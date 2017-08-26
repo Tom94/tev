@@ -49,12 +49,14 @@ endif()
 add_executable(tev
     include/Channel.h src/Channel.cpp
     include/CheckerboardShader.h src/CheckerboardShader.cpp
+    include/Common.h src/Common.cpp
     include/GammaShader.h src/GammaShader.cpp
-    include/GLTexture.h src/GLTexture.cpp
+    include/GlTexture.h src/GlTexture.cpp
     include/Image.h src/Image.cpp
     include/ImageButton.h src/ImageButton.cpp
     include/ImageCanvas.h src/ImageCanvas.cpp
     include/ImageViewer.h src/ImageViewer.cpp
+    include/Macros.h src/Macros.cpp
     src/main.cpp
 )
 
@@ -65,7 +67,6 @@ include_directories(
     ${NANOGUI_EXTRA_INCS}
     ${NANOGUI_INCLUDE}
     ${OPENEXR_INCLUDE_DIRS}
-    ${RENDER_INCLUDE}
     ${TINYFORMAT_INCLUDE}
 )
 
