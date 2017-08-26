@@ -1,0 +1,9 @@
+[submodule "dependencies/nanogui"]
+	path = dependencies/nanogui
+	url = https://github.com/Tom94/nanogui
+[submodule "dependencies/args"]
+	path = dependencies/args
+	url = https://github.com/Taywee/args
+[submodule "dependencies/openexr"]
+	path = dependencies/openexr
+	url = https://github.com/mitsuba-renderer/openexr

@@ -1,0 +1,73 @@
+# Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
+cmake_minimum_required (VERSION 3.1)
+
+project(tview CXX)
+
+# Set a default configuration if none was specified
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "No release type specified. Setting to 'Release'.")
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo")
+endif()
+
+set(CMAKE_CXX_STANDARD 14)
+
+if (APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+endif()
+
+# Kudos to
+if (MSVC)
+    # Disable annoying secure CRT warnings
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
+
+    # Parallel build
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+
+    # 32 bit windows
+    if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DEIGEN_DONT_ALIGN")
+    endif()
+endif()
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
+
+# Enable more warnings
+if(MSVC)
+    if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
+        string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    else()
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+    endif()
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register")
+    endif()
+endif()
+
+add_executable(tview
+    include/Channel.h src/Channel.cpp
+    include/CheckerboardShader.h src/CheckerboardShader.cpp
+    include/GammaShader.h src/GammaShader.cpp
+    include/GLTexture.h src/GLTexture.cpp
+    include/Image.h src/Image.cpp
+    include/ImageButton.h src/ImageButton.cpp
+    include/ImageCanvas.h src/ImageCanvas.cpp
+    include/ImageViewer.h src/ImageViewer.cpp
+    src/main.cpp
+)
+
+include_directories(
+    ${ARGS_INCLUDE}
+    ${EIGEN_INCLUDE}
+    ${GLFW_INCLUDE}
+    ${NANOGUI_EXTRA_INCS}
+    ${NANOGUI_INCLUDE}
+    ${OPENEXR_INCLUDE_DIRS}
+    ${RENDER_INCLUDE}
+)
+
+add_definitions(${NANOGUI_EXTRA_DEFS})
+
+target_link_libraries(tview IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
