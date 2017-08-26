@@ -40,12 +40,12 @@ private:
         nanogui::ref<ImageButton> button;
     };
 
-    float mMenuWidth = 200;
+    int mMenuWidth = 200;
 
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;
 
-    int mCurrentImage = 0;
+    size_t mCurrentImage = 0;
     std::vector<ImageInfo> mImageInfos;
     nanogui::Widget* mImageButtonContainer;
     nanogui::VScrollPanel* mImageScrollContainer;
