@@ -4,14 +4,18 @@
 #include "../include/ImageViewer.h"
 
 #include <args.hxx>
+#include <ImfThreading.h>
 
 #include <iostream>
+#include <thread>
 
 using namespace args;
 using namespace std;
 
 namespace {
     int mainFunc(int argc, char* argv[]) {
+        Imf::setGlobalThreadCount(thread::hardware_concurrency());
+
         ArgumentParser parser{
             "Inspection tool for images with a high dynamic range.",
             "This goes after the options.",
