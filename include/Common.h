@@ -3,9 +3,24 @@
 
 #pragma once
 
-#include "../include/Macros.h"
+#include <tinyformat.h>
 
 #include <algorithm>
+
+// A macro is used such that external tools won't end up indenting entire files,
+// resulting in wasted horizontal space.
+#define TEV_NAMESPACE_BEGIN namespace tev {
+#define TEV_NAMESPACE_END }
+
+#ifdef __GNUC__
+#   define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
+#   define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
+#else
+#   define LIKELY(condition) condition
+#   define UNLIKELY(condition) condition
+#endif
+
+#define TEV_ASSERT(cond, description, ...) if (UNLIKELY(!(cond))) std::cerr << tfm::format(description, ##__VA_ARGS__) << std::endl;
 
 TEV_NAMESPACE_BEGIN
 

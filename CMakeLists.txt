@@ -55,7 +55,6 @@ add_executable(tev
     include/ImageButton.h src/ImageButton.cpp
     include/ImageCanvas.h src/ImageCanvas.cpp
     include/ImageViewer.h src/ImageViewer.cpp
-    include/Macros.h src/Macros.cpp
     src/main.cpp
 )
 
