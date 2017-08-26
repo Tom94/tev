@@ -51,12 +51,13 @@ void Image::readStbi(const std::string& filename) {
     cout << "Loading "s + filename + " via STBI." << endl;
 
     int numChannels;
-    auto data = stbi_load(filename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+    auto data = stbi_loadf(filename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
     if (!data) {
         throw invalid_argument("Could not load texture data from file " + filename);
     }
 
     mNumChannels = static_cast<size_t>(numChannels);
+    size_t numPixels = mSize.prod();
 
     vector<string> channelNames = {"R", "G", "B", "A"};
 
@@ -64,17 +65,13 @@ void Image::readStbi(const std::string& filename) {
     for (size_t c = 0; c < mNumChannels; ++c) {
         string name = c < channelNames.size() ? channelNames[c] : to_string(c - channelNames.size());
         channels.emplace_back(name);
+        channels.back().data().resize(numPixels);
     }
 
-    size_t numPixels = mSize.prod();
     for (size_t i = 0; i < numPixels; ++i) {
         size_t baseIdx = i * mNumChannels;
         for (size_t c = 0; c < mNumChannels; ++c) {
-            // Assume LDR images were sRGB tonemapped and apply inverse.
-            // For now, approximate sRGB curve by 2.2 gamma.
-            // TODO: Proper sRGB curve.
-            float value = data[baseIdx + c];
-            channels[c].data().push_back(pow(value / 255.0f, 2.2f));
+            channels[c].data()[i] = data[baseIdx + c];
         }
     }
 
