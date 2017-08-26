@@ -21,18 +21,6 @@ using namespace Eigen;
 using namespace nanogui;
 using namespace std;
 
-namespace {
-    // Taken from https://stackoverflow.com/a/26221725
-    template<typename ... Args>
-    string format(const std::string& format, Args ... args)
-    {
-        size_t size = snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
-        unique_ptr<char[]> buf(new char[size]);
-        snprintf(buf.get(), size, format.c_str(), args ...);
-        return string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
-    }
-}
-
 ImageViewer::ImageViewer()
     : nanogui::Screen(Vector2i(1024, 767), "Viewer") {
 

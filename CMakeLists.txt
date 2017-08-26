@@ -66,6 +66,7 @@ include_directories(
     ${NANOGUI_INCLUDE}
     ${OPENEXR_INCLUDE_DIRS}
     ${RENDER_INCLUDE}
+    ${TINYFORMAT_INCLUDE}
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})

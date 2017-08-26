@@ -3,11 +3,14 @@
 
 #pragma once
 
-#include <cassert>
+#include <tinyformat.h>
 
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
-#define TVIEW_NAMESPACE_BEGIN namespace tev {
-#define TVIEW_NAMESPACE_END }
+#define TEV_NAMESPACE_BEGIN namespace tev {
+#define TEV_NAMESPACE_END }
 
-#define TVIEW_ASSERT(cond, description, ...) assert(cond)
+#define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
+#define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
+
+#define TEV_ASSERT(cond, description, ...) if (UNLIKELY(!(cond))) std::cerr << tfm::format(description, ##__VA_ARGS__) << std::endl;

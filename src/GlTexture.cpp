@@ -29,6 +29,12 @@ void GlTexture::setData(const vector<float>& data, const Vector2i& size, int num
         default: internalFormat = 0; format = 0; break;
     }
 
+    TEV_ASSERT(
+        data.size() == static_cast<size_t>(mSize.prod()),
+        "Supplied data (%d) does not match the size of the texture (%dx%d == %d).",
+        data.size(), mSize.x(), mSize.y(), mSize.prod()
+    );
+
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, size.x(), size.y(), 0, format, GL_FLOAT, data.data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);

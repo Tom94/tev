@@ -38,6 +38,10 @@ add_subdirectory(openexr)
 # Manually populate locations of our included dependencies.
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
 
+set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/eigen PARENT_SCOPE)
+
+set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)
+
 set(NANOGUI_INCLUDE
     ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/nanovg/src
     ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/include
@@ -55,7 +59,4 @@ set(OPENEXR_INCLUDE_DIRS
     ${CMAKE_CURRENT_BINARY_DIR}/openexr/IlmBase/config
 PARENT_SCOPE)
 
-set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/eigen PARENT_SCOPE)
-
-set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)
-
+set(TINYFORMAT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/tinyformat PARENT_SCOPE)
