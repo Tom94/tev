@@ -3,15 +3,6 @@
 
 #include "../include/Image.h"
 
-#if defined(__GNUC__)
-#  pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#  pragma GCC diagnostic ignored "-Wdeprecated-register"
-#endif
-#if defined(_WIN32)
-#  pragma warning(push)
-#  pragma warning(disable: 4457 4456 4005 4312)
-#endif
-
 #include <ImfChannelList.h>
 #include <ImfInputFile.h>
 
