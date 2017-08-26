@@ -1,6 +1,10 @@
 # tview
 
-An inspection and comparison tool for images with high dynamic range.
+An inspection and comparison tool for images with high dynamic range (HDR). Currently supports the following file formats:
+- __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
+- __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
+    - stb_image only supports subsets of each of the aforementioned file formats. Please consult its documentation for more details.
+    - Low-dynamic-range (LDR) images are "promoted" to HDR through an inverse gamma tonemappinng operator, where `gamma=2.2`.
 
 ## Building tview
 
