@@ -7,7 +7,7 @@
 
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
-#define TVIEW_NAMESPACE_BEGIN namespace tview {
+#define TVIEW_NAMESPACE_BEGIN namespace tev {
 #define TVIEW_NAMESPACE_END }
 
 #define TVIEW_ASSERT(cond, description, ...) assert(cond)

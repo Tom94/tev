@@ -1,7 +1,7 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
 cmake_minimum_required (VERSION 3.1)
 
-project(tview CXX)
+project(tev CXX)
 
 # Set a default configuration if none was specified
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -46,7 +46,7 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
     endif()
 endif()
 
-add_executable(tview
+add_executable(tev
     include/Channel.h src/Channel.cpp
     include/CheckerboardShader.h src/CheckerboardShader.cpp
     include/GammaShader.h src/GammaShader.cpp
@@ -70,4 +70,4 @@ include_directories(
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
 
-target_link_libraries(tview IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+target_link_libraries(tev IlmImf nanogui ${NANOGUI_EXTRA_LIBS})

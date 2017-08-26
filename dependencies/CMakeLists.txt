@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.1)
 
 if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
     message(FATAL_ERROR
-        "Some tview dependencies are missing. "
+        "Some tev dependencies are missing. "
         "If you forgot the '--recursive' flag when cloning this project, "
         "this can be fixed by calling 'git submodule update --init --recursive'."
     )
