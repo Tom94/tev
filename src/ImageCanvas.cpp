@@ -44,14 +44,15 @@ bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
 }
 
 void ImageCanvas::drawGL() {
-    if (!mImage) {
-        return;
-    }
-
     mCheckerboardShader.draw(
         2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
         Vector2f::Constant(20)
     );
+
+    if (!mImage) {
+        return;
+    }
+
     mShader.draw(
         {{
             mImage->texture("R"),
