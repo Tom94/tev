@@ -16,7 +16,6 @@ if (APPLE)
     set(CMAKE_MACOSX_RPATH ON)
 endif()
 
-# Kudos to
 if (MSVC)
     # Disable annoying secure CRT warnings
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
