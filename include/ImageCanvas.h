@@ -42,4 +42,7 @@ private:
 
     GammaShader mShader;
     CheckerboardShader mCheckerboardShader;
+
+    GlTexture mTextureBlack;
+    GlTexture mTextureWhite;
 };

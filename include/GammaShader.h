@@ -7,20 +7,14 @@
 
 #include <nanogui/glutil.h>
 
-#include <array>
-
 class GammaShader {
 public:
     GammaShader();
     virtual ~GammaShader();
 
-    /// Draw an RGB image.
-    void draw(std::array<const GlTexture*, 3> textures, float exposure, const Eigen::Matrix3f& transform);
+    // Draws an image using each supplied texture as the R, G, B, and then A channel.
+    void draw(std::array<const GlTexture*, 4> textures, float exposure, const Eigen::Matrix3f& transform);
 
-    /// Draw a grayscale image.
-    void draw(const GlTexture* texture, float exposure, const Eigen::Matrix3f& transform) {
-        draw({{texture, texture, texture}}, exposure, transform);
-    }
 
 private:
     nanogui::GLShader mShader;

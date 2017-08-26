@@ -8,7 +8,8 @@ using namespace nanogui;
 
 ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
     : GLCanvas(parent), mPixelRatio(pixelRatio) {
-
+    mTextureBlack.setData({ 0.0 }, Vector2i::Constant(1), 1);
+    mTextureWhite.setData({ 1.0 }, Vector2i::Constant(1), 1);
 }
 
 bool ImageCanvas::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int button, int modifiers) {
@@ -53,11 +54,17 @@ void ImageCanvas::drawGL() {
         return;
     }
 
+    const GlTexture* textureRed = mImage->hasChannel("R") ? mImage->texture("R") : &mTextureBlack;
+    const GlTexture* textureGreen = mImage->hasChannel("G") ? mImage->texture("G") : &mTextureBlack;
+    const GlTexture* textureBlue = mImage->hasChannel("B") ? mImage->texture("B") : &mTextureBlack;
+    const GlTexture* textureAlpha = mImage->hasChannel("A") ? mImage->texture("A") : &mTextureWhite;
+
     mShader.draw(
         {{
-            mImage->texture("R"),
-            mImage->texture("G"),
-            mImage->texture("B"),
+            textureRed,
+            textureGreen,
+            textureBlue,
+            textureAlpha,
         }},
         mExposure,
         imageTransform()

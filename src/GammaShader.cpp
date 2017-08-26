@@ -27,6 +27,7 @@ GammaShader::GammaShader() {
         uniform sampler2D imageRed;
         uniform sampler2D imageGreen;
         uniform sampler2D imageBlue;
+        uniform sampler2D imageAlpha;
 
         uniform float exposure;
         out vec4 color;
@@ -41,7 +42,7 @@ GammaShader::GammaShader() {
                 texture(imageRed, uv).x,
                 texture(imageGreen, uv).x,
                 texture(imageBlue, uv).x,
-                1.0
+                texture(imageAlpha, uv).x
             );
             color = vec4(tonemap(imageVal.xyz), imageVal.a);
         })"
@@ -67,16 +68,19 @@ GammaShader::~GammaShader() {
     mShader.free();
 }
 
-void GammaShader::draw(std::array<const GlTexture*, 3> textures, float exposure, const Matrix3f& transform) {
-    for (int i = 0; i < 3; ++i) {
+void GammaShader::draw(std::array<const GlTexture*, 4> textures, float exposure, const Matrix3f& transform) {
+    for (int i = 0; i < 4; ++i) {
         glActiveTexture(GL_TEXTURE0 + i);
         glBindTexture(GL_TEXTURE_2D, textures[i]->id());
     }
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     mShader.bind();
     mShader.setUniform("imageRed", 0);
     mShader.setUniform("imageGreen", 1);
     mShader.setUniform("imageBlue", 2);
+    mShader.setUniform("imageAlpha", 3);
 
     mShader.setUniform("modelViewProj", transform);
     mShader.setUniform("exposure", exposure);

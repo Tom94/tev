@@ -18,8 +18,12 @@ public:
         return mName;
     }
 
+    bool hasChannel(const std::string& channelName) const {
+        return mChannels.count(channelName) != 0;
+    }
+
     const Channel* channel(const std::string& channelName) const {
-        if (mChannels.count(channelName) == 0) {
+        if (!hasChannel(channelName)) {
             return nullptr;
         }
         return &mChannels.at(channelName);
