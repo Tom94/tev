@@ -48,7 +48,7 @@ const GlTexture* Image::texture(const std::string& channelName) {
 
 void Image::readStbi(const std::string& filename) {
     // No exr image? Try our best using stbi
-    cout << "Loading "s + filename + " via STB." << endl;
+    cout << "Loading "s + filename + " via STBI." << endl;
 
     int numChannels;
     auto data = stbi_load(filename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
