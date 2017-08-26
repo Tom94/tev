@@ -222,6 +222,11 @@ void ImageViewer::fitAllImages() {
         maxSize = maxSize.cwiseMax(imageInfo.image->size());
     }
 
+    // Convert from image pixel coordinates to nanogui coordinates.
+    maxSize = (maxSize.cast<float>() / pixelRatio()).cast<int>();
+    // Take into account the size of the menu on the left.
     maxSize.x() += mMenuWidth;
-    setSize(mSize.cwiseMax(maxSize / pixelRatio()));
+
+    // Only increase our current size if we are larger than the default size of the window.
+    setSize(mSize.cwiseMax(maxSize));
 }
