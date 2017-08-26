@@ -10,6 +10,8 @@
 
 #include <nanogui/glcanvas.h>
 
+#include <memory>
+
 class ImageCanvas : public nanogui::GLCanvas {
 public:
     ImageCanvas(nanogui::Widget* parent, float pixelRatio);

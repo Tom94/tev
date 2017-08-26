@@ -17,8 +17,6 @@
 #include <nanogui/tabwidget.h>
 #include <nanogui/vscrollpanel.h>
 
-#include <Util.h>
-
 using namespace Eigen;
 using namespace nanogui;
 using namespace std;

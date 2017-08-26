@@ -7,3 +7,6 @@
 [submodule "dependencies/openexr"]
 	path = dependencies/openexr
 	url = https://github.com/mitsuba-renderer/openexr
+[submodule "dependencies/zlib"]
+	path = dependencies/zlib
+	url = https://github.com/mitsuba-renderer/zlib
