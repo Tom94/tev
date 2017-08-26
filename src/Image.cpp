@@ -121,9 +121,9 @@ void Image::readExr(const std::string& filename) {
             for (size_t i = 0; i < dstData.size(); ++i) {
                 size_t rawIdx = i * bpp;
                 switch (mType) {
-                    case Imf::HALF:  dstData[i] = *reinterpret_cast<const half*>(&mData[rawIdx]);     break;
-                    case Imf::FLOAT: dstData[i] = *reinterpret_cast<const float*>(&mData[rawIdx]);    break;
-                    case Imf::UINT:  dstData[i] = *reinterpret_cast<const uint32_t*>(&mData[rawIdx]); break;
+                    case Imf::HALF:  dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[rawIdx]));     break;
+                    case Imf::FLOAT: dstData[i] = static_cast<float>(*reinterpret_cast<const float*>(&mData[rawIdx]));    break;
+                    case Imf::UINT:  dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[rawIdx])); break;
                     default:
                         throw runtime_error("Invalid pixel type encountered.");
                 }
