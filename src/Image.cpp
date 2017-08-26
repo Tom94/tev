@@ -15,7 +15,7 @@ using namespace std;
 
 namespace {
     bool endsWith(const string& a, const string& b) {
-        return a.find_last_of(b) == a.size() - 1;
+        return a.length() >= b.length() && a.compare(a.length() - b.length(), b.length(), b) == 0;
     }
 }
 
