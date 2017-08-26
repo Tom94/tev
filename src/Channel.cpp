@@ -5,6 +5,10 @@
 
 using namespace std;
 
+TEV_NAMESPACE_BEGIN
+
 Channel::Channel(const std::string& name)
     : mName(name) {
 }
+
+TEV_NAMESPACE_END

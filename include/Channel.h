@@ -8,6 +8,8 @@
 #include <vector>
 #include <string>
 
+TEV_NAMESPACE_BEGIN
+
 class Channel {
 public:
     Channel(const std::string& name);
@@ -28,3 +30,5 @@ private:
     std::string mName;
     std::vector<float> mData;
 };
+
+TEV_NAMESPACE_END

@@ -8,6 +8,8 @@
 using namespace std;
 using namespace Eigen;
 
+TEV_NAMESPACE_BEGIN
+
 void GlTexture::setData(const vector<float>& data, const Vector2i& size, int numChannels) {
     if (mId) {
         glDeleteTextures(1, &mId);
@@ -41,3 +43,5 @@ void GlTexture::setData(const vector<float>& data, const Vector2i& size, int num
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 }
+
+TEV_NAMESPACE_END

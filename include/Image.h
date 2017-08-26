@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+TEV_NAMESPACE_BEGIN
+
 class Image {
 public:
     Image(const std::string& filename);
@@ -46,3 +48,5 @@ private:
     std::map<std::string, Channel> mChannels;
     std::map<std::string, GlTexture> mTextures;
 };
+
+TEV_NAMESPACE_END

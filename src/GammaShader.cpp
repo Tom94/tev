@@ -6,6 +6,8 @@
 using namespace Eigen;
 using namespace nanogui;
 
+TEV_NAMESPACE_BEGIN
+
 GammaShader::GammaShader() {
 
     mShader.init(
@@ -86,3 +88,5 @@ void GammaShader::draw(std::array<const GlTexture*, 4> textures, float exposure,
     mShader.setUniform("exposure", exposure);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
+
+TEV_NAMESPACE_END

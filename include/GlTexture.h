@@ -7,6 +7,8 @@
 
 #include <nanogui/opengl.h>
 
+TEV_NAMESPACE_BEGIN
+
 class GlTexture {
 public:
     GlTexture() = default;
@@ -43,3 +45,5 @@ private:
     int mNumChannels = 0;
     std::vector<float> mData;
 };
+
+TEV_NAMESPACE_END

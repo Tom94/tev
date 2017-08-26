@@ -14,6 +14,8 @@
 #include <vector>
 #include <memory>
 
+TEV_NAMESPACE_BEGIN
+
 class ImageViewer : public nanogui::Screen {
 public:
     ImageViewer();
@@ -52,3 +54,5 @@ private:
 
     ImageCanvas* mImageCanvas;
 };
+
+TEV_NAMESPACE_END

@@ -6,6 +6,8 @@
 using namespace Eigen;
 using namespace nanogui;
 
+TEV_NAMESPACE_BEGIN
+
 CheckerboardShader::CheckerboardShader() {
 
     mShader.init(
@@ -65,3 +67,5 @@ void CheckerboardShader::draw(const Eigen::Vector2f& pixelSize, const Eigen::Vec
     mShader.setUniform("checkerSize", checkerSize);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
+
+TEV_NAMESPACE_END

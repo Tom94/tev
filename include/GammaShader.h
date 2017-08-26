@@ -7,6 +7,8 @@
 
 #include <nanogui/glutil.h>
 
+TEV_NAMESPACE_BEGIN
+
 class GammaShader {
 public:
     GammaShader();
@@ -19,3 +21,5 @@ public:
 private:
     nanogui::GLShader mShader;
 };
+
+TEV_NAMESPACE_END

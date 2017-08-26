@@ -12,6 +12,8 @@
 
 #include <memory>
 
+TEV_NAMESPACE_BEGIN
+
 class ImageCanvas : public nanogui::GLCanvas {
 public:
     ImageCanvas(nanogui::Widget* parent, float pixelRatio);
@@ -46,3 +48,5 @@ private:
     GlTexture mTextureBlack;
     GlTexture mTextureWhite;
 };
+
+TEV_NAMESPACE_END

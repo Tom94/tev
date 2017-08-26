@@ -5,6 +5,8 @@
 
 using namespace nanogui;
 
+TEV_NAMESPACE_BEGIN
+
 ImageButton::ImageButton(NVGcontext* nvgContext, nanogui::Widget* parent, const std::string& caption, int icon)
     : Button(parent, caption, icon) {
 
@@ -20,3 +22,4 @@ ImageButton::ImageButton(NVGcontext* nvgContext, nanogui::Widget* parent, const 
     setCaption("..." + caption.substr(caption.length() - 30));
 }
 
+TEV_NAMESPACE_END

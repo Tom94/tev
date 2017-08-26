@@ -7,6 +7,8 @@
 
 #include <algorithm>
 
+TEV_NAMESPACE_BEGIN
+
 // Taken from https://stackoverflow.com/a/26221725
 template<typename ... Args>
 std::string format(const std::string& format, Args ... args) {
@@ -21,3 +23,5 @@ constexpr T clamp(T value, T min, T max) {
     TEV_ASSERT(max >= min, "Minimum (%f) may not be larger than maximum (%f).", min, max);
     return std::max(std::min(value, max), min);
 }
+
+TEV_NAMESPACE_END

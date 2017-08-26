@@ -21,9 +21,10 @@ using namespace Eigen;
 using namespace nanogui;
 using namespace std;
 
+TEV_NAMESPACE_BEGIN
+
 ImageViewer::ImageViewer()
     : nanogui::Screen(Vector2i(1024, 767), "Viewer") {
-
 
     auto screenSplit = new Widget(this);
     screenSplit->setLayout(new BoxLayout(Orientation::Horizontal, Alignment::Fill));
@@ -218,3 +219,5 @@ void ImageViewer::fitAllImages() {
     // Only increase our current size if we are larger than the default size of the window.
     setSize(mSize.cwiseMax(maxSize));
 }
+
+TEV_NAMESPACE_END

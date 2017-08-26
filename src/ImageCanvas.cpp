@@ -6,6 +6,8 @@
 using namespace Eigen;
 using namespace nanogui;
 
+TEV_NAMESPACE_BEGIN
+
 ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
     : GLCanvas(parent), mPixelRatio(pixelRatio) {
     mTextureBlack.setData({ 0.0 }, Vector2i::Constant(1), 1);
@@ -83,3 +85,5 @@ Matrix3f ImageCanvas::imageTransform() {
         Translation2f(Vector2f::Constant(-0.5f))
     ).matrix();
 }
+
+TEV_NAMESPACE_END

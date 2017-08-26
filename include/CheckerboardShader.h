@@ -3,7 +3,11 @@
 
 #pragma once
 
+#include "../include/Common.h"
+
 #include <nanogui/glutil.h>
+
+TEV_NAMESPACE_BEGIN
 
 class CheckerboardShader {
 public:
@@ -15,3 +19,5 @@ public:
 private:
     nanogui::GLShader mShader;
 };
+
+TEV_NAMESPACE_END

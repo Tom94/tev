@@ -13,10 +13,10 @@
 
 using namespace std;
 
-namespace {
-    bool endsWith(const string& a, const string& b) {
-        return a.length() >= b.length() && a.compare(a.length() - b.length(), b.length(), b) == 0;
-    }
+TEV_NAMESPACE_BEGIN
+
+bool endsWith(const string& a, const string& b) {
+    return a.length() >= b.length() && a.compare(a.length() - b.length(), b.length(), b) == 0;
 }
 
 Image::Image(const string& filename)
@@ -158,3 +158,5 @@ void Image::readExr(const std::string& filename) {
         rawChannel.copyTo(mChannels.at(rawChannel.name()));
     }
 }
+
+TEV_NAMESPACE_END
