@@ -160,22 +160,22 @@ void UberShader::draw(
     }
 
     for (int i = 0; i < 4; ++i) {
-        glActiveTexture(GL_TEXTURE0 + i + 4);
+        glActiveTexture(GL_TEXTURE0 + 4 + i);
         glBindTexture(GL_TEXTURE_2D, texturesReference[i]->id());
     }
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     mShader.bind();
-    mShader.setUniform("imageRed", 0);
+    mShader.setUniform("imageRed",   0);
     mShader.setUniform("imageGreen", 1);
-    mShader.setUniform("imageBlue", 2);
+    mShader.setUniform("imageBlue",  2);
     mShader.setUniform("imageAlpha", 3);
     mShader.setUniform("imageTransform", transformImage);
 
-    mShader.setUniform("referenceRed", 4);
+    mShader.setUniform("referenceRed",   4);
     mShader.setUniform("referenceGreen", 5);
-    mShader.setUniform("referenceBlue", 6);
+    mShader.setUniform("referenceBlue",  6);
     mShader.setUniform("referenceAlpha", 7);
     mShader.setUniform("referenceTransform", transformReference);
 
