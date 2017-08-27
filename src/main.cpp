@@ -22,17 +22,23 @@ int mainFunc(int argc, char* argv[]) {
         "This goes after the options.",
     };
 
-    HelpFlag help(parser, "help",
+    HelpFlag help{
+        parser,
+        "help",
         "Display this help menu",
-        {'h', "help"}
-    );
+        {'h', "help"},
+    };
 
-    ValueFlag<float> exposure{parser, "exposure",
+    ValueFlag<float> exposure{
+        parser,
+        "exposure",
         "Initial exposure setting of the viewer.",
         {'e', "exposure"},
     };
 
-    PositionalList<string> imageFiles{parser, "images",
+    PositionalList<string> imageFiles{
+        parser,
+        "images",
         "The image files to be opened by the viewer.",
     };
 
@@ -62,8 +68,10 @@ int mainFunc(int argc, char* argv[]) {
         app->setVisible(true);
 
         // Load all images which were passed in via the command line.
-        for (const auto imageFile : get(imageFiles)) {
-            app->addImage(make_shared<Image>(imageFile));
+        if (imageFiles) {
+            for (const auto imageFile : get(imageFiles)) {
+                app->addImage(make_shared<Image>(imageFile));
+            }
         }
 
         // Resize the application window such that the largest image fits into it.
