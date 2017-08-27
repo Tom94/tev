@@ -74,7 +74,8 @@ ImageViewer::ImageViewer()
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Tonemapping", "sans-bold", 20};
         label->setTooltip(
-            "The Exposure Value (EV) scales the brightness of an image prior to tonemapping by 2^EV."
+            "The Exposure Value (EV) scales the brightness of an image prior to tonemapping by 2^EV. "
+            "It can be controlled via the GUI, or by pressing E/Shift+E."
         );
 
         panel = new Widget{leftSide};
