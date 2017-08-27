@@ -41,16 +41,26 @@ ImageViewer::ImageViewer()
     tools->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill, 5));
     auto b = new Button(tools, "Open file");
     b->setCallback([&] {
-        addImage(std::make_shared<Image>(
-            file_dialog(
-                {
-                    {"exr", "OpenEXR image"},
-                    {"png", "Portable Network Graphics"},
-                    {"jpg", "JPG image"},
-                },
-                false
-            )
-        ));
+        string path = file_dialog(
+            {
+                { "exr",  "OpenEXR image" },
+                { "hdr",  "HDR image" },
+                { "bmp",  "Bitmap Image File" },
+                { "gif",  "Graphics Interchange Format image" },
+                { "jpg",  "JPEG image" },
+                { "jpeg", "JPEG image" },
+                { "pic",  "PIC image" },
+                { "png",  "Portable Network Graphics image" },
+                { "pnm",  "Portable Any Map image" },
+                { "psd",  "PSD image" },
+                { "tga",  "Truevision TGA image" },
+            },
+            false
+        );
+        
+        if (!path.empty()) {
+            addImage(std::make_shared<Image>(path));
+        }
     });
 
     // Exposure label and slider
