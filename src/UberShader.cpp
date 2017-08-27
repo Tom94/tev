@@ -5,10 +5,20 @@
 
 using namespace Eigen;
 using namespace nanogui;
+using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
 UberShader::UberShader() {
+    mShader.define("SRGB",        to_string(ETonemap::SRGB));
+    mShader.define("GAMMA",       to_string(ETonemap::Gamma));
+    mShader.define("FALSE_COLOR", to_string(ETonemap::FalseColor));
+
+    mShader.define("ERROR",                   to_string(EMetric::Error));
+    mShader.define("ABSOLUTE_ERROR",          to_string(EMetric::AbsoluteError));
+    mShader.define("SQUARED_ERROR",           to_string(EMetric::SquaredError));
+    mShader.define("RELATIVE_ABSOLUTE_ERROR", to_string(EMetric::RelativeAbsoluteError));
+    mShader.define("RELATIVE_SQUARED_ERROR",  to_string(EMetric::RelativeSquaredError));
 
     mShader.init(
         "ubershader",
@@ -71,20 +81,20 @@ UberShader::UberShader() {
 
         vec3 applyTonemap(vec3 col) {
             switch (tonemap) {
-                case 0: return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
-                case 1: return pow(col, vec3(1.0 / 2.2));
-                case 2: return pow(col, vec3(1.0 / 2.2));
+                case SRGB:        return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
+                case GAMMA:       return pow(col, vec3(1.0 / 2.2));
+                case FALSE_COLOR: return pow(col, vec3(1.0 / 2.2));
             }
             return vec3(0.0);
         }
 
         vec3 applyMetric(vec3 col, vec3 reference) {
             switch (metric) {
-                case 0: return col;
-                case 1: return abs(col);
-                case 2: return col * col;
-                case 3: return abs(col) / (reference + vec3(0.01));
-                case 4: return col * col / (reference * reference + vec3(0.0001));
+                case ERROR:                   return col;
+                case ABSOLUTE_ERROR:          return abs(col);
+                case SQUARED_ERROR:           return col * col;
+                case RELATIVE_ABSOLUTE_ERROR: return abs(col) / (reference + vec3(0.01));
+                case RELATIVE_SQUARED_ERROR:  return col * col / (reference * reference + vec3(0.0001));
             }
             return vec3(0.0);
         }
