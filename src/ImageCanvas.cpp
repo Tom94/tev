@@ -56,32 +56,56 @@ void ImageCanvas::drawGL() {
         return;
     }
 
-    const GlTexture* textureRed = mImage->hasChannel("R") ? mImage->texture("R") : &mTextureBlack;
-    const GlTexture* textureGreen = mImage->hasChannel("G") ? mImage->texture("G") : &mTextureBlack;
-    const GlTexture* textureBlue = mImage->hasChannel("B") ? mImage->texture("B") : &mTextureBlack;
-    const GlTexture* textureAlpha = mImage->hasChannel("A") ? mImage->texture("A") : &mTextureWhite;
-
-    mShader.draw(
-        {{
-            textureRed,
-            textureGreen,
-            textureBlue,
-            textureAlpha,
-        }},
-        mExposure,
-        imageTransform()
-    );
+    if (mReference) {
+        mShader.draw(
+            {{
+                mImage->hasChannel("R") ? mImage->texture("R") : &mTextureBlack,
+                mImage->hasChannel("G") ? mImage->texture("G") : &mTextureBlack,
+                mImage->hasChannel("B") ? mImage->texture("B") : &mTextureBlack,
+                mImage->hasChannel("A") ? mImage->texture("A") : &mTextureWhite,
+            }},
+            // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
+            // image transform to obtain texture coordinates in [0, 1]-space.
+            transform(mImage.get()).inverse(),
+            {{
+                (mReference && mReference->hasChannel("R")) ? mReference->texture("R") : &mTextureBlack,
+                (mReference && mReference->hasChannel("G")) ? mReference->texture("G") : &mTextureBlack,
+                (mReference && mReference->hasChannel("B")) ? mReference->texture("B") : &mTextureBlack,
+                (mReference && mReference->hasChannel("A")) ? mReference->texture("A") : &mTextureWhite,
+            }},
+            transform(mImage.get()).inverse(),
+            mExposure,
+            mTonemap,
+            mMetric
+        );
+    } else {
+        mShader.draw(
+            {{
+                mImage->hasChannel("R") ? mImage->texture("R") : &mTextureBlack,
+                mImage->hasChannel("G") ? mImage->texture("G") : &mTextureBlack,
+                mImage->hasChannel("B") ? mImage->texture("B") : &mTextureBlack,
+                mImage->hasChannel("A") ? mImage->texture("A") : &mTextureWhite,
+            }},
+            // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
+            // image transform to obtain texture coordinates in [0, 1]-space.
+            transform(mImage.get()).inverse(),
+            mExposure,
+            mTonemap
+        );
+    }
 }
 
-Matrix3f ImageCanvas::imageTransform() {
-    Vector2f imageSize = mImage->size().cast<float>();
+Matrix3f ImageCanvas::transform(const Image* image) {
+    if (!image) {
+        return Matrix3f::Identity();
+    }
 
     // Center image, scale to pixel space, translate to desired position,
     // then rescale to the [-1, 1] square for drawing.
     return (
         Scaling(2.0f / mSize.x(), -2.0f / mSize.y()) *
         mTransform *
-        Scaling(imageSize / mPixelRatio) *
+        Scaling(image->size().cast<float>() / mPixelRatio) *
         Translation2f(Vector2f::Constant(-0.5f))
     ).matrix();
 }

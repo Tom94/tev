@@ -4,7 +4,7 @@
 #pragma once
 
 #include "../include/CheckerboardShader.h"
-#include "../include/GammaShader.h"
+#include "../include/UberShader.h"
 #include "../include/GlTexture.h"
 #include "../include/Image.h"
 
@@ -32,35 +32,9 @@ public:
         mImage = image;
     }
 
-    enum EMetric : int {
-        Error = 0,
-        SquaredError,
-        RelativeSquaredError,
-        AbsoluteError,
-        RelativeAbsoluteError,
-
-        // This enum value should never be used directly.
-        // It facilitates looping over all members of this enum.
-        AmountMetrics,
-    };
-
-    EMetric metric() {
-        return mMetric;
+    void setReference(std::shared_ptr<Image> reference) {
+        mReference = reference;
     }
-
-    void setMetric(EMetric metric) {
-        mMetric = metric;
-    }
-
-    enum ETonemap : int {
-        SRGB = 0,
-        Gamma,
-        FalseColor,
-
-        // This enum value should never be used directly.
-        // It facilitates looping over all members of this enum.
-        AmountTonemaps,
-    };
 
     ETonemap tonemap() {
         return mTonemap;
@@ -70,14 +44,24 @@ public:
         mTonemap = tonemap;
     }
 
+    EMetric metric() {
+        return mMetric;
+    }
+
+    void setMetric(EMetric metric) {
+        mMetric = metric;
+    }
+
 private:
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
-    Eigen::Matrix3f imageTransform();
+    Eigen::Matrix3f transform(const Image* image);
 
     float mPixelRatio = 1;
     float mExposure = 0;
     std::shared_ptr<Image> mImage;
+    std::shared_ptr<Image> mReference;
+
     Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
 
     UberShader mShader;
@@ -86,8 +70,8 @@ private:
     GlTexture mTextureBlack;
     GlTexture mTextureWhite;
 
-    EMetric mMetric = Error;
     ETonemap mTonemap = SRGB;
+    EMetric mMetric = Error;
 };
 
 TEV_NAMESPACE_END

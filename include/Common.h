@@ -36,4 +36,26 @@ constexpr T round(T value, T decimals) {
     return std::round(value * std::pow(static_cast<T>(10), decimals)) / std::pow(static_cast<T>(10), decimals);
 }
 
+enum ETonemap : int {
+    SRGB = 0,
+    Gamma,
+    FalseColor,
+
+    // This enum value should never be used directly.
+    // It facilitates looping over all members of this enum.
+    AmountTonemaps,
+};
+
+enum EMetric : int {
+    Error = 0,
+    AbsoluteError,
+    SquaredError,
+    RelativeAbsoluteError,
+    RelativeSquaredError,
+
+    // This enum value should never be used directly.
+    // It facilitates looping over all members of this enum.
+    AmountMetrics,
+};
+
 TEV_NAMESPACE_END

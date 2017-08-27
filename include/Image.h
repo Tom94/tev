@@ -33,7 +33,7 @@ public:
 
     const GlTexture* texture(const std::string& channelName);
 
-    const Eigen::Vector2i& size() {
+    const Eigen::Vector2i& size() const {
         return mSize;
     }
 

@@ -33,23 +33,26 @@ public:
 
     void selectImage(size_t index);
 
+    void unselectReference();
+    void selectReference(size_t index);
+
     float exposure() {
         return mExposureSlider->value();
     }
 
     void setExposure(float value);
 
-    ImageCanvas::EMetric metric() {
-        return mImageCanvas->metric();
-    }
-
-    void setMetric(ImageCanvas::EMetric metric);
-
-    ImageCanvas::ETonemap tonemap() {
+    ETonemap tonemap() {
         return mImageCanvas->tonemap();
     }
 
-    void setTonemap(ImageCanvas::ETonemap tonemap);
+    void setTonemap(ETonemap tonemap);
+
+    EMetric metric() {
+        return mImageCanvas->metric();
+    }
+
+    void setMetric(EMetric metric);
 
     void fitAllImages();
     void maximize();
@@ -67,6 +70,8 @@ private:
     nanogui::Slider* mExposureSlider;
 
     size_t mCurrentImage = 0;
+    size_t mCurrentReference = 0;
+
     std::vector<ImageInfo> mImageInfos;
     nanogui::Widget* mImageButtonContainer;
     nanogui::VScrollPanel* mImageScrollContainer;

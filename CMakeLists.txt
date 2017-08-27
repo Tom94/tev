@@ -49,12 +49,12 @@ add_executable(tev
     include/Channel.h src/Channel.cpp
     include/CheckerboardShader.h src/CheckerboardShader.cpp
     include/Common.h src/Common.cpp
-    include/GammaShader.h src/GammaShader.cpp
     include/GlTexture.h src/GlTexture.cpp
     include/Image.h src/Image.cpp
     include/ImageButton.h src/ImageButton.cpp
     include/ImageCanvas.h src/ImageCanvas.cpp
     include/ImageViewer.h src/ImageViewer.cpp
+    include/UberShader.h src/UberShader.cpp
     src/main.cpp
 )
 

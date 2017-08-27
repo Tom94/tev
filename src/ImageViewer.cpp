@@ -70,19 +70,20 @@ ImageViewer::ImageViewer()
             auto button = new Button{mTonemapButtonContainer, name};
             button->setFlags(Button::RadioButton);
             button->setFontSize(15);
+            button->setCallback(callback);
             return button;
         };
 
         auto errorButton = makeTonemapButton("sRGB", [this]() {
-            setTonemap(ImageCanvas::ETonemap::SRGB);
+            setTonemap(ETonemap::SRGB);
         });
 
         makeTonemapButton("Gamma", [this]() {
-            setTonemap(ImageCanvas::ETonemap::Gamma);
+            setTonemap(ETonemap::Gamma);
         });
 
         makeTonemapButton("False-color", [this]() {
-            setTonemap(ImageCanvas::ETonemap::FalseColor);
+            setTonemap(ETonemap::FalseColor);
         });
 
         errorButton->setPushed(true);
@@ -97,27 +98,28 @@ ImageViewer::ImageViewer()
             auto button = new Button{mMetricButtonContainer, name};
             button->setFlags(Button::RadioButton);
             button->setFontSize(15);
+            button->setCallback(callback);
             return button;
         };
 
         auto errorButton = makeMetricButton("E", [this]() {
-            setMetric(ImageCanvas::EMetric::Error);
-        });
-
-        makeMetricButton("SE", [this]() {
-            setMetric(ImageCanvas::EMetric::SquaredError);
-        });
-
-        makeMetricButton("RSE", [this]() {
-            setMetric(ImageCanvas::EMetric::RelativeSquaredError);
+            setMetric(EMetric::Error);
         });
 
         makeMetricButton("AE", [this]() {
-            setMetric(ImageCanvas::EMetric::AbsoluteError);
+            setMetric(EMetric::AbsoluteError);
+        });
+
+        makeMetricButton("SE", [this]() {
+            setMetric(EMetric::SquaredError);
         });
 
         makeMetricButton("RAE", [this]() {
-            setMetric(ImageCanvas::EMetric::RelativeAbsoluteError);
+            setMetric(EMetric::RelativeAbsoluteError);
+        });
+
+        makeMetricButton("RSE", [this]() {
+            setMetric(EMetric::RelativeSquaredError);
         });
 
         errorButton->setPushed(true);
@@ -209,7 +211,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
             int idx = (key - GLFW_KEY_1 + 10) % 10;
             if (idx >= 0 && idx < amountImages) {
-                selectImage(idx);
+                if (modifiers & GLFW_MOD_SHIFT) {
+                    selectReference(idx);
+                } else {
+                    selectImage(idx);
+                }
             }
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
@@ -228,22 +234,30 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         }
 
         if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
-            selectImage((mCurrentImage - 1 + amountImages) % amountImages);
+            if (modifiers & GLFW_MOD_SHIFT) {
+                selectReference((mCurrentReference - 1 + amountImages) % amountImages);
+            } else {
+                selectImage((mCurrentImage - 1 + amountImages) % amountImages);
+            }
         } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN) {
-            selectImage((mCurrentImage + 1) % amountImages);
+            if (modifiers & GLFW_MOD_SHIFT) {
+                selectReference((mCurrentReference + 1) % amountImages);
+            } else {
+                selectImage((mCurrentImage + 1) % amountImages);
+            }
         }
 
         if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                setTonemap(static_cast<ImageCanvas::ETonemap>((tonemap() + 1) % ImageCanvas::AmountTonemaps));
+                setTonemap(static_cast<ETonemap>((tonemap() + 1) % AmountTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
-                setMetric(static_cast<ImageCanvas::EMetric>((metric() + 1) % ImageCanvas::AmountMetrics));
+                setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
             }
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                setTonemap(static_cast<ImageCanvas::ETonemap>((tonemap() - 1 + ImageCanvas::AmountTonemaps) % ImageCanvas::AmountTonemaps));
+                setTonemap(static_cast<ETonemap>((tonemap() - 1 + AmountTonemaps) % AmountTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
-                setMetric(static_cast<ImageCanvas::EMetric>((metric() - 1 + ImageCanvas::AmountMetrics) % ImageCanvas::AmountMetrics));
+                setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
             }
         }
     }
@@ -259,10 +273,18 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
     size_t index = mImageInfos.size();
 
     auto button = new ImageButton{mImageButtonContainer, image->name()};
+    button->setFontSize(15);
+
     button->setSelectedCallback([this,index]() {
         selectImage(index);
     });
-    button->setFontSize(15);
+    button->setReferenceCallback([this, index](bool isReference) {
+        if (!isReference) {
+            unselectReference();
+        } else {
+            selectReference(index);
+        }
+    });
 
     mImageInfos.push_back({
         image,
@@ -301,6 +323,28 @@ void ImageViewer::selectImage(size_t index) {
     mImageCanvas->setImage(mImageInfos[mCurrentImage].image);
 }
 
+void ImageViewer::unselectReference() {
+    for (size_t i = 0; i < mImageInfos.size(); ++i) {
+        mImageInfos[i].button->setIsReference(false);
+    }
+
+    mCurrentReference = 0;
+    mImageCanvas->setReference(nullptr);
+}
+
+void ImageViewer::selectReference(size_t index) {
+    if (index >= mImageInfos.size()) {
+        throw invalid_argument{tfm::format("Invalid reference index (%d) should be in range [0,%d).", index, mImageInfos.size())};
+    }
+
+    for (size_t i = 0; i < mImageInfos.size(); ++i) {
+        mImageInfos[i].button->setIsReference(i == index);
+    }
+
+    mCurrentReference = index;
+    mImageCanvas->setReference(mImageInfos[mCurrentReference].image);
+}
+
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
     mExposureSlider->setValue(value);
@@ -309,21 +353,21 @@ void ImageViewer::setExposure(float value) {
     mImageCanvas->setExposure(value);
 }
 
-void ImageViewer::setMetric(ImageCanvas::EMetric metric) {
-    mImageCanvas->setMetric(metric);
-    auto& buttons = mMetricButtonContainer->children();
-    for (int i = 0; i < buttons.size(); ++i) {
-        Button* b = dynamic_cast<Button*>(buttons[i]);
-        b->setPushed(i == metric);
-    }
-}
-
-void ImageViewer::setTonemap(ImageCanvas::ETonemap tonemap) {
+void ImageViewer::setTonemap(ETonemap tonemap) {
     mImageCanvas->setTonemap(tonemap);
     auto& buttons = mTonemapButtonContainer->children();
     for (int i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->setPushed(i == tonemap);
+    }
+}
+
+void ImageViewer::setMetric(EMetric metric) {
+    mImageCanvas->setMetric(metric);
+    auto& buttons = mMetricButtonContainer->children();
+    for (int i = 0; i < buttons.size(); ++i) {
+        Button* b = dynamic_cast<Button*>(buttons[i]);
+        b->setPushed(i == metric);
     }
 }
 
