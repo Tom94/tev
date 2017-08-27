@@ -95,10 +95,10 @@ int mainFunc(int argc, char* argv[]) {
             shallMaximize = get(maximizeFlag);
         }
 
+        // Make sure the largest loaded image fits into our window.
+        app->fitAllImages();
         if (shallMaximize) {
             app->maximize();
-        } else {
-            app->fitAllImages();
         }
 
         // Adjust exposure according to potential command line parameters.
