@@ -1,6 +1,6 @@
 # tev — Tom94's EXR Viewer
 
-A _work-in-progress_ inspection and comparison tool for images with high dynamic range (HDR). Currently supports the following file formats:
+A _work-in-progress_ inspection and comparison tool for images with high dynamic range (HDR). As the name suggests, the predominantly supported file format is OpenEXR, however certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
     - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
