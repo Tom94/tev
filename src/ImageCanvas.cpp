@@ -24,7 +24,7 @@ bool ImageCanvas::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
         mTransform = Translation2f(rel.cast<float>()) * mTransform;
     }
 
-    return true;
+    return false;
 }
 
 bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
