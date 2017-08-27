@@ -6,6 +6,7 @@
 #include <tinyformat.h>
 
 #include <algorithm>
+#include <cmath>
 
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
