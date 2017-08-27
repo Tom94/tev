@@ -35,6 +35,8 @@ public:
 
     void fitAllImages();
 
+    void maximize();
+
 private:
 
     struct ImageInfo {

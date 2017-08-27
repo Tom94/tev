@@ -22,18 +22,27 @@ int mainFunc(int argc, char* argv[]) {
         "This goes after the options.",
     };
 
-    HelpFlag help{
+    HelpFlag helpFlag{
         parser,
         "help",
         "Display this help menu",
         {'h', "help"},
     };
 
-    ValueFlag<float> exposure{
+    ValueFlag<float> exposureFlag{
         parser,
         "exposure",
         "Initial exposure setting of the viewer.",
         {'e', "exposure"},
+    };
+
+    ValueFlag<bool> maximizeFlag{
+        parser,
+        "maximize",
+        "Whether to maximize the window on startup or not. "
+        "If no images were supplied via the command line, then the default is false. "
+        "Otherwise, the default is true.",
+        {'m', "maximize"},
     };
 
     PositionalList<string> imageFiles{
@@ -67,19 +76,34 @@ int mainFunc(int argc, char* argv[]) {
         app->drawAll();
         app->setVisible(true);
 
+        bool shallMaximize = false;
+
         // Load all images which were passed in via the command line.
         if (imageFiles) {
             for (const auto imageFile : get(imageFiles)) {
                 app->addImage(make_shared<Image>(imageFile));
             }
+
+            // If all images were loaded from the command line, then there
+            // is a good chance the user won't want to interact with the OS
+            // to drag more images in. Therefore, let's maximize by default.
+            shallMaximize = true;
         }
 
-        // Resize the application window such that the largest image fits into it.
-        app->fitAllImages();
+        // Override shallMaximize according to the supplied flag
+        if (maximizeFlag) {
+            shallMaximize = get(maximizeFlag);
+        }
+
+        if (shallMaximize) {
+            app->maximize();
+        } else {
+            app->fitAllImages();
+        }
 
         // Adjust exposure according to potential command line parameters.
-        if (exposure) {
-            app->setExposure(get(exposure));
+        if (exposureFlag) {
+            app->setExposure(get(exposureFlag));
         }
 
         nanogui::mainloop();

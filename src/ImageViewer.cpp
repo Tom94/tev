@@ -235,4 +235,8 @@ void ImageViewer::fitAllImages() {
     setSize(mSize.cwiseMax(maxSize));
 }
 
+void ImageViewer::maximize() {
+    glfwMaximizeWindow(mGLFWWindow);
+}
+
 TEV_NAMESPACE_END
