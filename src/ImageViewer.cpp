@@ -208,7 +208,7 @@ float ImageViewer::exposure() {
 }
 
 void ImageViewer::setExposure(float value) {
-    value = round(value * 10) / 10;
+    value = round(value, 1.0f);
     mExposureSlider->setValue(value);
     mExposureLabel->setCaption(tfm::format("EV%+.1f", value));
 

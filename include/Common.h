@@ -30,4 +30,9 @@ constexpr T clamp(T value, T min, T max) {
     return std::max(std::min(value, max), min);
 }
 
+template <typename T>
+constexpr T round(T value, T decimals) {
+    return std::round(value * std::pow(static_cast<T>(10), decimals)) / std::pow(static_cast<T>(10), decimals);
+}
+
 TEV_NAMESPACE_END
