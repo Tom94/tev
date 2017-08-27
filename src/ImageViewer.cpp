@@ -59,7 +59,7 @@ ImageViewer::ImageViewer()
         );
         
         if (!path.empty()) {
-            addImage(std::make_shared<Image>(path));
+            addImage(std::make_shared<Image>(path), true);
         }
     });
 
@@ -119,7 +119,7 @@ bool ImageViewer::dropEvent(const std::vector<std::string>& filenames) {
     }
 
     for (const auto& imageFile : filenames) {
-        addImage(make_shared<Image>(imageFile));
+        addImage(make_shared<Image>(imageFile), true);
     }
 
     return true;
@@ -168,7 +168,7 @@ void ImageViewer::draw(NVGcontext *ctx) {
     Screen::draw(ctx);
 }
 
-void ImageViewer::addImage(shared_ptr<Image> image) {
+void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
     size_t index = mImageInfos.size();
 
     auto button = new ImageButton{mImageButtonContainer, image->name()};
@@ -185,8 +185,9 @@ void ImageViewer::addImage(shared_ptr<Image> image) {
     performLayout();
 
     // First image got added, let's select it.
-    if (index == 0) {
+    if (index == 0 || shallSelect) {
         selectImage(index);
+        fitAllImages();
     }
 }
 

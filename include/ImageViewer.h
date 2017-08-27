@@ -26,7 +26,7 @@ public:
 
     void draw(NVGcontext *ctx) override;
 
-    void addImage(std::shared_ptr<Image> image);
+    void addImage(std::shared_ptr<Image> image, bool shallSelect = false);
 
     void selectImage(size_t index);
 
