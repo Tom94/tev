@@ -24,22 +24,22 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
-    : nanogui::Screen(Vector2i(1024, 767), "Viewer") {
+    : nanogui::Screen(Vector2i{1024, 767}, "Viewer") {
 
     auto screenSplit = new Widget(this);
-    screenSplit->setLayout(new BoxLayout(Orientation::Horizontal, Alignment::Fill));
+    screenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
     auto leftSide = new Widget(screenSplit);
     leftSide->setFixedWidth(mMenuWidth);
-    leftSide->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill, 0, 0));
+    leftSide->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas(screenSplit, pixelRatio());
+    mImageCanvas = new ImageCanvas{screenSplit, pixelRatio()};
 
     performLayout();
 
-    auto tools = new Widget(leftSide);
-    tools->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill, 5));
-    auto b = new Button(tools, "Open file");
+    auto tools = new Widget{leftSide};
+    tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+    auto b = new Button{tools, "Open file"};
     b->setCallback([&] {
         string path = file_dialog(
             {
@@ -65,35 +65,35 @@ ImageViewer::ImageViewer()
 
     // Exposure label and slider
     {
-        auto spacer = new Widget(leftSide);
+        auto spacer = new Widget{leftSide};
         spacer->setHeight(10);
 
-        Widget* panel = new Widget(leftSide);
-        panel->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill, 5));
-        new Label(panel, "Settings", "sans-bold", 20);
+        Widget* panel = new Widget{leftSide};
+        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        new Label{panel, "Settings", "sans-bold", 20};
 
-        panel = new Widget(leftSide);
-        panel->setLayout(new BoxLayout(Orientation::Horizontal, Alignment::Middle, 5));
+        panel = new Widget{leftSide};
+        panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5});
 
-        mExposureLabel = new Label(panel, "", "sans-bold");
+        mExposureLabel = new Label{panel, "", "sans-bold"};
 
-        mExposureSlider = new Slider(panel);
+        mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
         mExposureSlider->setFixedWidth(mMenuWidth - 50);
     }
 
     // Image selection
     {
-        auto spacer = new Widget(leftSide);
+        auto spacer = new Widget{leftSide};
         spacer->setHeight(10);
 
-        auto panel = new Widget(leftSide);
-        panel->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill, 5));
-        new Label(panel, "Images", "sans-bold", 20);
+        auto panel = new Widget{leftSide};
+        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        new Label{panel, "Images", "sans-bold", 20};
 
-        mImageScrollContainer = new VScrollPanel(leftSide);
-        mImageButtonContainer = new Widget(mImageScrollContainer);
-        mImageButtonContainer->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill));
+        mImageScrollContainer = new VScrollPanel{leftSide};
+        mImageButtonContainer = new Widget{mImageScrollContainer};
+        mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
         mImageScrollContainer->setFixedWidth(mMenuWidth);
 
         mExposureSlider->setCallback([this](float value) {
@@ -171,7 +171,7 @@ void ImageViewer::draw(NVGcontext *ctx) {
 void ImageViewer::addImage(shared_ptr<Image> image) {
     size_t index = mImageInfos.size();
 
-    auto button = new ImageButton(mImageButtonContainer, image->name());
+    auto button = new ImageButton{mImageButtonContainer, image->name()};
     button->setSelectedCallback([this,index]() {
         selectImage(index);
     });
@@ -192,7 +192,7 @@ void ImageViewer::addImage(shared_ptr<Image> image) {
 
 void ImageViewer::selectImage(size_t index) {
     if (index >= mImageInfos.size()) {
-        throw invalid_argument("Invalid image index.");
+        throw invalid_argument{tfm::format("Invalid image index (%d) should be in range [0,%d).", index, mImageInfos.size())};
     }
 
     for (size_t i = 0; i < mImageInfos.size(); ++i) {
