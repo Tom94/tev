@@ -7,9 +7,10 @@
 #include "../include/ImageButton.h"
 #include "../include/ImageCanvas.h"
 
-#include <nanogui/screen.h>
-#include <nanogui/opengl.h>
 #include <nanogui/glutil.h>
+#include <nanogui/opengl.h>
+#include <nanogui/screen.h>
+#include <nanogui/slider.h>
 
 #include <vector>
 #include <memory>
@@ -32,11 +33,25 @@ public:
 
     void selectImage(size_t index);
 
-    float exposure();
+    float exposure() {
+        return mExposureSlider->value();
+    }
+
     void setExposure(float value);
 
-    void fitAllImages();
+    ImageCanvas::EMetric metric() {
+        return mImageCanvas->metric();
+    }
 
+    void setMetric(ImageCanvas::EMetric metric);
+
+    ImageCanvas::ETonemap tonemap() {
+        return mImageCanvas->tonemap();
+    }
+
+    void setTonemap(ImageCanvas::ETonemap tonemap);
+
+    void fitAllImages();
     void maximize();
 
 private:
@@ -57,6 +72,9 @@ private:
     nanogui::VScrollPanel* mImageScrollContainer;
 
     ImageCanvas* mImageCanvas;
+
+    nanogui::Widget* mMetricButtonContainer;
+    nanogui::Widget* mTonemapButtonContainer;
 };
 
 TEV_NAMESPACE_END

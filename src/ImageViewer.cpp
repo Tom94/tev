@@ -13,7 +13,6 @@
 #include <nanogui/label.h>
 #include <nanogui/button.h>
 #include <nanogui/textbox.h>
-#include <nanogui/slider.h>
 #include <nanogui/tabwidget.h>
 #include <nanogui/vscrollpanel.h>
 
@@ -37,38 +36,9 @@ ImageViewer::ImageViewer()
 
     mImageCanvas = new ImageCanvas{screenSplit, pixelRatio()};
 
-    auto tools = new Widget{leftSide};
-    tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-    auto b = new Button{tools, "Open image file"};
-    b->setCallback([&] {
-        string path = file_dialog(
-            {
-                { "exr",  "OpenEXR image" },
-                { "hdr",  "HDR image" },
-                { "bmp",  "Bitmap Image File" },
-                { "gif",  "Graphics Interchange Format image" },
-                { "jpg",  "JPEG image" },
-                { "jpeg", "JPEG image" },
-                { "pic",  "PIC image" },
-                { "png",  "Portable Network Graphics image" },
-                { "pnm",  "Portable Any Map image" },
-                { "psd",  "PSD image" },
-                { "tga",  "Truevision TGA image" },
-            },
-            false
-        );
-
-        if (!path.empty()) {
-            tryLoadImage(path, true);
-        }
-    });
-
     // Exposure label and slider
     {
-        auto spacer = new Widget{leftSide};
-        spacer->setHeight(10);
-
-        Widget* panel = new Widget{leftSide};
+        auto panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Tonemapping", "sans-bold", 20};
         label->setTooltip(
@@ -83,12 +53,74 @@ ImageViewer::ImageViewer()
 
         mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
-        mExposureSlider->setFixedWidth(mMenuWidth - 50);
+        mExposureSlider->setFixedWidth(mMenuWidth - 47);
 
         mExposureSlider->setCallback([this](float value) {
             setExposure(value);
         });
         setExposure(0);
+    }
+
+    // Tonemap options
+    {
+        mTonemapButtonContainer = new Widget{leftSide};
+        mTonemapButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 1});
+
+        auto makeTonemapButton = [&](const string& name, function<void()> callback) {
+            auto button = new Button{mTonemapButtonContainer, name};
+            button->setFlags(Button::RadioButton);
+            button->setFontSize(15);
+            return button;
+        };
+
+        auto errorButton = makeTonemapButton("sRGB", [this]() {
+            setTonemap(ImageCanvas::ETonemap::SRGB);
+        });
+
+        makeTonemapButton("Gamma", [this]() {
+            setTonemap(ImageCanvas::ETonemap::Gamma);
+        });
+
+        makeTonemapButton("False-color", [this]() {
+            setTonemap(ImageCanvas::ETonemap::FalseColor);
+        });
+
+        errorButton->setPushed(true);
+    }
+
+    // Error metrics
+    {
+        mMetricButtonContainer = new Widget{leftSide};
+        mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
+
+        auto makeMetricButton = [&](const string& name, function<void()> callback) {
+            auto button = new Button{mMetricButtonContainer, name};
+            button->setFlags(Button::RadioButton);
+            button->setFontSize(15);
+            return button;
+        };
+
+        auto errorButton = makeMetricButton("E", [this]() {
+            setMetric(ImageCanvas::EMetric::Error);
+        });
+
+        makeMetricButton("SE", [this]() {
+            setMetric(ImageCanvas::EMetric::SquaredError);
+        });
+
+        makeMetricButton("RSE", [this]() {
+            setMetric(ImageCanvas::EMetric::RelativeSquaredError);
+        });
+
+        makeMetricButton("AE", [this]() {
+            setMetric(ImageCanvas::EMetric::AbsoluteError);
+        });
+
+        makeMetricButton("RAE", [this]() {
+            setMetric(ImageCanvas::EMetric::RelativeAbsoluteError);
+        });
+
+        errorButton->setPushed(true);
     }
 
     // Image selection
@@ -106,9 +138,41 @@ ImageViewer::ImageViewer()
         );
 
         mImageScrollContainer = new VScrollPanel{leftSide};
-        mImageButtonContainer = new Widget{mImageScrollContainer};
+        auto scrollContent = new Widget{mImageScrollContainer};
+        scrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+
+        mImageButtonContainer = new Widget{scrollContent};
         mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
         mImageScrollContainer->setFixedWidth(mMenuWidth);
+
+        spacer = new Widget{scrollContent};
+        spacer->setHeight(5);
+
+        auto tools = new Widget{scrollContent};
+        tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        auto b = new Button{tools, "Open image file"};
+        b->setCallback([&] {
+            string path = file_dialog(
+            {
+                {"exr",  "OpenEXR image"},
+                {"hdr",  "HDR image"},
+                {"bmp",  "Bitmap Image File"},
+                {"gif",  "Graphics Interchange Format image"},
+                {"jpg",  "JPEG image"},
+                {"jpeg", "JPEG image"},
+                {"pic",  "PIC image"},
+                {"png",  "Portable Network Graphics image"},
+                {"pnm",  "Portable Any Map image"},
+                {"psd",  "PSD image"},
+                {"tga",  "Truevision TGA image"},
+            },
+            false
+            );
+
+            if (!path.empty()) {
+                tryLoadImage(path, true);
+            }
+        });
     }
 
     setResizeCallback([this, screenSplit](Vector2i size) {
@@ -163,10 +227,24 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         }
 
-        if (key == GLFW_KEY_LEFT) {
+        if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             selectImage((mCurrentImage - 1 + amountImages) % amountImages);
-        } else if (key == GLFW_KEY_RIGHT) {
-            selectImage((mCurrentImage + 1 + amountImages) % amountImages);
+        } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN) {
+            selectImage((mCurrentImage + 1) % amountImages);
+        }
+
+        if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                setTonemap(static_cast<ImageCanvas::ETonemap>((tonemap() + 1) % ImageCanvas::AmountTonemaps));
+            } else if (modifiers & GLFW_MOD_CONTROL) {
+                setMetric(static_cast<ImageCanvas::EMetric>((metric() + 1) % ImageCanvas::AmountMetrics));
+            }
+        } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                setTonemap(static_cast<ImageCanvas::ETonemap>((tonemap() - 1 + ImageCanvas::AmountTonemaps) % ImageCanvas::AmountTonemaps));
+            } else if (modifiers & GLFW_MOD_CONTROL) {
+                setMetric(static_cast<ImageCanvas::EMetric>((metric() - 1 + ImageCanvas::AmountMetrics) % ImageCanvas::AmountMetrics));
+            }
         }
     }
 
@@ -223,16 +301,30 @@ void ImageViewer::selectImage(size_t index) {
     mImageCanvas->setImage(mImageInfos[mCurrentImage].image);
 }
 
-float ImageViewer::exposure() {
-    return mExposureSlider->value();
-}
-
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
     mExposureSlider->setValue(value);
     mExposureLabel->setCaption(tfm::format("EV%+.1f", value));
 
     mImageCanvas->setExposure(value);
+}
+
+void ImageViewer::setMetric(ImageCanvas::EMetric metric) {
+    mImageCanvas->setMetric(metric);
+    auto& buttons = mMetricButtonContainer->children();
+    for (int i = 0; i < buttons.size(); ++i) {
+        Button* b = dynamic_cast<Button*>(buttons[i]);
+        b->setPushed(i == metric);
+    }
+}
+
+void ImageViewer::setTonemap(ImageCanvas::ETonemap tonemap) {
+    mImageCanvas->setTonemap(tonemap);
+    auto& buttons = mTonemapButtonContainer->children();
+    for (int i = 0; i < buttons.size(); ++i) {
+        Button* b = dynamic_cast<Button*>(buttons[i]);
+        b->setPushed(i == tonemap);
+    }
 }
 
 void ImageViewer::fitAllImages() {

@@ -32,6 +32,44 @@ public:
         mImage = image;
     }
 
+    enum EMetric : int {
+        Error = 0,
+        SquaredError,
+        RelativeSquaredError,
+        AbsoluteError,
+        RelativeAbsoluteError,
+
+        // This enum value should never be used directly.
+        // It facilitates looping over all members of this enum.
+        AmountMetrics,
+    };
+
+    EMetric metric() {
+        return mMetric;
+    }
+
+    void setMetric(EMetric metric) {
+        mMetric = metric;
+    }
+
+    enum ETonemap : int {
+        SRGB = 0,
+        Gamma,
+        FalseColor,
+
+        // This enum value should never be used directly.
+        // It facilitates looping over all members of this enum.
+        AmountTonemaps,
+    };
+
+    ETonemap tonemap() {
+        return mTonemap;
+    }
+
+    void setTonemap(ETonemap tonemap) {
+        mTonemap = tonemap;
+    }
+
 private:
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
@@ -42,11 +80,14 @@ private:
     std::shared_ptr<Image> mImage;
     Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
 
-    GammaShader mShader;
+    UberShader mShader;
     CheckerboardShader mCheckerboardShader;
 
     GlTexture mTextureBlack;
     GlTexture mTextureWhite;
+
+    EMetric mMetric = Error;
+    ETonemap mTonemap = SRGB;
 };
 
 TEV_NAMESPACE_END
