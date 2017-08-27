@@ -14,6 +14,7 @@ ImageButton::ImageButton(Widget *parent, const string &caption)
     : Widget(parent), mCaption(caption)
 {
     mFontSize = 15;
+    setTooltip(caption);
 }
 
 Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {

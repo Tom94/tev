@@ -39,7 +39,7 @@ ImageViewer::ImageViewer()
 
     auto tools = new Widget{leftSide};
     tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-    auto b = new Button{tools, "Open file"};
+    auto b = new Button{tools, "Open image file"};
     b->setCallback([&] {
         string path = file_dialog(
             {
@@ -70,7 +70,10 @@ ImageViewer::ImageViewer()
 
         Widget* panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        new Label{panel, "Settings", "sans-bold", 20};
+        auto label = new Label{panel, "Tonemapping", "sans-bold", 20};
+        label->setTooltip(
+            "The Exposure Value (EV) scales the brightness of an image prior to tonemapping by 2^EV."
+        );
 
         panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5});
@@ -80,6 +83,11 @@ ImageViewer::ImageViewer()
         mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
         mExposureSlider->setFixedWidth(mMenuWidth - 50);
+
+        mExposureSlider->setCallback([this](float value) {
+            setExposure(value);
+        });
+        setExposure(0);
     }
 
     // Image selection
@@ -89,17 +97,17 @@ ImageViewer::ImageViewer()
 
         auto panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        new Label{panel, "Images", "sans-bold", 20};
+        auto label = new Label{panel, "Images", "sans-bold", 20};
+        label->setTooltip(
+            "Select images either by left-clicking on them or by pressing arrow/number keys on your keyboard.\n"
+            "Right-clicking an image marks it as the 'reference' image. "
+            "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
+        );
 
         mImageScrollContainer = new VScrollPanel{leftSide};
         mImageButtonContainer = new Widget{mImageScrollContainer};
         mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
         mImageScrollContainer->setFixedWidth(mMenuWidth);
-
-        mExposureSlider->setCallback([this](float value) {
-            setExposure(value);
-        });
-        setExposure(0);
     }
 
     setResizeCallback([this, screenSplit](Vector2i size) {
