@@ -37,8 +37,6 @@ ImageViewer::ImageViewer()
 
     mImageCanvas = new ImageCanvas{screenSplit, pixelRatio()};
 
-    performLayout();
-
     auto tools = new Widget{leftSide};
     tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
     auto b = new Button{tools, "Open image file"};
