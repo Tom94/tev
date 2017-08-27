@@ -61,12 +61,15 @@ int mainFunc(int argc, char* argv[]) {
         app->drawAll();
         app->setVisible(true);
 
+        // Load all images which were passed in via the command line.
         for (const auto imageFile : get(imageFiles)) {
             app->addImage(make_shared<Image>(imageFile));
         }
 
+        // Resize the application window such that the largest image fits into it.
         app->fitAllImages();
 
+        // Adjust exposure according to potential command line parameters.
         if (exposure) {
             app->setExposure(get(exposure));
         }
