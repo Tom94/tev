@@ -110,7 +110,7 @@ void ImageButton::draw(NVGcontext *ctx) {
     }
 
     if (caption.length() != mCaption.length()) {
-        caption = "..."s + caption;
+        caption = "…"s + caption;
     }
 
     Vector2f center = mPos.cast<float>() + mSize.cast<float>() * 0.5f;
