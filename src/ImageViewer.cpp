@@ -17,6 +17,8 @@
 #include <nanogui/tabwidget.h>
 #include <nanogui/vscrollpanel.h>
 
+#include <Iex.h>
+
 using namespace Eigen;
 using namespace nanogui;
 using namespace std;
@@ -203,6 +205,8 @@ void ImageViewer::tryLoadImage(const std::string& filename, bool shallSelect) {
     try {
         addImage(make_shared<Image>(filename), shallSelect);
     } catch (invalid_argument e) {
+        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
+    } catch (Iex::BaseExc& e) {
         tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
     }
 }
