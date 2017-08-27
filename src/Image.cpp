@@ -103,18 +103,18 @@ void Image::readExr(const std::string& filename) {
     // Inline helper class for dealing with the raw channels loaded from an exr file.
     class RawChannel {
     public:
-        RawChannel(string name, Imf::PixelType type, size_t size)
-            : mName(name), mType(type) {
+        RawChannel(string name, Imf::Channel imfChannel, size_t size)
+            : mName(name), mImfChannel(imfChannel) {
             mData.resize(size * bytesPerPixel());
         }
 
         void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
             int width = dw.max.x - dw.min.x + 1;
             frameBuffer.insert(mName.c_str(), Imf::Slice(
-                mType,
-                mData.data() - (dw.min.x - dw.min.y * width) * bytesPerPixel(),
-                bytesPerPixel(), bytesPerPixel() * width, // stride in x and y
-                1, 1, 0
+                mImfChannel.type,
+                mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
+                bytesPerPixel(), bytesPerPixel() * width,
+                mImfChannel.xSampling, mImfChannel.ySampling, 0
             ));
         }
 
@@ -125,7 +125,7 @@ void Image::readExr(const std::string& filename) {
 
             for (size_t i = 0; i < dstData.size(); ++i) {
                 size_t rawIdx = i * bpp;
-                switch (mType) {
+                switch (mImfChannel.type) {
                     case Imf::HALF:  dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[rawIdx]));     break;
                     case Imf::FLOAT: dstData[i] = static_cast<float>(*reinterpret_cast<const float*>(&mData[rawIdx]));    break;
                     case Imf::UINT:  dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[rawIdx])); break;
@@ -141,11 +141,17 @@ void Image::readExr(const std::string& filename) {
 
     private:
         int bytesPerPixel() const {
-            return mType == Imf::HALF ? 2 : 4;
+            switch (mImfChannel.type) {
+                case Imf::HALF:  return sizeof(half);
+                case Imf::FLOAT: return sizeof(float);
+                case Imf::UINT:  return sizeof(uint32_t);
+                default:
+                    throw runtime_error("Invalid pixel type encountered.");
+            }
         }
 
         string mName;
-        Imf::PixelType mType;
+        Imf::Channel mImfChannel;
         vector<char> mData;
     };
 
