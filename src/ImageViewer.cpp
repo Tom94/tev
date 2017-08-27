@@ -94,7 +94,7 @@ ImageViewer::ImageViewer()
         mImageScrollContainer = new VScrollPanel(leftSide);
         mImageButtonContainer = new Widget(mImageScrollContainer);
         mImageButtonContainer->setLayout(new BoxLayout(Orientation::Vertical, Alignment::Fill));
-        mImageButtonContainer->setFixedWidth(mMenuWidth - 15);
+        mImageScrollContainer->setFixedWidth(mMenuWidth);
 
         mExposureSlider->setCallback([this](float value) {
             setExposure(value);
@@ -166,11 +166,10 @@ void ImageViewer::draw(NVGcontext *ctx) {
 void ImageViewer::addImage(shared_ptr<Image> image) {
     size_t index = mImageInfos.size();
 
-    auto button = new ImageButton(nvgContext(), mImageButtonContainer, image->name());
-    button->setCallback([this,index]() {
+    auto button = new ImageButton(mImageButtonContainer, image->name());
+    button->setSelectedCallback([this,index]() {
         selectImage(index);
     });
-    button->setFlags(Button::RadioButton);
     button->setFontSize(15);
 
     mImageInfos.push_back({
@@ -192,7 +191,7 @@ void ImageViewer::selectImage(size_t index) {
     }
 
     for (size_t i = 0; i < mImageInfos.size(); ++i) {
-        mImageInfos[i].button->setPushed(i == index);
+        mImageInfos[i].button->setIsSelected(i == index);
     }
 
     mCurrentImage = index;
