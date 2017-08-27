@@ -134,11 +134,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
     if (action == GLFW_PRESS) {
         if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
-            selectImage(clamp(key - GLFW_KEY_1, 0, amountImages - 1));
-        } else if (key == GLFW_KEY_LEFT) {
-            selectImage((mCurrentImage - 1 + amountImages) % amountImages);
-        } else if (key == GLFW_KEY_RIGHT) {
-            selectImage((mCurrentImage + 1 + amountImages) % amountImages);
+            int idx = (key - GLFW_KEY_1 + 10) % 10;
+            if (idx >= 0 && idx < amountImages) {
+                selectImage(idx);
+            }
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -153,6 +152,12 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             } else {
                 setExposure(exposure() + 0.5f);
             }
+        }
+
+        if (key == GLFW_KEY_LEFT) {
+            selectImage((mCurrentImage - 1 + amountImages) % amountImages);
+        } else if (key == GLFW_KEY_RIGHT) {
+            selectImage((mCurrentImage + 1 + amountImages) % amountImages);
         }
     }
 
