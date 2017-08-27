@@ -28,6 +28,8 @@ public:
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false);
 
+    void tryLoadImage(const std::string& filename, bool shallSelect = false);
+
     void selectImage(size_t index);
 
     float exposure();

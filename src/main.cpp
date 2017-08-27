@@ -81,7 +81,7 @@ int mainFunc(int argc, char* argv[]) {
         // Load all images which were passed in via the command line.
         if (imageFiles) {
             for (const auto imageFile : get(imageFiles)) {
-                app->addImage(make_shared<Image>(imageFile));
+                app->tryLoadImage(imageFile);
             }
 
             // If all images were loaded from the command line, then there

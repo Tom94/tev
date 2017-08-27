@@ -15,13 +15,21 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool endsWith(const string& a, const string& b) {
-    return a.length() >= b.length() && a.compare(a.length() - b.length(), b.length(), b) == 0;
+bool isExrFile(const string& filename) {
+    std::ifstream f{filename, std::ios_base::binary};
+    if (!f) {
+        throw invalid_argument{tfm::format("File %s could not be opened.", filename)};
+    }
+
+    // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
+    char b[4];
+    f.read(b, sizeof(b));
+    return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 }
 
 Image::Image(const string& filename)
     : mName(filename) {
-    if (endsWith(filename, ".exr")) {
+    if (isExrFile(filename)) {
         readExr(filename);
     } else {
         readStbi(filename);
