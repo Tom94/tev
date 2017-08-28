@@ -1,5 +1,6 @@
 # Build artifacts
 /build
+/x64
 
 # Automatically generated files by .vscode
 /.vscode/.cmaketools.json
