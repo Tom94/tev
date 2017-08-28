@@ -25,7 +25,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
-    : nanogui::Screen(Vector2i{1024, 767}, "Viewer") {
+    : nanogui::Screen(Vector2i{1024, 767}, "tev") {
 
     auto screenSplit = new Widget(this);
     screenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
