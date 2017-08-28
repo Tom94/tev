@@ -20,8 +20,13 @@ ImageButton::ImageButton(Widget *parent, const string &caption)
 Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans-bold");
+    string idString = to_string(mId);
+    float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
+
+    nvgFontSize(ctx, mFontSize);
+    nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
-    return Vector2i(static_cast<int>(tw) + 10, mFontSize + 6);
+    return Vector2i(static_cast<int>(tw + idSize) + 10, mFontSize + 6);
 }
 
 bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
@@ -104,8 +109,14 @@ void ImageButton::draw(NVGcontext *ctx) {
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans-bold");
 
+    string idString = to_string(mId);
+    float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
+
+    nvgFontSize(ctx, mFontSize);
+    nvgFontFace(ctx, "sans");
+
     string caption = mCaption;
-    while (nvgTextBounds(ctx, 0, 0, caption.c_str(), nullptr, nullptr) > mSize.x() - 15) {
+    while (nvgTextBounds(ctx, 0, 0, caption.c_str(), nullptr, nullptr) > mSize.x() - 20 - idSize) {
         caption = caption.substr(1, caption.length() - 1);
     }
 
@@ -121,13 +132,23 @@ void ImageButton::draw(NVGcontext *ctx) {
         textColor = Color(0.7f, 0.7f, 0.7f, 1.0f);
     }
 
+    // Image name
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans");
     nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(ctx, Color(0.2f, 0.2f, 0.2f, 0.2f));
+    nvgFillColor(ctx, Color(0.2f, 0.2f, 0.2f, 1.0f));
     nvgText(ctx, textPos.x(), textPos.y(), caption.c_str(), nullptr);
     nvgFillColor(ctx, textColor);
     nvgText(ctx, textPos.x(), textPos.y() + 1, caption.c_str(), nullptr);
+
+    // Image number
+    nvgFontSize(ctx, mFontSize);
+    nvgFontFace(ctx, "sans-bold");
+    nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(ctx, Color(0.2f, 0.2f, 0.2f, 1.0f));
+    nvgText(ctx, mPos.x() + 5, textPos.y(), idString.c_str(), nullptr);
+    nvgFillColor(ctx, textColor);
+    nvgText(ctx, mPos.x() + 5, textPos.y() + 1, idString.c_str(), nullptr);
 }
 
 TEV_NAMESPACE_END

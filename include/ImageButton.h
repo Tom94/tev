@@ -37,6 +37,10 @@ public:
         mIsSelected = isSelected;
     }
 
+    void setId(size_t id) {
+        mId = id;
+    }
+
 private:
     std::string mCaption;
 
@@ -45,6 +49,8 @@ private:
 
     bool mIsSelected = false;
     std::function<void()> mSelectedCallback;
+
+    size_t mId = 0;
 };
 
 TEV_NAMESPACE_END

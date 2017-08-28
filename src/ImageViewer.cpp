@@ -148,7 +148,7 @@ ImageViewer::ImageViewer()
         mImageScrollContainer->setFixedWidth(mMenuWidth);
 
         spacer = new Widget{scrollContent};
-        spacer->setHeight(5);
+        spacer->setHeight(3);
 
         auto tools = new Widget{scrollContent};
         tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
@@ -274,6 +274,7 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
 
     auto button = new ImageButton{mImageButtonContainer, image->name()};
     button->setFontSize(15);
+    button->setId(index + 1);
 
     button->setSelectedCallback([this,index]() {
         selectImage(index);
