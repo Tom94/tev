@@ -80,7 +80,7 @@ const GlTexture* Image::texture(const std::string& channelName) {
 
     const auto* chan = channel(channelName);
     if (!chan) {
-        return nullptr;
+        throw invalid_argument{tfm::format("Cannot obtain texture of channel %s, because the channel does not exist.", channelName)};
     }
 
     mTextures.emplace(channelName, GlTexture{});
