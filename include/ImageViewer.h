@@ -65,6 +65,7 @@ private:
     };
 
     int mMenuWidth = 200;
+    int mFooterHeight = 25;
 
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;

@@ -25,8 +25,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
-    : nanogui::Screen(Vector2i{1024, 767}, "tev") {
-
+: nanogui::Screen(Vector2i{1024, 767}, "tev") {
     auto screenSplit = new Widget(this);
     screenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
@@ -179,8 +178,8 @@ ImageViewer::ImageViewer()
 
     setResizeCallback([this, screenSplit](Vector2i size) {
         screenSplit->setFixedSize(size);
-        mImageCanvas->setFixedSize(size - Vector2i{mMenuWidth, 0});
-        mImageScrollContainer->setFixedHeight(size.y() - mImageScrollContainer->position().y());
+        mImageCanvas->setFixedSize(size - Vector2i{mMenuWidth, mFooterHeight});
+        mImageScrollContainer->setFixedHeight(size.y() - mImageScrollContainer->position().y() - mFooterHeight);
 
         performLayout();
     });

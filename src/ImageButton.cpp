@@ -11,8 +11,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageButton::ImageButton(Widget *parent, const string &caption)
-    : Widget(parent), mCaption(caption)
-{
+: Widget(parent), mCaption(caption) {
     mFontSize = 15;
     setTooltip(caption);
 }

@@ -28,7 +28,7 @@ bool isExrFile(const string& filename) {
 }
 
 Image::Image(const string& filename)
-    : mName(filename) {
+: mName(filename) {
     if (isExrFile(filename)) {
         readExr(filename);
     } else {
@@ -104,7 +104,7 @@ void Image::readExr(const std::string& filename) {
     class RawChannel {
     public:
         RawChannel(string name, Imf::Channel imfChannel, size_t size)
-            : mName(name), mImfChannel(imfChannel) {
+        : mName(name), mImfChannel(imfChannel) {
             mData.resize(size * bytesPerPixel());
         }
 

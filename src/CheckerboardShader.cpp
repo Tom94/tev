@@ -9,7 +9,6 @@ using namespace nanogui;
 TEV_NAMESPACE_BEGIN
 
 CheckerboardShader::CheckerboardShader() {
-
     mShader.init(
         "tonemapper",
 
