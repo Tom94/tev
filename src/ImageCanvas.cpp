@@ -5,6 +5,7 @@
 
 using namespace Eigen;
 using namespace nanogui;
+using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
@@ -56,23 +57,23 @@ void ImageCanvas::drawGL() {
         return;
     }
 
+    auto getTextures = [this](Image& image) {
+        const auto& imageChannels = getChannels(image);
+        return array<const GlTexture*, 4>{{
+            imageChannels.size() > 0 ? image.texture(imageChannels[0]) : &mTextureBlack,
+            imageChannels.size() > 1 ? image.texture(imageChannels[1]) : &mTextureBlack,
+            imageChannels.size() > 2 ? image.texture(imageChannels[2]) : &mTextureBlack,
+            imageChannels.size() > 3 ? image.texture(imageChannels[3]) : &mTextureWhite,
+        }};
+    };
+
     if (mReference) {
         mShader.draw(
-            {{
-                mImage->hasChannel("R") ? mImage->texture("R") : &mTextureBlack,
-                mImage->hasChannel("G") ? mImage->texture("G") : &mTextureBlack,
-                mImage->hasChannel("B") ? mImage->texture("B") : &mTextureBlack,
-                mImage->hasChannel("A") ? mImage->texture("A") : &mTextureWhite,
-            }},
+            getTextures(*mImage),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(mImage.get()).inverse(),
-            {{
-                (mReference && mReference->hasChannel("R")) ? mReference->texture("R") : &mTextureBlack,
-                (mReference && mReference->hasChannel("G")) ? mReference->texture("G") : &mTextureBlack,
-                (mReference && mReference->hasChannel("B")) ? mReference->texture("B") : &mTextureBlack,
-                (mReference && mReference->hasChannel("A")) ? mReference->texture("A") : &mTextureWhite,
-            }},
+            getTextures(*mReference),
             transform(mImage.get()).inverse(),
             mExposure,
             mTonemap,
@@ -80,12 +81,7 @@ void ImageCanvas::drawGL() {
         );
     } else {
         mShader.draw(
-            {{
-                mImage->hasChannel("R") ? mImage->texture("R") : &mTextureBlack,
-                mImage->hasChannel("G") ? mImage->texture("G") : &mTextureBlack,
-                mImage->hasChannel("B") ? mImage->texture("B") : &mTextureBlack,
-                mImage->hasChannel("A") ? mImage->texture("A") : &mTextureWhite,
-            }},
+            getTextures(*mImage),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(mImage.get()).inverse(),
@@ -93,6 +89,65 @@ void ImageCanvas::drawGL() {
             mTonemap
         );
     }
+}
+
+vector<string> ImageCanvas::getChannels(const Image& image) {
+    vector<vector<string>> groups = {
+        { "R", "G", "B" },
+        { "r", "g", "b" },
+        { "X", "Y", "Z" },
+        { "x", "y", "z" },
+        { "U", "V" },
+        { "u", "v" },
+        { "Z" },
+        { "z" },
+    };
+
+    string layerPrefix = mRequestedLayer.empty() ? "" : (mRequestedLayer + ".");
+
+    vector<string> result;
+    for (const auto& group : groups) {
+        for (size_t i = 0; i < group.size(); ++i) {
+            const auto& name = layerPrefix + group[i];
+            if (image.hasChannel(name)) {
+                result.emplace_back(name);
+            }
+        }
+
+        if (!result.empty()) {
+            break;
+        }
+    }
+
+    string alphaChannelName = layerPrefix + "A";
+
+    // No channels match the given groups; fall back to the first 3 channels.
+    if (result.empty()) {
+        const auto& channelNames = image.channelsInLayer(mRequestedLayer);
+        for (const auto& name : channelNames) {
+            if (name != alphaChannelName) {
+                result.emplace_back(name);
+            }
+
+            if (result.size() >= 3) {
+                break;
+            }
+        }
+    }
+
+    // If we found just 1 channel, let's display is as grayscale
+    // by duplicating it twice.
+    if (result.size() == 1) {
+        result.emplace_back(result[0]);
+        result.emplace_back(result[0]);
+    }
+
+    // If there is an alpha layer, use it
+    if (image.hasChannel(alphaChannelName)) {
+        result.emplace_back(alphaChannelName);
+    }
+
+    return result;
 }
 
 Matrix3f ImageCanvas::transform(const Image* image) {

@@ -16,25 +16,34 @@ class Image {
 public:
     Image(const std::string& filename);
 
-    const std::string& name() {
+    const auto& name() {
         return mName;
     }
+
+    std::string shortName();
 
     bool hasChannel(const std::string& channelName) const {
         return mChannels.count(channelName) != 0;
     }
 
     const Channel* channel(const std::string& channelName) const {
-        if (!hasChannel(channelName)) {
+        if (hasChannel(channelName)) {
+            return &mChannels.at(channelName);
+        } else {
             return nullptr;
         }
-        return &mChannels.at(channelName);
     }
+
+    std::vector<std::string> channelsInLayer(std::string layerName) const;
 
     const GlTexture* texture(const std::string& channelName);
 
-    const Eigen::Vector2i& size() const {
+    const auto& size() const {
         return mSize;
+    }
+
+    const auto& layers() const {
+        return mLayers;
     }
 
 private:
@@ -47,6 +56,8 @@ private:
     size_t mNumChannels;
     std::map<std::string, Channel> mChannels;
     std::map<std::string, GlTexture> mTextures;
+
+    std::vector<std::string> mLayers;
 };
 
 TEV_NAMESPACE_END

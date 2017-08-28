@@ -36,6 +36,12 @@ public:
         mReference = reference;
     }
 
+    void setRequestedLayer(const std::string& layerName) {
+        mRequestedLayer = layerName;
+    }
+
+    std::vector<std::string> getChannels(const Image& image);
+
     ETonemap tonemap() {
         return mTonemap;
     }
@@ -61,6 +67,8 @@ private:
     float mExposure = 0;
     std::shared_ptr<Image> mImage;
     std::shared_ptr<Image> mReference;
+
+    std::string mRequestedLayer;
 
     Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
 

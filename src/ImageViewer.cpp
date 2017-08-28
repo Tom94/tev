@@ -26,14 +26,18 @@ TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
 : nanogui::Screen(Vector2i{1024, 767}, "tev") {
-    auto screenSplit = new Widget(this);
-    screenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
-    auto leftSide = new Widget(screenSplit);
+    auto verticalScreenSplit = new Widget(this);
+    verticalScreenSplit->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+
+    auto horizontalScreenSplit = new Widget(verticalScreenSplit);
+    horizontalScreenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+
+    auto leftSide = new Widget(horizontalScreenSplit);
     leftSide->setFixedWidth(mMenuWidth);
     leftSide->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas{screenSplit, pixelRatio()};
+    mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixelRatio()};
 
     // Exposure label and slider
     {
@@ -176,8 +180,18 @@ ImageViewer::ImageViewer()
         });
     }
 
-    setResizeCallback([this, screenSplit](Vector2i size) {
-        screenSplit->setFixedSize(size);
+    // Layer selection
+    {
+        auto footer = new Widget{verticalScreenSplit};
+        footer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+
+        mLayerButtonContainer = new Widget{footer};
+        mLayerButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+        mLayerButtonContainer->setFixedHeight(mFooterHeight);
+    }
+
+    setResizeCallback([this, verticalScreenSplit](Vector2i size) {
+        verticalScreenSplit->setFixedSize(size);
         mImageCanvas->setFixedSize(size - Vector2i{mMenuWidth, mFooterHeight});
         mImageScrollContainer->setFixedHeight(size.y() - mImageScrollContainer->position().y() - mFooterHeight);
 
@@ -204,15 +218,22 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         return true;
     }
 
-    int amountImages = static_cast<int>(mImageInfos.size());
+    int amountImages = static_cast<int>(mImages.size());
+    int amountLayers = mLayerButtonContainer->childCount();
 
     if (action == GLFW_PRESS) {
         if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
             int idx = (key - GLFW_KEY_1 + 10) % 10;
-            if (idx >= 0 && idx < amountImages) {
-                if (modifiers & GLFW_MOD_SHIFT) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                if (idx >= 0 && idx < amountImages) {
                     selectReference(idx);
-                } else {
+                }
+            } else if (modifiers & GLFW_MOD_CONTROL) {
+                if (idx >= 0 && idx < amountLayers) {
+                    selectLayer(idx);
+                }
+            } else {
+                if (idx >= 0 && idx < amountImages) {
                     selectImage(idx);
                 }
             }
@@ -251,12 +272,16 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                 setTonemap(static_cast<ETonemap>((tonemap() + 1) % AmountTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
+            } else {
+                selectLayer((mCurrentLayer + 1) % amountLayers);
             }
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() - 1 + AmountTonemaps) % AmountTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
+            } else {
+                selectLayer((mCurrentLayer - 1 + amountLayers) % amountLayers);
             }
         }
     }
@@ -269,7 +294,7 @@ void ImageViewer::draw(NVGcontext *ctx) {
 }
 
 void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
-    size_t index = mImageInfos.size();
+    size_t index = mImages.size();
 
     auto button = new ImageButton{mImageButtonContainer, image->name()};
     button->setFontSize(15);
@@ -286,10 +311,7 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
         }
     });
 
-    mImageInfos.push_back({
-        image,
-        button,
-    });
+    mImages.push_back(image);
 
     performLayout();
 
@@ -311,21 +333,87 @@ void ImageViewer::tryLoadImage(const std::string& filename, bool shallSelect) {
 }
 
 void ImageViewer::selectImage(size_t index) {
-    if (index >= mImageInfos.size()) {
-        throw invalid_argument{tfm::format("Invalid image index (%d) should be in range [0,%d).", index, mImageInfos.size())};
+    if (index >= mImages.size()) {
+        throw invalid_argument{tfm::format("Invalid image index (%d) should be in range [0,%d).", index, mImages.size())};
     }
 
-    for (size_t i = 0; i < mImageInfos.size(); ++i) {
-        mImageInfos[i].button->setIsSelected(i == index);
+    string currentLayer = layerName(mCurrentLayer);
+    mCurrentLayer = 0;
+
+    auto& buttons = mImageButtonContainer->children();
+    for (size_t i = 0; i < buttons.size(); ++i) {
+        dynamic_cast<ImageButton*>(buttons[i])->setIsSelected(i == index);
     }
 
     mCurrentImage = index;
-    mImageCanvas->setImage(mImageInfos[mCurrentImage].image);
+
+    const auto& image = mImages[mCurrentImage];
+    mImageCanvas->setImage(image);
+
+    // Clear layer buttons
+    while (mLayerButtonContainer->childCount() > 0) {
+        mLayerButtonContainer->removeChild(mLayerButtonContainer->childCount() - 1);
+    }
+
+    size_t numLayers = image->layers().size();
+    for (size_t i = 0; i < numLayers; ++i) {
+        string layer = layerName(i);
+        layer = layer.empty() ? "<root>"s : layer;
+        auto button = new ImageButton{mLayerButtonContainer, layer};
+        button->setFontSize(15);
+        button->setId(i + 1);
+
+        button->setSelectedCallback([this, i]() {
+            selectLayer(i);
+        });
+    }
+
+    performLayout();
+
+    selectLayer(currentLayer);
+}
+
+void ImageViewer::selectLayer(size_t index) {
+    if (index >= mLayerButtonContainer->children().size()) {
+        throw invalid_argument{tfm::format(
+            "Invalid reference index (%d) should be in range [0,%d).",
+            index,
+            mLayerButtonContainer->children().size()
+        )};
+    }
+
+    auto& buttons = mLayerButtonContainer->children();
+    for (size_t i = 0; i < buttons.size(); ++i) {
+        dynamic_cast<ImageButton*>(buttons[i])->setIsSelected(i == index);
+    }
+
+    mCurrentLayer = index;
+    mImageCanvas->setRequestedLayer(layerName(mCurrentLayer));
+
+    updateTitle();
+}
+
+void ImageViewer::selectLayer(string name) {
+    if (mImages.empty()) {
+        return;
+    }
+
+    size_t numLayers = mImages[mCurrentImage]->layers().size();
+    for (size_t i = 0; i < numLayers; ++i) {
+        if (layerName(i) == name) {
+            selectLayer(i);
+            return;
+        }
+    }
+
+    // If no layer matches, fall back to the first layer.
+    selectLayer(0);
 }
 
 void ImageViewer::unselectReference() {
-    for (size_t i = 0; i < mImageInfos.size(); ++i) {
-        mImageInfos[i].button->setIsReference(false);
+    auto& buttons = mImageButtonContainer->children();
+    for (size_t i = 0; i < buttons.size(); ++i) {
+        dynamic_cast<ImageButton*>(buttons[i])->setIsReference(false);
     }
 
     mCurrentReference = 0;
@@ -333,16 +421,17 @@ void ImageViewer::unselectReference() {
 }
 
 void ImageViewer::selectReference(size_t index) {
-    if (index >= mImageInfos.size()) {
-        throw invalid_argument{tfm::format("Invalid reference index (%d) should be in range [0,%d).", index, mImageInfos.size())};
+    if (index >= mImages.size()) {
+        throw invalid_argument{tfm::format("Invalid reference index (%d) should be in range [0,%d).", index, mImages.size())};
     }
 
-    for (size_t i = 0; i < mImageInfos.size(); ++i) {
-        mImageInfos[i].button->setIsReference(i == index);
+    auto& buttons = mImageButtonContainer->children();
+    for (size_t i = 0; i < buttons.size(); ++i) {
+        dynamic_cast<ImageButton*>(buttons[i])->setIsReference(i == index);
     }
 
     mCurrentReference = index;
-    mImageCanvas->setReference(mImageInfos[mCurrentReference].image);
+    mImageCanvas->setReference(mImages[mCurrentReference]);
 }
 
 void ImageViewer::setExposure(float value) {
@@ -372,13 +461,13 @@ void ImageViewer::setMetric(EMetric metric) {
 }
 
 void ImageViewer::fitAllImages() {
-    if (mImageInfos.empty()) {
+    if (mImages.empty()) {
         return;
     }
 
     Vector2i maxSize = Vector2i::Zero();
-    for (const auto& imageInfo : mImageInfos) {
-        maxSize = maxSize.cwiseMax(imageInfo.image->size());
+    for (const auto& image : mImages) {
+        maxSize = maxSize.cwiseMax(image->size());
     }
 
     // Convert from image pixel coordinates to nanogui coordinates.
@@ -392,6 +481,52 @@ void ImageViewer::fitAllImages() {
 
 void ImageViewer::maximize() {
     glfwMaximizeWindow(mGLFWWindow);
+}
+
+void ImageViewer::updateTitle() {
+    string caption = "tev";
+    if (!mImages.empty()) {
+        const auto& image = mImages[mCurrentImage];
+        const auto& layer = layerName(mCurrentLayer);
+
+        string channelsString;
+        auto channels = mImageCanvas->getChannels(*image);
+        // Remove duplicates
+        channels.erase(unique(begin(channels), end(channels)), end(channels));
+
+        for (string channel : channels) {
+            size_t dotPosition = channel.rfind(".");
+            if (dotPosition != string::npos) {
+                channel = channel.substr(dotPosition + 1);
+            }
+            channelsString += channel + ",";
+        }
+        channelsString.pop_back();
+
+        caption += " - "s + image->shortName();
+
+        if (layer.empty()) {
+            caption += " - "s + channelsString;
+        } else {
+            caption += " - "s + layer;
+            if (channels.size() == 1) {
+                caption += "."s + channelsString;
+            } else {
+                caption += ".("s + channelsString + ")"s;
+            }
+        }
+    }
+
+    setCaption(caption);
+}
+
+string ImageViewer::layerName(size_t index) {
+    if (mImages.empty()) {
+        throw runtime_error{"Can not obtain current layer name if there exists no image."};
+    }
+
+    const auto& image = mImages[mCurrentImage];
+    return image->layers().at(index);
 }
 
 TEV_NAMESPACE_END

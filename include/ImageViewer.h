@@ -33,6 +33,13 @@ public:
 
     void selectImage(size_t index);
 
+    size_t layer() {
+        return mCurrentLayer;
+    }
+
+    void selectLayer(size_t index);
+    void selectLayer(std::string name);
+
     void unselectReference();
     void selectReference(size_t index);
 
@@ -58,11 +65,8 @@ public:
     void maximize();
 
 private:
-
-    struct ImageInfo {
-        std::shared_ptr<Image> image;
-        nanogui::ref<ImageButton> button;
-    };
+    void updateTitle();
+    std::string layerName(size_t index);
 
     int mMenuWidth = 200;
     int mFooterHeight = 25;
@@ -70,17 +74,20 @@ private:
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;
 
+    nanogui::Widget* mTonemapButtonContainer;
+    nanogui::Widget* mMetricButtonContainer;
+
     size_t mCurrentImage = 0;
     size_t mCurrentReference = 0;
 
-    std::vector<ImageInfo> mImageInfos;
+    std::vector<std::shared_ptr<Image>> mImages;
     nanogui::Widget* mImageButtonContainer;
     nanogui::VScrollPanel* mImageScrollContainer;
 
     ImageCanvas* mImageCanvas;
 
-    nanogui::Widget* mMetricButtonContainer;
-    nanogui::Widget* mTonemapButtonContainer;
+    nanogui::Widget* mLayerButtonContainer;
+    size_t mCurrentLayer = 0;
 };
 
 TEV_NAMESPACE_END

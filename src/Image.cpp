@@ -10,6 +10,7 @@
 
 #include <array>
 #include <iostream>
+#include <set>
 
 using namespace std;
 
@@ -34,6 +35,41 @@ Image::Image(const string& filename)
     } else {
         readStbi(filename);
     }
+}
+
+string Image::shortName() {
+    size_t slashPosition = mName.find_last_of("/\\");
+    if (slashPosition != string::npos) {
+        return mName.substr(slashPosition + 1);
+    }
+
+    return mName;
+}
+
+vector<string> Image::channelsInLayer(string layerName) const {
+    vector<string> result;
+
+    if (layerName.empty()) {
+        for (const auto& kv : mChannels) {
+            if (kv.first.find(".") == string::npos) {
+                result.emplace_back(kv.first);
+            }
+        }
+    } else {
+        for (const auto& kv : mChannels) {
+            // If the layer name starts at the beginning, and
+            // if no other dot is found after the end of the layer name,
+            // then we have found a channel of this layer.
+            if (kv.first.find(layerName) == 0 && kv.first.length() > layerName.length()) {
+                const auto& channelWithoutLayer = kv.first.substr(layerName.length() + 1);
+                if (channelWithoutLayer.find(".") == string::npos) {
+                    result.emplace_back(kv.first);
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 const GlTexture* Image::texture(const std::string& channelName) {
@@ -89,6 +125,10 @@ void Image::readStbi(const std::string& filename) {
         string name = channel.name();
         mChannels.emplace(move(name), move(channel));
     }
+
+    // STBI can not load layers, so all channels simply reside
+    // within a topmost root layer.
+    mLayers.emplace_back("");
 }
 
 void Image::readExr(const std::string& filename) {
@@ -159,6 +199,15 @@ void Image::readExr(const std::string& filename) {
     Imf::FrameBuffer frameBuffer;
 
     const Imf::ChannelList& imfChannels = file.header().channels();
+
+    // The topmost root layer isn't included in OpenEXRs layer list.
+    mLayers.emplace_back("");
+    set<string> layerNames;
+    imfChannels.layers(layerNames);
+    for (const string& layer : layerNames) {
+        mLayers.emplace_back(layer);
+    }
+
     for (Imf::ChannelList::ConstIterator i = imfChannels.begin(); i != imfChannels.end(); ++i) {
         rawChannels.emplace_back(i.name(), i.channel().type, mSize.prod());
         rawChannels.back().registerWith(frameBuffer, dw);

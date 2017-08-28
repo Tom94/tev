@@ -25,7 +25,7 @@ Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
-    return Vector2i(static_cast<int>(tw + idSize) + 10, mFontSize + 6);
+    return Vector2i(static_cast<int>(tw + idSize) + 15, mFontSize + 6);
 }
 
 bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
@@ -115,12 +115,14 @@ void ImageButton::draw(NVGcontext *ctx) {
     nvgFontFace(ctx, "sans");
 
     string caption = mCaption;
-    while (nvgTextBounds(ctx, 0, 0, caption.c_str(), nullptr, nullptr) > mSize.x() - 20 - idSize) {
-        caption = caption.substr(1, caption.length() - 1);
-    }
+    if (mSize.x() != preferredSize(ctx).x()) {
+        while (nvgTextBounds(ctx, 0, 0, caption.c_str(), nullptr, nullptr) > mSize.x() - 20 - idSize) {
+            caption = caption.substr(1, caption.length() - 1);
+        }
 
-    if (caption.length() != mCaption.length()) {
-        caption = "…"s + caption;
+        if (caption.length() != mCaption.length()) {
+            caption = "…"s + caption;
+        }
     }
 
     Vector2f center = mPos.cast<float>() + mSize.cast<float>() * 0.5f;
