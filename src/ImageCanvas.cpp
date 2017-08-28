@@ -138,8 +138,8 @@ vector<string> ImageCanvas::getChannels(const Image& image) {
     // If we found just 1 channel, let's display is as grayscale
     // by duplicating it twice.
     if (result.size() == 1) {
-        result.emplace_back(result[0]);
-        result.emplace_back(result[0]);
+        result.push_back(result[0]);
+        result.push_back(result[0]);
     }
 
     // If there is an alpha layer, use it
