@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 
 """
-Deploys the website to a target directory supplied as an argument.
+Parses .vscode/.cmaketools.json to obtain a list of include paths.
+These can then be subsequently pasted into .vscode/c_cpp_properties.json
+to make intellisense work. This is script exists purely for convenience
+and only needs to be used when the include paths change (e.g. when a new
+dependency is added).
 """
 
 import json
