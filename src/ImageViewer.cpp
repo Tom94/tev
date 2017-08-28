@@ -357,7 +357,7 @@ void ImageViewer::setExposure(float value) {
 void ImageViewer::setTonemap(ETonemap tonemap) {
     mImageCanvas->setTonemap(tonemap);
     auto& buttons = mTonemapButtonContainer->children();
-    for (int i = 0; i < buttons.size(); ++i) {
+    for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->setPushed(i == tonemap);
     }
@@ -366,7 +366,7 @@ void ImageViewer::setTonemap(ETonemap tonemap) {
 void ImageViewer::setMetric(EMetric metric) {
     mImageCanvas->setMetric(metric);
     auto& buttons = mMetricButtonContainer->children();
-    for (int i = 0; i < buttons.size(); ++i) {
+    for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->setPushed(i == metric);
     }
