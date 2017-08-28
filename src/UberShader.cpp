@@ -108,7 +108,7 @@ UberShader::UberShader() {
             );
 
             if (!hasReference) {
-                color = vec4(applyTonemap(applyExposure(image.rgb)), image.a);
+                color = vec4(applyTonemap(applyExposure(abs(image.rgb))), image.a);
                 return;
             }
 
