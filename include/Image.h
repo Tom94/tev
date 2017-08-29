@@ -60,4 +60,6 @@ private:
     std::vector<std::string> mLayers;
 };
 
+std::shared_ptr<Image> tryLoadImage(std::string filename);
+
 TEV_NAMESPACE_END

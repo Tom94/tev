@@ -79,6 +79,16 @@ int mainFunc(int argc, char* argv[]) {
         return -2;
     }
 
+    // Load images passed via command line prior to initializing nanogui
+    // such that no frozen window is created.
+    vector<shared_ptr<Image>> images;
+    for (const auto imageFile : get(imageFiles)) {
+        auto image = tryLoadImage(imageFile);
+        if (image) {
+            images.emplace_back(image);
+        }
+    }
+
     // Init nanogui application
     nanogui::init();
 
@@ -90,9 +100,9 @@ int mainFunc(int argc, char* argv[]) {
         bool shallMaximize = false;
 
         // Load all images which were passed in via the command line.
-        if (imageFiles) {
-            for (const auto imageFile : get(imageFiles)) {
-                app->tryLoadImage(imageFile);
+        if (!images.empty()) {
+            for (const auto& image : images) {
+                app->addImage(image);
             }
 
             // If all images were loaded from the command line, then there

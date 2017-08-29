@@ -217,7 +217,10 @@ ImageViewer::ImageViewer()
             );
 
             if (!path.empty()) {
-                tryLoadImage(path, true);
+                auto image = tryLoadImage(path);
+                if (image) {
+                    addImage(image, true);
+                }
             }
         });
     }
@@ -249,7 +252,10 @@ bool ImageViewer::dropEvent(const std::vector<std::string>& filenames) {
     }
 
     for (const auto& imageFile : filenames) {
-        tryLoadImage(imageFile, true);
+        auto image = tryLoadImage(imageFile);
+        if (image) {
+            addImage(image, true);
+        }
     }
 
     return true;
@@ -373,16 +379,6 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
     if (index == 0 || shallSelect) {
         selectImage(index);
         fitAllImages();
-    }
-}
-
-void ImageViewer::tryLoadImage(const std::string& filename, bool shallSelect) {
-    try {
-        addImage(make_shared<Image>(filename), shallSelect);
-    } catch (invalid_argument e) {
-        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
-    } catch (Iex::BaseExc& e) {
-        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
     }
 }
 

@@ -265,4 +265,16 @@ void Image::readExr(const std::string& filename) {
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
+shared_ptr<Image> tryLoadImage(string filename) {
+    try {
+        return make_shared<Image>(filename);
+    } catch (invalid_argument e) {
+        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
+    } catch (Iex::BaseExc& e) {
+        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
+    }
+
+    return nullptr;
+}
+
 TEV_NAMESPACE_END

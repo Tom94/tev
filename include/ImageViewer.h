@@ -29,8 +29,6 @@ public:
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false);
 
-    void tryLoadImage(const std::string& filename, bool shallSelect = false);
-
     void selectImage(size_t index);
 
     size_t layer() {
@@ -78,12 +76,12 @@ private:
     std::string layerName(size_t index);
 
     size_t currentImageId() const {
-        auto pos = std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentImage));
+        auto pos = static_cast<size_t>(std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentImage)));
         return pos >= mImages.size() ? 0 : pos;
     }
 
     size_t currentReferenceId() const {
-        auto pos = std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentReference));
+        auto pos = static_cast<size_t>(std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentReference)));
         return pos >= mImages.size() ? 0 : pos;
     }
 
