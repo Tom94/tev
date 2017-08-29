@@ -70,6 +70,7 @@ public:
 
     void fitAllImages();
     void maximize();
+    void updateLayout();
 
 private:
     void updateTitle();
@@ -85,8 +86,10 @@ private:
         return pos >= mImages.size() ? 0 : pos;
     }
 
-    int mMenuWidth = 200;
+    nanogui::Widget* mVerticalScreenSplit;
+
     int mFooterHeight = 25;
+    nanogui::Widget* mSidebar;
 
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;

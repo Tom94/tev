@@ -27,28 +27,28 @@ TEV_NAMESPACE_BEGIN
 ImageViewer::ImageViewer()
 : nanogui::Screen(Vector2i{1024, 767}, "tev") {
 
-    auto verticalScreenSplit = new Widget(this);
-    verticalScreenSplit->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+    mVerticalScreenSplit = new Widget(this);
+    mVerticalScreenSplit->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
-    auto horizontalScreenSplit = new Widget(verticalScreenSplit);
+    auto horizontalScreenSplit = new Widget(mVerticalScreenSplit);
     horizontalScreenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
-    auto leftSide = new Widget(horizontalScreenSplit);
-    leftSide->setFixedWidth(mMenuWidth);
-    leftSide->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    mSidebar = new Widget(horizontalScreenSplit);
+    mSidebar->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    mSidebar->setFixedWidth(200);
 
     mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixelRatio()};
 
     // Exposure label and slider
     {
-        auto panel = new Widget{leftSide};
+        auto panel = new Widget{mSidebar};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Tonemapping", "sans-bold", 25};
         label->setTooltip(
             "Various tonemapping options. Hover the labels of individual options to learn more!"
         );
 
-        panel = new Widget{leftSide};
+        panel = new Widget{mSidebar};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mExposureLabel = new Label{panel, "", "sans-bold", 15};
@@ -59,14 +59,14 @@ ImageViewer::ImageViewer()
 
         mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
-        mExposureSlider->setFixedWidth(mMenuWidth - 10);
+        mExposureSlider->setFixedWidth(mSidebar->fixedWidth() - 10);
 
         mExposureSlider->setCallback([this](float value) {
             setExposure(value);
         });
         setExposure(0);
 
-        panel = new Widget{leftSide};
+        panel = new Widget{mSidebar};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mOffsetLabel = new Label{panel, "", "sans-bold", 15};
@@ -77,7 +77,7 @@ ImageViewer::ImageViewer()
 
         mOffsetSlider = new Slider{panel};
         mOffsetSlider->setRange({-1.0f, 1.0f});
-        mOffsetSlider->setFixedWidth(mMenuWidth - 10);
+        mOffsetSlider->setFixedWidth(mSidebar->fixedWidth() - 10);
 
         mOffsetSlider->setCallback([this](float value) {
             setOffset(value);
@@ -87,7 +87,7 @@ ImageViewer::ImageViewer()
 
     // Exposure/offset buttons
     {
-        auto buttonContainer = new Widget{leftSide};
+        auto buttonContainer = new Widget{mSidebar};
         buttonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeButton = [&](const string& name, function<void()> callback) {
@@ -108,7 +108,7 @@ ImageViewer::ImageViewer()
 
     // Tonemap options
     {
-        mTonemapButtonContainer = new Widget{leftSide};
+        mTonemapButtonContainer = new Widget{mSidebar};
         mTonemapButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 1});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
@@ -136,7 +136,7 @@ ImageViewer::ImageViewer()
 
     // Error metrics
     {
-        mMetricButtonContainer = new Widget{leftSide};
+        mMetricButtonContainer = new Widget{mSidebar};
         mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
@@ -172,10 +172,10 @@ ImageViewer::ImageViewer()
 
     // Image selection
     {
-        auto spacer = new Widget{leftSide};
+        auto spacer = new Widget{mSidebar};
         spacer->setHeight(10);
 
-        auto panel = new Widget{leftSide};
+        auto panel = new Widget{mSidebar};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Images", "sans-bold", 25};
         label->setTooltip(
@@ -184,13 +184,14 @@ ImageViewer::ImageViewer()
             "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
         );
 
-        mImageScrollContainer = new VScrollPanel{leftSide};
+        mImageScrollContainer = new VScrollPanel{mSidebar};
+        mImageScrollContainer->setFixedWidth(mSidebar->fixedWidth());
+
         auto scrollContent = new Widget{mImageScrollContainer};
         scrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
         mImageButtonContainer = new Widget{scrollContent};
         mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
-        mImageScrollContainer->setFixedWidth(mMenuWidth);
 
         spacer = new Widget{scrollContent};
         spacer->setHeight(3);
@@ -227,7 +228,7 @@ ImageViewer::ImageViewer()
 
     // Layer selection
     {
-        auto footer = new Widget{verticalScreenSplit};
+        auto footer = new Widget{mVerticalScreenSplit};
         footer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
         mLayerButtonContainer = new Widget{footer};
@@ -235,13 +236,7 @@ ImageViewer::ImageViewer()
         mLayerButtonContainer->setFixedHeight(mFooterHeight);
     }
 
-    setResizeCallback([this, verticalScreenSplit](Vector2i size) {
-        verticalScreenSplit->setFixedSize(size);
-        mImageCanvas->setFixedSize(size - Vector2i{mMenuWidth, mFooterHeight});
-        mImageScrollContainer->setFixedHeight(size.y() - mImageScrollContainer->position().y() - mFooterHeight);
-
-        performLayout();
-    });
+    setResizeCallback([this](Vector2i) { updateLayout(); });
 
     this->setSize(Vector2i(1024, 768));
     unselectReference();
@@ -294,6 +289,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             normalizeExposureAndOffset();
         } else if (key == GLFW_KEY_R) {
             resetExposureAndOffset();
+        } else if (key == GLFW_KEY_B) {
+            if (modifiers & GLFW_MOD_CONTROL) {
+                mSidebar->setVisible(!mSidebar->visible());
+                updateLayout();
+            }
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
@@ -580,7 +580,7 @@ void ImageViewer::fitAllImages() {
     // Convert from image pixel coordinates to nanogui coordinates.
     maxSize = (maxSize.cast<float>() / pixelRatio()).cast<int>();
     // Take into account the size of the menu on the left.
-    maxSize.x() += mMenuWidth;
+    maxSize.x() += mSidebar->width();
 
     // Only increase our current size if we are larger than the default size of the window.
     setSize(mSize.cwiseMax(maxSize));
@@ -588,6 +588,15 @@ void ImageViewer::fitAllImages() {
 
 void ImageViewer::maximize() {
     glfwMaximizeWindow(mGLFWWindow);
+}
+
+void ImageViewer::updateLayout() {
+    mImageCanvas->setFixedSize(mSize - Vector2i{mSidebar->visible() ? mSidebar->width() : 0, mFooterHeight});
+
+    mVerticalScreenSplit->setFixedSize(mSize);
+    mImageScrollContainer->setFixedHeight(mSize.y() - mImageScrollContainer->position().y() - mFooterHeight);
+
+    performLayout();
 }
 
 void ImageViewer::updateTitle() {
