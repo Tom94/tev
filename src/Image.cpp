@@ -9,6 +9,7 @@
 #include <stb_image.h>
 
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <set>
 
@@ -92,7 +93,8 @@ const GlTexture* Image::texture(const std::string& channelName) {
 
 void Image::readStbi(const std::string& filename) {
     // No exr image? Try our best using stbi
-    cout << "Loading "s + filename + " via STBI." << endl;
+    cout << "Loading "s + filename + " via STBI... ";
+    auto start = chrono::system_clock::now();
 
     int numChannels;
     auto data = stbi_loadf(filename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
@@ -112,7 +114,8 @@ void Image::readStbi(const std::string& filename) {
         channels.back().data().resize(numPixels);
     }
 
-    for (size_t i = 0; i < numPixels; ++i) {
+#pragma omp parallel for
+    for (int i = 0; i < numPixels; ++i) {
         size_t baseIdx = i * mNumChannels;
         for (size_t c = 0; c < mNumChannels; ++c) {
             channels[c].data()[i] = data[baseIdx + c];
@@ -129,11 +132,17 @@ void Image::readStbi(const std::string& filename) {
     // STBI can not load layers, so all channels simply reside
     // within a topmost root layer.
     mLayers.emplace_back("");
+
+    auto end = chrono::system_clock::now();
+    chrono::duration<double> elapsedSeconds = end - start;
+
+    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
 void Image::readExr(const std::string& filename) {
     // OpenEXR for reading exr images
-    cout << "Loading "s + filename + " via OpenEXR." << endl;
+    cout << "Loading "s + filename + " via OpenEXR... ";
+    auto start = chrono::system_clock::now();
 
     Imf::InputFile file(filename.c_str());
     Imath::Box2i dw = file.header().dataWindow();
@@ -143,13 +152,17 @@ void Image::readExr(const std::string& filename) {
     // Inline helper class for dealing with the raw channels loaded from an exr file.
     class RawChannel {
     public:
-        RawChannel(string name, Imf::Channel imfChannel, size_t size)
+        RawChannel(string name, Imf::Channel imfChannel)
         : mName(name), mImfChannel(imfChannel) {
+        }
+
+        void resize(size_t size) {
             mData.resize(size * bytesPerPixel());
         }
 
         void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
             int width = dw.max.x - dw.min.x + 1;
+
             frameBuffer.insert(mName.c_str(), Imf::Slice(
                 mImfChannel.type,
                 mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
@@ -159,20 +172,34 @@ void Image::readExr(const std::string& filename) {
         }
 
         void copyTo(Channel& channel) const {
-            int bpp = bytesPerPixel();
             auto& dstData = channel.data();
-            dstData.resize(mData.size() / bpp);
+            dstData.resize(mData.size() / bytesPerPixel());
 
-            for (size_t i = 0; i < dstData.size(); ++i) {
-                size_t rawIdx = i * bpp;
-                switch (mImfChannel.type) {
-                    case Imf::HALF:  dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[rawIdx]));     break;
-                    case Imf::FLOAT: dstData[i] = static_cast<float>(*reinterpret_cast<const float*>(&mData[rawIdx]));    break;
-                    case Imf::UINT:  dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[rawIdx])); break;
-                    default:
-                        throw runtime_error("Invalid pixel type encountered.");
-                }
+            // The code in this switch statement may seem overly complicated, but it helps
+            // the compiler optimize. This code is time-critical for large images.
+            switch (mImfChannel.type) {
+                case Imf::HALF:
+#pragma omp parallel for
+                    for (int i = 0; i < dstData.size(); ++i) {
+                        dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
+                    }
+                    break;
+
+                case Imf::FLOAT:
+#pragma omp parallel for
+                    for (int i = 0; i < dstData.size(); ++i) {
+                        dstData[i] = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
+                    }
+                    break;
+
+                case Imf::UINT:
+#pragma omp parallel for
+                    for (int i = 0; i < dstData.size(); ++i) {
+                        dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
+                    }
+                    break;
             }
+
         }
 
         const auto& name() const {
@@ -209,8 +236,16 @@ void Image::readExr(const std::string& filename) {
     }
 
     for (Imf::ChannelList::ConstIterator i = imfChannels.begin(); i != imfChannels.end(); ++i) {
-        rawChannels.emplace_back(i.name(), i.channel().type, mSize.prod());
-        rawChannels.back().registerWith(frameBuffer, dw);
+        rawChannels.emplace_back(i.name(), i.channel().type);
+    }
+
+#pragma omp parallel for
+    for (int i = 0; i < rawChannels.size(); ++i) {
+        rawChannels[i].resize(mSize.prod());
+    }
+
+    for (int i = 0; i < rawChannels.size(); ++i) {
+        rawChannels[i].registerWith(frameBuffer, dw);
     }
 
     file.setFrameBuffer(frameBuffer);
@@ -218,8 +253,17 @@ void Image::readExr(const std::string& filename) {
 
     for (const auto& rawChannel : rawChannels) {
         mChannels.emplace(rawChannel.name(), Channel{rawChannel.name()});
-        rawChannel.copyTo(mChannels.at(rawChannel.name()));
     }
+
+#pragma omp parallel for
+    for (int i = 0; i < rawChannels.size(); ++i) {
+        rawChannels[i].copyTo(mChannels.at(rawChannels[i].name()));
+    }
+
+    auto end = chrono::system_clock::now();
+    chrono::duration<double> elapsedSeconds = end - start;
+
+    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
 TEV_NAMESPACE_END
