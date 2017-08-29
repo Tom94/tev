@@ -9,6 +9,7 @@
 
 #include <stb_image.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <iostream>
@@ -90,6 +91,24 @@ const GlTexture* Image::texture(const std::string& channelName) {
     texture.setData(chan->data(), mSize, 1);
 
     return &texture;
+}
+
+string Image::toString() const {
+    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, mSize.x(), mSize.y());
+
+    auto localLayers = mLayers;
+    transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
+        auto channels = channelsInLayer(layer);
+        transform(begin(channels), end(channels), begin(channels), [this](string channel) {
+            return Channel::tail(channel);
+        });
+        if (layer.empty()) {
+            layer = "<root>";
+        }
+        return layer + ": " + join(channels, ",");
+    });
+
+    return result + join(localLayers, "\n");
 }
 
 void Image::readStbi(const std::string& filename) {

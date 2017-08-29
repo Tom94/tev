@@ -51,6 +51,8 @@ public:
         return mSize;
     }
 
+    static std::string tail(const std::string& fullChannel);
+
 private:
     std::string mName;
     std::vector<float> mData;

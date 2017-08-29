@@ -47,6 +47,8 @@ public:
         return mLayers;
     }
 
+    std::string toString() const;
+
 private:
     void readStbi(const std::string& filename);
     void readExr(const std::string& filename);

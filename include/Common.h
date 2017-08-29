@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <sstream>
 
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
@@ -34,6 +36,19 @@ constexpr T clamp(T value, T min, T max) {
 template <typename T>
 constexpr T round(T value, T decimals) {
     return std::round(value * std::pow(static_cast<T>(10), decimals)) / std::pow(static_cast<T>(10), decimals);
+}
+
+template <typename T>
+std::string join(const T& components, const std::string& delim) {
+    std::ostringstream s;
+    for (const auto& component : components) {
+        if (&components[0] != &component) {
+            s << delim;
+        }
+        s << component;
+    }
+
+    return s.str();
 }
 
 enum ETonemap : int {

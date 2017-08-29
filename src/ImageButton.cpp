@@ -13,7 +13,6 @@ TEV_NAMESPACE_BEGIN
 ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
 : Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
     mFontSize = 15;
-    setTooltip(caption);
 }
 
 Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {

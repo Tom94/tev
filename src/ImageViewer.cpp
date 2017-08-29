@@ -372,10 +372,11 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
     auto button = new ImageButton{mImageButtonContainer, image->name(), true};
     button->setFontSize(15);
     button->setId(index + 1);
-
+    button->setTooltip(image->toString());
     button->setSelectedCallback([this,index]() {
         selectImage(index);
     });
+
     button->setReferenceCallback([this, index](bool isReference) {
         if (!isReference) {
             unselectReference();
@@ -594,16 +595,7 @@ void ImageViewer::updateTitle() {
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
 
-        string channelsString;
-        for (string channel : channels) {
-            size_t dotPosition = channel.rfind(".");
-            if (dotPosition != string::npos) {
-                channel = channel.substr(dotPosition + 1);
-            }
-            channelsString += channel + ",";
-        }
-        channelsString.pop_back();
-
+        string channelsString = join(channels, ",");
         caption = mCurrentImage->shortName();
 
         if (layer.empty()) {

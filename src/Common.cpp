@@ -3,6 +3,8 @@
 
 #include "../include/Common.h"
 
+using namespace std;
+
 TEV_NAMESPACE_BEGIN
 
 TEV_NAMESPACE_END
