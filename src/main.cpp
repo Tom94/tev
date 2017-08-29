@@ -124,7 +124,10 @@ int mainFunc(int argc, char* argv[]) {
         nanogui::mainloop();
     }
 
-    nanogui::shutdown();
+    // On some linux distributions glfwTerminate() (which is called by
+    // nanogui::shutdown()) causes segfaults. Since we are done with our
+    // program here anyways, let's let the OS clean up after us.
+    //nanogui::shutdown();
 
     return 0;
 }
