@@ -10,8 +10,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageButton::ImageButton(Widget *parent, const string &caption)
-: Widget(parent), mCaption(caption) {
+ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
+: Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
     mFontSize = 15;
     setTooltip(caption);
 }
@@ -51,7 +51,7 @@ bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int
             }
         }
         return true;
-    } else if (button == GLFW_MOUSE_BUTTON_2) {
+    } else if (mCanBeReference && button == GLFW_MOUSE_BUTTON_2) {
         // If we already were the reference, then let's disable using us a reference.
         mIsReference = !mIsReference;
 

@@ -354,9 +354,13 @@ void ImageViewer::drawContents() {
 }
 
 void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
+    if (!image) {
+        throw invalid_argument{"Image may not be null."};
+    }
+
     size_t index = mImages.size();
 
-    auto button = new ImageButton{mImageButtonContainer, image->name()};
+    auto button = new ImageButton{mImageButtonContainer, image->name(), true};
     button->setFontSize(15);
     button->setId(index + 1);
 
@@ -403,7 +407,7 @@ void ImageViewer::selectImage(size_t index) {
     for (size_t i = 0; i < numLayers; ++i) {
         string layer = layerName(i);
         layer = layer.empty() ? "<root>"s : layer;
-        auto button = new ImageButton{mLayerButtonContainer, layer};
+        auto button = new ImageButton{mLayerButtonContainer, layer, false};
         button->setFontSize(15);
         button->setId(i + 1);
 

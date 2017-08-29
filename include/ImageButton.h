@@ -13,7 +13,7 @@ TEV_NAMESPACE_BEGIN
 
 class ImageButton : public nanogui::Widget {
 public:
-    ImageButton(nanogui::Widget* parent, const std::string& caption = "Untitled");
+    ImageButton(nanogui::Widget* parent, const std::string& caption, bool canBeReference);
 
     Eigen::Vector2i preferredSize(NVGcontext *ctx) const override;
 
@@ -43,6 +43,7 @@ public:
 
 private:
     std::string mCaption;
+    bool mCanBeReference;
 
     bool mIsReference = false;
     std::function<void(bool)> mReferenceCallback;
