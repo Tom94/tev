@@ -1,4 +1,4 @@
-// This file was developed by Thomas Müller <thomas94@gmx.net>.
+// This file was developed by Thomas MÃ¼ller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include "../include/ThreadPool.h"
@@ -13,6 +13,7 @@ ThreadPool::ThreadPool()
 
 ThreadPool::ThreadPool(size_t numThreads) {
     startThreads(numThreads);
+    mNumTasksInSystem.store(0);
 }
 
 ThreadPool::~ThreadPool() {

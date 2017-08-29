@@ -97,6 +97,8 @@ void Image::readStbi(const std::string& filename) {
     cout << "Loading "s + filename + " via STBI... ";
     auto start = chrono::system_clock::now();
 
+    ThreadPool threadPool;
+
     int numChannels;
     auto data = stbi_loadf(filename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
     if (!data) {
@@ -115,13 +117,12 @@ void Image::readStbi(const std::string& filename) {
         channels.back().data().resize(numPixels);
     }
 
-#pragma omp parallel for
-    for (int i = 0; i < numPixels; ++i) {
+    threadPool.parallelForNoWait(0, numPixels, [&](size_t i) {
         size_t baseIdx = i * mNumChannels;
         for (size_t c = 0; c < mNumChannels; ++c) {
             channels[c].data()[i] = data[baseIdx + c];
         }
-    }
+    });
 
     stbi_image_free(data);
 
@@ -245,7 +246,7 @@ void Image::readExr(const std::string& filename) {
         rawChannels[i].resize(mSize.prod());
     });
 
-    for (int i = 0; i < rawChannels.size(); ++i) {
+    for (size_t i = 0; i < rawChannels.size(); ++i) {
         rawChannels[i].registerWith(frameBuffer, dw);
     }
 
@@ -256,7 +257,7 @@ void Image::readExr(const std::string& filename) {
         mChannels.emplace(rawChannel.name(), Channel{rawChannel.name(), mSize});
     }
 
-    for (int i = 0; i < rawChannels.size(); ++i) {
+    for (size_t i = 0; i < rawChannels.size(); ++i) {
         rawChannels[i].copyTo(mChannels.at(rawChannels[i].name()), threadPool);
     }
 

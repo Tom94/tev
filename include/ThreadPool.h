@@ -1,4 +1,4 @@
-// This file was developed by Thomas Müller <thomas94@gmx.net>.
+// This file was developed by Thomas MÃ¼ller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #pragma once
@@ -9,6 +9,7 @@
 #include <deque>
 #include <future>
 #include <thread>
+#include <vector>
 
 class ThreadPool {
 public:
@@ -60,7 +61,7 @@ private:
     std::mutex mTaskQueueMutex;
     std::condition_variable mWorkerCondition;
 
-    std::atomic<size_t> mNumTasksInSystem = 0;
+    std::atomic<size_t> mNumTasksInSystem;
     std::mutex mSystemBusyMutex;
     std::condition_variable mSystemBusyCondition;
 };
