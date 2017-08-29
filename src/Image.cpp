@@ -2,6 +2,7 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include "../include/Image.h"
+#include "../include/ThreadPool.h"
 
 #include <ImfChannelList.h>
 #include <ImfInputFile.h>
@@ -144,6 +145,8 @@ void Image::readExr(const std::string& filename) {
     cout << "Loading "s + filename + " via OpenEXR... ";
     auto start = chrono::system_clock::now();
 
+    ThreadPool threadPool;
+
     Imf::InputFile file(filename.c_str());
     Imath::Box2i dw = file.header().dataWindow();
     mSize.x() = dw.max.x - dw.min.x + 1;
@@ -171,7 +174,7 @@ void Image::readExr(const std::string& filename) {
             ));
         }
 
-        void copyTo(Channel& channel) const {
+        void copyTo(Channel& channel, ThreadPool& threadPool) const {
             auto& dstData = channel.data();
             dstData.resize(mData.size() / bytesPerPixel());
 
@@ -179,24 +182,21 @@ void Image::readExr(const std::string& filename) {
             // the compiler optimize. This code is time-critical for large images.
             switch (mImfChannel.type) {
                 case Imf::HALF:
-#pragma omp parallel for
-                    for (int i = 0; i < dstData.size(); ++i) {
+                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
                         dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
-                    }
+                    });
                     break;
 
                 case Imf::FLOAT:
-#pragma omp parallel for
-                    for (int i = 0; i < dstData.size(); ++i) {
+                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
                         dstData[i] = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
-                    }
+                    });
                     break;
 
                 case Imf::UINT:
-#pragma omp parallel for
-                    for (int i = 0; i < dstData.size(); ++i) {
+                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
                         dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
-                    }
+                    });
                     break;
 
                 default:
@@ -241,10 +241,9 @@ void Image::readExr(const std::string& filename) {
         rawChannels.emplace_back(i.name(), i.channel().type);
     }
 
-#pragma omp parallel for
-    for (int i = 0; i < rawChannels.size(); ++i) {
+    threadPool.parallelFor(0, rawChannels.size(), [&](size_t i) {
         rawChannels[i].resize(mSize.prod());
-    }
+    });
 
     for (int i = 0; i < rawChannels.size(); ++i) {
         rawChannels[i].registerWith(frameBuffer, dw);
@@ -257,10 +256,11 @@ void Image::readExr(const std::string& filename) {
         mChannels.emplace(rawChannel.name(), Channel{rawChannel.name(), mSize});
     }
 
-#pragma omp parallel for
     for (int i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].copyTo(mChannels.at(rawChannels[i].name()));
+        rawChannels[i].copyTo(mChannels.at(rawChannels[i].name()), threadPool);
     }
+
+    threadPool.waitUntilFinished();
 
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;

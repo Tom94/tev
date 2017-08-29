@@ -31,12 +31,6 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
-# Use OpenMP if available
-find_package(OpenMP)
-if (OPENMP_FOUND)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
-
 # Enable more warnings
 if(MSVC)
     if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
@@ -60,6 +54,7 @@ add_executable(tev
     include/ImageButton.h src/ImageButton.cpp
     include/ImageCanvas.h src/ImageCanvas.cpp
     include/ImageViewer.h src/ImageViewer.cpp
+    include/ThreadPool.h src/ThreadPool.cpp
     include/UberShader.h src/UberShader.cpp
     src/main.cpp
 )
