@@ -109,7 +109,7 @@ ImageViewer::ImageViewer()
     // Tonemap options
     {
         mTonemapButtonContainer = new Widget{mSidebar};
-        mTonemapButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 1});
+        mTonemapButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mTonemapButtonContainer, name};
@@ -127,8 +127,12 @@ ImageViewer::ImageViewer()
             setTonemap(ETonemap::Gamma);
         });
 
-        makeTonemapButton("False-color", [this]() {
+        makeTonemapButton("FC", [this]() {
             setTonemap(ETonemap::FalseColor);
+        });
+
+        makeTonemapButton("+/-", [this]() {
+            setTonemap(ETonemap::PositiveNegative);
         });
 
         errorButton->setPushed(true);

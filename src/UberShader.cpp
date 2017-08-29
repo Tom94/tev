@@ -13,6 +13,7 @@ UberShader::UberShader() {
     mShader.define("SRGB",        to_string(ETonemap::SRGB));
     mShader.define("GAMMA",       to_string(ETonemap::Gamma));
     mShader.define("FALSE_COLOR", to_string(ETonemap::FalseColor));
+    mShader.define("POS_NEG",     to_string(ETonemap::PositiveNegative));
 
     mShader.define("ERROR",                   to_string(EMetric::Error));
     mShader.define("ABSOLUTE_ERROR",          to_string(EMetric::AbsoluteError));
@@ -64,6 +65,10 @@ UberShader::UberShader() {
 
         out vec4 color;
 
+        float average(vec3 col) {
+            return (col.r + col.g + col.b) / 3.0;
+        }
+
         vec3 applyExposureAndOffset(vec3 col) {
             return pow(2.0, exposure) * col + offset;
         }
@@ -105,16 +110,12 @@ UberShader::UberShader() {
             switch (tonemap) {
                 case SRGB:        return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
                 case GAMMA:       return pow(col, vec3(1.0 / 2.2));
-                case FALSE_COLOR:
-                {
-                    float grayscale = (col.r + col.g + col.b) / 3.0;
-                    // Here grayscale is compressed such that a value of 1/1000th becomes 0 and 1000 becomes 1.
-                    // Due to the usage of the logarithm, varying the exposure simply has an additive effect on
-                    // the result of the following expression, and therefore the high range of values (a factor
-                    // of ~1,000,000 is preserved).
-                    float compressed = log2(grayscale) / 20.0 + 0.5;
-                    return falseColor(compressed);
-                }
+                // Here grayscale is compressed such that a value of 1/1000th becomes 0 and 1000 becomes 1.
+                // Due to the usage of the logarithm, varying the exposure simply has an additive effect on
+                // the result of the following expression, and therefore the high range of values (a factor
+                // of ~1,000,000 is preserved).
+                case FALSE_COLOR: return falseColor(log2(average(col)) / 20.0 + 0.5);
+                case POS_NEG:     return vec3(-average(min(col, vec3(0.0))) / 0.5, average(max(col, vec3(0.0))) / 0.5, 0.0);
             }
             return vec3(0.0);
         }

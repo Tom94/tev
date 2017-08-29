@@ -55,6 +55,7 @@ enum ETonemap : int {
     SRGB = 0,
     Gamma,
     FalseColor,
+    PositiveNegative,
 
     // This enum value should never be used directly.
     // It facilitates looping over all members of this enum.
