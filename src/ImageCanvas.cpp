@@ -208,6 +208,11 @@ vector<float> ImageCanvas::getValues(Vector2i mousePos) {
     return result;
 }
 
+void ImageCanvas::fitImageToScreen(const Image& image) {
+    Vector2f nanoguiImageSize = image.size().cast<float>() / mPixelRatio;
+    mTransform = Scaling(mSize.cast<float>().cwiseQuotient(nanoguiImageSize).minCoeff());
+}
+
 Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
     if (!image) {
         return Transform<float, 2, 0>::Identity();

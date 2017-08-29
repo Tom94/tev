@@ -68,6 +68,8 @@ public:
         mMetric = metric;
     }
 
+    void fitImageToScreen(const Image& image);
+
 private:
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
