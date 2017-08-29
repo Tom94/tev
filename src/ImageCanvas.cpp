@@ -76,6 +76,7 @@ void ImageCanvas::drawGL() {
             getTextures(*mReference),
             transform(mImage.get()).inverse(),
             mExposure,
+            mOffset,
             mTonemap,
             mMetric
         );
@@ -86,6 +87,7 @@ void ImageCanvas::drawGL() {
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(mImage.get()).inverse(),
             mExposure,
+            mOffset,
             mTonemap
         );
     }

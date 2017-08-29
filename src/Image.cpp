@@ -175,13 +175,22 @@ void Image::readExr(const std::string& filename) {
             auto& dstData = channel.data();
             dstData.resize(mData.size() / bytesPerPixel());
 
+            float minimum = numeric_limits<float>::max();
+            float maximum = numeric_limits<float>::min();
+
             // The code in this switch statement may seem overly complicated, but it helps
             // the compiler optimize. This code is time-critical for large images.
             switch (mImfChannel.type) {
                 case Imf::HALF:
-#pragma omp parallel for
+#pragma omp parallel for reduction(max:maximum), reduction(min:minimum)
                     for (int i = 0; i < dstData.size(); ++i) {
                         dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
+                        if (dstData[i] > maximum) {
+                            maximum = dstData[i];
+                        }
+                        if (dstData[i] < minimum) {
+                            minimum = dstData[i];
+                        }
                     }
                     break;
 
@@ -189,6 +198,12 @@ void Image::readExr(const std::string& filename) {
 #pragma omp parallel for
                     for (int i = 0; i < dstData.size(); ++i) {
                         dstData[i] = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
+                        if (dstData[i] > maximum) {
+                            maximum = dstData[i];
+                        }
+                        if (dstData[i] < minimum) {
+                            minimum = dstData[i];
+                        }
                     }
                     break;
 
@@ -196,10 +211,18 @@ void Image::readExr(const std::string& filename) {
 #pragma omp parallel for
                     for (int i = 0; i < dstData.size(); ++i) {
                         dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
+                        if (dstData[i] > maximum) {
+                            maximum = dstData[i];
+                        }
+                        if (dstData[i] < minimum) {
+                            minimum = dstData[i];
+                        }
                     }
                     break;
             }
 
+            channel.setMax(maximum);
+            channel.setMin(minimum);
         }
 
         const auto& name() const {

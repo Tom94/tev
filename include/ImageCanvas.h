@@ -28,6 +28,10 @@ public:
         mExposure = exposure;
     }
 
+    void setOffset(float offset) {
+        mOffset = offset;
+    }
+
     void setImage(std::shared_ptr<Image> image) {
         mImage = image;
     }
@@ -65,6 +69,7 @@ private:
 
     float mPixelRatio = 1;
     float mExposure = 0;
+    float mOffset = 0;
     std::shared_ptr<Image> mImage;
     std::shared_ptr<Image> mReference;
 

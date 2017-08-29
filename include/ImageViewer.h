@@ -49,6 +49,15 @@ public:
 
     void setExposure(float value);
 
+    float offset() {
+        return mOffsetSlider->value();
+    }
+
+    void setOffset(float value);
+
+    void normalizeExposureAndOffset();
+    void resetExposureAndOffset();
+
     ETonemap tonemap() {
         return mImageCanvas->tonemap();
     }
@@ -73,6 +82,9 @@ private:
 
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;
+
+    nanogui::Label* mOffsetLabel;
+    nanogui::Slider* mOffsetSlider;
 
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;

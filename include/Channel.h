@@ -26,9 +26,26 @@ public:
         return mData;
     }
 
+    float min() const {
+        return mMin;
+    }
+
+    void setMin(float minimum) {
+        mMin = minimum;
+    }
+
+    float max() const {
+        return mMax;
+    }
+
+    void setMax(float maximum) {
+        mMax = maximum;
+    }
+
 private:
     std::string mName;
     std::vector<float> mData;
+    float mMin = 0, mMax = 0;
 };
 
 TEV_NAMESPACE_END

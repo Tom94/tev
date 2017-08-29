@@ -55,6 +55,7 @@ UberShader::UberShader() {
         uniform bool hasReference;
 
         uniform float exposure;
+        uniform float offset;
         uniform int tonemap;
         uniform int metric;
 
@@ -63,8 +64,8 @@ UberShader::UberShader() {
 
         out vec4 color;
 
-        vec3 applyExposure(vec3 col) {
-            return pow(2.0, exposure) * col;
+        vec3 applyExposureAndOffset(vec3 col) {
+            return pow(2.0, exposure) * col + offset;
         }
 
         vec3 falseColor(float v) {
@@ -138,7 +139,7 @@ UberShader::UberShader() {
             );
 
             if (!hasReference) {
-                color = vec4(applyTonemap(applyExposure(abs(image.rgb))), image.a);
+                color = vec4(applyTonemap(applyExposureAndOffset(image.rgb)), image.a);
                 return;
             }
 
@@ -151,7 +152,7 @@ UberShader::UberShader() {
 
             vec3 difference = image.rgb - reference.rgb;
             float alpha = (image.a + reference.a) * 0.5;
-            color = vec4(applyTonemap(applyExposure(applyMetric(difference, reference.rgb))), alpha);
+            color = vec4(applyTonemap(applyExposureAndOffset(applyMetric(difference, reference.rgb))), alpha);
         })"
     );
 
@@ -181,6 +182,7 @@ void UberShader::draw(
     std::array<const GlTexture*, 4> texturesReference,
     const Eigen::Matrix3f& transformReference,
     float exposure,
+    float offset,
     ETonemap tonemap,
     EMetric metric
 ) {
@@ -210,11 +212,12 @@ void UberShader::draw(
     mShader.setUniform("referenceTransform", transformReference);
 
     mShader.setUniform("hasReference", true);
-    
+
     mShader.setUniform("exposure", exposure);
+    mShader.setUniform("offset", offset);
     mShader.setUniform("tonemap", static_cast<int>(tonemap));
     mShader.setUniform("metric", static_cast<int>(metric));
-    
+
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
 
@@ -222,6 +225,7 @@ void UberShader::draw(
     std::array<const GlTexture*, 4> texturesImage,
     const Eigen::Matrix3f& transformImage,
     float exposure,
+    float offset,
     ETonemap tonemap
 ) {
     for (int i = 0; i < 4; ++i) {
@@ -241,6 +245,7 @@ void UberShader::draw(
     mShader.setUniform("hasReference", false);
 
     mShader.setUniform("exposure", exposure);
+    mShader.setUniform("offset", offset);
     mShader.setUniform("tonemap", static_cast<int>(tonemap));
 
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);

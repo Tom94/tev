@@ -21,6 +21,7 @@ public:
         std::array<const GlTexture*, 4> texturesReference,
         const Eigen::Matrix3f& transformReference,
         float exposure,
+        float offset,
         ETonemap tonemap,
         EMetric metric
     );
@@ -30,6 +31,7 @@ public:
         std::array<const GlTexture*, 4> texturesImage,
         const Eigen::Matrix3f& transformImage,
         float exposure,
+        float offset,
         ETonemap tonemap
     );
 

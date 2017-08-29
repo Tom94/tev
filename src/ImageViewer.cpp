@@ -43,25 +43,60 @@ ImageViewer::ImageViewer()
     {
         auto panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        auto label = new Label{panel, "Tonemapping", "sans-bold", 20};
+        auto label = new Label{panel, "Tonemapping", "sans-bold", 25};
         label->setTooltip(
             "The Exposure Value (EV) scales the brightness of an image prior to tonemapping by 2^EV. "
             "It can be controlled via the GUI, or by pressing E/Shift+E."
         );
 
         panel = new Widget{leftSide};
-        panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5});
+        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
-        mExposureLabel = new Label{panel, "", "sans-bold"};
+        mExposureLabel = new Label{panel, "", "sans-bold", 15};
 
         mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
-        mExposureSlider->setFixedWidth(mMenuWidth - 47);
+        mExposureSlider->setFixedWidth(mMenuWidth - 10);
 
         mExposureSlider->setCallback([this](float value) {
             setExposure(value);
         });
         setExposure(0);
+
+        panel = new Widget{leftSide};
+        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+
+        mOffsetLabel = new Label{panel, "", "sans-bold", 15};
+
+        mOffsetSlider = new Slider{panel};
+        mOffsetSlider->setRange({-1.0f, 1.0f});
+        mOffsetSlider->setFixedWidth(mMenuWidth - 10);
+
+        mOffsetSlider->setCallback([this](float value) {
+            setOffset(value);
+        });
+        setOffset(0);
+    }
+
+    // Exposure/offset buttons
+    {
+        auto buttonContainer = new Widget{leftSide};
+        buttonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
+
+        auto makeButton = [&](const string& name, function<void()> callback) {
+            auto button = new Button{buttonContainer, name};
+            button->setFontSize(15);
+            button->setCallback(callback);
+            return button;
+        };
+
+        makeButton("Reset", [this]() {
+            resetExposureAndOffset();
+        });
+
+        makeButton("Normalize", [this]() {
+            normalizeExposureAndOffset();
+        });
     }
 
     // Tonemap options
@@ -95,7 +130,7 @@ ImageViewer::ImageViewer()
     // Error metrics
     {
         mMetricButtonContainer = new Widget{leftSide};
-        mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
+        mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 3});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mMetricButtonContainer, name};
@@ -135,7 +170,7 @@ ImageViewer::ImageViewer()
 
         auto panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        auto label = new Label{panel, "Images", "sans-bold", 20};
+        auto label = new Label{panel, "Images", "sans-bold", 25};
         label->setTooltip(
             "Select images either by left-clicking on them or by pressing arrow/number keys on your keyboard.\n"
             "Right-clicking an image marks it as the 'reference' image. "
@@ -237,6 +272,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                     selectImage(idx);
                 }
             }
+        } else if (key == GLFW_KEY_N) {
+            normalizeExposureAndOffset();
+        } else if (key == GLFW_KEY_R) {
+            resetExposureAndOffset();
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -437,9 +476,43 @@ void ImageViewer::selectReference(size_t index) {
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
     mExposureSlider->setValue(value);
-    mExposureLabel->setCaption(tfm::format("EV%+.1f", value));
+    mExposureLabel->setCaption(tfm::format("Exposure: %+.1f", value));
 
     mImageCanvas->setExposure(value);
+}
+
+void ImageViewer::setOffset(float value) {
+    value = round(value, 2.0f);
+    mOffsetSlider->setValue(value);
+    mOffsetLabel->setCaption(tfm::format("Offset: %+.2f", value));
+
+    mImageCanvas->setOffset(value);
+}
+
+void ImageViewer::normalizeExposureAndOffset() {
+    if (mImages.empty()) {
+        return;
+    }
+
+    const auto& image = mImages[mCurrentImage];
+    auto channels = mImageCanvas->getChannels(*image);
+
+    float minimum = numeric_limits<float>::max();
+    float maximum = numeric_limits<float>::min();
+    for (const auto& channelName : channels) {
+        const auto& channel = image->channel(channelName);
+        minimum = min(minimum, channel->min());
+        maximum = max(maximum, channel->max());
+    }
+
+    float factor = 1.0f / (maximum - minimum);
+    setExposure(log2(factor));
+    setOffset(-minimum * factor);
+}
+
+void ImageViewer::resetExposureAndOffset() {
+    setExposure(0);
+    setOffset(0);
 }
 
 void ImageViewer::setTonemap(ETonemap tonemap) {
