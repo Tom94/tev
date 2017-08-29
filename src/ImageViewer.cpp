@@ -137,7 +137,7 @@ ImageViewer::ImageViewer()
     // Error metrics
     {
         mMetricButtonContainer = new Widget{leftSide};
-        mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 3});
+        mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mMetricButtonContainer, name};

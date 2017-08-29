@@ -114,15 +114,20 @@ void ImageButton::draw(NVGcontext *ctx) {
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans");
 
-    string caption = mCaption;
-    if (mSize.x() != preferredSize(ctx).x()) {
-        while (nvgTextBounds(ctx, 0, 0, caption.c_str(), nullptr, nullptr) > mSize.x() - 20 - idSize) {
-            caption = caption.substr(1, caption.length() - 1);
+    if (mSize.x() == preferredSize(ctx).x()) {
+        mCutoff = 0;
+    } else if(mSize != mSizeForWhichCutoffWasComputed) {
+        mCutoff = 0;
+        while (nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
+            ++mCutoff;
         }
 
-        if (caption.length() != mCaption.length()) {
-            caption = "…"s + caption;
-        }
+        mSizeForWhichCutoffWasComputed = mSize;
+    }
+
+    string caption = mCaption.substr(mCutoff);
+    if (mCutoff > 0) {
+        caption = "…"s + caption;
     }
 
     Vector2f center = mPos.cast<float>() + mSize.cast<float>() * 0.5f;

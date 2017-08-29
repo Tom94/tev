@@ -52,6 +52,8 @@ private:
     std::function<void()> mSelectedCallback;
 
     size_t mId = 0;
+    size_t mCutoff = 0;
+    Eigen::Vector2i mSizeForWhichCutoffWasComputed = Eigen::Vector2i::Constant(0);
 };
 
 TEV_NAMESPACE_END
