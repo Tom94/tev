@@ -258,6 +258,8 @@ bool ImageViewer::dropEvent(const std::vector<std::string>& filenames) {
         }
     }
 
+    // Make sure we gain focus after dragging files into here.
+    glfwFocusWindow(mGLFWWindow);
     return true;
 }
 
