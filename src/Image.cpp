@@ -117,7 +117,7 @@ void Image::readStbi(const std::string& filename) {
         channels.back().data().resize(numPixels);
     }
 
-    threadPool.parallelForNoWait(0, numPixels, [&](size_t i) {
+    threadPool.parallelFor(0, numPixels, [&](size_t i) {
         size_t baseIdx = i * mNumChannels;
         for (size_t c = 0; c < mNumChannels; ++c) {
             channels[c].data()[i] = data[baseIdx + c];
