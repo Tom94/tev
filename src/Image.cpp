@@ -198,6 +198,9 @@ void Image::readExr(const std::string& filename) {
                         dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
                     }
                     break;
+
+                default:
+                    throw runtime_error("Invalid pixel type encountered.");
             }
         }
 
