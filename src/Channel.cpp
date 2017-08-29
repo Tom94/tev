@@ -3,12 +3,13 @@
 
 #include "../include/Channel.h"
 
+using namespace Eigen;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-Channel::Channel(const std::string& name)
-: mName(name) {
+Channel::Channel(const std::string& name, Vector2i size)
+: mName{name}, mSize{size} {
 }
 
 TEV_NAMESPACE_END

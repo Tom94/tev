@@ -12,7 +12,7 @@ TEV_NAMESPACE_BEGIN
 
 class Channel {
 public:
-    Channel(const std::string& name);
+    Channel(const std::string& name, Eigen::Vector2i size);
 
     const auto& name() const {
         return mName;
@@ -26,26 +26,30 @@ public:
         return mData;
     }
 
-    float min() const {
-        return mMin;
+    float eval(size_t index) const {
+        if (index >= mData.size()) {
+            return 0;
+        }
+        return mData[index];
     }
 
-    void setMin(float minimum) {
-        mMin = minimum;
+    float eval(Eigen::Vector2i index) const {
+        size_t i = index.x() + index.y() * mSize.x();
+        return eval(i);
     }
 
-    float max() const {
-        return mMax;
+    size_t count() const {
+        return mData.size();
     }
 
-    void setMax(float maximum) {
-        mMax = maximum;
+    Eigen::Vector2i size() const {
+        return mSize;
     }
 
 private:
     std::string mName;
     std::vector<float> mData;
-    float mMin = 0, mMax = 0;
+    Eigen::Vector2i mSize;
 };
 
 TEV_NAMESPACE_END

@@ -504,9 +504,17 @@ void ImageViewer::normalizeExposureAndOffset() {
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::min();
     for (const auto& channelName : channels) {
-        const auto& channel = image->channel(channelName);
-        minimum = min(minimum, channel->min());
-        maximum = max(maximum, channel->max());
+        const auto& channel = mCurrentImage->channel(channelName);
+
+        for (size_t i = 0; i < channel->count(); ++i) {
+            float val = channel->eval(i);
+            if (val > maximum) {
+                maximum = val;
+            }
+            if (val < minimum) {
+                minimum = val;
+            }
+        }
     }
 
     float factor = 1.0f / (maximum - minimum);
