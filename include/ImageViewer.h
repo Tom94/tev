@@ -69,7 +69,11 @@ public:
     void setMetric(EMetric metric);
 
     void fitAllImages();
+
     void maximize();
+    bool isMaximized();
+    void toggleMaximized();
+
     void updateLayout();
 
 private:

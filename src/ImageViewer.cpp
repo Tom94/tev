@@ -304,6 +304,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
+        } else if (key == GLFW_KEY_ENTER) {
+            if (modifiers & GLFW_MOD_ALT) {
+                toggleMaximized();
+            }
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -594,6 +598,18 @@ void ImageViewer::fitAllImages() {
 
 void ImageViewer::maximize() {
     glfwMaximizeWindow(mGLFWWindow);
+}
+
+bool ImageViewer::isMaximized() {
+    return glfwGetWindowAttrib(mGLFWWindow, GLFW_MAXIMIZED) != 0;
+}
+
+void ImageViewer::toggleMaximized() {
+    if (isMaximized()) {
+        glfwRestoreWindow(mGLFWWindow);
+    } else {
+        maximize();
+    }
 }
 
 void ImageViewer::updateLayout() {
