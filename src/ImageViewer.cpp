@@ -274,7 +274,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             int idx = (key - GLFW_KEY_1 + 10) % 10;
             if (modifiers & GLFW_MOD_SHIFT) {
                 if (idx >= 0 && idx < amountImages) {
-                    selectReference(idx);
+                    if (mCurrentReference && (int)currentReferenceId() == idx) {
+                        unselectReference();
+                    } else {
+                        selectReference(idx);
+                    }
                 }
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (idx >= 0 && idx < amountLayers) {
