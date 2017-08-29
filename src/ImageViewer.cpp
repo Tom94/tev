@@ -309,15 +309,15 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
         if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                selectReference((mCurrentReference - 1 + amountImages) % amountImages);
+                selectReference((currentReferenceId() + amountImages - 1) % amountImages);
             } else {
-                selectImage((mCurrentImage - 1 + amountImages) % amountImages);
+                selectImage((currentImageId() + amountImages - 1) % amountImages);
             }
         } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                selectReference((mCurrentReference + 1) % amountImages);
+                selectReference((currentReferenceId() + 1) % amountImages);
             } else {
-                selectImage((mCurrentImage + 1) % amountImages);
+                selectImage((currentImageId() + 1) % amountImages);
             }
         }
 
@@ -387,10 +387,6 @@ void ImageViewer::tryLoadImage(const std::string& filename, bool shallSelect) {
 }
 
 void ImageViewer::selectImage(size_t index) {
-    if (index >= mImages.size()) {
-        throw invalid_argument{tfm::format("Invalid image index (%d) should be in range [0,%d).", index, mImages.size())};
-    }
-
     string currentLayer = layerName(mCurrentLayer);
     mCurrentLayer = 0;
 
@@ -399,17 +395,15 @@ void ImageViewer::selectImage(size_t index) {
         dynamic_cast<ImageButton*>(buttons[i])->setIsSelected(i == index);
     }
 
-    mCurrentImage = index;
-
-    const auto& image = mImages[mCurrentImage];
-    mImageCanvas->setImage(image);
+    mCurrentImage = mImages.at(index);
+    mImageCanvas->setImage(mCurrentImage);
 
     // Clear layer buttons
     while (mLayerButtonContainer->childCount() > 0) {
         mLayerButtonContainer->removeChild(mLayerButtonContainer->childCount() - 1);
     }
 
-    size_t numLayers = image->layers().size();
+    size_t numLayers = mCurrentImage->layers().size();
     for (size_t i = 0; i < numLayers; ++i) {
         string layer = layerName(i);
         layer = layer.empty() ? "<root>"s : layer;
@@ -448,11 +442,11 @@ void ImageViewer::selectLayer(size_t index) {
 }
 
 void ImageViewer::selectLayer(string name) {
-    if (mImages.empty()) {
+    if (!mCurrentImage) {
         return;
     }
 
-    size_t numLayers = mImages[mCurrentImage]->layers().size();
+    size_t numLayers = mCurrentImage->layers().size();
     for (size_t i = 0; i < numLayers; ++i) {
         if (layerName(i) == name) {
             selectLayer(i);
@@ -470,22 +464,18 @@ void ImageViewer::unselectReference() {
         dynamic_cast<ImageButton*>(buttons[i])->setIsReference(false);
     }
 
-    mCurrentReference = 0;
+    mCurrentReference = nullptr;
     mImageCanvas->setReference(nullptr);
 }
 
 void ImageViewer::selectReference(size_t index) {
-    if (index >= mImages.size()) {
-        throw invalid_argument{tfm::format("Invalid reference index (%d) should be in range [0,%d).", index, mImages.size())};
-    }
-
     auto& buttons = mImageButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
         dynamic_cast<ImageButton*>(buttons[i])->setIsReference(i == index);
     }
 
-    mCurrentReference = index;
-    mImageCanvas->setReference(mImages[mCurrentReference]);
+    mCurrentReference = mImages.at(index);
+    mImageCanvas->setReference(mCurrentReference);
 }
 
 void ImageViewer::setExposure(float value) {
@@ -505,12 +495,11 @@ void ImageViewer::setOffset(float value) {
 }
 
 void ImageViewer::normalizeExposureAndOffset() {
-    if (mImages.empty()) {
+    if (!mCurrentImage) {
         return;
     }
 
-    const auto& image = mImages[mCurrentImage];
-    auto channels = mImageCanvas->getChannels(*image);
+    auto channels = mImageCanvas->getChannels(*mCurrentImage);
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::min();
@@ -573,12 +562,11 @@ void ImageViewer::maximize() {
 
 void ImageViewer::updateTitle() {
     string caption = "tev";
-    if (!mImages.empty()) {
-        const auto& image = mImages[mCurrentImage];
+    if (mCurrentImage) {
         const auto& layer = layerName(mCurrentLayer);
 
         string channelsString;
-        auto channels = mImageCanvas->getChannels(*image);
+        auto channels = mImageCanvas->getChannels(*mCurrentImage);
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
 
@@ -591,7 +579,7 @@ void ImageViewer::updateTitle() {
         }
         channelsString.pop_back();
 
-        caption += " - "s + image->shortName();
+        caption += " - "s + mCurrentImage->shortName();
 
         if (layer.empty()) {
             caption += " - "s + channelsString;
@@ -609,12 +597,11 @@ void ImageViewer::updateTitle() {
 }
 
 string ImageViewer::layerName(size_t index) {
-    if (mImages.empty()) {
-        throw runtime_error{"Can not obtain current layer name if there exists no image."};
+    if (!mCurrentImage) {
+        return "";
     }
 
-    const auto& image = mImages[mCurrentImage];
-    return image->layers().at(index);
+    return mCurrentImage->layers().at(index);
 }
 
 TEV_NAMESPACE_END

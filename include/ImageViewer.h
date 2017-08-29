@@ -77,6 +77,16 @@ private:
     void updateTitle();
     std::string layerName(size_t index);
 
+    size_t currentImageId() const {
+        auto pos = std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentImage));
+        return pos >= mImages.size() ? 0 : pos;
+    }
+
+    size_t currentReferenceId() const {
+        auto pos = std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentReference));
+        return pos >= mImages.size() ? 0 : pos;
+    }
+
     int mMenuWidth = 200;
     int mFooterHeight = 25;
 
@@ -89,8 +99,8 @@ private:
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;
 
-    size_t mCurrentImage = 0;
-    size_t mCurrentReference = 0;
+    std::shared_ptr<Image> mCurrentImage;
+    std::shared_ptr<Image> mCurrentReference;
 
     std::vector<std::shared_ptr<Image>> mImages;
     nanogui::Widget* mImageButtonContainer;
