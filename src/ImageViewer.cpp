@@ -45,14 +45,17 @@ ImageViewer::ImageViewer()
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Tonemapping", "sans-bold", 25};
         label->setTooltip(
-            "The Exposure Value (EV) scales the brightness of an image prior to tonemapping by 2^EV. "
-            "It can be controlled via the GUI, or by pressing E/Shift+E."
+            "Various tonemapping options. Hover the labels of individual options to learn more!"
         );
 
         panel = new Widget{leftSide};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mExposureLabel = new Label{panel, "", "sans-bold", 15};
+        mExposureLabel->setTooltip(
+            "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
+            "It can be controlled via the GUI, or by pressing E/Shift+E."
+        );
 
         mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
@@ -67,6 +70,10 @@ ImageViewer::ImageViewer()
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mOffsetLabel = new Label{panel, "", "sans-bold", 15};
+        mOffsetLabel->setTooltip(
+            "An offset to add to image values after exposure has been applied. "
+            "It can be controlled via the GUI, or by pressing O/Shift+O."
+        );
 
         mOffsetSlider = new Slider{panel};
         mOffsetSlider->setRange({-1.0f, 1.0f});
@@ -289,6 +296,14 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                 setExposure(exposure() - 0.5f);
             } else {
                 setExposure(exposure() + 0.5f);
+            }
+        }
+
+        if (key == GLFW_KEY_O) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                setOffset(offset() - 0.1f);
+            } else {
+                setOffset(offset() + 0.1f);
             }
         }
 
