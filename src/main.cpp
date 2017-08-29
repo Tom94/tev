@@ -32,7 +32,9 @@ int mainFunc(int argc, char* argv[]) {
     ValueFlag<float> exposureFlag{
         parser,
         "exposure",
-        "Initial exposure setting of the viewer.",
+        "Initial exposure setting of the viewer. "
+        "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
+        "It can be controlled via the GUI, or by pressing E/Shift+E.",
         {'e', "exposure"},
     };
 
@@ -43,6 +45,15 @@ int mainFunc(int argc, char* argv[]) {
         "If no images were supplied via the command line, then the default is false. "
         "Otherwise, the default is true.",
         {'m', "maximize"},
+    };
+
+    ValueFlag<float> offsetFlag{
+        parser,
+        "offset",
+        "Initial offset setting of the viewer. "
+        "The offset is added to the image after exposure has been applied. "
+        "It can be controlled via the GUI, or by pressing O/Shift+O.",
+        {'o', "offset"},
     };
 
     PositionalList<string> imageFiles{
@@ -104,6 +115,10 @@ int mainFunc(int argc, char* argv[]) {
         // Adjust exposure according to potential command line parameters.
         if (exposureFlag) {
             app->setExposure(get(exposureFlag));
+        }
+
+        if (offsetFlag) {
+            app->setOffset(get(offsetFlag));
         }
 
         nanogui::mainloop();

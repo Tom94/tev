@@ -71,7 +71,7 @@ ImageViewer::ImageViewer()
 
         mOffsetLabel = new Label{panel, "", "sans-bold", 15};
         mOffsetLabel->setTooltip(
-            "An offset to add to image values after exposure has been applied. "
+            "The offset is added to the image after exposure has been applied. "
             "It can be controlled via the GUI, or by pressing O/Shift+O."
         );
 
