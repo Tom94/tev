@@ -19,7 +19,7 @@ int mainFunc(int argc, char* argv[]) {
 
     ArgumentParser parser{
         "Inspection tool for images with a high dynamic range.",
-        "This goes after the options.",
+        "",
     };
 
     HelpFlag helpFlag{
