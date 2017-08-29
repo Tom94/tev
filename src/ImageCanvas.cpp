@@ -172,8 +172,8 @@ float ImageCanvas::applyMetric(float diff, float reference) {
         case EMetric::Error:                 return diff;
         case EMetric::AbsoluteError:         return abs(diff);
         case EMetric::SquaredError:          return diff * diff;
-        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01);
-        case EMetric::RelativeSquaredError:  return diff * diff / (reference * reference + 0.0001);
+        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01f);
+        case EMetric::RelativeSquaredError:  return diff * diff / (reference * reference + 0.0001f);
         default:
             throw runtime_error{"Invalid metric selected."};
     }
@@ -199,7 +199,7 @@ vector<float> ImageCanvas::getValues(Vector2i mousePos) {
         for (size_t i = 0; i < result.size(); ++i) {
             float reference = i < referenceChannels.size() ?
                 mReference->channel(referenceChannels[i])->eval(referenceCoords) :
-                0.0;
+                0.0f;
 
             result[i] = applyMetric(result[i] - reference, reference);
         }
