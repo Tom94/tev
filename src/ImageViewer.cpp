@@ -244,6 +244,7 @@ ImageViewer::ImageViewer()
     });
 
     this->setSize(Vector2i(1024, 768));
+    unselectReference();
 }
 
 bool ImageViewer::dropEvent(const std::vector<std::string>& filenames) {
@@ -335,7 +336,9 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() + 1) % AmountTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
-                setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
+                if (mCurrentReference) {
+                    setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
+                }
             } else {
                 selectLayer((mCurrentLayer + 1) % amountLayers);
             }
@@ -343,7 +346,9 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() - 1 + AmountTonemaps) % AmountTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
-                setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
+                if (mCurrentReference) {
+                    setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
+                }
             } else {
                 selectLayer((mCurrentLayer - 1 + amountLayers) % amountLayers);
             }
@@ -466,6 +471,11 @@ void ImageViewer::unselectReference() {
         dynamic_cast<ImageButton*>(buttons[i])->setIsReference(false);
     }
 
+    auto& metricButtons = mMetricButtonContainer->children();
+    for (size_t i = 0; i < metricButtons.size(); ++i) {
+        dynamic_cast<Button*>(metricButtons[i])->setEnabled(false);
+    }
+
     mCurrentReference = nullptr;
     mImageCanvas->setReference(nullptr);
 }
@@ -474,6 +484,11 @@ void ImageViewer::selectReference(size_t index) {
     auto& buttons = mImageButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
         dynamic_cast<ImageButton*>(buttons[i])->setIsReference(i == index);
+    }
+
+    auto& metricButtons = mMetricButtonContainer->children();
+    for (size_t i = 0; i < metricButtons.size(); ++i) {
+        dynamic_cast<Button*>(metricButtons[i])->setEnabled(true);
     }
 
     mCurrentReference = mImages.at(index);
