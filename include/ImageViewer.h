@@ -25,7 +25,7 @@ public:
 
     bool keyboardEvent(int key, int scancode, int action, int modifiers) override;
 
-    void draw(NVGcontext *ctx) override;
+    void drawContents() override;
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false);
 

@@ -72,9 +72,9 @@ void ImageCanvas::drawGL() {
             getTextures(*mImage),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
-            transform(mImage.get()).inverse(),
+            transform(mImage.get()).inverse().matrix(),
             getTextures(*mReference),
-            transform(mImage.get()).inverse(),
+            transform(mImage.get()).inverse().matrix(),
             mExposure,
             mOffset,
             mTonemap,
@@ -85,7 +85,7 @@ void ImageCanvas::drawGL() {
             getTextures(*mImage),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
-            transform(mImage.get()).inverse(),
+            transform(mImage.get()).inverse().matrix(),
             mExposure,
             mOffset,
             mTonemap
@@ -152,9 +152,65 @@ vector<string> ImageCanvas::getChannels(const Image& image) {
     return result;
 }
 
-Matrix3f ImageCanvas::transform(const Image* image) {
+Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
+    if (!mImage) {
+        return {0, 0};
+    }
+
+    Vector2f mouse = (mousePos - position()).cast<float>().cwiseQuotient(size().cast<float>());
+    mouse = (mouse - Vector2f::Constant(0.5f)).cwiseProduct(Vector2f(2.0, -2.0));
+
+    Vector2f imagePos = (transform(&image).inverse() * mouse).cwiseProduct(mImage->size().cast<float>());
+    return {
+        static_cast<int>(floor(imagePos.x())),
+        static_cast<int>(floor(imagePos.y())),
+    };
+}
+
+float ImageCanvas::applyMetric(float diff, float reference) {
+    switch (mMetric) {
+        case EMetric::Error:                 return diff;
+        case EMetric::AbsoluteError:         return abs(diff);
+        case EMetric::SquaredError:          return diff * diff;
+        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01);
+        case EMetric::RelativeSquaredError:  return diff * diff / (reference * reference + 0.0001);
+        default:
+            throw runtime_error{"Invalid metric selected."};
+    }
+}
+
+vector<float> ImageCanvas::getValues(Vector2i mousePos) {
+    if (!mImage) {
+        return {};
+    }
+
+    Vector2i imageCoords = getImageCoords(*mImage, mousePos);
+    const auto& channels = getChannels(*mImage);
+
+    vector<float> result;
+    for (const auto& channel : channels) {
+        result.push_back(mImage->channel(channel)->eval(imageCoords));
+    }
+
+    // Subtract reference if it exists.
+    if (mReference) {
+        Vector2i referenceCoords = getImageCoords(*mReference, mousePos);
+        const auto& referenceChannels = getChannels(*mReference);
+        for (size_t i = 0; i < result.size(); ++i) {
+            float reference = i < referenceChannels.size() ?
+                mReference->channel(referenceChannels[i])->eval(referenceCoords) :
+                0.0;
+
+            result[i] = applyMetric(result[i] - reference, reference);
+        }
+    }
+
+    return result;
+}
+
+Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
     if (!image) {
-        return Matrix3f::Identity();
+        return Transform<float, 2, 0>::Identity();
     }
 
     // Center image, scale to pixel space, translate to desired position,
@@ -164,7 +220,7 @@ Matrix3f ImageCanvas::transform(const Image* image) {
         mTransform *
         Scaling(image->size().cast<float>() / mPixelRatio) *
         Translation2f(Vector2f::Constant(-0.5f))
-    ).matrix();
+    );
 }
 
 TEV_NAMESPACE_END

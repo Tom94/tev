@@ -34,8 +34,13 @@ public:
     }
 
     float eval(Eigen::Vector2i index) const {
+        if (index.x() < 0 || index.x() >= mSize.x() ||
+            index.y() < 0 || index.y() >= mSize.y()) {
+            return 0;
+        }
+
         size_t i = index.x() + index.y() * mSize.x();
-        return eval(i);
+        return mData[i];
     }
 
     size_t count() const {

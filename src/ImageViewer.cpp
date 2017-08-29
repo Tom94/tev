@@ -343,8 +343,8 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
     return false;
 }
 
-void ImageViewer::draw(NVGcontext *ctx) {
-    Screen::draw(ctx);
+void ImageViewer::drawContents() {
+    updateTitle();
 }
 
 void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
@@ -437,8 +437,6 @@ void ImageViewer::selectLayer(size_t index) {
 
     mCurrentLayer = index;
     mImageCanvas->setRequestedLayer(layerName(mCurrentLayer));
-
-    updateTitle();
 }
 
 void ImageViewer::selectLayer(string name) {
@@ -573,11 +571,11 @@ void ImageViewer::updateTitle() {
     if (mCurrentImage) {
         const auto& layer = layerName(mCurrentLayer);
 
-        string channelsString;
         auto channels = mImageCanvas->getChannels(*mCurrentImage);
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
 
+        string channelsString;
         for (string channel : channels) {
             size_t dotPosition = channel.rfind(".");
             if (dotPosition != string::npos) {
@@ -587,7 +585,7 @@ void ImageViewer::updateTitle() {
         }
         channelsString.pop_back();
 
-        caption += " - "s + mCurrentImage->shortName();
+        caption = mCurrentImage->shortName();
 
         if (layer.empty()) {
             caption += " - "s + channelsString;
@@ -599,6 +597,18 @@ void ImageViewer::updateTitle() {
                 caption += ".("s + channelsString + ")"s;
             }
         }
+
+        vector<float> values = mImageCanvas->getValues(mousePos());
+        Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, mousePos());
+        TEV_ASSERT(values.size() >= channels.size(), "Should obtain a value for every existing channel.");
+
+        string valuesString;
+        for (size_t i = 0; i < channels.size(); ++i) {
+            valuesString += tfm::format("%.2f,", values[i]);
+        }
+        valuesString.pop_back();
+
+        caption += " - "s + tfm::format("@(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
     }
 
     setCaption(caption);

@@ -46,6 +46,12 @@ public:
 
     std::vector<std::string> getChannels(const Image& image);
 
+    Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
+
+    float applyMetric(float value, float reference);
+
+    std::vector<float> getValues(Eigen::Vector2i mousePos);
+
     ETonemap tonemap() {
         return mTonemap;
     }
@@ -65,7 +71,7 @@ public:
 private:
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
-    Eigen::Matrix3f transform(const Image* image);
+    Eigen::Transform<float, 2, 2> transform(const Image* image);
 
     float mPixelRatio = 1;
     float mExposure = 0;
