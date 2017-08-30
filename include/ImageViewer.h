@@ -74,9 +74,13 @@ public:
     bool isMaximized();
     void toggleMaximized();
 
-    void updateLayout();
+    bool isUiVisible() {
+        return mSidebar->visible();
+    }
+    void setUiVisible(bool shouldBeVisible);
 
 private:
+    void updateLayout();
     void updateTitle();
     std::string layerName(size_t index);
 
@@ -92,8 +96,8 @@ private:
 
     nanogui::Widget* mVerticalScreenSplit;
 
-    int mFooterHeight = 25;
     nanogui::Widget* mSidebar;
+    nanogui::Widget* mFooter;
 
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;

@@ -232,12 +232,13 @@ ImageViewer::ImageViewer()
 
     // Layer selection
     {
-        auto footer = new Widget{mVerticalScreenSplit};
-        footer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+        mFooter = new Widget{mVerticalScreenSplit};
+        mFooter->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
-        mLayerButtonContainer = new Widget{footer};
+        mLayerButtonContainer = new Widget{mFooter};
         mLayerButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
-        mLayerButtonContainer->setFixedHeight(mFooterHeight);
+        mFooter->setFixedHeight(25);
+        mFooter->setVisible(false);
     }
 
     setResizeCallback([this](Vector2i) { updateLayout(); });
@@ -297,8 +298,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             resetExposureAndOffset();
         } else if (key == GLFW_KEY_B) {
             if (modifiers & GLFW_MOD_CONTROL) {
-                mSidebar->setVisible(!mSidebar->visible());
-                updateLayout();
+                setUiVisible(!isUiVisible());
             }
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
@@ -401,7 +401,10 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
 
     mImages.push_back(image);
 
-    performLayout();
+    // The following call will show the footer if there is not an image
+    // with more than 1 layer.
+    setUiVisible(isUiVisible());
+    updateLayout();
 
     // First image got added, let's select it.
     if (index == 0 || shallSelect) {
@@ -440,7 +443,7 @@ void ImageViewer::selectImage(size_t index) {
         });
     }
 
-    performLayout();
+    updateLayout();
 
     selectLayer(currentLayer);
 }
@@ -612,11 +615,33 @@ void ImageViewer::toggleMaximized() {
     }
 }
 
+void ImageViewer::setUiVisible(bool shouldBeVisible) {
+    mSidebar->setVisible(shouldBeVisible);
+
+    bool shouldFooterBeVisible = false;
+    for (const auto& image : mImages) {
+        // There is no point showing the footer as long as no image
+        // has more than the root layer.
+        if (image->layers().size() > 1) {
+            shouldFooterBeVisible = true;
+            break;
+        }
+    }
+
+    mFooter->setVisible(shouldFooterBeVisible && shouldBeVisible);
+
+    updateLayout();
+}
+
 void ImageViewer::updateLayout() {
-    mImageCanvas->setFixedSize(mSize - Vector2i{mSidebar->visible() ? mSidebar->width() : 0, mFooterHeight});
+    float sidebarWidth = mSidebar->visible() ? mSidebar->fixedWidth() : 0;
+    float footerHeight = mFooter->visible() ? mFooter->fixedHeight() : 0;
+    mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth, footerHeight});
 
     mVerticalScreenSplit->setFixedSize(mSize);
-    mImageScrollContainer->setFixedHeight(mSize.y() - mImageScrollContainer->position().y() - mFooterHeight);
+    mImageScrollContainer->setFixedHeight(
+        mSize.y() - mImageScrollContainer->position().y() - footerHeight
+    );
 
     performLayout();
 }
