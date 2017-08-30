@@ -51,6 +51,8 @@ std::string join(const T& components, const std::string& delim) {
     return s.str();
 }
 
+bool matches(std::string text, std::string filter);
+
 enum ETonemap : int {
     SRGB = 0,
     Gamma,

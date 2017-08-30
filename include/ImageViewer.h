@@ -29,17 +29,11 @@ public:
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false);
 
-    void selectImage(size_t index);
+    void selectImage(const std::shared_ptr<Image>& image);
 
-    size_t layer() {
-        return mCurrentLayer;
-    }
-
-    void selectLayer(size_t index);
     void selectLayer(std::string name);
 
-    void unselectReference();
-    void selectReference(size_t index);
+    void selectReference(const std::shared_ptr<Image>& image);
 
     float exposure() {
         return mExposureSlider->value();
@@ -69,6 +63,7 @@ public:
     void setMetric(EMetric metric);
 
     void fitAllImages();
+    bool setFilter(const std::string& filter);
 
     void maximize();
     bool isMaximized();
@@ -84,15 +79,16 @@ private:
     void updateTitle();
     std::string layerName(size_t index);
 
-    size_t currentImageId() const {
-        auto pos = static_cast<size_t>(std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentImage)));
-        return pos >= mImages.size() ? 0 : pos;
-    }
+    size_t layerId(const std::string& layer) const;
+    size_t imageId(const std::shared_ptr<Image>& image) const;
 
-    size_t currentReferenceId() const {
-        auto pos = static_cast<size_t>(std::distance(mImages.begin(), find(mImages.begin(), mImages.end(), mCurrentReference)));
-        return pos >= mImages.size() ? 0 : pos;
-    }
+    std::string nextLayer(const std::string& layer);
+    std::string previousLayer(const std::string& layer);
+    std::string nthVisibleLayer(size_t n);
+
+    const std::shared_ptr<Image>& nextImage(const std::shared_ptr<Image>& image);
+    const std::shared_ptr<Image>& previousImage(const std::shared_ptr<Image>& image);
+    std::shared_ptr<Image> nthVisibleImage(size_t n);
 
     nanogui::Widget* mVerticalScreenSplit;
 
@@ -112,13 +108,16 @@ private:
     std::shared_ptr<Image> mCurrentReference;
 
     std::vector<std::shared_ptr<Image>> mImages;
+
+    nanogui::TextBox* mFilter;
+
     nanogui::Widget* mImageButtonContainer;
     nanogui::VScrollPanel* mImageScrollContainer;
 
     ImageCanvas* mImageCanvas;
 
     nanogui::Widget* mLayerButtonContainer;
-    size_t mCurrentLayer = 0;
+    std::string mCurrentLayer;
 };
 
 TEV_NAMESPACE_END

@@ -21,6 +21,10 @@ public:
 
     void draw(NVGcontext *ctx) override;
 
+    const std::string& caption() {
+        return mCaption;
+    }
+
     void setReferenceCallback(const std::function<void(bool)> &callback) {
         mReferenceCallback = callback;
     }

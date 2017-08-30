@@ -3,8 +3,22 @@
 
 #include "../include/Common.h"
 
+#include <algorithm>
+
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
+
+bool matches(string text, string filter) {
+    if (filter.empty()) {
+        return true;
+    }
+
+    // Perform matching on lowercase strings
+    transform(begin(text), end(text), begin(text), ::tolower);
+    transform(begin(filter), end(filter), begin(filter), ::tolower);
+
+    return text.find(filter) != string::npos;
+}
 
 TEV_NAMESPACE_END

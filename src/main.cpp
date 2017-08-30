@@ -32,10 +32,18 @@ int mainFunc(int argc, char* argv[]) {
     ValueFlag<float> exposureFlag{
         parser,
         "exposure",
-        "Initial exposure setting of the viewer. "
         "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
         "It can be controlled via the GUI, or by pressing E/Shift+E.",
         {'e', "exposure"},
+    };
+
+    ValueFlag<string> filterFlag{
+        parser,
+        "filter",
+        "Filters visible images and layers according to a supplied string. "
+        "The string should have the format 'image#layer'. "
+        "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
+        {'f', "filter"},
     };
 
     ValueFlag<bool> maximizeFlag{
@@ -50,7 +58,6 @@ int mainFunc(int argc, char* argv[]) {
     ValueFlag<float> offsetFlag{
         parser,
         "offset",
-        "Initial offset setting of the viewer. "
         "The offset is added to the image after exposure has been applied. "
         "It can be controlled via the GUI, or by pressing O/Shift+O.",
         {'o', "offset"},
@@ -129,6 +136,10 @@ int mainFunc(int argc, char* argv[]) {
 
         if (offsetFlag) {
             app->setOffset(get(offsetFlag));
+        }
+
+        if (filterFlag) {
+            app->setFilter(get(filterFlag));
         }
 
         nanogui::mainloop();
