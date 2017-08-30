@@ -449,7 +449,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
     size_t id = imageId(image);
 
     // Don't do anything if the image that wants to be selected is not visible.
-    if (!mImageButtonContainer->childAt(id)->visible()) {
+    if (!mImageButtonContainer->childAt((int)id)->visible()) {
         return;
     }
 
@@ -611,8 +611,10 @@ void ImageViewer::fitAllImages() {
 
     // Convert from image pixel coordinates to nanogui coordinates.
     maxSize = (maxSize.cast<float>() / pixelRatio()).cast<int>();
-    // Take into account the size of the menu on the left.
-    maxSize.x() += mSidebar->width();
+
+    // Take into account the size of the UI.
+    maxSize.x() += mSidebar->fixedWidth();
+    maxSize.y() += mFooter->fixedHeight();
 
     // Only increase our current size if we are larger than the default size of the window.
     setSize(mSize.cwiseMax(maxSize));
@@ -700,8 +702,8 @@ void ImageViewer::setUiVisible(bool shouldBeVisible) {
 }
 
 void ImageViewer::updateLayout() {
-    float sidebarWidth = mSidebar->visible() ? mSidebar->fixedWidth() : 0;
-    float footerHeight = mFooter->visible() ? mFooter->fixedHeight() : 0;
+    int sidebarWidth = mSidebar->visible() ? mSidebar->fixedWidth() : 0;
+    int footerHeight = mFooter->visible() ? mFooter->fixedHeight() : 0;
     mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth, footerHeight});
 
     mVerticalScreenSplit->setFixedSize(mSize);
