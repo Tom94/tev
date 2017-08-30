@@ -11,18 +11,22 @@ TEV_NAMESPACE_BEGIN
 
 class GlTexture {
 public:
-    GlTexture() = default;
+    GlTexture(GLint clamping = GL_CLAMP_TO_BORDER, GLint filtering = GL_NEAREST, bool mipmap = true);
 
     GlTexture(GLint textureId) : mId(textureId) {}
 
     GlTexture(const GlTexture& other) = delete;
-    GlTexture(GlTexture&& other) noexcept : mId(other.mId) {
+    GlTexture(GlTexture&& other) noexcept
+    : mId{other.mId}, mClamping{other.mClamping}, mFiltering{other.mFiltering}, mMipmap{other.mMipmap} {
         other.mId = 0;
     }
 
     GlTexture& operator=(const GlTexture& other) = delete;
     GlTexture& operator=(GlTexture&& other) noexcept {
         std::swap(mId, other.mId);
+        std::swap(mClamping, other.mClamping);
+        std::swap(mFiltering, other.mFiltering);
+        std::swap(mMipmap, other.mMipmap);
         return *this;
     }
 
@@ -40,6 +44,9 @@ public:
 
 private:
     GLuint mId = 0;
+    GLint mClamping;
+    GLint mFiltering;
+    bool mMipmap;
 
     Eigen::Vector2i mSize = Eigen::Vector2i::Constant(0);
     int mNumChannels = 0;

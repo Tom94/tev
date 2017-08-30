@@ -37,7 +37,22 @@ public:
 
 
 private:
+    void bindImageData(
+        std::array<const GlTexture*, 4> texturesImage,
+        const Eigen::Matrix3f& transformImage,
+        float exposure,
+        float offset,
+        ETonemap tonemap
+    );
+
+    void bindReferenceData(
+        std::array<const GlTexture*, 4> texturesReference,
+        const Eigen::Matrix3f& transformReference,
+        EMetric metric
+    );
+
     nanogui::GLShader mShader;
+    GlTexture mColorMap;
 };
 
 TEV_NAMESPACE_END

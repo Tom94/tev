@@ -10,6 +10,10 @@ using namespace Eigen;
 
 TEV_NAMESPACE_BEGIN
 
+GlTexture::GlTexture(GLint clamping, GLint filtering, bool mipmap)
+: mClamping{clamping}, mFiltering{filtering}, mMipmap{mipmap} {
+}
+
 void GlTexture::setData(const vector<float>& data, const Vector2i& size, int numChannels) {
     if (mId) {
         glDeleteTextures(1, &mId);
@@ -32,19 +36,23 @@ void GlTexture::setData(const vector<float>& data, const Vector2i& size, int num
     }
 
     TEV_ASSERT(
-        data.size() == static_cast<size_t>(mSize.prod()),
-        "Supplied data (%d) does not match the size of the texture (%dx%d == %d).",
-        data.size(), mSize.x(), mSize.y(), mSize.prod()
+        data.size() == static_cast<size_t>(mSize.prod()) * numChannels,
+        "Supplied data (%d) does not match the size of the texture (%dx%dx%d == %d).",
+        data.size(), mSize.x(), mSize.y(), numChannels, mSize.prod()
     );
 
     glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, size.x(), size.y(), 0, format, GL_FLOAT, data.data());
-    glGenerateMipmap(GL_TEXTURE_2D);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, mClamping);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, mClamping);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    if (mMipmap) {
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    } else {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mFiltering);
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mFiltering);
 }
 
 TEV_NAMESPACE_END
