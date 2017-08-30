@@ -74,7 +74,7 @@ void ImageCanvas::drawGL() {
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(mImage.get()).inverse().matrix(),
             getTextures(*mReference),
-            transform(mImage.get()).inverse().matrix(),
+            transform(mReference.get()).inverse().matrix(),
             mExposure,
             mOffset,
             mTonemap,
