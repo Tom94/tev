@@ -226,6 +226,9 @@ ImageViewer::ImageViewer()
                 if (image) {
                     addImage(image, true);
                 }
+
+                // Make sure we gain focus after seleting a file to be loaded.
+                glfwFocusWindow(mGLFWWindow);
             }
         });
     }
