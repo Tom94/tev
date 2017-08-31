@@ -10,6 +10,11 @@
 #include <string>
 #include <sstream>
 
+#ifdef _WIN32
+#pragma warning(disable : 4127) // warning C4127: conditional expression is constant
+#pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
+#endif
+
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
 #define TEV_NAMESPACE_BEGIN namespace tev {
