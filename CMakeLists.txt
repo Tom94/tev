@@ -1,5 +1,5 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required(VERSION 3.1)
 
 project(tev CXX)
 
@@ -32,8 +32,8 @@ endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
 # Enable more warnings
-if(MSVC)
-    if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
+if (MSVC)
+    if (CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
         string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
     else()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
