@@ -38,6 +38,11 @@ if(MSVC)
     else()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
     endif()
+
+    # To allow for wildcards in command-line path arguments on windows,
+    # we need to link to setargv.obj
+    # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} setargv.obj")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
