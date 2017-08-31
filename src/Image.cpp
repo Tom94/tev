@@ -126,7 +126,7 @@ string Image::toString() const {
 
 void Image::readStbi(const string& filename) {
     // No exr image? Try our best using stbi
-    cout << "Loading "s + filename + " via STBI... ";
+    cout << "Loading "s + filename + " via STBI... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
@@ -175,7 +175,7 @@ void Image::readStbi(const string& filename) {
 
 void Image::readExr(const string& filename, const string& channelSubstr) {
     // OpenEXR for reading exr images
-    cout << "Loading "s + filename + " via OpenEXR... ";
+    cout << "Loading "s + filename + " via OpenEXR... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
