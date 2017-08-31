@@ -15,7 +15,7 @@ TEV_NAMESPACE_BEGIN
 
 class Image {
 public:
-    Image(const std::string& filename);
+    Image(const std::string& filename, const std::string& extra);
 
     const auto& name() {
         return mName;
@@ -51,7 +51,7 @@ public:
 
 private:
     void readStbi(const std::string& filename);
-    void readExr(const std::string& filename);
+    void readExr(const std::string& filename, const std::string& suffix);
 
     std::string mName;
     Eigen::Vector2i mSize;
@@ -63,6 +63,6 @@ private:
     std::vector<std::string> mLayers;
 };
 
-std::shared_ptr<Image> tryLoadImage(std::string filename);
+std::shared_ptr<Image> tryLoadImage(std::string filename, std::string extra);
 
 TEV_NAMESPACE_END

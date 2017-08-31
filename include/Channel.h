@@ -51,7 +51,12 @@ public:
         return mSize;
     }
 
+    static std::pair<std::string, std::string> split(const std::string& fullChannel);
+
     static std::string tail(const std::string& fullChannel);
+    static std::string head(const std::string& fullChannel);
+
+    static bool isTopmost(const std::string& fullChannel);
 
 private:
     std::string mName;

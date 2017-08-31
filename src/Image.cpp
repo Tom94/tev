@@ -6,6 +6,8 @@
 
 #include <ImfChannelList.h>
 #include <ImfInputFile.h>
+#include <ImfInputPart.h>
+#include <ImfMultiPartInputFile.h>
 
 #include <stb_image.h>
 
@@ -20,7 +22,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 bool isExrFile(const string& filename) {
-    std::ifstream f{filename, std::ios_base::binary};
+    ifstream f{filename, ios_base::binary};
     if (!f) {
         throw invalid_argument{tfm::format("File %s could not be opened.", filename)};
     }
@@ -31,22 +33,29 @@ bool isExrFile(const string& filename) {
     return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 }
 
-Image::Image(const string& filename)
-: mName(filename) {
+Image::Image(const string& filename, const string& extra)
+: mName{tfm::format("%s:%s", filename, extra)} {
     if (isExrFile(filename)) {
-        readExr(filename);
+        readExr(filename, extra);
     } else {
         readStbi(filename);
     }
 }
 
 string Image::shortName() {
-    size_t slashPosition = mName.find_last_of("/\\");
+    string result = mName;
+
+    size_t slashPosition = result.find_last_of("/\\");
     if (slashPosition != string::npos) {
-        return mName.substr(slashPosition + 1);
+        result = result.substr(slashPosition + 1);
     }
 
-    return mName;
+    size_t colonPosition = result.find_last_of(":");
+    if (colonPosition != string::npos) {
+        result = result.substr(0, colonPosition);
+    }
+
+    return result;
 }
 
 vector<string> Image::channelsInLayer(string layerName) const {
@@ -75,7 +84,7 @@ vector<string> Image::channelsInLayer(string layerName) const {
     return result;
 }
 
-const GlTexture* Image::texture(const std::string& channelName) {
+const GlTexture* Image::texture(const string& channelName) {
     auto iter = mTextures.find(channelName);
     if (iter != end(mTextures)) {
         return &iter->second;
@@ -111,7 +120,7 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
-void Image::readStbi(const std::string& filename) {
+void Image::readStbi(const string& filename) {
     // No exr image? Try our best using stbi
     cout << "Loading "s + filename + " via STBI... ";
     auto start = chrono::system_clock::now();
@@ -160,14 +169,37 @@ void Image::readStbi(const std::string& filename) {
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
-void Image::readExr(const std::string& filename) {
+void Image::readExr(const string& filename, const string& channelSubstr) {
     // OpenEXR for reading exr images
     cout << "Loading "s + filename + " via OpenEXR... ";
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
 
-    Imf::InputFile file(filename.c_str());
+    Imf::MultiPartInputFile multiPartFile{filename.c_str()};
+    int numParts = multiPartFile.parts();
+
+    if (numParts <= 0) {
+        throw invalid_argument{tfm::format("EXR image '%s' does not contain any parts.", filename)};
+    }
+
+    // Find the first part containing a channel that matches the given channelSubstr.
+    int partIdx = 0;
+    for (int i = 0; i < numParts; ++i) {
+        Imf::InputPart part{multiPartFile, i};
+
+        const Imf::ChannelList& imfChannels = part.header().channels();
+
+        for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
+            if (string{c.name()}.find(channelSubstr) != string::npos) {
+                partIdx = i;
+                goto l_foundPart;
+            }
+        }
+    }
+l_foundPart:
+
+    Imf::InputPart file{multiPartFile, partIdx};
     Imath::Box2i dw = file.header().dataWindow();
     mSize.x() = dw.max.x - dw.min.x + 1;
     mSize.y() = dw.max.y - dw.min.y + 1;
@@ -248,17 +280,21 @@ void Image::readExr(const std::string& filename) {
     Imf::FrameBuffer frameBuffer;
 
     const Imf::ChannelList& imfChannels = file.header().channels();
-
-    // The topmost root layer isn't included in OpenEXRs layer list.
-    mLayers.emplace_back("");
     set<string> layerNames;
-    imfChannels.layers(layerNames);
-    for (const string& layer : layerNames) {
-        mLayers.emplace_back(layer);
+
+    for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
+        if (string{c.name()}.find(channelSubstr) != string::npos) {
+            rawChannels.emplace_back(c.name(), c.channel().type);
+            layerNames.insert(Channel::head(c.name()));
+        }
     }
 
-    for (Imf::ChannelList::ConstIterator i = imfChannels.begin(); i != imfChannels.end(); ++i) {
-        rawChannels.emplace_back(i.name(), i.channel().type);
+    if (rawChannels.empty()) {
+        throw invalid_argument{tfm::format("No channels match '%s'.", channelSubstr)};
+    }
+
+    for (const string& layer : layerNames) {
+        mLayers.emplace_back(layer);
     }
 
     threadPool.parallelFor(0, rawChannels.size(), [&](size_t i) {
@@ -288,13 +324,13 @@ void Image::readExr(const std::string& filename) {
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
-shared_ptr<Image> tryLoadImage(string filename) {
+shared_ptr<Image> tryLoadImage(string filename, string extra) {
     try {
-        return make_shared<Image>(filename);
+        return make_shared<Image>(filename, extra);
     } catch (invalid_argument e) {
-        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, extra, e.what());
     } catch (Iex::BaseExc& e) {
-        tfm::format(cerr, "Could not load image from %s: %s\n", filename, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, extra, e.what());
     }
 
     return nullptr;

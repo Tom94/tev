@@ -229,7 +229,7 @@ ImageViewer::ImageViewer()
             );
 
             if (!path.empty()) {
-                auto image = tryLoadImage(path);
+                auto image = tryLoadImage(path, "");
                 if (image) {
                     addImage(image, true);
                 }
@@ -263,7 +263,7 @@ bool ImageViewer::dropEvent(const std::vector<std::string>& filenames) {
     }
 
     for (const auto& imageFile : filenames) {
-        auto image = tryLoadImage(imageFile);
+        auto image = tryLoadImage(imageFile, "");
         if (image) {
             addImage(image, true);
         }
@@ -626,21 +626,42 @@ bool ImageViewer::setFilter(const string& filter) {
     string imagePart = filter;
     string layerPart = "";
 
-    auto shaPos = filter.find_last_of('#');
-    if (shaPos != string::npos) {
-        imagePart = filter.substr(0, shaPos);
-        layerPart = filter.substr(shaPos + 1);
+    auto colonPos = filter.find_last_of(':');
+    if (colonPos != string::npos) {
+        imagePart = filter.substr(0, colonPos);
+        layerPart = filter.substr(colonPos + 1);
     }
 
     // Image filtering
     {
-        const auto& buttons = mImageButtonContainer->children();
-        for (Widget* button : buttons) {
-            ImageButton* ib = dynamic_cast<ImageButton*>(button);
-            ib->setVisible(matches(ib->caption(), imagePart));
+        // Checks whether an image matches the filter.
+        // This is the case if the image name matches the image part
+        // and at least one of the image's layers matches the layer part.
+        auto doesImageMatch = [&](const auto& image) {
+            bool doesMatch = matches(image->name(), imagePart);
+            if (doesMatch) {
+                bool anyLayersMatch = false;
+                for (const auto& layer : image->layers()) {
+                    if (matches(layer, layerPart)) {
+                        anyLayersMatch = true;
+                        break;
+                    }
+                }
+
+                if (!anyLayersMatch) {
+                    doesMatch = false;
+                }
+            }
+
+            return doesMatch;
+        };
+
+        for (size_t i = 0; i < mImages.size(); ++i) {
+            ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
+            ib->setVisible(doesImageMatch(mImages[i]));
         }
 
-        if (mCurrentImage && !matches(mCurrentImage->name(), imagePart)) {
+        if (mCurrentImage && !doesImageMatch(mCurrentImage)) {
             selectImage(nthVisibleImage(0));
         }
 

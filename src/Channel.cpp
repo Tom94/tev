@@ -12,13 +12,25 @@ Channel::Channel(const std::string& name, Vector2i size)
 : mName{name}, mSize{size} {
 }
 
-string Channel::tail(const string& channel) {
+pair<string, string> Channel::split(const string& channel) {
     size_t dotPosition = channel.rfind(".");
     if (dotPosition != string::npos) {
-        return channel.substr(dotPosition + 1);
+        return make_pair(channel.substr(0, dotPosition), channel.substr(dotPosition + 1));
     }
 
-    return channel;
+    return make_pair(""s, channel);
+}
+
+string Channel::tail(const string& channel) {
+    return split(channel).second;
+}
+
+string Channel::head(const string& channel) {
+    return split(channel).first;
+}
+
+bool Channel::isTopmost(const string& channel) {
+    return tail(channel) == channel;
 }
 
 TEV_NAMESPACE_END

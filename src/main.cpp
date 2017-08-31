@@ -41,7 +41,7 @@ int mainFunc(int argc, char* argv[]) {
         parser,
         "filter",
         "Filters visible images and layers according to a supplied string. "
-        "The string should have the format 'image#layer'. "
+        "The string should have the format 'image:layer'. "
         "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
         {'f', "filter"},
     };
@@ -89,8 +89,14 @@ int mainFunc(int argc, char* argv[]) {
     // Load images passed via command line prior to initializing nanogui
     // such that no frozen window is created.
     vector<shared_ptr<Image>> images;
+    string currentExtra;
     for (const auto imageFile : get(imageFiles)) {
-        auto image = tryLoadImage(imageFile);
+        if (!imageFile.empty() && imageFile[0] == ':') {
+            currentExtra = imageFile.substr(1);
+            continue;
+        }
+
+        auto image = tryLoadImage(imageFile, currentExtra);
         if (image) {
             images.emplace_back(image);
         }
