@@ -33,12 +33,20 @@ public:
         mIsReference = isReference;
     }
 
+    bool isReference() const {
+        return mIsReference;
+    }
+
     void setSelectedCallback(const std::function<void()> &callback) {
         mSelectedCallback = callback;
     }
 
     void setIsSelected(bool isSelected) {
         mIsSelected = isSelected;
+    }
+
+    bool isSelected() const {
+        return mIsSelected;
     }
 
     void setId(size_t id) {

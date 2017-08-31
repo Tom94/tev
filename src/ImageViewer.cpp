@@ -212,20 +212,20 @@ ImageViewer::ImageViewer()
         auto b = new Button{tools, "Open image file"};
         b->setCallback([&] {
             string path = file_dialog(
-            {
-                {"exr",  "OpenEXR image"},
-                {"hdr",  "HDR image"},
-                {"bmp",  "Bitmap Image File"},
-                {"gif",  "Graphics Interchange Format image"},
-                {"jpg",  "JPEG image"},
-                {"jpeg", "JPEG image"},
-                {"pic",  "PIC image"},
-                {"png",  "Portable Network Graphics image"},
-                {"pnm",  "Portable Any Map image"},
-                {"psd",  "PSD image"},
-                {"tga",  "Truevision TGA image"},
-            },
-            false
+                {
+                    {"exr",  "OpenEXR image"},
+                    {"hdr",  "HDR image"},
+                    {"bmp",  "Bitmap Image File"},
+                    {"gif",  "Graphics Interchange Format image"},
+                    {"jpg",  "JPEG image"},
+                    {"jpeg", "JPEG image"},
+                    {"pic",  "PIC image"},
+                    {"png",  "Portable Network Graphics image"},
+                    {"pnm",  "Portable Any Map image"},
+                    {"psd",  "PSD image"},
+                    {"tga",  "Truevision TGA image"},
+                },
+                false
             );
 
             if (!path.empty()) {
@@ -243,10 +243,10 @@ ImageViewer::ImageViewer()
     // Layer selection
     {
         mFooter = new Widget{mVerticalScreenSplit};
-        mFooter->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
         mLayerButtonContainer = new Widget{mFooter};
         mLayerButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+        mLayerButtonContainer->setFixedHeight(25);
         mFooter->setFixedHeight(25);
         mFooter->setVisible(false);
     }
@@ -497,6 +497,7 @@ void ImageViewer::selectLayer(string layer) {
 
     mCurrentLayer = layerName(id);
     mImageCanvas->setRequestedLayer(mCurrentLayer);
+    updateLayout();
 }
 
 void ImageViewer::selectReference(const shared_ptr<Image>& image) {
@@ -731,6 +732,29 @@ void ImageViewer::updateLayout() {
     mImageScrollContainer->setFixedHeight(
         mSize.y() - mImageScrollContainer->position().y() - footerHeight
     );
+
+
+    Widget* activeLayerButton = nullptr;
+    for (Widget* widget : mLayerButtonContainer->children()) {
+        if (dynamic_cast<ImageButton*>(widget)->isSelected()) {
+            activeLayerButton = widget;
+            break;
+        }
+    }
+
+    // Ensure the currently active layer button is always fully on-screen
+    if (activeLayerButton) {
+        mLayerButtonContainer->setPosition(
+            Vector2i{
+                clamp(
+                    mLayerButtonContainer->position().x(),
+                    -activeLayerButton->position().x(),
+                    mSize.x() - activeLayerButton->position().x() - activeLayerButton->size().x()
+                ),
+                0
+            }
+        );
+    }
 
     performLayout();
 }
