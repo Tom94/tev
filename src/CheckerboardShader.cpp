@@ -33,8 +33,6 @@ CheckerboardShader::CheckerboardShader() {
             vec3 darkGray = vec3(0.5, 0.5, 0.5);
             vec3 lightGray = vec3(0.6, 0.6, 0.6);
 
-            vec2 flooredUv = vec2(floor(uv.x), floor(uv.y));
-
             vec3 gray = mod(int(floor(uv.x) + floor(uv.y)), 2) == 0 ? darkGray : lightGray;
             color = vec4(gray, 1.0);
         })"
