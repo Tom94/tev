@@ -86,8 +86,8 @@ private:
     std::string previousLayer(const std::string& layer);
     std::string nthVisibleLayer(size_t n);
 
-    const std::shared_ptr<Image>& nextImage(const std::shared_ptr<Image>& image);
-    const std::shared_ptr<Image>& previousImage(const std::shared_ptr<Image>& image);
+    std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image);
+    std::shared_ptr<Image> previousImage(const std::shared_ptr<Image>& image);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
 
     nanogui::Widget* mVerticalScreenSplit;

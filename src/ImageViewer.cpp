@@ -797,6 +797,10 @@ size_t ImageViewer::imageId(const shared_ptr<Image>& image) const {
 }
 
 string ImageViewer::nextLayer(const string& layer) {
+    if (mLayerButtonContainer->childCount() == 0) {
+        return mCurrentLayer;
+    }
+
     int startId = (int)layerId(layer);
 
     int id = startId;
@@ -808,6 +812,10 @@ string ImageViewer::nextLayer(const string& layer) {
 }
 
 string ImageViewer::previousLayer(const string& layer) {
+    if (mLayerButtonContainer->childCount() == 0) {
+        return mCurrentLayer;
+    }
+
     int startId = (int)layerId(layer);
 
     int id = startId;
@@ -830,7 +838,11 @@ string ImageViewer::nthVisibleLayer(size_t n) {
     return mCurrentLayer;
 }
 
-const shared_ptr<Image>& ImageViewer::nextImage(const shared_ptr<Image>& image) {
+shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image) {
+    if (mImages.empty()) {
+        return nullptr;
+    }
+
     int startId = (int)imageId(image);
 
     int id = startId;
@@ -841,7 +853,11 @@ const shared_ptr<Image>& ImageViewer::nextImage(const shared_ptr<Image>& image) 
     return mImages[id];
 }
 
-const shared_ptr<Image>& ImageViewer::previousImage(const shared_ptr<Image>& image) {
+shared_ptr<Image> ImageViewer::previousImage(const shared_ptr<Image>& image) {
+    if (mImages.empty()) {
+        return nullptr;
+    }
+
     int startId = (int)imageId(image);
 
     int id = startId;

@@ -24,7 +24,7 @@ Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
-    return Vector2i(static_cast<int>(tw + idSize) + 15, mFontSize + 6);
+    return Vector2i(static_cast<int>(tw + idSize) + 150, mFontSize + 6);
 }
 
 bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
