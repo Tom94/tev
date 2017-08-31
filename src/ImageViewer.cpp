@@ -293,7 +293,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                         selectReference(image);
                     }
                 }
-            } else if (modifiers & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) {
+            } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (idx >= 0 && idx < amountLayers) {
                     selectLayer(nthVisibleLayer(idx));
                 }
@@ -308,11 +308,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_R) {
             resetExposureAndOffset();
         } else if (key == GLFW_KEY_B) {
-            if (modifiers & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) {
+            if (modifiers & SYSTEM_COMMAND_MOD) {
                 setUiVisible(!isUiVisible());
             }
         } else if (key == GLFW_KEY_P) {
-            if (modifiers & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) {
+            if (modifiers & SYSTEM_COMMAND_MOD) {
                 mFilter->setValue("");
                 mFilter->requestFocus();
             }
@@ -365,7 +365,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() + 1) % AmountTonemaps));
-            } else if (modifiers & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) {
+            } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (mCurrentReference) {
                     setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
                 }
@@ -375,7 +375,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() - 1 + AmountTonemaps) % AmountTonemaps));
-            } else if (modifiers & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) {
+            } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (mCurrentReference) {
                     setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
                 }
