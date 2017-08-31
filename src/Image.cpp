@@ -33,8 +33,12 @@ bool isExrFile(const string& filename) {
     return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 }
 
-Image::Image(const string& filename, const string& extra)
-: mName{tfm::format("%s:%s", filename, extra)} {
+Image::Image(const string& filename, const string& extra) {
+    mName = filename;
+    if (!extra.empty()) {
+        mName += ":"s + extra;
+    }
+
     if (isExrFile(filename)) {
         readExr(filename, extra);
     } else {
