@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <deque>
+#include <functional>
 #include <future>
 #include <thread>
 #include <vector>
