@@ -198,16 +198,16 @@ ImageViewer::ImageViewer()
         mImageScrollContainer = new VScrollPanel{mSidebar};
         mImageScrollContainer->setFixedWidth(mSidebar->fixedWidth());
 
-        auto scrollContent = new Widget{mImageScrollContainer};
-        scrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+        mScrollContent = new Widget{mImageScrollContainer};
+        mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
-        mImageButtonContainer = new Widget{scrollContent};
+        mImageButtonContainer = new Widget{mScrollContent};
         mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
-        spacer = new Widget{scrollContent};
+        spacer = new Widget{mScrollContent};
         spacer->setHeight(3);
 
-        auto tools = new Widget{scrollContent};
+        auto tools = new Widget{mScrollContent};
         tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto b = new Button{tools, "Open image file"};
         b->setCallback([&] {
@@ -356,7 +356,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                selectReference(previousImage(mCurrentReference));
+                selectReference(nextImage(mCurrentReference));
             } else {
                 selectImage(nextImage(mCurrentImage));
             }
@@ -485,6 +485,26 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
     // Setting the filter again makes sure, that layers are correctly filtered.
     setFilter(mFilter->value());
     updateLayout();
+
+    // Ensure the currently active image button is always fully on-screen
+    Widget* activeImageButton = nullptr;
+    for (Widget* widget : mImageButtonContainer->children()) {
+        if (dynamic_cast<ImageButton*>(widget)->isSelected()) {
+            activeImageButton = widget;
+            break;
+        }
+    }
+
+    if (activeImageButton) {
+        float divisor = mScrollContent->height() - mImageScrollContainer->height();
+        if (divisor > 0) {
+            mImageScrollContainer->setScroll(clamp(
+                mImageScrollContainer->scroll(),
+                (activeImageButton->position().y() + activeImageButton->height() - mImageScrollContainer->height()) / divisor,
+                activeImageButton->position().y() / divisor
+            ));
+        }
+    }
 }
 
 void ImageViewer::selectLayer(string layer) {
@@ -497,7 +517,29 @@ void ImageViewer::selectLayer(string layer) {
 
     mCurrentLayer = layerName(id);
     mImageCanvas->setRequestedLayer(mCurrentLayer);
-    updateLayout();
+
+    // Ensure the currently active layer button is always fully on-screen
+    Widget* activeLayerButton = nullptr;
+    for (Widget* widget : mLayerButtonContainer->children()) {
+        if (dynamic_cast<ImageButton*>(widget)->isSelected()) {
+            activeLayerButton = widget;
+            break;
+        }
+    }
+
+    // Ensure the currently active layer button is always fully on-screen
+    if (activeLayerButton) {
+        mLayerButtonContainer->setPosition(
+            Vector2i{
+                clamp(
+                    mLayerButtonContainer->position().x(),
+                    -activeLayerButton->position().x(),
+                    mSize.x() - activeLayerButton->position().x() - activeLayerButton->width()
+                ),
+                0
+            }
+        );
+    }
 }
 
 void ImageViewer::selectReference(const shared_ptr<Image>& image) {
@@ -531,6 +573,26 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 
     mCurrentReference = image;
     mImageCanvas->setReference(mCurrentReference);
+
+    // Ensure the currently active reference button is always fully on-screen
+    Widget* activeReferenceButton = nullptr;
+    for (Widget* widget : mImageButtonContainer->children()) {
+        if (dynamic_cast<ImageButton*>(widget)->isReference()) {
+            activeReferenceButton = widget;
+            break;
+        }
+    }
+
+    if (activeReferenceButton) {
+        float divisor = mScrollContent->height() - mImageScrollContainer->height();
+        if (divisor > 0) {
+            mImageScrollContainer->setScroll(clamp(
+                mImageScrollContainer->scroll(),
+                (activeReferenceButton->position().y() + activeReferenceButton->height() - mImageScrollContainer->height()) / divisor,
+                activeReferenceButton->position().y() / divisor
+            ));
+        }
+    }
 }
 
 void ImageViewer::setExposure(float value) {
@@ -732,29 +794,6 @@ void ImageViewer::updateLayout() {
     mImageScrollContainer->setFixedHeight(
         mSize.y() - mImageScrollContainer->position().y() - footerHeight
     );
-
-
-    Widget* activeLayerButton = nullptr;
-    for (Widget* widget : mLayerButtonContainer->children()) {
-        if (dynamic_cast<ImageButton*>(widget)->isSelected()) {
-            activeLayerButton = widget;
-            break;
-        }
-    }
-
-    // Ensure the currently active layer button is always fully on-screen
-    if (activeLayerButton) {
-        mLayerButtonContainer->setPosition(
-            Vector2i{
-                clamp(
-                    mLayerButtonContainer->position().x(),
-                    -activeLayerButton->position().x(),
-                    mSize.x() - activeLayerButton->position().x() - activeLayerButton->size().x()
-                ),
-                0
-            }
-        );
-    }
 
     performLayout();
 }

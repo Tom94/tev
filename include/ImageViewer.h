@@ -112,6 +112,7 @@ private:
     nanogui::TextBox* mFilter;
 
     nanogui::Widget* mImageButtonContainer;
+    nanogui::Widget* mScrollContent;
     nanogui::VScrollPanel* mImageScrollContainer;
 
     ImageCanvas* mImageCanvas;
