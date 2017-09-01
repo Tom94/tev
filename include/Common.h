@@ -69,6 +69,8 @@ enum ETonemap : int {
     AmountTonemaps,
 };
 
+ETonemap toTonemap(std::string name);
+
 enum EMetric : int {
     Error = 0,
     AbsoluteError,
@@ -80,5 +82,7 @@ enum EMetric : int {
     // It facilitates looping over all members of this enum.
     AmountMetrics,
 };
+
+EMetric toMetric(std::string name);
 
 TEV_NAMESPACE_END

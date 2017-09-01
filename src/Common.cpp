@@ -4,6 +4,7 @@
 #include "../include/Common.h"
 
 #include <algorithm>
+#include <map>
 
 using namespace std;
 
@@ -19,6 +20,40 @@ bool matches(string text, string filter) {
     transform(begin(filter), end(filter), begin(filter), ::tolower);
 
     return text.find(filter) != string::npos;
+}
+
+ETonemap toTonemap(string name) {
+    // Perform matching on uppercase strings
+    transform(begin(name), end(name), begin(name), ::toupper);
+    if (name == "SRGB") {
+        return SRGB;
+    } else if (name == "GAMMA") {
+        return Gamma;
+    } else if (name == "FALSECOLOR" || name == "FC") {
+        return FalseColor;
+    } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" ||name == "+-") {
+        return PositiveNegative;
+    } else {
+        return SRGB;
+    }
+}
+
+EMetric toMetric(string name) {
+    // Perform matching on uppercase strings
+    transform(begin(name), end(name), begin(name), ::toupper);
+    if (name == "E") {
+        return Error;
+    } else if (name == "AE") {
+        return AbsoluteError;
+    } else if (name == "SE") {
+        return SquaredError;
+    } else if (name == "RAE") {
+        return RelativeAbsoluteError;
+    } else if (name == "RSE") {
+        return RelativeSquaredError;
+    } else {
+        return Error;
+    }
 }
 
 TEV_NAMESPACE_END

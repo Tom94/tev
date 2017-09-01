@@ -52,7 +52,23 @@ int mainFunc(int argc, char* argv[]) {
         "Whether to maximize the window on startup or not. "
         "If no images were supplied via the command line, then the default is false. "
         "Otherwise, the default is true.",
-        {'m', "maximize"},
+        {"max", "maximize"},
+    };
+
+    ValueFlag<string> metricFlag{
+        parser,
+        "metric",
+        "The metric to use when comparing two images. "
+        R"(
+        The available metrics are:
+        E   - Error
+        AE  - Absolute Error
+        SE  - Squared Error
+        RAE - Relative Absolute Error
+        RSE - Relative Squared Error
+        )"
+        "Default is E.",
+        {'m', "metric"},
     };
 
     ValueFlag<float> offsetFlag{
@@ -63,10 +79,32 @@ int mainFunc(int argc, char* argv[]) {
         {'o', "offset"},
     };
 
+    ValueFlag<string> tonemapFlag{
+        parser,
+        "tonemap",
+        "The tonemapping algorithm to use. "
+        R"(
+        The available tonemaps are:
+        sRGB   - sRGB
+        Gamma  - Gamma curve (2.2)
+        FC     - False Color
+        PN     - Positive=Green, Negative=Red
+        )"
+        "Default is sRGB.",
+        {'t', "tonemap"},
+    };
+
     PositionalList<string> imageFiles{
         parser,
-        "images",
-        "The image files to be opened by the viewer.",
+        "images or channel selectors",
+        "The image files to be opened by the viewer. "
+        "If a filename starting with a ':' is encountered, "
+        "then this filename is not treated as an image file "
+        "but as a channel selector. Until the next channel "
+        "selector is encountered only channels containing "
+        "the selector string will be loaded. This is "
+        "especially useful for selectively loading a specific "
+        "part of a multi-part EXR file.",
     };
 
     // Parse command line arguments and react to parsing
@@ -135,17 +173,24 @@ int mainFunc(int argc, char* argv[]) {
             app->maximize();
         }
 
-        // Adjust exposure according to potential command line parameters.
         if (exposureFlag) {
             app->setExposure(get(exposureFlag));
+        }
+
+        if (filterFlag) {
+            app->setFilter(get(filterFlag));
+        }
+
+        if (metricFlag) {
+            app->setMetric(toMetric(get(metricFlag)));
         }
 
         if (offsetFlag) {
             app->setOffset(get(offsetFlag));
         }
 
-        if (filterFlag) {
-            app->setFilter(get(filterFlag));
+        if (tonemapFlag) {
+            app->setTonemap(toTonemap(get(tonemapFlag)));
         }
 
         nanogui::mainloop();
