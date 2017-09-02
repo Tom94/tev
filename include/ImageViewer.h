@@ -48,7 +48,7 @@ public:
     void setOffset(float value);
 
     void normalizeExposureAndOffset();
-    void resetExposureAndOffset();
+    void resetImage();
 
     ETonemap tonemap() {
         return mImageCanvas->tonemap();

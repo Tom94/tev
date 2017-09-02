@@ -94,7 +94,7 @@ ImageViewer::ImageViewer()
         };
 
         makeButton("Reset", [this]() {
-            resetExposureAndOffset();
+            resetImage();
         });
 
         makeButton("Normalize", [this]() {
@@ -306,7 +306,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
         } else if (key == GLFW_KEY_R) {
-            resetExposureAndOffset();
+            resetImage();
         } else if (key == GLFW_KEY_B) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
                 setUiVisible(!isUiVisible());
@@ -639,9 +639,10 @@ void ImageViewer::normalizeExposureAndOffset() {
     setOffset(-minimum * factor);
 }
 
-void ImageViewer::resetExposureAndOffset() {
+void ImageViewer::resetImage() {
     setExposure(0);
     setOffset(0);
+    mImageCanvas->resetTransform();
 }
 
 void ImageViewer::setTonemap(ETonemap tonemap) {

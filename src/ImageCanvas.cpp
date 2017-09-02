@@ -213,6 +213,10 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
     mTransform = Scaling(mSize.cast<float>().cwiseQuotient(nanoguiImageSize).minCoeff());
 }
 
+void ImageCanvas::resetTransform() {
+    mTransform = Affine2f::Identity();
+}
+
 Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
     if (!image) {
         return Transform<float, 2, 0>::Identity();

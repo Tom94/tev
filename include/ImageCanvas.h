@@ -69,6 +69,7 @@ public:
     }
 
     void fitImageToScreen(const Image& image);
+    void resetTransform();
 
 private:
     // Assembles the transform from canonical space to
