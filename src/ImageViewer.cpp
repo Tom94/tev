@@ -896,15 +896,17 @@ string ImageViewer::previousLayer(const string& layer) {
 }
 
 string ImageViewer::nthVisibleLayer(size_t n) {
+    string lastVisible = mCurrentLayer;
     for (int i = 0; i < mLayerButtonContainer->childCount(); ++i) {
         if (mLayerButtonContainer->childAt(i)->visible()) {
+            lastVisible = layerName(i);
             if (n == 0) {
-                return layerName(i);
+                break;
             }
             --n;
         }
     }
-    return mCurrentLayer;
+    return lastVisible;
 }
 
 shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image) {
@@ -938,15 +940,17 @@ shared_ptr<Image> ImageViewer::previousImage(const shared_ptr<Image>& image) {
 }
 
 shared_ptr<Image> ImageViewer::nthVisibleImage(size_t n) {
+    shared_ptr<Image> lastVisible = nullptr;
     for (size_t i = 0; i < mImages.size(); ++i) {
         if (mImageButtonContainer->children()[i]->visible()) {
+            lastVisible = mImages[i];
             if (n == 0) {
-                return mImages[i];
+                break;
             }
             --n;
         }
     }
-    return nullptr;
+    return lastVisible;
 }
 
 TEV_NAMESPACE_END
