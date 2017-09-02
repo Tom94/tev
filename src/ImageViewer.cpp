@@ -815,9 +815,9 @@ void ImageViewer::updateTitle() {
         caption = mCurrentImage->shortName();
 
         if (mCurrentLayer.empty()) {
-            caption += " - "s + channelsString;
+            caption += " – "s + channelsString;
         } else {
-            caption += " - "s + mCurrentLayer;
+            caption += " – "s + mCurrentLayer;
             if (channels.size() == 1) {
                 caption += "."s + channelsString;
             } else {
@@ -835,7 +835,7 @@ void ImageViewer::updateTitle() {
         }
         valuesString.pop_back();
 
-        caption += " - "s + tfm::format("@(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
+        caption += " – "s + tfm::format("@(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
     }
 
     setCaption(caption);
