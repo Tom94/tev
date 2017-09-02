@@ -27,7 +27,11 @@ public:
 
     void drawContents() override;
 
-    void addImage(std::shared_ptr<Image> image, bool shallSelect = false);
+    void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
+
+    void addImage(std::shared_ptr<Image> image, bool shallSelect = false) {
+        insertImage(image, mImages.size(), shallSelect);
+    }
 
     void selectImage(const std::shared_ptr<Image>& image);
 
@@ -79,15 +83,13 @@ private:
     void updateTitle();
     std::string layerName(size_t index);
 
-    size_t layerId(const std::string& layer) const;
-    size_t imageId(const std::shared_ptr<Image>& image) const;
+    int layerId(const std::string& layer) const;
+    int imageId(const std::shared_ptr<Image>& image) const;
 
-    std::string nextLayer(const std::string& layer);
-    std::string previousLayer(const std::string& layer);
+    std::string nextLayer(const std::string& layer, EDirection direction);
     std::string nthVisibleLayer(size_t n);
 
-    std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image);
-    std::shared_ptr<Image> previousImage(const std::shared_ptr<Image>& image);
+    std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
 
     nanogui::Widget* mVerticalScreenSplit;

@@ -85,4 +85,9 @@ enum EMetric : int {
 
 EMetric toMetric(std::string name);
 
+enum EDirection {
+    Forward,
+    Backward,
+};
+
 TEV_NAMESPACE_END

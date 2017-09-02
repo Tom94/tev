@@ -350,15 +350,15 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
         if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                selectReference(previousImage(mCurrentReference));
+                selectReference(nextImage(mCurrentReference, Backward));
             } else {
-                selectImage(previousImage(mCurrentImage));
+                selectImage(nextImage(mCurrentImage, Backward));
             }
         } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                selectReference(nextImage(mCurrentReference));
+                selectReference(nextImage(mCurrentReference, Forward));
             } else {
-                selectImage(nextImage(mCurrentImage));
+                selectImage(nextImage(mCurrentImage, Forward));
             }
         }
 
@@ -370,7 +370,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                     setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
                 }
             } else {
-                selectLayer(nextLayer(mCurrentLayer));
+                selectLayer(nextLayer(mCurrentLayer, Forward));
             }
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
             if (modifiers & GLFW_MOD_SHIFT) {
@@ -380,7 +380,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                     setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
                 }
             } else {
-                selectLayer(previousLayer(mCurrentLayer));
+                selectLayer(nextLayer(mCurrentLayer, Backward));
             }
         }
     }
@@ -392,14 +392,12 @@ void ImageViewer::drawContents() {
     updateTitle();
 }
 
-void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
+void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallSelect) {
     if (!image) {
         throw invalid_argument{"Image may not be null."};
     }
 
-    size_t index = mImages.size();
-
-    auto button = new ImageButton{mImageButtonContainer, image->name(), true};
+    auto button = new ImageButton{nullptr, image->name(), true};
     button->setFontSize(15);
     button->setId(index + 1);
     button->setTooltip(image->toString());
@@ -416,7 +414,8 @@ void ImageViewer::addImage(shared_ptr<Image> image, bool shallSelect) {
         }
     });
 
-    mImages.push_back(image);
+    mImageButtonContainer->addChild((int)index, button);
+    mImages.insert(begin(mImages) + index, image);
 
     // The following call will show the footer if there is not an image
     // with more than 1 layer.
@@ -446,7 +445,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
         return;
     }
 
-    size_t id = imageId(image);
+    size_t id = (size_t)max(0, imageId(image));
 
     // Don't do anything if the image that wants to be selected is not visible.
     if (!mImageButtonContainer->childAt((int)id)->visible()) {
@@ -508,7 +507,8 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
 }
 
 void ImageViewer::selectLayer(string layer) {
-    size_t id = layerId(layer);
+    // If the layer does not exist, select the first layer.
+    size_t id = (size_t)max(0, layerId(layer));
 
     auto& buttons = mLayerButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
@@ -559,7 +559,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
         return;
     }
 
-    size_t id = imageId(image);
+    size_t id = (size_t)max(0, imageId(image));
 
     auto& buttons = mImageButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
@@ -850,46 +850,34 @@ string ImageViewer::layerName(size_t index) {
     return mCurrentImage->layers().at(index);
 }
 
-size_t ImageViewer::layerId(const string& layer) const {
+int ImageViewer::layerId(const string& layer) const {
     if (!mCurrentImage) {
         return 0;
     }
 
     const auto& layers = mCurrentImage->layers();
     auto pos = static_cast<size_t>(distance(begin(layers), find(begin(layers), end(layers), layer)));
-    return pos >= layers.size() ? 0 : pos;
+    return pos >= layers.size() ? -1 : (int)pos;
 }
 
-size_t ImageViewer::imageId(const shared_ptr<Image>& image) const {
+int ImageViewer::imageId(const shared_ptr<Image>& image) const {
     auto pos = static_cast<size_t>(distance(begin(mImages), find(begin(mImages), end(mImages), image)));
-    return pos >= mImages.size() ? 0 : pos;
+    return pos >= mImages.size() ? -1 : (int)pos;
 }
 
-string ImageViewer::nextLayer(const string& layer) {
+string ImageViewer::nextLayer(const string& layer, EDirection direction) {
     if (mLayerButtonContainer->childCount() == 0) {
         return mCurrentLayer;
     }
 
-    int startId = (int)layerId(layer);
+    int dir = direction == Forward ? 1 : -1;
+
+    // If the layer does not exist, start at index 0.
+    int startId = max(0, layerId(layer));
 
     int id = startId;
     do {
-        id = (id + 1) % mLayerButtonContainer->childCount();
-    } while (!mLayerButtonContainer->childAt(id)->visible() && id != startId);
-
-    return layerName(id);
-}
-
-string ImageViewer::previousLayer(const string& layer) {
-    if (mLayerButtonContainer->childCount() == 0) {
-        return mCurrentLayer;
-    }
-
-    int startId = (int)layerId(layer);
-
-    int id = startId;
-    do {
-        id = (id + mLayerButtonContainer->childCount() - 1) % mLayerButtonContainer->childCount();
+        id = (id + mLayerButtonContainer->childCount() + dir) % mLayerButtonContainer->childCount();
     } while (!mLayerButtonContainer->childAt(id)->visible() && id != startId);
 
     return layerName(id);
@@ -909,31 +897,19 @@ string ImageViewer::nthVisibleLayer(size_t n) {
     return lastVisible;
 }
 
-shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image) {
+shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image, EDirection direction) {
     if (mImages.empty()) {
         return nullptr;
     }
 
-    int startId = (int)imageId(image);
+    int dir = direction == Forward ? 1 : -1;
+
+    // If the image does not exist, start at image 0.
+    int startId = max(0, imageId(image));
 
     int id = startId;
     do {
-        id = (id + 1) % mImages.size();
-    } while (!mImageButtonContainer->childAt(id)->visible() && id != startId);
-
-    return mImages[id];
-}
-
-shared_ptr<Image> ImageViewer::previousImage(const shared_ptr<Image>& image) {
-    if (mImages.empty()) {
-        return nullptr;
-    }
-
-    int startId = (int)imageId(image);
-
-    int id = startId;
-    do {
-        id = (id + (int)mImages.size() - 1) % mImages.size();
+        id = (id + mImageButtonContainer->childCount() + dir) % mImageButtonContainer->childCount();
     } while (!mImageButtonContainer->childAt(id)->visible() && id != startId);
 
     return mImages[id];
