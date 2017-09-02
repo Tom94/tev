@@ -676,10 +676,15 @@ void ImageViewer::fitAllImages() {
     maxSize = (maxSize.cast<float>() / pixelRatio()).cast<int>();
 
     // Take into account the size of the UI.
-    maxSize.x() += mSidebar->fixedWidth();
-    maxSize.y() += mFooter->fixedHeight();
+    if (mSidebar->visible()) {
+        maxSize.x() += mSidebar->fixedWidth();
+    }
+    
+    if (mFooter->visible()) {
+        maxSize.y() += mFooter->fixedHeight();
+    }
 
-    // Only increase our current size if we are larger than the default size of the window.
+    // Only increase our current size if we are larger than the current size of the window.
     setSize(mSize.cwiseMax(maxSize));
 }
 
