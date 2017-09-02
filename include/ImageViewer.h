@@ -33,6 +33,10 @@ public:
         insertImage(image, mImages.size(), shallSelect);
     }
 
+    void removeImage(std::shared_ptr<Image> image);
+
+    void reloadImage(std::shared_ptr<Image> image);
+
     void selectImage(const std::shared_ptr<Image>& image);
 
     void selectLayer(std::string name);

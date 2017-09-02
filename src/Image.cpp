@@ -33,16 +33,17 @@ bool isExrFile(const string& filename) {
     return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 }
 
-Image::Image(const string& filename, const string& extra) {
+Image::Image(const string& filename, const string& extra)
+: mFilename{filename}, mExtra{extra} {
     mName = filename;
     if (!extra.empty()) {
         mName += ":"s + extra;
     }
 
     if (isExrFile(filename)) {
-        readExr(filename, extra);
+        readExr();
     } else {
-        readStbi(filename);
+        readStbi();
     }
 }
 
@@ -124,17 +125,17 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
-void Image::readStbi(const string& filename) {
+void Image::readStbi() {
     // No exr image? Try our best using stbi
-    cout << "Loading "s + filename + " via STBI... " << flush;
+    cout << "Loading "s + mFilename + " via STBI... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
 
     int numChannels;
-    auto data = stbi_loadf(filename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+    auto data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
     if (!data) {
-        throw invalid_argument("Could not load texture data from file " + filename);
+        throw invalid_argument("Could not load texture data from file " + mFilename);
     }
 
     mNumChannels = static_cast<size_t>(numChannels);
@@ -173,18 +174,18 @@ void Image::readStbi(const string& filename) {
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
-void Image::readExr(const string& filename, const string& channelSubstr) {
+void Image::readExr() {
     // OpenEXR for reading exr images
-    cout << "Loading "s + filename + " via OpenEXR... " << flush;
+    cout << "Loading "s + mFilename + " via OpenEXR... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
 
-    Imf::MultiPartInputFile multiPartFile{filename.c_str()};
+    Imf::MultiPartInputFile multiPartFile{mFilename.c_str()};
     int numParts = multiPartFile.parts();
 
     if (numParts <= 0) {
-        throw invalid_argument{tfm::format("EXR image '%s' does not contain any parts.", filename)};
+        throw invalid_argument{tfm::format("EXR image '%s' does not contain any parts.", mFilename)};
     }
 
     // Find the first part containing a channel that matches the given channelSubstr.
@@ -195,7 +196,7 @@ void Image::readExr(const string& filename, const string& channelSubstr) {
         const Imf::ChannelList& imfChannels = part.header().channels();
 
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            if (string{c.name()}.find(channelSubstr) != string::npos) {
+            if (string{c.name()}.find(mExtra) != string::npos) {
                 partIdx = i;
                 goto l_foundPart;
             }
@@ -287,14 +288,14 @@ l_foundPart:
     set<string> layerNames;
 
     for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-        if (string{c.name()}.find(channelSubstr) != string::npos) {
+        if (string{c.name()}.find(mExtra) != string::npos) {
             rawChannels.emplace_back(c.name(), c.channel().type);
             layerNames.insert(Channel::head(c.name()));
         }
     }
 
     if (rawChannels.empty()) {
-        throw invalid_argument{tfm::format("No channels match '%s'.", channelSubstr)};
+        throw invalid_argument{tfm::format("No channels match '%s'.", mExtra)};
     }
 
     for (const string& layer : layerNames) {

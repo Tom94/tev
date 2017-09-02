@@ -257,7 +257,7 @@ ImageViewer::ImageViewer()
     selectReference(nullptr);
 }
 
-bool ImageViewer::dropEvent(const std::vector<std::string>& filenames) {
+bool ImageViewer::dropEvent(const vector<string>& filenames) {
     if (Screen::dropEvent(filenames)) {
         return true;
     }
@@ -306,24 +306,24 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
         } else if (key == GLFW_KEY_R) {
-            resetImage();
-        } else if (key == GLFW_KEY_B) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
-                setUiVisible(!isUiVisible());
+                reloadImage(mCurrentImage);
+            } else {
+                resetImage();
             }
-        } else if (key == GLFW_KEY_P) {
-            if (modifiers & SYSTEM_COMMAND_MOD) {
-                mFilter->setValue("");
-                mFilter->requestFocus();
-            }
+        } else if (key == GLFW_KEY_B && modifiers & SYSTEM_COMMAND_MOD) {
+            setUiVisible(!isUiVisible());
+        } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
+            mFilter->setValue("");
+            mFilter->requestFocus();
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
-        } else if (key == GLFW_KEY_ENTER) {
-            if (modifiers & GLFW_MOD_ALT) {
-                toggleMaximized();
-            }
+        } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
+            toggleMaximized();
+        } else if (key == GLFW_KEY_F5) {
+            reloadImage(mCurrentImage);
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -346,6 +346,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             } else {
                 setOffset(offset() + 0.1f);
             }
+        }
+
+        if (key == GLFW_KEY_DELETE) {
+            removeImage(mCurrentImage);
         }
 
         if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
@@ -433,6 +437,45 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     }
 }
 
+void ImageViewer::removeImage(shared_ptr<Image> image) {
+    int id = imageId(image);
+    if (id == -1) {
+        return;
+    }
+
+    mImages.erase(begin(mImages) + id);
+    mImageButtonContainer->removeChild(id);
+
+    if (mImages.empty()) {
+        selectImage(nullptr);
+        selectReference(nullptr);
+        return;
+    }
+
+    auto nextCandidate = mImages[min(id, (int)mImages.size() - 1)];
+
+    if (mCurrentImage == image) {
+        selectImage(nextCandidate);
+    }
+
+    if (mCurrentReference == image) {
+        selectReference(nextCandidate);
+    }
+}
+
+void ImageViewer::reloadImage(shared_ptr<Image> image) {
+    int id = imageId(image);
+    if (id == -1) {
+        return;
+    }
+
+    auto newImage = tryLoadImage(image->filename(), image->extra());
+    if (newImage) {
+        removeImage(image);
+        insertImage(newImage, id, true);
+    }
+}
+
 void ImageViewer::selectImage(const shared_ptr<Image>& image) {
     if (!image) {
         auto& buttons = mImageButtonContainer->children();
@@ -442,6 +485,13 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
 
         mCurrentImage = nullptr;
         mImageCanvas->setImage(nullptr);
+
+        // Clear layer buttons
+        while (mLayerButtonContainer->childCount() > 0) {
+            mLayerButtonContainer->removeChild(mLayerButtonContainer->childCount() - 1);
+        }
+
+        updateLayout();
         return;
     }
 

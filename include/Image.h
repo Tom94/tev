@@ -17,6 +17,14 @@ class Image {
 public:
     Image(const std::string& filename, const std::string& extra);
 
+    const auto& filename() {
+        return mFilename;
+    }
+
+    const auto& extra() {
+        return mExtra;
+    }
+
     const auto& name() {
         return mName;
     }
@@ -50,8 +58,11 @@ public:
     std::string toString() const;
 
 private:
-    void readStbi(const std::string& filename);
-    void readExr(const std::string& filename, const std::string& suffix);
+    void readStbi();
+    void readExr();
+
+    std::string mFilename;
+    std::string mExtra;
 
     std::string mName;
     Eigen::Vector2i mSize;
