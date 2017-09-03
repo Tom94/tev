@@ -141,9 +141,12 @@ void ImageCanvas::draw(NVGcontext *ctx) {
                         };
 
                         // First draw a shadow such that the font will be visible on white background.
+                        nvgFontBlur(ctx, 2);
                         nvgFillColor(ctx, Color(0.0f, fontAlpha));
                         nvgText(ctx, pos.x() + 1, pos.y() + 1, str.c_str(), nullptr);
+
                         // Actual text.
+                        nvgFontBlur(ctx, 0);
                         nvgFillColor(ctx, Color(1.0f, fontAlpha));
                         nvgText(ctx, pos.x(), pos.y(), str.c_str(), nullptr);
                     }
