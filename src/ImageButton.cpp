@@ -78,12 +78,12 @@ bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int
 void ImageButton::draw(NVGcontext *ctx) {
     Widget::draw(ctx);
 
-    NVGcolor color = Color(0.35f, 0.35f, 0.35f, 1.0f);
+    NVGcolor color = Color(0.3f, 0.3f, 0.32f, 1.0f);
 
     if (mIsSelected) {
-        color = Color(0.4f, 0.4f, 0.7f, 1.0f);
+        color = Color(0.35f, 0.35f, 0.8f, 1.0f);
     } else if (mMouseFocus && mEnabled) {
-        color = Color(0.4f, 0.4f, 0.4f, 1.0f);
+        color = Color(0.35f, 0.35f, 0.37f, 1.0f);
     }
 
     if (mIsReference) {
@@ -131,29 +131,25 @@ void ImageButton::draw(NVGcontext *ctx) {
 
     Vector2f center = mPos.cast<float>() + mSize.cast<float>() * 0.5f;
     Vector2f bottomRight = mPos.cast<float>() + mSize.cast<float>();
-    Vector2f textPos(bottomRight.x() - 5, center.y() - 1);
-    NVGcolor textColor = Color(1.0f, 1.0f, 1.0f, 1.0f);
-    if (!mEnabled) {
-        textColor = Color(0.7f, 0.7f, 0.7f, 1.0f);
+    Vector2f textPos(bottomRight.x() - 5, center.y());
+    NVGcolor textColor = Color(180, 255);
+    if (mIsSelected || mIsReference || mMouseFocus) {
+        textColor  = Color(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     // Image name
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans");
     nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(ctx, Color(0.2f, 0.2f, 0.2f, 1.0f));
-    nvgText(ctx, textPos.x(), textPos.y(), caption.c_str(), nullptr);
     nvgFillColor(ctx, textColor);
-    nvgText(ctx, textPos.x(), textPos.y() + 1, caption.c_str(), nullptr);
+    nvgText(ctx, textPos.x(), textPos.y(), caption.c_str(), nullptr);
 
     // Image number
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans-bold");
     nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(ctx, Color(0.2f, 0.2f, 0.2f, 1.0f));
-    nvgText(ctx, mPos.x() + 5, textPos.y(), idString.c_str(), nullptr);
     nvgFillColor(ctx, textColor);
-    nvgText(ctx, mPos.x() + 5, textPos.y() + 1, idString.c_str(), nullptr);
+    nvgText(ctx, mPos.x() + 5, textPos.y(), idString.c_str(), nullptr);
 }
 
 TEV_NAMESPACE_END
