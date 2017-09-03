@@ -22,7 +22,7 @@ __tev__ uses [CMake](https://cmake.org/) as its build system. The following sect
 
 ### Mac OS X / Linux
 
-On Mac OS X and most Linux distributions [CMake](https://cmake.org/) can be obtained via a package manager ([Homebrew](https://brew.sh/) on Mac OS X, apt on Ubuntu/Debian, etc.). Most Linux distributions additionally require _xorg_ and _gl_ development packages. On Ubuntu/Debian simply call
+On Mac OS X and most Linux distributions [CMake](https://cmake.org/) can be obtained via a package manager ([Homebrew](https://brew.sh/) on Mac OS X, apt on Ubuntu/Debian, etc.). Most Linux distributions additionally require _xorg_, _gl_, and _zlib_ development packages and _zenity_. On Ubuntu/Debian simply call
 ```sh
 $ apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
 ```
