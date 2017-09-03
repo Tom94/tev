@@ -93,6 +93,65 @@ void ImageCanvas::drawGL() {
     }
 }
 
+void ImageCanvas::draw(NVGcontext *ctx) {
+    GLCanvas::draw(ctx);
+
+    if (!mImage) {
+        return;
+    }
+
+    auto texToNano = textureToNanogui(mImage.get());
+    auto nanoToTex = texToNano.inverse();
+
+    Vector2f pixelSize = texToNano * Vector2f::Ones() - texToNano * Vector2f::Zero();
+
+    Vector2f topLeft = (nanoToTex * Vector2f::Zero());
+    Vector2f bottomRight = (nanoToTex * mSize.cast<float>());
+
+    Vector2i start = Vector2i{
+        static_cast<int>(floor(topLeft.x())),
+        static_cast<int>(floor(topLeft.y())),
+    };
+
+    Vector2i end = Vector2i{
+        static_cast<int>(ceil(bottomRight.x())),
+        static_cast<int>(ceil(bottomRight.y())),
+    };
+
+    if (pixelSize.x() > 50) {
+        float fontSize = pixelSize.x() / 6;
+        float fontAlpha = min(1.0f, (pixelSize.x() - 50) / 30);
+
+        nvgFontSize(ctx, fontSize);
+        nvgFontFace(ctx, "sans");
+        nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+
+        Vector2i cur;
+        vector<float> values;
+        for (cur.y() = start.y(); cur.y() < end.y(); ++cur.y()) {
+            for (cur.x() = start.x(); cur.x() < end.x(); ++cur.x()) {
+                Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
+                getValues(nano, values);
+
+                for (size_t i = 0; i < values.size(); ++i) {
+                    string str = to_string(values[i]);
+                    Vector2f pos{
+                        mPos.x() + nano.x(),
+                        mPos.y() + nano.y() + (i - 0.5f * (values.size() - 1)) * fontSize,
+                    };
+
+                    // First draw a shadow such that the font will be visible on white background.
+                    nvgFillColor(ctx, Color(0.0f, 0.0f, 0.0f, fontAlpha));
+                    nvgText(ctx, pos.x() + 1, pos.y() + 1, str.c_str(), nullptr);
+                    // Actual text.
+                    nvgFillColor(ctx, Color(1.0f, 1.0f, 1.0f, fontAlpha));
+                    nvgText(ctx, pos.x(), pos.y(), str.c_str(), nullptr);
+                }
+            }
+        }
+    }
+}
+
 vector<string> ImageCanvas::getChannels(const Image& image) {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
@@ -153,14 +212,7 @@ vector<string> ImageCanvas::getChannels(const Image& image) {
 }
 
 Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
-    if (!mImage) {
-        return {0, 0};
-    }
-
-    Vector2f mouse = (mousePos - position()).cast<float>().cwiseQuotient(size().cast<float>());
-    mouse = (mouse - Vector2f::Constant(0.5f)).cwiseProduct(Vector2f(2.0, -2.0));
-
-    Vector2f imagePos = (transform(&image).inverse() * mouse).cwiseProduct(mImage->size().cast<float>());
+    Vector2f imagePos = textureToNanogui(&image).inverse() * mousePos.cast<float>();
     return {
         static_cast<int>(floor(imagePos.x())),
         static_cast<int>(floor(imagePos.y())),
@@ -179,15 +231,15 @@ float ImageCanvas::applyMetric(float diff, float reference) {
     }
 }
 
-vector<float> ImageCanvas::getValues(Vector2i mousePos) {
+void ImageCanvas::getValues(Vector2i mousePos, vector<float>& result) {
+    result.clear();
     if (!mImage) {
-        return {};
+        return;
     }
 
     Vector2i imageCoords = getImageCoords(*mImage, mousePos);
     const auto& channels = getChannels(*mImage);
 
-    vector<float> result;
     for (const auto& channel : channels) {
         result.push_back(mImage->channel(channel)->eval(imageCoords));
     }
@@ -204,8 +256,6 @@ vector<float> ImageCanvas::getValues(Vector2i mousePos) {
             result[i] = applyMetric(result[i] - reference, reference);
         }
     }
-
-    return result;
 }
 
 void ImageCanvas::fitImageToScreen(const Image& image) {
@@ -224,12 +274,24 @@ Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
 
     // Center image, scale to pixel space, translate to desired position,
     // then rescale to the [-1, 1] square for drawing.
-    return (
+    return
         Scaling(2.0f / mSize.x(), -2.0f / mSize.y()) *
         mTransform *
         Scaling(image->size().cast<float>() / mPixelRatio) *
-        Translation2f(Vector2f::Constant(-0.5f))
-    );
+        Translation2f(Vector2f::Constant(-0.5f));
+}
+
+Transform<float, 2, 2> ImageCanvas::textureToNanogui(const Image* image) {
+    if (!image) {
+        return Transform<float, 2, 0>::Identity();
+    }
+
+    // Move origin to centre of image, scale pixels, apply our transform, move origin back to top-left.
+    return
+        Translation2f(0.5f * mSize.cast<float>()) *
+        mTransform *
+        Scaling(1.0f / mPixelRatio) *
+        Translation2f(-0.5f * image->size().cast<float>());
 }
 
 TEV_NAMESPACE_END

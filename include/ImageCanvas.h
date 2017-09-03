@@ -24,6 +24,8 @@ public:
 
     void drawGL() override;
 
+    void draw(NVGcontext *ctx) override;
+
     void setExposure(float exposure) {
         mExposure = exposure;
     }
@@ -50,7 +52,12 @@ public:
 
     float applyMetric(float value, float reference);
 
-    std::vector<float> getValues(Eigen::Vector2i mousePos);
+    void getValues(Eigen::Vector2i mousePos, std::vector<float>& result);
+    std::vector<float> getValues(Eigen::Vector2i mousePos) {
+        std::vector<float> result;
+        getValues(mousePos, result);
+        return result;
+    }
 
     ETonemap tonemap() {
         return mTonemap;
@@ -75,6 +82,7 @@ private:
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
     Eigen::Transform<float, 2, 2> transform(const Image* image);
+    Eigen::Transform<float, 2, 2> textureToNanogui(const Image* image);
 
     float mPixelRatio = 1;
     float mExposure = 0;

@@ -876,7 +876,7 @@ void ImageViewer::updateTitle() {
             }
         }
 
-        vector<float> values = mImageCanvas->getValues(mousePos());
+        vector<float> values = mImageCanvas->getValues(mousePos() - mImageCanvas->position());
         Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, mousePos());
         TEV_ASSERT(values.size() >= channels.size(), "Should obtain a value for every existing channel.");
 
