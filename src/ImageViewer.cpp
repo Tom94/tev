@@ -769,7 +769,7 @@ void ImageViewer::fitAllImages() {
     if (mSidebar->visible()) {
         maxSize.x() += mSidebar->fixedWidth();
     }
-    
+
     if (mFooter->visible()) {
         maxSize.y() += mFooter->fixedHeight();
     }
