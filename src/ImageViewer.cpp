@@ -444,6 +444,10 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
         return;
     }
 
+    // Reset all focus as a workaround a crash caused by nanogui.
+    // TODO: Remove once a fix exists.
+    requestFocus();
+
     mImages.erase(begin(mImages) + id);
     mImageButtonContainer->removeChild(id);
 
