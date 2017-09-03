@@ -213,7 +213,7 @@ ImageViewer::ImageViewer()
 
         auto tools = new Widget{mScrollContent};
         tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        auto b = new Button{tools, "Open image file"};
+        auto b = new Button{tools, "Open image file", ENTYPO_ICON_FOLDER};
         b->setCallback([&] {
             string path = file_dialog(
                 {
