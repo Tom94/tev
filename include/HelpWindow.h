@@ -14,6 +14,9 @@ TEV_NAMESPACE_BEGIN
 class HelpWindow : public nanogui::Window {
 public:
     HelpWindow(nanogui::Widget* parent, std::function<void()> closeCallback);
+
+    static std::string COMMAND;
+    static std::string ALT;
 };
 
 TEV_NAMESPACE_END

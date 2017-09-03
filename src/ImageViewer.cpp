@@ -37,6 +37,7 @@ ImageViewer::ImageViewer()
     helpButton->setPosition(Vector2i{162, 5});
     helpButton->setCallback([this]() { toggleHelpWindow(); });
     helpButton->setFontSize(15);
+    helpButton->setTooltip("Information about using tev.");
 
     auto sidebarLayout = new Widget{mSidebar};
     sidebarLayout->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
@@ -50,17 +51,13 @@ ImageViewer::ImageViewer()
         panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
         auto label = new Label{panel, "Tonemapping", "sans-bold", 25};
         label->setTooltip(
-            "Various tonemapping options. Hover the labels of individual options to learn more!"
+            "Various tonemapping options. Hover the individual conntrols to learn more!"
         );
 
         panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mExposureLabel = new Label{panel, "", "sans-bold", 15};
-        mExposureLabel->setTooltip(
-            "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
-            "It can be controlled via the GUI, or by pressing E/Shift+E."
-        );
 
         mExposureSlider = new Slider{panel};
         mExposureSlider->setRange({-5.0f, 5.0f});
@@ -68,15 +65,15 @@ ImageViewer::ImageViewer()
             setExposure(value);
         });
         setExposure(0);
+        mExposureSlider->setTooltip(
+            "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n"
+            "Keyboard shortcut: E or Shift+E"
+        );
 
         panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mOffsetLabel = new Label{panel, "", "sans-bold", 15};
-        mOffsetLabel->setTooltip(
-            "The offset is added to the image after exposure has been applied. "
-            "It can be controlled via the GUI, or by pressing O/Shift+O."
-        );
 
         mOffsetSlider = new Slider{panel};
         mOffsetSlider->setRange({-1.0f, 1.0f});
@@ -84,6 +81,10 @@ ImageViewer::ImageViewer()
             setOffset(value);
         });
         setOffset(0);
+        mOffsetSlider->setTooltip(
+            "The offset is added to the image after exposure has been applied.\n"
+            "Keyboard shortcut: O or Shift+O"
+        );
     }
 
     // Exposure/offset buttons
@@ -91,20 +92,21 @@ ImageViewer::ImageViewer()
         auto buttonContainer = new Widget{sidebarLayout};
         buttonContainer->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
-        auto makeButton = [&](const string& name, function<void()> callback, int icon = 0) {
+        auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
             button->setFontSize(15);
             button->setCallback(callback);
+            button->setTooltip(tooltip);
             return button;
         };
 
         makeButton("Normalize", [this]() {
             normalizeExposureAndOffset();
-        });
+        }, 0, "Shortcut: N");
 
         makeButton("Reset", [this]() {
             resetImage();
-        });
+        }, 0, "Shortcut: R");
     }
 
     // Tonemap options
@@ -200,17 +202,29 @@ ImageViewer::ImageViewer()
             return setFilter(filter);
         });
 
+        mFilter->setTooltip(
+            "Filters visible images and layers according to a supplied string. "
+            "The string must have the format 'image:layer'. "
+            "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n"
+            "Keyboard shortcut: "s + HelpWindow::COMMAND + "+P"
+        );
+
         auto tools = new Widget{sidebarLayout};
         tools->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
-        auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0) {
+        auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{tools, name, icon};
             button->setCallback(callback);
+            button->setTooltip(tooltip);
             return button;
         };
 
-        makeImageButton("Open", [this] { openImageDialog(); }, ENTYPO_ICON_FOLDER);
-        makeImageButton("Reload", [this] { reloadImage(mCurrentImage); }, ENTYPO_ICON_CYCLE);
+        makeImageButton("Open", [this] {
+            openImageDialog();
+        }, ENTYPO_ICON_FOLDER, "Shortcut: "s + HelpWindow::COMMAND + "+O");
+        makeImageButton("Reload", [this] {
+            reloadImage(mCurrentImage);
+        }, ENTYPO_ICON_CYCLE, "Shortcut: "s + HelpWindow::COMMAND + "+R or F5");
 
         spacer = new Widget{sidebarLayout};
         spacer->setHeight(3);

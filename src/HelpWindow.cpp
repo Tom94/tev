@@ -14,6 +14,18 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
+#ifdef __APPLE__
+string HelpWindow::COMMAND = "Cmd";
+#else
+string HelpWindow::COMMAND = "Ctrl";
+#endif
+
+#ifdef __APPLE__
+string HelpWindow::ALT = "Opt";
+#else
+string HelpWindow::ALT = "Alt";
+#endif
+
 HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     : Window{parent, "Help – Keybindings"} {
 
@@ -36,25 +48,13 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         row->setHeight(10);
     };
 
-#ifdef __APPLE__
-    string command = "Cmd";
-#else
-    string command = "Ctrl";
-#endif
-
-#ifdef __APPLE__
-    string alt = "Opt";
-#else
-    string alt = "Alt";
-#endif
-
     new Label{this, "Image Loading", "sans-bold", 18};
     auto imageLoading = new Widget{this};
     imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(imageLoading, command + "+O", "Open Image");
-    addRow(imageLoading, command + "+R or F5", "Reload Image");
-    addRow(imageLoading, command + "+W", "Close Image");
+    addRow(imageLoading, COMMAND + "+O", "Open Image");
+    addRow(imageLoading, COMMAND + "+R or F5", "Reload Image");
+    addRow(imageLoading, COMMAND + "+W", "Close Image");
 
     new Label{this, "Image Options", "sans-bold", 18};
     auto imageSelection = new Widget{this};
@@ -107,10 +107,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     auto interface = new Widget{this};
     interface->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(interface, alt + "+Enter", "Maximize");
-    addRow(interface, command + "+B", "Toggle GUI");
+    addRow(interface, ALT + "+Enter", "Maximize");
+    addRow(interface, COMMAND + "+B", "Toggle GUI");
     addRow(interface, "H", "Show Help (this Window)");
-    addRow(interface, command + "+P", "Find Image or Layer");
+    addRow(interface, COMMAND + "+P", "Find Image or Layer");
     addRow(interface, "Q or Esc", "Quit");
 }
 

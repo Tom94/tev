@@ -41,7 +41,7 @@ int mainFunc(int argc, char* argv[]) {
         parser,
         "filter",
         "Filters visible images and layers according to a supplied string. "
-        "The string should have the format 'image:layer'. "
+        "The string must have the format 'image:layer'. "
         "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
         {'f', "filter"},
     };
