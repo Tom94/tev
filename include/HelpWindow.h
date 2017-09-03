@@ -13,7 +13,7 @@ TEV_NAMESPACE_BEGIN
 
 class HelpWindow : public nanogui::Window {
 public:
-    HelpWindow(nanogui::Widget* parent);
+    HelpWindow(nanogui::Widget* parent, std::function<void()> closeCallback);
 };
 
 TEV_NAMESPACE_END

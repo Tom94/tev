@@ -852,7 +852,7 @@ void ImageViewer::toggleHelpWindow() {
         mHelpWindow->dispose();
         mHelpWindow = nullptr;
     } else {
-        mHelpWindow = new HelpWindow{this};
+        mHelpWindow = new HelpWindow{this, [this] { toggleHelpWindow(); }};
         mHelpWindow->center();
         mHelpWindow->requestFocus();
     }
