@@ -115,12 +115,19 @@ UberShader::UberShader()
             return vec3(0.0);
         }
 
+        float sample(sampler2D sampler, vec2 uv) {
+            if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+                return 0.0;
+            }
+            return texture(sampler, imageUv).x;
+        }
+
         void main() {
             vec4 image = vec4(
-                texture(imageRed, imageUv).x,
-                texture(imageGreen, imageUv).x,
-                texture(imageBlue, imageUv).x,
-                texture(imageAlpha, imageUv).x
+                sample(imageRed, imageUv),
+                sample(imageGreen, imageUv),
+                sample(imageBlue, imageUv),
+                sample(imageAlpha, imageUv)
             );
 
             if (!hasReference) {
@@ -129,10 +136,10 @@ UberShader::UberShader()
             }
 
             vec4 reference = vec4(
-                texture(referenceRed, referenceUv).x,
-                texture(referenceGreen, referenceUv).x,
-                texture(referenceBlue, referenceUv).x,
-                texture(referenceAlpha, referenceUv).x
+                sample(referenceRed, referenceUv),
+                sample(referenceGreen, referenceUv),
+                sample(referenceBlue, referenceUv),
+                sample(referenceAlpha, referenceUv)
             );
 
             vec3 difference = image.rgb - reference.rgb;

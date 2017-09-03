@@ -11,7 +11,7 @@ TEV_NAMESPACE_BEGIN
 
 class GlTexture {
 public:
-    GlTexture(GLint clamping = GL_CLAMP_TO_BORDER, GLint filtering = GL_NEAREST, bool mipmap = true);
+    GlTexture(GLint clamping = GL_CLAMP_TO_EDGE, GLint filtering = GL_NEAREST, bool mipmap = true);
 
     GlTexture(GLint textureId) : mId(textureId) {}
 
