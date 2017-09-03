@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "../include/HelpWindow.h"
 #include "../include/Image.h"
 #include "../include/ImageButton.h"
 #include "../include/ImageCanvas.h"
@@ -82,6 +83,8 @@ public:
     }
     void setUiVisible(bool shouldBeVisible);
 
+    void toggleHelpWindow();
+
 private:
     void updateLayout();
     void updateTitle();
@@ -125,6 +128,8 @@ private:
 
     nanogui::Widget* mLayerButtonContainer;
     std::string mCurrentLayer;
+
+    HelpWindow* mHelpWindow = nullptr;
 };
 
 TEV_NAMESPACE_END

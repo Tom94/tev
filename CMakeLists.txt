@@ -55,6 +55,7 @@ add_executable(tev
     include/CheckerboardShader.h src/CheckerboardShader.cpp
     include/Common.h src/Common.cpp
     include/GlTexture.h src/GlTexture.cpp
+    include/HelpWindow.h src/HelpWindow.cpp
     include/Image.h src/Image.cpp
     include/ImageButton.h src/ImageButton.cpp
     include/ImageCanvas.h src/ImageCanvas.cpp

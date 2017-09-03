@@ -320,6 +320,8 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
+        } else if (key == GLFW_KEY_H) {
+            toggleHelpWindow();
         } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
             toggleMaximized();
         } else if (key == GLFW_KEY_F5) {
@@ -837,6 +839,19 @@ void ImageViewer::setUiVisible(bool shouldBeVisible) {
     }
 
     mFooter->setVisible(shouldFooterBeVisible && shouldBeVisible);
+
+    updateLayout();
+}
+
+void ImageViewer::toggleHelpWindow() {
+    if (mHelpWindow) {
+        mHelpWindow->dispose();
+        mHelpWindow = nullptr;
+    } else {
+        mHelpWindow = new HelpWindow{this};
+        mHelpWindow->center();
+        mHelpWindow->requestFocus();
+    }
 
     updateLayout();
 }
