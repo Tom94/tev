@@ -3,6 +3,8 @@
 
 #include "../include/ImageCanvas.h"
 
+#include <nanogui/theme.h>
+
 using namespace Eigen;
 using namespace nanogui;
 using namespace std;
@@ -13,6 +15,7 @@ ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
 : GLCanvas(parent), mPixelRatio(pixelRatio) {
     mTextureBlack.setData({ 0.0 }, Vector2i::Constant(1), 1);
     mTextureWhite.setData({ 1.0 }, Vector2i::Constant(1), 1);
+    setDrawBorder(false);
 }
 
 bool ImageCanvas::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int button, int modifiers) {
@@ -96,59 +99,77 @@ void ImageCanvas::drawGL() {
 void ImageCanvas::draw(NVGcontext *ctx) {
     GLCanvas::draw(ctx);
 
-    if (!mImage) {
-        return;
-    }
+    if (mImage) {
+        auto texToNano = textureToNanogui(mImage.get());
+        auto nanoToTex = texToNano.inverse();
 
-    auto texToNano = textureToNanogui(mImage.get());
-    auto nanoToTex = texToNano.inverse();
+        Vector2f pixelSize = texToNano * Vector2f::Ones() - texToNano * Vector2f::Zero();
 
-    Vector2f pixelSize = texToNano * Vector2f::Ones() - texToNano * Vector2f::Zero();
+        Vector2f topLeft = (nanoToTex * Vector2f::Zero());
+        Vector2f bottomRight = (nanoToTex * mSize.cast<float>());
 
-    Vector2f topLeft = (nanoToTex * Vector2f::Zero());
-    Vector2f bottomRight = (nanoToTex * mSize.cast<float>());
+        Vector2i start = Vector2i{
+            static_cast<int>(floor(topLeft.x())),
+            static_cast<int>(floor(topLeft.y())),
+        };
 
-    Vector2i start = Vector2i{
-        static_cast<int>(floor(topLeft.x())),
-        static_cast<int>(floor(topLeft.y())),
-    };
+        Vector2i end = Vector2i{
+            static_cast<int>(ceil(bottomRight.x())),
+            static_cast<int>(ceil(bottomRight.y())),
+        };
 
-    Vector2i end = Vector2i{
-        static_cast<int>(ceil(bottomRight.x())),
-        static_cast<int>(ceil(bottomRight.y())),
-    };
+        if (pixelSize.x() > 50) {
+            float fontSize = pixelSize.x() / 6;
+            float fontAlpha = min(1.0f, (pixelSize.x() - 50) / 30);
 
-    if (pixelSize.x() > 50) {
-        float fontSize = pixelSize.x() / 6;
-        float fontAlpha = min(1.0f, (pixelSize.x() - 50) / 30);
+            nvgFontSize(ctx, fontSize);
+            nvgFontFace(ctx, "sans");
+            nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 
-        nvgFontSize(ctx, fontSize);
-        nvgFontFace(ctx, "sans");
-        nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            Vector2i cur;
+            vector<float> values;
+            for (cur.y() = start.y(); cur.y() < end.y(); ++cur.y()) {
+                for (cur.x() = start.x(); cur.x() < end.x(); ++cur.x()) {
+                    Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
+                    getValues(nano, values);
 
-        Vector2i cur;
-        vector<float> values;
-        for (cur.y() = start.y(); cur.y() < end.y(); ++cur.y()) {
-            for (cur.x() = start.x(); cur.x() < end.x(); ++cur.x()) {
-                Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
-                getValues(nano, values);
+                    for (size_t i = 0; i < values.size(); ++i) {
+                        string str = to_string(values[i]);
+                        Vector2f pos{
+                            mPos.x() + nano.x(),
+                            mPos.y() + nano.y() + (i - 0.5f * (values.size() - 1)) * fontSize,
+                        };
 
-                for (size_t i = 0; i < values.size(); ++i) {
-                    string str = to_string(values[i]);
-                    Vector2f pos{
-                        mPos.x() + nano.x(),
-                        mPos.y() + nano.y() + (i - 0.5f * (values.size() - 1)) * fontSize,
-                    };
-
-                    // First draw a shadow such that the font will be visible on white background.
-                    nvgFillColor(ctx, Color(0.0f, fontAlpha));
-                    nvgText(ctx, pos.x() + 1, pos.y() + 1, str.c_str(), nullptr);
-                    // Actual text.
-                    nvgFillColor(ctx, Color(1.0f, fontAlpha));
-                    nvgText(ctx, pos.x(), pos.y(), str.c_str(), nullptr);
+                        // First draw a shadow such that the font will be visible on white background.
+                        nvgFillColor(ctx, Color(0.0f, fontAlpha));
+                        nvgText(ctx, pos.x() + 1, pos.y() + 1, str.c_str(), nullptr);
+                        // Actual text.
+                        nvgFillColor(ctx, Color(1.0f, fontAlpha));
+                        nvgText(ctx, pos.x(), pos.y(), str.c_str(), nullptr);
+                    }
                 }
             }
         }
+    }
+
+    // If we're not in fullscreen mode...
+    if (mPos.x() != 0) {
+        // Draw an inner drop shadow. (adapted from nanogui::Window)
+        int ds = mTheme->mWindowDropShadowSize, cr = mTheme->mWindowCornerRadius;
+        NVGpaint shadowPaint = nvgBoxGradient(
+            ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y(), cr * 2, ds * 2,
+            mTheme->mTransparent, mTheme->mDropShadow
+        );
+
+        nvgSave(ctx);
+        nvgResetScissor(ctx);
+        nvgBeginPath(ctx);
+        nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
+        nvgRoundedRect(ctx, mPos.x() + ds, mPos.y() + ds, mSize.x() - 2 * ds, mSize.y() - 2 * ds, cr);
+        nvgPathWinding(ctx, NVG_HOLE);
+        nvgFillPaint(ctx, shadowPaint);
+        nvgFill(ctx);
+        nvgRestore(ctx);
     }
 }
 

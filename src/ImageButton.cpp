@@ -78,14 +78,6 @@ bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int
 void ImageButton::draw(NVGcontext *ctx) {
     Widget::draw(ctx);
 
-    NVGcolor color = Color(0.3f, 0.3f, 0.32f, 1.0f);
-
-    if (mIsSelected) {
-        color = Color(0.35f, 0.35f, 0.8f, 1.0f);
-    } else if (mMouseFocus && mEnabled) {
-        color = Color(0.35f, 0.35f, 0.37f, 1.0f);
-    }
-
     if (mIsReference) {
         nvgBeginPath(ctx);
         nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
@@ -93,16 +85,19 @@ void ImageButton::draw(NVGcontext *ctx) {
         nvgFill(ctx);
     }
 
-    nvgBeginPath(ctx);
+    // Fill the button with color.
+    if (mIsSelected || mMouseFocus) {
+        nvgBeginPath(ctx);
 
-    if (mIsReference) {
-        nvgRect(ctx, mPos.x() + 2, mPos.y() + 2, mSize.x() - 4, mSize.y() - 4);
-    } else {
-        nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
+        if (mIsReference) {
+            nvgRect(ctx, mPos.x() + 2, mPos.y() + 2, mSize.x() - 4, mSize.y() - 4);
+        } else {
+            nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
+        }
+
+        nvgFillColor(ctx, mIsSelected ? Color(0.35f, 0.35f, 0.8f, 1.0f) : Color(1.0f, 0.1f));
+        nvgFill(ctx);
     }
-
-    nvgFillColor(ctx, color);
-    nvgFill(ctx);
 
     nvgFontSize(ctx, mFontSize);
     nvgFontFace(ctx, "sans-bold");

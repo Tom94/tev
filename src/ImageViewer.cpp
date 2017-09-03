@@ -26,8 +26,9 @@ TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
 : nanogui::Screen(Vector2i{1024, 767}, "tev") {
+    mBackground = Color{0.23f, 1.0f};
 
-    mVerticalScreenSplit = new Widget(this);
+    mVerticalScreenSplit = new Widget{this};
     mVerticalScreenSplit->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
     auto horizontalScreenSplit = new Widget(mVerticalScreenSplit);
