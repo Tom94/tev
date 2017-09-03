@@ -6,17 +6,13 @@
 #include <iostream>
 #include <stdexcept>
 
-#include <nanogui/opengl.h>
+#include <nanogui/entypo.h>
 #include <nanogui/screen.h>
-#include <nanogui/window.h>
 #include <nanogui/layout.h>
 #include <nanogui/label.h>
 #include <nanogui/button.h>
 #include <nanogui/textbox.h>
-#include <nanogui/tabwidget.h>
 #include <nanogui/vscrollpanel.h>
-
-#include <Iex.h>
 
 using namespace Eigen;
 using namespace nanogui;
@@ -34,22 +30,29 @@ ImageViewer::ImageViewer()
     auto horizontalScreenSplit = new Widget(mVerticalScreenSplit);
     horizontalScreenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
-    mSidebar = new Widget(horizontalScreenSplit);
-    mSidebar->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    mSidebar = new Widget{horizontalScreenSplit};
     mSidebar->setFixedWidth(200);
+
+    auto helpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
+    helpButton->setPosition(Vector2i{160, 5});
+    helpButton->setCallback([this]() { toggleHelpWindow(); });
+
+    auto sidebarLayout = new Widget{mSidebar};
+    sidebarLayout->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    sidebarLayout->setFixedWidth(200);
 
     mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixelRatio()};
 
     // Exposure label and slider
     {
-        auto panel = new Widget{mSidebar};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        auto panel = new Widget{sidebarLayout};
+        panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
         auto label = new Label{panel, "Tonemapping", "sans-bold", 25};
         label->setTooltip(
             "Various tonemapping options. Hover the labels of individual options to learn more!"
         );
 
-        panel = new Widget{mSidebar};
+        panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mExposureLabel = new Label{panel, "", "sans-bold", 15};
@@ -65,7 +68,7 @@ ImageViewer::ImageViewer()
         });
         setExposure(0);
 
-        panel = new Widget{mSidebar};
+        panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mOffsetLabel = new Label{panel, "", "sans-bold", 15};
@@ -84,7 +87,7 @@ ImageViewer::ImageViewer()
 
     // Exposure/offset buttons
     {
-        auto buttonContainer = new Widget{mSidebar};
+        auto buttonContainer = new Widget{sidebarLayout};
         buttonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeButton = [&](const string& name, function<void()> callback) {
@@ -105,7 +108,7 @@ ImageViewer::ImageViewer()
 
     // Tonemap options
     {
-        mTonemapButtonContainer = new Widget{mSidebar};
+        mTonemapButtonContainer = new Widget{sidebarLayout};
         mTonemapButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
@@ -137,7 +140,7 @@ ImageViewer::ImageViewer()
 
     // Error metrics
     {
-        mMetricButtonContainer = new Widget{mSidebar};
+        mMetricButtonContainer = new Widget{sidebarLayout};
         mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
@@ -173,10 +176,10 @@ ImageViewer::ImageViewer()
 
     // Image selection
     {
-        auto spacer = new Widget{mSidebar};
+        auto spacer = new Widget{sidebarLayout};
         spacer->setHeight(10);
 
-        auto panel = new Widget{mSidebar};
+        auto panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Images", "sans-bold", 25};
         label->setTooltip(
@@ -185,7 +188,7 @@ ImageViewer::ImageViewer()
             "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
         );
 
-        panel = new Widget{mSidebar};
+        panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         label = new Label{panel, "Filter", "sans-bold", 15};
 
@@ -196,8 +199,8 @@ ImageViewer::ImageViewer()
             return setFilter(filter);
         });
 
-        mImageScrollContainer = new VScrollPanel{mSidebar};
-        mImageScrollContainer->setFixedWidth(mSidebar->fixedWidth());
+        mImageScrollContainer = new VScrollPanel{sidebarLayout};
+        mImageScrollContainer->setFixedWidth(sidebarLayout->fixedWidth());
 
         mScrollContent = new Widget{mImageScrollContainer};
         mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
