@@ -856,7 +856,7 @@ void ImageViewer::toggleHelpWindow() {
 }
 
 void ImageViewer::openImageDialog() {
-    string path = file_dialog(
+    vector<string> paths = file_dialog_multiple(
     {
         {"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},
@@ -869,11 +869,9 @@ void ImageViewer::openImageDialog() {
         {"pnm",  "Portable Any Map image"},
         {"psd",  "PSD image"},
         {"tga",  "Truevision TGA image"},
-    },
-    false
-    );
+    });
 
-    if (!path.empty()) {
+    for (const auto& path : paths) {
         auto image = tryLoadImage(path, "");
         if (image) {
             addImage(image, true);
