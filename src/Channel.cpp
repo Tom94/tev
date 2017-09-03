@@ -4,6 +4,7 @@
 #include "../include/Channel.h"
 
 using namespace Eigen;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -31,6 +32,20 @@ string Channel::head(const string& channel) {
 
 bool Channel::isTopmost(const string& channel) {
     return tail(channel) == channel;
+}
+
+Color Channel::color(string channel) {
+    channel = tail(channel);
+
+    if (channel == "R" || channel == "r") {
+        return Color(0.8f, 0.2f, 0.2f, 1.0f);
+    } else if (channel == "G" || channel == "g") {
+        return Color(0.2f, 0.8f, 0.2f, 1.0f);
+    } else if (channel == "B" || channel == "b") {
+        return Color(0.2f, 0.3f, 1.0f, 1.0f);
+    }
+
+    return Color(1.0f, 1.0f);
 }
 
 TEV_NAMESPACE_END

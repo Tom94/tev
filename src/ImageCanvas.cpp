@@ -108,12 +108,12 @@ void ImageCanvas::draw(NVGcontext *ctx) {
         Vector2f topLeft = (nanoToTex * Vector2f::Zero());
         Vector2f bottomRight = (nanoToTex * mSize.cast<float>());
 
-        Vector2i start = Vector2i{
+        Vector2i startIndices = Vector2i{
             static_cast<int>(floor(topLeft.x())),
             static_cast<int>(floor(topLeft.y())),
         };
 
-        Vector2i end = Vector2i{
+        Vector2i endIndices = Vector2i{
             static_cast<int>(ceil(bottomRight.x())),
             static_cast<int>(ceil(bottomRight.y())),
         };
@@ -122,19 +122,30 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             float fontSize = pixelSize.x() / 6;
             float fontAlpha = min(1.0f, (pixelSize.x() - 50) / 30);
 
+            vector<string> channels = getChannels(*mImage);
+            // Remove duplicates
+            channels.erase(unique(begin(channels), end(channels)), end(channels));
+
+            vector<Color> colors;
+            for (const auto& channel : channels) {
+                colors.emplace_back(Channel::color(channel));
+            }
+
             nvgFontSize(ctx, fontSize);
             nvgFontFace(ctx, "sans");
             nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 
             Vector2i cur;
             vector<float> values;
-            for (cur.y() = start.y(); cur.y() < end.y(); ++cur.y()) {
-                for (cur.x() = start.x(); cur.x() < end.x(); ++cur.x()) {
+            for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
+                for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
                     Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
                     getValues(nano, values);
 
-                    for (size_t i = 0; i < values.size(); ++i) {
-                        string str = to_string(values[i]);
+                    TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
+
+                    for (size_t i = 0; i < colors.size(); ++i) {
+                        string str = tfm::format("%.4f", values[i]);
                         Vector2f pos{
                             mPos.x() + nano.x(),
                             mPos.y() + nano.y() + (i - 0.5f * (values.size() - 1)) * fontSize,
@@ -147,7 +158,8 @@ void ImageCanvas::draw(NVGcontext *ctx) {
 
                         // Actual text.
                         nvgFontBlur(ctx, 0);
-                        nvgFillColor(ctx, Color(1.0f, fontAlpha));
+                        Color col = colors[i];
+                        nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
                         nvgText(ctx, pos.x(), pos.y(), str.c_str(), nullptr);
                     }
                 }

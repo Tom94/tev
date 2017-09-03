@@ -58,6 +58,8 @@ public:
 
     static bool isTopmost(const std::string& fullChannel);
 
+    static nanogui::Color color(std::string fullChannel);
+
 private:
     std::string mName;
     std::vector<float> mData;
