@@ -210,7 +210,7 @@ ImageViewer::ImageViewer()
         );
 
         auto tools = new Widget{sidebarLayout};
-        tools->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+        tools->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{tools, name, icon};
@@ -219,12 +219,21 @@ ImageViewer::ImageViewer()
             return button;
         };
 
-        makeImageButton("Open", [this] {
+        makeImageButton("", [this] {
             openImageDialog();
-        }, ENTYPO_ICON_FOLDER, "Shortcut: "s + HelpWindow::COMMAND + "+O");
-        makeImageButton("Reload", [this] {
+        }, ENTYPO_ICON_FOLDER, tfm::format("Open Image (%s+O)", HelpWindow::COMMAND));
+
+        makeImageButton("", [this] {
             reloadImage(mCurrentImage);
-        }, ENTYPO_ICON_CYCLE, "Shortcut: "s + HelpWindow::COMMAND + "+R or F5");
+        }, ENTYPO_ICON_CYCLE, tfm::format("Reload Image (%s+R or F5)", HelpWindow::COMMAND));
+
+        makeImageButton("All", [this] {
+            reloadAllImages();
+        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All Images (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND));
+
+        makeImageButton("", [this] {
+            removeImage(mCurrentImage);
+        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close Image (%s+W)", HelpWindow::COMMAND));
 
         spacer = new Widget{sidebarLayout};
         spacer->setHeight(3);
@@ -306,7 +315,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             normalizeExposureAndOffset();
         } else if (key == GLFW_KEY_R) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
-                reloadImage(mCurrentImage);
+                if (modifiers & GLFW_MOD_SHIFT) {
+                    reloadAllImages();
+                } else {
+                    reloadImage(mCurrentImage);
+                }
             } else {
                 resetImage();
             }
@@ -326,7 +339,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
             toggleMaximized();
         } else if (key == GLFW_KEY_F5) {
-            reloadImage(mCurrentImage);
+            if (modifiers & SYSTEM_COMMAND_MOD) {
+                reloadAllImages();
+            } else {
+                reloadImage(mCurrentImage);
+            }
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -474,10 +491,27 @@ void ImageViewer::reloadImage(shared_ptr<Image> image) {
         return;
     }
 
+    int referenceId = imageId(mCurrentReference);
+
     auto newImage = tryLoadImage(image->filename(), image->extra());
     if (newImage) {
         removeImage(image);
         insertImage(newImage, id, true);
+    }
+
+    if (referenceId != -1) {
+        selectReference(mImages[referenceId]);
+    }
+}
+
+void ImageViewer::reloadAllImages() {
+    int id = imageId(mCurrentImage);
+    for (size_t i = 0; i < mImages.size(); ++i) {
+        reloadImage(mImages[i]);
+    }
+
+    if (id != 0) {
+        selectImage(mImages[id]);
     }
 }
 

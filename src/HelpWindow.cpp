@@ -54,6 +54,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
     addRow(imageLoading, COMMAND + "+O", "Open Image");
     addRow(imageLoading, COMMAND + "+R or F5", "Reload Image");
+    addRow(imageLoading, COMMAND + "+Shift+R or "s + COMMAND + "+F5", "Reload All Images");
     addRow(imageLoading, COMMAND + "+W", "Close Image");
 
     new Label{this, "Image Options", "sans-bold", 18};

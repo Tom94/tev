@@ -38,6 +38,8 @@ public:
 
     void reloadImage(std::shared_ptr<Image> image);
 
+    void reloadAllImages();
+
     void selectImage(const std::shared_ptr<Image>& image);
 
     void selectLayer(std::string name);
