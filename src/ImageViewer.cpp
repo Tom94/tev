@@ -34,8 +34,9 @@ ImageViewer::ImageViewer()
     mSidebar->setFixedWidth(200);
 
     auto helpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
-    helpButton->setPosition(Vector2i{160, 5});
+    helpButton->setPosition(Vector2i{162, 5});
     helpButton->setCallback([this]() { toggleHelpWindow(); });
+    helpButton->setFontSize(15);
 
     auto sidebarLayout = new Widget{mSidebar};
     sidebarLayout->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
@@ -88,28 +89,28 @@ ImageViewer::ImageViewer()
     // Exposure/offset buttons
     {
         auto buttonContainer = new Widget{sidebarLayout};
-        buttonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
+        buttonContainer->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
-        auto makeButton = [&](const string& name, function<void()> callback) {
-            auto button = new Button{buttonContainer, name};
+        auto makeButton = [&](const string& name, function<void()> callback, int icon = 0) {
+            auto button = new Button{buttonContainer, name, icon};
             button->setFontSize(15);
             button->setCallback(callback);
             return button;
         };
 
-        makeButton("Reset", [this]() {
-            resetImage();
-        });
-
         makeButton("Normalize", [this]() {
             normalizeExposureAndOffset();
+        });
+
+        makeButton("Reset", [this]() {
+            resetImage();
         });
     }
 
     // Tonemap options
     {
         mTonemapButtonContainer = new Widget{sidebarLayout};
-        mTonemapButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
+        mTonemapButtonContainer->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mTonemapButtonContainer, name};
@@ -141,7 +142,7 @@ ImageViewer::ImageViewer()
     // Error metrics
     {
         mMetricButtonContainer = new Widget{sidebarLayout};
-        mMetricButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Middle, 5, 2});
+        mMetricButtonContainer->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mMetricButtonContainer, name};
@@ -199,6 +200,21 @@ ImageViewer::ImageViewer()
             return setFilter(filter);
         });
 
+        auto tools = new Widget{sidebarLayout};
+        tools->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+
+        auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0) {
+            auto button = new Button{tools, name, icon};
+            button->setCallback(callback);
+            return button;
+        };
+
+        makeImageButton("Open", [this] { openImageDialog(); }, ENTYPO_ICON_FOLDER);
+        makeImageButton("Reload", [this] { reloadImage(mCurrentImage); }, ENTYPO_ICON_CYCLE);
+
+        spacer = new Widget{sidebarLayout};
+        spacer->setHeight(3);
+
         mImageScrollContainer = new VScrollPanel{sidebarLayout};
         mImageScrollContainer->setFixedWidth(sidebarLayout->fixedWidth());
 
@@ -207,41 +223,6 @@ ImageViewer::ImageViewer()
 
         mImageButtonContainer = new Widget{mScrollContent};
         mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
-
-        spacer = new Widget{mScrollContent};
-        spacer->setHeight(3);
-
-        auto tools = new Widget{mScrollContent};
-        tools->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        auto b = new Button{tools, "Open image file", ENTYPO_ICON_FOLDER};
-        b->setCallback([&] {
-            string path = file_dialog(
-                {
-                    {"exr",  "OpenEXR image"},
-                    {"hdr",  "HDR image"},
-                    {"bmp",  "Bitmap Image File"},
-                    {"gif",  "Graphics Interchange Format image"},
-                    {"jpg",  "JPEG image"},
-                    {"jpeg", "JPEG image"},
-                    {"pic",  "PIC image"},
-                    {"png",  "Portable Network Graphics image"},
-                    {"pnm",  "Portable Any Map image"},
-                    {"psd",  "PSD image"},
-                    {"tga",  "Truevision TGA image"},
-                },
-                false
-            );
-
-            if (!path.empty()) {
-                auto image = tryLoadImage(path, "");
-                if (image) {
-                    addImage(image, true);
-                }
-            }
-
-            // Make sure we gain focus after seleting a file to be loaded.
-            glfwFocusWindow(mGLFWWindow);
-        });
     }
 
     // Layer selection
@@ -317,6 +298,8 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         } else if (key == GLFW_KEY_B && modifiers & SYSTEM_COMMAND_MOD) {
             setUiVisible(!isUiVisible());
+        } else if (key == GLFW_KEY_O && modifiers & SYSTEM_COMMAND_MOD) {
+            openImageDialog();
         } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
             mFilter->setValue("");
             mFilter->requestFocus();
@@ -354,11 +337,9 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         }
 
-        if (key == GLFW_KEY_DELETE) {
+        if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
             removeImage(mCurrentImage);
-        }
-
-        if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
+        } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 selectReference(nextImage(mCurrentReference, Backward));
             } else {
@@ -858,6 +839,35 @@ void ImageViewer::toggleHelpWindow() {
     }
 
     updateLayout();
+}
+
+void ImageViewer::openImageDialog() {
+    string path = file_dialog(
+    {
+        {"exr",  "OpenEXR image"},
+        {"hdr",  "HDR image"},
+        {"bmp",  "Bitmap Image File"},
+        {"gif",  "Graphics Interchange Format image"},
+        {"jpg",  "JPEG image"},
+        {"jpeg", "JPEG image"},
+        {"pic",  "PIC image"},
+        {"png",  "Portable Network Graphics image"},
+        {"pnm",  "Portable Any Map image"},
+        {"psd",  "PSD image"},
+        {"tga",  "Truevision TGA image"},
+    },
+    false
+    );
+
+    if (!path.empty()) {
+        auto image = tryLoadImage(path, "");
+        if (image) {
+            addImage(image, true);
+        }
+    }
+
+    // Make sure we gain focus after seleting a file to be loaded.
+    glfwFocusWindow(mGLFWWindow);
 }
 
 void ImageViewer::updateLayout() {

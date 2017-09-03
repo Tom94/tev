@@ -85,6 +85,8 @@ public:
 
     void toggleHelpWindow();
 
+    void openImageDialog();
+
 private:
     void updateLayout();
     void updateTitle();
