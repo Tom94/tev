@@ -337,7 +337,6 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_O && modifiers & SYSTEM_COMMAND_MOD) {
             openImageDialog();
         } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
-            mFilter->setValue("");
             mFilter->requestFocus();
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
@@ -533,7 +532,7 @@ void ImageViewer::reloadAllImages() {
         reloadImage(mImages[i]);
     }
 
-    if (id != 0) {
+    if (id != -1) {
         selectImage(mImages[id]);
     }
 }

@@ -5,10 +5,27 @@
 
 #include <algorithm>
 #include <map>
+#include <vector>
 
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
+
+vector<string> split(string text, const string& delim) {
+    vector<string> result;
+    while (true) {
+        size_t begin = text.rfind(delim);
+        if (begin == string::npos) {
+            result.emplace_back(text);
+            return result;
+        } else {
+            result.emplace_back(text.substr(begin + delim.length()));
+            text.resize(begin);
+        }
+    }
+
+    return result;
+}
 
 bool matches(string text, string filter) {
     if (filter.empty()) {
@@ -19,7 +36,18 @@ bool matches(string text, string filter) {
     transform(begin(text), end(text), begin(text), ::tolower);
     transform(begin(filter), end(filter), begin(filter), ::tolower);
 
-    return text.find(filter) != string::npos;
+    auto words = split(filter, " ");
+    // We don't want people entering multiple spaces in a row to match everything.
+    words.erase(remove(begin(words), end(words), ""), end(words));
+
+    // Match every word of the filter separately.
+    for (const auto& word : words) {
+        if (text.find(word) != string::npos) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 ETonemap toTonemap(string name) {
