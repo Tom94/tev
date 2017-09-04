@@ -2,6 +2,8 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include "../include/ImageViewer.h"
+#include "../include/SharedQueue.h"
+#include "../include/ThreadPool.h"
 
 #include <args.hxx>
 #include <ImfThreading.h>
@@ -126,36 +128,34 @@ int mainFunc(int argc, char* argv[]) {
 
     // Load images passed via command line prior to initializing nanogui
     // such that no frozen window is created.
-    vector<shared_ptr<Image>> images;
+    shared_ptr<ImageViewer::image_queue_t> imagesToAdd = make_shared<ImageViewer::image_queue_t>();
     string currentExtra;
-    for (const auto imageFile : get(imageFiles)) {
+    for (auto imageFile : get(imageFiles)) {
         if (!imageFile.empty() && imageFile[0] == ':') {
             currentExtra = imageFile.substr(1);
             continue;
         }
 
-        auto image = tryLoadImage(imageFile, currentExtra);
-        if (image) {
-            images.emplace_back(image);
-        }
+        ThreadPool::singleWorker().enqueueTask([imageFile, currentExtra, &imagesToAdd] {
+            auto image = tryLoadImage(imageFile, currentExtra);
+            if (image) {
+                imagesToAdd->push({false, image});
+            }
+        });
     }
 
     // Init nanogui application
     nanogui::init();
 
     {
-        auto app = make_unique<ImageViewer>();
+        auto app = make_unique<ImageViewer>(imagesToAdd);
         app->drawAll();
         app->setVisible(true);
 
         bool shallMaximize = false;
 
         // Load all images which were passed in via the command line.
-        if (!images.empty()) {
-            for (const auto& image : images) {
-                app->addImage(image);
-            }
-
+        if (imageFiles) {
             // If all images were loaded from the command line, then there
             // is a good chance the user won't want to interact with the OS
             // to drag more images in. Therefore, let's maximize by default.
@@ -164,11 +164,10 @@ int mainFunc(int argc, char* argv[]) {
 
         // Override shallMaximize according to the supplied flag
         if (maximizeFlag) {
+            cout << get(maximizeFlag) << endl;
             shallMaximize = get(maximizeFlag);
         }
 
-        // Make sure the largest loaded image fits into our window.
-        app->fitAllImages();
         if (shallMaximize) {
             app->maximize();
         }
@@ -200,6 +199,9 @@ int mainFunc(int argc, char* argv[]) {
     // nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
     //nanogui::shutdown();
+
+    // Let all threads gracefully terminate.
+    ThreadPool::shutdown();
 
     return 0;
 }

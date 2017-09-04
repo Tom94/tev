@@ -2,6 +2,7 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include "../include/ImageViewer.h"
+#include "../include/ThreadPool.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -21,7 +22,11 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
-: nanogui::Screen(Vector2i{1024, 767}, "tev") {
+: ImageViewer{make_shared<image_queue_t>()} {
+}
+
+ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
+: nanogui::Screen{Vector2i{1024, 767}, "tev"}, mImagesToAdd{imagesToAdd} {
     mBackground = Color{0.23f, 1.0f};
 
     mVerticalScreenSplit = new Widget{this};
@@ -270,11 +275,15 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
         return true;
     }
 
-    for (const auto& imageFile : filenames) {
-        auto image = tryLoadImage(imageFile, "");
-        if (image) {
-            addImage(image, true);
-        }
+    for (size_t i = 0; i < filenames.size(); ++i) {
+        const string& imageFile = filenames[i];
+        bool shallSelect = i == filenames.size() - 1;
+        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
+            auto image = tryLoadImage(imageFile, "");
+            if (image) {
+                mImagesToAdd->push({shallSelect, image});
+            }
+        });
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -412,6 +421,14 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
 void ImageViewer::drawContents() {
     updateTitle();
+
+    try {
+        while (true) {
+            pair<bool, shared_ptr<Image>> newImage = mImagesToAdd->tryPop();
+            addImage(newImage.second, newImage.first);
+        }
+    } catch (runtime_error) {
+    }
 }
 
 void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallSelect) {
@@ -451,7 +468,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     // First image got added, let's select it.
     if (index == 0 || shallSelect) {
         selectImage(image);
-        fitAllImages();
+        resizeToFitImage(image);
     }
 }
 
@@ -752,30 +769,33 @@ void ImageViewer::setMetric(EMetric metric) {
     }
 }
 
-void ImageViewer::fitAllImages() {
-    if (mImages.empty()) {
+void ImageViewer::resizeToFitImage(const shared_ptr<Image>& image) {
+    if (!image) {
         return;
     }
 
-    Vector2i maxSize = Vector2i::Zero();
-    for (const auto& image : mImages) {
-        maxSize = maxSize.cwiseMax(image->size());
-    }
+    Vector2i requiredSize = image->size();
 
     // Convert from image pixel coordinates to nanogui coordinates.
-    maxSize = (maxSize.cast<float>() / pixelRatio()).cast<int>();
+    requiredSize = (requiredSize.cast<float>() / pixelRatio()).cast<int>();
 
     // Take into account the size of the UI.
     if (mSidebar->visible()) {
-        maxSize.x() += mSidebar->fixedWidth();
+        requiredSize.x() += mSidebar->fixedWidth();
     }
 
     if (mFooter->visible()) {
-        maxSize.y() += mFooter->fixedHeight();
+        requiredSize.y() += mFooter->fixedHeight();
     }
 
     // Only increase our current size if we are larger than the current size of the window.
-    setSize(mSize.cwiseMax(maxSize));
+    setSize(mSize.cwiseMax(requiredSize));
+}
+
+void ImageViewer::resizeToFitAllImages() {
+    for (const auto& image : mImages) {
+        resizeToFitImage(image);
+    }
 }
 
 bool ImageViewer::setFilter(const string& filter) {
@@ -909,11 +929,15 @@ void ImageViewer::openImageDialog() {
         {"tga",  "Truevision TGA image"},
     });
 
-    for (const auto& path : paths) {
-        auto image = tryLoadImage(path, "");
-        if (image) {
-            addImage(image, true);
-        }
+    for (size_t i = 0; i < paths.size(); ++i) {
+        const string& imageFile = paths[i];
+        bool shallSelect = i == paths.size() - 1;
+        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
+            auto image = tryLoadImage(imageFile, "");
+            if (image) {
+                mImagesToAdd->push({shallSelect, image});
+            }
+        });
     }
 
     // Make sure we gain focus after seleting a file to be loaded.

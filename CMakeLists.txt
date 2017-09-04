@@ -60,6 +60,7 @@ add_executable(tev
     include/ImageButton.h src/ImageButton.cpp
     include/ImageCanvas.h src/ImageCanvas.cpp
     include/ImageViewer.h src/ImageViewer.cpp
+    include/SharedQueue.h src/SharedQueue.cpp
     include/ThreadPool.h src/ThreadPool.cpp
     include/UberShader.h src/UberShader.cpp
     src/main.cpp

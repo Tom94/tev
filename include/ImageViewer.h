@@ -7,6 +7,7 @@
 #include "../include/Image.h"
 #include "../include/ImageButton.h"
 #include "../include/ImageCanvas.h"
+#include "../include/SharedQueue.h"
 
 #include <nanogui/glutil.h>
 #include <nanogui/opengl.h>
@@ -20,7 +21,11 @@ TEV_NAMESPACE_BEGIN
 
 class ImageViewer : public nanogui::Screen {
 public:
+    // The boolean value indicates whether the image should be selected upon addition.
+    using image_queue_t = SharedQueue<std::pair<bool, std::shared_ptr<Image>>>;
+
     ImageViewer();
+    ImageViewer(std::shared_ptr<image_queue_t> imagesToAdd);
 
     bool dropEvent(const std::vector<std::string>& filenames) override;
 
@@ -73,7 +78,8 @@ public:
 
     void setMetric(EMetric metric);
 
-    void fitAllImages();
+    void resizeToFitImage(const std::shared_ptr<Image>& image);
+    void resizeToFitAllImages();
     bool setFilter(const std::string& filter);
 
     void maximize();
@@ -117,6 +123,7 @@ private:
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;
 
+    std::shared_ptr<image_queue_t> mImagesToAdd;
     std::shared_ptr<Image> mCurrentImage;
     std::shared_ptr<Image> mCurrentReference;
 

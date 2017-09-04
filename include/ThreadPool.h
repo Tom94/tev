@@ -14,7 +14,6 @@
 
 class ThreadPool {
 public:
-
     ThreadPool();
     ThreadPool(size_t numThreads);
     virtual ~ThreadPool();
@@ -53,6 +52,15 @@ public:
 
     void parallelForNoWait(size_t start, size_t end, std::function<void(size_t)> body);
     void parallelFor(size_t start, size_t end, std::function<void(size_t)> body);
+
+    static ThreadPool& singleWorker() {
+        static ThreadPool threadPool{1};
+        return threadPool;
+    }
+
+    static void shutdown() {
+        singleWorker().shutdownThreads(1);
+    }
 
 private:
     size_t mNumThreads = 0;
