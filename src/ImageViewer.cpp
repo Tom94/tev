@@ -775,7 +775,7 @@ void ImageViewer::setMetric(EMetric metric) {
 }
 
 void ImageViewer::resizeToFitImage(const shared_ptr<Image>& image) {
-    if (!image) {
+    if (!image || isMaximized()) {
         return;
     }
 
