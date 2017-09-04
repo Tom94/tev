@@ -40,6 +40,10 @@ bool matches(string text, string filter) {
     // We don't want people entering multiple spaces in a row to match everything.
     words.erase(remove(begin(words), end(words), ""), end(words));
 
+    if (words.empty()) {
+        return true;
+    }
+
     // Match every word of the filter separately.
     for (const auto& word : words) {
         if (text.find(word) != string::npos) {
