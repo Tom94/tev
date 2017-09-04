@@ -7,6 +7,7 @@
 #include <nanogui/entypo.h>
 #include <nanogui/label.h>
 #include <nanogui/layout.h>
+#include <nanogui/opengl.h>
 #include <nanogui/window.h>
 
 using namespace nanogui;
@@ -27,10 +28,10 @@ string HelpWindow::ALT = "Alt";
 #endif
 
 HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
-    : Window{parent, "Help – Keybindings"} {
+    : Window{parent, "Help – Keybindings"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{buttonPanel(), "", ENTYPO_ICON_CROSS};
-    closeButton->setCallback(closeCallback);
+    closeButton->setCallback(mCloseCallback);
 
     setLayout(new GroupLayout{});
 
@@ -82,7 +83,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     addRow(imageSelection, "Shift+E", "Decrease Exposure by 0.5");
     addRow(imageSelection, "O", "Increase Offset by 0.1");
     addRow(imageSelection, "Shift+O", "Decrease Offset by 0.1");
-    
+
     new Label{this, "Reference Options", "sans-bold", 18};
     auto referenceSelection = new Widget{this};
     referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
@@ -113,6 +114,19 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     addRow(interface, "H", "Show Help (this Window)");
     addRow(interface, COMMAND + "+P", "Find Image or Layer");
     addRow(interface, "Q or Esc", "Quit");
+}
+
+bool HelpWindow::keyboardEvent(int key, int scancode, int action, int modifiers) {
+    if (Window::keyboardEvent(key, scancode, action, modifiers)) {
+        return true;
+    }
+
+    if (key == GLFW_KEY_ESCAPE) {
+        mCloseCallback();
+        return true;
+    }
+
+    return false;
 }
 
 TEV_NAMESPACE_END
