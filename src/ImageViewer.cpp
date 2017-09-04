@@ -840,9 +840,13 @@ bool ImageViewer::setFilter(const string& filter) {
             return doesMatch;
         };
 
+        size_t id = 1;
         for (size_t i = 0; i < mImages.size(); ++i) {
             ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
             ib->setVisible(doesImageMatch(mImages[i]));
+            if (ib->visible()) {
+                ib->setId(id++);
+            }
         }
 
         if (mCurrentImage && !doesImageMatch(mCurrentImage)) {
