@@ -961,6 +961,7 @@ void ImageViewer::updateLayout() {
     int sidebarWidth = mSidebar->visible() ? mSidebar->fixedWidth() : 0;
     int footerHeight = mFooter->visible() ? mFooter->fixedHeight() : 0;
     mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth, footerHeight});
+    mSidebar->setFixedHeight(mSize.y() - footerHeight);
 
     mVerticalScreenSplit->setFixedSize(mSize);
     mImageScrollContainer->setFixedHeight(
