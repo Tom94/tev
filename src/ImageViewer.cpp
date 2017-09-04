@@ -860,10 +860,14 @@ bool ImageViewer::setFilter(const string& filter) {
     // Layer filtering
     if (mCurrentImage)
     {
+        size_t id = 1;
         const auto& buttons = mLayerButtonContainer->children();
         for (Widget* button : buttons) {
             ImageButton* ib = dynamic_cast<ImageButton*>(button);
             ib->setVisible(matches(ib->caption(), layerPart));
+            if (ib->visible()) {
+                ib->setId(id++);
+            }
         }
 
         if (!matches(mCurrentLayer, layerPart)) {
