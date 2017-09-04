@@ -478,6 +478,14 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
         return;
     }
 
+    auto nextCandidate = nextImage(image, Forward);
+    // If we rolled over, let's rather use the previous image.
+    // We don't want to jumpt to the beginning when deleting the
+    // last image in our list.
+    if (imageId(nextCandidate) < id) {
+        nextCandidate = nextImage(image, Backward);
+    }
+
     // Reset all focus as a workaround a crash caused by nanogui.
     // TODO: Remove once a fix exists.
     requestFocus();
@@ -490,8 +498,6 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
         selectReference(nullptr);
         return;
     }
-
-    auto nextCandidate = mImages[min(id, (int)mImages.size() - 1)];
 
     if (mCurrentImage == image) {
         selectImage(nextCandidate);
