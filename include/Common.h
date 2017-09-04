@@ -9,6 +9,7 @@
 #include <cmath>
 #include <string>
 #include <sstream>
+#include <vector>
 
 #ifdef _WIN32
 #pragma warning(disable : 4127) // warning C4127: conditional expression is constant
