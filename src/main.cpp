@@ -192,7 +192,7 @@ int mainFunc(int argc, char* argv[]) {
             app->setTonemap(toTonemap(get(tonemapFlag)));
         }
 
-        nanogui::mainloop();
+        nanogui::mainloop(250);
     }
 
     // On some linux distributions glfwTerminate() (which is called by
