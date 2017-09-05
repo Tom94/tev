@@ -159,7 +159,7 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             return button;
         };
 
-        auto errorButton = makeMetricButton("E", [this]() {
+        makeMetricButton("E", [this]() {
             setMetric(EMetric::Error);
         });
 
@@ -179,7 +179,7 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             setMetric(EMetric::RelativeSquaredError);
         });
 
-        errorButton->setPushed(true);
+        setMetric(EMetric::AbsoluteError);
     }
 
     // Image selection
