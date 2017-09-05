@@ -29,7 +29,7 @@ if (MSVC)
     endif()
 endif()
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies EXCLUDE_FROM_ALL)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
 # Enable more warnings
 if (MSVC)

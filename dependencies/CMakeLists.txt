@@ -20,6 +20,7 @@ add_subdirectory(nanogui)
 if (WIN32)
     set(ZLIB_BUILD_STATIC_LIBS ON CACHE BOOL " " FORCE)
     set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(SKIP_INSTALL_ALL ON CACHE BOOL " " FORCE)
     add_subdirectory(zlib)
 
     set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib" CACHE PATH " " FORCE)
@@ -33,7 +34,7 @@ set(ILMBASE_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(ILMBASE_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 set(OPENEXR_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
-add_subdirectory(openexr)
+add_subdirectory(openexr EXCLUDE_FROM_ALL)
 
 # Manually populate locations of our included dependencies.
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
