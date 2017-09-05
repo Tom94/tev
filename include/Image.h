@@ -4,7 +4,6 @@
 #pragma once
 
 #include "../include/Channel.h"
-#include "../include/GlTexture.h"
 
 #include <map>
 #include <memory>
@@ -17,19 +16,19 @@ class Image {
 public:
     Image(const std::string& filename, const std::string& extra);
 
-    const auto& filename() {
+    const auto& filename() const {
         return mFilename;
     }
 
-    const auto& extra() {
+    const auto& extra() const {
         return mExtra;
     }
 
-    const auto& name() {
+    const auto& name() const {
         return mName;
     }
 
-    std::string shortName();
+    std::string shortName() const;
 
     bool hasChannel(const std::string& channelName) const {
         return mChannels.count(channelName) != 0;
@@ -43,9 +42,9 @@ public:
         }
     }
 
-    std::vector<std::string> channelsInLayer(std::string layerName) const;
+    const GlTexture* texture(const std::vector<std::string>& channelNames);
 
-    const GlTexture* texture(const std::string& channelName);
+    std::vector<std::string> channelsInLayer(std::string layerName) const;
 
     const auto& size() const {
         return mSize;

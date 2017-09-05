@@ -13,8 +13,6 @@ TEV_NAMESPACE_BEGIN
 
 ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
 : GLCanvas(parent), mPixelRatio(pixelRatio) {
-    mTextureBlack.setData({ 0.0 }, Vector2i::Constant(1), 1);
-    mTextureWhite.setData({ 1.0 }, Vector2i::Constant(1), 1);
     setDrawBorder(false);
 }
 
@@ -60,23 +58,13 @@ void ImageCanvas::drawGL() {
         return;
     }
 
-    auto getTextures = [this](Image& image) {
-        const auto& imageChannels = getChannels(image);
-        return array<const GlTexture*, 4>{{
-            imageChannels.size() > 0 ? image.texture(imageChannels[0]) : &mTextureBlack,
-            imageChannels.size() > 1 ? image.texture(imageChannels[1]) : &mTextureBlack,
-            imageChannels.size() > 2 ? image.texture(imageChannels[2]) : &mTextureBlack,
-            imageChannels.size() > 3 ? image.texture(imageChannels[3]) : &mTextureWhite,
-        }};
-    };
-
     if (mReference) {
         mShader.draw(
-            getTextures(*mImage),
+            mImage->texture(getChannels(*mImage)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(mImage.get()).inverse().matrix(),
-            getTextures(*mReference),
+            mReference->texture(getChannels(*mReference)),
             transform(mReference.get()).inverse().matrix(),
             mExposure,
             mOffset,
@@ -85,7 +73,7 @@ void ImageCanvas::drawGL() {
         );
     } else {
         mShader.draw(
-            getTextures(*mImage),
+            mImage->texture(getChannels(*mImage)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(mImage.get()).inverse().matrix(),

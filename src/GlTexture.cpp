@@ -36,7 +36,7 @@ void GlTexture::setData(const vector<float>& data, const Vector2i& size, int num
     }
 
     TEV_ASSERT(
-        data.size() == static_cast<size_t>(mSize.prod()) * numChannels,
+        data.size() == (size_t)mSize.x() * mSize.y() * numChannels,
         "Supplied data (%d) does not match the size of the texture (%dx%dx%d == %d).",
         data.size(), mSize.x(), mSize.y(), numChannels, mSize.prod()
     );

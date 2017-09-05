@@ -16,9 +16,9 @@ public:
 
     // Draws a difference between a reference and an image.
     void draw(
-        std::array<const GlTexture*, 4> texturesImage,
+        const GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
-        std::array<const GlTexture*, 4> texturesReference,
+        const GlTexture* textureReference,
         const Eigen::Matrix3f& transformReference,
         float exposure,
         float offset,
@@ -28,7 +28,7 @@ public:
 
     // Draws an image.
     void draw(
-        std::array<const GlTexture*, 4> texturesImage,
+        const GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
         float exposure,
         float offset,
@@ -38,7 +38,7 @@ public:
 
 private:
     void bindImageData(
-        std::array<const GlTexture*, 4> texturesImage,
+        const GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
         float exposure,
         float offset,
@@ -46,7 +46,7 @@ private:
     );
 
     void bindReferenceData(
-        std::array<const GlTexture*, 4> texturesReference,
+        const GlTexture* textureReference,
         const Eigen::Matrix3f& transformReference,
         EMetric metric
     );

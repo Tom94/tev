@@ -45,15 +45,8 @@ UberShader::UberShader()
         // Fragment shader
         R"(#version 330
 
-        uniform sampler2D imageRed;
-        uniform sampler2D imageGreen;
-        uniform sampler2D imageBlue;
-        uniform sampler2D imageAlpha;
-
-        uniform sampler2D referenceRed;
-        uniform sampler2D referenceGreen;
-        uniform sampler2D referenceBlue;
-        uniform sampler2D referenceAlpha;
+        uniform sampler2D image;
+        uniform sampler2D reference;
         uniform bool hasReference;
 
         uniform sampler2D colormap;
@@ -115,36 +108,26 @@ UberShader::UberShader()
             return vec3(0.0);
         }
 
-        float sample(sampler2D sampler, vec2 uv) {
+        vec4 sample(sampler2D sampler, vec2 uv) {
             if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-                return 0.0;
+                return vec4(0.0);
             }
-            return texture(sampler, imageUv).x;
+            return texture(sampler, uv);
         }
 
         void main() {
-            vec4 image = vec4(
-                sample(imageRed, imageUv),
-                sample(imageGreen, imageUv),
-                sample(imageBlue, imageUv),
-                sample(imageAlpha, imageUv)
-            );
+            vec4 imageVal = sample(image, imageUv);
 
             if (!hasReference) {
-                color = vec4(applyTonemap(applyExposureAndOffset(image.rgb)), image.a);
+                color = vec4(applyTonemap(applyExposureAndOffset(imageVal.rgb)), imageVal.a);
                 return;
             }
 
-            vec4 reference = vec4(
-                sample(referenceRed, referenceUv),
-                sample(referenceGreen, referenceUv),
-                sample(referenceBlue, referenceUv),
-                sample(referenceAlpha, referenceUv)
-            );
+            vec4 referenceVal = sample(reference, referenceUv);
 
-            vec3 difference = image.rgb - reference.rgb;
-            float alpha = (image.a + reference.a) * 0.5;
-            color = vec4(applyTonemap(applyExposureAndOffset(applyMetric(difference, reference.rgb))), alpha);
+            vec3 difference = imageVal.rgb - referenceVal.rgb;
+            float alpha = (imageVal.a + referenceVal.a) * 0.5;
+            color = vec4(applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb))), alpha);
         })"
     );
 
@@ -430,82 +413,72 @@ UberShader::~UberShader() {
 }
 
 void UberShader::draw(
-    std::array<const GlTexture*, 4> texturesImage,
-    const Eigen::Matrix3f& transformImage,
-    std::array<const GlTexture*, 4> texturesReference,
-    const Eigen::Matrix3f& transformReference,
+    const GlTexture* textureImage,
+    const Matrix3f& transformImage,
+    const GlTexture* textureReference,
+    const Matrix3f& transformReference,
     float exposure,
     float offset,
     ETonemap tonemap,
     EMetric metric
 ) {
-    bindImageData(texturesImage, transformImage, exposure, offset, tonemap);
-    bindReferenceData(texturesReference, transformReference, metric);
+    bindImageData(textureImage, transformImage, exposure, offset, tonemap);
+    bindReferenceData(textureReference, transformReference, metric);
     mShader.setUniform("hasReference", true);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
 
 void UberShader::draw(
-    std::array<const GlTexture*, 4> texturesImage,
-    const Eigen::Matrix3f& transformImage,
+    const GlTexture* textureImage,
+    const Matrix3f& transformImage,
     float exposure,
     float offset,
     ETonemap tonemap
 ) {
-    bindImageData(texturesImage, transformImage, exposure, offset, tonemap);
+    bindImageData(textureImage, transformImage, exposure, offset, tonemap);
     mShader.setUniform("hasReference", false);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
 
-void UberShader::bindReferenceData(
-    std::array<const GlTexture*, 4> texturesReference,
-    const Eigen::Matrix3f& transformReference,
-    EMetric metric
-) {
-    for (int i = 0; i < 4; ++i) {
-        glActiveTexture(GL_TEXTURE0 + 4 + i);
-        glBindTexture(GL_TEXTURE_2D, texturesReference[i]->id());
-    }
-
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    mShader.setUniform("referenceRed",   4);
-    mShader.setUniform("referenceGreen", 5);
-    mShader.setUniform("referenceBlue",  6);
-    mShader.setUniform("referenceAlpha", 7);
-    mShader.setUniform("referenceTransform", transformReference);
-
-    mShader.setUniform("metric", static_cast<int>(metric));
-}
-
 void UberShader::bindImageData(
-    std::array<const GlTexture*, 4> texturesImage,
-    const Eigen::Matrix3f& transformImage,
+    const GlTexture* textureImage,
+    const Matrix3f& transformImage,
     float exposure,
     float offset,
     ETonemap tonemap
 ) {
-    for (int i = 0; i < 4; ++i) {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, texturesImage[i]->id());
-    }
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textureImage->id());
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     mShader.bind();
-    mShader.setUniform("imageRed", 0);
-    mShader.setUniform("imageGreen", 1);
-    mShader.setUniform("imageBlue", 2);
-    mShader.setUniform("imageAlpha", 3);
+    mShader.setUniform("image", 0);
     mShader.setUniform("imageTransform", transformImage);
 
     mShader.setUniform("exposure", exposure);
     mShader.setUniform("offset", offset);
     mShader.setUniform("tonemap", static_cast<int>(tonemap));
 
-    glActiveTexture(GL_TEXTURE10);
+    glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, mColorMap.id());
-    mShader.setUniform("colormap", 10);
+    mShader.setUniform("colormap", 2);
+}
+
+void UberShader::bindReferenceData(
+    const GlTexture* textureReference,
+    const Matrix3f& transformReference,
+    EMetric metric
+) {
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, textureReference->id());
+
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    mShader.setUniform("reference", 1);
+    mShader.setUniform("referenceTransform", transformReference);
+
+    mShader.setUniform("metric", static_cast<int>(metric));
 }
 
 TEV_NAMESPACE_END

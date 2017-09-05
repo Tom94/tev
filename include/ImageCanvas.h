@@ -97,9 +97,6 @@ private:
     UberShader mShader;
     CheckerboardShader mCheckerboardShader;
 
-    GlTexture mTextureBlack;
-    GlTexture mTextureWhite;
-
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
 };

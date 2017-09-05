@@ -47,7 +47,7 @@ Image::Image(const string& filename, const string& extra)
     }
 }
 
-string Image::shortName() {
+string Image::shortName() const {
     string result = mName;
 
     size_t slashPosition = result.find_last_of("/\\");
@@ -61,6 +61,43 @@ string Image::shortName() {
     }
 
     return result;
+}
+
+const GlTexture* Image::texture(const vector<string>& channelNames) {
+    string lookup = join(channelNames, ",");
+    auto iter = mTextures.find(lookup);
+    if (iter != end(mTextures)) {
+        return &iter->second;
+    }
+
+    mTextures.emplace(lookup, GlTexture{});
+    auto& texture = mTextures.at(lookup);
+
+    size_t numPixels = (size_t)mSize.x() * mSize.y();
+    vector<float> data(numPixels * 4);
+
+    for (size_t i = 0; i < 4; ++i) {
+        if (i < channelNames.size()) {
+            const auto& channelName = channelNames[i];
+            const auto* chan = channel(channelName);
+            if (!chan) {
+                throw invalid_argument{tfm::format("Cannot obtain texture of %s:%s, because the channel does not exist.", filename(), channelName)};
+            }
+
+            const auto& channelData = chan->data();
+            for (size_t j = 0; j < numPixels; ++j) {
+                data[j * 4 + i] = channelData[j];
+            }
+        } else {
+            float val = i == 3 ? 1 : 0;
+            for (size_t j = 0; j < numPixels; ++j) {
+                data[j * 4 + i] = val;
+            }
+        }
+    }
+
+    texture.setData(data, mSize, 4);
+    return &texture;
 }
 
 vector<string> Image::channelsInLayer(string layerName) const {
@@ -87,24 +124,6 @@ vector<string> Image::channelsInLayer(string layerName) const {
     }
 
     return result;
-}
-
-const GlTexture* Image::texture(const string& channelName) {
-    auto iter = mTextures.find(channelName);
-    if (iter != end(mTextures)) {
-        return &iter->second;
-    }
-
-    const auto* chan = channel(channelName);
-    if (!chan) {
-        throw invalid_argument{tfm::format("Cannot obtain texture of channel %s, because the channel does not exist.", channelName)};
-    }
-
-    mTextures.emplace(channelName, GlTexture{});
-    auto& texture = mTextures.at(channelName);
-    texture.setData(chan->data(), mSize, 1);
-
-    return &texture;
 }
 
 string Image::toString() const {
