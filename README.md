@@ -6,12 +6,30 @@ An inspection and comparison tool for images with high dynamic range (HDR). As t
     - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
     - Low-dynamic-range (LDR) images are "promoted" to HDR through an inverse gamma tonemappinng operator, where `gamma==2.2`.
 
-## Screenshot
+__tev__ allows viewing images through various tonemapping operators and inspecting exact pixel values. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof).
+
+__tev__ can open gigabytes of images at once. To avoid clutter, opened images and their individual layers can be filtered via keywords.
+
+# Screenshot
 
 ![Screenshot](https://raw.githubusercontent.com/Tom94/tev/master/resources/screenshot.png)
 _A false-color comparison two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
 
-## Building tev
+# Usage
+
+Images can be opened via __tev__'s GUI or via the command line
+```sh
+$ tev some-image.exr
+```
+
+For a list of all valid command-line arguments simply invoke
+```sh
+$ tev -h
+```
+
+For a quick overview of all keybindings, press _h_ or click the little help icon in the top-right corner of the side bar.
+
+# Building tev
 
 All that is required for building __tev__ is a C++14-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
 ```sh
@@ -25,7 +43,7 @@ $ git submodule update --init --recursive
 
 __tev__ uses [CMake](https://cmake.org/) as its build system. The following sections detail how it should be used on various operating systems.
 
-### Mac OS X / Linux
+## Mac OS X / Linux
 
 On Mac OS X and most Linux distributions [CMake](https://cmake.org/) can be obtained via a package manager ([Homebrew](https://brew.sh/) on Mac OS X, apt on Ubuntu/Debian, etc.). Most Linux distributions additionally require _xorg_, _gl_, and _zlib_ development packages and _zenity_. On Ubuntu/Debian simply call
 ```sh
@@ -45,10 +63,10 @@ $ make
 $ make install
 ```
 
-### Windows
+## Windows
 
 On Windows, precompiled binaries of CMake can be found [here](https://cmake.org/download/). After installing CMake, open the included GUI application and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2015 (Win64) or higher!
 
-## License
+# License
 
 __tev__ is available under the BSD 3-clause license, which you can find in the `LICENSE.md` file. [TL;DR](https://tldrlegal.com/license/bsd-3-clause-license-(revised)) you can do almost whatever you want as long as you include the original copyright and license notice in any copy of the software and the source code.
