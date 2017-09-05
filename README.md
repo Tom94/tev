@@ -8,7 +8,7 @@ An inspection and comparison tool for images with high dynamic range (HDR). As t
 
 __tev__ allows viewing images through various tonemapping operators and inspecting exact pixel values. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof).
 
-__tev__ can open gigabytes of images at once. To avoid clutter, opened images and their individual layers can be filtered via keywords.
+__tev__ can open gigabytes of images at once. To avoid clutter, opened images and their layers can be filtered by keywords.
 
 # Screenshot
 
@@ -32,7 +32,7 @@ For a list of all valid command-line arguments simply invoke
 $ tev -h
 ```
 
-For a quick overview of all keybindings, press _h_ or click the little help icon in the top-right corner of the side bar.
+Within __tev__, press _h_ or click the little help icon in the top-right corner of the side bar to get an overview of all keybindings.
 
 # Building tev
 
