@@ -29,7 +29,7 @@ if (MSVC)
     endif()
 endif()
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies EXCLUDE_FROM_ALL)
 
 # Enable more warnings
 if (MSVC)
@@ -79,3 +79,5 @@ include_directories(
 add_definitions(${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+
+install(TARGETS tev RUNTIME DESTINATION "bin")
