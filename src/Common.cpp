@@ -4,6 +4,7 @@
 #include "../include/Common.h"
 
 #include <algorithm>
+#include <cctype>
 #include <map>
 
 using namespace std;
@@ -26,14 +27,24 @@ vector<string> split(string text, const string& delim) {
     return result;
 }
 
+string toLower(string str) {
+    transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)tolower(c); });
+    return str;
+}
+
+string toUpper(string str) {
+    transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)toupper(c); });
+    return str;
+}
+
 bool matches(string text, string filter) {
     if (filter.empty()) {
         return true;
     }
 
     // Perform matching on lowercase strings
-    transform(begin(text), end(text), begin(text), ::tolower);
-    transform(begin(filter), end(filter), begin(filter), ::tolower);
+    text = toLower(text);
+    filter = toLower(filter);
 
     auto words = split(filter, " ");
     // We don't want people entering multiple spaces in a row to match everything.
@@ -55,7 +66,7 @@ bool matches(string text, string filter) {
 
 ETonemap toTonemap(string name) {
     // Perform matching on uppercase strings
-    transform(begin(name), end(name), begin(name), ::toupper);
+    name = toUpper(name);
     if (name == "SRGB") {
         return SRGB;
     } else if (name == "GAMMA") {
@@ -71,7 +82,7 @@ ETonemap toTonemap(string name) {
 
 EMetric toMetric(string name) {
     // Perform matching on uppercase strings
-    transform(begin(name), end(name), begin(name), ::toupper);
+    name = toUpper(name);
     if (name == "E") {
         return Error;
     } else if (name == "AE") {

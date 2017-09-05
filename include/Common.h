@@ -59,6 +59,9 @@ std::string join(const T& components, const std::string& delim) {
 
 std::vector<std::string> split(std::string text, const std::string& delim);
 
+std::string toLower(std::string str);
+std::string toUpper(std::string str);
+
 bool matches(std::string text, std::string filter);
 
 enum ETonemap : int {
