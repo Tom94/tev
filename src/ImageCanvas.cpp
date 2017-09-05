@@ -313,6 +313,9 @@ Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
     return
         Scaling(2.0f / mSize.x(), -2.0f / mSize.y()) *
         mTransform *
+        // Translate by 1/10000th of a pixel to avoid pixel edges lying exactly on fragment edges.
+        // This avoids artifacts caused by inconsistent rounding.
+        Translation2f(Vector2f::Constant(0.0001f)) *
         Scaling(image->size().cast<float>() / mPixelRatio) *
         Translation2f(Vector2f::Constant(-0.5f));
 }
