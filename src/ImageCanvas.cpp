@@ -49,17 +49,31 @@ bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
 }
 
 void ImageCanvas::drawGL() {
-    mCheckerboardShader.draw(
-        2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
-        Vector2f::Constant(20)
-    );
-
     if (!mImage) {
+        mShader.draw(
+            2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
+            Vector2f::Constant(20)
+        );
         return;
     }
 
-    if (mReference) {
+    if (!mReference) {
         mShader.draw(
+            2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
+            Vector2f::Constant(20),
+            mImage->texture(getChannels(*mImage)),
+            // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
+            // image transform to obtain texture coordinates in [0, 1]-space.
+            transform(mImage.get()).inverse().matrix(),
+            mExposure,
+            mOffset,
+            mTonemap
+        );
+        return;
+    } else {
+        mShader.draw(
+            2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
+            Vector2f::Constant(20),
             mImage->texture(getChannels(*mImage)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
@@ -71,16 +85,7 @@ void ImageCanvas::drawGL() {
             mTonemap,
             mMetric
         );
-    } else {
-        mShader.draw(
-            mImage->texture(getChannels(*mImage)),
-            // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
-            // image transform to obtain texture coordinates in [0, 1]-space.
-            transform(mImage.get()).inverse().matrix(),
-            mExposure,
-            mOffset,
-            mTonemap
-        );
+        return;
     }
 }
 

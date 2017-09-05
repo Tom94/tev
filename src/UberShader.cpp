@@ -27,15 +27,21 @@ UberShader::UberShader()
 
         // Vertex shader
         R"(#version 330
+
+        uniform vec2 pixelSize;
+        uniform vec2 checkerSize;
+
         uniform mat3 imageTransform;
         uniform mat3 referenceTransform;
 
         in vec2 position;
 
+        out vec2 checkerUv;
         out vec2 imageUv;
         out vec2 referenceUv;
 
         void main() {
+            checkerUv = position / (pixelSize * checkerSize);
             imageUv = (imageTransform * vec3(position, 1.0)).xy;
             referenceUv = (referenceTransform * vec3(position, 1.0)).xy;
 
@@ -46,6 +52,8 @@ UberShader::UberShader()
         R"(#version 330
 
         uniform sampler2D image;
+        uniform bool hasImage;
+
         uniform sampler2D reference;
         uniform bool hasReference;
 
@@ -56,6 +64,7 @@ UberShader::UberShader()
         uniform int tonemap;
         uniform int metric;
 
+        in vec2 checkerUv;
         in vec2 imageUv;
         in vec2 referenceUv;
 
@@ -116,10 +125,22 @@ UberShader::UberShader()
         }
 
         void main() {
-            vec4 imageVal = sample(image, imageUv);
+            vec3 darkGray = vec3(0.5, 0.5, 0.5);
+            vec3 lightGray = vec3(0.55, 0.55, 0.55);
 
+            vec3 checker = mod(int(floor(checkerUv.x) + floor(checkerUv.y)), 2) == 0 ? darkGray : lightGray;
+            if (!hasImage) {
+                color = vec4(checker, 1.0);
+                return;
+            }
+
+            vec4 imageVal = sample(image, imageUv);
             if (!hasReference) {
-                color = vec4(applyTonemap(applyExposureAndOffset(imageVal.rgb)), imageVal.a);
+                color = vec4(
+                    applyTonemap(applyExposureAndOffset(imageVal.rgb)) * imageVal.a +
+                    checker * (1.0 - imageVal.a),
+                    1.0
+                );
                 return;
             }
 
@@ -127,7 +148,11 @@ UberShader::UberShader()
 
             vec3 difference = imageVal.rgb - referenceVal.rgb;
             float alpha = (imageVal.a + referenceVal.a) * 0.5;
-            color = vec4(applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb))), alpha);
+            color = vec4(
+                applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb))) * alpha +
+                checker * (1.0 - alpha),
+                1.0
+            );
         })"
     );
 
@@ -412,7 +437,34 @@ UberShader::~UberShader() {
     mShader.free();
 }
 
+void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
+    mShader.bind();
+    bindCheckerboardData(pixelSize, checkerSize);
+    mShader.setUniform("hasImage", false);
+    mShader.setUniform("hasReference", false);
+    mShader.drawIndexed(GL_TRIANGLES, 0, 2);
+}
+
 void UberShader::draw(
+    const Vector2f& pixelSize,
+    const Vector2f& checkerSize,
+    const GlTexture* textureImage,
+    const Matrix3f& transformImage,
+    float exposure,
+    float offset,
+    ETonemap tonemap
+) {
+    mShader.bind();
+    bindCheckerboardData(pixelSize, checkerSize);
+    bindImageData(textureImage, transformImage, exposure, offset, tonemap);
+    mShader.setUniform("hasImage", true);
+    mShader.setUniform("hasReference", false);
+    mShader.drawIndexed(GL_TRIANGLES, 0, 2);
+}
+
+void UberShader::draw(
+    const Vector2f& pixelSize,
+    const Vector2f& checkerSize,
     const GlTexture* textureImage,
     const Matrix3f& transformImage,
     const GlTexture* textureReference,
@@ -422,22 +474,18 @@ void UberShader::draw(
     ETonemap tonemap,
     EMetric metric
 ) {
+    mShader.bind();
+    bindCheckerboardData(pixelSize, checkerSize);
     bindImageData(textureImage, transformImage, exposure, offset, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
+    mShader.setUniform("hasImage", true);
     mShader.setUniform("hasReference", true);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
 
-void UberShader::draw(
-    const GlTexture* textureImage,
-    const Matrix3f& transformImage,
-    float exposure,
-    float offset,
-    ETonemap tonemap
-) {
-    bindImageData(textureImage, transformImage, exposure, offset, tonemap);
-    mShader.setUniform("hasReference", false);
-    mShader.drawIndexed(GL_TRIANGLES, 0, 2);
+void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize) {
+    mShader.setUniform("pixelSize", pixelSize);
+    mShader.setUniform("checkerSize", checkerSize);
 }
 
 void UberShader::bindImageData(
@@ -449,8 +497,6 @@ void UberShader::bindImageData(
 ) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureImage->id());
-
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     mShader.bind();
     mShader.setUniform("image", 0);
@@ -472,8 +518,6 @@ void UberShader::bindReferenceData(
 ) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, textureReference->id());
-
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     mShader.setUniform("reference", 1);
     mShader.setUniform("referenceTransform", transformReference);

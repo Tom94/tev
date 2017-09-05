@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "../include/CheckerboardShader.h"
 #include "../include/UberShader.h"
 #include "../include/Image.h"
 
@@ -94,7 +93,6 @@ private:
     Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
 
     UberShader mShader;
-    CheckerboardShader mCheckerboardShader;
 
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;

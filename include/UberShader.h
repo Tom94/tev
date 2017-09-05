@@ -14,8 +14,24 @@ public:
     UberShader();
     virtual ~UberShader();
 
+    // Draws just a checkerboard.
+    void draw(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
+
+    // Draws an image.
+    void draw(
+        const Eigen::Vector2f& pixelSize,
+        const Eigen::Vector2f& checkerSize,
+        const GlTexture* textureImage,
+        const Eigen::Matrix3f& transformImage,
+        float exposure,
+        float offset,
+        ETonemap tonemap
+    );
+
     // Draws a difference between a reference and an image.
     void draw(
+        const Eigen::Vector2f& pixelSize,
+        const Eigen::Vector2f& checkerSize,
         const GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
         const GlTexture* textureReference,
@@ -26,17 +42,9 @@ public:
         EMetric metric
     );
 
-    // Draws an image.
-    void draw(
-        const GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
-        float exposure,
-        float offset,
-        ETonemap tonemap
-    );
-
-
 private:
+    void bindCheckerboardData(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
+
     void bindImageData(
         const GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,

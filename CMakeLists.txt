@@ -52,7 +52,6 @@ endif()
 
 add_executable(tev
     include/Channel.h src/Channel.cpp
-    include/CheckerboardShader.h src/CheckerboardShader.cpp
     include/Common.h src/Common.cpp
     include/GlTexture.h src/GlTexture.cpp
     include/HelpWindow.h src/HelpWindow.cpp
