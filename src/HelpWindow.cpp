@@ -35,7 +35,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
     setLayout(new GroupLayout{});
 
-    setFixedWidth(400);
+    setFixedWidth(435);
     auto addRow = [](Widget* current, string keys, string desc) {
         auto row = new Widget{current};
         row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 0, 10});
@@ -62,9 +62,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     auto imageSelection = new Widget{this};
     imageSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(imageSelection, "1…9",       "Select N-th Image");
-    addRow(imageSelection, "Down or W", "Select Next Image");
-    addRow(imageSelection, "Up or W",   "Select Previous Image");
+    addRow(imageSelection, "Left Click", "Select Hovered Image");
+    addRow(imageSelection, "1…9",        "Select N-th Image");
+    addRow(imageSelection, "Down or W",  "Select Next Image");
+    addRow(imageSelection, "Up or W",    "Select Previous Image");
 
     addSpacer(imageSelection);
 
@@ -88,9 +89,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     auto referenceSelection = new Widget{this};
     referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(referenceSelection, "Shift+1…9",             "Select N-th Image as Reference");
-    addRow(referenceSelection, "Shift+Down or Shift+W", "Select Next Image as Reference");
-    addRow(referenceSelection, "Shift+Up or Shift+W",   "Select Previous Image as Reference");
+    addRow(referenceSelection, "Shift+Left Click or Right Click", "Select Hovered Image as Reference");
+    addRow(referenceSelection, "Shift+1…9",                       "Select N-th Image as Reference");
+    addRow(referenceSelection, "Shift+Down or Shift+W",           "Select Next Image as Reference");
+    addRow(referenceSelection, "Shift+Up or Shift+W",             "Select Previous Image as Reference");
 
     addSpacer(referenceSelection);
 
@@ -101,6 +103,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     auto layerSelection = new Widget{this};
     layerSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
+    addRow(layerSelection, "Left Click", "Select Hovered Layer");
     addRow(layerSelection, "Ctrl+1…9",   "Select N-th Layer");
     addRow(layerSelection, "Right or D", "Select Next Layer");
     addRow(layerSelection, "Left or A",  "Select Previous Layer");

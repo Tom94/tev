@@ -34,23 +34,7 @@ bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int
         return false;
     }
 
-    if (button == GLFW_MOUSE_BUTTON_1) {
-        if (!mIsSelected) {
-            // Unselect the other, currently selected image.
-            for (auto widget : parent()->children()) {
-                ImageButton* b = dynamic_cast<ImageButton*>(widget);
-                if (b && b != this) {
-                    b->mIsSelected = false;
-                }
-            }
-
-            mIsSelected = true;
-            if (mSelectedCallback) {
-                mSelectedCallback();
-            }
-        }
-        return true;
-    } else if (mCanBeReference && button == GLFW_MOUSE_BUTTON_2) {
+    if (mCanBeReference && (button == GLFW_MOUSE_BUTTON_2 || (button == GLFW_MOUSE_BUTTON_1 && modifiers & GLFW_MOD_SHIFT))) {
         // If we already were the reference, then let's disable using us a reference.
         mIsReference = !mIsReference;
 
@@ -71,7 +55,24 @@ bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int
             mReferenceCallback(mIsReference);
         }
         return true;
+    } else if (button == GLFW_MOUSE_BUTTON_1) {
+        if (!mIsSelected) {
+            // Unselect the other, currently selected image.
+            for (auto widget : parent()->children()) {
+                ImageButton* b = dynamic_cast<ImageButton*>(widget);
+                if (b && b != this) {
+                    b->mIsSelected = false;
+                }
+            }
+
+            mIsSelected = true;
+            if (mSelectedCallback) {
+                mSelectedCallback();
+            }
+        }
+        return true;
     }
+
     return false;
 }
 

@@ -26,7 +26,7 @@ ImageViewer::ImageViewer()
 }
 
 ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
-: nanogui::Screen{Vector2i{1024, 767}, "tev"}, mImagesToAdd{imagesToAdd} {
+: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesToAdd{imagesToAdd} {
     mBackground = Color{0.23f, 1.0f};
 
     mVerticalScreenSplit = new Widget{this};
@@ -266,7 +266,7 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
 
     setResizeCallback([this](Vector2i) { updateLayout(); });
 
-    this->setSize(Vector2i(1024, 768));
+    this->setSize(Vector2i(1024, 800));
     selectReference(nullptr);
 }
 
