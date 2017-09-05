@@ -22,7 +22,7 @@ Images can be opened via __tev__'s GUI or via the command line.
 $ tev some-image.exr :some-layer other-image.exr :layer.some-channel yet-another-image.exr
 ```
 
-Individual _layers_ or _channels_ can be specified.
+By default, all _layers_ and _channels_ are loaded, but individual _layers_ or _channels_ can also be specified.
 ```sh
 $ tev :some-layer some-image.exr :some-layer.some-channel yet-another-image.exr
 ```
