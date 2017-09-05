@@ -4,6 +4,7 @@
 #pragma once
 
 #include "../include/Channel.h"
+#include "../include/GlTexture.h"
 
 #include <map>
 #include <memory>

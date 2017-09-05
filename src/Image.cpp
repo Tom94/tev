@@ -76,7 +76,8 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
     size_t numPixels = (size_t)mSize.x() * mSize.y();
     vector<float> data(numPixels * 4);
 
-    for (size_t i = 0; i < 4; ++i) {
+    ThreadPool pool;
+    pool.parallelForNoWait(0, 4, [&](size_t i) {
         if (i < channelNames.size()) {
             const auto& channelName = channelNames[i];
             const auto* chan = channel(channelName);
@@ -85,16 +86,17 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
             }
 
             const auto& channelData = chan->data();
-            for (size_t j = 0; j < numPixels; ++j) {
+            pool.parallelForNoWait(0, numPixels, [&channelData, &data, i](size_t j) {
                 data[j * 4 + i] = channelData[j];
-            }
+            });
         } else {
             float val = i == 3 ? 1 : 0;
-            for (size_t j = 0; j < numPixels; ++j) {
+            pool.parallelForNoWait(0, numPixels, [&data, val, i](size_t j) {
                 data[j * 4 + i] = val;
-            }
+            });
         }
-    }
+    });
+    pool.waitUntilFinished();
 
     texture.setData(data, mSize, 4);
     return &texture;

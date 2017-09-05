@@ -5,7 +5,6 @@
 
 #include "../include/CheckerboardShader.h"
 #include "../include/UberShader.h"
-#include "../include/GlTexture.h"
 #include "../include/Image.h"
 
 #include <nanogui/glcanvas.h>
