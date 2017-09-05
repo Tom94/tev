@@ -1,10 +1,15 @@
 # tev — Tom94's EXR Viewer
 
-A _work-in-progress_ inspection and comparison tool for images with high dynamic range (HDR). As the name suggests, the predominantly supported file format is OpenEXR, however certain other types of images can also be loaded. The following file formats are currently supported:
+An inspection and comparison tool for images with high dynamic range (HDR). As the name suggests, the predominantly supported file format is OpenEXR, however certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
     - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
     - Low-dynamic-range (LDR) images are "promoted" to HDR through an inverse gamma tonemappinng operator, where `gamma==2.2`.
+
+## Screenshot
+
+![Screenshot](https://raw.githubusercontent.com/Tom94/tev/master/resources/screenshot.png)
+_A false-color comparison two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
 
 ## Building tev
 
@@ -34,9 +39,15 @@ $ cd build
 $ cmake ..
 ```
 
+Afterwards, __tev__ can be built and installed via
+```sh
+$ make
+$ make install
+```
+
 ### Windows
 
-On Windows, precompiled binaries of CMake can be found [here](https://cmake.org/download/). After installing CMake, open the included GUI application and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2015 or higher, otherwise the compiler will not have sufficient C++14 support!
+On Windows, precompiled binaries of CMake can be found [here](https://cmake.org/download/). After installing CMake, open the included GUI application and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2015 (Win64) or higher!
 
 ## License
 
