@@ -64,7 +64,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
     addRow(imageSelection, "Left Click", "Select Hovered Image");
     addRow(imageSelection, "1…9",        "Select N-th Image");
-    addRow(imageSelection, "Down or W",  "Select Next Image");
+    addRow(imageSelection, "Down or S",  "Select Next Image");
     addRow(imageSelection, "Up or W",    "Select Previous Image");
 
     addSpacer(imageSelection);
@@ -91,7 +91,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
     addRow(referenceSelection, "Shift+Left Click or Right Click", "Select Hovered Image as Reference");
     addRow(referenceSelection, "Shift+1…9",                       "Select N-th Image as Reference");
-    addRow(referenceSelection, "Shift+Down or Shift+W",           "Select Next Image as Reference");
+    addRow(referenceSelection, "Shift+Down or Shift+S",           "Select Next Image as Reference");
     addRow(referenceSelection, "Shift+Up or Shift+W",             "Select Previous Image as Reference");
 
     addSpacer(referenceSelection);
