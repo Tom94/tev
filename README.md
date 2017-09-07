@@ -61,7 +61,7 @@ $ cmake ..
 
 Afterwards, __tev__ can be built and installed via
 ```sh
-$ make
+$ make -j
 $ make install
 ```
 
