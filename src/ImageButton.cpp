@@ -12,7 +12,6 @@ TEV_NAMESPACE_BEGIN
 
 ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
 : Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
-    mFontSize = 15;
 }
 
 Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {
@@ -28,7 +27,9 @@ Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {
 }
 
 bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
-    Widget::mouseButtonEvent(p, button, down, modifiers);
+    if (Widget::mouseButtonEvent(p, button, down, modifiers)) {
+        return true;
+    }
 
     if (!mEnabled || !down) {
         return false;
