@@ -13,8 +13,6 @@ class GlTexture {
 public:
     GlTexture(GLint clamping = GL_CLAMP_TO_EDGE, GLint filtering = GL_NEAREST, bool mipmap = true);
 
-    GlTexture(GLint textureId) : mId(textureId) {}
-
     GlTexture(const GlTexture& other) = delete;
     GlTexture(GlTexture&& other) noexcept
     : mId{other.mId}, mClamping{other.mClamping}, mFiltering{other.mFiltering}, mMipmap{other.mMipmap} {
