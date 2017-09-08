@@ -53,10 +53,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     auto imageLoading = new Widget{this};
     imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(imageLoading, COMMAND + "+O", "Open Image");
-    addRow(imageLoading, COMMAND + "+R or F5", "Reload Image");
+    addRow(imageLoading, COMMAND + "+O",                              "Open Image");
+    addRow(imageLoading, COMMAND + "+R or F5",                        "Reload Image");
     addRow(imageLoading, COMMAND + "+Shift+R or "s + COMMAND + "+F5", "Reload All Images");
-    addRow(imageLoading, COMMAND + "+W", "Close Image");
+    addRow(imageLoading, COMMAND + "+W",                              "Close Image");
 
     new Label{this, "Image Options", "sans-bold", 18};
     auto imageSelection = new Widget{this};
@@ -76,13 +76,13 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     addSpacer(imageSelection);
 
     addRow(imageSelection, "Shift+Right or Shift+D", "Select Next Tonemap");
-    addRow(imageSelection, "Shift+Left or Shift+A", "Select Previous Tonemap");
+    addRow(imageSelection, "Shift+Left or Shift+A",  "Select Previous Tonemap");
 
     addSpacer(imageSelection);
 
-    addRow(imageSelection, "E", "Increase Exposure by 0.5");
+    addRow(imageSelection, "E",       "Increase Exposure by 0.5");
     addRow(imageSelection, "Shift+E", "Decrease Exposure by 0.5");
-    addRow(imageSelection, "O", "Increase Offset by 0.1");
+    addRow(imageSelection, "O",       "Increase Offset by 0.1");
     addRow(imageSelection, "Shift+O", "Decrease Offset by 0.1");
 
     new Label{this, "Reference Options", "sans-bold", 18};
@@ -97,7 +97,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     addSpacer(referenceSelection);
 
     addRow(referenceSelection, "Ctrl+Right or Ctrl+D", "Select Next Error Metric");
-    addRow(referenceSelection, "Ctrl+Left or Ctrl+A", "Select Previous Error Metric");
+    addRow(referenceSelection, "Ctrl+Left or Ctrl+A",  "Select Previous Error Metric");
 
     new Label{this, "Layer Options", "sans-bold", 18};
     auto layerSelection = new Widget{this};
@@ -114,9 +114,9 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
     addRow(interface, ALT + "+Enter", "Maximize");
     addRow(interface, COMMAND + "+B", "Toggle GUI");
-    addRow(interface, "H", "Show Help (this Window)");
+    addRow(interface, "H",            "Show Help (this Window)");
     addRow(interface, COMMAND + "+P", "Find Image or Layer");
-    addRow(interface, "Q or Esc", "Quit");
+    addRow(interface, "Q or Esc",     "Quit");
 }
 
 bool HelpWindow::keyboardEvent(int key, int scancode, int action, int modifiers) {
