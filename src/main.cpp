@@ -126,18 +126,19 @@ int mainFunc(int argc, char* argv[]) {
         return -2;
     }
 
-    // Load images passed via command line prior to initializing nanogui
-    // such that no frozen window is created.
+    // Load images passed via command line in the background prior to
+    // creating our main application such that they are not stalled
+    // by the potentially slow initialization of opengl / glfw.
     shared_ptr<SharedQueue<ImageAddition>> imagesToAdd = make_shared<SharedQueue<ImageAddition>>();
-    string currentExtra;
+    string channelSelector;
     for (auto imageFile : get(imageFiles)) {
         if (!imageFile.empty() && imageFile[0] == ':') {
-            currentExtra = imageFile.substr(1);
+            channelSelector = imageFile.substr(1);
             continue;
         }
 
-        ThreadPool::singleWorker().enqueueTask([imageFile, currentExtra, &imagesToAdd] {
-            auto image = tryLoadImage(imageFile, currentExtra);
+        ThreadPool::singleWorker().enqueueTask([imageFile, channelSelector, &imagesToAdd] {
+            auto image = tryLoadImage(imageFile, channelSelector);
             if (image) {
                 imagesToAdd->push({false, image});
             }
@@ -152,46 +153,21 @@ int mainFunc(int argc, char* argv[]) {
         app->drawAll();
         app->setVisible(true);
 
-        bool shallMaximize = false;
-
-        // Load all images which were passed in via the command line.
-        if (imageFiles) {
-            // If all images were loaded from the command line, then there
-            // is a good chance the user won't want to interact with the OS
-            // to drag more images in. Therefore, let's maximize by default.
-            shallMaximize = true;
-        }
-
-        // Override shallMaximize according to the supplied flag
-        if (maximizeFlag) {
-            cout << get(maximizeFlag) << endl;
-            shallMaximize = get(maximizeFlag);
-        }
-
-        if (shallMaximize) {
+        // Do what the maximize flag tells us---if it exists---and
+        // maximize if we have images otherwise.
+        if (maximizeFlag ? get(maximizeFlag) : imageFiles) {
             app->maximize();
         }
 
-        if (exposureFlag) {
-            app->setExposure(get(exposureFlag));
-        }
+        // Apply parameter flags
+        if (exposureFlag)  { app->setExposure(get(exposureFlag)); }
+        if (filterFlag)    { app->setFilter(get(filterFlag)); }
+        if (metricFlag)    { app->setMetric(toMetric(get(metricFlag))); }
+        if (offsetFlag)    { app->setOffset(get(offsetFlag)); }
+        if (tonemapFlag)   { app->setTonemap(toTonemap(get(tonemapFlag))); }
 
-        if (filterFlag) {
-            app->setFilter(get(filterFlag));
-        }
-
-        if (metricFlag) {
-            app->setMetric(toMetric(get(metricFlag)));
-        }
-
-        if (offsetFlag) {
-            app->setOffset(get(offsetFlag));
-        }
-
-        if (tonemapFlag) {
-            app->setTonemap(toTonemap(get(tonemapFlag)));
-        }
-
+        // Refresh only every 250ms if there are no user interactions.
+        // This makes an idling tev surprisingly energy-efficient. :)
         nanogui::mainloop(250);
     }
 
