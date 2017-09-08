@@ -210,13 +210,13 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             "|i - r|\n\n"
 
             "SE (Squared Error)\n"
-            "(i - r)^2\n\n"
+            "(i - r)²\n\n"
 
             "RAE (Relative Absolute Error)\n"
             "|i - r| / (r + 0.01)\n\n"
 
             "RSE (Relative Squared Error)\n"
-            "(i - r)^2 / (r^2 + 0.01)"
+            "(i - r)² / (r² + 0.01)"
         );
     }
 
