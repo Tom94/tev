@@ -22,10 +22,10 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer()
-: ImageViewer{make_shared<image_queue_t>()} {
+: ImageViewer{make_shared<SharedQueue<ImageAddition>>()} {
 }
 
-ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
+ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 : nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesToAdd{imagesToAdd} {
     mBackground = Color{0.23f, 1.0f};
 
@@ -461,8 +461,8 @@ void ImageViewer::drawContents() {
 
     try {
         while (true) {
-            pair<bool, shared_ptr<Image>> newImage = mImagesToAdd->tryPop();
-            addImage(newImage.second, newImage.first);
+            auto addition = mImagesToAdd->tryPop();
+            addImage(addition.image, addition.shallSelect);
         }
     } catch (runtime_error) {
     }

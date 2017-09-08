@@ -19,13 +19,15 @@
 
 TEV_NAMESPACE_BEGIN
 
+struct ImageAddition {
+    bool shallSelect;
+    std::shared_ptr<Image> image;
+};
+
 class ImageViewer : public nanogui::Screen {
 public:
-    // The boolean value indicates whether the image should be selected upon addition.
-    using image_queue_t = SharedQueue<std::pair<bool, std::shared_ptr<Image>>>;
-
     ImageViewer();
-    ImageViewer(std::shared_ptr<image_queue_t> imagesToAdd);
+    ImageViewer(std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd);
 
     bool dropEvent(const std::vector<std::string>& filenames) override;
 
@@ -123,7 +125,7 @@ private:
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;
 
-    std::shared_ptr<image_queue_t> mImagesToAdd;
+    std::shared_ptr<SharedQueue<ImageAddition>> mImagesToAdd;
     std::shared_ptr<Image> mCurrentImage;
     std::shared_ptr<Image> mCurrentReference;
 

@@ -128,7 +128,7 @@ int mainFunc(int argc, char* argv[]) {
 
     // Load images passed via command line prior to initializing nanogui
     // such that no frozen window is created.
-    shared_ptr<ImageViewer::image_queue_t> imagesToAdd = make_shared<ImageViewer::image_queue_t>();
+    shared_ptr<SharedQueue<ImageAddition>> imagesToAdd = make_shared<SharedQueue<ImageAddition>>();
     string currentExtra;
     for (auto imageFile : get(imageFiles)) {
         if (!imageFile.empty() && imageFile[0] == ':') {
