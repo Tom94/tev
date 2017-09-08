@@ -54,9 +54,9 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
     {
         auto panel = new Widget{sidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
-        auto label = new Label{panel, "Tonemapping", "sans-bold", 25};
-        label->setTooltip(
-            "Various tonemapping options. Hover the individual conntrols to learn more!"
+        new Label{panel, "Tonemapping", "sans-bold", 25};
+        panel->setTooltip(
+            "Various tonemapping options. Hover the individual controls to learn more!"
         );
 
         panel = new Widget{sidebarLayout};
@@ -70,9 +70,10 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             setExposure(value);
         });
         setExposure(0);
-        mExposureSlider->setTooltip(
-            "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n"
-            "Keyboard shortcut: E or Shift+E"
+
+        panel->setTooltip(
+            "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n\n"
+            "Keyboard shortcuts:\nE and Shift+E"
         );
 
         panel = new Widget{sidebarLayout};
@@ -86,9 +87,10 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             setOffset(value);
         });
         setOffset(0);
-        mOffsetSlider->setTooltip(
-            "The offset is added to the image after exposure has been applied.\n"
-            "Keyboard shortcut: O or Shift+O"
+
+        panel->setTooltip(
+            "The offset is added to the image after exposure has been applied.\n\n"
+            "Keyboard shortcuts:\nO and Shift+O"
         );
     }
 
@@ -127,7 +129,7 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             return button;
         };
 
-        auto errorButton = makeTonemapButton("sRGB", [this]() {
+        makeTonemapButton("sRGB", [this]() {
             setTonemap(ETonemap::SRGB);
         });
 
@@ -143,7 +145,23 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
             setTonemap(ETonemap::PositiveNegative);
         });
 
-        errorButton->setPushed(true);
+        setTonemap(ETonemap::SRGB);
+
+        mTonemapButtonContainer->setTooltip(
+            "Tonemap operator selection:\n\n"
+
+            "sRGB\n"
+            "Linear to sRGB conversion\n\n"
+
+            "Gamma\n"
+            "Inverse power gamma correction\n\n"
+
+            "FC\n"
+            "False-color visualization\n\n"
+
+            "+/-\n"
+            "Positive=Green, Negative=Red"
+        );
     }
 
     // Error metrics
@@ -180,6 +198,26 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
         });
 
         setMetric(EMetric::AbsoluteError);
+
+        mMetricButtonContainer->setTooltip(
+            "Error metric selection. Given a reference image r and the selected image i, "
+            "the following operators are available:\n\n"
+
+            "E (Error)\n"
+            "i - r\n\n"
+
+            "AE (Absolute Error)\n"
+            "|i - r|\n\n"
+
+            "SE (Squared Error)\n"
+            "(i - r)^2\n\n"
+
+            "RAE (Relative Absolute Error)\n"
+            "|i - r| / (r + 0.01)\n\n"
+
+            "RSE (Relative Squared Error)\n"
+            "(i - r)^2 / (r^2 + 0.01)"
+        );
     }
 
     // Image selection
@@ -210,8 +248,8 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
         mFilter->setTooltip(
             "Filters visible images and layers according to a supplied string. "
             "The string must have the format 'image:layer'. "
-            "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n"
-            "Keyboard shortcut: "s + HelpWindow::COMMAND + "+P"
+            "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n\n"
+            "Keyboard shortcut:\n"s + HelpWindow::COMMAND + "+P"
         );
 
         auto tools = new Widget{sidebarLayout};
@@ -226,19 +264,19 @@ ImageViewer::ImageViewer(shared_ptr<image_queue_t> imagesToAdd)
 
         makeImageButton("", [this] {
             openImageDialog();
-        }, ENTYPO_ICON_FOLDER, tfm::format("Open Image (%s+O)", HelpWindow::COMMAND));
+        }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
 
         makeImageButton("", [this] {
             reloadImage(mCurrentImage);
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload Image (%s+R or F5)", HelpWindow::COMMAND));
+        }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND));
 
         makeImageButton("All", [this] {
             reloadAllImages();
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All Images (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND));
+        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND));
 
         makeImageButton("", [this] {
             removeImage(mCurrentImage);
-        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close Image (%s+W)", HelpWindow::COMMAND));
+        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND));
 
         spacer = new Widget{sidebarLayout};
         spacer->setHeight(3);
