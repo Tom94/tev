@@ -107,13 +107,8 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             return button;
         };
 
-        makeButton("Normalize", [this]() {
-            normalizeExposureAndOffset();
-        }, 0, "Shortcut: N");
-
-        makeButton("Reset", [this]() {
-            resetImage();
-        }, 0, "Shortcut: R");
+        makeButton("Normalize", [this]() { normalizeExposureAndOffset(); }, 0, "Shortcut: N");
+        makeButton("Reset",     [this]() { resetImage(); },                 0, "Shortcut: R");
     }
 
     // Tonemap options
@@ -129,21 +124,10 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             return button;
         };
 
-        makeTonemapButton("sRGB", [this]() {
-            setTonemap(ETonemap::SRGB);
-        });
-
-        makeTonemapButton("Gamma", [this]() {
-            setTonemap(ETonemap::Gamma);
-        });
-
-        makeTonemapButton("FC", [this]() {
-            setTonemap(ETonemap::FalseColor);
-        });
-
-        makeTonemapButton("+/-", [this]() {
-            setTonemap(ETonemap::PositiveNegative);
-        });
+        makeTonemapButton("sRGB",  [this]() { setTonemap(ETonemap::SRGB); });
+        makeTonemapButton("Gamma", [this]() { setTonemap(ETonemap::Gamma); });
+        makeTonemapButton("FC",    [this]() { setTonemap(ETonemap::FalseColor); });
+        makeTonemapButton("+/-",   [this]() { setTonemap(ETonemap::PositiveNegative); });
 
         setTonemap(ETonemap::SRGB);
 
@@ -177,25 +161,11 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             return button;
         };
 
-        makeMetricButton("E", [this]() {
-            setMetric(EMetric::Error);
-        });
-
-        makeMetricButton("AE", [this]() {
-            setMetric(EMetric::AbsoluteError);
-        });
-
-        makeMetricButton("SE", [this]() {
-            setMetric(EMetric::SquaredError);
-        });
-
-        makeMetricButton("RAE", [this]() {
-            setMetric(EMetric::RelativeAbsoluteError);
-        });
-
-        makeMetricButton("RSE", [this]() {
-            setMetric(EMetric::RelativeSquaredError);
-        });
+        makeMetricButton("E",   [this]() { setMetric(EMetric::Error); });
+        makeMetricButton("AE",  [this]() { setMetric(EMetric::AbsoluteError); });
+        makeMetricButton("SE",  [this]() { setMetric(EMetric::SquaredError); });
+        makeMetricButton("RAE", [this]() { setMetric(EMetric::RelativeAbsoluteError); });
+        makeMetricButton("RSE", [this]() { setMetric(EMetric::RelativeSquaredError); });
 
         setMetric(EMetric::AbsoluteError);
 
@@ -336,6 +306,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
     int amountLayers = mLayerButtonContainer->childCount();
 
+    // Keybindings which should _not_ respond to repeats
     if (action == GLFW_PRESS) {
         if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
             int idx = (key - GLFW_KEY_1 + 10) % 10;
@@ -396,7 +367,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         }
     }
 
-    // Hotkeys for changing values like exposure should also respond to repeats
+    // Keybindings which should respond to repeats
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         if (key == GLFW_KEY_E) {
             if (modifiers & GLFW_MOD_SHIFT) {
@@ -678,16 +649,14 @@ void ImageViewer::selectLayer(string layer) {
 
     // Ensure the currently active layer button is always fully on-screen
     if (activeLayerButton) {
-        mLayerButtonContainer->setPosition(
-            Vector2i{
-                clamp(
-                    mLayerButtonContainer->position().x(),
-                    -activeLayerButton->position().x(),
-                    mSize.x() - activeLayerButton->position().x() - activeLayerButton->width()
-                ),
-                0
-            }
-        );
+        mLayerButtonContainer->setPosition(Vector2i{
+            clamp(
+                mLayerButtonContainer->position().x(),
+                -activeLayerButton->position().x(),
+                mSize.x() - activeLayerButton->position().x() - activeLayerButton->width()
+            ),
+            0
+        });
     }
 }
 
@@ -771,15 +740,10 @@ void ImageViewer::normalizeExposureAndOffset() {
     float maximum = numeric_limits<float>::min();
     for (const auto& channelName : channels) {
         const auto& channel = mCurrentImage->channel(channelName);
-
         for (size_t i = 0; i < channel->count(); ++i) {
             float val = channel->eval(i);
-            if (val > maximum) {
-                maximum = val;
-            }
-            if (val < minimum) {
-                minimum = val;
-            }
+            maximum = max(maximum, val);
+            minimum = min(minimum, val);
         }
     }
 
