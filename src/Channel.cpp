@@ -35,13 +35,13 @@ bool Channel::isTopmost(const string& channel) {
 }
 
 Color Channel::color(string channel) {
-    channel = tail(channel);
+    channel = toLower(tail(channel));
 
-    if (channel == "R" || channel == "r") {
+    if (channel == "r") {
         return Color(0.8f, 0.2f, 0.2f, 1.0f);
-    } else if (channel == "G" || channel == "g") {
+    } else if (channel == "g") {
         return Color(0.2f, 0.8f, 0.2f, 1.0f);
-    } else if (channel == "B" || channel == "b") {
+    } else if (channel == "b") {
         return Color(0.2f, 0.3f, 1.0f, 1.0f);
     }
 
