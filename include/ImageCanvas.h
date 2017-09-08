@@ -50,10 +50,10 @@ public:
 
     float applyMetric(float value, float reference);
 
-    void getValues(Eigen::Vector2i mousePos, std::vector<float>& result);
-    std::vector<float> getValues(Eigen::Vector2i mousePos) {
+    void getValuesAtNanoPos(Eigen::Vector2i nanoPos, std::vector<float>& result);
+    std::vector<float> getValuesAtNanoPos(Eigen::Vector2i mousePos) {
         std::vector<float> result;
-        getValues(mousePos, result);
+        getValuesAtNanoPos(mousePos, result);
         return result;
     }
 
@@ -77,6 +77,8 @@ public:
     void resetTransform();
 
 private:
+    float computeMeanValue();
+
     void translate(const Eigen::Vector2f& amount);
     void scale(float amount, const Eigen::Vector2f& origin);
 

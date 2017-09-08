@@ -2,8 +2,11 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include "../include/ImageCanvas.h"
+#include "../include/ThreadPool.h"
 
 #include <nanogui/theme.h>
+
+#include <numeric>
 
 using namespace Eigen;
 using namespace nanogui;
@@ -127,7 +130,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
                 for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
                     Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
-                    getValues(nano, values);
+                    getValuesAtNanoPos(nano, values);
 
                     TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
 
@@ -240,7 +243,8 @@ Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
     };
 }
 
-float ImageCanvas::applyMetric(float diff, float reference) {
+float ImageCanvas::applyMetric(float image, float reference) {
+    float diff = image - reference;
     switch (mMetric) {
         case EMetric::Error:                 return diff;
         case EMetric::AbsoluteError:         return abs(diff);
@@ -252,7 +256,7 @@ float ImageCanvas::applyMetric(float diff, float reference) {
     }
 }
 
-void ImageCanvas::getValues(Vector2i mousePos, vector<float>& result) {
+void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     result.clear();
     if (!mImage) {
         return;
@@ -274,7 +278,7 @@ void ImageCanvas::getValues(Vector2i mousePos, vector<float>& result) {
                 mReference->channel(referenceChannels[i])->eval(referenceCoords) :
                 0.0f;
 
-            result[i] = applyMetric(result[i] - reference, reference);
+            result[i] = applyMetric(result[i], reference);
         }
     }
 }
@@ -286,6 +290,62 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
 
 void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
+}
+
+float ImageCanvas::computeMeanValue() {
+    if (!mImage) {
+        return 0.0f;
+    }
+
+    const auto& channels = getChannels(*mImage);
+    vector<float> means(channels.size(), 0);
+
+    if (!mReference) {
+        ThreadPool pool;
+        pool.parallelFor(0, channels.size(), [&](size_t i) {
+            const auto* chan = mImage->channel(channels[i]);
+            const auto& channelData = chan->data();
+
+            float mean = 0;
+            for (size_t j = 0; j < channelData.size(); ++j) {
+                mean += channelData[j];
+            }
+
+            means[i] = mean / channelData.size();
+        });
+    } else {
+        Vector2i size = mImage->size();
+        Vector2i offset = (mReference->size() - size) / 2;
+        const auto& referenceChannels = getChannels(*mReference);
+
+        ThreadPool pool;
+        pool.parallelFor(0, channels.size(), [&](size_t i) {
+            const auto* chan = mImage->channel(channels[i]);
+
+            float mean = 0;
+            if (i < referenceChannels.size()) {
+                const Channel* referenceChan = mReference->channel(referenceChannels[i]);
+                for (int y = 0; y < size.y(); ++y) {
+                    for (int x = 0; x < size.x(); ++x) {
+                        mean += applyMetric(
+                            chan->eval({x, y}),
+                            referenceChan->eval({x + offset.x(), y + offset.y()})
+                        );
+                    }
+                }
+            } else {
+                for (int y = 0; y < size.y(); ++y) {
+                    for (int x = 0; x < size.x(); ++x) {
+                        mean += applyMetric(chan->eval({x, y}), 0);
+                    }
+                }
+            }
+
+            means[i] = mean / size.y() / size.x();
+        });
+    }
+
+    return accumulate(begin(means), end(means), 0.0) / means.size();
 }
 
 void ImageCanvas::translate(const Vector2f& amount) {
