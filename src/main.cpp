@@ -102,9 +102,9 @@ int mainFunc(int argc, char* argv[]) {
         "The image files to be opened by the viewer. "
         "If a filename starting with a ':' is encountered, "
         "then this filename is not treated as an image file "
-        "but as a channel selector. Until the next channel "
+        "but as a comma-separated channel selector. Until the next channel "
         "selector is encountered only channels containing "
-        "the selector string will be loaded. This is "
+        "elements from the current selector will be loaded. This is "
         "especially useful for selectively loading a specific "
         "part of a multi-part EXR file.",
     };

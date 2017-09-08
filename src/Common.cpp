@@ -14,12 +14,12 @@ TEV_NAMESPACE_BEGIN
 vector<string> split(string text, const string& delim) {
     vector<string> result;
     while (true) {
-        size_t begin = text.rfind(delim);
+        size_t begin = text.find_last_of(delim);
         if (begin == string::npos) {
             result.emplace_back(text);
             return result;
         } else {
-            result.emplace_back(text.substr(begin + delim.length()));
+            result.emplace_back(text.substr(begin + 1));
             text.resize(begin);
         }
     }
@@ -46,7 +46,7 @@ bool matches(string text, string filter) {
     text = toLower(text);
     filter = toLower(filter);
 
-    auto words = split(filter, " ");
+    auto words = split(filter, ", ");
     // We don't want people entering multiple spaces in a row to match everything.
     words.erase(remove(begin(words), end(words), ""), end(words));
 

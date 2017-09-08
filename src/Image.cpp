@@ -182,7 +182,9 @@ void Image::readStbi() {
 
     for (auto& channel : channels) {
         string name = channel.name();
-        mChannels.emplace(move(name), move(channel));
+        if (matches(name, mExtra)) {
+            mChannels.emplace(move(name), move(channel));
+        }
     }
 
     // STBI can not load layers, so all channels simply reside
@@ -217,7 +219,7 @@ void Image::readExr() {
         const Imf::ChannelList& imfChannels = part.header().channels();
 
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            if (string{c.name()}.find(mExtra) != string::npos) {
+            if (matches(c.name(), mExtra)) {
                 partIdx = i;
                 goto l_foundPart;
             }
@@ -309,7 +311,7 @@ l_foundPart:
     set<string> layerNames;
 
     for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-        if (string{c.name()}.find(mExtra) != string::npos) {
+        if (matches(c.name(), mExtra)) {
             rawChannels.emplace_back(c.name(), c.channel().type);
             layerNames.insert(Channel::head(c.name()));
         }
