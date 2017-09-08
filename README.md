@@ -15,6 +15,14 @@ _A false-color comparison two multi-layer OpenEXR images of a beach ball. Image 
 
 ## Usage
 
+### Graphical User Interface
+
+Images can be opened via a file dialog or simply by dragging them into __tev__. They can be reloaded, closed, or filtered at any time, so don't worry about opening more images than exactly needed.
+
+Select an image by left-clicking it, and optionally select a reference image to compare the current selection to by right-clicking. For convenience, the current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts simply click the little "?" icon at the top (or press "h").
+
+If the interface seems overwhelming, simply hover any controls to view an explanatory tooltip.
+
 ### Command Line
 
 Simply supply images as positional command-line arguments.
@@ -31,14 +39,6 @@ Other command-line arguments also exist (e.g. for starting __tev__ with a pre-se
 ```sh
 $ tev -h
 ```
-
-### Graphical User Interface
-
-Images can be opened via a file dialog or simply by dragging them into __tev__. They can be reloaded, closed, or filtered at any time, so don't worry about opening more images than exactly needed.
-
-Select an image by left-clicking it, and optionally select a reference image to compare the current selection to by right-clicking. For convenience, the current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts simply click the little "?" icon at the top (or press "h").
-
-If the interface seems overwhelming, simply hover any controls to view an explanatory tooltip.
 
 ## Building tev
 
