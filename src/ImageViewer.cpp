@@ -799,7 +799,7 @@ void ImageViewer::setTonemap(ETonemap tonemap) {
     auto& buttons = mTonemapButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
-        b->setPushed(i == tonemap);
+        b->setPushed((ETonemap)i == tonemap);
     }
 }
 
@@ -808,7 +808,7 @@ void ImageViewer::setMetric(EMetric metric) {
     auto& buttons = mMetricButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
-        b->setPushed(i == metric);
+        b->setPushed((EMetric)i == metric);
     }
 }
 
