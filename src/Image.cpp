@@ -33,11 +33,11 @@ bool isExrFile(const string& filename) {
     return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 }
 
-Image::Image(const string& filename, const string& extra)
-: mFilename{filename}, mExtra{extra} {
+Image::Image(const string& filename, const string& channelSelector)
+: mFilename{filename}, mChannelSelector{channelSelector} {
     mName = filename;
-    if (!extra.empty()) {
-        mName += ":"s + extra;
+    if (!channelSelector.empty()) {
+        mName += ":"s + channelSelector;
     }
 
     if (isExrFile(filename)) {
@@ -182,7 +182,7 @@ void Image::readStbi() {
 
     for (auto& channel : channels) {
         string name = channel.name();
-        if (matches(name, mExtra)) {
+        if (matches(name, mChannelSelector)) {
             mChannels.emplace(move(name), move(channel));
         }
     }
@@ -219,7 +219,7 @@ void Image::readExr() {
         const Imf::ChannelList& imfChannels = part.header().channels();
 
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            if (matches(c.name(), mExtra)) {
+            if (matches(c.name(), mChannelSelector)) {
                 partIdx = i;
                 goto l_foundPart;
             }
@@ -311,14 +311,14 @@ l_foundPart:
     set<string> layerNames;
 
     for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-        if (matches(c.name(), mExtra)) {
+        if (matches(c.name(), mChannelSelector)) {
             rawChannels.emplace_back(c.name(), c.channel().type);
             layerNames.insert(Channel::head(c.name()));
         }
     }
 
     if (rawChannels.empty()) {
-        throw invalid_argument{tfm::format("No channels match '%s'.", mExtra)};
+        throw invalid_argument{tfm::format("No channels match '%s'.", mChannelSelector)};
     }
 
     for (const string& layer : layerNames) {
@@ -352,13 +352,13 @@ l_foundPart:
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
-shared_ptr<Image> tryLoadImage(string filename, string extra) {
+shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
     try {
-        return make_shared<Image>(filename, extra);
+        return make_shared<Image>(filename, channelSelector);
     } catch (invalid_argument e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, extra, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
     } catch (Iex::BaseExc& e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, extra, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
     }
 
     return nullptr;

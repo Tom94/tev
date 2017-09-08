@@ -553,7 +553,7 @@ void ImageViewer::reloadImage(shared_ptr<Image> image) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImage = tryLoadImage(image->filename(), image->extra());
+    auto newImage = tryLoadImage(image->filename(), image->channelSelector());
     if (newImage) {
         removeImage(image);
         insertImage(newImage, id, true);
