@@ -15,21 +15,30 @@ _A false-color comparison two multi-layer OpenEXR images of a beach ball. Image 
 
 ## Usage
 
-Images can be opened via __tev__'s GUI or via the command line.
+### Command Line
+
+Simply supply images as positional command-line arguments.
 ```sh
-$ tev some-image.exr some-other-image.exr
+$ tev foo.exr bar.exr
 ```
 
-By default, all _layers_ and _channels_ are loaded, but individual layers or channels can also be specified.
+By default, all layers and channels are loaded, but individual layers or channels can also be specified. In the following example, the *depth* layer of *foo.exr* and the *r*, *g*, and *b* channels of *foo.exr* and *bar.exr* are loaded.
 ```sh
-$ tev :some-layer some-image.exr :some-layer.some-channel yet-another-image.exr
+$ tev :depth foo.exr :r,g,b foo.exr bar.exr
 ```
 
-For a list of all valid command-line arguments simply invoke
+Other command-line arguments also exist (e.g. for starting __tev__ with a pre-set exposure value). For a list of all valid arguments simply invoke
 ```sh
 $ tev -h
 ```
-and from within __tev__, press _h_ or click the little help icon in the top-right corner of the side bar to get an overview of all keybindings.
+
+### Graphical User Interface
+
+Images can be opened via a file dialog or simply by dragging them into __tev__. They can be reloaded, closed, or filtered at any time, so don't worry about opening more images than exactly needed.
+
+Select an image by left-clicking it, and optionally select a reference image to compare the current selection to by right-clicking. For convenience, the current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts simply click the little "?" icon at the top (or press "h").
+
+If the interface seems overwhelming, simply hover any controls to view an explanatory tooltip.
 
 ## Building tev
 
