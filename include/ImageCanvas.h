@@ -77,6 +77,9 @@ public:
     void resetTransform();
 
 private:
+    void translate(const Eigen::Vector2f& amount);
+    void scale(float amount, const Eigen::Vector2f& origin);
+
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
     Eigen::Transform<float, 2, 2> transform(const Image* image);

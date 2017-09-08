@@ -21,9 +21,14 @@ bool ImageCanvas::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
         return true;
     }
 
-    // If left mouse button is held
+    // If left mouse button is held, move the image with mouse movement
     if ((button & 1) != 0) {
-        mTransform = Translation2f(rel.cast<float>()) * mTransform;
+        translate(rel.cast<float>());
+    }
+    
+    // If middle mouse button is held, zoom in-out with up-down mouse movement
+    if ((button & 4) != 0) {
+        scale(rel.y() / 10.0f, p.cast<float>());
     }
 
     return false;
@@ -34,17 +39,7 @@ bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
         return true;
     }
 
-    float scaleFactor = pow(1.1f, rel.y());
-
-    // Use the current cursor position as the origin to scale around.
-    Vector2f offset = -(p - position()).cast<float>() + 0.5f * mSize.cast<float>();
-    auto scaleTransform =
-        Translation2f(-offset) *
-        Scaling(scaleFactor) *
-        Translation2f(offset);
-
-    mTransform = scaleTransform * mTransform;
-
+    scale(rel.y(), p.cast<float>());
     return true;
 }
 
@@ -70,23 +65,22 @@ void ImageCanvas::drawGL() {
             mTonemap
         );
         return;
-    } else {
-        mShader.draw(
-            2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
-            Vector2f::Constant(20),
-            mImage->texture(getChannels(*mImage)),
-            // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
-            // image transform to obtain texture coordinates in [0, 1]-space.
-            transform(mImage.get()).inverse().matrix(),
-            mReference->texture(getChannels(*mReference)),
-            transform(mReference.get()).inverse().matrix(),
-            mExposure,
-            mOffset,
-            mTonemap,
-            mMetric
-        );
-        return;
     }
+
+    mShader.draw(
+        2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
+        Vector2f::Constant(20),
+        mImage->texture(getChannels(*mImage)),
+        // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
+        // image transform to obtain texture coordinates in [0, 1]-space.
+        transform(mImage.get()).inverse().matrix(),
+        mReference->texture(getChannels(*mReference)),
+        transform(mReference.get()).inverse().matrix(),
+        mExposure,
+        mOffset,
+        mTonemap,
+        mMetric
+    );
 }
 
 void ImageCanvas::draw(NVGcontext *ctx) {
@@ -160,9 +154,8 @@ void ImageCanvas::draw(NVGcontext *ctx) {
         }
     }
 
-    // If we're not in fullscreen mode...
+    // If we're not in fullscreen mode draw an inner drop shadow. (adapted from nanogui::Window)
     if (mPos.x() != 0) {
-        // Draw an inner drop shadow. (adapted from nanogui::Window)
         int ds = mTheme->mWindowDropShadowSize, cr = mTheme->mWindowCornerRadius;
         NVGpaint shadowPaint = nvgBoxGradient(
             ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y(), cr * 2, ds * 2,
@@ -225,8 +218,7 @@ vector<string> ImageCanvas::getChannels(const Image& image) {
         }
     }
 
-    // If we found just 1 channel, let's display is as grayscale
-    // by duplicating it twice.
+    // If we found just 1 channel, let's display is as grayscale by duplicating it twice.
     if (result.size() == 1) {
         result.push_back(result[0]);
         result.push_back(result[0]);
@@ -294,6 +286,23 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
 
 void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
+}
+
+void ImageCanvas::translate(const Vector2f& amount) {
+    mTransform = Translation2f(amount) * mTransform;
+}
+
+void ImageCanvas::scale(float amount, const Vector2f& origin) {
+    float scaleFactor = pow(1.1f, amount);
+
+    // Use the current cursor position as the origin to scale around.
+    Vector2f offset = -(origin - position().cast<float>()) + 0.5f * mSize.cast<float>();
+    auto scaleTransform =
+        Translation2f(-offset) *
+        Scaling(scaleFactor) *
+        Translation2f(offset);
+
+    mTransform = scaleTransform * mTransform;
 }
 
 Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
