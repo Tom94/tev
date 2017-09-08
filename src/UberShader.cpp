@@ -171,6 +171,7 @@ UberShader::UberShader()
     mShader.uploadIndices(indices);
     mShader.uploadAttrib("position", positions);
 
+    // "viridis" colormap data generated with scripts/sample-colormap.py
     vector<float> falseColorData = {
         0.267004f, 0.004874f, 0.329415f, 1.0f,
         0.26851f, 0.009605f, 0.335427f, 1.0f,
