@@ -7,6 +7,10 @@
 #include <cctype>
 #include <map>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -96,6 +100,13 @@ EMetric toMetric(string name) {
     } else {
         return Error;
     }
+}
+
+void toggleConsole() {
+#ifdef _WIN32
+    auto console = GetConsoleWindow();
+    ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
+#endif
 }
 
 TEV_NAMESPACE_END

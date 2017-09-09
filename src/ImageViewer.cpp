@@ -27,6 +27,9 @@ ImageViewer::ImageViewer()
 
 ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 : nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesToAdd{imagesToAdd} {
+    // At this point we no longer need the standalone console (if it exists).
+    toggleConsole();
+
     mBackground = Color{0.23f, 1.0f};
 
     mVerticalScreenSplit = new Widget{this};
@@ -361,6 +364,9 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             } else {
                 reloadImage(mCurrentImage);
             }
+        } else if (key == GLFW_KEY_F12) {
+            // For debugging purposes.
+            toggleConsole();
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;

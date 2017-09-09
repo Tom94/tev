@@ -126,6 +126,8 @@ int mainFunc(int argc, char* argv[]) {
         return -2;
     }
 
+    cout << "Loading..." << endl;
+
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
     // by the potentially slow initialization of opengl / glfw.

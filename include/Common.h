@@ -96,4 +96,6 @@ enum EDirection {
     Backward,
 };
 
+void toggleConsole();
+
 TEV_NAMESPACE_END
