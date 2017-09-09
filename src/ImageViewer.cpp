@@ -971,6 +971,13 @@ void ImageViewer::updateLayout() {
     );
 
     performLayout();
+
+    // With a changed layout the relative position of the mouse
+    // within children changes and therefore should get updated.
+    // nanogui does not handle this for us.
+    double x, y;
+    glfwGetCursorPos(mGLFWWindow, &x, &y);
+    cursorPosCallbackEvent(x, y);
 }
 
 void ImageViewer::updateTitle() {
