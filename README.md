@@ -1,6 +1,6 @@
 # tev — The EXR Viewer
 
-An inspection and comparison tool for images with high dynamic range (HDR). __tev__ allows viewing images through various tonemapping operators and inspecting exact pixel values. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof). To avoid clutter, opened images and their layers can be filtered by keywords.
+A high dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting exact pixel values. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof). To avoid clutter, opened images and their layers can be filtered by keywords.
 
 While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
