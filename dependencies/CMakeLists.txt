@@ -1,5 +1,5 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required(VERSION 2.8.3)
 
 if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
     message(FATAL_ERROR
@@ -15,6 +15,7 @@ set(NANOGUI_BUILD_SHARED OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL " " FORCE)
 set(NANOGUI_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(nanogui)
+set_property(TARGET glfw glfw_objects nanogui nanogui-obj PROPERTY FOLDER "dependencies")
 
 # Compile zlib (only on Windows)
 if (WIN32)
@@ -22,6 +23,7 @@ if (WIN32)
     set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(SKIP_INSTALL_ALL ON CACHE BOOL " " FORCE)
     add_subdirectory(zlib)
+    set_property(TARGET zlibstatic PROPERTY FOLDER "dependencies")
 
     set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib" CACHE PATH " " FORCE)
     set(ZLIB_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/zlib/$<CONFIGURATION>/zlibstatic.lib" CACHE FILEPATH " " FORCE)
@@ -35,6 +37,7 @@ set(OPENEXR_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(ILMBASE_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 set(OPENEXR_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 add_subdirectory(openexr EXCLUDE_FROM_ALL)
+set_property(TARGET b44ExpLogTable CopyIlmBaseLibs dwaLookups eLut Half Iex IlmImf IlmImf-obj IlmThread Imath toFloat PROPERTY FOLDER "dependencies")
 
 # Manually populate locations of our included dependencies.
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)

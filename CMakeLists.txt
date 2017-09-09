@@ -1,5 +1,5 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
 
