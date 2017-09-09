@@ -14,15 +14,15 @@ class Channel {
 public:
     Channel(const std::string& name, Eigen::Vector2i size);
 
-    const auto& name() const {
+    const std::string& name() const {
         return mName;
     }
 
-    auto& data() {
+    std::vector<float>& data() {
         return mData;
     }
 
-    const auto& data() const {
+    const std::vector<float>& data() const {
         return mData;
     }
 

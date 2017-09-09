@@ -35,9 +35,10 @@ bool isExrFile(const string& filename) {
 
 Image::Image(const string& filename, const string& channelSelector)
 : mFilename{filename}, mChannelSelector{channelSelector} {
-    mName = filename;
     if (!channelSelector.empty()) {
-        mName += ":"s + channelSelector;
+        mName = tfm::format("%s:%s", filename, channelSelector);
+    } else {
+        mName = filename;
     }
 
     if (isExrFile(filename)) {
@@ -148,7 +149,7 @@ string Image::toString() const {
 
 void Image::readStbi() {
     // No exr image? Try our best using stbi
-    cout << "Loading "s + mFilename + " via STBI... " << flush;
+    cout << "Loading " << mFilename << " via STBI... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
@@ -199,7 +200,7 @@ void Image::readStbi() {
 
 void Image::readExr() {
     // OpenEXR for reading exr images
-    cout << "Loading "s + mFilename + " via OpenEXR... " << flush;
+    cout << "Loading " << mFilename << " via OpenEXR... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
@@ -284,7 +285,7 @@ l_foundPart:
             }
         }
 
-        const auto& name() const {
+        const string& name() const {
             return mName;
         }
 

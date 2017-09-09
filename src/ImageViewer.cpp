@@ -218,12 +218,13 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             return setFilter(filter);
         });
 
-        mFilter->setTooltip(
+        mFilter->setTooltip(tfm::format(
             "Filters visible images and layers according to a supplied string. "
             "The string must have the format 'image:layer'. "
             "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n\n"
-            "Keyboard shortcut:\n"s + HelpWindow::COMMAND + "+P"
-        );
+            "Keyboard shortcut:\n%s+P",
+            HelpWindow::COMMAND
+        ));
 
         auto tools = new Widget{sidebarLayout};
         tools->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
@@ -594,7 +595,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
     size_t numLayers = mCurrentImage->layers().size();
     for (size_t i = 0; i < numLayers; ++i) {
         string layer = layerName(i);
-        auto button = new ImageButton{mLayerButtonContainer, layer.empty() ? "<root>"s : layer, false};
+        auto button = new ImageButton{mLayerButtonContainer, layer.empty() ? "<root>" : layer, false};
         button->setFontSize(15);
         button->setId(i + 1);
 
@@ -828,7 +829,7 @@ bool ImageViewer::setFilter(const string& filter) {
         // Checks whether an image matches the filter.
         // This is the case if the image name matches the image part
         // and at least one of the image's layers matches the layer part.
-        auto doesImageMatch = [&](const auto& image) {
+        auto doesImageMatch = [&](const shared_ptr<Image>& image) {
             bool doesMatch = matches(image->name(), imagePart);
             if (doesMatch) {
                 bool anyLayersMatch = false;
@@ -998,13 +999,13 @@ void ImageViewer::updateTitle() {
         caption = mCurrentImage->shortName();
 
         if (mCurrentLayer.empty()) {
-            caption += " – "s + channelsString;
+            caption += string{" – "} + channelsString;
         } else {
-            caption += " – "s + mCurrentLayer;
+            caption += string{" – "} + mCurrentLayer;
             if (channels.size() == 1) {
-                caption += "."s + channelsString;
+                caption += string{"."} + channelsString;
             } else {
-                caption += ".("s + channelsString + ")"s;
+                caption += string{".("} + channelsString + ")";
             }
         }
 
@@ -1018,7 +1019,7 @@ void ImageViewer::updateTitle() {
         }
         valuesString.pop_back();
 
-        caption += " – "s + tfm::format("@(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
+        caption += tfm::format(" – @(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
     }
 
     setCaption(caption);

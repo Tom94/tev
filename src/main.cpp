@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
     try {
         tev::mainFunc(argc, argv);
     } catch (const runtime_error& e) {
-        cerr << "Uncaught exception: "s + e.what() << endl;
+        cerr << tfm::format("Uncaught exception: %s", e.what()) << endl;
         return 1;
     }
 }

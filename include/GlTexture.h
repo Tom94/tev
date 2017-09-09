@@ -34,9 +34,9 @@ public:
         }
     }
 
-    auto id() const { return mId; }
-    const auto& data() const { return mData; }
-    const auto& size() const { return mSize; }
+    GLuint id() const { return mId; }
+    const std::vector<float>& data() const { return mData; }
+    const Eigen::Vector2i& size() const { return mSize; }
 
     void setData(const std::vector<float>& data, const Eigen::Vector2i& size, int numChannels);
 

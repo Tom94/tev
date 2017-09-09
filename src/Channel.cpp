@@ -16,10 +16,10 @@ Channel::Channel(const std::string& name, Vector2i size)
 pair<string, string> Channel::split(const string& channel) {
     size_t dotPosition = channel.rfind(".");
     if (dotPosition != string::npos) {
-        return make_pair(channel.substr(0, dotPosition), channel.substr(dotPosition + 1));
+        return {channel.substr(0, dotPosition), channel.substr(dotPosition + 1)};
     }
 
-    return make_pair(""s, channel);
+    return {"", channel};
 }
 
 string Channel::tail(const string& channel) {

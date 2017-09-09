@@ -53,10 +53,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     auto imageLoading = new Widget{this};
     imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(imageLoading, COMMAND + "+O",                              "Open Image");
-    addRow(imageLoading, COMMAND + "+R or F5",                        "Reload Image");
-    addRow(imageLoading, COMMAND + "+Shift+R or "s + COMMAND + "+F5", "Reload All Images");
-    addRow(imageLoading, COMMAND + "+W",                              "Close Image");
+    addRow(imageLoading, COMMAND + "+O",                             "Open Image");
+    addRow(imageLoading, COMMAND + "+R or F5",                       "Reload Image");
+    addRow(imageLoading, COMMAND + "+Shift+R or " + COMMAND + "+F5", "Reload All Images");
+    addRow(imageLoading, COMMAND + "+W",                             "Close Image");
 
     new Label{this, "Image Options", "sans-bold", 18};
     auto imageSelection = new Widget{this};

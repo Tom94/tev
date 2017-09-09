@@ -33,15 +33,21 @@
 
 TEV_NAMESPACE_BEGIN
 
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
 template <typename T>
-constexpr T clamp(T value, T min, T max) {
+T clamp(T value, T min, T max) {
     TEV_ASSERT(max >= min, "Minimum (%f) may not be larger than maximum (%f).", min, max);
     return std::max(std::min(value, max), min);
 }
 
 template <typename T>
-constexpr T round(T value, T decimals) {
-    return std::round(value * std::pow(static_cast<T>(10), decimals)) / std::pow(static_cast<T>(10), decimals);
+T round(T value, T decimals) {
+    auto precision = std::pow(static_cast<T>(10), decimals);
+    return std::round(value * precision) / precision;
 }
 
 template <typename T>

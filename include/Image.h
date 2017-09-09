@@ -17,15 +17,15 @@ class Image {
 public:
     Image(const std::string& filename, const std::string& channelSelector);
 
-    const auto& filename() const {
+    const std::string& filename() const {
         return mFilename;
     }
 
-    const auto& channelSelector() const {
+    const std::string& channelSelector() const {
         return mChannelSelector;
     }
 
-    const auto& name() const {
+    const std::string& name() const {
         return mName;
     }
 
@@ -47,11 +47,11 @@ public:
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
 
-    const auto& size() const {
+    const Eigen::Vector2i& size() const {
         return mSize;
     }
 
-    const auto& layers() const {
+    const std::vector<std::string>& layers() const {
         return mLayers;
     }
 
