@@ -151,7 +151,7 @@ int mainFunc(int argc, char* argv[]) {
     nanogui::init();
 
     {
-        auto app = make_unique<ImageViewer>(imagesToAdd);
+        auto app = unique_ptr<ImageViewer>{new ImageViewer{imagesToAdd}};
         app->drawAll();
         app->setVisible(true);
 
@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
     try {
         tev::mainFunc(argc, argv);
     } catch (const runtime_error& e) {
-        cerr << tfm::format("Uncaught exception: %s", e.what()) << endl;
+        cerr << "Uncaught exception: %s" << e.what() << endl;
         return 1;
     }
 }

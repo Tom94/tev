@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <memory>
 #include <string>
 #include <sstream>
 #include <vector>
@@ -33,11 +32,6 @@
 #define TEV_ASSERT(cond, description, ...) if (UNLIKELY(!(cond))) std::cerr << tfm::format(description, ##__VA_ARGS__) << std::endl;
 
 TEV_NAMESPACE_BEGIN
-
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args&&... args) {
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-}
 
 template <typename T>
 T clamp(T value, T min, T max) {
