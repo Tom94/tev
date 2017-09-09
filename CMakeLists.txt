@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
 
+# Set ourselves as the startup project in visual studio.
+# Not available until cmake 3.6, but doesn't break older versions.
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT tev)
+
 # Set a default configuration if none was specified
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "No release type specified. Setting to 'Release'.")
