@@ -40,6 +40,10 @@ Other command-line arguments also exist (e.g. for starting __tev__ with a pre-se
 $ tev -h
 ```
 
+## Obtaining tev
+
+Pre-built binaries for Microsoft Windows (32-bit and 64-bit) are available on the [releases page](https://github.com/Tom94/tev/releases). For other operating systems __tev__ has to be built from source as of now (next section).
+
 ## Building tev
 
 All that is required for building __tev__ is a C++14-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
