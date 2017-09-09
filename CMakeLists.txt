@@ -65,6 +65,11 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
     endif()
 endif()
 
+set(TEV_LIBS IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+if (MSVC)
+    set(TEV_LIBS ${TEV_LIBS} zlibstatic)
+endif()
+
 add_executable(tev
     include/Channel.h src/Channel.cpp
     include/Common.h src/Common.cpp
@@ -92,6 +97,6 @@ include_directories(
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
 
-target_link_libraries(tev IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+target_link_libraries(tev ${TEV_LIBS})
 
 install(TARGETS tev RUNTIME DESTINATION "bin")
