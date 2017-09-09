@@ -1,0 +1,31 @@
+language: cpp
+sudo: false
+dist: trusty
+matrix:
+  include:
+    - os: osx
+      compiler: clang
+      script:
+        - cmake --version
+        - make -j 2
+    - os: linux
+      compiler: gcc-4.8
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - kubuntu-backports
+          packages:
+            - cmake
+            - g++-4.8
+            - libglu1-mesa-dev
+            - libxxf86vm-dev
+            - libxrandr-dev
+            - libxinerama-dev
+            - libxcursor-dev
+            - libxi-dev
+            - libx11-dev
+      script:
+        - cmake --version
+        - cmake -DNANOGUI_USE_GLAD=ON -DCMAKE_CXX_COMPILER=g++-4.8 -DCMAKE_C_COMPILER=gcc-4.8
+        - make -j 2
