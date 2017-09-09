@@ -162,11 +162,11 @@ int mainFunc(int argc, char* argv[]) {
         }
 
         // Apply parameter flags
-        if (exposureFlag)  { app->setExposure(get(exposureFlag)); }
-        if (filterFlag)    { app->setFilter(get(filterFlag)); }
-        if (metricFlag)    { app->setMetric(toMetric(get(metricFlag))); }
-        if (offsetFlag)    { app->setOffset(get(offsetFlag)); }
-        if (tonemapFlag)   { app->setTonemap(toTonemap(get(tonemapFlag))); }
+        if (exposureFlag) { app->setExposure(get(exposureFlag)); }
+        if (filterFlag)   { app->setFilter(get(filterFlag)); }
+        if (metricFlag)   { app->setMetric(toMetric(get(metricFlag))); }
+        if (offsetFlag)   { app->setOffset(get(offsetFlag)); }
+        if (tonemapFlag)  { app->setTonemap(toTonemap(get(tonemapFlag))); }
 
         // Refresh only every 250ms if there are no user interactions.
         // This makes an idling tev surprisingly energy-efficient. :)
