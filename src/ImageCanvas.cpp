@@ -375,9 +375,10 @@ Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
     return
         Scaling(2.0f / mSize.x(), -2.0f / mSize.y()) *
         mTransform *
-        // Translate by 1/10000th of a pixel to avoid pixel edges lying exactly on fragment edges.
-        // This avoids artifacts caused by inconsistent rounding.
-        Translation2f(Vector2f::Constant(0.0001f)) *
+        // Translate by a quarter of a pixel to avoid pixel boundaries aligning perfectly with texels.
+        // I do not use a value of 0.5, because texel-pixel alignment _can_ already be off by exactly
+        // 0.5 if the image has an odd resolution.
+        Translation2f(Vector2f::Constant(0.25f)) *
         Scaling(image->size().cast<float>() / mPixelRatio) *
         Translation2f(Vector2f::Constant(-0.5f));
 }
@@ -392,7 +393,7 @@ Transform<float, 2, 2> ImageCanvas::textureToNanogui(const Image* image) {
         Translation2f(0.5f * mSize.cast<float>()) *
         mTransform *
         Scaling(1.0f / mPixelRatio) *
-        Translation2f(-0.5f * image->size().cast<float>());
+        Translation2f(-0.5f * image->size().cast<float>() + Vector2f::Constant(0.25f));
 }
 
 TEV_NAMESPACE_END
