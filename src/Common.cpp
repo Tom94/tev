@@ -104,8 +104,15 @@ EMetric toMetric(string name) {
 
 void toggleConsole() {
 #ifdef _WIN32
-    auto console = GetConsoleWindow();
-    ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
+    HWND console = GetConsoleWindow();
+    DWORD consoleProcessId;
+    GetWindowThreadProcessId(console, &consoleProcessId);
+
+    // Only toggle the console if it was actually spawned by tev. If we are
+    // running in a foreign console, then we should leave it be.
+    if (GetCurrentProcessId() == consoleProcessId) {
+        ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
+    }
 #endif
 }
 

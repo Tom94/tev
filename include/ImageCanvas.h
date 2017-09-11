@@ -79,6 +79,8 @@ public:
 private:
     float computeMeanValue();
 
+    Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;
+
     void translate(const Eigen::Vector2f& amount);
     void scale(float amount, const Eigen::Vector2f& origin);
 
