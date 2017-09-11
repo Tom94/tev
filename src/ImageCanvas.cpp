@@ -28,7 +28,7 @@ bool ImageCanvas::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
     if ((button & 1) != 0) {
         translate(rel.cast<float>());
     }
-    
+
     // If middle mouse button is held, zoom in-out with up-down mouse movement
     if ((button & 4) != 0) {
         scale(rel.y() / 10.0f, p.cast<float>());
@@ -348,6 +348,16 @@ float ImageCanvas::computeMeanValue() {
     return accumulate(begin(means), end(means), 0.0) / means.size();
 }
 
+Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
+    // Translate by half of a pixel to avoid pixel boundaries aligning perfectly with texels.
+    // The translation only needs to happen for axes with even resolution. Odd-resolution
+    // axes are implicitly shifted by half a pixel due to the centering operation.
+    return {
+        size.x() % 2 == 0 ?  0.5f : 0.0f,
+        size.y() % 2 == 0 ? -0.5f : 0.0f,
+    };
+}
+
 void ImageCanvas::translate(const Vector2f& amount) {
     mTransform = Translation2f(amount) * mTransform;
 }
@@ -375,11 +385,9 @@ Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
     return
         Scaling(2.0f / mSize.x(), -2.0f / mSize.y()) *
         mTransform *
-        // Translate by a quarter of a pixel to avoid pixel boundaries aligning perfectly with texels.
-        // I do not use a value of 0.5, because texel-pixel alignment _can_ already be off by exactly
-        // 0.5 if the image has an odd resolution.
-        Translation2f(Vector2f::Constant(0.25f)) *
-        Scaling(image->size().cast<float>() / mPixelRatio) *
+        Scaling(1.0f / mPixelRatio) *
+        Translation2f(pixelOffset(image->size())) *
+        Scaling(image->size().cast<float>()) *
         Translation2f(Vector2f::Constant(-0.5f));
 }
 
@@ -393,7 +401,7 @@ Transform<float, 2, 2> ImageCanvas::textureToNanogui(const Image* image) {
         Translation2f(0.5f * mSize.cast<float>()) *
         mTransform *
         Scaling(1.0f / mPixelRatio) *
-        Translation2f(-0.5f * image->size().cast<float>() + Vector2f::Constant(0.25f));
+        Translation2f(-0.5f * image->size().cast<float>() + pixelOffset(image->size()));
 }
 
 TEV_NAMESPACE_END
