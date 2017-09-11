@@ -1,6 +1,9 @@
 language: cpp
 sudo: false
 dist: trusty
+branches:
+  only:
+    - master
 matrix:
   include:
     - os: linux
