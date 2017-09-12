@@ -112,7 +112,7 @@ void ImageButton::draw(NVGcontext *ctx) {
 
     if (mSize.x() == preferredSize(ctx).x()) {
         mCutoff = 0;
-    } else if(mSize != mSizeForWhichCutoffWasComputed) {
+    } else if (mSize != mSizeForWhichCutoffWasComputed) {
         mCutoff = 0;
         while (nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
             ++mCutoff;

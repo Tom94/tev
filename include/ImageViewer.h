@@ -97,7 +97,12 @@ public:
 
     void openImageDialog();
 
+    void requestLayoutUpdate() {
+        mRequiresLayoutUpdate = true;
+    }
+
 private:
+    void updateFilter();
     void updateLayout();
     void updateTitle();
     std::string layerName(size_t index);
@@ -110,6 +115,9 @@ private:
 
     std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
+
+    bool mRequiresFilterUpdate = true;
+    bool mRequiresLayoutUpdate = true;
 
     nanogui::Widget* mVerticalScreenSplit;
 
