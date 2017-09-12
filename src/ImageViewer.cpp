@@ -995,12 +995,48 @@ void ImageViewer::updateFilter() {
             return doesMatch;
         };
 
+        vector<string> activeImageNames;
         size_t id = 1;
         for (size_t i = 0; i < mImages.size(); ++i) {
             ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
             ib->setVisible(doesImageMatch(mImages[i]));
             if (ib->visible()) {
                 ib->setId(id++);
+                activeImageNames.emplace_back(mImages[i]->name());
+            }
+        }
+
+        int endOffset = 0;
+        if (activeImageNames.size() > 1) {
+            string first = activeImageNames.front();
+            int firstSize = (int)first.size();
+            if (firstSize > 0) {
+                bool allEndWithSameChar;
+                do {
+                    char lastChar = first[firstSize - endOffset - 1];
+                    allEndWithSameChar = all_of(
+                        begin(activeImageNames),
+                        end(activeImageNames),
+                        [lastChar, endOffset](const string& name) {
+                            int index = (int)name.size() - endOffset - 1;
+                            return index >= 0 && name[index] == lastChar;
+                        }
+                    );
+
+                    if (allEndWithSameChar) {
+                        ++endOffset;
+                    }
+                } while (allEndWithSameChar && endOffset < firstSize);
+            }
+        }
+
+        if (endOffset > 0) {
+            for (size_t i = 0; i < mImages.size(); ++i) {
+                ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
+                if (ib->visible()) {
+                    const auto& caption = mImages[i]->name();
+                    ib->setCaption(caption.substr(0, (int)caption.size() - endOffset) + "…");
+                }
             }
         }
 
