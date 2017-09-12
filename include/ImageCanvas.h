@@ -16,13 +16,14 @@ class ImageCanvas : public nanogui::GLCanvas {
 public:
     ImageCanvas(nanogui::Widget* parent, float pixelRatio);
 
-    bool mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) override;
-
     bool scrollEvent(const Eigen::Vector2i& p, const Eigen::Vector2f& rel) override;
 
     void drawGL() override;
 
     void draw(NVGcontext *ctx) override;
+
+    void translate(const Eigen::Vector2f& amount);
+    void scale(float amount, const Eigen::Vector2f& origin);
 
     void setExposure(float exposure) {
         mExposure = exposure;
@@ -80,9 +81,6 @@ private:
     float computeMeanValue();
 
     Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;
-
-    void translate(const Eigen::Vector2f& amount);
-    void scale(float amount, const Eigen::Vector2f& origin);
 
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
