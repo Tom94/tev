@@ -313,7 +313,7 @@ bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector
     }
 
     if (mIsDraggingSidebar) {
-        mSidebar->setFixedWidth(p.x());
+        mSidebar->setFixedWidth(max(0, p.x()));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
         // If left mouse button is held, move the image with mouse movement
