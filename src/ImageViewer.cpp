@@ -289,7 +289,7 @@ bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int
         if (canDragSidebarFrom(p)) {
             mIsDraggingSidebar = true;
             return true;
-        } else if (p.x() > visibleSidebarWidth() && p.y() < mSize.y() - visibleFooterHeight()) {
+        } else if (mImageCanvas->contains(p)) {
             mIsDraggingImage = true;
             return true;
         }
@@ -307,9 +307,11 @@ bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector
     }
 
     if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
-        setCursor(Cursor::HResize);
+        mSidebarLayout->setCursor(Cursor::HResize);
+        mImageCanvas->setCursor(Cursor::HResize);
     } else {
-        setCursor(Cursor::Arrow);
+        mSidebarLayout->setCursor(Cursor::Arrow);
+        mImageCanvas->setCursor(Cursor::Arrow);
     }
 
     if (mIsDraggingSidebar) {
@@ -928,7 +930,7 @@ void ImageViewer::toggleHelpWindow() {
 }
 
 void ImageViewer::openImageDialog() {
-    vector<string> paths = file_dialog_multiple(
+    vector<string> paths = file_dialog(
     {
         {"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},
@@ -941,7 +943,7 @@ void ImageViewer::openImageDialog() {
         {"pnm",  "Portable Any Map image"},
         {"psd",  "PSD image"},
         {"tga",  "Truevision TGA image"},
-    });
+    }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
         const string& imageFile = paths[i];
