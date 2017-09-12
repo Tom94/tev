@@ -21,8 +21,14 @@ public:
 
     void draw(NVGcontext *ctx) override;
 
-    const std::string& caption() {
+    const std::string& caption() const {
         return mCaption;
+    }
+
+    void setCaption(const std::string& caption) {
+        mCaption = caption;
+        // Require cutoff re-computation.
+        mSizeForWhichCutoffWasComputed = Eigen::Vector2i::Constant(0);
     }
 
     void setReferenceCallback(const std::function<void(bool)> &callback) {

@@ -276,7 +276,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
         mFooter->setVisible(false);
     }
 
-    setResizeCallback([this](Vector2i) { updateLayout(); });
+    setResizeCallback([this](Vector2i) { requestLayoutUpdate(); });
 
     this->setSize(Vector2i(1024, 800));
     selectReference(nullptr);
@@ -435,8 +435,6 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::drawContents() {
-    updateTitle();
-
     try {
         while (true) {
             auto addition = mImagesToAdd->tryPop();
@@ -444,6 +442,18 @@ void ImageViewer::drawContents() {
         }
     } catch (runtime_error) {
     }
+
+    if (mRequiresFilterUpdate) {
+        updateFilter();
+        mRequiresFilterUpdate = false;
+    }
+
+    if (mRequiresLayoutUpdate) {
+        updateLayout();
+        mRequiresLayoutUpdate = false;
+    }
+
+    updateTitle();
 }
 
 void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallSelect) {
@@ -478,7 +488,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     // Ensure the new image button will have the correct visibility state.
     setFilter(mFilter->value());
 
-    updateLayout();
+    requestLayoutUpdate();
 
     // First image got added, let's select it.
     if (index == 0 || shallSelect) {
@@ -568,7 +578,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image) {
             mLayerButtonContainer->removeChild(mLayerButtonContainer->childCount() - 1);
         }
 
-        updateLayout();
+        requestLayoutUpdate();
         return;
     }
 
@@ -814,7 +824,90 @@ void ImageViewer::resizeToFitAllImages() {
 
 bool ImageViewer::setFilter(const string& filter) {
     mFilter->setValue(filter);
+    mRequiresFilterUpdate = true;
+    return true;
+}
 
+void ImageViewer::maximize() {
+    glfwMaximizeWindow(mGLFWWindow);
+}
+
+bool ImageViewer::isMaximized() {
+    return glfwGetWindowAttrib(mGLFWWindow, GLFW_MAXIMIZED) != 0;
+}
+
+void ImageViewer::toggleMaximized() {
+    if (isMaximized()) {
+        glfwRestoreWindow(mGLFWWindow);
+    } else {
+        maximize();
+    }
+}
+
+void ImageViewer::setUiVisible(bool shouldBeVisible) {
+    mSidebar->setVisible(shouldBeVisible);
+
+    bool shouldFooterBeVisible = false;
+    for (const auto& image : mImages) {
+        // There is no point showing the footer as long as no image
+        // has more than the root layer.
+        if (image->layers().size() > 1) {
+            shouldFooterBeVisible = true;
+            break;
+        }
+    }
+
+    mFooter->setVisible(shouldFooterBeVisible && shouldBeVisible);
+
+    requestLayoutUpdate();
+}
+
+void ImageViewer::toggleHelpWindow() {
+    if (mHelpWindow) {
+        mHelpWindow->dispose();
+        mHelpWindow = nullptr;
+    } else {
+        mHelpWindow = new HelpWindow{this, [this] { toggleHelpWindow(); }};
+        mHelpWindow->center();
+        mHelpWindow->requestFocus();
+    }
+
+    requestLayoutUpdate();
+}
+
+void ImageViewer::openImageDialog() {
+    vector<string> paths = file_dialog_multiple(
+    {
+        {"exr",  "OpenEXR image"},
+        {"hdr",  "HDR image"},
+        {"bmp",  "Bitmap Image File"},
+        {"gif",  "Graphics Interchange Format image"},
+        {"jpg",  "JPEG image"},
+        {"jpeg", "JPEG image"},
+        {"pic",  "PIC image"},
+        {"png",  "Portable Network Graphics image"},
+        {"pnm",  "Portable Any Map image"},
+        {"psd",  "PSD image"},
+        {"tga",  "Truevision TGA image"},
+    });
+
+    for (size_t i = 0; i < paths.size(); ++i) {
+        const string& imageFile = paths[i];
+        bool shallSelect = i == paths.size() - 1;
+        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
+            auto image = tryLoadImage(imageFile, "");
+            if (image) {
+                mImagesToAdd->push({shallSelect, image});
+            }
+        });
+    }
+
+    // Make sure we gain focus after seleting a file to be loaded.
+    glfwFocusWindow(mGLFWWindow);
+}
+
+void ImageViewer::updateFilter() {
+    string filter = mFilter->value();
     string imagePart = filter;
     string layerPart = "";
 
@@ -884,86 +977,7 @@ bool ImageViewer::setFilter(const string& filter) {
         }
     }
 
-    updateLayout();
-    return true;
-}
-
-void ImageViewer::maximize() {
-    glfwMaximizeWindow(mGLFWWindow);
-}
-
-bool ImageViewer::isMaximized() {
-    return glfwGetWindowAttrib(mGLFWWindow, GLFW_MAXIMIZED) != 0;
-}
-
-void ImageViewer::toggleMaximized() {
-    if (isMaximized()) {
-        glfwRestoreWindow(mGLFWWindow);
-    } else {
-        maximize();
-    }
-}
-
-void ImageViewer::setUiVisible(bool shouldBeVisible) {
-    mSidebar->setVisible(shouldBeVisible);
-
-    bool shouldFooterBeVisible = false;
-    for (const auto& image : mImages) {
-        // There is no point showing the footer as long as no image
-        // has more than the root layer.
-        if (image->layers().size() > 1) {
-            shouldFooterBeVisible = true;
-            break;
-        }
-    }
-
-    mFooter->setVisible(shouldFooterBeVisible && shouldBeVisible);
-
-    updateLayout();
-}
-
-void ImageViewer::toggleHelpWindow() {
-    if (mHelpWindow) {
-        mHelpWindow->dispose();
-        mHelpWindow = nullptr;
-    } else {
-        mHelpWindow = new HelpWindow{this, [this] { toggleHelpWindow(); }};
-        mHelpWindow->center();
-        mHelpWindow->requestFocus();
-    }
-
-    updateLayout();
-}
-
-void ImageViewer::openImageDialog() {
-    vector<string> paths = file_dialog_multiple(
-    {
-        {"exr",  "OpenEXR image"},
-        {"hdr",  "HDR image"},
-        {"bmp",  "Bitmap Image File"},
-        {"gif",  "Graphics Interchange Format image"},
-        {"jpg",  "JPEG image"},
-        {"jpeg", "JPEG image"},
-        {"pic",  "PIC image"},
-        {"png",  "Portable Network Graphics image"},
-        {"pnm",  "Portable Any Map image"},
-        {"psd",  "PSD image"},
-        {"tga",  "Truevision TGA image"},
-    });
-
-    for (size_t i = 0; i < paths.size(); ++i) {
-        const string& imageFile = paths[i];
-        bool shallSelect = i == paths.size() - 1;
-        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
-            auto image = tryLoadImage(imageFile, "");
-            if (image) {
-                mImagesToAdd->push({shallSelect, image});
-            }
-        });
-    }
-
-    // Make sure we gain focus after seleting a file to be loaded.
-    glfwFocusWindow(mGLFWWindow);
+    requestLayoutUpdate();
 }
 
 void ImageViewer::updateLayout() {
