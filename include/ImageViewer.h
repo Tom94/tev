@@ -29,6 +29,9 @@ public:
     ImageViewer();
     ImageViewer(std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd);
 
+    bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
+    bool mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) override;
+
     bool dropEvent(const std::vector<std::string>& filenames) override;
 
     bool keyboardEvent(int key, int scancode, int action, int modifiers) override;
@@ -116,12 +119,27 @@ private:
     std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
 
+    bool canDragSidebarFrom(const Eigen::Vector2i& p) {
+        return mSidebar->visible() && abs(p.x() - mSidebar->fixedWidth()) < 10;
+    }
+
+    int visibleSidebarWidth() {
+        return mSidebar->visible() ? mSidebar->fixedWidth() : 0;
+    }
+
+    int visibleFooterHeight() {
+        return mFooter->visible() ? mFooter->fixedHeight() : 0;
+    }
+
     bool mRequiresFilterUpdate = true;
     bool mRequiresLayoutUpdate = true;
 
     nanogui::Widget* mVerticalScreenSplit;
 
     nanogui::Widget* mSidebar;
+    nanogui::Button* mHelpButton;
+    nanogui::Widget* mSidebarLayout;
+
     nanogui::Widget* mFooter;
 
     nanogui::Label* mExposureLabel;
@@ -151,6 +169,9 @@ private:
     std::string mCurrentLayer;
 
     HelpWindow* mHelpWindow = nullptr;
+
+    bool mIsDraggingSidebar = false;
+    bool mIsDraggingImage = false;
 };
 
 TEV_NAMESPACE_END

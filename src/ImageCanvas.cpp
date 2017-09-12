@@ -19,24 +19,6 @@ ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
     setDrawBorder(false);
 }
 
-bool ImageCanvas::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int button, int modifiers) {
-    if (GLCanvas::mouseMotionEvent(p, rel, button, modifiers)) {
-        return true;
-    }
-
-    // If left mouse button is held, move the image with mouse movement
-    if ((button & 1) != 0) {
-        translate(rel.cast<float>());
-    }
-
-    // If middle mouse button is held, zoom in-out with up-down mouse movement
-    if ((button & 4) != 0) {
-        scale(rel.y() / 10.0f, p.cast<float>());
-    }
-
-    return false;
-}
-
 bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
     if (GLCanvas::scrollEvent(p, rel)) {
         return true;
@@ -175,6 +157,23 @@ void ImageCanvas::draw(NVGcontext *ctx) {
         nvgFill(ctx);
         nvgRestore(ctx);
     }
+}
+
+void ImageCanvas::translate(const Vector2f& amount) {
+    mTransform = Translation2f(amount) * mTransform;
+}
+
+void ImageCanvas::scale(float amount, const Vector2f& origin) {
+    float scaleFactor = pow(1.1f, amount);
+
+    // Use the current cursor position as the origin to scale around.
+    Vector2f offset = -(origin - position().cast<float>()) + 0.5f * mSize.cast<float>();
+    auto scaleTransform =
+        Translation2f(-offset) *
+        Scaling(scaleFactor) *
+        Translation2f(offset);
+
+    mTransform = scaleTransform * mTransform;
 }
 
 vector<string> ImageCanvas::getChannels(const Image& image) {
@@ -356,23 +355,6 @@ Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
         size.x() % 2 == 0 ?  0.5f : 0.0f,
         size.y() % 2 == 0 ? -0.5f : 0.0f,
     };
-}
-
-void ImageCanvas::translate(const Vector2f& amount) {
-    mTransform = Translation2f(amount) * mTransform;
-}
-
-void ImageCanvas::scale(float amount, const Vector2f& origin) {
-    float scaleFactor = pow(1.1f, amount);
-
-    // Use the current cursor position as the origin to scale around.
-    Vector2f offset = -(origin - position().cast<float>()) + 0.5f * mSize.cast<float>();
-    auto scaleTransform =
-        Translation2f(-offset) *
-        Scaling(scaleFactor) *
-        Translation2f(offset);
-
-    mTransform = scaleTransform * mTransform;
 }
 
 Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {

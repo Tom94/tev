@@ -41,28 +41,26 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
     mSidebar = new Widget{horizontalScreenSplit};
     mSidebar->setFixedWidth(200);
 
-    auto helpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
-    helpButton->setPosition(Vector2i{162, 5});
-    helpButton->setCallback([this]() { toggleHelpWindow(); });
-    helpButton->setFontSize(15);
-    helpButton->setTooltip("Information about using tev.");
+    mHelpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
+    mHelpButton->setCallback([this]() { toggleHelpWindow(); });
+    mHelpButton->setFontSize(15);
+    mHelpButton->setTooltip("Information about using tev.");
 
-    auto sidebarLayout = new Widget{mSidebar};
-    sidebarLayout->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
-    sidebarLayout->setFixedWidth(200);
+    mSidebarLayout = new Widget{mSidebar};
+    mSidebarLayout->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixelRatio()};
 
     // Exposure label and slider
     {
-        auto panel = new Widget{sidebarLayout};
+        auto panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
         new Label{panel, "Tonemapping", "sans-bold", 25};
         panel->setTooltip(
             "Various tonemapping options. Hover the individual controls to learn more!"
         );
 
-        panel = new Widget{sidebarLayout};
+        panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mExposureLabel = new Label{panel, "", "sans-bold", 15};
@@ -79,7 +77,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             "Keyboard shortcuts:\nE and Shift+E"
         );
 
-        panel = new Widget{sidebarLayout};
+        panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mOffsetLabel = new Label{panel, "", "sans-bold", 15};
@@ -99,7 +97,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 
     // Exposure/offset buttons
     {
-        auto buttonContainer = new Widget{sidebarLayout};
+        auto buttonContainer = new Widget{mSidebarLayout};
         buttonContainer->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
         auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
@@ -116,7 +114,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 
     // Tonemap options
     {
-        mTonemapButtonContainer = new Widget{sidebarLayout};
+        mTonemapButtonContainer = new Widget{mSidebarLayout};
         mTonemapButtonContainer->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
@@ -153,7 +151,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 
     // Error metrics
     {
-        mMetricButtonContainer = new Widget{sidebarLayout};
+        mMetricButtonContainer = new Widget{mSidebarLayout};
         mMetricButtonContainer->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
@@ -195,10 +193,10 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 
     // Image selection
     {
-        auto spacer = new Widget{sidebarLayout};
+        auto spacer = new Widget{mSidebarLayout};
         spacer->setHeight(10);
 
-        auto panel = new Widget{sidebarLayout};
+        auto panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Images", "sans-bold", 25};
         label->setTooltip(
@@ -207,7 +205,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
         );
 
-        panel = new Widget{sidebarLayout};
+        panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         label = new Label{panel, "Filter", "sans-bold", 15};
 
@@ -226,7 +224,7 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             HelpWindow::COMMAND
         ));
 
-        auto tools = new Widget{sidebarLayout};
+        auto tools = new Widget{mSidebarLayout};
         tools->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
@@ -252,11 +250,11 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
             removeImage(mCurrentImage);
         }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND));
 
-        spacer = new Widget{sidebarLayout};
+        spacer = new Widget{mSidebarLayout};
         spacer->setHeight(3);
 
-        mImageScrollContainer = new VScrollPanel{sidebarLayout};
-        mImageScrollContainer->setFixedWidth(sidebarLayout->fixedWidth());
+        mImageScrollContainer = new VScrollPanel{mSidebarLayout};
+        mImageScrollContainer->setFixedWidth(mSidebarLayout->fixedWidth());
 
         mScrollContent = new Widget{mImageScrollContainer};
         mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
@@ -280,6 +278,58 @@ ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
 
     this->setSize(Vector2i(1024, 800));
     selectReference(nullptr);
+}
+
+bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
+    if (Screen::mouseButtonEvent(p, button, down, modifiers)) {
+        return true;
+    }
+
+    if (down) {
+        if (canDragSidebarFrom(p)) {
+            mIsDraggingSidebar = true;
+            return true;
+        } else if (mImageCanvas->contains(p)) {
+            mIsDraggingImage = true;
+            return true;
+        }
+    } else {
+        mIsDraggingSidebar = false;
+        mIsDraggingImage = false;
+    }
+
+    return false;
+}
+
+bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) {
+    if (Screen::mouseMotionEvent(p, rel, button, modifiers)) {
+        return true;
+    }
+
+    if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
+        mSidebarLayout->setCursor(Cursor::HResize);
+        mImageCanvas->setCursor(Cursor::HResize);
+    } else {
+        mSidebarLayout->setCursor(Cursor::Arrow);
+        mImageCanvas->setCursor(Cursor::Arrow);
+    }
+
+    if (mIsDraggingSidebar) {
+        mSidebar->setFixedWidth(max(200, p.x()));
+        requestLayoutUpdate();
+    } else if (mIsDraggingImage) {
+        // If left mouse button is held, move the image with mouse movement
+        if ((button & 1) != 0) {
+            mImageCanvas->translate(rel.cast<float>());
+        }
+
+        // If middle mouse button is held, zoom in-out with up-down mouse movement
+        if ((button & 4) != 0) {
+            mImageCanvas->scale(rel.y() / 10.0f, p.cast<float>());
+        }
+    }
+
+    return false;
 }
 
 bool ImageViewer::dropEvent(const vector<string>& filenames) {
@@ -845,6 +895,10 @@ void ImageViewer::toggleMaximized() {
 }
 
 void ImageViewer::setUiVisible(bool shouldBeVisible) {
+    if (!shouldBeVisible) {
+        mIsDraggingSidebar = false;
+    }
+
     mSidebar->setVisible(shouldBeVisible);
 
     bool shouldFooterBeVisible = false;
@@ -876,7 +930,7 @@ void ImageViewer::toggleHelpWindow() {
 }
 
 void ImageViewer::openImageDialog() {
-    vector<string> paths = file_dialog_multiple(
+    vector<string> paths = file_dialog(
     {
         {"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},
@@ -889,7 +943,7 @@ void ImageViewer::openImageDialog() {
         {"pnm",  "Portable Any Map image"},
         {"psd",  "PSD image"},
         {"tga",  "Truevision TGA image"},
-    });
+    }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
         const string& imageFile = paths[i];
@@ -981,10 +1035,13 @@ void ImageViewer::updateFilter() {
 }
 
 void ImageViewer::updateLayout() {
-    int sidebarWidth = mSidebar->visible() ? mSidebar->fixedWidth() : 0;
-    int footerHeight = mFooter->visible() ? mFooter->fixedHeight() : 0;
+    int sidebarWidth = visibleSidebarWidth();
+    int footerHeight = visibleFooterHeight();
     mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth, footerHeight});
     mSidebar->setFixedHeight(mSize.y() - footerHeight);
+
+    mHelpButton->setPosition(Vector2i{mSidebar->fixedWidth() - 38, 5});
+    mSidebarLayout->setFixedWidth(mSidebar->fixedWidth());
 
     mVerticalScreenSplit->setFixedSize(mSize);
     mImageScrollContainer->setFixedHeight(
