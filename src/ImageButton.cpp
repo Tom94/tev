@@ -114,7 +114,7 @@ void ImageButton::draw(NVGcontext *ctx) {
         mCutoff = 0;
     } else if (mSize != mSizeForWhichCutoffWasComputed) {
         mCutoff = 0;
-        while (nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
+        while (mCutoff < mCaption.size() && nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
             ++mCutoff;
         }
 
@@ -122,7 +122,7 @@ void ImageButton::draw(NVGcontext *ctx) {
     }
 
     string caption = mCaption.substr(mCutoff);
-    if (mCutoff > 0) {
+    if (mCutoff > 0 && mCutoff < mCaption.size()) {
         caption = string{"…"} + caption;
     }
 
