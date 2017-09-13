@@ -1037,7 +1037,7 @@ void ImageViewer::updateFilter() {
 void ImageViewer::updateLayout() {
     int sidebarWidth = visibleSidebarWidth();
     int footerHeight = visibleFooterHeight();
-    mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth, footerHeight});
+    mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth - 1, footerHeight - 1});
     mSidebar->setFixedHeight(mSize.y() - footerHeight);
 
     mHelpButton->setPosition(Vector2i{mSidebar->fixedWidth() - 38, 5});

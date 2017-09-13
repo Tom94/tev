@@ -351,10 +351,12 @@ Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
     // Translate by half of a pixel to avoid pixel boundaries aligning perfectly with texels.
     // The translation only needs to happen for axes with even resolution. Odd-resolution
     // axes are implicitly shifted by half a pixel due to the centering operation.
-    return {
+    // Additionally, add 0.1111111 such that our final position is almost never 0
+    // modulo our pixel ratio, which again avoids aligned pixel boundaries with texels.
+    return Vector2f{
         size.x() % 2 == 0 ?  0.5f : 0.0f,
         size.y() % 2 == 0 ? -0.5f : 0.0f,
-    };
+    } + Vector2f::Constant(0.1111111f);
 }
 
 Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
