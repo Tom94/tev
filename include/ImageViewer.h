@@ -120,7 +120,7 @@ private:
     std::shared_ptr<Image> nthVisibleImage(size_t n);
 
     bool canDragSidebarFrom(const Eigen::Vector2i& p) {
-        return mSidebar->visible() && abs(p.x() - mSidebar->fixedWidth()) < 10;
+        return mSidebar->visible() && p.x() - mSidebar->fixedWidth() < 10 && p.x() - mSidebar->fixedWidth() > -5;
     }
 
     int visibleSidebarWidth() {
