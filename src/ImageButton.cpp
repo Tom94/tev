@@ -191,16 +191,21 @@ void ImageButton::setHighlightRange(size_t begin, size_t end) {
     mHighlightBegin = beginIndex;
     mHighlightEnd = max(mCaption.size() - end, beginIndex);
 
-    if (mHighlightBegin == mHighlightEnd) {
+    if (mHighlightBegin == mHighlightEnd || mCaption.empty()) {
         return;
     }
 
-    while (mHighlightBegin > 0 && isalnum(mCaption[mHighlightBegin - 1])) {
-        --mHighlightBegin;
+    // Extend beginning and ending of highlighted region to entire word/number
+    if (isalnum(mCaption[mHighlightBegin])) {
+        while (mHighlightBegin > 0 && isalnum(mCaption[mHighlightBegin - 1])) {
+            --mHighlightBegin;
+        }
     }
 
-    while (mHighlightEnd < mCaption.size() && isalnum(mCaption[mHighlightEnd])) {
-        ++mHighlightEnd;
+    if (isalnum(mCaption[mHighlightEnd - 1])) {
+        while (mHighlightEnd < mCaption.size() && isalnum(mCaption[mHighlightEnd])) {
+            ++mHighlightEnd;
+        }
     }
 }
 
