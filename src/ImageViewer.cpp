@@ -995,12 +995,61 @@ void ImageViewer::updateFilter() {
             return doesMatch;
         };
 
+        vector<string> activeImageNames;
         size_t id = 1;
         for (size_t i = 0; i < mImages.size(); ++i) {
             ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
             ib->setVisible(doesImageMatch(mImages[i]));
             if (ib->visible()) {
                 ib->setId(id++);
+                activeImageNames.emplace_back(mImages[i]->name());
+            }
+        }
+
+        int beginOffset = 0, endOffset = 0;
+        if (!activeImageNames.empty()) {
+            string first = activeImageNames.front();
+            int firstSize = (int)first.size();
+            if (firstSize > 0) {
+                bool allStartWithSameChar;
+                do {
+                    char firstChar = first[beginOffset];
+                    allStartWithSameChar = all_of(
+                        begin(activeImageNames),
+                        end(activeImageNames),
+                        [firstChar, beginOffset](const string& name) {
+                            return beginOffset < (int)name.size() && name[beginOffset] == firstChar;
+                        }
+                    );
+
+                    if (allStartWithSameChar) {
+                        ++beginOffset;
+                    }
+                } while (allStartWithSameChar && beginOffset < firstSize);
+
+                bool allEndWithSameChar;
+                do {
+                    char lastChar = first[firstSize - endOffset - 1];
+                    allEndWithSameChar = all_of(
+                        begin(activeImageNames),
+                        end(activeImageNames),
+                        [lastChar, endOffset](const string& name) {
+                            int index = (int)name.size() - endOffset - 1;
+                            return index >= 0 && name[index] == lastChar;
+                        }
+                    );
+
+                    if (allEndWithSameChar) {
+                        ++endOffset;
+                    }
+                } while (allEndWithSameChar && endOffset < firstSize);
+            }
+        }
+
+        for (size_t i = 0; i < mImages.size(); ++i) {
+            ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
+            if (ib->visible()) {
+                ib->setHighlightRange(beginOffset, endOffset);
             }
         }
 
