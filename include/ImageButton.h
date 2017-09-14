@@ -25,12 +25,6 @@ public:
         return mCaption;
     }
 
-    void setCaption(const std::string& caption) {
-        mCaption = caption;
-        // Require cutoff re-computation.
-        mSizeForWhichCutoffWasComputed = Eigen::Vector2i::Constant(0);
-    }
-
     void setReferenceCallback(const std::function<void(bool)> &callback) {
         mReferenceCallback = callback;
     }
@@ -59,6 +53,8 @@ public:
         mId = id;
     }
 
+    void setHighlightRange(size_t begin, size_t end);
+
 private:
     std::string mCaption;
     bool mCanBeReference;
@@ -72,6 +68,9 @@ private:
     size_t mId = 0;
     size_t mCutoff = 0;
     Eigen::Vector2i mSizeForWhichCutoffWasComputed = Eigen::Vector2i::Constant(0);
+
+    size_t mHighlightBegin = 0;
+    size_t mHighlightEnd = 0;
 };
 
 TEV_NAMESPACE_END

@@ -5,6 +5,8 @@
 
 #include <nanogui/opengl.h>
 
+#include <cctype>
+
 using namespace nanogui;
 using namespace std;
 
@@ -101,19 +103,19 @@ void ImageButton::draw(NVGcontext *ctx) {
         nvgFill(ctx);
     }
 
-    nvgFontSize(ctx, mFontSize);
-    nvgFontFace(ctx, "sans-bold");
 
     string idString = to_string(mId);
-    float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
-
-    nvgFontSize(ctx, mFontSize);
-    nvgFontFace(ctx, "sans");
 
     if (mSize.x() == preferredSize(ctx).x()) {
         mCutoff = 0;
     } else if (mSize != mSizeForWhichCutoffWasComputed) {
         mCutoff = 0;
+
+        nvgFontSize(ctx, mFontSize + 2);
+        nvgFontFace(ctx, "sans-bold");
+        float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
+
+        nvgFontSize(ctx, mFontSize);
         while (mCutoff < mCaption.size() && nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
             ++mCutoff;
         }
@@ -121,32 +123,89 @@ void ImageButton::draw(NVGcontext *ctx) {
         mSizeForWhichCutoffWasComputed = mSize;
     }
 
+    // Image name
     string caption = mCaption.substr(mCutoff);
+
+    vector<string> pieces;
+    if (mHighlightBegin <= mCutoff) {
+        if (mHighlightEnd <= mCutoff) {
+            pieces.emplace_back(caption);
+        } else {
+            size_t offset = mHighlightEnd - mCutoff;
+            pieces.emplace_back(caption.substr(offset));
+            pieces.emplace_back(caption.substr(0, offset));
+        }
+    } else {
+        size_t beginOffset = mHighlightBegin - mCutoff;
+        size_t endOffset = mHighlightEnd - mCutoff;
+        pieces.emplace_back(caption.substr(endOffset));
+        pieces.emplace_back(caption.substr(beginOffset, endOffset - beginOffset));
+        pieces.emplace_back(caption.substr(0, beginOffset));
+    }
+
     if (mCutoff > 0 && mCutoff < mCaption.size()) {
-        caption = string{"…"} + caption;
+        pieces.back() = string{"…"} + pieces.back();
     }
 
     Vector2f center = mPos.cast<float>() + mSize.cast<float>() * 0.5f;
     Vector2f bottomRight = mPos.cast<float>() + mSize.cast<float>();
-    Vector2f textPos(bottomRight.x() - 5, center.y());
-    NVGcolor textColor = Color(180, 255);
+    Vector2f textPos(bottomRight.x() - 5, center.y() + 0.5f * (mFontSize + 1));
+    NVGcolor regularTextColor = mCanBeReference ? Color(150, 255) : Color(190, 255);
+    NVGcolor hightlightedTextColor = Color(190, 255);
     if (mIsSelected || mIsReference || mMouseFocus) {
-        textColor  = Color(1.0f, 1.0f, 1.0f, 1.0f);
+        regularTextColor = hightlightedTextColor = Color(255, 255);
     }
 
-    // Image name
     nvgFontSize(ctx, mFontSize);
-    nvgFontFace(ctx, "sans");
-    nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(ctx, textColor);
-    nvgText(ctx, textPos.x(), textPos.y(), caption.c_str(), nullptr);
+    nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+    
+    for (size_t i = 0; i < pieces.size(); ++i) {
+        nvgFontFace(ctx, i == 1 ? "sans-bold" : "sans");
+        nvgFillColor(ctx, i == 1 ? hightlightedTextColor : regularTextColor);
+        nvgText(ctx, textPos.x(), textPos.y(), pieces[i].c_str(), nullptr);
+        textPos.x() -= nvgTextBounds(ctx, 0, 0, pieces[i].c_str(), nullptr, nullptr);
+    }
 
     // Image number
-    nvgFontSize(ctx, mFontSize);
+    NVGcolor idColor = Color(200, 255);
+    if (mIsSelected || mIsReference || mMouseFocus) {
+        idColor = Color(255, 255);
+    }
+
+    nvgFontSize(ctx, mFontSize + 2);
     nvgFontFace(ctx, "sans-bold");
-    nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(ctx, textColor);
+    nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+    nvgFillColor(ctx, idColor);
     nvgText(ctx, mPos.x() + 5, textPos.y(), idString.c_str(), nullptr);
+}
+
+void ImageButton::setHighlightRange(size_t begin, size_t end) {
+    size_t beginIndex = begin;
+    if (end > mCaption.size()) {
+        throw std::invalid_argument{tfm::format(
+            "end (%d) must not be larger than mCaption.size() (%d)",
+            end, mCaption.size()
+        )};
+    }
+
+    size_t endIndex = mCaption.size() - end;
+    if (beginIndex > endIndex) {
+        throw std::invalid_argument{tfm::format(
+            "beginIndex (%d) must be larger or equal than endIndex (%d)",
+            beginIndex, endIndex
+        )};
+    }
+
+    mHighlightBegin = beginIndex;
+    mHighlightEnd = endIndex;
+
+    while (mHighlightBegin > 0 && isalnum(mCaption[mHighlightBegin - 1])) {
+        --mHighlightBegin;
+    }
+
+    while (mHighlightEnd < mCaption.size() && isalnum(mCaption[mHighlightEnd])) {
+        ++mHighlightEnd;
+    }
 }
 
 TEV_NAMESPACE_END

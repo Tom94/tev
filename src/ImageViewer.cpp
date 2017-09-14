@@ -1006,11 +1006,27 @@ void ImageViewer::updateFilter() {
             }
         }
 
-        int endOffset = 0;
+        int beginOffset = 0, endOffset = 0;
         if (activeImageNames.size() > 1) {
             string first = activeImageNames.front();
             int firstSize = (int)first.size();
             if (firstSize > 0) {
+                bool allStartWithSameChar;
+                do {
+                    char firstChar = first[beginOffset];
+                    allStartWithSameChar = all_of(
+                        begin(activeImageNames),
+                        end(activeImageNames),
+                        [firstChar, beginOffset](const string& name) {
+                            return beginOffset < (int)name.size() && name[beginOffset] == firstChar;
+                        }
+                    );
+
+                    if (allStartWithSameChar) {
+                        ++beginOffset;
+                    }
+                } while (allStartWithSameChar && beginOffset < firstSize);
+
                 bool allEndWithSameChar;
                 do {
                     char lastChar = first[firstSize - endOffset - 1];
@@ -1030,13 +1046,10 @@ void ImageViewer::updateFilter() {
             }
         }
 
-        if (endOffset > 0) {
-            for (size_t i = 0; i < mImages.size(); ++i) {
-                ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
-                if (ib->visible()) {
-                    const auto& caption = mImages[i]->name();
-                    ib->setCaption(caption.substr(0, (int)caption.size() - endOffset) + "…");
-                }
+        for (size_t i = 0; i < mImages.size(); ++i) {
+            ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
+            if (ib->visible()) {
+                ib->setHighlightRange(beginOffset, endOffset);
             }
         }
 
