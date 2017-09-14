@@ -1007,7 +1007,7 @@ void ImageViewer::updateFilter() {
         }
 
         int beginOffset = 0, endOffset = 0;
-        if (activeImageNames.size() > 1) {
+        if (!activeImageNames.empty()) {
             string first = activeImageNames.front();
             int firstSize = (int)first.size();
             if (firstSize > 0) {

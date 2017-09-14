@@ -188,16 +188,12 @@ void ImageButton::setHighlightRange(size_t begin, size_t end) {
         )};
     }
 
-    size_t endIndex = mCaption.size() - end;
-    if (beginIndex > endIndex) {
-        throw std::invalid_argument{tfm::format(
-            "beginIndex (%d) must be larger or equal than endIndex (%d)",
-            beginIndex, endIndex
-        )};
-    }
-
     mHighlightBegin = beginIndex;
-    mHighlightEnd = endIndex;
+    mHighlightEnd = max(mCaption.size() - end, beginIndex);
+
+    if (mHighlightBegin == mHighlightEnd) {
+        return;
+    }
 
     while (mHighlightBegin > 0 && isalnum(mCaption[mHighlightBegin - 1])) {
         --mHighlightBegin;
