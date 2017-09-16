@@ -357,7 +357,8 @@ shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
     try {
         filename = absolutePath(filename);
     } catch (runtime_error e) {
-        cerr << tfm::format("absolutePath('%s') failed: %s. Trying to load image anyway...", filename, e.what()) << endl;
+        // If for some strange reason we can not obtain an absolute path, let's still
+        // try to open the image at the given path just to make sure.
     }
 
     try {
