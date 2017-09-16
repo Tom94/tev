@@ -15,7 +15,13 @@
 #ifdef _WIN32
 #   define NOMINMAX
 #   include <Windows.h>
+using socklen_t = int;
 #else
+#   ifdef __APPLE__
+#       include <arpa/inet.h>
+#       include <fcntl.h>
+#       include <netinet/in.h>
+#   endif
 #   include <sys/types.h>
 #endif
 
@@ -119,7 +125,7 @@ public:
     }
 
     void sendToPrimaryInstance(std::string message);
-    void receiveFromSecondaryInstance(std::function<void(std::string)> callback);
+    bool receiveFromSecondaryInstance(std::function<void(std::string)> callback);
 
 private:
     bool mIsPrimaryInstance;
@@ -131,6 +137,7 @@ private:
 #else
     int mLockFileDescriptor;
     int mSocket;
+    std::string mLockFile;
 #endif
 };
 
