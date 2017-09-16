@@ -483,6 +483,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::drawContents() {
+    bool receivedFileViaIpc = false;
     while (mIpc->receiveFromSecondaryInstance([this](string imageString) {
         ThreadPool::singleWorker().enqueueTask([imageString, this] {
             size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
@@ -491,7 +492,9 @@ void ImageViewer::drawContents() {
                 mImagesToAdd->push({true, image});
             }
         });
-    }));
+    })) {
+        receivedFileViaIpc = true;
+    }
 
     try {
         while (true) {
@@ -499,6 +502,10 @@ void ImageViewer::drawContents() {
             addImage(addition.image, addition.shallSelect);
         }
     } catch (runtime_error) {
+    }
+
+    if (receivedFileViaIpc) {
+        glfwFocusWindow(mGLFWWindow);
     }
 
     if (mRequiresFilterUpdate) {
