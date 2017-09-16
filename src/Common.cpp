@@ -288,12 +288,14 @@ Ipc::~Ipc() {
         closesocket(mSocket);
     }
 #else
-    if (mIsPrimaryInstance && mLockFileDescriptor != -1) {
-        close(mLockFileDescriptor);
-    }
+    if (mIsPrimaryInstance) {
+        if (mLockFileDescriptor != -1) {
+            close(mLockFileDescriptor);
+        }
 
-    // Delete the lock file if it exists.
-    unlink(mLockFile.c_str());
+        // Delete the lock file if it exists.
+        unlink(mLockFile.c_str());
+    }
 
     if (mSocket != INVALID_SOCKET) {
         close(mSocket);
