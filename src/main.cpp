@@ -138,7 +138,11 @@ int mainFunc(int argc, char* argv[]) {
                 continue;
             }
 
-            ipc->sendToPrimaryInstance(imageFile + ":" + channelSelector);
+            try {
+                ipc->sendToPrimaryInstance(absolutePath(imageFile) + ":" + channelSelector);
+            } catch (runtime_error e) {
+                cerr << tfm::format("Invalid file '%s': %s", imageFile, e.what()) << endl;
+            }
         }
 
         return 0;

@@ -81,6 +81,8 @@ std::string toUpper(std::string str);
 
 bool matches(std::string text, std::string filter);
 
+std::string absolutePath(std::string path);
+
 enum ETonemap : int {
     SRGB = 0,
     Gamma,

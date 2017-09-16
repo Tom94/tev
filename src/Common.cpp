@@ -106,6 +106,56 @@ EMetric toMetric(string name) {
     }
 }
 
+static string errorString(int errorId) {
+#ifdef _WIN32
+    char* s = NULL;
+    FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, errorId, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
+
+    string result = tfm::format("%s (%d)", s, errorId);
+    LocalFree(s);
+
+    return result;
+#else
+    return tfm::format("%s (%d)", strerror(errorId), errno);
+#endif
+}
+
+static int lastError() {
+#ifdef _WIN32
+    return GetLastError();
+#else
+    return errno;
+#endif
+}
+
+static int lastSocketError() {
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
+string absolutePath(string path) {
+    const static int bufferSize = 16384;
+    char buffer[bufferSize];
+
+#ifdef _WIN32
+    DWORD length = GetFullPathName(path.c_str(), bufferSize, buffer, NULL);
+    if (length == 0 || length == bufferSize) {
+        throw runtime_error{tfm::format("Could not obtain absolute path: %s", errorString(lastError()))};
+    }
+    return buffer;
+#else
+    if (realpath(path.c_str(), buffer) == NULL) {
+        throw runtime_error{tfm::format("Could not obtain absolute path: %s", errorString(lastError()))};
+    }
+    return buffer;
+#endif
+}
+
 void toggleConsole() {
 #ifdef _WIN32
     HWND console = GetConsoleWindow();
@@ -117,23 +167,6 @@ void toggleConsole() {
     if (GetCurrentProcessId() == consoleProcessId) {
         ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
     }
-#endif
-}
-
-static string lastSocketError() {
-#ifdef _WIN32
-    int lastError = WSAGetLastError();
-    char* s = NULL;
-    FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, lastError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
-
-    string result = tfm::format("%s (%d)", s, lastError);
-    LocalFree(s);
-
-    return result;
-#else
-    return tfm::format("%s (%d)", strerror(errno), errno);
 #endif
 }
 
@@ -150,7 +183,7 @@ Ipc::Ipc() {
         mInstanceMutex = CreateMutex(NULL, TRUE, lockName.c_str());
 
         if (!mInstanceMutex) {
-            throw runtime_error{"Could not obtain global mutex."};
+            throw runtime_error{tfm::format("Could not obtain global mutex: %s", errorString(lastError()))};
         }
 
         mIsPrimaryInstance = GetLastError() != ERROR_ALREADY_EXISTS;
@@ -162,8 +195,9 @@ Ipc::Ipc() {
 
         // Initialize Winsock
         WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != NO_ERROR) {
-            throw runtime_error{"Could not initialize WSA."};
+        int wsaStartupResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (wsaStartupResult != NO_ERROR) {
+            throw runtime_error{tfm::format("Could not initialize WSA: %s", errorString(wsaStartupResult))};
         }
 #else
         struct passwd* pw = getpwuid(getuid());
@@ -172,7 +206,7 @@ Ipc::Ipc() {
 
         mLockFileDescriptor = open(mLockFile.c_str(), O_RDWR | O_CREAT, 0666);
         if (mLockFileDescriptor == -1) {
-            throw runtime_error{tfm::format("Could not create lock file: ", lastSocketError())};
+            throw runtime_error{tfm::format("Could not create lock file: ", errorString(lastError()))};
         }
 
         mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
@@ -192,7 +226,7 @@ Ipc::Ipc() {
 
         mSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (mSocket == INVALID_SOCKET) {
-            throw runtime_error{tfm::format("Could not create UDP socket: ", lastSocketError())};
+            throw runtime_error{tfm::format("Could not create UDP socket: ", errorString(lastSocketError()))};
         }
 
         // Make socket non-blocking
@@ -208,7 +242,7 @@ Ipc::Ipc() {
         if (mIsPrimaryInstance) {
             int result = ::bind(mSocket, (sockaddr*)&mAddress, sizeof(mAddress));
             if (result == SOCKET_ERROR) {
-                throw runtime_error{tfm::format("Could not bind UDP socket: %s", lastSocketError())};
+                throw runtime_error{tfm::format("Could not bind UDP socket: %s", errorString(lastSocketError()))};
             }
         }
     } catch (runtime_error e) {
@@ -220,7 +254,7 @@ Ipc::Ipc() {
 void Ipc::sendToPrimaryInstance(string message) {
     int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
     if (bytesSent == -1) {
-        throw runtime_error{tfm::format("Could not send to primary instance: %s", lastSocketError())};
+        throw runtime_error{tfm::format("Could not send to primary instance: %s", errorString(lastSocketError()))};
     }
 }
 
