@@ -17,12 +17,7 @@
 #   include <Windows.h>
 using socklen_t = int;
 #else
-#   ifdef __APPLE__
-#       include <arpa/inet.h>
-#       include <fcntl.h>
-#       include <netinet/in.h>
-#   endif
-#   include <sys/types.h>
+#   include <netinet/in.h>
 #endif
 
 #ifdef _WIN32

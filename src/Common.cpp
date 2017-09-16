@@ -8,8 +8,13 @@
 #include <map>
 
 #ifndef _WIN32
-#   include <errno.h>
+#   include <arpa/inet.h>
+#   include <cstring>
+#   include <cerrno>
+#   include <fcntl.h>
 #   include <pwd.h>
+#   include <sys/file.h>
+#   include <sys/types.h>
 #   include <unistd.h>
 #   define SOCKET_ERROR (-1)
 #   define INVALID_SOCKET (-1)
