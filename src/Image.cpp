@@ -355,6 +355,12 @@ l_foundPart:
 
 shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
     try {
+        filename = absolutePath(filename);
+    } catch (runtime_error e) {
+        cerr << tfm::format("absolutePath('%s') failed: %s. Trying to load image anyway...", filename, e.what()) << endl;
+    }
+
+    try {
         return make_shared<Image>(filename, channelSelector);
     } catch (invalid_argument e) {
         tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
