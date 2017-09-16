@@ -355,6 +355,13 @@ l_foundPart:
 
 shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
     try {
+        filename = absolutePath(filename);
+    } catch (runtime_error e) {
+        // If for some strange reason we can not obtain an absolute path, let's still
+        // try to open the image at the given path just to make sure.
+    }
+
+    try {
         return make_shared<Image>(filename, channelSelector);
     } catch (invalid_argument e) {
         tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());

@@ -21,14 +21,12 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer()
-: ImageViewer{make_shared<SharedQueue<ImageAddition>>()} {
-}
-
-ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
-: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesToAdd{imagesToAdd} {
+ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
+: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mIpc{ipc}, mImagesToAdd{imagesToAdd} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
+
+    TEV_ASSERT(mIpc->isPrimaryInstance(), "ImageViewer may only exist in the primary instance of tev.");
 
     mBackground = Color{0.23f, 1.0f};
 
@@ -485,12 +483,29 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::drawContents() {
+    bool receivedFileViaIpc = false;
+    while (mIpc->receiveFromSecondaryInstance([this](string imageString) {
+        ThreadPool::singleWorker().enqueueTask([imageString, this] {
+            size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
+            auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
+            if (image) {
+                mImagesToAdd->push({true, image});
+            }
+        });
+    })) {
+        receivedFileViaIpc = true;
+    }
+
     try {
         while (true) {
             auto addition = mImagesToAdd->tryPop();
             addImage(addition.image, addition.shallSelect);
         }
     } catch (runtime_error) {
+    }
+
+    if (receivedFileViaIpc) {
+        glfwFocusWindow(mGLFWWindow);
     }
 
     if (mRequiresFilterUpdate) {
