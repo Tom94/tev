@@ -71,7 +71,7 @@ endif()
 
 set(TEV_LIBS IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
-    set(TEV_LIBS ${TEV_LIBS} zlibstatic)
+    set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
 endif()
 
 add_executable(tev

@@ -109,14 +109,14 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     addRow(layerSelection, "Left or A",  "Select Previous Layer");
 
     new Label{this, "Interface", "sans-bold", 18};
-    auto interface = new Widget{this};
-    interface->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    auto ui = new Widget{this};
+    ui->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(interface, ALT + "+Enter", "Maximize");
-    addRow(interface, COMMAND + "+B", "Toggle GUI");
-    addRow(interface, "H",            "Show Help (this Window)");
-    addRow(interface, COMMAND + "+P", "Find Image or Layer");
-    addRow(interface, "Q or Esc",     "Quit");
+    addRow(ui, ALT + "+Enter", "Maximize");
+    addRow(ui, COMMAND + "+B", "Toggle GUI");
+    addRow(ui, "H",            "Show Help (this Window)");
+    addRow(ui, COMMAND + "+P", "Find Image or Layer");
+    addRow(ui, "Q or Esc",     "Quit");
 }
 
 bool HelpWindow::keyboardEvent(int key, int scancode, int action, int modifiers) {

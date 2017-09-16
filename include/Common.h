@@ -7,13 +7,21 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <string>
 #include <sstream>
 #include <vector>
 
 #ifdef _WIN32
-#pragma warning(disable : 4127) // warning C4127: conditional expression is constant
-#pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
+#   define NOMINMAX
+#   include <Windows.h>
+#else
+#   include <sys/types.h>
+#endif
+
+#ifdef _WIN32
+#   pragma warning(disable : 4127) // warning C4127: conditional expression is constant
+#   pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
 #endif
 
 // A macro is used such that external tools won't end up indenting entire files,
@@ -29,7 +37,9 @@
 #   define UNLIKELY(condition) condition
 #endif
 
-#define TEV_ASSERT(cond, description, ...) if (UNLIKELY(!(cond))) std::cerr << tfm::format(description, ##__VA_ARGS__) << std::endl;
+#define TEV_ASSERT(cond, description, ...) \
+    if (UNLIKELY(!(cond))) \
+        throw std::runtime_error{tfm::format(description, ##__VA_ARGS__)};
 
 TEV_NAMESPACE_BEGIN
 
@@ -98,5 +108,30 @@ enum EDirection {
 };
 
 void toggleConsole();
+
+class Ipc {
+public:
+    Ipc();
+    virtual ~Ipc();
+
+    bool isPrimaryInstance() {
+        return mIsPrimaryInstance;
+    }
+
+    void sendToPrimaryInstance(std::string message);
+    void receiveFromSecondaryInstance(std::function<void(std::string)> callback);
+
+private:
+    bool mIsPrimaryInstance;
+    sockaddr_in mAddress;
+
+#ifdef _WIN32
+    HANDLE mInstanceMutex;
+    SOCKET mSocket;
+#else
+    int mLockFileDescriptor;
+    int mSocket;
+#endif
+};
 
 TEV_NAMESPACE_END

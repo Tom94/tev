@@ -7,8 +7,12 @@
 #include <cctype>
 #include <map>
 
-#ifdef _WIN32
-#include <Windows.h>
+#ifndef _WIN32
+#   include <errno.h>
+#   include <pwd.h>
+#   include <unistd.h>
+#   define SOCKET_ERROR (-1)
+#   define INVALID_SOCKET (-1)
 #endif
 
 using namespace std;
@@ -113,6 +117,133 @@ void toggleConsole() {
     if (GetCurrentProcessId() == consoleProcessId) {
         ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
     }
+#endif
+}
+
+static string lastSocketError() {
+#ifdef _WIN32
+    int lastError = WSAGetLastError();
+    char* s = NULL;
+    FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, lastError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
+    
+    string result = tfm::format("%s (%d)", s, lastError);
+    LocalFree(s);
+
+    return result;
+#else
+    return tfm::format("%s (%d)", strerror(errno), errno);
+#endif
+}
+
+Ipc::Ipc() {
+    static const string lockName = ".tev-lock";
+    static const string localhost = "127.0.0.1";
+    static const short port = 1415;
+
+    memset((char*)&mAddress, 0, sizeof(mAddress));
+
+#ifdef _WIN32
+    //Make sure at most one instance of the tool is running
+    mInstanceMutex = CreateMutex(NULL, TRUE, lockName.c_str());
+    mIsPrimaryInstance = mInstanceMutex && GetLastError() != ERROR_ALREADY_EXISTS;
+    if (!mIsPrimaryInstance) {
+        // No need to keep the handle to the existing mutex if we're not the primary instance.
+        if (mInstanceMutex) {
+            ReleaseMutex(mInstanceMutex);
+            CloseHandle(mInstanceMutex);
+        }
+    }
+
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != NO_ERROR) {
+        cerr << "Could not initialize WSA; inter-process communication will not function." << endl;
+    }
+#else
+    struct passwd* pw = getpwuid(getuid());
+    string homedir = pw->pw_dir;
+
+    string lockFile = homedir + "/" + lockName;
+
+    mLockFileDescriptor = open(lockFile.c_str(), O_RDWR | O_CREAT, 0666);
+    mIsPrimaryInstance = !flock(fd, LOCK_EX | LOCK_NB));
+    if (!mIsPrimaryInstance) {
+        close(mLockFileDescriptor);
+    }
+#endif
+
+    mAddress.sin_family = AF_INET;
+    mAddress.sin_port = htons(port);
+
+#ifdef _WIN32
+    mAddress.sin_addr.S_un.S_addr = inet_addr(localhost.c_str());
+#else
+    inet_aton(localhost.c_str(), &mAddress.sin_addr);
+#endif
+
+    mSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (mSocket == INVALID_SOCKET) {
+        cerr << "Could not create UDP socket; inter-process communication will not function: " << lastSocketError() << endl;
+    }
+
+    // Make socket non-blocking
+#ifdef _WIN32
+    u_long mode = 1;
+    ioctlsocket(mSocket, FIONBIO, &mode);
+#else
+    int flags = fcntl(mSocket, F_GETFL, 0);
+    fcntl(s, F_SETFL, flags | O_NONBLOCK);
+#endif
+
+    // Listen to UDP packets if we're the primary instance.
+    if (mIsPrimaryInstance) {
+        int result = ::bind(mSocket, (sockaddr*)&mAddress, sizeof(mAddress));
+        if (result == SOCKET_ERROR) {
+            cerr << "Could not bind UDP socket; inter-process communication will not function: " << lastSocketError() << endl;
+        }
+    }
+}
+
+void Ipc::sendToPrimaryInstance(string message) {
+    int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
+    if (bytesSent == -1) {
+        throw runtime_error{tfm::format("Could not send to primary instance: %s", lastSocketError())};
+    }
+}
+
+void Ipc::receiveFromSecondaryInstance(function<void(string)> callback) {
+    sockaddr_in recvAddress;
+    int recvAddressSize = sizeof(recvAddress);
+    char recvBuffer[16384];
+
+    int bytesReceived = recvfrom(mSocket, recvBuffer, sizeof(recvBuffer), 0, (sockaddr*)&recvAddress, &recvAddressSize);
+    if (bytesReceived <= 0) {
+        return;
+    }
+
+    if (recvBuffer[bytesReceived - 1] == '\0') {
+        // We probably received a valid string. Let's pass it to our callback function.
+        // TODO: Proper handling of multiple concatenated and partial packets.
+        callback(recvBuffer);
+    }
+}
+
+Ipc::~Ipc() {
+#ifdef _WIN32
+    if (mIsPrimaryInstance) {
+        ReleaseMutex(mInstanceMutex);
+        CloseHandle(mInstanceMutex);
+    }
+
+    closesocket(mSocket);
+#else
+    if (mIsPrimaryInstance) {
+        close(mLockFileDescriptor);
+    }
+
+    close(mSocket);
 #endif
 }
 

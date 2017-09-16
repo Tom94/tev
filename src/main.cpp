@@ -126,6 +126,24 @@ int mainFunc(int argc, char* argv[]) {
         return -2;
     }
 
+    auto ipc = make_shared<Ipc>();
+
+    // If we're not the primary instance, simply send the to-be-opened images
+    // to the primary instance.
+    if (!ipc->isPrimaryInstance()) {
+        string channelSelector;
+        for (auto imageFile : get(imageFiles)) {
+            if (!imageFile.empty() && imageFile[0] == ':') {
+                channelSelector = imageFile.substr(1);
+                continue;
+            }
+
+            ipc->sendToPrimaryInstance(imageFile + ":" + channelSelector);
+        }
+
+        return 0;
+    }
+
     cout << "Loading window..." << endl;
 
     // Load images passed via command line in the background prior to
@@ -151,7 +169,7 @@ int mainFunc(int argc, char* argv[]) {
     nanogui::init();
 
     {
-        auto app = unique_ptr<ImageViewer>{new ImageViewer{imagesToAdd}};
+        auto app = unique_ptr<ImageViewer>{new ImageViewer{ipc, imagesToAdd}};
         app->drawAll();
         app->setVisible(true);
 
@@ -190,7 +208,7 @@ int main(int argc, char* argv[]) {
     try {
         tev::mainFunc(argc, argv);
     } catch (const runtime_error& e) {
-        cerr << "Uncaught exception: %s" << e.what() << endl;
+        cerr << "Uncaught exception: " << e.what() << endl;
         return 1;
     }
 }
