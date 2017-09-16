@@ -17,8 +17,6 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 int mainFunc(int argc, char* argv[]) {
-    Imf::setGlobalThreadCount(thread::hardware_concurrency());
-
     ArgumentParser parser{
         "Inspection tool for images with a high dynamic range.",
         "",
@@ -147,6 +145,8 @@ int mainFunc(int argc, char* argv[]) {
 
         return 0;
     }
+
+    Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
     cout << "Loading window..." << endl;
 
