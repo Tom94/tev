@@ -45,6 +45,10 @@ string toUpper(string str) {
     return str;
 }
 
+bool endsWith(const string& str, const string& ending) {
+    return str.rfind(ending) == str.length() - ending.length();
+}
+
 bool matches(string text, string filter) {
     if (filter.empty()) {
         return true;

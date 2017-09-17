@@ -12,6 +12,7 @@ TEV_NAMESPACE_BEGIN
 
 class Channel {
 public:
+    Channel(size_t index, Eigen::Vector2i size);
     Channel(const std::string& name, Eigen::Vector2i size);
 
     const std::string& name() const {
@@ -42,6 +43,13 @@ public:
         size_t i = index.x() + index.y() * mSize.x();
         return mData[i];
     }
+
+    float& at(Eigen::Vector2i index) {
+        size_t i = index.x() + index.y() * mSize.x();
+        return mData[i];
+    }
+
+    float computeMean() const;
 
     size_t count() const {
         return mData.size();

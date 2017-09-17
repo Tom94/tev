@@ -99,6 +99,7 @@ public:
     void toggleHelpWindow();
 
     void openImageDialog();
+    void saveImageDialog();
 
     void requestLayoutUpdate() {
         mRequiresLayoutUpdate = true;

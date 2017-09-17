@@ -12,6 +12,8 @@
 #include <thread>
 #include <vector>
 
+TEV_NAMESPACE_BEGIN
+
 class ThreadPool {
 public:
     ThreadPool();
@@ -74,3 +76,5 @@ private:
     std::mutex mSystemBusyMutex;
     std::condition_variable mSystemBusyCondition;
 };
+
+TEV_NAMESPACE_END

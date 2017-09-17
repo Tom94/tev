@@ -381,8 +381,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                     selectImage(image);
                 }
             }
+            return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
+            return true;
         } else if (key == GLFW_KEY_R) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
                 if (modifiers & GLFW_MOD_SHIFT) {
@@ -393,29 +395,40 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             } else {
                 resetImage();
             }
+            return true;
         } else if (key == GLFW_KEY_B && modifiers & SYSTEM_COMMAND_MOD) {
             setUiVisible(!isUiVisible());
         } else if (key == GLFW_KEY_O && modifiers & SYSTEM_COMMAND_MOD) {
             openImageDialog();
+            return true;
+        } else if (key == GLFW_KEY_S && modifiers & SYSTEM_COMMAND_MOD) {
+            saveImageDialog();
+            return true;
         } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
             mFilter->requestFocus();
+            return true;
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
+            return true;
         } else if (key == GLFW_KEY_H) {
             toggleHelpWindow();
+            return true;
         } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
             toggleMaximized();
+            return true;
         } else if (key == GLFW_KEY_F5) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
                 reloadAllImages();
             } else {
                 reloadImage(mCurrentImage);
             }
+            return true;
         } else if (key == GLFW_KEY_F12) {
             // For debugging purposes.
             toggleConsole();
+            return true;
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -970,6 +983,28 @@ void ImageViewer::openImageDialog() {
             }
         });
     }
+
+    // Make sure we gain focus after seleting a file to be loaded.
+    glfwFocusWindow(mGLFWWindow);
+}
+
+void ImageViewer::saveImageDialog() {
+    if (!mCurrentImage) {
+        return;
+    }
+
+    string path = file_dialog(
+    {
+        //{"exr",  "OpenEXR image"},
+        {"hdr",  "HDR image"},
+        {"bmp",  "Bitmap Image File"},
+        {"jpg",  "JPEG image"},
+        {"jpeg", "JPEG image"},
+        {"png",  "Portable Network Graphics image"},
+        {"tga",  "Truevision TGA image"},
+    }, true);
+
+    mImageCanvas->save(path);
 
     // Make sure we gain focus after seleting a file to be loaded.
     glfwFocusWindow(mGLFWWindow);

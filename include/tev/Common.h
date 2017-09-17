@@ -69,6 +69,8 @@ std::vector<std::string> split(std::string text, const std::string& delim);
 std::string toLower(std::string str);
 std::string toUpper(std::string str);
 
+bool endsWith(const std::string& str, const std::string& ending);
+
 bool matches(std::string text, std::string filter);
 
 int lastError();

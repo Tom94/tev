@@ -9,6 +9,8 @@
 #include <mutex>
 #include <condition_variable>
 
+TEV_NAMESPACE_BEGIN
+
 template <typename T>
 class SharedQueue {
 public:
@@ -59,3 +61,5 @@ private:
     mutable std::mutex mMutex;
     std::condition_variable mDataCondition;
 };
+
+TEV_NAMESPACE_END

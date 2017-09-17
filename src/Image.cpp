@@ -161,17 +161,13 @@ void Image::readStbi() {
     }
 
     mNumChannels = static_cast<size_t>(numChannels);
-    size_t numPixels = mSize.prod();
-
-    vector<string> channelNames = {"R", "G", "B", "A"};
 
     vector<Channel> channels;
     for (size_t c = 0; c < mNumChannels; ++c) {
-        string name = c < channelNames.size() ? channelNames[c] : to_string(c - channelNames.size());
-        channels.emplace_back(name, mSize);
-        channels.back().data().resize(numPixels);
+        channels.emplace_back(c, mSize);
     }
 
+    size_t numPixels = (size_t)mSize.x() * mSize.y();
     threadPool.parallelFor(0, numPixels, [&](size_t i) {
         size_t baseIdx = i * mNumChannels;
         for (size_t c = 0; c < mNumChannels; ++c) {
@@ -257,7 +253,6 @@ l_foundPart:
 
         void copyTo(Channel& channel, ThreadPool& threadPool) const {
             auto& dstData = channel.data();
-            dstData.resize(mData.size() / bytesPerPixel());
 
             // The code in this switch statement may seem overly complicated, but it helps
             // the compiler optimize. This code is time-critical for large images.
