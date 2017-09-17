@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "../include/UberShader.h"
-#include "../include/Image.h"
+#include <tev/UberShader.h>
+#include <tev/Image.h>
 
 #include <nanogui/glcanvas.h>
 

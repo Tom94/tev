@@ -1,9 +1,9 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/ImageViewer.h"
-#include "../include/SharedQueue.h"
-#include "../include/ThreadPool.h"
+#include <tev/ImageViewer.h>
+#include <tev/SharedQueue.h>
+#include <tev/ThreadPool.h>
 
 #include <args.hxx>
 #include <ImfThreading.h>

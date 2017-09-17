@@ -75,17 +75,17 @@ if (MSVC)
 endif()
 
 add_executable(tev
-    include/Channel.h src/Channel.cpp
-    include/Common.h src/Common.cpp
-    include/GlTexture.h src/GlTexture.cpp
-    include/HelpWindow.h src/HelpWindow.cpp
-    include/Image.h src/Image.cpp
-    include/ImageButton.h src/ImageButton.cpp
-    include/ImageCanvas.h src/ImageCanvas.cpp
-    include/ImageViewer.h src/ImageViewer.cpp
-    include/SharedQueue.h src/SharedQueue.cpp
-    include/ThreadPool.h src/ThreadPool.cpp
-    include/UberShader.h src/UberShader.cpp
+    include/tev/Channel.h src/Channel.cpp
+    include/tev/Common.h src/Common.cpp
+    include/tev/GlTexture.h src/GlTexture.cpp
+    include/tev/HelpWindow.h src/HelpWindow.cpp
+    include/tev/Image.h src/Image.cpp
+    include/tev/ImageButton.h src/ImageButton.cpp
+    include/tev/ImageCanvas.h src/ImageCanvas.cpp
+    include/tev/ImageViewer.h src/ImageViewer.cpp
+    include/tev/SharedQueue.h src/SharedQueue.cpp
+    include/tev/ThreadPool.h src/ThreadPool.cpp
+    include/tev/UberShader.h src/UberShader.cpp
     src/main.cpp
 )
 
@@ -97,6 +97,7 @@ include_directories(
     ${NANOGUI_INCLUDE}
     ${OPENEXR_INCLUDE_DIRS}
     ${TINYFORMAT_INCLUDE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})

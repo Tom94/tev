@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../include/GlTexture.h"
+#include <tev/GlTexture.h>
 
 #include <vector>
 #include <string>

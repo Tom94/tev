@@ -1,8 +1,8 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/ImageCanvas.h"
-#include "../include/ThreadPool.h"
+#include <tev/ImageCanvas.h>
+#include <tev/ThreadPool.h>
 
 #include <nanogui/theme.h>
 
