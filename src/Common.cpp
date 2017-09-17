@@ -11,11 +11,7 @@
 #   include <Shlobj.h>
 #else
 #   include <cstring>
-#   include <cerrno>
-#   include <fcntl.h>
 #   include <pwd.h>
-#   include <sys/file.h>
-#   include <sys/types.h>
 #   include <unistd.h>
 #endif
 
