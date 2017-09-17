@@ -74,7 +74,7 @@ if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
 endif()
 
-add_executable(tev
+set(TEV_SOURCES
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
@@ -90,6 +90,11 @@ add_executable(tev
     include/tev/UberShader.h src/UberShader.cpp
     src/main.cpp
 )
+if (MSVC)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icons/icon.rc)
+endif()
+
+add_executable(tev ${TEV_SOURCES})
 
 include_directories(
     ${ARGS_INCLUDE}
