@@ -37,7 +37,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
     horizontalScreenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
     mSidebar = new Widget{horizontalScreenSplit};
-    mSidebar->setFixedWidth(200);
+    mSidebar->setFixedWidth(205);
 
     mHelpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
     mHelpButton->setCallback([this]() { toggleHelpWindow(); });
@@ -223,12 +223,13 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         ));
 
         auto tools = new Widget{mSidebarLayout};
-        tools->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+        tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{tools, name, icon};
             button->setCallback(callback);
             button->setTooltip(tooltip);
+            button->setFontSize(15);
             return button;
         };
 
@@ -237,10 +238,14 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
 
         makeImageButton("", [this] {
+            saveImageDialog();
+        }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND));
+
+        makeImageButton("", [this] {
             reloadImage(mCurrentImage);
         }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND));
 
-        makeImageButton("All", [this] {
+        makeImageButton("A", [this] {
             reloadAllImages();
         }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND));
 
@@ -313,7 +318,7 @@ bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector
     }
 
     if (mIsDraggingSidebar) {
-        mSidebar->setFixedWidth(max(200, p.x()));
+        mSidebar->setFixedWidth(max(205, p.x()));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
         // If left mouse button is held, move the image with mouse movement
@@ -1003,6 +1008,10 @@ void ImageViewer::saveImageDialog() {
         {"png",  "Portable Network Graphics image"},
         {"tga",  "Truevision TGA image"},
     }, true);
+
+    if (path.empty()) {
+        return;
+    }
 
     mImageCanvas->saveImage(path);
 

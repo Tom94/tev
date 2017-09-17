@@ -411,7 +411,7 @@ void ImageCanvas::saveImage(const string& filename) {
         } else if (endsWith(lowerFilename, ".tga")) {
             stbi_write_tga(filename.c_str(), imageSize.x(), imageSize.y(), 4, byteData.data());
         } else {
-            throw runtime_error{tfm::format("Image '%s' has unknown format.", filename)};
+            cerr << tfm::format("Image '%s' has unknown format.", filename) << endl;
         }
     }
 
