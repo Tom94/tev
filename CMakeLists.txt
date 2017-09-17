@@ -97,6 +97,7 @@ include_directories(
     ${NANOGUI_EXTRA_INCS}
     ${NANOGUI_INCLUDE}
     ${OPENEXR_INCLUDE_DIRS}
+    ${STB_INCLUDE}
     ${TINYFORMAT_INCLUDE}
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
