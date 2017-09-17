@@ -81,7 +81,7 @@ public:
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
-    void save(const std::string& filename);
+    void saveImage(const std::string& filename);
 
 private:
     std::vector<Channel> channelsFromDisplayedImage();

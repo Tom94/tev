@@ -344,7 +344,7 @@ void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
 }
 
-void ImageCanvas::save(const string& filename) {
+void ImageCanvas::saveImage(const string& filename) {
     if (!mImage) {
         return;
     }

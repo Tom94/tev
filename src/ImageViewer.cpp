@@ -1004,7 +1004,7 @@ void ImageViewer::saveImageDialog() {
         {"tga",  "Truevision TGA image"},
     }, true);
 
-    mImageCanvas->save(path);
+    mImageCanvas->saveImage(path);
 
     // Make sure we gain focus after seleting a file to be loaded.
     glfwFocusWindow(mGLFWWindow);
