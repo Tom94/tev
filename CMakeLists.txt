@@ -91,10 +91,20 @@ set(TEV_SOURCES
     src/main.cpp
 )
 if (MSVC)
-    set(TEV_SOURCES ${TEV_SOURCES} resources/icons/icon.rc)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
+elseif (APPLE)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns)
 endif()
 
 add_executable(tev ${TEV_SOURCES})
+
+if (APPLE)
+    set_target_properties(tev PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
+        RESOURCE resources/icon.icns
+    )
+endif()
 
 include_directories(
     ${ARGS_INCLUDE}
@@ -112,4 +122,9 @@ add_definitions(${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev ${TEV_LIBS})
 
-install(TARGETS tev RUNTIME DESTINATION "bin")
+if (APPLE)
+    install(TARGETS tev BUNDLE DESTINATION "/Applications")
+    install(SCRIPT scripts/osx-post-install.cmake)
+else()
+    install(TARGETS tev RUNTIME DESTINATION "bin")
+endif()

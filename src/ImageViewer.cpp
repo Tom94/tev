@@ -281,6 +281,8 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
 
     this->setSize(Vector2i(1024, 800));
     selectReference(nullptr);
+
+    dropEvent(mPendingDrops);
 }
 
 bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
@@ -965,17 +967,17 @@ void ImageViewer::toggleHelpWindow() {
 void ImageViewer::openImageDialog() {
     vector<string> paths = file_dialog(
     {
-        {"exr",  "OpenEXR image"},
-        {"hdr",  "HDR image"},
+        {"exr",  "OpenEXR Image"},
+        {"hdr",  "HDR Image"},
         {"bmp",  "Bitmap Image File"},
-        {"gif",  "Graphics Interchange Format image"},
-        {"jpg",  "JPEG image"},
-        {"jpeg", "JPEG image"},
-        {"pic",  "PIC image"},
-        {"png",  "Portable Network Graphics image"},
-        {"pnm",  "Portable Any Map image"},
-        {"psd",  "PSD image"},
-        {"tga",  "Truevision TGA image"},
+        {"gif",  "Graphics Interchange Format Image"},
+        {"jpg",  "JPEG Image"},
+        {"jpeg", "JPEG Image"},
+        {"pic",  "PIC Image"},
+        {"png",  "Portable Network Graphics Image"},
+        {"pnm",  "Portable Any Map Image"},
+        {"psd",  "PSD Image"},
+        {"tga",  "Truevision TGA Image"},
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
