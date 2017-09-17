@@ -2,6 +2,7 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/ImageViewer.h>
+#include <tev/Ipc.h>
 #include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 

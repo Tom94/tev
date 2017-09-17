@@ -484,7 +484,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
 void ImageViewer::drawContents() {
     bool receivedFileViaIpc = false;
-    while (mIpc->receiveFromSecondaryInstance([this](string imageString) {
+    while (mIpc->receiveFromSecondaryInstance([this](const string& imageString) {
         ThreadPool::singleWorker().enqueueTask([imageString, this] {
             size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
             auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));

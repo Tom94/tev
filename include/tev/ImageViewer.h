@@ -7,6 +7,7 @@
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
 #include <tev/ImageCanvas.h>
+#include <tev/Ipc.h>
 #include <tev/SharedQueue.h>
 
 #include <nanogui/glutil.h>
