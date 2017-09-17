@@ -1,7 +1,7 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/HelpWindow.h"
+#include <tev/HelpWindow.h>
 
 #include <nanogui/button.h>
 #include <nanogui/entypo.h>
@@ -54,6 +54,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     addRow(imageLoading, COMMAND + "+O",                             "Open Image");
+    addRow(imageLoading, COMMAND + "+S",                             "Save View as Image");
     addRow(imageLoading, COMMAND + "+R or F5",                       "Reload Image");
     addRow(imageLoading, COMMAND + "+Shift+R or " + COMMAND + "+F5", "Reload All Images");
     addRow(imageLoading, COMMAND + "+W",                             "Close Image");

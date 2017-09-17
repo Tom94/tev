@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../include/Common.h"
+#include <tev/Common.h>
 
 #include <atomic>
 #include <deque>
@@ -11,6 +11,8 @@
 #include <future>
 #include <thread>
 #include <vector>
+
+TEV_NAMESPACE_BEGIN
 
 class ThreadPool {
 public:
@@ -74,3 +76,5 @@ private:
     std::mutex mSystemBusyMutex;
     std::condition_variable mSystemBusyCondition;
 };
+
+TEV_NAMESPACE_END

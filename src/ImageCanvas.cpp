@@ -1,10 +1,14 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/ImageCanvas.h"
-#include "../include/ThreadPool.h"
+#include <tev/FalseColor.h>
+#include <tev/ImageCanvas.h>
+#include <tev/ThreadPool.h>
 
 #include <nanogui/theme.h>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 #include <numeric>
 
@@ -176,6 +180,10 @@ void ImageCanvas::scale(float amount, const Vector2f& origin) {
     mTransform = scaleTransform * mTransform;
 }
 
+float ImageCanvas::applyExposureAndOffset(float value) {
+    return pow(2.0f, mExposure) * value + mOffset;
+}
+
 vector<string> ImageCanvas::getChannels(const Image& image) {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
@@ -242,19 +250,6 @@ Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
     };
 }
 
-float ImageCanvas::applyMetric(float image, float reference) {
-    float diff = image - reference;
-    switch (mMetric) {
-        case EMetric::Error:                 return diff;
-        case EMetric::AbsoluteError:         return abs(diff);
-        case EMetric::SquaredError:          return diff * diff;
-        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01f);
-        case EMetric::RelativeSquaredError:  return diff * diff / (reference * reference + 0.01f);
-        default:
-            throw runtime_error{"Invalid metric selected."};
-    }
-}
-
 void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     result.clear();
     if (!mImage) {
@@ -282,6 +277,64 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     }
 }
 
+Vector3f ImageCanvas::applyTonemap(const Vector3f& value) {
+    Vector3f result;
+    switch (mTonemap) {
+        case ETonemap::SRGB:
+            {
+                static const auto toSRGB = [](float linear) {
+                    if (linear < 0.0031308f) {
+                        return 12.92f * linear;
+                    } else {
+                        return 1.055f * pow(linear, 0.41666f) - 0.055f;
+                    }
+                };
+
+                result = {toSRGB(value.x()), toSRGB(value.y()), toSRGB(value.z())};
+                break;
+            }
+        case ETonemap::Gamma:
+            {
+                static const float gamma = 2.2f;
+                result = {pow(value.x(), 1 / gamma), pow(value.y(), 1 / gamma), pow(value.z(), 1 / gamma)};
+                break;
+            }
+        case ETonemap::FalseColor:
+            {
+                static const auto falseColor = [](float linear) {
+                    static const auto& fcd = falseColorData();
+                    int start = 4 * clamp((int)(linear * (fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
+                    return Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
+                };
+
+                result = falseColor(log2(value.mean()) / 10 + 0.5f);
+                break;
+            }
+        case ETonemap::PositiveNegative:
+            {
+                result = {-2.0f * value.cwiseMin(Vector3f::Zero()).mean(), 2.0f * value.cwiseMax(Vector3f::Zero()).mean(), 0.0f};
+                break;
+            }
+        default:
+            throw runtime_error{"Invalid tonemap selected."};
+    }
+
+    return result.cwiseMax(Vector3f::Zero()).cwiseMin(Vector3f::Ones());
+}
+
+float ImageCanvas::applyMetric(float image, float reference) {
+    float diff = image - reference;
+    switch (mMetric) {
+        case EMetric::Error:                 return diff;
+        case EMetric::AbsoluteError:         return abs(diff);
+        case EMetric::SquaredError:          return diff * diff;
+        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01f);
+        case EMetric::RelativeSquaredError:  return diff * diff / (reference * reference + 0.01f);
+        default:
+            throw runtime_error{"Invalid metric selected."};
+    }
+}
+
 void ImageCanvas::fitImageToScreen(const Image& image) {
     Vector2f nanoguiImageSize = image.size().cast<float>() / mPixelRatio;
     mTransform = Scaling(mSize.cast<float>().cwiseQuotient(nanoguiImageSize).minCoeff());
@@ -291,26 +344,103 @@ void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
 }
 
-float ImageCanvas::computeMeanValue() {
+void ImageCanvas::saveImage(const string& filename) {
     if (!mImage) {
-        return 0.0f;
+        return;
     }
 
-    const auto& channels = getChannels(*mImage);
-    vector<float> means(channels.size(), 0);
+    const auto& channels = channelsFromDisplayedImage();
+    Vector2i imageSize = channels.front().size();
+    size_t numPixels = (size_t)imageSize.x() * imageSize.y();
+
+    TEV_ASSERT(channels.size() <= 4, "Can not save an image with more than 4 channels.");
+
+    if (channels.empty()) {
+        return;
+    }
+
+    cout << "Saving currently displayed image as " << filename << "... " << flush;
+    auto start = chrono::system_clock::now();
+
+    // Flatten channels into single array
+    vector<float> floatData(4 * channels.front().data().size(), 0);
+
+    ThreadPool pool;
+    pool.parallelFor(0, channels.size(), [&channels, &floatData](size_t i) {
+        const auto& channelData = channels[i].data();
+        for (size_t j = 0; j < channelData.size(); ++j) {
+            floatData[j * 4 + i] = channelData[j];
+        }
+    });
+
+    // Manually set alpha channel to 1 if the image does not have one.
+    if (channels.size() < 4) {
+        for (size_t i = 0; i < numPixels; ++i) {
+            floatData[i * 4 + 3] = 1;
+        }
+    }
+
+    string lowerFilename = toLower(filename);
+    if (endsWith(lowerFilename, ".hdr")) {
+        // Store as HDR image.
+        stbi_write_hdr(filename.c_str(), imageSize.x(), imageSize.y(), 4, floatData.data());
+    } else {
+        // Store as LDR image.
+        vector<char> byteData(floatData.size());
+        pool.parallelFor(0, numPixels, [&](size_t i) {
+            size_t start = 4 * i;
+            Vector3f value = applyTonemap({
+                applyExposureAndOffset(floatData[start]),
+                applyExposureAndOffset(floatData[start + 1]),
+                applyExposureAndOffset(floatData[start + 2]),
+            });
+            for (int j = 0; j < 3; ++j) {
+                floatData[start + j] = value[j];
+            }
+            for (int j = 0; j < 4; ++j) {
+                byteData[start + j] = (char)(floatData[start + j] * 255);
+            }
+        });
+
+        if (endsWith(lowerFilename, ".jpg") || endsWith(lowerFilename, ".jpeg")) {
+            stbi_write_jpg(filename.c_str(), imageSize.x(), imageSize.y(), 4, byteData.data(), 100);
+        } else if (endsWith(lowerFilename, ".png")) {
+            stbi_write_png(filename.c_str(), imageSize.x(), imageSize.y(), 4, byteData.data(), 0);
+        } else if (endsWith(lowerFilename, ".bmp")) {
+            stbi_write_bmp(filename.c_str(), imageSize.x(), imageSize.y(), 4, byteData.data());
+        } else if (endsWith(lowerFilename, ".tga")) {
+            stbi_write_tga(filename.c_str(), imageSize.x(), imageSize.y(), 4, byteData.data());
+        } else {
+            cerr << tfm::format("Image '%s' has unknown format.", filename) << endl;
+        }
+    }
+
+    auto end = chrono::system_clock::now();
+    chrono::duration<double> elapsedSeconds = end - start;
+
+    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+}
+
+vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
+    if (!mImage) {
+        return {};
+    }
+
+    vector<Channel> result;
+    const auto& channelNames = getChannels(*mImage);
+    for (size_t i = 0; i < channelNames.size(); ++i) {
+        result.emplace_back(i, mImage->size());
+    }
 
     if (!mReference) {
         ThreadPool pool;
-        pool.parallelFor(0, channels.size(), [&](size_t i) {
-            const auto* chan = mImage->channel(channels[i]);
+        pool.parallelFor(0, channelNames.size(), [&](size_t i) {
+            const auto* chan = mImage->channel(channelNames[i]);
             const auto& channelData = chan->data();
 
-            float mean = 0;
             for (size_t j = 0; j < channelData.size(); ++j) {
-                mean += channelData[j];
+                result[i].data()[j] = channelData[j];
             }
-
-            means[i] = mean / channelData.size();
         });
     } else {
         Vector2i size = mImage->size();
@@ -318,15 +448,14 @@ float ImageCanvas::computeMeanValue() {
         const auto& referenceChannels = getChannels(*mReference);
 
         ThreadPool pool;
-        pool.parallelFor(0, channels.size(), [&](size_t i) {
-            const auto* chan = mImage->channel(channels[i]);
+        pool.parallelFor(0, channelNames.size(), [&](size_t i) {
+            const auto* chan = mImage->channel(channelNames[i]);
 
-            float mean = 0;
             if (i < referenceChannels.size()) {
                 const Channel* referenceChan = mReference->channel(referenceChannels[i]);
                 for (int y = 0; y < size.y(); ++y) {
                     for (int x = 0; x < size.x(); ++x) {
-                        mean += applyMetric(
+                        result[i].at({x, y}) = applyMetric(
                             chan->eval({x, y}),
                             referenceChan->eval({x + offset.x(), y + offset.y()})
                         );
@@ -335,16 +464,25 @@ float ImageCanvas::computeMeanValue() {
             } else {
                 for (int y = 0; y < size.y(); ++y) {
                     for (int x = 0; x < size.x(); ++x) {
-                        mean += applyMetric(chan->eval({x, y}), 0);
+                        result[i].at({x, y}) = applyMetric(chan->eval({x, y}), 0);
                     }
                 }
             }
-
-            means[i] = mean / size.y() / size.x();
         });
     }
 
-    return accumulate(begin(means), end(means), 0.0) / means.size();
+    return result;
+}
+
+float ImageCanvas::computeMeanValue() {
+    const auto& flattened = channelsFromDisplayedImage();
+
+    float mean = 0;
+    for (const auto& channel : flattened) {
+        mean += channel.computeMean() / flattened.size();
+    }
+
+    return mean;
 }
 
 Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {

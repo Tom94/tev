@@ -1,7 +1,9 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/Channel.h"
+#include <tev/Channel.h>
+
+#include <numeric>
 
 using namespace Eigen;
 using namespace nanogui;
@@ -9,8 +11,20 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
+Channel::Channel(size_t index, Vector2i size)
+: mSize{size} {
+    vector<string> channelNames = {"R", "G", "B", "A"};
+    mName = index < channelNames.size() ? channelNames[index] : to_string(index - channelNames.size());
+    mData.resize((size_t)mSize.x() * mSize.y());
+}
+
 Channel::Channel(const std::string& name, Vector2i size)
 : mName{name}, mSize{size} {
+    mData.resize((size_t)mSize.x() * mSize.y());
+}
+
+float Channel::computeMean() const {
+    return accumulate(begin(mData), end(mData), 0.0f) / mData.size();
 }
 
 pair<string, string> Channel::split(const string& channel) {

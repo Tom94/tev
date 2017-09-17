@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../include/Common.h"
+#include <tev/Common.h>
 
 #include <nanogui/window.h>
 

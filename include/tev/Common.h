@@ -15,12 +15,7 @@
 #ifdef _WIN32
 #   define NOMINMAX
 #   include <Windows.h>
-using socklen_t = int;
-#else
-#   include <netinet/in.h>
-#endif
-
-#ifdef _WIN32
+#   undef NOMINMAX
 #   pragma warning(disable : 4127) // warning C4127: conditional expression is constant
 #   pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
 #endif
@@ -74,9 +69,19 @@ std::vector<std::string> split(std::string text, const std::string& delim);
 std::string toLower(std::string str);
 std::string toUpper(std::string str);
 
+bool endsWith(const std::string& str, const std::string& ending);
+
 bool matches(std::string text, std::string filter);
 
-std::string absolutePath(std::string path);
+int lastError();
+int lastSocketError();
+std::string errorString(int errorId);
+
+std::string absolutePath(const std::string& path);
+
+std::string homeDirectory();
+
+void toggleConsole();
 
 enum ETonemap : int {
     SRGB = 0,
@@ -108,34 +113,6 @@ EMetric toMetric(std::string name);
 enum EDirection {
     Forward,
     Backward,
-};
-
-void toggleConsole();
-
-class Ipc {
-public:
-    Ipc();
-    virtual ~Ipc();
-
-    bool isPrimaryInstance() {
-        return mIsPrimaryInstance;
-    }
-
-    void sendToPrimaryInstance(std::string message);
-    bool receiveFromSecondaryInstance(std::function<void(std::string)> callback);
-
-private:
-    bool mIsPrimaryInstance;
-    sockaddr_in mAddress;
-
-#ifdef _WIN32
-    HANDLE mInstanceMutex;
-    SOCKET mSocket;
-#else
-    int mLockFileDescriptor;
-    int mSocket;
-    std::string mLockFile;
-#endif
 };
 
 TEV_NAMESPACE_END

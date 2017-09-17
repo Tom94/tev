@@ -1,11 +1,13 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/ThreadPool.h"
+#include <tev/ThreadPool.h>
 
 #include <chrono>
 
 using namespace std;
+
+TEV_NAMESPACE_BEGIN
 
 ThreadPool::ThreadPool()
 : ThreadPool{thread::hardware_concurrency()} {
@@ -123,3 +125,5 @@ void ThreadPool::parallelFor(size_t start, size_t end, std::function<void(size_t
     parallelForNoWait(start, end, body);
     waitUntilFinished();
 }
+
+TEV_NAMESPACE_END

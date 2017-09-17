@@ -1,23 +1,18 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/Common.h"
+#include <tev/Common.h>
 
 #include <algorithm>
 #include <cctype>
 #include <map>
 
-#ifndef _WIN32
-#   include <arpa/inet.h>
+#ifdef _WIN32
+#   include <Shlobj.h>
+#else
 #   include <cstring>
-#   include <cerrno>
-#   include <fcntl.h>
 #   include <pwd.h>
-#   include <sys/file.h>
-#   include <sys/types.h>
 #   include <unistd.h>
-#   define SOCKET_ERROR (-1)
-#   define INVALID_SOCKET (-1)
 #endif
 
 using namespace std;
@@ -48,6 +43,10 @@ string toLower(string str) {
 string toUpper(string str) {
     transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)toupper(c); });
     return str;
+}
+
+bool endsWith(const string& str, const string& ending) {
+    return str.rfind(ending) == str.length() - ending.length();
 }
 
 bool matches(string text, string filter) {
@@ -111,7 +110,23 @@ EMetric toMetric(string name) {
     }
 }
 
-static string errorString(int errorId) {
+int lastError() {
+#ifdef _WIN32
+    return GetLastError();
+#else
+    return errno;
+#endif
+}
+
+int lastSocketError() {
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
+string errorString(int errorId) {
 #ifdef _WIN32
     char* s = NULL;
     FormatMessage(
@@ -127,29 +142,12 @@ static string errorString(int errorId) {
 #endif
 }
 
-static int lastError() {
-#ifdef _WIN32
-    return GetLastError();
-#else
-    return errno;
-#endif
-}
-
-static int lastSocketError() {
-#ifdef _WIN32
-    return WSAGetLastError();
-#else
-    return errno;
-#endif
-}
-
-string absolutePath(string path) {
-    const static int bufferSize = 16384;
-    char buffer[bufferSize];
+string absolutePath(const string& path) {
+    char buffer[16384];
 
 #ifdef _WIN32
-    DWORD length = GetFullPathName(path.c_str(), bufferSize, buffer, NULL);
-    if (length == 0 || length == bufferSize) {
+    DWORD length = GetFullPathName(path.c_str(), sizeof(buffer), buffer, NULL);
+    if (length == 0 || length == sizeof(buffer)) {
         throw runtime_error{tfm::format("Could not obtain absolute path: %s", errorString(lastError()))};
     }
     return buffer;
@@ -158,6 +156,20 @@ string absolutePath(string path) {
         throw runtime_error{tfm::format("Could not obtain absolute path: %s", errorString(lastError()))};
     }
     return buffer;
+#endif
+}
+
+string homeDirectory() {
+#ifdef _WIN32
+    char path[MAX_PATH];
+    if (SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, 0, path) != S_OK) {
+        return "";
+    }
+
+    return path;
+#else
+    struct passwd* pw = getpwuid(getuid());
+    return pw->pw_dir;
 #endif
 }
 
@@ -171,139 +183,6 @@ void toggleConsole() {
     // running in a foreign console, then we should leave it be.
     if (GetCurrentProcessId() == consoleProcessId) {
         ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
-    }
-#endif
-}
-
-Ipc::Ipc() {
-    static const string lockName = ".tev-lock";
-    static const string localhost = "127.0.0.1";
-    static const short port = 14158;
-
-    memset((char*)&mAddress, 0, sizeof(mAddress));
-
-    try {
-#ifdef _WIN32
-        //Make sure at most one instance of the tool is running
-        mInstanceMutex = CreateMutex(NULL, TRUE, lockName.c_str());
-
-        if (!mInstanceMutex) {
-            throw runtime_error{tfm::format("Could not obtain global mutex: %s", errorString(lastError()))};
-        }
-
-        mIsPrimaryInstance = GetLastError() != ERROR_ALREADY_EXISTS;
-        if (!mIsPrimaryInstance) {
-            // No need to keep the handle to the existing mutex if we're not the primary instance.
-            ReleaseMutex(mInstanceMutex);
-            CloseHandle(mInstanceMutex);
-        }
-
-        // Initialize Winsock
-        WSADATA wsaData;
-        int wsaStartupResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-        if (wsaStartupResult != NO_ERROR) {
-            throw runtime_error{tfm::format("Could not initialize WSA: %s", errorString(wsaStartupResult))};
-        }
-#else
-        struct passwd* pw = getpwuid(getuid());
-        string home = pw->pw_dir;
-        mLockFile = home + "/" + lockName;
-
-        mLockFileDescriptor = open(mLockFile.c_str(), O_RDWR | O_CREAT, 0666);
-        if (mLockFileDescriptor == -1) {
-            throw runtime_error{tfm::format("Could not create lock file: ", errorString(lastError()))};
-        }
-
-        mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
-        if (!mIsPrimaryInstance) {
-            close(mLockFileDescriptor);
-        }
-#endif
-
-        mAddress.sin_family = AF_INET;
-        mAddress.sin_port = htons(port);
-
-#ifdef _WIN32
-        mAddress.sin_addr.S_un.S_addr = inet_addr(localhost.c_str());
-#else
-        inet_aton(localhost.c_str(), &mAddress.sin_addr);
-#endif
-
-        mSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (mSocket == INVALID_SOCKET) {
-            throw runtime_error{tfm::format("Could not create UDP socket: ", errorString(lastSocketError()))};
-        }
-
-        // Make socket non-blocking
-#ifdef _WIN32
-        u_long mode = 1;
-        ioctlsocket(mSocket, FIONBIO, &mode);
-#else
-        int flags = fcntl(mSocket, F_GETFL, 0);
-        fcntl(mSocket, F_SETFL, flags | O_NONBLOCK);
-#endif
-
-        // Listen to UDP packets if we're the primary instance.
-        if (mIsPrimaryInstance) {
-            int result = ::bind(mSocket, (sockaddr*)&mAddress, sizeof(mAddress));
-            if (result == SOCKET_ERROR) {
-                throw runtime_error{tfm::format("Could not bind UDP socket: %s", errorString(lastSocketError()))};
-            }
-        }
-    } catch (runtime_error e) {
-        cerr << "Error initializing IPC. " << e.what() << endl;
-        mIsPrimaryInstance = true;
-    }
-}
-
-void Ipc::sendToPrimaryInstance(string message) {
-    int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
-    if (bytesSent == -1) {
-        throw runtime_error{tfm::format("Could not send to primary instance: %s", errorString(lastSocketError()))};
-    }
-}
-
-bool Ipc::receiveFromSecondaryInstance(function<void(string)> callback) {
-    sockaddr_in recvAddress;
-    socklen_t recvAddressSize = sizeof(recvAddress);
-    char recvBuffer[16384];
-
-    int bytesReceived = recvfrom(mSocket, recvBuffer, sizeof(recvBuffer), 0, (sockaddr*)&recvAddress, &recvAddressSize);
-    if (bytesReceived <= 0) {
-        return false;
-    }
-
-    if (recvBuffer[bytesReceived - 1] == '\0') {
-        // We probably received a valid string. Let's pass it to our callback function.
-        // TODO: Proper handling of multiple concatenated and partial packets.
-        callback(recvBuffer);
-    }
-
-    return true;
-}
-
-Ipc::~Ipc() {
-#ifdef _WIN32
-    if (mIsPrimaryInstance && mInstanceMutex) {
-        ReleaseMutex(mInstanceMutex);
-        CloseHandle(mInstanceMutex);
-    }
-
-    if (mSocket != INVALID_SOCKET) {
-        closesocket(mSocket);
-    }
-#else
-    if (mIsPrimaryInstance) {
-        if (mLockFileDescriptor != -1) {
-            close(mLockFileDescriptor);
-        }
-
-        // Delete the lock file if it exists.
-        unlink(mLockFile.c_str());
-    }
-
-    if (mSocket != INVALID_SOCKET) {
-        close(mSocket);
     }
 #endif
 }

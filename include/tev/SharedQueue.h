@@ -3,11 +3,13 @@
 
 #pragma once
 
-#include "../include/Common.h"
+#include <tev/Common.h>
 
 #include <deque>
 #include <mutex>
 #include <condition_variable>
+
+TEV_NAMESPACE_BEGIN
 
 template <typename T>
 class SharedQueue {
@@ -59,3 +61,5 @@ private:
     mutable std::mutex mMutex;
     std::condition_variable mDataCondition;
 };
+
+TEV_NAMESPACE_END

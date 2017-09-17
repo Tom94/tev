@@ -1,8 +1,8 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include "../include/ImageViewer.h"
-#include "../include/ThreadPool.h"
+#include <tev/ImageViewer.h>
+#include <tev/ThreadPool.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -37,7 +37,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
     horizontalScreenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
     mSidebar = new Widget{horizontalScreenSplit};
-    mSidebar->setFixedWidth(200);
+    mSidebar->setFixedWidth(205);
 
     mHelpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
     mHelpButton->setCallback([this]() { toggleHelpWindow(); });
@@ -223,12 +223,13 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         ));
 
         auto tools = new Widget{mSidebarLayout};
-        tools->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+        tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{tools, name, icon};
             button->setCallback(callback);
             button->setTooltip(tooltip);
+            button->setFontSize(15);
             return button;
         };
 
@@ -237,10 +238,14 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
 
         makeImageButton("", [this] {
+            saveImageDialog();
+        }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND));
+
+        makeImageButton("", [this] {
             reloadImage(mCurrentImage);
         }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND));
 
-        makeImageButton("All", [this] {
+        makeImageButton("A", [this] {
             reloadAllImages();
         }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND));
 
@@ -313,7 +318,7 @@ bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector
     }
 
     if (mIsDraggingSidebar) {
-        mSidebar->setFixedWidth(max(200, p.x()));
+        mSidebar->setFixedWidth(max(205, p.x()));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
         // If left mouse button is held, move the image with mouse movement
@@ -381,8 +386,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                     selectImage(image);
                 }
             }
+            return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
+            return true;
         } else if (key == GLFW_KEY_R) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
                 if (modifiers & GLFW_MOD_SHIFT) {
@@ -393,29 +400,40 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             } else {
                 resetImage();
             }
+            return true;
         } else if (key == GLFW_KEY_B && modifiers & SYSTEM_COMMAND_MOD) {
             setUiVisible(!isUiVisible());
         } else if (key == GLFW_KEY_O && modifiers & SYSTEM_COMMAND_MOD) {
             openImageDialog();
+            return true;
+        } else if (key == GLFW_KEY_S && modifiers & SYSTEM_COMMAND_MOD) {
+            saveImageDialog();
+            return true;
         } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
             mFilter->requestFocus();
+            return true;
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
+            return true;
         } else if (key == GLFW_KEY_H) {
             toggleHelpWindow();
+            return true;
         } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
             toggleMaximized();
+            return true;
         } else if (key == GLFW_KEY_F5) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
                 reloadAllImages();
             } else {
                 reloadImage(mCurrentImage);
             }
+            return true;
         } else if (key == GLFW_KEY_F12) {
             // For debugging purposes.
             toggleConsole();
+            return true;
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -484,7 +502,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
 void ImageViewer::drawContents() {
     bool receivedFileViaIpc = false;
-    while (mIpc->receiveFromSecondaryInstance([this](string imageString) {
+    while (mIpc->receiveFromSecondaryInstance([this](const string& imageString) {
         ThreadPool::singleWorker().enqueueTask([imageString, this] {
             size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
             auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
@@ -970,6 +988,32 @@ void ImageViewer::openImageDialog() {
             }
         });
     }
+
+    // Make sure we gain focus after seleting a file to be loaded.
+    glfwFocusWindow(mGLFWWindow);
+}
+
+void ImageViewer::saveImageDialog() {
+    if (!mCurrentImage) {
+        return;
+    }
+
+    string path = file_dialog(
+    {
+        //{"exr",  "OpenEXR image"},
+        {"hdr",  "HDR image"},
+        {"bmp",  "Bitmap Image File"},
+        {"jpg",  "JPEG image"},
+        {"jpeg", "JPEG image"},
+        {"png",  "Portable Network Graphics image"},
+        {"tga",  "Truevision TGA image"},
+    }, true);
+
+    if (path.empty()) {
+        return;
+    }
+
+    mImageCanvas->saveImage(path);
 
     // Make sure we gain focus after seleting a file to be loaded.
     glfwFocusWindow(mGLFWWindow);

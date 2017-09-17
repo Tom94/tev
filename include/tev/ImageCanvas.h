@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "../include/UberShader.h"
-#include "../include/Image.h"
+#include <tev/UberShader.h>
+#include <tev/Image.h>
 
 #include <nanogui/glcanvas.h>
 
@@ -33,6 +33,8 @@ public:
         mOffset = offset;
     }
 
+    float applyExposureAndOffset(float value);
+
     void setImage(std::shared_ptr<Image> image) {
         mImage = image;
     }
@@ -49,8 +51,6 @@ public:
 
     Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
 
-    float applyMetric(float value, float reference);
-
     void getValuesAtNanoPos(Eigen::Vector2i nanoPos, std::vector<float>& result);
     std::vector<float> getValuesAtNanoPos(Eigen::Vector2i mousePos) {
         std::vector<float> result;
@@ -66,6 +66,8 @@ public:
         mTonemap = tonemap;
     }
 
+    Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value);
+
     EMetric metric() {
         return mMetric;
     }
@@ -74,10 +76,15 @@ public:
         mMetric = metric;
     }
 
+    float applyMetric(float value, float reference);
+
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
+    void saveImage(const std::string& filename);
+
 private:
+    std::vector<Channel> channelsFromDisplayedImage();
     float computeMeanValue();
 
     Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;

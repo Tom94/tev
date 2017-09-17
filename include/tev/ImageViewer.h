@@ -3,11 +3,12 @@
 
 #pragma once
 
-#include "../include/HelpWindow.h"
-#include "../include/Image.h"
-#include "../include/ImageButton.h"
-#include "../include/ImageCanvas.h"
-#include "../include/SharedQueue.h"
+#include <tev/HelpWindow.h>
+#include <tev/Image.h>
+#include <tev/ImageButton.h>
+#include <tev/ImageCanvas.h>
+#include <tev/Ipc.h>
+#include <tev/SharedQueue.h>
 
 #include <nanogui/glutil.h>
 #include <nanogui/opengl.h>
@@ -98,6 +99,7 @@ public:
     void toggleHelpWindow();
 
     void openImageDialog();
+    void saveImageDialog();
 
     void requestLayoutUpdate() {
         mRequiresLayoutUpdate = true;
