@@ -9,8 +9,6 @@
         <dict>
             <key>CFBundleTypeName</key>
             <string>Image file</string>
-            <key>CFBundleTypeIconFile</key>
-            <string>icon.icns</string>
             <key>CFBundleTypeRole</key>
             <string>Viewer</string>
             <key>LSHandlerRank</key>
