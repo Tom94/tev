@@ -93,7 +93,7 @@ set(TEV_SOURCES
 if (MSVC)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
 elseif (APPLE)
-    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/osx-run-tev.sh)
 endif()
 
 add_executable(tev ${TEV_SOURCES})
@@ -103,6 +103,7 @@ if (APPLE)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
         RESOURCE resources/icon.icns
+        RESOURCE scripts/osx-run-tev.sh
     )
 endif()
 
