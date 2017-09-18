@@ -22,7 +22,7 @@
     <key>CFBundleExecutable</key>
     <string>tev</string>
     <key>CFBundleGetInfoString</key>
-    <string>High dynamic range (HDR) image comparison tool for graphics people. Supports primarily OpenEXR files.</string>
+    <string>High dynamic range (HDR) image comparison tool.</string>
     <key>CFBundleIconFile</key>
     <string>icon.icns</string>
     <key>CFBundleIdentifier</key>
