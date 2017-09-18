@@ -1,9 +1,11 @@
 [Desktop Entry]
 Type=Application
-Encoding=UTF-8
+Version=1.0
 Name=tev
-Comment=High dynamic range (HDR) image comparison tool for graphics people. Supports primarily OpenEXR files.
+GenericName=Image Viewer
+Comment=High dynamic range (HDR) image comparison tool.
 Exec=tev
 Icon=tev.png
 Terminal=false
 MimeType=image/*;
+Categories=Graphics;
