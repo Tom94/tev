@@ -27,7 +27,7 @@ struct ImageAddition {
 
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(std::shared_ptr<Ipc> ipc, std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd);
+    ImageViewer(std::shared_ptr<Ipc> ipc, std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops);
 
     bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
     bool mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) override;

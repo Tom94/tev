@@ -174,7 +174,7 @@ int mainFunc(int argc, char* argv[]) {
     nanogui::init();
 
     {
-        auto app = unique_ptr<ImageViewer>{new ImageViewer{ipc, imagesToAdd}};
+        auto app = unique_ptr<ImageViewer>{new ImageViewer{ipc, imagesToAdd, !imageFiles}};
         app->drawAll();
         app->setVisible(true);
 

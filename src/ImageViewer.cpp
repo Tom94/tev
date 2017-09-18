@@ -21,7 +21,7 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAddition>> imagesToAdd)
+ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops)
 : nanogui::Screen{Vector2i{1024, 799}, "tev"}, mIpc{ipc}, mImagesToAdd{imagesToAdd} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
@@ -282,7 +282,9 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
     this->setSize(Vector2i(1024, 800));
     selectReference(nullptr);
 
-    dropEvent(mPendingDrops);
+    if (processPendingDrops) {
+        dropEvent(mPendingDrops);
+    }
 }
 
 bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
