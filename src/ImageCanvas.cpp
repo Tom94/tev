@@ -429,7 +429,7 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
     vector<Channel> result;
     const auto& channelNames = getChannels(*mImage);
     for (size_t i = 0; i < channelNames.size(); ++i) {
-        result.emplace_back(i, mImage->size());
+        result.emplace_back(toUpper(Channel::tail(channelNames[i])), mImage->size());
     }
 
     if (!mReference) {
@@ -450,21 +450,41 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
         ThreadPool pool;
         pool.parallelFor(0, channelNames.size(), [&](size_t i) {
             const auto* chan = mImage->channel(channelNames[i]);
+            bool isAlpha = result[i].name() == "A";
 
             if (i < referenceChannels.size()) {
                 const Channel* referenceChan = mReference->channel(referenceChannels[i]);
-                for (int y = 0; y < size.y(); ++y) {
-                    for (int x = 0; x < size.x(); ++x) {
-                        result[i].at({x, y}) = applyMetric(
-                            chan->eval({x, y}),
-                            referenceChan->eval({x + offset.x(), y + offset.y()})
-                        );
+                if (isAlpha) {
+                    for (int y = 0; y < size.y(); ++y) {
+                        for (int x = 0; x < size.x(); ++x) {
+                            result[i].at({x, y}) = 0.5f * (
+                                chan->eval({x, y}) +
+                                referenceChan->eval({x + offset.x(), y + offset.y()})
+                            );
+                        }
+                    }
+                } else {
+                    for (int y = 0; y < size.y(); ++y) {
+                        for (int x = 0; x < size.x(); ++x) {
+                            result[i].at({x, y}) = applyMetric(
+                                chan->eval({x, y}),
+                                referenceChan->eval({x + offset.x(), y + offset.y()})
+                            );
+                        }
                     }
                 }
             } else {
-                for (int y = 0; y < size.y(); ++y) {
-                    for (int x = 0; x < size.x(); ++x) {
-                        result[i].at({x, y}) = applyMetric(chan->eval({x, y}), 0);
+                if (isAlpha) {
+                    for (int y = 0; y < size.y(); ++y) {
+                        for (int x = 0; x < size.x(); ++x) {
+                            result[i].at({x, y}) = chan->eval({x, y});
+                        }
+                    }
+                } else {
+                    for (int y = 0; y < size.y(); ++y) {
+                        for (int x = 0; x < size.x(); ++x) {
+                            result[i].at({x, y}) = applyMetric(chan->eval({x, y}), 0);
+                        }
                     }
                 }
             }
@@ -478,11 +498,17 @@ float ImageCanvas::computeMeanValue() {
     const auto& flattened = channelsFromDisplayedImage();
 
     float mean = 0;
+    size_t nChannels = 0;
     for (const auto& channel : flattened) {
-        mean += channel.computeMean() / flattened.size();
+        if (channel.name() == "A") {
+            continue;
+        }
+
+        mean += channel.computeMean();
+        ++nChannels;
     }
 
-    return mean;
+    return nChannels > 0 ? (mean / nChannels) : 0;
 }
 
 Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {

@@ -74,7 +74,7 @@ if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
 endif()
 
-add_executable(tev
+set(TEV_SOURCES
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
@@ -90,6 +90,21 @@ add_executable(tev
     include/tev/UberShader.h src/UberShader.cpp
     src/main.cpp
 )
+if (MSVC)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
+elseif (APPLE)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns)
+endif()
+
+add_executable(tev ${TEV_SOURCES})
+
+if (APPLE)
+    set_target_properties(tev PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
+        RESOURCE resources/icon.icns
+    )
+endif()
 
 include_directories(
     ${ARGS_INCLUDE}
@@ -107,4 +122,21 @@ add_definitions(${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev ${TEV_LIBS})
 
-install(TARGETS tev RUNTIME DESTINATION "bin")
+if (APPLE)
+    install(TARGETS tev BUNDLE DESTINATION "/Applications")
+    install(SCRIPT scripts/osx-post-install.cmake)
+elseif(WIN32)
+    install(TARGETS tev RUNTIME DESTINATION "bin")
+else()
+    install(TARGETS tev RUNTIME DESTINATION "bin")
+    install(FILES resources/tev.desktop DESTINATION "/usr/share/applications")
+    install(FILES resources/icon-512.png DESTINATION "/usr/share/icons/hicolor/512x512/apps" RENAME tev.png)
+    install(FILES resources/icon-256.png DESTINATION "/usr/share/icons/hicolor/256x256/apps" RENAME tev.png)
+    install(FILES resources/icon-128.png DESTINATION "/usr/share/icons/hicolor/128x128/apps" RENAME tev.png)
+    install(FILES resources/icon-96.png DESTINATION "/usr/share/icons/hicolor/96x96/apps" RENAME tev.png)
+    install(FILES resources/icon-64.png DESTINATION "/usr/share/icons/hicolor/64x64/apps" RENAME tev.png)
+    install(FILES resources/icon-48.png DESTINATION "/usr/share/icons/hicolor/48x48/apps" RENAME tev.png)
+    install(FILES resources/icon-32.png DESTINATION "/usr/share/icons/hicolor/32x32/apps" RENAME tev.png)
+    install(FILES resources/icon-24.png DESTINATION "/usr/share/icons/hicolor/24x24/apps" RENAME tev.png)
+    install(FILES resources/icon-16.png DESTINATION "/usr/share/icons/hicolor/16x16/apps" RENAME tev.png)
+endif()

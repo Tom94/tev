@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=tev
+GenericName=Image Viewer
+Comment=High dynamic range (HDR) image comparison tool.
+Exec=tev
+Icon=tev.png
+Terminal=false
+MimeType=image/*;
+Categories=Graphics;
