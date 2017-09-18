@@ -6,3 +6,4 @@ Comment=High dynamic range (HDR) image comparison tool for graphics people. Supp
 Exec=tev
 Icon=tev.png
 Terminal=false
+MimeType=image/*;
