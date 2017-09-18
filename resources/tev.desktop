@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Encoding=UTF-8
+Name=tev
+Comment=High dynamic range (HDR) image comparison tool for graphics people. Supports primarily OpenEXR files.
+Exec=tev
+Icon=tev.png
+Terminal=true
