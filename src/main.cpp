@@ -108,10 +108,23 @@ int mainFunc(int argc, char* argv[]) {
         "part of a multi-part EXR file.",
     };
 
+    vector<string> arguments;
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        // OSX sometimes (seemingly sporadically) passes the
+        // process serial number via a command line parameter.
+        // We would like to ignore this.
+        if (arg.find("-psn") == 0) {
+            continue;
+        }
+
+        arguments.emplace_back(arg);
+    }
+
     // Parse command line arguments and react to parsing
     // errors using exceptions.
     try {
-        parser.ParseCLI(argc, argv);
+        parser.ParseArgs(arguments);
     } catch (args::Help) {
         std::cout << parser;
         return 0;
