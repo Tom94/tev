@@ -7,11 +7,12 @@
 #include <iostream>
 #include <stdexcept>
 
-#include <nanogui/entypo.h>
-#include <nanogui/screen.h>
-#include <nanogui/layout.h>
-#include <nanogui/label.h>
 #include <nanogui/button.h>
+#include <nanogui/entypo.h>
+#include <nanogui/label.h>
+#include <nanogui/layout.h>
+#include <nanogui/messagedialog.h>
+#include <nanogui/screen.h>
 #include <nanogui/textbox.h>
 #include <nanogui/vscrollpanel.h>
 
@@ -1017,7 +1018,16 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    mImageCanvas->saveImage(path);
+    try {
+        mImageCanvas->saveImage(path);
+    } catch (invalid_argument e) {
+        new MessageDialog(
+            this,
+            MessageDialog::Type::Warning,
+            "Error",
+            tfm::format("Failed to save image: %s", e.what())
+        );
+    }
 
     // Make sure we gain focus after seleting a file to be loaded.
     glfwFocusWindow(mGLFWWindow);
