@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
-set(VERSION "1.4")
+set(VERSION "1.4.dev")
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
