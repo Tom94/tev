@@ -7,11 +7,12 @@
 #include <iostream>
 #include <stdexcept>
 
-#include <nanogui/entypo.h>
-#include <nanogui/screen.h>
-#include <nanogui/layout.h>
-#include <nanogui/label.h>
 #include <nanogui/button.h>
+#include <nanogui/entypo.h>
+#include <nanogui/label.h>
+#include <nanogui/layout.h>
+#include <nanogui/messagedialog.h>
+#include <nanogui/screen.h>
 #include <nanogui/textbox.h>
 #include <nanogui/vscrollpanel.h>
 
@@ -106,8 +107,10 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             return button;
         };
 
-        makeButton("Normalize", [this]() { normalizeExposureAndOffset(); }, 0, "Shortcut: N");
-        makeButton("Reset",     [this]() { resetImage(); },                 0, "Shortcut: R");
+        mCurrentImageButtons.push_back(
+            makeButton("Normalize", [this]() { normalizeExposureAndOffset(); }, 0, "Shortcut: N")
+        );
+        makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
     }
 
     // Tonemap options
@@ -225,33 +228,34 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         auto tools = new Widget{mSidebarLayout};
         tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
-        auto makeImageButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
+        auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{tools, name, icon};
             button->setCallback(callback);
             button->setTooltip(tooltip);
             button->setFontSize(15);
+            button->setEnabled(enabled);
             return button;
         };
 
-        makeImageButton("", [this] {
+        makeImageButton("", true, [this] {
             openImageDialog();
         }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
 
-        makeImageButton("", [this] {
+        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
             saveImageDialog();
-        }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND));
+        }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
 
-        makeImageButton("", [this] {
+        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
             reloadImage(mCurrentImage);
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND));
+        }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
 
-        makeImageButton("A", [this] {
+        mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
             reloadAllImages();
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND));
+        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
-        makeImageButton("", [this] {
+        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
             removeImage(mCurrentImage);
-        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND));
+        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
 
         spacer = new Widget{mSidebarLayout};
         spacer->setHeight(3);
@@ -280,6 +284,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
     setResizeCallback([this](Vector2i) { requestLayoutUpdate(); });
 
     this->setSize(Vector2i(1024, 800));
+    selectImage(nullptr);
     selectReference(nullptr);
 
     if (processPendingDrops) {
@@ -548,6 +553,10 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
         throw invalid_argument{"Image may not be null."};
     }
 
+    for (auto button : mAnyImageButtons) {
+        button->setEnabled(true);
+    }
+
     auto button = new ImageButton{nullptr, image->name(), true};
     button->setFontSize(15);
     button->setId(index + 1);
@@ -608,6 +617,11 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
     if (mImages.empty()) {
         selectImage(nullptr);
         selectReference(nullptr);
+
+        for (auto button : mAnyImageButtons) {
+            button->setEnabled(false);
+        }
+
         return;
     }
 
@@ -651,6 +665,10 @@ void ImageViewer::reloadAllImages() {
 }
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image) {
+    for (auto button : mCurrentImageButtons) {
+        button->setEnabled(image != nullptr);
+    }
+
     if (!image) {
         auto& buttons = mImageButtonContainer->children();
         for (size_t i = 0; i < buttons.size(); ++i) {
@@ -1017,7 +1035,16 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    mImageCanvas->saveImage(path);
+    try {
+        mImageCanvas->saveImage(path);
+    } catch (invalid_argument e) {
+        new MessageDialog(
+            this,
+            MessageDialog::Type::Warning,
+            "Error",
+            tfm::format("Failed to save image: %s", e.what())
+        );
+    }
 
     // Make sure we gain focus after seleting a file to be loaded.
     glfwFocusWindow(mGLFWWindow);

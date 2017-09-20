@@ -162,6 +162,12 @@ private:
 
     nanogui::TextBox* mFilter;
 
+    // Buttons which require a current image to be meaningful.
+    std::vector<nanogui::Button*> mCurrentImageButtons;
+
+    // Buttons which require at least one image to be meaningful
+    std::vector<nanogui::Button*> mAnyImageButtons;
+
     nanogui::Widget* mImageButtonContainer;
     nanogui::Widget* mScrollContent;
     nanogui::VScrollPanel* mImageScrollContainer;

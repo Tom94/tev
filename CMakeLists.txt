@@ -2,6 +2,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
+set(VERSION "1.4.dev")
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
@@ -102,6 +103,9 @@ if (APPLE)
     set_target_properties(tev PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
+        MACOSX_BUNDLE_BUNDLE_VERSION ${VERSION}
+        MACOSX_BUNDLE_SHORT_VERSION_STRING ${VERSION}
+        MACOSX_BUNDLE_LONG_VERSION_STRING ${VERSION}
         RESOURCE resources/icon.icns
         RESOURCE scripts/osx-run-tev.sh
     )
