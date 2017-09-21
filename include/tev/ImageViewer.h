@@ -8,6 +8,7 @@
 #include <tev/ImageButton.h>
 #include <tev/ImageCanvas.h>
 #include <tev/Ipc.h>
+#include <tev/Lazy.h>
 #include <tev/SharedQueue.h>
 
 #include <nanogui/glutil.h>
@@ -15,8 +16,8 @@
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 TEV_NAMESPACE_BEGIN
 

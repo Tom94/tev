@@ -1219,6 +1219,11 @@ void ImageViewer::updateTitle() {
             }
         }
 
+        auto lazyMean = mImageCanvas->meanValue();
+        if (lazyMean->isReady()) {
+            caption += tfm::format(" – Mean=%f", lazyMean->get());
+        }
+
         vector<float> values = mImageCanvas->getValuesAtNanoPos(mousePos() - mImageCanvas->position());
         Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, mousePos() - mImageCanvas->position());
         TEV_ASSERT(values.size() >= channels.size(), "Should obtain a value for every existing channel.");

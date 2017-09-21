@@ -184,7 +184,7 @@ float ImageCanvas::applyExposureAndOffset(float value) {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-vector<string> ImageCanvas::getChannels(const Image& image) {
+vector<string> ImageCanvas::getChannels(const Image& image) const {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
         { "r", "g", "b" },
@@ -277,7 +277,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     }
 }
 
-Vector3f ImageCanvas::applyTonemap(const Vector3f& value) {
+Vector3f ImageCanvas::applyTonemap(const Vector3f& value) const {
     Vector3f result;
     switch (mTonemap) {
         case ETonemap::SRGB:
@@ -322,7 +322,7 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value) {
     return result.cwiseMax(Vector3f::Zero()).cwiseMin(Vector3f::Ones());
 }
 
-float ImageCanvas::applyMetric(float image, float reference) {
+float ImageCanvas::applyMetric(float image, float reference) const {
     float diff = image - reference;
     switch (mMetric) {
         case EMetric::Error:                 return diff;
@@ -421,7 +421,34 @@ void ImageCanvas::saveImage(const string& filename) {
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
-vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
+shared_ptr<Lazy<float>> ImageCanvas::meanValue() {
+    string key;
+    if (!mImage) {
+        key = "";
+    } else {
+        string channels = join(getChannels(*mImage), ",");
+        if (!mReference) {
+            key = tfm::format("%s-%s", mImage->filename(), channels);
+        } else {
+            key = tfm::format("%s-%s-%s-%d", mImage->filename(), channels, mReference->filename(), mMetric);
+        }
+    }
+
+    auto iter = mMeanValues.find(key);
+    if (iter != end(mMeanValues)) {
+        return iter->second;
+    }
+
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<float>>([this]() {
+        return computeMeanValue();
+    }, &mMeanValueThreadPool)));
+
+    auto val = mMeanValues.at(key);
+    val->computeAsync();
+    return val;
+}
+
+vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
     if (!mImage) {
         return {};
     }
@@ -494,7 +521,7 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
     return result;
 }
 
-float ImageCanvas::computeMeanValue() {
+float ImageCanvas::computeMeanValue() const {
     const auto& flattened = channelsFromDisplayedImage();
 
     float mean = 0;
