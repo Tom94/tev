@@ -20,21 +20,24 @@ public:
     ThreadPool(size_t numThreads);
     virtual ~ThreadPool();
 
-    template<class F, class... Args>
-    std::future<typename std::result_of<F(Args...)>::type> enqueueTask(F && f, Args && ... args) {
-        typedef typename std::result_of<F(Args...)>::type return_type;
+    template<class F>
+    std::future<typename std::result_of<F(void)>::type> enqueueTask(F&& f, bool highPriority = false) {
+        typedef typename std::result_of<F(void)>::type return_type;
 
         ++mNumTasksInSystem;
 
-        auto task = std::make_shared<std::packaged_task<return_type()>>(
-            std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-        );
+        auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
 
         auto res = task->get_future();
 
         {
             std::lock_guard<std::mutex> lock{mTaskQueueMutex};
-            mTaskQueue.emplace_back([task]() { (*task)(); });
+
+            if (highPriority) {
+                mTaskQueue.emplace_front([task]() { (*task)(); });
+            } else {
+                mTaskQueue.emplace_back([task]() { (*task)(); });
+            }
         }
 
         mWorkerCondition.notify_one();

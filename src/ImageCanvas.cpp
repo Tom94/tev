@@ -184,7 +184,7 @@ float ImageCanvas::applyExposureAndOffset(float value) {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-vector<string> ImageCanvas::getChannels(const Image& image) {
+vector<string> ImageCanvas::getChannels(const Image& image) const {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
         { "r", "g", "b" },
@@ -277,7 +277,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     }
 }
 
-Vector3f ImageCanvas::applyTonemap(const Vector3f& value) {
+Vector3f ImageCanvas::applyTonemap(const Vector3f& value) const {
     Vector3f result;
     switch (mTonemap) {
         case ETonemap::SRGB:
@@ -322,7 +322,7 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value) {
     return result.cwiseMax(Vector3f::Zero()).cwiseMin(Vector3f::Ones());
 }
 
-float ImageCanvas::applyMetric(float image, float reference) {
+float ImageCanvas::applyMetric(float image, float reference) const {
     float diff = image - reference;
     switch (mMetric) {
         case EMetric::Error:                 return diff;
@@ -421,7 +421,31 @@ void ImageCanvas::saveImage(const string& filename) {
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
 }
 
-vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
+shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
+    if (!mImage) {
+        return nullptr;
+    }
+
+    string channels = join(getChannels(*mImage), ",");
+    string key = mReference ? 
+        tfm::format("%s-%s-%s-%d", mImage->filename(), channels, mReference->filename(), mMetric) :
+        tfm::format("%s-%s", mImage->filename(), channels);
+
+    auto iter = mMeanValues.find(key);
+    if (iter != end(mMeanValues)) {
+        return iter->second;
+    }
+
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([this]() {
+        return computeCanvasStatistics();
+    }, &mMeanValueThreadPool)));
+
+    auto val = mMeanValues.at(key);
+    val->computeAsync();
+    return val;
+}
+
+vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
     if (!mImage) {
         return {};
     }
@@ -494,21 +518,79 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() {
     return result;
 }
 
-float ImageCanvas::computeMeanValue() {
+shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics() const {
     const auto& flattened = channelsFromDisplayedImage();
 
     float mean = 0;
+    float maximum = -numeric_limits<float>::infinity();
+    float minimum = numeric_limits<float>::infinity();
+
     size_t nChannels = 0;
+
     for (const auto& channel : flattened) {
         if (channel.name() == "A") {
             continue;
         }
 
-        mean += channel.computeMean();
+        auto channelSize = channel.size();
+        size_t numElements = (size_t)channelSize.x() * channelSize.y();
+        for (int i = 0; i < numElements; ++i) {
+            float val = channel.eval(i);
+            mean += val;
+            maximum = max(maximum, val);
+            minimum = min(minimum, val);
+        }
+        
+        if (numElements > 0) {
+            mean /= numElements;
+        }
+
         ++nChannels;
     }
 
-    return nChannels > 0 ? (mean / nChannels) : 0;
+    auto result = make_shared<CanvasStatistics>();
+
+    result->mean = nChannels > 0 ? (mean / nChannels) : 0;
+    result->maximum = maximum;
+    result->minimum = minimum;
+
+    // Now that we know the maximum and minimum value we can define our histogram bin size.
+    static const int NUM_BINS = 400;
+    result->histogram = MatrixXf::Zero(NUM_BINS, nChannels);
+
+    // We're going to draw our histogram in log space.
+    auto symmetricLog2 = [](float val) {
+        static const float addition = 0.001f;
+        static const float smallest = log2(addition);
+        return val > 0 ? (log2(val + addition) - smallest) : -(log2(-val + addition) - smallest);
+    };
+
+    float minLog2 = symmetricLog2(minimum);
+    float maxLog2 = symmetricLog2(maximum);
+
+    auto valToBin = [&](float val) {
+        return clamp((int)(NUM_BINS * (symmetricLog2(val) - minLog2) / (maxLog2 - minLog2)), 0, NUM_BINS - 1);
+    };
+
+    size_t iChannel = 0;
+    for (const auto& channel : flattened) {
+        if (channel.name() == "A") {
+            continue;
+        }
+
+        auto channelSize = channel.size();
+        size_t numElements = (size_t)channelSize.x() * channelSize.y();
+        for (int i = 0; i < numElements; ++i) {
+            size_t bin = valToBin(channel.eval(i));
+            result->histogram(bin, iChannel) += 1;
+        }
+
+        ++iChannel;
+    }
+
+    result->histogram /= result->histogram.maxCoeff() * 1.3f;
+    result->histogramZero = valToBin(0);
+    return result;
 }
 
 Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {

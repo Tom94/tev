@@ -208,7 +208,11 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
 
         panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        label = new Label{panel, "Filter", "sans-bold", 15};
+
+        mHistogram = new MultiGraph{panel, ""};
+
+        panel = new Widget{mSidebarLayout};
+        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
         mFilter = new TextBox{panel, ""};
         mFilter->setEditable(true);
@@ -217,6 +221,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             return setFilter(filter);
         });
 
+        mFilter->setPlaceholder("Enter text to filter images");
         mFilter->setTooltip(tfm::format(
             "Filters visible images and layers according to a supplied string. "
             "The string must have the format 'image:layer'. "
@@ -226,7 +231,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         ));
 
         auto tools = new Widget{mSidebarLayout};
-        tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
+        tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
 
         auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{tools, name, icon};
@@ -546,6 +551,40 @@ void ImageViewer::drawContents() {
     }
 
     updateTitle();
+
+    // Update histogram
+    static const string histogramTooltipBase = "Histogram of color values.Adapts to the currently chosen layer and error metric.";
+    auto lazyCanvasStatistics = mImageCanvas->canvasStatistics();
+    if (lazyCanvasStatistics) {
+        if (lazyCanvasStatistics->isReady()) {
+            auto statistics = lazyCanvasStatistics->get();
+            mHistogram->setValues(statistics->histogram);
+            mHistogram->setMinimum(statistics->minimum);
+            mHistogram->setMean(statistics->mean);
+            mHistogram->setMaximum(statistics->maximum);
+            mHistogram->setZero(statistics->histogramZero);
+            mHistogram->setTooltip(tfm::format(
+                "%s\n\n"
+                "Minimum: %.3f\n"
+                "Mean: %.3f\n"
+                "Maximum: %.3f",
+                histogramTooltipBase,
+                statistics->minimum,
+                statistics->mean,
+                statistics->maximum)
+            );
+        }
+        
+    } else {
+        mHistogram->setValues(MatrixXf::Zero(1, 1));
+        mHistogram->setMinimum(0);
+        mHistogram->setMean(0);
+        mHistogram->setMaximum(0);
+        mHistogram->setZero(0);
+        mHistogram->setTooltip(
+            tfm::format("%s", histogramTooltipBase)
+        );
+    }
 }
 
 void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallSelect) {

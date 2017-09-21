@@ -8,6 +8,8 @@
 #include <tev/ImageButton.h>
 #include <tev/ImageCanvas.h>
 #include <tev/Ipc.h>
+#include <tev/Lazy.h>
+#include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
 
 #include <nanogui/glutil.h>
@@ -15,8 +17,8 @@
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
 
-#include <vector>
 #include <memory>
+#include <vector>
 
 TEV_NAMESPACE_BEGIN
 
@@ -159,6 +161,11 @@ private:
     std::shared_ptr<Image> mCurrentReference;
 
     std::vector<std::shared_ptr<Image>> mImages;
+
+    nanogui::Label* mZoomLevel;
+    nanogui::Label* mHoveredPixel;
+    nanogui::Label* mMeanValue;
+    MultiGraph* mHistogram;
 
     nanogui::TextBox* mFilter;
 

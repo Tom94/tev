@@ -5,12 +5,21 @@
 
 #include <tev/UberShader.h>
 #include <tev/Image.h>
+#include <tev/Lazy.h>
 
 #include <nanogui/glcanvas.h>
 
 #include <memory>
 
 TEV_NAMESPACE_BEGIN
+
+struct CanvasStatistics {
+    float mean;
+    float maximum;
+    float minimum;
+    Eigen::MatrixXf histogram;
+    int histogramZero;
+};
 
 class ImageCanvas : public nanogui::GLCanvas {
 public:
@@ -47,7 +56,7 @@ public:
         mRequestedLayer = layerName;
     }
 
-    std::vector<std::string> getChannels(const Image& image);
+    std::vector<std::string> getChannels(const Image& image) const;
 
     Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
 
@@ -58,7 +67,7 @@ public:
         return result;
     }
 
-    ETonemap tonemap() {
+    ETonemap tonemap() const {
         return mTonemap;
     }
 
@@ -66,9 +75,9 @@ public:
         mTonemap = tonemap;
     }
 
-    Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value);
+    Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value) const;
 
-    EMetric metric() {
+    EMetric metric() const {
         return mMetric;
     }
 
@@ -76,16 +85,18 @@ public:
         mMetric = metric;
     }
 
-    float applyMetric(float value, float reference);
+    float applyMetric(float value, float reference) const;
 
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
     void saveImage(const std::string& filename);
 
+    std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
+
 private:
-    std::vector<Channel> channelsFromDisplayedImage();
-    float computeMeanValue();
+    std::vector<Channel> channelsFromDisplayedImage() const;
+    std::shared_ptr<CanvasStatistics> computeCanvasStatistics() const;
 
     Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;
 
@@ -108,6 +119,9 @@ private:
 
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
+
+    std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mMeanValues;
+    ThreadPool mMeanValueThreadPool;
 };
 
 TEV_NAMESPACE_END
