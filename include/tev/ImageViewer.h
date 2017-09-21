@@ -162,9 +162,6 @@ private:
 
     std::vector<std::shared_ptr<Image>> mImages;
 
-    nanogui::Label* mZoomLevel;
-    nanogui::Label* mHoveredPixel;
-    nanogui::Label* mMeanValue;
     MultiGraph* mHistogram;
 
     nanogui::TextBox* mFilter;

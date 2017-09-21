@@ -42,11 +42,11 @@ void MultiGraph::draw(NVGcontext *ctx) {
     nvgFill(ctx);
 
     if (mValues.cols() >= 1 && mValues.rows() >= 2) {
-        array<Color, 3> colors = {
+        array<Color, 3> colors = {{
             Color{255, 0, 0, 200},
             Color{0, 255, 0, 200},
             Color{0, 0, 255, 200},
-        };
+        }};
 
         nvgSave(ctx);
         // Additive blending

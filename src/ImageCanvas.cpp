@@ -427,7 +427,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     }
 
     string channels = join(getChannels(*mImage), ",");
-    string key = mReference ? 
+    string key = mReference ?
         tfm::format("%s-%s-%s-%d", mImage->filename(), channels, mReference->filename(), mMetric) :
         tfm::format("%s-%s", mImage->filename(), channels);
 
@@ -534,13 +534,13 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics() const {
 
         auto channelSize = channel.size();
         size_t numElements = (size_t)channelSize.x() * channelSize.y();
-        for (int i = 0; i < numElements; ++i) {
+        for (size_t i = 0; i < numElements; ++i) {
             float val = channel.eval(i);
             mean += val;
             maximum = max(maximum, val);
             minimum = min(minimum, val);
         }
-        
+
         if (numElements > 0) {
             mean /= numElements;
         }
@@ -580,8 +580,8 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics() const {
 
         auto channelSize = channel.size();
         size_t numElements = (size_t)channelSize.x() * channelSize.y();
-        for (int i = 0; i < numElements; ++i) {
-            size_t bin = valToBin(channel.eval(i));
+        for (size_t i = 0; i < numElements; ++i) {
+            int bin = valToBin(channel.eval(i));
             result->histogram(bin, iChannel) += 1;
         }
 
