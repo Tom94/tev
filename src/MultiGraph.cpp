@@ -1,6 +1,6 @@
 // This file was adapted from the nanogui::Graph class, which was developed
 // by Wenzel Jakob <wenzel.jakob@epfl.ch> and based on the NanoVG demo application
-// by Mikko Mononen. Modifications were developed by Thomas Müller <thomas94@gmx.net>.
+// by Mikko Mononen. Modifications were developed by Thomas Mï¿½ller <thomas94@gmx.net>.
 // This file is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/MultiGraph.h>
@@ -70,11 +70,12 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         nvgRestore(ctx);
 
-        nvgBeginPath(ctx);
-        float zeroX = mPos.x() + mZeroBin * mSize.x() / (float)(mValues.rows() - 1);
-        nvgRect(ctx, zeroX, mPos.y() + 15, 1, mSize.y() - 15);
-        nvgFillColor(ctx, Color(200, 255));
-        nvgFill(ctx);
+        if (mZeroBin > 0) {
+            nvgBeginPath(ctx);
+            nvgRect(ctx, mPos.x() + mZeroBin * mSize.x() / (float)(mValues.rows() - 1), mPos.y() + 15, 1, mSize.y() - 15);
+            nvgFillColor(ctx, Color(200, 255));
+            nvgFill(ctx);
+        }
 
         nvgFontFace(ctx, "sans");
 
