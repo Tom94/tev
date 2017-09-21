@@ -221,6 +221,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             return setFilter(filter);
         });
 
+        mFilter->setPlaceholder("Enter text to filter images");
         mFilter->setTooltip(tfm::format(
             "Filters visible images and layers according to a supplied string. "
             "The string must have the format 'image:layer'. "
@@ -552,22 +553,36 @@ void ImageViewer::drawContents() {
     updateTitle();
 
     // Update histogram
+    static const string histogramTooltipBase = "Histogram of color values.Adapts to the currently chosen layer and error metric.";
     auto lazyCanvasStatistics = mImageCanvas->canvasStatistics();
-    if (lazyCanvasStatistics && lazyCanvasStatistics->isReady()) {
-        auto statistics = lazyCanvasStatistics->get();
-        mHistogram->setValues(statistics->histogram);
-        mHistogram->setMinimum(statistics->minimum);
-        mHistogram->setMean(statistics->mean);
-        mHistogram->setMaximum(statistics->maximum);
-        mHistogram->setZero(statistics->histogramZero);
-        mHistogram->setTooltip(tfm::format(
-            "Histogram of color values. Adapts to the currently chosen layer and error metric.\n\n"
-            "Minimum: %.3f\n"
-            "Mean: %.3f\n"
-            "Maximum: %.3f",
-            statistics->minimum,
-            statistics->mean,
-            statistics->maximum)
+    if (lazyCanvasStatistics) {
+        if (lazyCanvasStatistics->isReady()) {
+            auto statistics = lazyCanvasStatistics->get();
+            mHistogram->setValues(statistics->histogram);
+            mHistogram->setMinimum(statistics->minimum);
+            mHistogram->setMean(statistics->mean);
+            mHistogram->setMaximum(statistics->maximum);
+            mHistogram->setZero(statistics->histogramZero);
+            mHistogram->setTooltip(tfm::format(
+                "%s\n\n"
+                "Minimum: %.3f\n"
+                "Mean: %.3f\n"
+                "Maximum: %.3f",
+                histogramTooltipBase,
+                statistics->minimum,
+                statistics->mean,
+                statistics->maximum)
+            );
+        }
+        
+    } else {
+        mHistogram->setValues(MatrixXf::Zero(1, 1));
+        mHistogram->setMinimum(0);
+        mHistogram->setMean(0);
+        mHistogram->setMaximum(0);
+        mHistogram->setZero(0);
+        mHistogram->setTooltip(
+            tfm::format("%s", histogramTooltipBase)
         );
     }
 }

@@ -117,7 +117,7 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
     nvgBeginPath(ctx);
     nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
-    nvgRoundedRect(ctx, mPos.x() + 0.5f, mPos.y() + 0.5f, mSize.x() - 1, mSize.y() - 1, 2.5f);
+    nvgRoundedRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y(), 2.5f);
     nvgPathWinding(ctx, NVG_HOLE);
     nvgFillColor(ctx, Color(0.23f, 1.0f));
     nvgFill(ctx);
