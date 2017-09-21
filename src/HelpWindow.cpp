@@ -8,6 +8,7 @@
 #include <nanogui/label.h>
 #include <nanogui/layout.h>
 #include <nanogui/opengl.h>
+#include <nanogui/tabwidget.h>
 #include <nanogui/window.h>
 
 using namespace nanogui;
@@ -28,96 +29,145 @@ string HelpWindow::ALT = "Alt";
 #endif
 
 HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
-    : Window{parent, "Help – Keybindings"}, mCloseCallback{closeCallback} {
+    : Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{buttonPanel(), "", ENTYPO_ICON_CROSS};
     closeButton->setCallback(mCloseCallback);
 
     setLayout(new GroupLayout{});
+    setFixedWidth(600);
 
-    setFixedWidth(435);
-    auto addRow = [](Widget* current, string keys, string desc) {
-        auto row = new Widget{current};
-        row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 0, 10});
-        auto descWidget = new Label{row, desc, "sans"};
-        descWidget->setFixedWidth(210);
-        new Label{row, keys, "sans-bold"};
-    };
+    TabWidget* tabWidget = new TabWidget{this};
+    
+    // Keybindings tab
+    {
+        Widget* shortcuts = tabWidget->createTab("Keybindings");
+        shortcuts->setLayout(new GroupLayout{});
 
-    auto addSpacer = [](Widget* current) {
-        auto row = new Widget{current};
-        row->setHeight(10);
-    };
+        auto addRow = [](Widget* current, string keys, string desc) {
+            auto row = new Widget{current};
+            row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 0, 10});
+            auto descWidget = new Label{row, desc, "sans"};
+            descWidget->setFixedWidth(250);
+            new Label{row, keys, "sans-bold"};
+        };
 
-    new Label{this, "Image Loading", "sans-bold", 18};
-    auto imageLoading = new Widget{this};
-    imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        auto addSpacer = [](Widget* current) {
+            auto row = new Widget{current};
+            row->setHeight(10);
+        };
 
-    addRow(imageLoading, COMMAND + "+O",                             "Open Image");
-    addRow(imageLoading, COMMAND + "+S",                             "Save View as Image");
-    addRow(imageLoading, COMMAND + "+R or F5",                       "Reload Image");
-    addRow(imageLoading, COMMAND + "+Shift+R or " + COMMAND + "+F5", "Reload All Images");
-    addRow(imageLoading, COMMAND + "+W",                             "Close Image");
+        new Label{shortcuts, "Image Loading", "sans-bold", 18};
+        auto imageLoading = new Widget{shortcuts};
+        imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    new Label{this, "Image Options", "sans-bold", 18};
-    auto imageSelection = new Widget{this};
-    imageSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        addRow(imageLoading, COMMAND + "+O",                             "Open Image");
+        addRow(imageLoading, COMMAND + "+S",                             "Save View as Image");
+        addRow(imageLoading, COMMAND + "+R or F5",                       "Reload Image");
+        addRow(imageLoading, COMMAND + "+Shift+R or " + COMMAND + "+F5", "Reload All Images");
+        addRow(imageLoading, COMMAND + "+W",                             "Close Image");
 
-    addRow(imageSelection, "Left Click", "Select Hovered Image");
-    addRow(imageSelection, "1…9",        "Select N-th Image");
-    addRow(imageSelection, "Down or S",  "Select Next Image");
-    addRow(imageSelection, "Up or W",    "Select Previous Image");
+        new Label{shortcuts, "Image Options", "sans-bold", 18};
+        auto imageSelection = new Widget{shortcuts};
+        imageSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addSpacer(imageSelection);
+        addRow(imageSelection, "Left Click",          "Select Hovered Image");
+        addRow(imageSelection, "1…9",                 "Select N-th Image");
+        addRow(imageSelection, "Down or S / Up or W", "Select Next Image");
 
-    addRow(imageSelection, "F", "Fit Image to Screen");
-    addRow(imageSelection, "N", "Normalize Image to [0, 1]");
-    addRow(imageSelection, "R", "Reset Image Parameters");
+        addSpacer(imageSelection);
 
-    addSpacer(imageSelection);
+        addRow(imageSelection, "F", "Fit Image to Screen");
+        addRow(imageSelection, "N", "Normalize Image to [0, 1]");
+        addRow(imageSelection, "R", "Reset Image Parameters");
 
-    addRow(imageSelection, "Shift+Right or Shift+D", "Select Next Tonemap");
-    addRow(imageSelection, "Shift+Left or Shift+A",  "Select Previous Tonemap");
+        addSpacer(imageSelection);
 
-    addSpacer(imageSelection);
+        addRow(imageSelection, "Shift+Right or Shift+D / Shift+Left or Shift+A", "Select Next / Previous Tonemap");
 
-    addRow(imageSelection, "E",       "Increase Exposure by 0.5");
-    addRow(imageSelection, "Shift+E", "Decrease Exposure by 0.5");
-    addRow(imageSelection, "O",       "Increase Offset by 0.1");
-    addRow(imageSelection, "Shift+O", "Decrease Offset by 0.1");
+        addSpacer(imageSelection);
 
-    new Label{this, "Reference Options", "sans-bold", 18};
-    auto referenceSelection = new Widget{this};
-    referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        addRow(imageSelection, "E / Shift+E", "Increase / Decrease Exposure by 0.5");
+        addRow(imageSelection, "O / Shift+O", "Increase / Decrease Offset by 0.1");
 
-    addRow(referenceSelection, "Shift+Left Click or Right Click", "Select Hovered Image as Reference");
-    addRow(referenceSelection, "Shift+1…9",                       "Select N-th Image as Reference");
-    addRow(referenceSelection, "Shift+Down or Shift+S",           "Select Next Image as Reference");
-    addRow(referenceSelection, "Shift+Up or Shift+W",             "Select Previous Image as Reference");
+        new Label{shortcuts, "Reference Options", "sans-bold", 18};
+        auto referenceSelection = new Widget{shortcuts};
+        referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addSpacer(referenceSelection);
+        addRow(referenceSelection, "Shift+Left Click or Right Click",             "Select Hovered Image as Reference");
+        addRow(referenceSelection, "Shift+1…9",                                   "Select N-th Image as Reference");
+        addRow(referenceSelection, "Shift+Down or Shift+S / Shift+Up or Shift+W", "Select Next / Previous Image as Reference");
 
-    addRow(referenceSelection, "Ctrl+Right or Ctrl+D", "Select Next Error Metric");
-    addRow(referenceSelection, "Ctrl+Left or Ctrl+A",  "Select Previous Error Metric");
+        addSpacer(referenceSelection);
 
-    new Label{this, "Layer Options", "sans-bold", 18};
-    auto layerSelection = new Widget{this};
-    layerSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        addRow(referenceSelection, "Ctrl+Right or Ctrl+D / Ctrl+Left or Ctrl+A", "Select Next / Previous Error Metric");
 
-    addRow(layerSelection, "Left Click", "Select Hovered Layer");
-    addRow(layerSelection, "Ctrl+1…9",   "Select N-th Layer");
-    addRow(layerSelection, "Right or D", "Select Next Layer");
-    addRow(layerSelection, "Left or A",  "Select Previous Layer");
+        new Label{shortcuts, "Layer Options", "sans-bold", 18};
+        auto layerSelection = new Widget{shortcuts};
+        layerSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    new Label{this, "Interface", "sans-bold", 18};
-    auto ui = new Widget{this};
-    ui->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        addRow(layerSelection, "Left Click",             "Select Hovered Layer");
+        addRow(layerSelection, "Ctrl+1…9",               "Select N-th Layer");
+        addRow(layerSelection, "Right or D / Left or A", "Select Next / Previous Layer");
 
-    addRow(ui, ALT + "+Enter", "Maximize");
-    addRow(ui, COMMAND + "+B", "Toggle GUI");
-    addRow(ui, "H",            "Show Help (this Window)");
-    addRow(ui, COMMAND + "+P", "Find Image or Layer");
-    addRow(ui, "Q or Esc",     "Quit");
+        new Label{shortcuts, "Interface", "sans-bold", 18};
+        auto ui = new Widget{shortcuts};
+        ui->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+
+        addRow(ui, ALT + "+Enter", "Maximize");
+        addRow(ui, COMMAND + "+B", "Toggle GUI");
+        addRow(ui, "H",            "Show Help (this Window)");
+        addRow(ui, COMMAND + "+P", "Find Image or Layer");
+        addRow(ui, "Q or Esc",     "Quit");
+    }
+    
+    // About tab
+    {
+        Widget* about = tabWidget->createTab("About");
+        about->setLayout(new GroupLayout{});
+        
+        auto addText = [](Widget* current, string text) {
+            auto row = new Widget{current};
+            row->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
+            new Label{row, text, "sans", 18};
+        };
+
+        auto addLibrary = [](Widget* current, string name, string license, string desc) {
+            auto row = new Widget{current};
+            row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5, 30});
+            auto leftColumn = new Widget{row};
+            leftColumn->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
+            leftColumn->setFixedWidth(130);
+
+            new Label{leftColumn, name, "sans-bold", 18};
+            new Label{row, desc, "sans", 18};
+        };
+
+        auto addSpacer = [](Widget* current, int space) {
+            auto row = new Widget{current};
+            row->setHeight(space);
+        };
+
+        addSpacer(about, 20);
+
+        addText(about, "tev was developed by Thomas Müller and is released under the BSD 3-Clause License.");
+        addText(about, "It was built directly or indirectly upon the following amazing third-party libraries.");
+
+        addSpacer(about, 40);
+
+        addLibrary(about, "args",              "", "Single-Header Argument Parsing Library.");
+        addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra.");
+        addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator.");
+        addLibrary(about, "GLEW",              "", "The OpenGL Extension Wrangler Library.");
+        addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library.");
+        addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL.");
+        addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library.");
+        addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format.");
+        addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images.");
+        addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement.");
+    }
+
+    tabWidget->setActiveTab(0);
 }
 
 bool HelpWindow::keyboardEvent(int key, int scancode, int action, int modifiers) {
