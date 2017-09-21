@@ -13,6 +13,14 @@
 
 TEV_NAMESPACE_BEGIN
 
+struct CanvasStatistics {
+    float mean;
+    float maximum;
+    float minimum;
+    Eigen::MatrixXf histogram;
+    int histogramZero;
+};
+
 class ImageCanvas : public nanogui::GLCanvas {
 public:
     ImageCanvas(nanogui::Widget* parent, float pixelRatio);
@@ -84,11 +92,11 @@ public:
 
     void saveImage(const std::string& filename);
 
-    std::shared_ptr<Lazy<float>> meanValue();
+    std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
 private:
     std::vector<Channel> channelsFromDisplayedImage() const;
-    float computeMeanValue() const;
+    std::shared_ptr<CanvasStatistics> computeCanvasStatistics() const;
 
     Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;
 
@@ -112,7 +120,7 @@ private:
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
 
-    std::map<std::string, std::shared_ptr<Lazy<float>>> mMeanValues;
+    std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mMeanValues;
     ThreadPool mMeanValueThreadPool;
 };
 

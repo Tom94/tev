@@ -87,6 +87,7 @@ set(TEV_SOURCES
     include/tev/ImageViewer.h src/ImageViewer.cpp
     include/tev/Ipc.h src/Ipc.cpp
     include/tev/Lazy.h src/Lazy.cpp
+    include/tev/MultiGraph.h src/MultiGraph.cpp
     include/tev/SharedQueue.h src/SharedQueue.cpp
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp

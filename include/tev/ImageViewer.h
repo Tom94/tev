@@ -9,6 +9,7 @@
 #include <tev/ImageCanvas.h>
 #include <tev/Ipc.h>
 #include <tev/Lazy.h>
+#include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
 
 #include <nanogui/glutil.h>
@@ -160,6 +161,11 @@ private:
     std::shared_ptr<Image> mCurrentReference;
 
     std::vector<std::shared_ptr<Image>> mImages;
+
+    nanogui::Label* mZoomLevel;
+    nanogui::Label* mHoveredPixel;
+    nanogui::Label* mMeanValue;
+    MultiGraph* mHistogram;
 
     nanogui::TextBox* mFilter;
 

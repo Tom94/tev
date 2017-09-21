@@ -68,7 +68,7 @@ public:
         }
 
         if (mThreadPool) {
-            mAsyncValue = mThreadPool->enqueueTask(mCompute);
+            mAsyncValue = mThreadPool->enqueueTask(mCompute, true);
         } else {
             mAsyncValue = std::async(std::launch::async, mCompute);
         }
