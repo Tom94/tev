@@ -7,7 +7,6 @@
 
 #include <nanogui/theme.h>
 #include <nanogui/opengl.h>
-#include <nanogui/serializer/core.h>
 
 using namespace Eigen;
 using namespace nanogui;
@@ -55,16 +54,17 @@ void MultiGraph::draw(NVGcontext *ctx) {
         for (size_t i = 0; i < (size_t)mValues.cols(); i++) {
             nvgBeginPath(ctx);
             nvgMoveTo(ctx, mPos.x(), mPos.y() + mSize.y());
+            
             for (size_t j = 0; j < (size_t)mValues.rows(); j++) {
                 float value = mValues(j, i);
-                float vx = mPos.x() + j * mSize.x() / (float)(mValues.rows() - 1);
+                float vx = mPos.x() + 2 + j * (mSize.x() - 4) / (float)(mValues.rows() - 1);
                 float vy = mPos.y() + (1 - value) * mSize.y();
                 nvgLineTo(ctx, vx, vy);
             }
 
             auto color = i < colors.size() ? colors[i] : mForegroundColor;
             nvgLineTo(ctx, mPos.x() + mSize.x(), mPos.y() + mSize.y());
-            nvgFillColor(ctx, colors[i]);
+            nvgFillColor(ctx, color);
             nvgFill(ctx);
         }
 
@@ -72,7 +72,7 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         if (mZeroBin > 0) {
             nvgBeginPath(ctx);
-            nvgRect(ctx, mPos.x() + mZeroBin * mSize.x() / (float)(mValues.rows() - 1), mPos.y() + 15, 1, mSize.y() - 15);
+            nvgRect(ctx, mPos.x() + 2 + mZeroBin * (mSize.x() - 4) / (float)(mValues.rows() - 1), mPos.y() + 15, 1, mSize.y() - 15);
             nvgFillColor(ctx, Color(200, 255));
             nvgFill(ctx);
         }
