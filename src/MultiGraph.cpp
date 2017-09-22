@@ -64,7 +64,7 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
             auto color = i < colors.size() ? colors[i] : mForegroundColor;
             nvgLineTo(ctx, mPos.x() + mSize.x(), mPos.y() + mSize.y());
-            nvgFillColor(ctx, colors[i]);
+            nvgFillColor(ctx, color);
             nvgFill(ctx);
         }
 
