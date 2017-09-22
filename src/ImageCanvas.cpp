@@ -604,7 +604,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         ++iChannel;
     }
 
-    result->histogram /= result->histogram.maxCoeff() * 1.3f;
+    result->histogram *= NUM_BINS * 0.25f / ((size_t)image->size().x() * image->size().y() * nChannels);
     result->histogramZero = valToBin(0);
     return result;
 }
