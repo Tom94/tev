@@ -184,7 +184,7 @@ float ImageCanvas::applyExposureAndOffset(float value) {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-vector<string> ImageCanvas::getChannels(const Image& image) const {
+vector<string> ImageCanvas::getChannels(const Image& image, const string& requestedLayer) {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
         { "r", "g", "b" },
@@ -196,7 +196,7 @@ vector<string> ImageCanvas::getChannels(const Image& image) const {
         { "z" },
     };
 
-    string layerPrefix = mRequestedLayer.empty() ? "" : (mRequestedLayer + ".");
+    string layerPrefix = requestedLayer.empty() ? "" : (requestedLayer + ".");
 
     vector<string> result;
     for (const auto& group : groups) {
@@ -216,7 +216,7 @@ vector<string> ImageCanvas::getChannels(const Image& image) const {
 
     // No channels match the given groups; fall back to the first 3 channels.
     if (result.empty()) {
-        const auto& channelNames = image.channelsInLayer(mRequestedLayer);
+        const auto& channelNames = image.channelsInLayer(requestedLayer);
         for (const auto& name : channelNames) {
             if (name != alphaChannelName) {
                 result.emplace_back(name);
@@ -277,9 +277,9 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     }
 }
 
-Vector3f ImageCanvas::applyTonemap(const Vector3f& value) const {
+Vector3f ImageCanvas::applyTonemap(const Vector3f& value, ETonemap tonemap) {
     Vector3f result;
-    switch (mTonemap) {
+    switch (tonemap) {
         case ETonemap::SRGB:
             {
                 static const auto toSRGB = [](float linear) {
@@ -322,9 +322,9 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value) const {
     return result.cwiseMax(Vector3f::Zero()).cwiseMin(Vector3f::Ones());
 }
 
-float ImageCanvas::applyMetric(float image, float reference) const {
+float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
     float diff = image - reference;
-    switch (mMetric) {
+    switch (metric) {
         case EMetric::Error:                 return diff;
         case EMetric::AbsoluteError:         return abs(diff);
         case EMetric::SquaredError:          return diff * diff;
@@ -349,7 +349,7 @@ void ImageCanvas::saveImage(const string& filename) {
         return;
     }
 
-    const auto& channels = channelsFromDisplayedImage();
+    const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
     Vector2i imageSize = channels.front().size();
     size_t numPixels = (size_t)imageSize.x() * imageSize.y();
 
@@ -436,8 +436,11 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         return iter->second;
     }
 
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([this]() {
-        return computeCanvasStatistics();
+    auto image = mImage, reference = mReference;
+    auto requestedLayer = mRequestedLayer;
+    auto metric = mMetric;
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedLayer, metric]() {
+        return computeCanvasStatistics(image, reference, requestedLayer, metric);
     }, &mMeanValueThreadPool)));
 
     auto val = mMeanValues.at(key);
@@ -445,21 +448,26 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     return val;
 }
 
-vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
-    if (!mImage) {
+vector<Channel> ImageCanvas::channelsFromImages(
+    shared_ptr<Image> image,
+    shared_ptr<Image> reference,
+    const string& requestedLayer,
+    EMetric metric
+) {
+    if (!image) {
         return {};
     }
 
     vector<Channel> result;
-    const auto& channelNames = getChannels(*mImage);
+    const auto& channelNames = getChannels(*image, requestedLayer);
     for (size_t i = 0; i < channelNames.size(); ++i) {
-        result.emplace_back(toUpper(Channel::tail(channelNames[i])), mImage->size());
+        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
     }
 
-    if (!mReference) {
+    if (!reference) {
         ThreadPool pool;
         pool.parallelFor(0, channelNames.size(), [&](size_t i) {
-            const auto* chan = mImage->channel(channelNames[i]);
+            const auto* chan = image->channel(channelNames[i]);
             const auto& channelData = chan->data();
 
             for (size_t j = 0; j < channelData.size(); ++j) {
@@ -467,17 +475,17 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
             }
         });
     } else {
-        Vector2i size = mImage->size();
-        Vector2i offset = (mReference->size() - size) / 2;
-        const auto& referenceChannels = getChannels(*mReference);
+        Vector2i size = image->size();
+        Vector2i offset = (reference->size() - size) / 2;
+        const auto& referenceChannels = getChannels(*reference, requestedLayer);
 
         ThreadPool pool;
         pool.parallelFor(0, channelNames.size(), [&](size_t i) {
-            const auto* chan = mImage->channel(channelNames[i]);
+            const auto* chan = image->channel(channelNames[i]);
             bool isAlpha = result[i].name() == "A";
 
             if (i < referenceChannels.size()) {
-                const Channel* referenceChan = mReference->channel(referenceChannels[i]);
+                const Channel* referenceChan = reference->channel(referenceChannels[i]);
                 if (isAlpha) {
                     for (int y = 0; y < size.y(); ++y) {
                         for (int x = 0; x < size.x(); ++x) {
@@ -492,7 +500,8 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
                         for (int x = 0; x < size.x(); ++x) {
                             result[i].at({x, y}) = applyMetric(
                                 chan->eval({x, y}),
-                                referenceChan->eval({x + offset.x(), y + offset.y()})
+                                referenceChan->eval({x + offset.x(), y + offset.y()}),
+                                metric
                             );
                         }
                     }
@@ -507,7 +516,7 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
                 } else {
                     for (int y = 0; y < size.y(); ++y) {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = applyMetric(chan->eval({x, y}), 0);
+                            result[i].at({x, y}) = applyMetric(chan->eval({x, y}), 0, metric);
                         }
                     }
                 }
@@ -518,8 +527,13 @@ vector<Channel> ImageCanvas::channelsFromDisplayedImage() const {
     return result;
 }
 
-shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics() const {
-    const auto& flattened = channelsFromDisplayedImage();
+shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
+    std::shared_ptr<Image> image,
+    std::shared_ptr<Image> reference,
+    const std::string& requestedLayer,
+    EMetric metric
+) {
+    const auto& flattened = channelsFromImages(image, reference, requestedLayer, metric);
 
     float mean = 0;
     float maximum = -numeric_limits<float>::infinity();

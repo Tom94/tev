@@ -56,7 +56,10 @@ public:
         mRequestedLayer = layerName;
     }
 
-    std::vector<std::string> getChannels(const Image& image) const;
+    static std::vector<std::string> getChannels(const Image& image, const std::string& requestedLayer);
+    std::vector<std::string> getChannels(const Image& image) const {
+        return getChannels(image, mRequestedLayer);
+    }
 
     Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
 
@@ -75,7 +78,10 @@ public:
         mTonemap = tonemap;
     }
 
-    Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value) const;
+    static Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value, ETonemap tonemap);
+    Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value) const {
+        return applyTonemap(value, mTonemap);
+    }
 
     EMetric metric() const {
         return mMetric;
@@ -85,7 +91,10 @@ public:
         mMetric = metric;
     }
 
-    float applyMetric(float value, float reference) const;
+    static float applyMetric(float value, float reference, EMetric metric);
+    float applyMetric(float value, float reference) const {
+        return applyMetric(value, reference, mMetric);
+    }
 
     void fitImageToScreen(const Image& image);
     void resetTransform();
@@ -95,8 +104,19 @@ public:
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
 private:
-    std::vector<Channel> channelsFromDisplayedImage() const;
-    std::shared_ptr<CanvasStatistics> computeCanvasStatistics() const;
+    static std::vector<Channel> channelsFromImages(
+        std::shared_ptr<Image> image,
+        std::shared_ptr<Image> reference,
+        const std::string& requestedLayer,
+        EMetric metric
+    );
+
+    static std::shared_ptr<CanvasStatistics> computeCanvasStatistics(
+        std::shared_ptr<Image> image,
+        std::shared_ptr<Image> reference,
+        const std::string& requestedLayer,
+        EMetric metric
+    );
 
     Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;
 
