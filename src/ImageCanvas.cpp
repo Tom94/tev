@@ -541,8 +541,10 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
 
     size_t nChannels = 0;
 
+    const Channel* alphaChannel = nullptr;
     for (const auto& channel : flattened) {
         if (channel.name() == "A") {
+            alphaChannel = &channel;
             continue;
         }
 
@@ -596,7 +598,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         size_t numElements = (size_t)channelSize.x() * channelSize.y();
         for (size_t i = 0; i < numElements; ++i) {
             int bin = valToBin(channel.eval(i));
-            result->histogram(bin, iChannel) += 1;
+            result->histogram(bin, iChannel) += alphaChannel ? alphaChannel->eval(i) : 1;
         }
 
         ++iChannel;

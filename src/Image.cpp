@@ -33,7 +33,7 @@ bool isExrFile(const string& filename) {
     return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 }
 
-atomic<int> Image::sId = 0;
+atomic<int> Image::sId(0);
 
 Image::Image(const string& filename, const string& channelSelector)
 : mFilename{ filename }, mChannelSelector{ channelSelector }, mId{sId++} {
