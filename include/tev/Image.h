@@ -6,6 +6,7 @@
 #include <tev/Channel.h>
 #include <tev/GlTexture.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <string>
@@ -55,9 +56,15 @@ public:
         return mLayers;
     }
 
+    int id() const {
+        return mId;
+    }
+
     std::string toString() const;
 
 private:
+    static std::atomic<int> sId;
+
     void readStbi();
     void readExr();
 
@@ -72,6 +79,8 @@ private:
     std::map<std::string, GlTexture> mTextures;
 
     std::vector<std::string> mLayers;
+
+    const int mId;
 };
 
 std::shared_ptr<Image> tryLoadImage(std::string filename, std::string channelSelector);

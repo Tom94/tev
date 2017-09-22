@@ -428,8 +428,8 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
 
     string channels = join(getChannels(*mImage), ",");
     string key = mReference ?
-        tfm::format("%s-%s-%s-%d", mImage->filename(), channels, mReference->filename(), mMetric) :
-        tfm::format("%s-%s", mImage->filename(), channels);
+        tfm::format("%d-%s-%d-%d", mImage->id(), channels, mReference->id(), mMetric) :
+        tfm::format("%d-%s", mImage->id(), channels);
 
     auto iter = mMeanValues.find(key);
     if (iter != end(mMeanValues)) {
