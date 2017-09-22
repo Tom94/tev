@@ -553,7 +553,7 @@ void ImageViewer::drawContents() {
     updateTitle();
 
     // Update histogram
-    static const string histogramTooltipBase = "Histogram of color values.Adapts to the currently chosen layer and error metric.";
+    static const string histogramTooltipBase = "Histogram of color values. Adapts to the currently chosen layer and error metric.";
     auto lazyCanvasStatistics = mImageCanvas->canvasStatistics();
     if (lazyCanvasStatistics) {
         if (lazyCanvasStatistics->isReady()) {
@@ -574,7 +574,7 @@ void ImageViewer::drawContents() {
                 statistics->maximum)
             );
         }
-        
+
     } else {
         mHistogram->setValues(MatrixXf::Zero(1, 1));
         mHistogram->setMinimum(0);
