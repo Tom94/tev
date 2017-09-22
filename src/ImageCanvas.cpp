@@ -498,7 +498,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
                 } else {
                     for (int y = 0; y < size.y(); ++y) {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = applyMetric(
+                            result[i].at({x, y}) = ImageCanvas::applyMetric(
                                 chan->eval({x, y}),
                                 referenceChan->eval({x + offset.x(), y + offset.y()}),
                                 metric
@@ -516,7 +516,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
                 } else {
                     for (int y = 0; y < size.y(); ++y) {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = applyMetric(chan->eval({x, y}), 0, metric);
+                            result[i].at({x, y}) = ImageCanvas::applyMetric(chan->eval({x, y}), 0, metric);
                         }
                     }
                 }
