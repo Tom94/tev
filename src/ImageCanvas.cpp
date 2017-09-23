@@ -275,14 +275,6 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, ETonemap tonemap) {
     switch (tonemap) {
         case ETonemap::SRGB:
             {
-                static const auto toSRGB = [](float linear) {
-                    if (linear < 0.0031308f) {
-                        return 12.92f * linear;
-                    } else {
-                        return 1.055f * pow(linear, 0.41666f) - 0.055f;
-                    }
-                };
-
                 result = {toSRGB(value.x()), toSRGB(value.y()), toSRGB(value.z())};
                 break;
             }

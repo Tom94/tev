@@ -157,12 +157,19 @@ void Image::readStbi() {
     ThreadPool threadPool;
 
     int numChannels;
-    auto data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+    void* data;
+    bool isHdr = stbi_is_hdr(mFilename.c_str());
+    if (isHdr) {
+        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+    } else {
+        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+    }
+
     if (!data) {
         throw invalid_argument("Could not load texture data from file " + mFilename);
     }
 
-    mNumChannels = static_cast<size_t>(numChannels);
+    mNumChannels = (size_t)numChannels;
 
     vector<Channel> channels;
     for (size_t c = 0; c < mNumChannels; ++c) {
@@ -170,12 +177,24 @@ void Image::readStbi() {
     }
 
     size_t numPixels = (size_t)mSize.x() * mSize.y();
-    threadPool.parallelFor(0, numPixels, [&](size_t i) {
-        size_t baseIdx = i * mNumChannels;
-        for (size_t c = 0; c < mNumChannels; ++c) {
-            channels[c].data()[i] = data[baseIdx + c];
-        }
-    });
+
+    if (isHdr) {
+        float* typedData = reinterpret_cast<float*>(data);
+        threadPool.parallelFor(0, numPixels, [&](size_t i) {
+            size_t baseIdx = i * mNumChannels;
+            for (size_t c = 0; c < mNumChannels; ++c) {
+                channels[c].data()[i] = typedData[baseIdx + c];
+            }
+        });
+    } else {
+        unsigned char* typedData = reinterpret_cast<unsigned char*>(data);
+        threadPool.parallelFor(0, numPixels, [&](size_t i) {
+            size_t baseIdx = i * mNumChannels;
+            for (size_t c = 0; c < mNumChannels; ++c) {
+                channels[c].data()[i] = toLinear((typedData[baseIdx + c]) / 255.0f);
+            }
+        });
+    }
 
     stbi_image_free(data);
 

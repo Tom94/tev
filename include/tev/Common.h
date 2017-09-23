@@ -77,6 +77,24 @@ bool matches(std::string text, std::string filter);
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
 
+inline float toSRGB(float linear, float gamma = 2.4f) {
+    static const float a = 0.055f;
+    if (linear <= 0.0031308f) {
+        return 12.92f * linear;
+    } else {
+        return (1 + a) * pow(linear, 1 / gamma) - a;
+    }
+}
+
+inline float toLinear(float sRGB, float gamma = 2.4f) {
+    static const float a = 0.055f;
+    if (sRGB <= 0.04045f) {
+        return sRGB / 12.92f;
+    } else {
+        return pow((sRGB + a) / (1 + a), gamma);
+    }
+}
+
 int lastError();
 int lastSocketError();
 std::string errorString(int errorId);
