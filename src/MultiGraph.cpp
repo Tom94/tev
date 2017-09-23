@@ -83,7 +83,7 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         nvgFontFace(ctx, "sans");
 
-        nvgFontSize(ctx, 14.0f);
+        nvgFontSize(ctx, 15.0f);
         nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
         drawTextWithShadow(ctx, mPos.x() + 3, mPos.y() + 1, tfm::format("%.3f", mMinimum));
