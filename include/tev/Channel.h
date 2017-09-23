@@ -12,6 +12,8 @@ TEV_NAMESPACE_BEGIN
 
 class Channel {
 public:
+    using RowMatrixXf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
     Channel(size_t index, Eigen::Vector2i size);
     Channel(const std::string& name, Eigen::Vector2i size);
 
@@ -19,19 +21,15 @@ public:
         return mName;
     }
 
-    std::vector<float>& data() {
+    const RowMatrixXf& data() const {
         return mData;
     }
 
-    const std::vector<float>& data() const {
-        return mData;
-    }
-
-    float eval(size_t index) const {
+    float eval(Eigen::DenseIndex index) const {
         if (index >= mData.size()) {
             return 0;
         }
-        return mData[index];
+        return mData(index);
     }
 
     float eval(Eigen::Vector2i index) const {
@@ -40,18 +38,18 @@ public:
             return 0;
         }
 
-        size_t i = index.x() + index.y() * mSize.x();
-        return mData[i];
+        return mData(index.x() + index.y() * mSize.x());
+    }
+
+    float& at(Eigen::DenseIndex index) {
+        return mData(index);
     }
 
     float& at(Eigen::Vector2i index) {
-        size_t i = index.x() + index.y() * mSize.x();
-        return mData[i];
+        return at(index.x() + index.y() * mSize.x());
     }
 
-    float computeMean() const;
-
-    size_t count() const {
+    Eigen::DenseIndex count() const {
         return mData.size();
     }
 
@@ -70,7 +68,7 @@ public:
 
 private:
     std::string mName;
-    std::vector<float> mData;
+    RowMatrixXf mData;
     Eigen::Vector2i mSize;
 };
 

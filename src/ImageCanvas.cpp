@@ -336,7 +336,7 @@ void ImageCanvas::saveImage(const string& filename) {
 
     const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
     Vector2i imageSize = channels.front().size();
-    size_t numPixels = (size_t)imageSize.x() * imageSize.y();
+    auto numPixels = (DenseIndex)imageSize.x() * imageSize.y();
 
     TEV_ASSERT(channels.size() <= 4, "Can not save an image with more than 4 channels.");
 
@@ -348,19 +348,19 @@ void ImageCanvas::saveImage(const string& filename) {
     auto start = chrono::system_clock::now();
 
     // Flatten channels into single array
-    vector<float> floatData(4 * channels.front().data().size(), 0);
+    vector<float> floatData(4 * channels.front().count(), 0);
 
     ThreadPool pool;
-    pool.parallelFor(0, channels.size(), [&channels, &floatData](size_t i) {
+    pool.parallelFor(0, (int)channels.size(), [&channels, &floatData](int i) {
         const auto& channelData = channels[i].data();
-        for (size_t j = 0; j < channelData.size(); ++j) {
-            floatData[j * 4 + i] = channelData[j];
+        for (DenseIndex j = 0; j < channelData.size(); ++j) {
+            floatData[j * 4 + i] = channelData(j);
         }
     });
 
     // Manually set alpha channel to 1 if the image does not have one.
     if (channels.size() < 4) {
-        for (size_t i = 0; i < numPixels; ++i) {
+        for (DenseIndex i = 0; i < numPixels; ++i) {
             floatData[i * 4 + 3] = 1;
         }
     }
@@ -372,7 +372,7 @@ void ImageCanvas::saveImage(const string& filename) {
     } else {
         // Store as LDR image.
         vector<char> byteData(floatData.size());
-        pool.parallelFor(0, numPixels, [&](size_t i) {
+        pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             size_t start = 4 * i;
             Vector3f value = applyTonemap({
                 applyExposureAndOffset(floatData[start]),
@@ -451,12 +451,10 @@ vector<Channel> ImageCanvas::channelsFromImages(
 
     if (!reference) {
         ThreadPool pool;
-        pool.parallelFor(0, channelNames.size(), [&](size_t i) {
+        pool.parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
-            const auto& channelData = chan->data();
-
-            for (size_t j = 0; j < channelData.size(); ++j) {
-                result[i].data()[j] = channelData[j];
+            for (DenseIndex j = 0; j < chan->count(); ++j) {
+                result[i].at(j) = chan->eval(j);
             }
         });
     } else {
@@ -465,7 +463,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         const auto& referenceChannels = getChannels(*reference, requestedLayer);
 
         ThreadPool pool;
-        pool.parallelFor(0, channelNames.size(), [&](size_t i) {
+        pool.parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
             bool isAlpha = result[i].name() == "A";
 

@@ -17,6 +17,7 @@
 #include <iostream>
 #include <set>
 
+using namespace Eigen;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -76,7 +77,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
     mTextures.emplace(lookup, GlTexture{});
     auto& texture = mTextures.at(lookup);
 
-    size_t numPixels = (size_t)mSize.x() * mSize.y();
+    auto numPixels = mSize.prod();
     vector<float> data(numPixels * 4);
 
     ThreadPool pool;
@@ -90,7 +91,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
 
             const auto& channelData = chan->data();
             pool.parallelForNoWait(0, numPixels, [&channelData, &data, i](size_t j) {
-                data[j * 4 + i] = channelData[j];
+                data[j * 4 + i] = channelData(j);
             });
         } else {
             float val = i == 3 ? 1 : 0;
@@ -156,42 +157,39 @@ void Image::readStbi() {
 
     ThreadPool threadPool;
 
-    int numChannels;
     void* data;
     bool isHdr = stbi_is_hdr(mFilename.c_str());
     if (isHdr) {
-        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &mNumChannels, 0);
     } else {
-        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &mNumChannels, 0);
     }
 
     if (!data) {
         throw invalid_argument("Could not load texture data from file " + mFilename);
     }
 
-    mNumChannels = (size_t)numChannels;
-
     vector<Channel> channels;
     for (size_t c = 0; c < mNumChannels; ++c) {
         channels.emplace_back(c, mSize);
     }
 
-    size_t numPixels = (size_t)mSize.x() * mSize.y();
+    auto numPixels = mSize.prod();
 
     if (isHdr) {
         float* typedData = reinterpret_cast<float*>(data);
-        threadPool.parallelFor(0, numPixels, [&](size_t i) {
-            size_t baseIdx = i * mNumChannels;
-            for (size_t c = 0; c < mNumChannels; ++c) {
-                channels[c].data()[i] = typedData[baseIdx + c];
+        threadPool.parallelFor(0, numPixels, [&](int i) {
+            int baseIdx = i * mNumChannels;
+            for (int c = 0; c < mNumChannels; ++c) {
+                channels[c].at(i) = typedData[baseIdx + c];
             }
         });
     } else {
         unsigned char* typedData = reinterpret_cast<unsigned char*>(data);
-        threadPool.parallelFor(0, numPixels, [&](size_t i) {
-            size_t baseIdx = i * mNumChannels;
-            for (size_t c = 0; c < mNumChannels; ++c) {
-                channels[c].data()[i] = toLinear((typedData[baseIdx + c]) / 255.0f);
+        threadPool.parallelFor(0, numPixels, [&](int i) {
+            int baseIdx = i * mNumChannels;
+            for (int c = 0; c < mNumChannels; ++c) {
+                channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
             }
         });
     }
@@ -273,26 +271,24 @@ l_foundPart:
         }
 
         void copyTo(Channel& channel, ThreadPool& threadPool) const {
-            auto& dstData = channel.data();
-
             // The code in this switch statement may seem overly complicated, but it helps
             // the compiler optimize. This code is time-critical for large images.
             switch (mImfChannel.type) {
                 case Imf::HALF:
-                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
-                        dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
+                        channel.at(i) = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
                     });
                     break;
 
                 case Imf::FLOAT:
-                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
-                        dstData[i] = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
+                        channel.at(i) = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
                     });
                     break;
 
                 case Imf::UINT:
-                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
-                        dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
+                        channel.at(i) = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
                     });
                     break;
 
@@ -342,7 +338,7 @@ l_foundPart:
         mLayers.emplace_back(layer);
     }
 
-    threadPool.parallelFor(0, rawChannels.size(), [&](size_t i) {
+    threadPool.parallelFor(0, (int)rawChannels.size(), [&](int i) {
         rawChannels[i].resize(mSize.prod());
     });
 

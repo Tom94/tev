@@ -104,26 +104,4 @@ void ThreadPool::flushQueue() {
     mTaskQueue.clear();
 }
 
-void ThreadPool::parallelForNoWait(size_t start, size_t end, std::function<void(size_t)> body) {
-    size_t localNumThreads = mNumThreads;
-
-    size_t range = end - start;
-    size_t chunk = (range / localNumThreads) + 1;
-
-    for (size_t i = 0; i < localNumThreads; ++i) {
-        enqueueTask([i, chunk, start, end, body] {
-            size_t innerStart = start + i * chunk;
-            size_t innerEnd = min(end, start + (i + 1) * chunk);
-            for (size_t j = innerStart; j < innerEnd; ++j) {
-                body(j);
-            }
-        });
-    }
-}
-
-void ThreadPool::parallelFor(size_t start, size_t end, std::function<void(size_t)> body) {
-    parallelForNoWait(start, end, body);
-    waitUntilFinished();
-}
-
 TEV_NAMESPACE_END

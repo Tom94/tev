@@ -55,8 +55,29 @@ public:
     void waitUntilFinishedFor(const std::chrono::microseconds Duration);
     void flushQueue();
 
-    void parallelForNoWait(size_t start, size_t end, std::function<void(size_t)> body);
-    void parallelFor(size_t start, size_t end, std::function<void(size_t)> body);
+    template <typename Int, typename F>
+    void parallelForNoWait(Int start, Int end, F body) {
+        Int localNumThreads = (Int)mNumThreads;
+
+        Int range = end - start;
+        Int chunk = (range / localNumThreads) + 1;
+
+        for (Int i = 0; i < localNumThreads; ++i) {
+            enqueueTask([i, chunk, start, end, body] {
+                Int innerStart = start + i * chunk;
+                Int innerEnd = min(end, start + (i + 1) * chunk);
+                for (Int j = innerStart; j < innerEnd; ++j) {
+                    body(j);
+                }
+            });
+        }
+    }
+
+    template <typename Int, typename F>
+    void parallelFor(Int start, Int end, F body) {
+        parallelForNoWait(start, end, body);
+        waitUntilFinished();
+    }
 
     static ThreadPool& singleWorker() {
         static ThreadPool threadPool{1};

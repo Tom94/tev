@@ -15,16 +15,12 @@ Channel::Channel(size_t index, Vector2i size)
 : mSize{size} {
     vector<string> channelNames = {"R", "G", "B", "A"};
     mName = index < channelNames.size() ? channelNames[index] : to_string(index - channelNames.size());
-    mData.resize((size_t)mSize.x() * mSize.y());
+    mData.resize(mSize.x(), mSize.y());
 }
 
 Channel::Channel(const std::string& name, Vector2i size)
 : mName{name}, mSize{size} {
-    mData.resize((size_t)mSize.x() * mSize.y());
-}
-
-float Channel::computeMean() const {
-    return accumulate(begin(mData), end(mData), 0.0f) / mData.size();
+    mData.resize(mSize.x(), mSize.y());
 }
 
 pair<string, string> Channel::split(const string& channel) {
