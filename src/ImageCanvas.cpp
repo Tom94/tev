@@ -335,8 +335,8 @@ void ImageCanvas::saveImage(const string& filename) {
     }
 
     const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
-    Vector2i imageSize = channels.front().size();
-    auto numPixels = (DenseIndex)imageSize.x() * imageSize.y();
+    Vector2i imageSize = mImage->size();
+    auto numPixels = mImage->count();
 
     TEV_ASSERT(channels.size() <= 4, "Can not save an image with more than 4 channels.");
 
@@ -522,7 +522,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     float maximum = -numeric_limits<float>::infinity();
     float minimum = numeric_limits<float>::infinity();
 
-    size_t nChannels = 0;
+    int nChannels = 0;
 
     const Channel* alphaChannel = nullptr;
     for (const auto& channel : flattened) {
@@ -531,9 +531,8 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
             continue;
         }
 
-        auto channelSize = channel.size();
-        size_t numElements = (size_t)channelSize.x() * channelSize.y();
-        for (size_t i = 0; i < numElements; ++i) {
+        auto numElements = channel.count();
+        for (DenseIndex i = 0; i < numElements; ++i) {
             float val = channel.eval(i);
             mean += val;
             maximum = max(maximum, val);
@@ -571,15 +570,14 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         return clamp((int)(NUM_BINS * (symmetricLog2(val) - minLog2) / (maxLog2 - minLog2)), 0, NUM_BINS - 1);
     };
 
-    size_t iChannel = 0;
+    int iChannel = 0;
     for (const auto& channel : flattened) {
         if (channel.name() == "A") {
             continue;
         }
 
-        auto channelSize = channel.size();
-        size_t numElements = (size_t)channelSize.x() * channelSize.y();
-        for (size_t i = 0; i < numElements; ++i) {
+        auto numElements = channel.count();
+        for (DenseIndex i = 0; i < numElements; ++i) {
             int bin = valToBin(channel.eval(i));
             result->histogram(bin, iChannel) += alphaChannel ? alphaChannel->eval(i) : 1;
         }
@@ -587,7 +585,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         ++iChannel;
     }
 
-    result->histogram *= NUM_BINS * 0.25f / ((size_t)image->size().x() * image->size().y() * nChannels);
+    result->histogram *= NUM_BINS * 0.25f / (image->count() * nChannels);
     result->histogramZero = valToBin(0);
     return result;
 }

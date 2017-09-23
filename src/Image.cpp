@@ -77,7 +77,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
     mTextures.emplace(lookup, GlTexture{});
     auto& texture = mTextures.at(lookup);
 
-    auto numPixels = mSize.prod();
+    auto numPixels = count();
     vector<float> data(numPixels * 4);
 
     ThreadPool pool;
@@ -90,19 +90,19 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
             }
 
             const auto& channelData = chan->data();
-            pool.parallelForNoWait(0, numPixels, [&channelData, &data, i](size_t j) {
+            pool.parallelForNoWait<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
                 data[j * 4 + i] = channelData(j);
             });
         } else {
             float val = i == 3 ? 1 : 0;
-            pool.parallelForNoWait(0, numPixels, [&data, val, i](size_t j) {
+            pool.parallelForNoWait<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
                 data[j * 4 + i] = val;
             });
         }
     });
     pool.waitUntilFinished();
 
-    texture.setData(data, mSize, 4);
+    texture.setData(data, size(), 4);
     return &texture;
 }
 
@@ -133,7 +133,7 @@ vector<string> Image::channelsInLayer(string layerName) const {
 }
 
 string Image::toString() const {
-    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, mSize.x(), mSize.y());
+    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, size().x(), size().y());
 
     auto localLayers = mLayers;
     transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
@@ -159,11 +159,12 @@ void Image::readStbi() {
 
     void* data;
     int numChannels;
+    Vector2i size;
     bool isHdr = stbi_is_hdr(mFilename.c_str());
     if (isHdr) {
-        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+        data = stbi_loadf(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
     } else {
-        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+        data = stbi_load(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
     }
 
     if (!data) {
@@ -172,14 +173,13 @@ void Image::readStbi() {
 
     vector<Channel> channels;
     for (size_t c = 0; c < numChannels; ++c) {
-        channels.emplace_back(c, mSize);
+        channels.emplace_back(c, size);
     }
 
-    auto numPixels = mSize.prod();
-
+    auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
         float* typedData = reinterpret_cast<float*>(data);
-        threadPool.parallelFor(0, numPixels, [&](int i) {
+        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
@@ -187,7 +187,7 @@ void Image::readStbi() {
         });
     } else {
         unsigned char* typedData = reinterpret_cast<unsigned char*>(data);
-        threadPool.parallelFor(0, numPixels, [&](int i) {
+        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
@@ -248,8 +248,7 @@ l_foundPart:
 
     Imf::InputPart file{multiPartFile, partIdx};
     Imath::Box2i dw = file.header().dataWindow();
-    mSize.x() = dw.max.x - dw.min.x + 1;
-    mSize.y() = dw.max.y - dw.min.y + 1;
+    Vector2i size = {dw.max.x - dw.min.x + 1 , dw.max.y - dw.min.y + 1};
 
     // Inline helper class for dealing with the raw channels loaded from an exr file.
     class RawChannel {
@@ -342,7 +341,7 @@ l_foundPart:
     }
 
     threadPool.parallelFor(0, (int)rawChannels.size(), [&](int i) {
-        rawChannels[i].resize(mSize.prod());
+        rawChannels[i].resize((DenseIndex)size.x() * size.y());
     });
 
     for (size_t i = 0; i < rawChannels.size(); ++i) {
@@ -353,7 +352,7 @@ l_foundPart:
     file.readPixels(dw.min.y, dw.max.y);
 
     for (const auto& rawChannel : rawChannels) {
-        mChannels.emplace(rawChannel.name(), Channel{rawChannel.name(), mSize});
+        mChannels.emplace(rawChannel.name(), Channel{rawChannel.name(), size});
     }
 
     for (size_t i = 0; i < rawChannels.size(); ++i) {
@@ -380,10 +379,10 @@ void Image::ensureValid() {
     }
 
     for (const auto& kv : mChannels) {
-        if (kv.second.size() != mSize) {
+        if (kv.second.size() != size()) {
             throw runtime_error{tfm::format(
                 "All channels must have the same size as their image. (%s:%dx%d != %dx%d)",
-                kv.first, kv.second.size().x(), kv.second.size().y(), mSize.x(), mSize.y()
+                kv.first, kv.second.size().x(), kv.second.size().y(), size().x(), size().y()
             )};
         }
     }

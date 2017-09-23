@@ -48,8 +48,12 @@ public:
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
 
-    const Eigen::Vector2i& size() const {
-        return mSize;
+    Eigen::Vector2i size() const {
+        return mChannels.begin()->second.size();
+    }
+
+    Eigen::DenseIndex count() const {
+        return mChannels.begin()->second.count();
     }
 
     const std::vector<std::string>& layers() const {
@@ -74,7 +78,6 @@ private:
     std::string mChannelSelector;
 
     std::string mName;
-    Eigen::Vector2i mSize;
 
     std::map<std::string, Channel> mChannels;
     std::map<std::string, GlTexture> mTextures;
