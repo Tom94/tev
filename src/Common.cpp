@@ -3,6 +3,8 @@
 
 #include <tev/Common.h>
 
+#include <nanogui/opengl.h>
+
 #include <algorithm>
 #include <cctype>
 #include <map>
@@ -15,6 +17,7 @@
 #   include <unistd.h>
 #endif
 
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -74,6 +77,15 @@ bool matches(string text, string filter) {
     }
 
     return false;
+}
+
+void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float shadowAlpha) {
+    nvgSave(ctx);
+    nvgFontBlur(ctx, 2);
+    nvgFillColor(ctx, Color{0.0f, shadowAlpha});
+    nvgText(ctx, x + 1, y + 1, text.c_str(), NULL);
+    nvgRestore(ctx);
+    nvgText(ctx, x, y, text.c_str(), NULL);
 }
 
 ETonemap toTonemap(string name) {

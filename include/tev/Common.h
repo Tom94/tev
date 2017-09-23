@@ -37,6 +37,8 @@
     if (UNLIKELY(!(cond))) \
         throw std::runtime_error{tfm::format(description, ##__VA_ARGS__)};
 
+struct NVGcontext;
+
 TEV_NAMESPACE_BEGIN
 
 template <typename T>
@@ -72,6 +74,8 @@ std::string toUpper(std::string str);
 bool endsWith(const std::string& str, const std::string& ending);
 
 bool matches(std::string text, std::string filter);
+
+void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
 
 int lastError();
 int lastSocketError();
