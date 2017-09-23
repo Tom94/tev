@@ -11,16 +11,15 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-Channel::Channel(size_t index, Vector2i size)
-: mSize{size} {
+Channel::Channel(size_t index, Vector2i size) {
     vector<string> channelNames = {"R", "G", "B", "A"};
     mName = index < channelNames.size() ? channelNames[index] : to_string(index - channelNames.size());
-    mData.resize(mSize.x(), mSize.y());
+    mData.resize(size.x(), size.y());
 }
 
 Channel::Channel(const std::string& name, Vector2i size)
-: mName{name}, mSize{size} {
-    mData.resize(mSize.x(), mSize.y());
+: mName{name} {
+    mData.resize(size.x(), size.y());
 }
 
 pair<string, string> Channel::split(const string& channel) {

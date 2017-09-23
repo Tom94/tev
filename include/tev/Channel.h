@@ -33,12 +33,12 @@ public:
     }
 
     float eval(Eigen::Vector2i index) const {
-        if (index.x() < 0 || index.x() >= mSize.x() ||
-            index.y() < 0 || index.y() >= mSize.y()) {
+        if (index.x() < 0 || index.x() >= mData.cols() ||
+            index.y() < 0 || index.y() >= mData.rows()) {
             return 0;
         }
 
-        return mData(index.x() + index.y() * mSize.x());
+        return mData(index.x() + index.y() * mData.cols());
     }
 
     float& at(Eigen::DenseIndex index) {
@@ -46,7 +46,7 @@ public:
     }
 
     float& at(Eigen::Vector2i index) {
-        return at(index.x() + index.y() * mSize.x());
+        return at(index.x() + index.y() * mData.cols());
     }
 
     Eigen::DenseIndex count() const {
@@ -54,7 +54,7 @@ public:
     }
 
     Eigen::Vector2i size() const {
-        return mSize;
+        return {mData.cols(), mData.rows()};
     }
 
     static std::pair<std::string, std::string> split(const std::string& fullChannel);
@@ -69,7 +69,6 @@ public:
 private:
     std::string mName;
     RowMatrixXf mData;
-    Eigen::Vector2i mSize;
 };
 
 TEV_NAMESPACE_END
