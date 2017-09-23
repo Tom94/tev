@@ -65,6 +65,8 @@ public:
 private:
     static std::atomic<int> sId;
 
+    void ensureValid();
+
     void readStbi();
     void readExr();
 

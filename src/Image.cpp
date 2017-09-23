@@ -212,6 +212,8 @@ void Image::readStbi() {
     chrono::duration<double> elapsedSeconds = end - start;
 
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+
+    ensureValid();
 }
 
 void Image::readExr() {
@@ -364,6 +366,27 @@ l_foundPart:
     chrono::duration<double> elapsedSeconds = end - start;
 
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+
+    ensureValid();
+}
+
+void Image::ensureValid() {
+    if (mLayers.empty()) {
+        throw runtime_error{"Images must have at least one layer."};
+    }
+
+    if (mChannels.empty()) {
+        throw runtime_error{"Images must have at least one channel."};
+    }
+
+    for (const auto& kv : mChannels) {
+        if (kv.second.size() != mSize) {
+            throw runtime_error{tfm::format(
+                "All channels must have the same size as their image. (%s:%dx%d != %dx%d)",
+                kv.first, kv.second.size().x(), kv.second.size().y(), mSize.x(), mSize.y()
+            )};
+        }
+    }
 }
 
 shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
@@ -377,6 +400,8 @@ shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
     try {
         return make_shared<Image>(filename, channelSelector);
     } catch (invalid_argument e) {
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
+    } catch (runtime_error e) {
         tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
     } catch (Iex::BaseExc& e) {
         tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
