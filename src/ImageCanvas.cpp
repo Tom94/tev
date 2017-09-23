@@ -127,16 +127,9 @@ void ImageCanvas::draw(NVGcontext *ctx) {
                             mPos.y() + nano.y() + (i - 0.5f * (values.size() - 1)) * fontSize,
                         };
 
-                        // First draw a shadow such that the font will be visible on white background.
-                        nvgFontBlur(ctx, 2);
-                        nvgFillColor(ctx, Color(0.0f, fontAlpha));
-                        nvgText(ctx, pos.x() + 1, pos.y() + 1, str.c_str(), nullptr);
-
-                        // Actual text.
-                        nvgFontBlur(ctx, 0);
                         Color col = colors[i];
                         nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
-                        nvgText(ctx, pos.x(), pos.y(), str.c_str(), nullptr);
+                        drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
                     }
                 }
             }

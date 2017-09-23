@@ -72,27 +72,31 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         if (mZeroBin > 0) {
             nvgBeginPath(ctx);
-            nvgRect(ctx, mPos.x() + 2 + mZeroBin * (mSize.x() - 4) / (float)(mValues.rows() - 1), mPos.y() + 15, 1, mSize.y() - 15);
+            nvgRect(ctx, mPos.x() + 1 + mZeroBin * (mSize.x() - 4) / (float)(mValues.rows() - 1), mPos.y() + 15, 4, mSize.y() - 15);
+            nvgFillColor(ctx, Color(0, 128));
+            nvgFill(ctx);
+            nvgBeginPath(ctx);
+            nvgRect(ctx, mPos.x() + 2 + mZeroBin * (mSize.x() - 4) / (float)(mValues.rows() - 1), mPos.y() + 15, 2, mSize.y() - 15);
             nvgFillColor(ctx, Color(200, 255));
             nvgFill(ctx);
         }
 
         nvgFontFace(ctx, "sans");
 
-        nvgFontSize(ctx, 14.0f);
+        nvgFontSize(ctx, 15.0f);
         nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        nvgText(ctx, mPos.x() + 3, mPos.y() + 1, tfm::format("%.3f", mMinimum).c_str(), NULL);
+        drawTextWithShadow(ctx, mPos.x() + 3, mPos.y() + 1, tfm::format("%.3f", mMinimum));
 
         nvgTextAlign(ctx, NVG_ALIGN_MIDDLE | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
         string meanString = tfm::format("%.3f", mMean);
         float textWidth = nvgTextBounds(ctx, 0, 0, meanString.c_str(), nullptr, nullptr);
-        nvgText(ctx, mPos.x() + mSize.x() / 2 - textWidth / 2, mPos.y() + 1, meanString.c_str(), NULL);
+        drawTextWithShadow(ctx, mPos.x() + mSize.x() / 2 - textWidth / 2, mPos.y() + 1, meanString);
 
         nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        nvgText(ctx, mPos.x() + mSize.x() - 3, mPos.y() + 1, tfm::format("%.3f", mMaximum).c_str(), NULL);
+        drawTextWithShadow(ctx, mPos.x() + mSize.x() - 3, mPos.y() + 1, tfm::format("%.3f", mMaximum));
 
         if (!mCaption.empty()) {
             nvgFontSize(ctx, 14.0f);
