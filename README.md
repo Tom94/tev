@@ -9,7 +9,7 @@ While the predominantly supported file format is OpenEXR certain other types of 
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
     - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
-    - Low-dynamic-range (LDR) images are "promoted" to HDR through an inverse gamma tonemappinng operator, where `gamma==2.2`.
+    - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
 
 ## Screenshot
 
