@@ -335,8 +335,8 @@ void ImageCanvas::saveImage(const string& filename) {
     }
 
     const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
-    Vector2i imageSize = channels.front().size();
-    size_t numPixels = (size_t)imageSize.x() * imageSize.y();
+    Vector2i imageSize = mImage->size();
+    auto numPixels = mImage->count();
 
     TEV_ASSERT(channels.size() <= 4, "Can not save an image with more than 4 channels.");
 
@@ -348,19 +348,19 @@ void ImageCanvas::saveImage(const string& filename) {
     auto start = chrono::system_clock::now();
 
     // Flatten channels into single array
-    vector<float> floatData(4 * channels.front().data().size(), 0);
+    vector<float> floatData(4 * channels.front().count(), 0);
 
     ThreadPool pool;
-    pool.parallelFor(0, channels.size(), [&channels, &floatData](size_t i) {
+    pool.parallelFor(0, (int)channels.size(), [&channels, &floatData](int i) {
         const auto& channelData = channels[i].data();
-        for (size_t j = 0; j < channelData.size(); ++j) {
-            floatData[j * 4 + i] = channelData[j];
+        for (DenseIndex j = 0; j < channelData.size(); ++j) {
+            floatData[j * 4 + i] = channelData(j);
         }
     });
 
     // Manually set alpha channel to 1 if the image does not have one.
     if (channels.size() < 4) {
-        for (size_t i = 0; i < numPixels; ++i) {
+        for (DenseIndex i = 0; i < numPixels; ++i) {
             floatData[i * 4 + 3] = 1;
         }
     }
@@ -372,7 +372,7 @@ void ImageCanvas::saveImage(const string& filename) {
     } else {
         // Store as LDR image.
         vector<char> byteData(floatData.size());
-        pool.parallelFor(0, numPixels, [&](size_t i) {
+        pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             size_t start = 4 * i;
             Vector3f value = applyTonemap({
                 applyExposureAndOffset(floatData[start]),
@@ -451,12 +451,10 @@ vector<Channel> ImageCanvas::channelsFromImages(
 
     if (!reference) {
         ThreadPool pool;
-        pool.parallelFor(0, channelNames.size(), [&](size_t i) {
+        pool.parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
-            const auto& channelData = chan->data();
-
-            for (size_t j = 0; j < channelData.size(); ++j) {
-                result[i].data()[j] = channelData[j];
+            for (DenseIndex j = 0; j < chan->count(); ++j) {
+                result[i].at(j) = chan->eval(j);
             }
         });
     } else {
@@ -465,7 +463,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         const auto& referenceChannels = getChannels(*reference, requestedLayer);
 
         ThreadPool pool;
-        pool.parallelFor(0, channelNames.size(), [&](size_t i) {
+        pool.parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
             const auto* chan = image->channel(channelNames[i]);
             bool isAlpha = result[i].name() == "A";
 
@@ -524,7 +522,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     float maximum = -numeric_limits<float>::infinity();
     float minimum = numeric_limits<float>::infinity();
 
-    size_t nChannels = 0;
+    int nChannels = 0;
 
     const Channel* alphaChannel = nullptr;
     for (const auto& channel : flattened) {
@@ -533,9 +531,8 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
             continue;
         }
 
-        auto channelSize = channel.size();
-        size_t numElements = (size_t)channelSize.x() * channelSize.y();
-        for (size_t i = 0; i < numElements; ++i) {
+        auto numElements = channel.count();
+        for (DenseIndex i = 0; i < numElements; ++i) {
             float val = channel.eval(i);
             mean += val;
             maximum = max(maximum, val);
@@ -573,15 +570,14 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         return clamp((int)(NUM_BINS * (symmetricLog2(val) - minLog2) / (maxLog2 - minLog2)), 0, NUM_BINS - 1);
     };
 
-    size_t iChannel = 0;
+    int iChannel = 0;
     for (const auto& channel : flattened) {
         if (channel.name() == "A") {
             continue;
         }
 
-        auto channelSize = channel.size();
-        size_t numElements = (size_t)channelSize.x() * channelSize.y();
-        for (size_t i = 0; i < numElements; ++i) {
+        auto numElements = channel.count();
+        for (DenseIndex i = 0; i < numElements; ++i) {
             int bin = valToBin(channel.eval(i));
             result->histogram(bin, iChannel) += alphaChannel ? alphaChannel->eval(i) : 1;
         }
@@ -589,7 +585,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         ++iChannel;
     }
 
-    result->histogram *= NUM_BINS * 0.25f / ((size_t)image->size().x() * image->size().y() * nChannels);
+    result->histogram *= NUM_BINS * 0.25f / (image->count() * nChannels);
     result->histogramZero = valToBin(0);
     return result;
 }

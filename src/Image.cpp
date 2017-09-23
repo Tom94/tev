@@ -17,6 +17,7 @@
 #include <iostream>
 #include <set>
 
+using namespace Eigen;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -76,7 +77,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
     mTextures.emplace(lookup, GlTexture{});
     auto& texture = mTextures.at(lookup);
 
-    size_t numPixels = (size_t)mSize.x() * mSize.y();
+    auto numPixels = count();
     vector<float> data(numPixels * 4);
 
     ThreadPool pool;
@@ -89,19 +90,19 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
             }
 
             const auto& channelData = chan->data();
-            pool.parallelForNoWait(0, numPixels, [&channelData, &data, i](size_t j) {
-                data[j * 4 + i] = channelData[j];
+            pool.parallelForNoWait<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
+                data[j * 4 + i] = channelData(j);
             });
         } else {
             float val = i == 3 ? 1 : 0;
-            pool.parallelForNoWait(0, numPixels, [&data, val, i](size_t j) {
+            pool.parallelForNoWait<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
                 data[j * 4 + i] = val;
             });
         }
     });
     pool.waitUntilFinished();
 
-    texture.setData(data, mSize, 4);
+    texture.setData(data, size(), 4);
     return &texture;
 }
 
@@ -132,7 +133,7 @@ vector<string> Image::channelsInLayer(string layerName) const {
 }
 
 string Image::toString() const {
-    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, mSize.x(), mSize.y());
+    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, size().x(), size().y());
 
     auto localLayers = mLayers;
     transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
@@ -156,42 +157,40 @@ void Image::readStbi() {
 
     ThreadPool threadPool;
 
-    int numChannels;
     void* data;
+    int numChannels;
+    Vector2i size;
     bool isHdr = stbi_is_hdr(mFilename.c_str());
     if (isHdr) {
-        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+        data = stbi_loadf(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
     } else {
-        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
+        data = stbi_load(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
     }
 
     if (!data) {
         throw invalid_argument("Could not load texture data from file " + mFilename);
     }
 
-    mNumChannels = (size_t)numChannels;
-
     vector<Channel> channels;
-    for (size_t c = 0; c < mNumChannels; ++c) {
-        channels.emplace_back(c, mSize);
+    for (int c = 0; c < numChannels; ++c) {
+        channels.emplace_back(c, size);
     }
 
-    size_t numPixels = (size_t)mSize.x() * mSize.y();
-
+    auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
         float* typedData = reinterpret_cast<float*>(data);
-        threadPool.parallelFor(0, numPixels, [&](size_t i) {
-            size_t baseIdx = i * mNumChannels;
-            for (size_t c = 0; c < mNumChannels; ++c) {
-                channels[c].data()[i] = typedData[baseIdx + c];
+        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+            int baseIdx = i * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
+                channels[c].at(i) = typedData[baseIdx + c];
             }
         });
     } else {
         unsigned char* typedData = reinterpret_cast<unsigned char*>(data);
-        threadPool.parallelFor(0, numPixels, [&](size_t i) {
-            size_t baseIdx = i * mNumChannels;
-            for (size_t c = 0; c < mNumChannels; ++c) {
-                channels[c].data()[i] = toLinear((typedData[baseIdx + c]) / 255.0f);
+        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+            int baseIdx = i * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
+                channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
             }
         });
     }
@@ -213,6 +212,8 @@ void Image::readStbi() {
     chrono::duration<double> elapsedSeconds = end - start;
 
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+
+    ensureValid();
 }
 
 void Image::readExr() {
@@ -247,8 +248,7 @@ l_foundPart:
 
     Imf::InputPart file{multiPartFile, partIdx};
     Imath::Box2i dw = file.header().dataWindow();
-    mSize.x() = dw.max.x - dw.min.x + 1;
-    mSize.y() = dw.max.y - dw.min.y + 1;
+    Vector2i size = {dw.max.x - dw.min.x + 1 , dw.max.y - dw.min.y + 1};
 
     // Inline helper class for dealing with the raw channels loaded from an exr file.
     class RawChannel {
@@ -273,26 +273,24 @@ l_foundPart:
         }
 
         void copyTo(Channel& channel, ThreadPool& threadPool) const {
-            auto& dstData = channel.data();
-
             // The code in this switch statement may seem overly complicated, but it helps
             // the compiler optimize. This code is time-critical for large images.
             switch (mImfChannel.type) {
                 case Imf::HALF:
-                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
-                        dstData[i] = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
+                        channel.at(i) = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
                     });
                     break;
 
                 case Imf::FLOAT:
-                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
-                        dstData[i] = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
+                        channel.at(i) = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
                     });
                     break;
 
                 case Imf::UINT:
-                    threadPool.parallelForNoWait(0, dstData.size(), [&](size_t i) {
-                        dstData[i] = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
+                        channel.at(i) = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
                     });
                     break;
 
@@ -342,8 +340,8 @@ l_foundPart:
         mLayers.emplace_back(layer);
     }
 
-    threadPool.parallelFor(0, rawChannels.size(), [&](size_t i) {
-        rawChannels[i].resize(mSize.prod());
+    threadPool.parallelFor(0, (int)rawChannels.size(), [&](int i) {
+        rawChannels[i].resize((DenseIndex)size.x() * size.y());
     });
 
     for (size_t i = 0; i < rawChannels.size(); ++i) {
@@ -354,7 +352,7 @@ l_foundPart:
     file.readPixels(dw.min.y, dw.max.y);
 
     for (const auto& rawChannel : rawChannels) {
-        mChannels.emplace(rawChannel.name(), Channel{rawChannel.name(), mSize});
+        mChannels.emplace(rawChannel.name(), Channel{rawChannel.name(), size});
     }
 
     for (size_t i = 0; i < rawChannels.size(); ++i) {
@@ -367,6 +365,27 @@ l_foundPart:
     chrono::duration<double> elapsedSeconds = end - start;
 
     cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+
+    ensureValid();
+}
+
+void Image::ensureValid() {
+    if (mLayers.empty()) {
+        throw runtime_error{"Images must have at least one layer."};
+    }
+
+    if (mChannels.empty()) {
+        throw runtime_error{"Images must have at least one channel."};
+    }
+
+    for (const auto& kv : mChannels) {
+        if (kv.second.size() != size()) {
+            throw runtime_error{tfm::format(
+                "All channels must have the same size as their image. (%s:%dx%d != %dx%d)",
+                kv.first, kv.second.size().x(), kv.second.size().y(), size().x(), size().y()
+            )};
+        }
+    }
 }
 
 shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
@@ -380,6 +399,8 @@ shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
     try {
         return make_shared<Image>(filename, channelSelector);
     } catch (invalid_argument e) {
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
+    } catch (runtime_error e) {
         tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
     } catch (Iex::BaseExc& e) {
         tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
