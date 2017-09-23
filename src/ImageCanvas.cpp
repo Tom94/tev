@@ -463,7 +463,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         const auto& referenceChannels = getChannels(*reference, requestedLayer);
 
         ThreadPool pool;
-        pool.parallelFor(0, (int)channelNames.size(), [&](int i) {
+        pool.parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
             const auto* chan = image->channel(channelNames[i]);
             bool isAlpha = result[i].name() == "A";
 

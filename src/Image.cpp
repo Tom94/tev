@@ -172,7 +172,7 @@ void Image::readStbi() {
     }
 
     vector<Channel> channels;
-    for (size_t c = 0; c < numChannels; ++c) {
+    for (int c = 0; c < numChannels; ++c) {
         channels.emplace_back(c, size);
     }
 

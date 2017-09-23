@@ -65,7 +65,7 @@ public:
         for (Int i = 0; i < localNumThreads; ++i) {
             enqueueTask([i, chunk, start, end, body] {
                 Int innerStart = start + i * chunk;
-                Int innerEnd = min(end, start + (i + 1) * chunk);
+                Int innerEnd = std::min(end, start + (i + 1) * chunk);
                 for (Int j = innerStart; j < innerEnd; ++j) {
                     body(j);
                 }
