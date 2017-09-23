@@ -74,7 +74,6 @@ private:
     std::string mName;
     Eigen::Vector2i mSize;
 
-    int mNumChannels;
     std::map<std::string, Channel> mChannels;
     std::map<std::string, GlTexture> mTextures;
 

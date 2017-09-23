@@ -158,11 +158,12 @@ void Image::readStbi() {
     ThreadPool threadPool;
 
     void* data;
+    int numChannels;
     bool isHdr = stbi_is_hdr(mFilename.c_str());
     if (isHdr) {
-        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &mNumChannels, 0);
+        data = stbi_loadf(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
     } else {
-        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &mNumChannels, 0);
+        data = stbi_load(mFilename.c_str(), &mSize.x(), &mSize.y(), &numChannels, 0);
     }
 
     if (!data) {
@@ -170,7 +171,7 @@ void Image::readStbi() {
     }
 
     vector<Channel> channels;
-    for (size_t c = 0; c < mNumChannels; ++c) {
+    for (size_t c = 0; c < numChannels; ++c) {
         channels.emplace_back(c, mSize);
     }
 
@@ -179,16 +180,16 @@ void Image::readStbi() {
     if (isHdr) {
         float* typedData = reinterpret_cast<float*>(data);
         threadPool.parallelFor(0, numPixels, [&](int i) {
-            int baseIdx = i * mNumChannels;
-            for (int c = 0; c < mNumChannels; ++c) {
+            int baseIdx = i * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
             }
         });
     } else {
         unsigned char* typedData = reinterpret_cast<unsigned char*>(data);
         threadPool.parallelFor(0, numPixels, [&](int i) {
-            int baseIdx = i * mNumChannels;
-            for (int c = 0; c < mNumChannels; ++c) {
+            int baseIdx = i * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
             }
         });
