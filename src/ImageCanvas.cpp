@@ -516,34 +516,31 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     const std::string& requestedLayer,
     EMetric metric
 ) {
-    const auto& flattened = channelsFromImages(image, reference, requestedLayer, metric);
+    auto flattened = channelsFromImages(image, reference, requestedLayer, metric);
 
     float mean = 0;
     float maximum = -numeric_limits<float>::infinity();
     float minimum = numeric_limits<float>::infinity();
 
-    int nChannels = 0;
-
     const Channel* alphaChannel = nullptr;
-    for (const auto& channel : flattened) {
+    for (auto& channel : flattened) {
         if (channel.name() == "A") {
             alphaChannel = &channel;
-            continue;
+            // The following code expects the alpha channel to be the last, so let's make sure it is.
+            if (alphaChannel != &flattened.back()) {
+                swap(channel, flattened.back());
+            }
+            break;
         }
+    }
 
-        auto numElements = channel.count();
-        for (DenseIndex i = 0; i < numElements; ++i) {
-            float val = channel.eval(i);
-            mean += val;
-            maximum = max(maximum, val);
-            minimum = min(minimum, val);
-        }
+    int nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
-        if (numElements > 0) {
-            mean /= numElements;
-        }
-
-        ++nChannels;
+    for (int i = 0; i < nChannels; ++i) {
+        const auto& channel = flattened[i];
+        mean += channel.data().mean();
+        maximum = max(maximum, channel.data().maxCoeff());
+        minimum = min(minimum, channel.data().minCoeff());
     }
 
     auto result = make_shared<CanvasStatistics>();
@@ -557,36 +554,40 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     result->histogram = MatrixXf::Zero(NUM_BINS, nChannels);
 
     // We're going to draw our histogram in log space.
-    auto symmetricLog2 = [](float val) {
+    auto symmetricLog = [](float val) {
         static const float addition = 0.001f;
-        static const float smallest = log2(addition);
-        return val > 0 ? (log2(val + addition) - smallest) : -(log2(-val + addition) - smallest);
+        static const float smallest = log(addition);
+        return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest);
     };
 
-    float minLog2 = symmetricLog2(minimum);
-    float maxLog2 = symmetricLog2(maximum);
+    float minLog = symmetricLog(minimum);
+    float diffLog = symmetricLog(maximum) - minLog;
 
     auto valToBin = [&](float val) {
-        return clamp((int)(NUM_BINS * (symmetricLog2(val) - minLog2) / (maxLog2 - minLog2)), 0, NUM_BINS - 1);
+        return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, NUM_BINS - 1);
     };
 
-    int iChannel = 0;
-    for (const auto& channel : flattened) {
-        if (channel.name() == "A") {
-            continue;
-        }
+    auto numElements = image->count();
+    Eigen::MatrixXf indices(numElements, nChannels);
 
-        auto numElements = channel.count();
-        for (DenseIndex i = 0; i < numElements; ++i) {
-            int bin = valToBin(channel.eval(i));
-            result->histogram(bin, iChannel) += alphaChannel ? alphaChannel->eval(i) : 1;
-        }
-
-        ++iChannel;
+    ThreadPool pool;
+    for (int i = 0; i < nChannels; ++i) {
+        const auto& channel = flattened[i];
+        pool.parallelForNoWait<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
+            indices(j, i) = valToBin(channel.eval(j));
+        });
     }
+    pool.waitUntilFinished();
+
+    pool.parallelFor(0, nChannels, [&](int i) {
+        for (DenseIndex j = 0; j < numElements; ++j) {
+            result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
+        }
+    });
 
     result->histogram *= NUM_BINS * 0.25f / (image->count() * nChannels);
     result->histogramZero = valToBin(0);
+
     return result;
 }
 
