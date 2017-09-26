@@ -596,6 +596,13 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         result->histogram.row(i) /= binToVal(i + 1) - binToVal(i);
     }
 
+    // Normalize the histogram according to the 10th-largest
+    // element to avoid a couple spikes ruining the entire graph.
+    MatrixXf temp = result->histogram;
+    DenseIndex idx = temp.size() - 10;
+    nth_element(temp.data(), temp.data() + idx, temp.data() + temp.size());
+    result->histogram /= max(temp(idx), 0.1f) * 1.3f;
+
     result->histogramZero = valToBin(0);
 
     return result;
