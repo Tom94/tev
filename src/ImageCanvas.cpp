@@ -554,10 +554,13 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     result->histogram = MatrixXf::Zero(NUM_BINS, nChannels);
 
     // We're going to draw our histogram in log space.
+    static const float addition = 0.001f;
+    static const float smallest = log(addition);
     auto symmetricLog = [](float val) {
-        static const float addition = 0.001f;
-        static const float smallest = log(addition);
         return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest);
+    };
+    auto symmetricLogInverse = [](float val) {
+        return val > 0 ? (exp(val + smallest) - addition) : -(exp(-val + smallest) - addition);
     };
 
     float minLog = symmetricLog(minimum);
@@ -565,6 +568,10 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
 
     auto valToBin = [&](float val) {
         return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, NUM_BINS - 1);
+    };
+
+    auto binToVal = [&](float val) {
+        return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog);
     };
 
     auto numElements = image->count();
@@ -585,7 +592,10 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         }
     });
 
-    result->histogram *= NUM_BINS * 0.25f / (image->count() * nChannels);
+    for (int i = 0; i < NUM_BINS; ++i) {
+        result->histogram.row(i) /= binToVal(i + 1) - binToVal(i);
+    }
+
     result->histogramZero = valToBin(0);
 
     return result;
