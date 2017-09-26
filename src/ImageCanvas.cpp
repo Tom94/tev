@@ -94,9 +94,9 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             static_cast<int>(ceil(bottomRight.y())),
         };
 
-        if (pixelSize.x() > 50) {
+        if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
             float fontSize = pixelSize.x() / 6;
-            float fontAlpha = min(1.0f, (pixelSize.x() - 50) / 30);
+            float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
 
             vector<string> channels = getChannels(*mImage);
             // Remove duplicates
