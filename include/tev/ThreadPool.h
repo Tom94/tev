@@ -44,8 +44,8 @@ public:
         return res;
     }
 
-    void startThreads(size_t Amount);
-    void shutdownThreads(size_t Amount);
+    void startThreads(size_t num);
+    void shutdownThreads(size_t num);
 
     size_t numTasksInSystem() const {
         return mNumTasksInSystem;
