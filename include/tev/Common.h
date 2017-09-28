@@ -113,7 +113,7 @@ enum ETonemap : int {
 
     // This enum value should never be used directly.
     // It facilitates looping over all members of this enum.
-    AmountTonemaps,
+    NumTonemaps,
 };
 
 ETonemap toTonemap(std::string name);
@@ -127,7 +127,7 @@ enum EMetric : int {
 
     // This enum value should never be used directly.
     // It facilitates looping over all members of this enum.
-    AmountMetrics,
+    NumMetrics,
 };
 
 EMetric toMetric(std::string name);

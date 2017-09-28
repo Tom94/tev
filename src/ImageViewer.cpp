@@ -375,7 +375,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         return true;
     }
 
-    int amountLayers = mLayerButtonContainer->childCount();
+    int numLayers = mLayerButtonContainer->childCount();
 
     // Keybindings which should _not_ respond to repeats
     if (action == GLFW_PRESS) {
@@ -391,7 +391,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                     }
                 }
             } else if (modifiers & GLFW_MOD_CONTROL) {
-                if (idx >= 0 && idx < amountLayers) {
+                if (idx >= 0 && idx < numLayers) {
                     selectLayer(nthVisibleLayer(idx));
                 }
             } else {
@@ -490,20 +490,20 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
         if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                setTonemap(static_cast<ETonemap>((tonemap() + 1) % AmountTonemaps));
+                setTonemap(static_cast<ETonemap>((tonemap() + 1) % NumTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (mCurrentReference) {
-                    setMetric(static_cast<EMetric>((metric() + 1) % AmountMetrics));
+                    setMetric(static_cast<EMetric>((metric() + 1) % NumMetrics));
                 }
             } else {
                 selectLayer(nextLayer(mCurrentLayer, Forward));
             }
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                setTonemap(static_cast<ETonemap>((tonemap() - 1 + AmountTonemaps) % AmountTonemaps));
+                setTonemap(static_cast<ETonemap>((tonemap() - 1 + NumTonemaps) % NumTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (mCurrentReference) {
-                    setMetric(static_cast<EMetric>((metric() - 1 + AmountMetrics) % AmountMetrics));
+                    setMetric(static_cast<EMetric>((metric() - 1 + NumMetrics) % NumMetrics));
                 }
             } else {
                 selectLayer(nextLayer(mCurrentLayer, Backward));

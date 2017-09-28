@@ -22,8 +22,8 @@ ThreadPool::~ThreadPool() {
     shutdownThreads(mThreads.size());
 }
 
-void ThreadPool::startThreads(size_t amount) {
-    mNumThreads += amount;
+void ThreadPool::startThreads(size_t num) {
+    mNumThreads += num;
     for (size_t i = mThreads.size(); i < mNumThreads; ++i) {
         mThreads.emplace_back([this, i] {
             while (true) {
@@ -61,17 +61,17 @@ void ThreadPool::startThreads(size_t amount) {
     }
 }
 
-void ThreadPool::shutdownThreads(size_t amount) {
-    auto amountToClose = min(amount, mNumThreads);
+void ThreadPool::shutdownThreads(size_t num) {
+    auto numToClose = min(num, mNumThreads);
 
     {
         lock_guard<mutex> lock{mTaskQueueMutex};
-        mNumThreads -= amountToClose;
+        mNumThreads -= numToClose;
     }
 
     // Wake up all the threads to have them quit
     mWorkerCondition.notify_all();
-    for (auto i = 0u; i < amountToClose; ++i) {
+    for (auto i = 0u; i < numToClose; ++i) {
         mThreads.back().join();
         mThreads.pop_back();
     }
