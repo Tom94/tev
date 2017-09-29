@@ -103,14 +103,18 @@ endif()
 add_executable(tev ${TEV_SOURCES})
 
 if (APPLE)
+    set(RESOURCE_FILES
+        resources/icon.icns
+        scripts/osx-run-tev.sh
+    )
+
     set_target_properties(tev PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
         MACOSX_BUNDLE_BUNDLE_VERSION ${VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${VERSION}
         MACOSX_BUNDLE_LONG_VERSION_STRING ${VERSION}
-        RESOURCE resources/icon.icns
-        RESOURCE scripts/osx-run-tev.sh
+        RESOURCE "${RESOURCE_FILES}"
     )
 endif()
 
