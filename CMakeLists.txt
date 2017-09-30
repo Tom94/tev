@@ -5,6 +5,16 @@ cmake_minimum_required(VERSION 2.8.3)
 project(tev)
 set(TEV_VERSION "1.5")
 
+if (NOT TEV_DEPLOY)
+    set(TEV_VERSION "${TEV_VERSION}dev")
+endif()
+
+if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(TEV_VERSION "${TEV_VERSION} (64 bit)")
+elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(TEV_VERSION "${TEV_VERSION} (32 bit)")
+endif()
+
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT tev)
