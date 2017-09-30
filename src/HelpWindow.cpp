@@ -126,10 +126,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         Widget* about = tabWidget->createTab("About");
         about->setLayout(new GroupLayout{});
         
-        auto addText = [](Widget* current, string text) {
+        auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
             auto row = new Widget{current};
             row->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
-            new Label{row, text, "sans", 18};
+            new Label{row, text, font, fontSize };
         };
 
         auto addLibrary = [](Widget* current, string name, string license, string desc) {
@@ -148,7 +148,12 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
             row->setHeight(space);
         };
 
-        addSpacer(about, 20);
+        addSpacer(about, 15);
+
+        addText(about, "tev — The EXR Viewer", "sans-bold", 46);
+        addText(about, "version " TEV_VERSION, "sans", 26);
+
+        addSpacer(about, 60);
 
         addText(about, "tev was developed by Thomas Müller and is released under the BSD 3-Clause License.");
         addText(about, "It was built directly or indirectly upon the following amazing third-party libraries.");
