@@ -3,7 +3,17 @@
 cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
-set(VERSION "1.5.dev")
+set(TEV_VERSION "1.5")
+
+if (NOT TEV_DEPLOY)
+    set(TEV_VERSION "${TEV_VERSION}dev")
+endif()
+
+if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(TEV_VERSION "${TEV_VERSION} (64 bit)")
+elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(TEV_VERSION "${TEV_VERSION} (32 bit)")
+endif()
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
@@ -111,9 +121,9 @@ if (APPLE)
     set_target_properties(tev PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
-        MACOSX_BUNDLE_BUNDLE_VERSION ${VERSION}
-        MACOSX_BUNDLE_SHORT_VERSION_STRING ${VERSION}
-        MACOSX_BUNDLE_LONG_VERSION_STRING ${VERSION}
+        MACOSX_BUNDLE_BUNDLE_VERSION ${TEV_VERSION}
+        MACOSX_BUNDLE_SHORT_VERSION_STRING ${TEV_VERSION}
+        MACOSX_BUNDLE_LONG_VERSION_STRING ${TEV_VERSION}
         RESOURCE "${RESOURCE_FILES}"
     )
 endif()
@@ -130,7 +140,7 @@ include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-add_definitions(${NANOGUI_EXTRA_DEFS})
+add_definitions(-DTEV_VERSION="${TEV_VERSION}" ${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev ${TEV_LIBS})
 
