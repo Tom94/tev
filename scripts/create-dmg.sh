@@ -8,6 +8,7 @@ MACOSX_DEPLOYMENT_TARGET=10.9
 cmake \
     -DCMAKE_OSX_SYSROOT=/Users/tom94/Projects/MacOSX-SDKs/MacOSX10.9.sdk/ \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 \
+    -DTEV_DEPLOY=1 \
     ../..
 make -j
 cd ..

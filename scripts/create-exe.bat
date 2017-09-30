@@ -13,7 +13,7 @@ call %DevCmd%
 echo Building 64-bit tev...
 mkdir %BuildDir64%
 cd %BuildDir64%
-cmake -G "Visual Studio 15 2017 Win64" ..\..
+cmake -DTEV_DEPLOY=1 -G "Visual Studio 15 2017 Win64" ..\..
 msbuild %MSBuildOptions% tev.sln
 move "Release\tev.exe" "..\..\tev.exe"
 cd ..
@@ -22,7 +22,7 @@ rmdir /S /Q %BuildDir64%
 echo Building 32-bit tev...
 mkdir %BuildDir32%
 cd %BuildDir32%
-cmake -G "Visual Studio 15 2017" ..\..
+cmake -DTEV_DEPLOY=1 -G "Visual Studio 15 2017" ..\..
 msbuild %MSBuildOptions% tev.sln
 move "Release\tev.exe" "..\..\tev-32bit.exe"
 cd ..
