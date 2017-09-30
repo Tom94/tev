@@ -14,7 +14,7 @@ While the predominantly supported file format is OpenEXR certain other types of 
 ## Screenshot
 
 ![Screenshot](https://raw.githubusercontent.com/Tom94/tev/master/resources/screenshot.png)
-_A false-color comparison two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
+_A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
 
 ## Usage
 
