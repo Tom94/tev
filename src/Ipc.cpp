@@ -97,32 +97,6 @@ Ipc::Ipc() {
     }
 }
 
-void Ipc::sendToPrimaryInstance(const string& message) {
-    int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
-    if (bytesSent == -1) {
-        throw runtime_error{tfm::format("Could not send to primary instance: %s", errorString(lastSocketError()))};
-    }
-}
-
-bool Ipc::receiveFromSecondaryInstance(function<void(const string&)> callback) {
-    sockaddr_in recvAddress;
-    socklen_t recvAddressSize = sizeof(recvAddress);
-    char recvBuffer[16384];
-
-    int bytesReceived = recvfrom(mSocket, recvBuffer, sizeof(recvBuffer), 0, (sockaddr*)&recvAddress, &recvAddressSize);
-    if (bytesReceived <= 0) {
-        return false;
-    }
-
-    if (recvBuffer[bytesReceived - 1] == '\0') {
-        // We probably received a valid string. Let's pass it to our callback function.
-        // TODO: Proper handling of multiple concatenated and partial packets.
-        callback(recvBuffer);
-    }
-
-    return true;
-}
-
 Ipc::~Ipc() {
 #ifdef _WIN32
     if (mIsPrimaryInstance && mInstanceMutex) {
@@ -147,6 +121,32 @@ Ipc::~Ipc() {
         close(mSocket);
     }
 #endif
+}
+
+void Ipc::sendToPrimaryInstance(const string& message) {
+    int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
+    if (bytesSent == -1) {
+        throw runtime_error{tfm::format("Could not send to primary instance: %s", errorString(lastSocketError()))};
+    }
+}
+
+bool Ipc::receiveFromSecondaryInstance(function<void(const string&)> callback) {
+    sockaddr_in recvAddress;
+    socklen_t recvAddressSize = sizeof(recvAddress);
+    char recvBuffer[16384];
+
+    int bytesReceived = recvfrom(mSocket, recvBuffer, sizeof(recvBuffer), 0, (sockaddr*)&recvAddress, &recvAddressSize);
+    if (bytesReceived <= 0) {
+        return false;
+    }
+
+    if (recvBuffer[bytesReceived - 1] == '\0') {
+        // We probably received a valid string. Let's pass it to our callback function.
+        // TODO: Proper handling of multiple concatenated and partial packets.
+        callback(recvBuffer);
+    }
+
+    return true;
 }
 
 TEV_NAMESPACE_END
