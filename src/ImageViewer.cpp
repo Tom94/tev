@@ -401,6 +401,18 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                 }
             }
             return true;
+        } else if (key == GLFW_KEY_HOME || key == GLFW_KEY_END) {
+            const auto& image = nthVisibleImage(key == GLFW_KEY_HOME ? 0 : mImages.size());
+            if (modifiers & GLFW_MOD_SHIFT) {
+                if (mCurrentReference == image) {
+                    selectReference(nullptr);
+                } else {
+                    selectReference(image);
+                }
+            } else {
+                selectImage(image);
+            }
+            return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
             return true;
