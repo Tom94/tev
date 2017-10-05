@@ -160,7 +160,7 @@ void Image::readStbi() {
     void* data;
     int numChannels;
     Vector2i size;
-    bool isHdr = stbi_is_hdr(mFilename.c_str());
+    bool isHdr = stbi_is_hdr(mFilename.c_str()) != 0;
     if (isHdr) {
         data = stbi_loadf(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
     } else {
