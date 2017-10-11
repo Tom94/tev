@@ -383,7 +383,7 @@ void ImageCanvas::saveImage(const string& filename) {
                 floatData[start + j] = value[j];
             }
             for (int j = 0; j < 4; ++j) {
-                byteData[start + j] = (char)(floatData[start + j] * 255);
+                byteData[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
             }
         });
 
