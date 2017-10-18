@@ -230,6 +230,37 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             HelpWindow::COMMAND
         ));
 
+        auto playback = new Widget{mSidebarLayout};
+        playback->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+
+        auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+            auto button = new Button{playback, name, icon};
+            button->setCallback(callback);
+            button->setTooltip(tooltip);
+            button->setFontSize(16);
+            button->setEnabled(enabled);
+            return button;
+        };
+
+        makePlaybackButton("", true, [this] {
+            openImageDialog();
+        }, ENTYPO_ICON_PLAY, "Play (Space)");
+
+        mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
+            openImageDialog();
+        }, ENTYPO_ICON_TO_START, "Front (Home)"));
+
+        mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
+            openImageDialog();
+        }, ENTYPO_ICON_TO_END, "Back (End)"));
+
+        mFpsTextBox = new IntBox<unsigned int>{playback, 24};
+        mFpsTextBox->setDefaultValue("24");
+        mFpsTextBox->setUnits("fps");
+        mFpsTextBox->setEditable(true);
+        mFpsTextBox->setAlignment(TextBox::Alignment::Right);
+
+        // Save, refresh, load, close
         auto tools = new Widget{mSidebarLayout};
         tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
 
