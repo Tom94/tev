@@ -172,7 +172,7 @@ private:
     // Buttons which require at least one image to be meaningful
     std::vector<nanogui::Button*> mAnyImageButtons;
 
-    nanogui::TextBox* mFpsTextBox;
+    nanogui::IntBox<int>* mFpsTextBox;
 
     nanogui::Widget* mImageButtonContainer;
     nanogui::Widget* mScrollContent;

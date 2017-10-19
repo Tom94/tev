@@ -262,11 +262,12 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
                 openImageDialog();
             }, ENTYPO_ICON_TO_END, "Back (End)"));
 
-            mFpsTextBox = new IntBox<unsigned int>{playback, 24};
+            mFpsTextBox = new IntBox<int>{playback, 24};
             mFpsTextBox->setDefaultValue("24");
             mFpsTextBox->setUnits("fps");
             mFpsTextBox->setEditable(true);
             mFpsTextBox->setAlignment(TextBox::Alignment::Right);
+            mFpsTextBox->setMinMaxValues(1, 1000);
         }
 
         // Save, refresh, load, close
