@@ -16,6 +16,7 @@
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
+#include <nanogui/textbox.h>
 
 #include <memory>
 #include <vector>
@@ -30,6 +31,7 @@ struct ImageAddition {
 class ImageViewer : public nanogui::Screen {
 public:
     ImageViewer(std::shared_ptr<Ipc> ipc, std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops);
+    virtual ~ImageViewer();
 
     bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
     bool mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) override;
@@ -52,7 +54,7 @@ public:
 
     void reloadAllImages();
 
-    void selectImage(const std::shared_ptr<Image>& image);
+    void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
     void selectLayer(std::string name);
 
@@ -135,6 +137,7 @@ private:
     }
 
     std::shared_ptr<Ipc> mIpc;
+    SharedQueue<std::function<void(void)>> mTaskQueue;
 
     bool mRequiresFilterUpdate = true;
     bool mRequiresLayoutUpdate = true;
@@ -172,7 +175,10 @@ private:
     // Buttons which require at least one image to be meaningful
     std::vector<nanogui::Button*> mAnyImageButtons;
 
+    nanogui::Button* mPlayButton;
     nanogui::IntBox<int>* mFpsTextBox;
+    std::thread mPlaybackThread;
+    bool mShallRunPlaybackThread = true;
 
     nanogui::Widget* mImageButtonContainer;
     nanogui::Widget* mScrollContent;

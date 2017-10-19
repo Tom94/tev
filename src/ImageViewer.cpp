@@ -4,6 +4,7 @@
 #include <tev/ImageViewer.h>
 #include <tev/ThreadPool.h>
 
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
 
@@ -250,9 +251,8 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
                 return button;
             };
 
-            makePlaybackButton("", true, [this] {
-                openImageDialog();
-            }, ENTYPO_ICON_PLAY, "Play (Space)");
+            mPlayButton = makePlaybackButton("", true, [this]{}, ENTYPO_ICON_PLAY, "Play (Space)");
+            mPlayButton->setFlags(Button::ToggleButton);
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
                 selectImage(nthVisibleImage(0));
@@ -269,6 +269,21 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             mFpsTextBox->setAlignment(TextBox::Alignment::Right);
             mFpsTextBox->setMinMaxValues(1, 1000);
             mFpsTextBox->setSpinnable(true);
+
+            mPlaybackThread = thread{[&]() {
+                while (mShallRunPlaybackThread) {
+                    auto fps = clamp(mFpsTextBox->value(), 1, 1000);
+                    auto sleepDuration = chrono::duration<float>{1.0f / fps};
+                    this_thread::sleep_for(sleepDuration);
+
+                    if (mPlayButton->pushed() && mTaskQueue.empty()) {
+                        mTaskQueue.push([&]() {
+                            selectImage(nextImage(mCurrentImage, Forward), false);
+                        });
+                        glfwPostEmptyEvent();
+                    }
+                }
+            }};
         }
 
         // Save, refresh, load, close
@@ -341,6 +356,13 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
 
     if (processPendingDrops) {
         dropEvent(mPendingDrops);
+    }
+}
+
+ImageViewer::~ImageViewer() {
+    mShallRunPlaybackThread = false;
+    if (mPlaybackThread.joinable()) {
+        mPlaybackThread.join();
     }
 }
 
@@ -599,6 +621,13 @@ void ImageViewer::drawContents() {
         glfwFocusWindow(mGLFWWindow);
     }
 
+    try {
+        while (true) {
+            mTaskQueue.tryPop()();
+        }
+    } catch (runtime_error) {
+    }
+
     if (mRequiresFilterUpdate) {
         updateFilter();
         mRequiresFilterUpdate = false;
@@ -762,7 +791,11 @@ void ImageViewer::reloadAllImages() {
     }
 }
 
-void ImageViewer::selectImage(const shared_ptr<Image>& image) {
+void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
+    if (stopPlayback) {
+        mPlayButton->setPushed(false);
+    }
+
     for (auto button : mCurrentImageButtons) {
         button->setEnabled(image != nullptr);
     }
