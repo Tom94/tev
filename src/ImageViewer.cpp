@@ -268,6 +268,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             mFpsTextBox->setEditable(true);
             mFpsTextBox->setAlignment(TextBox::Alignment::Right);
             mFpsTextBox->setMinMaxValues(1, 1000);
+            mFpsTextBox->setSpinnable(true);
         }
 
         // Save, refresh, load, close
