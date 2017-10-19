@@ -255,11 +255,11 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             }, ENTYPO_ICON_PLAY, "Play (Space)");
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
-                openImageDialog();
+                selectImage(nthVisibleImage(0));
             }, ENTYPO_ICON_TO_START, "Front (Home)"));
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
-                openImageDialog();
+                selectImage(nthVisibleImage(mImages.size()));
             }, ENTYPO_ICON_TO_END, "Back (End)"));
 
             mFpsTextBox = new IntBox<int>{playback, 24};
