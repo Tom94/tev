@@ -206,104 +206,118 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
         );
 
-        panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        // Histogram of selected image
+        {
+            panel = new Widget{mSidebarLayout};
+            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
-        mHistogram = new MultiGraph{panel, ""};
+            mHistogram = new MultiGraph{panel, ""};
+        }
 
-        panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        // Fuzzy filter of open images
+        {
+            panel = new Widget{mSidebarLayout};
+            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
-        mFilter = new TextBox{panel, ""};
-        mFilter->setEditable(true);
-        mFilter->setAlignment(TextBox::Alignment::Left);
-        mFilter->setCallback([this](const string& filter) {
-            return setFilter(filter);
-        });
+            mFilter = new TextBox{panel, ""};
+            mFilter->setEditable(true);
+            mFilter->setAlignment(TextBox::Alignment::Left);
+            mFilter->setCallback([this](const string& filter) {
+                return setFilter(filter);
+            });
 
-        mFilter->setPlaceholder("Enter text to filter images");
-        mFilter->setTooltip(tfm::format(
-            "Filters visible images and layers according to a supplied string. "
-            "The string must have the format 'image:layer'. "
-            "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n\n"
-            "Keyboard shortcut:\n%s+P",
-            HelpWindow::COMMAND
-        ));
+            mFilter->setPlaceholder("Enter text to filter images");
+            mFilter->setTooltip(tfm::format(
+                "Filters visible images and layers according to a supplied string. "
+                "The string must have the format 'image:layer'. "
+                "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n\n"
+                "Keyboard shortcut:\n%s+P",
+                HelpWindow::COMMAND
+            ));
+        }
 
-        auto playback = new Widget{mSidebarLayout};
-        playback->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+        // Playback controls
+        {
+            auto playback = new Widget{mSidebarLayout};
+            playback->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
-        auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
-            auto button = new Button{playback, name, icon};
-            button->setCallback(callback);
-            button->setTooltip(tooltip);
-            button->setFontSize(16);
-            button->setEnabled(enabled);
-            return button;
-        };
+            auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+                auto button = new Button{playback, name, icon};
+                button->setCallback(callback);
+                button->setTooltip(tooltip);
+                button->setFontSize(16);
+                button->setEnabled(enabled);
+                return button;
+            };
 
-        makePlaybackButton("", true, [this] {
-            openImageDialog();
-        }, ENTYPO_ICON_PLAY, "Play (Space)");
+            makePlaybackButton("", true, [this] {
+                openImageDialog();
+            }, ENTYPO_ICON_PLAY, "Play (Space)");
 
-        mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
-            openImageDialog();
-        }, ENTYPO_ICON_TO_START, "Front (Home)"));
+            mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
+                openImageDialog();
+            }, ENTYPO_ICON_TO_START, "Front (Home)"));
 
-        mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
-            openImageDialog();
-        }, ENTYPO_ICON_TO_END, "Back (End)"));
+            mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
+                openImageDialog();
+            }, ENTYPO_ICON_TO_END, "Back (End)"));
 
-        mFpsTextBox = new IntBox<unsigned int>{playback, 24};
-        mFpsTextBox->setDefaultValue("24");
-        mFpsTextBox->setUnits("fps");
-        mFpsTextBox->setEditable(true);
-        mFpsTextBox->setAlignment(TextBox::Alignment::Right);
+            mFpsTextBox = new IntBox<unsigned int>{playback, 24};
+            mFpsTextBox->setDefaultValue("24");
+            mFpsTextBox->setUnits("fps");
+            mFpsTextBox->setEditable(true);
+            mFpsTextBox->setAlignment(TextBox::Alignment::Right);
+        }
 
         // Save, refresh, load, close
-        auto tools = new Widget{mSidebarLayout};
-        tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
+        {
+            auto tools = new Widget{mSidebarLayout};
+            tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
 
-        auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
-            auto button = new Button{tools, name, icon};
-            button->setCallback(callback);
-            button->setTooltip(tooltip);
-            button->setFontSize(15);
-            button->setEnabled(enabled);
-            return button;
-        };
+            auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+                auto button = new Button{tools, name, icon};
+                button->setCallback(callback);
+                button->setTooltip(tooltip);
+                button->setFontSize(15);
+                button->setEnabled(enabled);
+                return button;
+            };
 
-        makeImageButton("", true, [this] {
-            openImageDialog();
-        }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
+            makeImageButton("", true, [this] {
+                openImageDialog();
+            }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
 
-        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-            saveImageDialog();
-        }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
+            mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
+                saveImageDialog();
+            }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
 
-        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-            reloadImage(mCurrentImage);
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
+            mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
+                reloadImage(mCurrentImage);
+            }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
 
-        mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
-            reloadAllImages();
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
+                reloadAllImages();
+            }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
-        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-            removeImage(mCurrentImage);
-        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
+            mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
+                removeImage(mCurrentImage);
+            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
 
-        spacer = new Widget{mSidebarLayout};
-        spacer->setHeight(3);
+            spacer = new Widget{mSidebarLayout};
+            spacer->setHeight(3);
+        }
 
-        mImageScrollContainer = new VScrollPanel{mSidebarLayout};
-        mImageScrollContainer->setFixedWidth(mSidebarLayout->fixedWidth());
+        // List of open images
+        {
+            mImageScrollContainer = new VScrollPanel{mSidebarLayout};
+            mImageScrollContainer->setFixedWidth(mSidebarLayout->fixedWidth());
 
-        mScrollContent = new Widget{mImageScrollContainer};
-        mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+            mScrollContent = new Widget{mImageScrollContainer};
+            mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
-        mImageButtonContainer = new Widget{mScrollContent};
-        mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+            mImageButtonContainer = new Widget{mScrollContent};
+            mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+        }
     }
 
     // Layer selection
