@@ -246,7 +246,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
                 auto button = new Button{playback, name, icon};
                 button->setCallback(callback);
                 button->setTooltip(tooltip);
-                button->setFontSize(16);
+                button->setFontSize(15);
                 button->setEnabled(enabled);
                 return button;
             };
@@ -269,6 +269,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             mFpsTextBox->setAlignment(TextBox::Alignment::Right);
             mFpsTextBox->setMinMaxValues(1, 1000);
             mFpsTextBox->setSpinnable(true);
+            mFpsTextBox->setFixedTextWidth(42);
 
             mPlaybackThread = thread{[&]() {
                 while (mShallRunPlaybackThread) {
