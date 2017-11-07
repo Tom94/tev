@@ -38,7 +38,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     setFixedWidth(600);
 
     TabWidget* tabWidget = new TabWidget{this};
-    
+
     // Keybindings tab
     {
         Widget* shortcuts = tabWidget->createTab("Keybindings");
@@ -50,11 +50,6 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
             auto descWidget = new Label{row, desc, "sans"};
             descWidget->setFixedWidth(250);
             new Label{row, keys, "sans-bold"};
-        };
-
-        auto addSpacer = [](Widget* current) {
-            auto row = new Widget{current};
-            row->setHeight(10);
         };
 
         new Label{shortcuts, "Image Loading", "sans-bold", 18};
@@ -75,17 +70,14 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(imageSelection, "1…9",                 "Select N-th Image");
         addRow(imageSelection, "Down or S / Up or W", "Select Next / Previous Image");
 
-        addSpacer(imageSelection);
+        addRow(imageSelection, "Click & Drag (+Shift)", "Translate Image");
+        addRow(imageSelection, "+ / - / Scroll (+Shift)", "Zoom In / Out of Image");
 
         addRow(imageSelection, "F", "Fit Image to Screen");
         addRow(imageSelection, "N", "Normalize Image to [0, 1]");
         addRow(imageSelection, "R", "Reset Image Parameters");
 
-        addSpacer(imageSelection);
-
         addRow(imageSelection, "Shift+Right or Shift+D / Shift+Left or Shift+A", "Select Next / Previous Tonemap");
-
-        addSpacer(imageSelection);
 
         addRow(imageSelection, "E / Shift+E", "Increase / Decrease Exposure by 0.5");
         addRow(imageSelection, "O / Shift+O", "Increase / Decrease Offset by 0.1");
@@ -97,8 +89,6 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(referenceSelection, "Shift+Left Click or Right Click",             "Select Hovered Image as Reference");
         addRow(referenceSelection, "Shift+1…9",                                   "Select N-th Image as Reference");
         addRow(referenceSelection, "Shift+Down or Shift+S / Shift+Up or Shift+W", "Select Next / Previous Image as Reference");
-
-        addSpacer(referenceSelection);
 
         addRow(referenceSelection, "Ctrl+Right or Ctrl+D / Ctrl+Left or Ctrl+A", "Select Next / Previous Error Metric");
 
@@ -120,12 +110,12 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(ui, COMMAND + "+P", "Find Image or Layer");
         addRow(ui, "Q or Esc",     "Quit");
     }
-    
+
     // About tab
     {
         Widget* about = tabWidget->createTab("About");
         about->setLayout(new GroupLayout{});
-        
+
         auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
             auto row = new Widget{current};
             row->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
