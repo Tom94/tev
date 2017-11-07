@@ -71,7 +71,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(imageSelection, "Down or S / Up or W", "Select Next / Previous Image");
 
         addRow(imageSelection, "Click & Drag (+Shift)", "Translate Image");
-        addRow(imageSelection, "+ / - / Scroll (+Shift)", "Zoom In / Out of Image");
+        addRow(imageSelection, "Plus / Minus / Scroll (+Shift)", "Zoom In / Out of Image");
 
         addRow(imageSelection, "F", "Fit Image to Screen");
         addRow(imageSelection, "N", "Normalize Image to [0, 1]");
