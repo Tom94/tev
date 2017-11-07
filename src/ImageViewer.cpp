@@ -468,6 +468,23 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
     // Keybindings which should respond to repeats
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        if (key == GLFW_KEY_KP_ADD || key == GLFW_KEY_EQUAL ||
+            key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
+            float scaleAmount = 1.0f;
+            if (modifiers & GLFW_MOD_SHIFT) {
+                scaleAmount /= 10;
+            }
+
+            if (key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
+                scaleAmount = -scaleAmount;
+            }
+
+            mImageCanvas->scale(
+                scaleAmount,
+                mImageCanvas->position().cast<float>() + mImageCanvas->size().cast<float>() / 2
+            );
+        }
+
         if (key == GLFW_KEY_E) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setExposure(exposure() - 0.5f);
