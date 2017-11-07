@@ -73,7 +73,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         addRow(imageSelection, "Left Click",          "Select Hovered Image");
         addRow(imageSelection, "1…9",                 "Select N-th Image");
-        addRow(imageSelection, "Down or S / Up or W", "Select Next Image");
+        addRow(imageSelection, "Down or S / Up or W", "Select Next / Previous Image");
 
         addSpacer(imageSelection);
 
