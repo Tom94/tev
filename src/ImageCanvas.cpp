@@ -6,6 +6,7 @@
 #include <tev/ThreadPool.h>
 
 #include <nanogui/theme.h>
+#include <nanogui/screen.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
@@ -28,7 +29,15 @@ bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
         return true;
     }
 
-    scale(rel.y(), p.cast<float>());
+    float scaleAmount = rel.y();
+    auto* glfwWindow = screen()->glfwWindow();
+    // There is no explicit access to the currently pressed modifier keys here, so we
+    // need to directly ask GLFW.
+    if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
+        scaleAmount /= 10;
+    }
+
+    scale(scaleAmount, p.cast<float>());
     return true;
 }
 
