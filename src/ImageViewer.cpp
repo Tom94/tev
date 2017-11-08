@@ -388,7 +388,7 @@ bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int
     return false;
 }
 
-bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) {
+bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int button, int modifiers) {
     if (Screen::mouseMotionEvent(p, rel, button, modifiers)) {
         return true;
     }
@@ -405,14 +405,22 @@ bool ImageViewer::mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector
         mSidebar->setFixedWidth(clamp(p.x(), 205, mSize.x() - 10));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
+        Vector2f relativeMovement = rel.cast<float>();
+        auto* glfwWindow = screen()->glfwWindow();
+        // There is no explicit access to the currently pressed modifier keys here, so we
+        // need to directly ask GLFW.
+        if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
+            relativeMovement /= 10;
+        }
+
         // If left mouse button is held, move the image with mouse movement
         if ((button & 1) != 0) {
-            mImageCanvas->translate(rel.cast<float>());
+            mImageCanvas->translate(relativeMovement);
         }
 
         // If middle mouse button is held, zoom in-out with up-down mouse movement
         if ((button & 4) != 0) {
-            mImageCanvas->scale(rel.y() / 10.0f, p.cast<float>());
+            mImageCanvas->scale(relativeMovement.y() / 10.0f, p.cast<float>());
         }
     }
 
@@ -541,6 +549,23 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
     // Keybindings which should respond to repeats
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        if (key == GLFW_KEY_KP_ADD || key == GLFW_KEY_EQUAL ||
+            key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
+            float scaleAmount = 1.0f;
+            if (modifiers & GLFW_MOD_SHIFT) {
+                scaleAmount /= 10;
+            }
+
+            if (key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
+                scaleAmount = -scaleAmount;
+            }
+
+            mImageCanvas->scale(
+                scaleAmount,
+                mImageCanvas->position().cast<float>() + mImageCanvas->size().cast<float>() / 2
+            );
+        }
+
         if (key == GLFW_KEY_E) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setExposure(exposure() - 0.5f);
