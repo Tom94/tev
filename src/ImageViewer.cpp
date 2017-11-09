@@ -4,6 +4,7 @@
 #include <tev/ImageViewer.h>
 #include <tev/ThreadPool.h>
 
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
 
@@ -206,73 +207,135 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
         );
 
-        panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        // Histogram of selected image
+        {
+            panel = new Widget{mSidebarLayout};
+            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
-        mHistogram = new MultiGraph{panel, ""};
+            mHistogram = new MultiGraph{panel, ""};
+        }
 
-        panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        // Fuzzy filter of open images
+        {
+            panel = new Widget{mSidebarLayout};
+            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
-        mFilter = new TextBox{panel, ""};
-        mFilter->setEditable(true);
-        mFilter->setAlignment(TextBox::Alignment::Left);
-        mFilter->setCallback([this](const string& filter) {
-            return setFilter(filter);
-        });
+            mFilter = new TextBox{panel, ""};
+            mFilter->setEditable(true);
+            mFilter->setAlignment(TextBox::Alignment::Left);
+            mFilter->setCallback([this](const string& filter) {
+                return setFilter(filter);
+            });
 
-        mFilter->setPlaceholder("Enter text to filter images");
-        mFilter->setTooltip(tfm::format(
-            "Filters visible images and layers according to a supplied string. "
-            "The string must have the format 'image:layer'. "
-            "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n\n"
-            "Keyboard shortcut:\n%s+P",
-            HelpWindow::COMMAND
-        ));
+            mFilter->setPlaceholder("Enter text to filter images");
+            mFilter->setTooltip(tfm::format(
+                "Filters visible images and layers according to a supplied string. "
+                "The string must have the format 'image:layer'. "
+                "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.\n\n"
+                "Keyboard shortcut:\n%s+P",
+                HelpWindow::COMMAND
+            ));
+        }
 
-        auto tools = new Widget{mSidebarLayout};
-        tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
+        // Playback controls
+        {
+            auto playback = new Widget{mSidebarLayout};
+            playback->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
-        auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
-            auto button = new Button{tools, name, icon};
-            button->setCallback(callback);
-            button->setTooltip(tooltip);
-            button->setFontSize(15);
-            button->setEnabled(enabled);
-            return button;
-        };
+            auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+                auto button = new Button{playback, name, icon};
+                button->setCallback(callback);
+                button->setTooltip(tooltip);
+                button->setFontSize(15);
+                button->setEnabled(enabled);
+                return button;
+            };
 
-        makeImageButton("", true, [this] {
-            openImageDialog();
-        }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
+            mPlayButton = makePlaybackButton("", true, [this]{}, ENTYPO_ICON_PLAY, "Play (Space)");
+            mPlayButton->setFlags(Button::ToggleButton);
 
-        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-            saveImageDialog();
-        }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
+            mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
+                selectImage(nthVisibleImage(0));
+            }, ENTYPO_ICON_TO_START, "Front (Home)"));
 
-        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-            reloadImage(mCurrentImage);
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
+            mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
+                selectImage(nthVisibleImage(mImages.size()));
+            }, ENTYPO_ICON_TO_END, "Back (End)"));
 
-        mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
-            reloadAllImages();
-        }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            mFpsTextBox = new IntBox<int>{playback, 24};
+            mFpsTextBox->setDefaultValue("24");
+            mFpsTextBox->setUnits("fps");
+            mFpsTextBox->setEditable(true);
+            mFpsTextBox->setAlignment(TextBox::Alignment::Right);
+            mFpsTextBox->setMinMaxValues(1, 1000);
+            mFpsTextBox->setSpinnable(true);
+            mFpsTextBox->setFixedTextWidth(42);
 
-        mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-            removeImage(mCurrentImage);
-        }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
+            mPlaybackThread = thread{[&]() {
+                while (mShallRunPlaybackThread) {
+                    auto fps = clamp(mFpsTextBox->value(), 1, 1000);
+                    auto sleepDuration = chrono::duration<float>{1.0f / fps};
+                    this_thread::sleep_for(sleepDuration);
 
-        spacer = new Widget{mSidebarLayout};
-        spacer->setHeight(3);
+                    if (mPlayButton->pushed() && mTaskQueue.empty()) {
+                        mTaskQueue.push([&]() {
+                            selectImage(nextImage(mCurrentImage, Forward), false);
+                        });
+                        glfwPostEmptyEvent();
+                    }
+                }
+            }};
+        }
 
-        mImageScrollContainer = new VScrollPanel{mSidebarLayout};
-        mImageScrollContainer->setFixedWidth(mSidebarLayout->fixedWidth());
+        // Save, refresh, load, close
+        {
+            auto tools = new Widget{mSidebarLayout};
+            tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
 
-        mScrollContent = new Widget{mImageScrollContainer};
-        mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+            auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+                auto button = new Button{tools, name, icon};
+                button->setCallback(callback);
+                button->setTooltip(tooltip);
+                button->setFontSize(15);
+                button->setEnabled(enabled);
+                return button;
+            };
 
-        mImageButtonContainer = new Widget{mScrollContent};
-        mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+            makeImageButton("", true, [this] {
+                openImageDialog();
+            }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
+
+            mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
+                saveImageDialog();
+            }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
+
+            mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
+                reloadImage(mCurrentImage);
+            }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
+
+            mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
+                reloadAllImages();
+            }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+
+            mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
+                removeImage(mCurrentImage);
+            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
+
+            spacer = new Widget{mSidebarLayout};
+            spacer->setHeight(3);
+        }
+
+        // List of open images
+        {
+            mImageScrollContainer = new VScrollPanel{mSidebarLayout};
+            mImageScrollContainer->setFixedWidth(mSidebarLayout->fixedWidth());
+
+            mScrollContent = new Widget{mImageScrollContainer};
+            mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+
+            mImageButtonContainer = new Widget{mScrollContent};
+            mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+        }
     }
 
     // Layer selection
@@ -294,6 +357,13 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
 
     if (processPendingDrops) {
         dropEvent(mPendingDrops);
+    }
+}
+
+ImageViewer::~ImageViewer() {
+    mShallRunPlaybackThread = false;
+    if (mPlaybackThread.joinable()) {
+        mPlaybackThread.join();
     }
 }
 
@@ -468,6 +538,9 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             // For debugging purposes.
             toggleConsole();
             return true;
+        } else if (key == GLFW_KEY_SPACE) {
+            mPlayButton->setPushed(!mPlayButton->pushed());
+            return true;
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
@@ -577,6 +650,13 @@ void ImageViewer::drawContents() {
 
     if (receivedFileViaIpc) {
         glfwFocusWindow(mGLFWWindow);
+    }
+
+    try {
+        while (true) {
+            mTaskQueue.tryPop()();
+        }
+    } catch (runtime_error) {
     }
 
     if (mRequiresFilterUpdate) {
@@ -742,7 +822,11 @@ void ImageViewer::reloadAllImages() {
     }
 }
 
-void ImageViewer::selectImage(const shared_ptr<Image>& image) {
+void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
+    if (stopPlayback) {
+        mPlayButton->setPushed(false);
+    }
+
     for (auto button : mCurrentImageButtons) {
         button->setEnabled(image != nullptr);
     }
