@@ -8,10 +8,12 @@
 #include <stdexcept>
 
 #include <nanogui/button.h>
+#include <nanogui/colorwheel.h>
 #include <nanogui/entypo.h>
 #include <nanogui/label.h>
 #include <nanogui/layout.h>
 #include <nanogui/messagedialog.h>
+#include <nanogui/popupbutton.h>
 #include <nanogui/screen.h>
 #include <nanogui/textbox.h>
 #include <nanogui/vscrollpanel.h>
@@ -97,7 +99,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
     // Exposure/offset buttons
     {
         auto buttonContainer = new Widget{mSidebarLayout};
-        buttonContainer->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+        buttonContainer->setLayout(new GridLayout{Orientation::Horizontal, 3, Alignment::Fill, 5, 2});
 
         auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
@@ -111,6 +113,46 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             makeButton("Normalize", [this]() { normalizeExposureAndOffset(); }, 0, "Shortcut: N")
         );
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
+
+        auto popupBtn = new PopupButton{buttonContainer, "", ENTYPO_ICON_BRUSH};
+        popupBtn->setFontSize(15);
+        popupBtn->setChevronIcon(0);
+        popupBtn->setTooltip("Background Color");
+
+        // Background color popup
+        {
+            auto popup = popupBtn->popup();
+            popup->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
+
+            new Label{popup, "Background Color"};
+            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
+            colorwheel->setColor(popupBtn->backgroundColor());
+
+            new Label{popup, "Background Alpha"};
+            auto bgAlphaSlider = new Slider{popup};
+            bgAlphaSlider->setRange({0.0f, 1.0f});
+            bgAlphaSlider->setCallback([this](float value) {
+                auto col = mImageCanvas->backgroundColor();
+                mImageCanvas->setBackgroundColor(Color{
+                    col.r(),
+                    col.g(),
+                    col.b(),
+                    value,
+                });
+            });
+
+            bgAlphaSlider->setValue(0);
+
+            colorwheel->setCallback([bgAlphaSlider, this](const Color& value) {
+                //popupBtn->setBackgroundColor(value);
+                mImageCanvas->setBackgroundColor(Color{
+                    value.r(),
+                    value.g(),
+                    value.b(),
+                    bgAlphaSlider->value(),
+                });
+            });
+        }
     }
 
     // Tonemap options
