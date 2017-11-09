@@ -42,6 +42,14 @@ public:
         EMetric metric
     );
 
+    const nanogui::Color& backgroundColor() {
+        return mBackgroundColor;
+    }
+
+    void setBackgroundColor(const nanogui::Color& color) {
+        mBackgroundColor = color;
+    }
+
 private:
     void bindCheckerboardData(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
 
@@ -61,6 +69,8 @@ private:
 
     nanogui::GLShader mShader;
     GlTexture mColorMap;
+
+    nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 };
 
 TEV_NAMESPACE_END

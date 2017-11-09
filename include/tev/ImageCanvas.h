@@ -96,6 +96,14 @@ public:
         return applyMetric(value, reference, mMetric);
     }
 
+    const nanogui::Color& backgroundColor() {
+        return mShader.backgroundColor();
+    }
+
+    void setBackgroundColor(const nanogui::Color& color) {
+        mShader.setBackgroundColor(color);
+    }
+
     void fitImageToScreen(const Image& image);
     void resetTransform();
 

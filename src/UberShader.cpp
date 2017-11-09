@@ -65,6 +65,8 @@ UberShader::UberShader()
         uniform int tonemap;
         uniform int metric;
 
+        uniform vec4 bgColor;
+
         in vec2 checkerUv;
         in vec2 imageUv;
         in vec2 referenceUv;
@@ -130,6 +132,7 @@ UberShader::UberShader()
             vec3 lightGray = vec3(0.55, 0.55, 0.55);
 
             vec3 checker = mod(int(floor(checkerUv.x) + floor(checkerUv.y)), 2) == 0 ? darkGray : lightGray;
+            checker = bgColor.rgb * bgColor.a + checker * (1.0 - bgColor.a);
             if (!hasImage) {
                 color = vec4(checker, 1.0);
                 return;
@@ -202,6 +205,7 @@ void UberShader::draw(
     bindImageData(textureImage, transformImage, exposure, offset, tonemap);
     mShader.setUniform("hasImage", true);
     mShader.setUniform("hasReference", false);
+    mShader.setUniform("bgColor", mBackgroundColor);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
 
