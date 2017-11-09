@@ -586,7 +586,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             setVisible(false);
             return true;
-        } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & GLFW_MOD_CONTROL)) {
+        } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
             glfwSetClipboardString(mGLFWWindow, mCurrentImage->name().c_str());
         }
     }
