@@ -205,7 +205,6 @@ void UberShader::draw(
     bindImageData(textureImage, transformImage, exposure, offset, tonemap);
     mShader.setUniform("hasImage", true);
     mShader.setUniform("hasReference", false);
-    mShader.setUniform("bgColor", mBackgroundColor);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
 }
 
@@ -233,6 +232,7 @@ void UberShader::draw(
 void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize) {
     mShader.setUniform("pixelSize", pixelSize);
     mShader.setUniform("checkerSize", checkerSize);
+    mShader.setUniform("bgColor", mBackgroundColor);
 }
 
 void UberShader::bindImageData(
