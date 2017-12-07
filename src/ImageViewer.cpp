@@ -30,8 +30,6 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
-    TEV_ASSERT(mIpc->isPrimaryInstance(), "ImageViewer may only exist in the primary instance of tev.");
-
     mBackground = Color{0.23f, 1.0f};
 
     mVerticalScreenSplit = new Widget{this};
@@ -670,16 +668,18 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 
 void ImageViewer::drawContents() {
     bool receivedFileViaIpc = false;
-    while (mIpc->receiveFromSecondaryInstance([this](const string& imageString) {
-        ThreadPool::singleWorker().enqueueTask([imageString, this] {
-            size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
-            auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
-            if (image) {
-                mImagesToAdd->push({true, image});
-            }
-        });
-    })) {
-        receivedFileViaIpc = true;
+    if (mIpc->isPrimaryInstance()) {
+        while (mIpc->receiveFromSecondaryInstance([this](const string& imageString) {
+            ThreadPool::singleWorker().enqueueTask([imageString, this] {
+                size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
+                auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
+                if (image) {
+                    mImagesToAdd->push({true, image});
+                }
+            });
+        })) {
+            receivedFileViaIpc = true;
+        }
     }
 
     try {
@@ -735,7 +735,6 @@ void ImageViewer::drawContents() {
                 statistics->maximum)
             );
         }
-
     } else {
         mHistogram->setValues(MatrixXf::Zero(1, 1));
         mHistogram->setMinimum(0);
