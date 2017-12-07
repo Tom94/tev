@@ -30,6 +30,13 @@ int mainFunc(int argc, char* argv[]) {
         {'h', "help"},
     };
 
+    Flag newWindowFlag{
+        parser,
+        "new window",
+        "Opens a new window of tev, even if one exists already.",
+        {'n', "new"},
+    };
+
     ValueFlag<float> exposureFlag{
         parser,
         "exposure",
@@ -140,9 +147,9 @@ int mainFunc(int argc, char* argv[]) {
 
     auto ipc = make_shared<Ipc>();
 
-    // If we're not the primary instance, simply send the to-be-opened images
-    // to the primary instance.
-    if (!ipc->isPrimaryInstance()) {
+    // If we're not the primary instance and did not request to open a new window,
+    // simply send the to-be-opened images to the primary instance.
+    if (!ipc->isPrimaryInstance() && !newWindowFlag) {
         string channelSelector;
         for (auto imageFile : get(imageFiles)) {
             if (!imageFile.empty() && imageFile[0] == ':') {
