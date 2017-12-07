@@ -124,6 +124,10 @@ Ipc::~Ipc() {
 }
 
 void Ipc::sendToPrimaryInstance(const string& message) {
+    if (mIsPrimaryInstance) {
+        throw runtime_error{"Must be a secondary instance to send to the primary instance."};
+    }
+
     int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
     if (bytesSent == -1) {
         throw runtime_error{tfm::format("Could not send to primary instance: %s", errorString(lastSocketError()))};
@@ -131,6 +135,10 @@ void Ipc::sendToPrimaryInstance(const string& message) {
 }
 
 bool Ipc::receiveFromSecondaryInstance(function<void(const string&)> callback) {
+    if (!mIsPrimaryInstance) {
+        throw runtime_error{"Must be the primary instance to receive from a secondary instance."};
+    }
+
     sockaddr_in recvAddress;
     socklen_t recvAddressSize = sizeof(recvAddress);
     char recvBuffer[16384];
