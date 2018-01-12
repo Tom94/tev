@@ -532,14 +532,17 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     float minimum = numeric_limits<float>::infinity();
 
     const Channel* alphaChannel = nullptr;
-    for (auto& channel : flattened) {
-        if (channel.name() == "A") {
-            alphaChannel = &channel;
-            // The following code expects the alpha channel to be the last, so let's make sure it is.
-            if (alphaChannel != &flattened.back()) {
-                swap(channel, flattened.back());
+    // Only treat the alpha channel specially if it is not the only channel of the image.
+    if (flattened.size() > 1) {
+        for (auto& channel : flattened) {
+            if (channel.name() == "A") {
+                alphaChannel = &channel;
+                // The following code expects the alpha channel to be the last, so let's make sure it is.
+                if (alphaChannel != &flattened.back()) {
+                    swap(channel, flattened.back());
+                }
+                break;
             }
-            break;
         }
     }
 
@@ -579,9 +582,16 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, NUM_BINS - 1);
     };
 
+    result->histogramZero = valToBin(0);
+
     auto binToVal = [&](float val) {
         return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog);
     };
+
+    // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
+    if (nChannels == 0) {
+        return result;
+    }
 
     auto numElements = image->count();
     Eigen::MatrixXf indices(numElements, nChannels);
@@ -611,8 +621,6 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     DenseIndex idx = temp.size() - 10;
     nth_element(temp.data(), temp.data() + idx, temp.data() + temp.size());
     result->histogram /= max(temp(idx), 0.1f) * 1.3f;
-
-    result->histogramZero = valToBin(0);
 
     return result;
 }
