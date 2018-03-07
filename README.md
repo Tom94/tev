@@ -45,7 +45,13 @@ $ tev -h
 
 ## Obtaining tev
 
-Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit) are available on the [releases page](https://github.com/Tom94/tev/releases). For other operating systems __tev__ has to be built from source as of now (next section).
+### Mac OS X / Windows
+
+Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit) are available on the [releases page](https://github.com/Tom94/tev/releases).
+
+### Linux
+
+- Archlinux: available on the [Arch User Repository](https://aur.archlinux.org/packages/tev/)
 
 ## Building tev
 
