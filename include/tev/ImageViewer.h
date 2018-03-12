@@ -91,6 +91,9 @@ public:
     void resizeToFitAllImages();
     bool setFilter(const std::string& filter);
 
+    bool useRegex();
+    void setUseRegex(bool value);
+
     void maximize();
     bool isMaximized();
     void toggleMaximized();
@@ -168,6 +171,7 @@ private:
     MultiGraph* mHistogram;
 
     nanogui::TextBox* mFilter;
+    nanogui::Button* mRegexButton;
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
