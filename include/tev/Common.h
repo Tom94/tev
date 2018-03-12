@@ -73,7 +73,7 @@ std::string toUpper(std::string str);
 
 bool endsWith(const std::string& str, const std::string& ending);
 
-bool matches(std::string text, std::string filter);
+bool matches(std::string text, std::string filter, bool isRegex);
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
 

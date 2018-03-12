@@ -258,7 +258,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
         // Fuzzy filter of open images
         {
             panel = new Widget{mSidebarLayout};
-            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+            panel->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
             mFilter = new TextBox{panel, ""};
             mFilter->setEditable(true);
@@ -267,7 +267,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
                 return setFilter(filter);
             });
 
-            mFilter->setPlaceholder("Enter text to filter images");
+            mFilter->setPlaceholder("Find");
             mFilter->setTooltip(tfm::format(
                 "Filters visible images and layers according to a supplied string. "
                 "The string must have the format 'image:layer'. "
@@ -275,6 +275,15 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
                 "Keyboard shortcut:\n%s+P",
                 HelpWindow::COMMAND
             ));
+
+            mRegexButton = new Button{panel, "", ENTYPO_ICON_SEARCH};
+            mRegexButton->setTooltip("Treat filter as regular expression");
+            mRegexButton->setPushed(false);
+            mRegexButton->setFlags(Button::ToggleButton);
+            mRegexButton->setFontSize(15);
+            mRegexButton->setChangeCallback([this](bool value) {
+                setUseRegex(value);
+            });
         }
 
         // Playback controls
@@ -1136,6 +1145,15 @@ bool ImageViewer::setFilter(const string& filter) {
     return true;
 }
 
+bool ImageViewer::useRegex() {
+    return mRegexButton->pushed();
+}
+
+void ImageViewer::setUseRegex(bool value) {
+    mRegexButton->setPushed(value);
+    mRequiresFilterUpdate = true;
+}
+
 void ImageViewer::maximize() {
     glfwMaximizeWindow(mGLFWWindow);
 }
@@ -1270,11 +1288,11 @@ void ImageViewer::updateFilter() {
         // This is the case if the image name matches the image part
         // and at least one of the image's layers matches the layer part.
         auto doesImageMatch = [&](const shared_ptr<Image>& image) {
-            bool doesMatch = matches(image->name(), imagePart);
+            bool doesMatch = matches(image->name(), imagePart, useRegex());
             if (doesMatch) {
                 bool anyLayersMatch = false;
                 for (const auto& layer : image->layers()) {
-                    if (matches(layer, layerPart)) {
+                    if (matches(layer, layerPart, useRegex())) {
                         anyLayersMatch = true;
                         break;
                     }
@@ -1350,7 +1368,7 @@ void ImageViewer::updateFilter() {
             selectImage(nthVisibleImage(0));
         }
 
-        if (mCurrentReference && !matches(mCurrentReference->name(), imagePart)) {
+        if (mCurrentReference && !matches(mCurrentReference->name(), imagePart, useRegex())) {
             selectReference(nullptr);
         }
     }
@@ -1362,13 +1380,13 @@ void ImageViewer::updateFilter() {
         const auto& buttons = mLayerButtonContainer->children();
         for (Widget* button : buttons) {
             ImageButton* ib = dynamic_cast<ImageButton*>(button);
-            ib->setVisible(matches(ib->caption(), layerPart));
+            ib->setVisible(matches(ib->caption(), layerPart, useRegex()));
             if (ib->visible()) {
                 ib->setId(id++);
             }
         }
 
-        if (!matches(mCurrentLayer, layerPart)) {
+        if (!matches(mCurrentLayer, layerPart, useRegex())) {
             selectLayer(nthVisibleLayer(0));
         }
     }
@@ -1383,6 +1401,7 @@ void ImageViewer::updateLayout() {
     mSidebar->setFixedHeight(mSize.y() - footerHeight);
 
     mHelpButton->setPosition(Vector2i{mSidebar->fixedWidth() - 38, 5});
+    mFilter->setFixedWidth(mSidebar->fixedWidth() - 50);
     mSidebarLayout->setFixedWidth(mSidebar->fixedWidth());
 
     mVerticalScreenSplit->setFixedSize(mSize);

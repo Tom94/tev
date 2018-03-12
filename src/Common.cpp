@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+#include <regex>
 
 #ifdef _WIN32
 #   include <Shlobj.h>
@@ -52,31 +53,44 @@ bool endsWith(const string& str, const string& ending) {
     return str.rfind(ending) == str.length() - ending.length();
 }
 
-bool matches(string text, string filter) {
-    if (filter.empty()) {
-        return true;
-    }
-
-    // Perform matching on lowercase strings
-    text = toLower(text);
-    filter = toLower(filter);
-
-    auto words = split(filter, ", ");
-    // We don't want people entering multiple spaces in a row to match everything.
-    words.erase(remove(begin(words), end(words), ""), end(words));
-
-    if (words.empty()) {
-        return true;
-    }
-
-    // Match every word of the filter separately.
-    for (const auto& word : words) {
-        if (text.find(word) != string::npos) {
+bool matches(string text, string filter, bool isRegex) {
+    auto matchesFuzzy = [](string text, string filter) {
+        if (filter.empty()) {
             return true;
         }
-    }
 
-    return false;
+        // Perform matching on lowercase strings
+        text = toLower(text);
+        filter = toLower(filter);
+
+        auto words = split(filter, ", ");
+        // We don't want people entering multiple spaces in a row to match everything.
+        words.erase(remove(begin(words), end(words), ""), end(words));
+
+        if (words.empty()) {
+            return true;
+        }
+
+        // Match every word of the filter separately.
+        for (const auto& word : words) {
+            if (text.find(word) != string::npos) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    auto matchesRegex = [](string text, string filter) {
+        if (filter.empty()) {
+            return true;
+        }
+
+        regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
+        return regex_search(text, searchRegex);
+    };
+
+    return isRegex ? matchesRegex(text, filter) : matchesFuzzy(text, filter);
 }
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float shadowAlpha) {
