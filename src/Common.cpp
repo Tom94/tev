@@ -86,8 +86,12 @@ bool matches(string text, string filter, bool isRegex) {
             return true;
         }
 
-        regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
-        return regex_search(text, searchRegex);
+        try {
+            regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
+            return regex_search(text, searchRegex);
+        } catch (const regex_error&) {
+            return false;
+        }
     };
 
     return isRegex ? matchesRegex(text, filter) : matchesFuzzy(text, filter);
