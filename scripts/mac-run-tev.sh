@@ -7,7 +7,7 @@ realpath() {
 }
 
 # Transform all path arguments to absolute paths.
-# This is required, since opening an app in OS X
+# This is required, since opening an app in macOS
 # does not let us control the working directory of
 # the app, and relative paths may thus not work.
 paths=()

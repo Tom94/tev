@@ -107,7 +107,7 @@ set(TEV_SOURCES
 if (MSVC)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
 elseif (APPLE)
-    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/osx-run-tev.sh)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/mac-run-tev.sh)
 endif()
 
 add_executable(tev ${TEV_SOURCES})
@@ -115,7 +115,7 @@ add_executable(tev ${TEV_SOURCES})
 if (APPLE)
     set(RESOURCE_FILES
         resources/icon.icns
-        scripts/osx-run-tev.sh
+        scripts/mac-run-tev.sh
     )
 
     set_target_properties(tev PROPERTIES
@@ -146,7 +146,7 @@ target_link_libraries(tev ${TEV_LIBS})
 
 if (APPLE)
     install(TARGETS tev BUNDLE DESTINATION "/Applications")
-    install(SCRIPT scripts/osx-post-install.cmake)
+    install(SCRIPT scripts/mac-post-install.cmake)
 elseif(WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
 else()
