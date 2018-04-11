@@ -300,7 +300,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
                 return button;
             };
 
-            mPlayButton = makePlaybackButton("", true, [this]{}, ENTYPO_ICON_PLAY, "Play (Space)");
+            mPlayButton = makePlaybackButton("", true, []{}, ENTYPO_ICON_PLAY, "Play (Space)");
             mPlayButton->setFlags(Button::ToggleButton);
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {

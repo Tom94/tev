@@ -138,7 +138,7 @@ string Image::toString() const {
     auto localLayers = mLayers;
     transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
         auto channels = channelsInLayer(layer);
-        transform(begin(channels), end(channels), begin(channels), [this](string channel) {
+        transform(begin(channels), end(channels), begin(channels), [](string channel) {
             return Channel::tail(channel);
         });
         if (layer.empty()) {
