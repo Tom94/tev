@@ -13,3 +13,6 @@
 [submodule "dependencies/tinyformat"]
 	path = dependencies/tinyformat
 	url = https://github.com/mitsuba-renderer/tinyformat
+[submodule "dependencies/filesystem"]
+	path = dependencies/filesystem
+	url = https://github.com/wjakob/filesystem

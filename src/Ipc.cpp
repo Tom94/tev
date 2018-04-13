@@ -48,9 +48,9 @@ Ipc::Ipc() {
             throw runtime_error{tfm::format("Could not initialize WSA: %s", errorString(wsaStartupResult))};
         }
 #else
-        mLockFile = homeDirectory() + "/" + lockName;
+        mLockFile = homeDirectory() / lockName;
 
-        mLockFileDescriptor = open(mLockFile.c_str(), O_RDWR | O_CREAT, 0666);
+        mLockFileDescriptor = open(mLockFile.str().c_str(), O_RDWR | O_CREAT, 0666);
         if (mLockFileDescriptor == -1) {
             throw runtime_error{tfm::format("Could not create lock file: ", errorString(lastError()))};
         }
@@ -114,7 +114,7 @@ Ipc::~Ipc() {
         }
 
         // Delete the lock file if it exists.
-        unlink(mLockFile.c_str());
+        unlink(mLockFile.str().c_str());
     }
 
     if (mSocket != INVALID_SOCKET) {

@@ -5,6 +5,8 @@
 
 #include <tev/Common.h>
 
+#include <filesystem/path.h>
+
 #ifndef _WIN32
 #   include <netinet/in.h>
 #endif
@@ -33,7 +35,7 @@ private:
 #else
     int mLockFileDescriptor;
     int mSocket;
-    std::string mLockFile;
+    filesystem::path mLockFile;
 #endif
 };
 

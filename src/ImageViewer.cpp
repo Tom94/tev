@@ -4,9 +4,7 @@
 #include <tev/ImageViewer.h>
 #include <tev/ThreadPool.h>
 
-#include <chrono>
-#include <iostream>
-#include <stdexcept>
+#include <filesystem/path.h>
 
 #include <nanogui/button.h>
 #include <nanogui/colorwheel.h>
@@ -19,7 +17,12 @@
 #include <nanogui/textbox.h>
 #include <nanogui/vscrollpanel.h>
 
+#include <chrono>
+#include <iostream>
+#include <stdexcept>
+
 using namespace Eigen;
+using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -850,7 +853,7 @@ void ImageViewer::reloadImage(shared_ptr<Image> image) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImage = tryLoadImage(image->filename(), image->channelSelector());
+    auto newImage = tryLoadImage(image->path(), image->channelSelector());
     if (newImage) {
         removeImage(image);
         insertImage(newImage, id, true);
@@ -1222,7 +1225,7 @@ void ImageViewer::openImageDialog() {
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
-        const string& imageFile = paths[i];
+        path imageFile = paths[i];
         bool shallSelect = i == paths.size() - 1;
         ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
             auto image = tryLoadImage(imageFile, "");
@@ -1241,7 +1244,7 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    string path = file_dialog(
+    path path = file_dialog(
     {
         //{"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},
@@ -1324,17 +1327,26 @@ void ImageViewer::updateFilter() {
             if (firstSize > 0) {
                 bool allStartWithSameChar;
                 do {
-                    char firstChar = first[beginOffset];
+                    int len = codePointLength(first[beginOffset]);
+
                     allStartWithSameChar = all_of(
                         begin(activeImageNames),
                         end(activeImageNames),
-                        [firstChar, beginOffset](const string& name) {
-                            return beginOffset < (int)name.size() && name[beginOffset] == firstChar;
+                        [&first, beginOffset, len](const string& name) {
+                            if (beginOffset + len > (int)name.size()) {
+                                return false;
+                            }
+                            for (int i = beginOffset; i < beginOffset + len; ++i) {
+                                if (name[i] != first[i]) {
+                                    return false;
+                                }
+                            }
+                            return true;
                         }
                     );
 
                     if (allStartWithSameChar) {
-                        ++beginOffset;
+                        beginOffset += len;
                     }
                 } while (allStartWithSameChar && beginOffset < firstSize);
 

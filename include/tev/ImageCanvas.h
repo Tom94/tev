@@ -107,7 +107,7 @@ public:
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
-    void saveImage(const std::string& filename);
+    void saveImage(const filesystem::path& filename);
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
