@@ -120,14 +120,14 @@ int mainFunc(const vector<string>& arguments) {
     // errors using exceptions.
     try {
         parser.ParseArgs(arguments);
-    } catch (args::Help) {
+    } catch (Help) {
         std::cout << parser;
         return 0;
-    } catch (args::ParseError e) {
+    } catch (ParseError e) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
         return -1;
-    } catch (args::ValidationError e) {
+    } catch (ValidationError e) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
         return -2;
