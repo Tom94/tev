@@ -56,6 +56,9 @@ inline int codePointLength(char first) {
     }
 }
 
+std::wstring utf8to16(const std::string& utf8);
+std::string utf16to8(const std::wstring& utf16);
+
 #ifdef _WIN32
 inline std::wstring nativeString(const filesystem::path& path) {
     return path.wstr();
@@ -68,10 +71,7 @@ inline std::string nativeString(const filesystem::path& path) {
 
 #ifdef _WIN32
 inline FILE* cfopen(const filesystem::path& path, std::string mode) {
-    int size = MultiByteToWideChar(CP_UTF8, 0, &mode[0], (int)mode.size(), NULL, 0);
-    std::wstring wmode(size, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &mode[0], (int)mode.size(), &wmode[0], size);
-    return _wfopen(path.wstr().c_str(), wmode.c_str());
+    return _wfopen(path.wstr().c_str(), utf8to16(mode).c_str());
 }
 #else
 inline FILE* cfopen(const filesystem::path& path, std::string mode) {

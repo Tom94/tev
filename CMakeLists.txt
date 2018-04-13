@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
-set(TEV_VERSION "1.9")
+set(TEV_VERSION "1.8")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
@@ -68,9 +68,9 @@ if (MSVC)
     endif()
 
     # To allow for wildcards in command-line path arguments on windows,
-    # we need to link to setargv.obj
+    # we need to link to wsetargv.obj
     # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} setargv.obj")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} wsetargv.obj")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -138,6 +138,7 @@ include_directories(
     ${OPENEXR_INCLUDE_DIRS}
     ${STB_INCLUDE}
     ${TINYFORMAT_INCLUDE}
+    ${UTFCPP_INCLUDE}
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
