@@ -9,6 +9,8 @@
 #include <args.hxx>
 #include <ImfThreading.h>
 
+#include <utf8.h>
+
 #include <iostream>
 #include <thread>
 
@@ -215,56 +217,30 @@ int mainFunc(const vector<string>& arguments) {
     return 0;
 }
 
-#ifdef _WIN32
-vector<string> arguments(int argc, char*[]) {
-    vector<string> arguments;
-
-    LPWSTR* arglist = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (arglist == NULL) {
-        // tfm::format is not used due to a compiler issue in MSVC 2015 clashing with the "args" namespace.
-        throw runtime_error{string{"Could not obtain command line: "} + errorString(lastError())};
-    }
-
-    for (int i = 1; i < argc; ++i) {
-        wstring warg = arglist[i];
-        string arg;
-        if (!warg.empty()) {
-            int size = WideCharToMultiByte(CP_UTF8, 0, &warg[0], (int)warg.size(), NULL, 0, NULL, NULL);
-            arg.resize(size, 0);
-            WideCharToMultiByte(CP_UTF8, 0, &warg[0], (int)warg.size(), &arg[0], size, NULL, NULL);
-        }
-
-        arguments.emplace_back(arg);
-    }
-
-    LocalFree(arglist);
-
-    return arguments;
-}
-#else
-vector<string> arguments(int argc, char* argv[]) {
-    vector<string> arguments;
-    for (int i = 1; i < argc; ++i) {
-        string arg = argv[i];
-        // OSX sometimes (seemingly sporadically) passes the
-        // process serial number via a command line parameter.
-        // We would like to ignore this.
-        if (arg.find("-psn") == 0) {
-            continue;
-        }
-
-        arguments.emplace_back(arg);
-    }
-
-    return arguments;
-}
-#endif
-
 TEV_NAMESPACE_END
 
+#ifdef _WIN32
+int wmain(int argc, wchar_t* argv[]) {
+#else
 int main(int argc, char* argv[]) {
+#endif
     try {
-        tev::mainFunc(tev::arguments(argc, argv));
+        vector<string> arguments;
+        for (int i = 1; i < argc; ++i) {
+#ifdef _WIN32
+            arguments.emplace_back(tev::utf16to8(argv[i]));
+#else
+            string arg = argv[i];
+            // OSX sometimes (seemingly sporadically) passes the
+            // process serial number via a command line parameter.
+            // We would like to ignore this.
+            if (arg.find("-psn") != 0) {
+                arguments.emplace_back(argv[i]);
+            }
+#endif
+        }
+
+        tev::mainFunc(arguments);
     } catch (const runtime_error& e) {
         cerr << "Uncaught exception: " << e.what() << endl;
         return 1;
