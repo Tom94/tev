@@ -1327,17 +1327,26 @@ void ImageViewer::updateFilter() {
             if (firstSize > 0) {
                 bool allStartWithSameChar;
                 do {
-                    char firstChar = first[beginOffset];
+                    int len = codePointLength(first[beginOffset]);
+
                     allStartWithSameChar = all_of(
                         begin(activeImageNames),
                         end(activeImageNames),
-                        [firstChar, beginOffset](const string& name) {
-                            return beginOffset < (int)name.size() && name[beginOffset] == firstChar;
+                        [&first, beginOffset, len](const string& name) {
+                            if (beginOffset + len > (int)name.size()) {
+                                return false;
+                            }
+                            for (int i = beginOffset; i < beginOffset + len; ++i) {
+                                if (name[i] != first[i]) {
+                                    return false;
+                                }
+                            }
+                            return true;
                         }
                     );
 
                     if (allStartWithSameChar) {
-                        ++beginOffset;
+                        beginOffset += len;
                     }
                 } while (allStartWithSameChar && beginOffset < firstSize);
 

@@ -117,7 +117,7 @@ void ImageButton::draw(NVGcontext *ctx) {
 
         nvgFontSize(ctx, mFontSize);
         while (mCutoff < mCaption.size() && nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
-            ++mCutoff;
+            mCutoff += codePointLength(mCaption[mCutoff]);;
         }
 
         mSizeForWhichCutoffWasComputed = mSize;
@@ -158,7 +158,7 @@ void ImageButton::draw(NVGcontext *ctx) {
 
     nvgFontSize(ctx, mFontSize);
     nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-    
+
     for (size_t i = 0; i < pieces.size(); ++i) {
         nvgFontFace(ctx, i == 1 ? "sans-bold" : "sans");
         nvgFillColor(ctx, i == 1 ? hightlightedTextColor : regularTextColor);

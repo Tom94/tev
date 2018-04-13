@@ -44,6 +44,18 @@ struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
 
+inline int codePointLength(char first) {
+    if ((first & 0xf8) == 0xf0) {
+        return 4;
+    } else if ((first & 0xf0) == 0xe0) {
+        return 3;
+    } else if ((first & 0xe0) == 0xc0) {
+        return 2;
+    } else {
+        return 1;
+    }
+}
+
 #ifdef _WIN32
 inline std::wstring nativeString(const filesystem::path& path) {
     return path.wstr();
