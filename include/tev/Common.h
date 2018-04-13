@@ -20,6 +20,9 @@
 #   pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
 #endif
 
+// Needs to be included _after_ Windows.h to ensure NOMINMAX has an effect
+#include <filesystem/path.h>
+
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
 #define TEV_NAMESPACE_BEGIN namespace tev {
@@ -40,6 +43,37 @@
 struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
+
+#ifdef _WIN32
+inline std::wstring nativeString(const filesystem::path& path) {
+    return path.wstr();
+}
+#else
+inline std::string nativeString(const filesystem::path& path) {
+    return path.str();
+}
+#endif
+
+#ifdef _WIN32
+inline FILE* cfopen(const filesystem::path& path, std::string mode) {
+    int size = MultiByteToWideChar(CP_UTF8, 0, &mode[0], (int)mode.size(), NULL, 0);
+    std::wstring wmode(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &mode[0], (int)mode.size(), &wmode[0], size);
+    return _wfopen(path.wstr().c_str(), wmode.c_str());
+}
+#else
+inline FILE* cfopen(const filesystem::path& path, std::string mode) {
+    return fopen(path.str().c_str(), mode.c_str());
+}
+#endif
+
+class ScopeGuard {
+public:
+    ScopeGuard(const std::function<void(void)>& callback) : mCallback{callback} {}
+    ~ScopeGuard() { mCallback(); }
+private:
+    std::function<void(void)> mCallback;
+};
 
 template <typename T>
 T clamp(T value, T min, T max) {
@@ -71,8 +105,6 @@ std::vector<std::string> split(std::string text, const std::string& delim);
 std::string toLower(std::string str);
 std::string toUpper(std::string str);
 
-bool endsWith(const std::string& str, const std::string& ending);
-
 bool matches(std::string text, std::string filter, bool isRegex);
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
@@ -99,9 +131,7 @@ int lastError();
 int lastSocketError();
 std::string errorString(int errorId);
 
-std::string absolutePath(const std::string& path);
-
-std::string homeDirectory();
+filesystem::path homeDirectory();
 
 void toggleConsole();
 

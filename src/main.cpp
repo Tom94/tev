@@ -13,11 +13,12 @@
 #include <thread>
 
 using namespace args;
+using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-int mainFunc(int argc, char* argv[]) {
+int mainFunc(const vector<string>& arguments) {
     ArgumentParser parser{
         "Inspection tool for images with a high dynamic range.",
         "",
@@ -115,19 +116,6 @@ int mainFunc(int argc, char* argv[]) {
         "part of a multi-part EXR file.",
     };
 
-    vector<string> arguments;
-    for (int i = 1; i < argc; ++i) {
-        string arg = argv[i];
-        // OSX sometimes (seemingly sporadically) passes the
-        // process serial number via a command line parameter.
-        // We would like to ignore this.
-        if (arg.find("-psn") == 0) {
-            continue;
-        }
-
-        arguments.emplace_back(arg);
-    }
-
     // Parse command line arguments and react to parsing
     // errors using exceptions.
     try {
@@ -158,7 +146,7 @@ int mainFunc(int argc, char* argv[]) {
             }
 
             try {
-                ipc->sendToPrimaryInstance(absolutePath(imageFile) + ":" + channelSelector);
+                ipc->sendToPrimaryInstance(path{imageFile}.make_absolute().str() + ":" + channelSelector);
             } catch (runtime_error e) {
                 cerr << "Invalid file '" << imageFile << "': " << e.what() << endl;
             }
@@ -227,11 +215,56 @@ int mainFunc(int argc, char* argv[]) {
     return 0;
 }
 
+#ifdef _WIN32
+vector<string> arguments(int argc, char*[]) {
+    vector<string> arguments;
+
+    LPWSTR* arglist = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (arglist == NULL) {
+        // tfm::format is not used due to a compiler issue in MSVC 2015 clashing with the "args" namespace.
+        throw runtime_error{string{"Could not obtain command line: "} + errorString(lastError())};
+    }
+
+    for (int i = 1; i < argc; ++i) {
+        wstring warg = arglist[i];
+        string arg;
+        if (!warg.empty()) {
+            int size = WideCharToMultiByte(CP_UTF8, 0, &warg[0], (int)warg.size(), NULL, 0, NULL, NULL);
+            arg.resize(size, 0);
+            WideCharToMultiByte(CP_UTF8, 0, &warg[0], (int)warg.size(), &arg[0], size, NULL, NULL);
+        }
+
+        arguments.emplace_back(arg);
+    }
+
+    LocalFree(arglist);
+
+    return arguments;
+}
+#else
+vector<string> arguments(int argc, char* argv[]) {
+    vector<string> arguments;
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        // OSX sometimes (seemingly sporadically) passes the
+        // process serial number via a command line parameter.
+        // We would like to ignore this.
+        if (arg.find("-psn") == 0) {
+            continue;
+        }
+
+        arguments.emplace_back(arg);
+    }
+
+    return arguments;
+}
+#endif
+
 TEV_NAMESPACE_END
 
 int main(int argc, char* argv[]) {
     try {
-        tev::mainFunc(argc, argv);
+        tev::mainFunc(tev::arguments(argc, argv));
     } catch (const runtime_error& e) {
         cerr << "Uncaught exception: " << e.what() << endl;
         return 1;

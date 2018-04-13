@@ -131,6 +131,7 @@ endif()
 include_directories(
     ${ARGS_INCLUDE}
     ${EIGEN_INCLUDE}
+    ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}
     ${NANOGUI_EXTRA_INCS}
     ${NANOGUI_INCLUDE}

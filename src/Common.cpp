@@ -18,6 +18,7 @@
 #   include <unistd.h>
 #endif
 
+using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -47,10 +48,6 @@ string toLower(string str) {
 string toUpper(string str) {
     transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)toupper(c); });
     return str;
-}
-
-bool endsWith(const string& str, const string& ending) {
-    return str.rfind(ending) == str.length() - ending.length();
 }
 
 bool matches(string text, string filter, bool isRegex) {
@@ -172,24 +169,7 @@ string errorString(int errorId) {
 #endif
 }
 
-string absolutePath(const string& path) {
-    char buffer[16384];
-
-#ifdef _WIN32
-    DWORD length = GetFullPathName(path.c_str(), sizeof(buffer), buffer, NULL);
-    if (length == 0 || length == sizeof(buffer)) {
-        throw runtime_error{tfm::format("Could not obtain absolute path: %s", errorString(lastError()))};
-    }
-    return buffer;
-#else
-    if (realpath(path.c_str(), buffer) == NULL) {
-        throw runtime_error{tfm::format("Could not obtain absolute path: %s", errorString(lastError()))};
-    }
-    return buffer;
-#endif
-}
-
-string homeDirectory() {
+path homeDirectory() {
 #ifdef _WIN32
     char path[MAX_PATH];
     if (SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, 0, path) != S_OK) {

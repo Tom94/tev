@@ -16,10 +16,10 @@ TEV_NAMESPACE_BEGIN
 
 class Image {
 public:
-    Image(const std::string& filename, const std::string& channelSelector);
+    Image(const filesystem::path& path, const std::string& channelSelector);
 
-    const std::string& filename() const {
-        return mFilename;
+    const filesystem::path& path() const {
+        return mPath;
     }
 
     const std::string& channelSelector() const {
@@ -74,7 +74,7 @@ private:
     void readStbi();
     void readExr();
 
-    std::string mFilename;
+    filesystem::path mPath;
     std::string mChannelSelector;
 
     std::string mName;
@@ -87,6 +87,6 @@ private:
     const int mId;
 };
 
-std::shared_ptr<Image> tryLoadImage(std::string filename, std::string channelSelector);
+std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::string channelSelector);
 
 TEV_NAMESPACE_END

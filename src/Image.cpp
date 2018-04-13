@@ -8,6 +8,7 @@
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
 #include <ImfMultiPartInputFile.h>
+#include <ImfStdIO.h>
 
 #include <stb_image.h>
 
@@ -18,14 +19,15 @@
 #include <set>
 
 using namespace Eigen;
+using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool isExrFile(const string& filename) {
-    ifstream f{filename, ios_base::binary};
+bool isExrFile(const path& filename) {
+    ifstream f{nativeString(filename), ios_base::binary};
     if (!f) {
-        throw invalid_argument{tfm::format("File %s could not be opened.", filename)};
+        throw invalid_argument{ tfm::format("File %s could not be opened.", filename) };
     }
 
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
@@ -36,15 +38,15 @@ bool isExrFile(const string& filename) {
 
 atomic<int> Image::sId(0);
 
-Image::Image(const string& filename, const string& channelSelector)
-: mFilename{ filename }, mChannelSelector{ channelSelector }, mId{sId++} {
+Image::Image(const filesystem::path& path, const string& channelSelector)
+: mPath{path}, mChannelSelector{channelSelector}, mId{sId++} {
     if (!channelSelector.empty()) {
-        mName = tfm::format("%s:%s", filename, channelSelector);
+        mName = tfm::format("%s:%s", path, channelSelector);
     } else {
-        mName = filename;
+        mName = path.str();
     }
 
-    if (isExrFile(filename)) {
+    if (isExrFile(path)) {
         readExr();
     } else {
         readStbi();
@@ -86,7 +88,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
             const auto& channelName = channelNames[i];
             const auto* chan = channel(channelName);
             if (!chan) {
-                throw invalid_argument{tfm::format("Cannot obtain texture of %s:%s, because the channel does not exist.", filename(), channelName)};
+                throw invalid_argument{tfm::format("Cannot obtain texture of %s:%s, because the channel does not exist.", path(), channelName)};
             }
 
             const auto& channelData = chan->data();
@@ -152,24 +154,35 @@ string Image::toString() const {
 
 void Image::readStbi() {
     // No exr image? Try our best using stbi
-    cout << "Loading " << mFilename << " via STBI... " << flush;
+    cout << "Loading " << mPath << " via STBI... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
 
+    FILE* file = cfopen(mPath, "rb");
+    if (!file) {
+        throw invalid_argument{tfm::format("Could not open file %s", mPath)};
+    }
+
+    ScopeGuard fileGuard{[file] { fclose(file); }};
+
     void* data;
     int numChannels;
     Vector2i size;
-    bool isHdr = stbi_is_hdr(mFilename.c_str()) != 0;
+    bool isHdr = stbi_is_hdr_from_file(file) != 0;
+    fseek(file, 0, SEEK_SET);
+
     if (isHdr) {
-        data = stbi_loadf(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_loadf_from_file(file, &size.x(), &size.y(), &numChannels, 0);
     } else {
-        data = stbi_load(mFilename.c_str(), &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_load_from_file(file, &size.x(), &size.y(), &numChannels, 0);
     }
 
     if (!data) {
-        throw invalid_argument("Could not load texture data from file " + mFilename);
+        throw invalid_argument{tfm::format("Could not load texture data from file %s", mPath)};
     }
+
+    ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
     vector<Channel> channels;
     for (int c = 0; c < numChannels; ++c) {
@@ -195,8 +208,6 @@ void Image::readStbi() {
         });
     }
 
-    stbi_image_free(data);
-
     for (auto& channel : channels) {
         string name = channel.name();
         if (matches(name, mChannelSelector, false)) {
@@ -218,16 +229,18 @@ void Image::readStbi() {
 
 void Image::readExr() {
     // OpenEXR for reading exr images
-    cout << "Loading " << mFilename << " via OpenEXR... " << flush;
+    cout << "Loading " << mPath << " via OpenEXR... " << flush;
     auto start = chrono::system_clock::now();
 
     ThreadPool threadPool;
 
-    Imf::MultiPartInputFile multiPartFile{mFilename.c_str()};
+    ifstream stream{nativeString(mPath), ios_base::binary};
+    Imf::StdIFStream imfStream{stream, mPath.str().c_str()};
+    Imf::MultiPartInputFile multiPartFile{imfStream};
     int numParts = multiPartFile.parts();
 
     if (numParts <= 0) {
-        throw invalid_argument{tfm::format("EXR image '%s' does not contain any parts.", mFilename)};
+        throw invalid_argument{tfm::format("EXR image '%s' does not contain any parts.", mPath)};
     }
 
     // Find the first part containing a channel that matches the given channelSubstr.
@@ -388,22 +401,22 @@ void Image::ensureValid() {
     }
 }
 
-shared_ptr<Image> tryLoadImage(string filename, string channelSelector) {
+shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     try {
-        filename = absolutePath(filename);
+        path = path.make_absolute();
     } catch (runtime_error e) {
         // If for some strange reason we can not obtain an absolute path, let's still
         // try to open the image at the given path just to make sure.
     }
 
     try {
-        return make_shared<Image>(filename, channelSelector);
+        return make_shared<Image>(path, channelSelector);
     } catch (invalid_argument e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", path, channelSelector, e.what());
     } catch (runtime_error e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", path, channelSelector, e.what());
     } catch (Iex::BaseExc& e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", filename, channelSelector, e.what());
+        tfm::format(cerr, "Could not load image from %s:%s - %s\n", path, channelSelector, e.what());
     }
 
     return nullptr;
