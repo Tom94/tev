@@ -26,6 +26,12 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
+string ensureUtf8(const string& str) {
+    string temp;
+    utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
+    return temp;
+}
+
 wstring utf8to16(const string& utf8) {
     wstring utf16;
     utf8::utf8to16(begin(utf8), end(utf8), back_inserter(utf16));

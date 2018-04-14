@@ -235,7 +235,7 @@ int main(int argc, char* argv[]) {
             // process serial number via a command line parameter.
             // We would like to ignore this.
             if (arg.find("-psn") != 0) {
-                arguments.emplace_back(argv[i]);
+                arguments.emplace_back(tev::ensureUtf8(argv[i]));
             }
 #endif
         }
