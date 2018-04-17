@@ -935,13 +935,13 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         });
     }
 
-    // This will automatically fall back to the root layer if the current
-    // layer isn't found.
-    selectLayer(mCurrentLayer);
-
     // Setting the filter again makes sure, that layers are correctly filtered.
     setFilter(mFilter->value());
     updateLayout();
+
+    // This will automatically fall back to the root layer if the current
+    // layer isn't found.
+    selectLayer(mCurrentLayer);
 
     // Ensure the currently active image button is always fully on-screen
     Widget* activeImageButton = nullptr;
