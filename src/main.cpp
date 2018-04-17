@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
         }
 
         tev::mainFunc(arguments);
-    } catch (const runtime_error& e) {
+    } catch (const exception& e) {
         cerr << "Uncaught exception: " << e.what() << endl;
         return 1;
     }
