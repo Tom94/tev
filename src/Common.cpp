@@ -5,6 +5,8 @@
 
 #include <nanogui/opengl.h>
 
+#include <utf8.h>
+
 #include <algorithm>
 #include <cctype>
 #include <map>
@@ -23,6 +25,24 @@ using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
+
+string ensureUtf8(const string& str) {
+    string temp;
+    utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
+    return temp;
+}
+
+wstring utf8to16(const string& utf8) {
+    wstring utf16;
+    utf8::utf8to16(begin(utf8), end(utf8), back_inserter(utf16));
+    return utf16;
+}
+
+string utf16to8(const wstring& utf16) {
+    string utf8;
+    utf8::utf16to8(begin(utf16), end(utf16), back_inserter(utf8));
+    return utf8;
+}
 
 vector<string> split(string text, const string& delim) {
     vector<string> result;

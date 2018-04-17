@@ -485,7 +485,7 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        const string& imageFile = filenames[i];
+        path imageFile = ensureUtf8(filenames[i]);
         bool shallSelect = i == filenames.size() - 1;
         ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
             auto image = tryLoadImage(imageFile, "");
@@ -681,7 +681,8 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 void ImageViewer::drawContents() {
     bool receivedFileViaIpc = false;
     if (mIpc->isPrimaryInstance()) {
-        while (mIpc->receiveFromSecondaryInstance([this](const string& imageString) {
+        while (mIpc->receiveFromSecondaryInstance([this](const string& reveicedString) {
+            string imageString = ensureUtf8(reveicedString);
             ThreadPool::singleWorker().enqueueTask([imageString, this] {
                 size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
                 auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
@@ -1225,7 +1226,7 @@ void ImageViewer::openImageDialog() {
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
-        path imageFile = paths[i];
+        path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
         ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
             auto image = tryLoadImage(imageFile, "");
@@ -1244,7 +1245,7 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    path path = file_dialog(
+    path path = ensureUtf8(file_dialog(
     {
         //{"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},
@@ -1253,7 +1254,7 @@ void ImageViewer::saveImageDialog() {
         {"jpeg", "JPEG image"},
         {"png",  "Portable Network Graphics image"},
         {"tga",  "Truevision TGA image"},
-    }, true);
+    }, true));
 
     if (path.empty()) {
         return;

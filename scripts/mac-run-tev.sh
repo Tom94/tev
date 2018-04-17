@@ -19,7 +19,7 @@ do
     if  [[ $var == -* ]] || [[ $var == :* ]]; then
         paths+=($var)
     else
-        paths+=("$(realpath $var)")
+        paths+=("$(realpath "$var")")
     fi
 done
 

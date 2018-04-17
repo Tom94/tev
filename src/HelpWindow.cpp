@@ -124,10 +124,10 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         auto addLibrary = [](Widget* current, string name, string license, string desc) {
             auto row = new Widget{current};
-            row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5, 30});
+            row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 30});
             auto leftColumn = new Widget{row};
             leftColumn->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
-            leftColumn->setFixedWidth(130);
+            leftColumn->setFixedWidth(135);
 
             new Label{leftColumn, name, "sans-bold", 18};
             new Label{row, desc, "sans", 18};
@@ -143,23 +143,25 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addText(about, "tev — The EXR Viewer", "sans-bold", 46);
         addText(about, "version " TEV_VERSION, "sans", 26);
 
-        addSpacer(about, 60);
+        addSpacer(about, 50);
 
         addText(about, "tev was developed by Thomas Müller and is released under the BSD 3-Clause License.");
         addText(about, "It was built directly or indirectly upon the following amazing third-party libraries.");
 
-        addSpacer(about, 40);
+        addSpacer(about, 30);
 
-        addLibrary(about, "args",              "", "Single-Header Argument Parsing Library.");
-        addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra.");
-        addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator.");
-        addLibrary(about, "GLEW",              "", "The OpenGL Extension Wrangler Library.");
-        addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library.");
-        addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL.");
-        addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library.");
-        addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format.");
-        addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images.");
-        addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement.");
+        addLibrary(about, "args",              "", "Single-Header Argument Parsing Library");
+        addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra");
+        addLibrary(about, "filesystem",        "", "Lightweight Path Manipulation Library");
+        addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
+        addLibrary(about, "GLEW",              "", "The OpenGL Extension Wrangler Library");
+        addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library");
+        addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL");
+        addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library");
+        addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format");
+        addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
+        addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement");
+        addLibrary(about, "UTF8-CPP",          "", "Lightweight UTF-8 String Manipulation Library");
     }
 
     tabWidget->setActiveTab(0);
