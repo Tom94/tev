@@ -70,16 +70,6 @@ inline std::string nativeString(const filesystem::path& path) {
 }
 #endif
 
-#ifdef _WIN32
-inline FILE* cfopen(const filesystem::path& path, std::string mode) {
-    return _wfopen(path.wstr().c_str(), utf8to16(mode).c_str());
-}
-#else
-inline FILE* cfopen(const filesystem::path& path, std::string mode) {
-    return fopen(path.str().c_str(), mode.c_str());
-}
-#endif
-
 class ScopeGuard {
 public:
     ScopeGuard(const std::function<void(void)>& callback) : mCallback{callback} {}

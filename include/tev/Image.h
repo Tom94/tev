@@ -71,8 +71,8 @@ private:
 
     void ensureValid();
 
-    void readStbi();
-    void readExr();
+    void readStbi(std::ifstream& f);
+    void readExr(std::ifstream& f);
 
     filesystem::path mPath;
     std::string mChannelSelector;

@@ -24,16 +24,13 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool isExrFile(const path& filename) {
-    ifstream f{nativeString(filename), ios_base::binary};
-    if (!f) {
-        throw invalid_argument{ tfm::format("File %s could not be opened.", filename) };
-    }
-
+bool isExrFile(ifstream& f) {
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
     char b[4];
     f.read(b, sizeof(b));
-    return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    bool result = !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    f.seekg(0);
+    return result;
 }
 
 atomic<int> Image::sId(0);
@@ -46,11 +43,28 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
         mName = path.str();
     }
 
-    if (isExrFile(path)) {
-        readExr();
-    } else {
-        readStbi();
+    cout << "Loading " << mPath;
+    auto start = chrono::system_clock::now();
+
+    ifstream f{nativeString(mPath), ios_base::binary};
+    if (!f) {
+        throw invalid_argument{tfm::format("File %s could not be opened.", mPath)};
     }
+
+    if (isExrFile(f)) {
+        cout << " via OpenEXR... " << flush;
+        readExr(f);
+    } else {
+        cout << " via STBI... " << flush;
+        readStbi(f);
+    }
+
+    auto end = chrono::system_clock::now();
+    chrono::duration<double> elapsedSeconds = end - start;
+
+    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+
+    ensureValid();
 }
 
 string Image::shortName() const {
@@ -152,30 +166,37 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
-void Image::readStbi() {
-    // No exr image? Try our best using stbi
-    cout << "Loading " << mPath << " via STBI... " << flush;
-    auto start = chrono::system_clock::now();
 
+void Image::readStbi(ifstream& f) {
     ThreadPool threadPool;
 
-    FILE* file = cfopen(mPath, "rb");
-    if (!file) {
-        throw invalid_argument{tfm::format("Could not open file %s", mPath)};
-    }
-
-    ScopeGuard fileGuard{[file] { fclose(file); }};
+    static const stbi_io_callbacks callbacks = {
+        // Read
+        [](void* context, char* data, int size) {
+            auto stream = reinterpret_cast<ifstream*>(context);
+            stream->read(data, size);
+            return (int)stream->gcount();
+        },
+        // Seek
+        [](void* context, int size) {
+            reinterpret_cast<ifstream*>(context)->seekg(size, ios_base::cur);
+        },
+        // EOF
+        [](void* context) {
+            return (int)!!(*reinterpret_cast<ifstream*>(context));
+        },
+    };
 
     void* data;
     int numChannels;
     Vector2i size;
-    bool isHdr = stbi_is_hdr_from_file(file) != 0;
-    fseek(file, 0, SEEK_SET);
+    bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &f) != 0;
+    f.seekg(0);
 
     if (isHdr) {
-        data = stbi_loadf_from_file(file, &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_loadf_from_callbacks(&callbacks, &f, &size.x(), &size.y(), &numChannels, 0);
     } else {
-        data = stbi_load_from_file(file, &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_load_from_callbacks(&callbacks, &f, &size.x(), &size.y(), &numChannels, 0);
     }
 
     if (!data) {
@@ -218,24 +239,12 @@ void Image::readStbi() {
     // STBI can not load layers, so all channels simply reside
     // within a topmost root layer.
     mLayers.emplace_back("");
-
-    auto end = chrono::system_clock::now();
-    chrono::duration<double> elapsedSeconds = end - start;
-
-    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
-
-    ensureValid();
 }
 
-void Image::readExr() {
-    // OpenEXR for reading exr images
-    cout << "Loading " << mPath << " via OpenEXR... " << flush;
-    auto start = chrono::system_clock::now();
-
+void Image::readExr(ifstream& f) {
     ThreadPool threadPool;
 
-    ifstream stream{nativeString(mPath), ios_base::binary};
-    Imf::StdIFStream imfStream{stream, mPath.str().c_str()};
+    Imf::StdIFStream imfStream{f, mPath.str().c_str()};
     Imf::MultiPartInputFile multiPartFile{imfStream};
     int numParts = multiPartFile.parts();
 
@@ -373,13 +382,6 @@ l_foundPart:
     }
 
     threadPool.waitUntilFinished();
-
-    auto end = chrono::system_clock::now();
-    chrono::duration<double> elapsedSeconds = end - start;
-
-    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
-
-    ensureValid();
 }
 
 void Image::ensureValid() {
