@@ -44,6 +44,11 @@ struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
 
+inline bool isLittleEndian() {
+    uint16_t beef = 0xbeef;
+    return *reinterpret_cast<const uint8_t*>(&beef) == 0xef;
+}
+
 inline int codePointLength(char first) {
     if ((first & 0xf8) == 0xf0) {
         return 4;
