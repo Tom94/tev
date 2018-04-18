@@ -215,8 +215,6 @@ void Image::readPfm(ifstream& f) {
     auto numFloats = numPixels * numChannels;
     auto numBytes = numFloats * sizeof(float);
 
-    // Stop eating new lines in binary mode.
-    f.unsetf(std::ios::skipws);
     // Skip last newline at the end of the header.
     f.seekg(1, ios_base::cur);
 
