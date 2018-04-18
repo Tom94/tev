@@ -44,7 +44,20 @@ struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
 
-inline bool isLittleEndian() {
+inline uint32_t swapBytes(uint32_t value) {
+#ifdef _WIN32
+    return _byteswap_ulong(value);
+#else
+    return __builtin_bswap32(value);
+#endif
+}
+
+inline float swapBytes(float value) {
+    uint32_t intVal = swapBytes(*reinterpret_cast<const uint32_t*>(&value));
+    return *reinterpret_cast<const float*>(&intVal);
+}
+
+inline bool isSystemLittleEndian() {
     uint16_t beef = 0xbeef;
     return *reinterpret_cast<const uint8_t*>(&beef) == 0xef;
 }

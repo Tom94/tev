@@ -71,6 +71,7 @@ private:
 
     void ensureValid();
 
+    void readPfm(std::ifstream& f);
     void readStbi(std::ifstream& f);
     void readExr(std::ifstream& f);
 

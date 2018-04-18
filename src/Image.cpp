@@ -28,7 +28,23 @@ bool isExrFile(ifstream& f) {
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
     char b[4];
     f.read(b, sizeof(b));
+    if (f.gcount() < 4) {
+        return false;
+    }
+
     bool result = !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    f.seekg(0);
+    return result;
+}
+
+bool isPfmFile(ifstream& f) {
+    char b[2];
+    f.read(b, sizeof(b));
+    if (f.gcount() < 2) {
+        return false;
+    }
+
+    bool result = !!f && b[0] == 'P' && (b[1] == 'F' || b[1] == 'f');
     f.seekg(0);
     return result;
 }
@@ -54,6 +70,9 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
     if (isExrFile(f)) {
         cout << " via OpenEXR... " << flush;
         readExr(f);
+    } else if (isPfmFile(f)) {
+        cout << " via PFM... " << flush;
+        readPfm(f);
     } else {
         cout << " via STBI... " << flush;
         readStbi(f);
@@ -166,6 +185,79 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
+void Image::readPfm(ifstream& f) {
+    ThreadPool threadPool;
+
+    string magic;
+    Vector2i size;
+    float scale;
+
+    f >> magic >> size.x() >> size.y() >> scale;
+
+    if (magic != "PF" && magic != "Pf") {
+        throw invalid_argument{tfm::format("Invalid magic PFM string %s in file %s", magic, mPath)};
+    }
+
+    if (!isfinite(scale) || scale == 0) {
+        throw invalid_argument{tfm::format("Invalid PFM scale %f in file %s", scale, mPath)};
+    }
+
+    int numChannels = magic[1] == 'F' ? 3 : 1;
+    bool isPfmLittleEndian = scale < 0;
+    scale = abs(scale);
+
+    vector<Channel> channels;
+    for (int c = 0; c < numChannels; ++c) {
+        channels.emplace_back(c, size);
+    }
+
+    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numBytes = numPixels * numChannels * sizeof(float);
+
+    // Stop eating new lines in binary mode.
+    f.unsetf(std::ios::skipws);
+    // Skip last newline at the end of the header.
+    f.seekg(1, ios_base::cur);
+    // Read entire file in binary mode.
+    vector<char> data((istream_iterator<char>(f)), istream_iterator<char>());
+
+    if (data.size() < numBytes) {
+        throw invalid_argument{tfm::format("Not sufficient bytes to read (%d vs %d) in file %s", data.size(), numBytes, mPath)};
+    }
+
+    // Reverse bytes of every float if endianness does not match up with system
+    const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
+
+    auto typedData = reinterpret_cast<const float*>(data.data());
+    threadPool.parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+        for (int x = 0; x < size.x(); ++x) {
+            int baseIdx = (y * size.x() + x) * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
+                float val = typedData[baseIdx + c];
+
+                // Thankfully, due to branch prediction, the "if" in the
+                // inner loop is no significant overhead.
+                if (shallSwapBytes) {
+                    val = swapBytes(val);
+                }
+
+                // Flip image vertically due to PFM format
+                channels[c].at({x, size.y() - y - 1}) = scale * val;
+            }
+        }
+    });
+
+    for (auto& channel : channels) {
+        string name = channel.name();
+        if (matches(name, mChannelSelector, false)) {
+            mChannels.emplace(move(name), move(channel));
+        }
+    }
+
+    // PFM can not contain layers, so all channels simply reside
+    // within a topmost root layer.
+    mLayers.emplace_back("");
+}
 
 void Image::readStbi(ifstream& f) {
     ThreadPool threadPool;
