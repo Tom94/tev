@@ -24,16 +24,29 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool isExrFile(const path& filename) {
-    ifstream f{nativeString(filename), ios_base::binary};
-    if (!f) {
-        throw invalid_argument{ tfm::format("File %s could not be opened.", filename) };
-    }
-
+bool isExrFile(ifstream& f) {
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
     char b[4];
     f.read(b, sizeof(b));
-    return !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    if (f.gcount() < 4) {
+        return false;
+    }
+
+    bool result = !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    f.seekg(0);
+    return result;
+}
+
+bool isPfmFile(ifstream& f) {
+    char b[2];
+    f.read(b, sizeof(b));
+    if (f.gcount() < 2) {
+        return false;
+    }
+
+    bool result = !!f && b[0] == 'P' && (b[1] == 'F' || b[1] == 'f');
+    f.seekg(0);
+    return result;
 }
 
 atomic<int> Image::sId(0);
@@ -46,11 +59,31 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
         mName = path.str();
     }
 
-    if (isExrFile(path)) {
-        readExr();
-    } else {
-        readStbi();
+    cout << "Loading " << mPath;
+    auto start = chrono::system_clock::now();
+
+    ifstream f{nativeString(mPath), ios_base::binary};
+    if (!f) {
+        throw invalid_argument{tfm::format("File %s could not be opened.", mPath)};
     }
+
+    if (isExrFile(f)) {
+        cout << " via OpenEXR... " << flush;
+        readExr(f);
+    } else if (isPfmFile(f)) {
+        cout << " via PFM... " << flush;
+        readPfm(f);
+    } else {
+        cout << " via STBI... " << flush;
+        readStbi(f);
+    }
+
+    auto end = chrono::system_clock::now();
+    chrono::duration<double> elapsedSeconds = end - start;
+
+    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+
+    ensureValid();
 }
 
 string Image::shortName() const {
@@ -152,30 +185,109 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
-void Image::readStbi() {
-    // No exr image? Try our best using stbi
-    cout << "Loading " << mPath << " via STBI... " << flush;
-    auto start = chrono::system_clock::now();
-
+void Image::readPfm(ifstream& f) {
     ThreadPool threadPool;
 
-    FILE* file = cfopen(mPath, "rb");
-    if (!file) {
-        throw invalid_argument{tfm::format("Could not open file %s", mPath)};
+    string magic;
+    Vector2i size;
+    float scale;
+
+    f >> magic >> size.x() >> size.y() >> scale;
+
+    if (magic != "PF" && magic != "Pf") {
+        throw invalid_argument{tfm::format("Invalid magic PFM string %s in file %s", magic, mPath)};
     }
 
-    ScopeGuard fileGuard{[file] { fclose(file); }};
+    if (!isfinite(scale) || scale == 0) {
+        throw invalid_argument{tfm::format("Invalid PFM scale %f in file %s", scale, mPath)};
+    }
+
+    int numChannels = magic[1] == 'F' ? 3 : 1;
+    bool isPfmLittleEndian = scale < 0;
+    scale = abs(scale);
+
+    vector<Channel> channels;
+    for (int c = 0; c < numChannels; ++c) {
+        channels.emplace_back(c, size);
+    }
+
+    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numFloats = numPixels * numChannels;
+    auto numBytes = numFloats * sizeof(float);
+
+    // Skip last newline at the end of the header.
+    f.seekg(1, ios_base::cur);
+
+    // Read entire file in binary mode.
+    vector<float> data(numFloats);
+    f.read(reinterpret_cast<char*>(data.data()), numBytes);
+    if (f.gcount() < (streamsize)numBytes) {
+        throw invalid_argument{tfm::format("Not sufficient bytes to read (%d vs %d) in file %s", f.gcount(), numBytes, mPath)};
+    }
+
+    // Reverse bytes of every float if endianness does not match up with system
+    const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
+
+    threadPool.parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+        for (int x = 0; x < size.x(); ++x) {
+            int baseIdx = (y * size.x() + x) * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
+                float val = data[baseIdx + c];
+
+                // Thankfully, due to branch prediction, the "if" in the
+                // inner loop is no significant overhead.
+                if (shallSwapBytes) {
+                    val = swapBytes(val);
+                }
+
+                // Flip image vertically due to PFM format
+                channels[c].at({x, size.y() - y - 1}) = scale * val;
+            }
+        }
+    });
+
+    for (auto& channel : channels) {
+        string name = channel.name();
+        if (matches(name, mChannelSelector, false)) {
+            mChannels.emplace(move(name), move(channel));
+        }
+    }
+
+    // PFM can not contain layers, so all channels simply reside
+    // within a topmost root layer.
+    mLayers.emplace_back("");
+}
+
+void Image::readStbi(ifstream& f) {
+    ThreadPool threadPool;
+
+    static const stbi_io_callbacks callbacks = {
+        // Read
+        [](void* context, char* data, int size) {
+            auto stream = reinterpret_cast<ifstream*>(context);
+            stream->read(data, size);
+            return (int)stream->gcount();
+        },
+        // Seek
+        [](void* context, int size) {
+            reinterpret_cast<ifstream*>(context)->seekg(size, ios_base::cur);
+        },
+        // EOF
+        [](void* context) {
+            return (int)!!(*reinterpret_cast<ifstream*>(context));
+        },
+    };
 
     void* data;
     int numChannels;
     Vector2i size;
-    bool isHdr = stbi_is_hdr_from_file(file) != 0;
-    fseek(file, 0, SEEK_SET);
+    bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &f) != 0;
+    f.seekg(0);
 
     if (isHdr) {
-        data = stbi_loadf_from_file(file, &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_loadf_from_callbacks(&callbacks, &f, &size.x(), &size.y(), &numChannels, 0);
     } else {
-        data = stbi_load_from_file(file, &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_load_from_callbacks(&callbacks, &f, &size.x(), &size.y(), &numChannels, 0);
     }
 
     if (!data) {
@@ -218,24 +330,12 @@ void Image::readStbi() {
     // STBI can not load layers, so all channels simply reside
     // within a topmost root layer.
     mLayers.emplace_back("");
-
-    auto end = chrono::system_clock::now();
-    chrono::duration<double> elapsedSeconds = end - start;
-
-    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
-
-    ensureValid();
 }
 
-void Image::readExr() {
-    // OpenEXR for reading exr images
-    cout << "Loading " << mPath << " via OpenEXR... " << flush;
-    auto start = chrono::system_clock::now();
-
+void Image::readExr(ifstream& f) {
     ThreadPool threadPool;
 
-    ifstream stream{nativeString(mPath), ios_base::binary};
-    Imf::StdIFStream imfStream{stream, mPath.str().c_str()};
+    Imf::StdIFStream imfStream{f, mPath.str().c_str()};
     Imf::MultiPartInputFile multiPartFile{imfStream};
     int numParts = multiPartFile.parts();
 
@@ -373,13 +473,6 @@ l_foundPart:
     }
 
     threadPool.waitUntilFinished();
-
-    auto end = chrono::system_clock::now();
-    chrono::duration<double> elapsedSeconds = end - start;
-
-    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
-
-    ensureValid();
 }
 
 void Image::ensureValid() {

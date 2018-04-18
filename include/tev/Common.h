@@ -44,6 +44,32 @@ struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
 
+inline uint32_t swapBytes(uint32_t value) {
+#ifdef _WIN32
+    return _byteswap_ulong(value);
+#else
+    return __builtin_bswap32(value);
+#endif
+}
+
+inline float swapBytes(float value) {
+    float result;
+    auto valueChars = reinterpret_cast<char*>(&value);
+    auto resultChars = reinterpret_cast<char*>(&result);
+
+    resultChars[0] = valueChars[3];
+    resultChars[1] = valueChars[2];
+    resultChars[2] = valueChars[1];
+    resultChars[3] = valueChars[0];
+
+    return result;
+}
+
+inline bool isSystemLittleEndian() {
+    uint16_t beef = 0xbeef;
+    return *reinterpret_cast<const uint8_t*>(&beef) == 0xef;
+}
+
 inline int codePointLength(char first) {
     if ((first & 0xf8) == 0xf0) {
         return 4;
@@ -67,16 +93,6 @@ inline std::wstring nativeString(const filesystem::path& path) {
 #else
 inline std::string nativeString(const filesystem::path& path) {
     return path.str();
-}
-#endif
-
-#ifdef _WIN32
-inline FILE* cfopen(const filesystem::path& path, std::string mode) {
-    return _wfopen(path.wstr().c_str(), utf8to16(mode).c_str());
-}
-#else
-inline FILE* cfopen(const filesystem::path& path, std::string mode) {
-    return fopen(path.str().c_str(), mode.c_str());
 }
 #endif
 

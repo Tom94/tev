@@ -11,6 +11,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+#include <fstream>
 #include <numeric>
 
 using namespace Eigen;
@@ -339,10 +340,6 @@ void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
 }
 
-void stbiStdioWrite(void* context, void* data, int size) {
-    fwrite(data, 1, size, reinterpret_cast<FILE*>(context));
-}
-
 void ImageCanvas::saveImage(const path& path) {
     if (!mImage) {
         return;
@@ -361,12 +358,10 @@ void ImageCanvas::saveImage(const path& path) {
     cout << "Saving currently displayed image as " << path << "... " << flush;
     auto start = chrono::system_clock::now();
 
-    FILE* file = cfopen(path, "wb");
-    if (!file) {
-        throw invalid_argument{ tfm::format("Could not open file %s", path) };
+    ofstream f{nativeString(path), ios_base::binary};
+    if (!f) {
+        throw invalid_argument{tfm::format("Could not open file %s", path)};
     }
-
-    ScopeGuard fileGuard{ [file] { fclose(file); } };
 
     // Flatten channels into single array
     vector<float> floatData(4 * channels.front().count(), 0);
@@ -386,10 +381,14 @@ void ImageCanvas::saveImage(const path& path) {
         }
     }
 
+    static const auto stbiOfstreamWrite = [](void* context, void* data, int size) {
+        reinterpret_cast<ofstream*>(context)->write(reinterpret_cast<char*>(data), size);
+    };
+
     string extension = toLower(path.extension());
     if (extension == "hdr") {
         // Store as HDR image.
-        stbi_write_hdr_to_func(stbiStdioWrite, file, imageSize.x(), imageSize.y(), 4, floatData.data());
+        stbi_write_hdr_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, floatData.data());
     } else {
         // Store as LDR image.
         vector<char> byteData(floatData.size());
@@ -409,13 +408,13 @@ void ImageCanvas::saveImage(const path& path) {
         });
 
         if (extension == "jpg" || extension == "jpeg") {
-            stbi_write_jpg_to_func(stbiStdioWrite, file, imageSize.x(), imageSize.y(), 4, byteData.data(), 100);
+            stbi_write_jpg_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data(), 100);
         } else if (extension == "png") {
-            stbi_write_png_to_func(stbiStdioWrite, file, imageSize.x(), imageSize.y(), 4, byteData.data(), 0);
+            stbi_write_png_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data(), 0);
         } else if (extension == "bmp") {
-            stbi_write_bmp_to_func(stbiStdioWrite, file, imageSize.x(), imageSize.y(), 4, byteData.data());
+            stbi_write_bmp_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data());
         } else if (extension == "tga") {
-            stbi_write_tga_to_func(stbiStdioWrite, file, imageSize.x(), imageSize.y(), 4, byteData.data());
+            stbi_write_tga_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data());
         } else {
             throw invalid_argument{tfm::format("Image '%s' has unknown format.", path)};
         }
