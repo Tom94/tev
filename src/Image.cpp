@@ -228,12 +228,11 @@ void Image::readPfm(ifstream& f) {
     // Reverse bytes of every float if endianness does not match up with system
     const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
 
-    auto typedData = reinterpret_cast<const float*>(data.data());
     threadPool.parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = (y * size.x() + x) * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                float val = typedData[baseIdx + c];
+                float val = data[baseIdx + c];
 
                 // Thankfully, due to branch prediction, the "if" in the
                 // inner loop is no significant overhead.
