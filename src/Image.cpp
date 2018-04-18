@@ -212,17 +212,19 @@ void Image::readPfm(ifstream& f) {
     }
 
     auto numPixels = (DenseIndex)size.x() * size.y();
-    auto numBytes = numPixels * numChannels * sizeof(float);
+    auto numFloats = numPixels * numChannels;
+    auto numBytes = numFloats * sizeof(float);
 
     // Stop eating new lines in binary mode.
     f.unsetf(std::ios::skipws);
     // Skip last newline at the end of the header.
     f.seekg(1, ios_base::cur);
-    // Read entire file in binary mode.
-    vector<char> data((istream_iterator<char>(f)), istream_iterator<char>());
 
-    if (data.size() < numBytes) {
-        throw invalid_argument{tfm::format("Not sufficient bytes to read (%d vs %d) in file %s", data.size(), numBytes, mPath)};
+    // Read entire file in binary mode.
+    vector<float> data(numFloats);
+    f.read(reinterpret_cast<char*>(data.data()), numBytes);
+    if (f.gcount() < (streamsize)numBytes) {
+        throw invalid_argument{tfm::format("Not sufficient bytes to read (%d vs %d) in file %s", f.gcount(), numBytes, mPath)};
     }
 
     // Reverse bytes of every float if endianness does not match up with system
