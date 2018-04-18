@@ -53,8 +53,16 @@ inline uint32_t swapBytes(uint32_t value) {
 }
 
 inline float swapBytes(float value) {
-    uint32_t intVal = swapBytes(*reinterpret_cast<const uint32_t*>(&value));
-    return *reinterpret_cast<const float*>(&intVal);
+    float result;
+    auto valueChars = reinterpret_cast<char*>(&value);
+    auto resultChars = reinterpret_cast<char*>(&result);
+
+    resultChars[0] = valueChars[3];
+    resultChars[1] = valueChars[2];
+    resultChars[2] = valueChars[1];
+    resultChars[3] = valueChars[0];
+
+    return result;
 }
 
 inline bool isSystemLittleEndian() {
