@@ -303,7 +303,7 @@ void Image::readStbi(ifstream& f) {
 
     auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
-        float* typedData = reinterpret_cast<float*>(data);
+        auto typedData = reinterpret_cast<float*>(data);
         threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
@@ -311,7 +311,7 @@ void Image::readStbi(ifstream& f) {
             }
         });
     } else {
-        unsigned char* typedData = reinterpret_cast<unsigned char*>(data);
+        auto typedData = reinterpret_cast<unsigned char*>(data);
         threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
@@ -376,7 +376,6 @@ l_foundPart:
 
         void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
             int width = dw.max.x - dw.min.x + 1;
-
             frameBuffer.insert(mName.c_str(), Imf::Slice(
                 mImfChannel.type,
                 mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
@@ -386,26 +385,31 @@ l_foundPart:
         }
 
         void copyTo(Channel& channel, ThreadPool& threadPool) const {
-            // The code in this switch statement may seem overly complicated, but it helps
-            // the compiler optimize. This code is time-critical for large images.
+            // TODO: Switch to generic lambda once C++14 is used
             switch (mImfChannel.type) {
-                case Imf::HALF:
-                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
-                        channel.at(i) = static_cast<float>(*reinterpret_cast<const half*>(&mData[i * sizeof(half)]));
+                case Imf::HALF: {
+                    auto data = reinterpret_cast<const half*>(mData.data());
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                        channel.at(i) = data[i];
                     });
                     break;
+                }
 
-                case Imf::FLOAT:
-                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
-                        channel.at(i) = *reinterpret_cast<const float*>(&mData[i * sizeof(float)]);
+                case Imf::FLOAT: {
+                    auto data = reinterpret_cast<const float*>(mData.data());
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                        channel.at(i) = data[i];
                     });
                     break;
+                }
 
-                case Imf::UINT:
-                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&](DenseIndex i) {
-                        channel.at(i) = static_cast<float>(*reinterpret_cast<const uint32_t*>(&mData[i * sizeof(uint32_t)]));
+                case Imf::UINT: {
+                    auto data = reinterpret_cast<const uint32_t*>(mData.data());
+                    threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                        channel.at(i) = data[i];
                     });
                     break;
+                }
 
                 default:
                     throw runtime_error("Invalid pixel type encountered.");
