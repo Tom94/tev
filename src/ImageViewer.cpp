@@ -1212,8 +1212,11 @@ void ImageViewer::toggleHelpWindow() {
 void ImageViewer::openImageDialog() {
     vector<string> paths = file_dialog(
     {
+        // HDR formats
         {"exr",  "OpenEXR Image"},
         {"hdr",  "HDR Image"},
+        {"pfm",  "Portable Float Map Image"},
+        // LDR formats
         {"bmp",  "Bitmap Image File"},
         {"gif",  "Graphics Interchange Format Image"},
         {"jpg",  "JPEG Image"},
