@@ -121,7 +121,10 @@ int mainFunc(const vector<string>& arguments) {
     // Parse command line arguments and react to parsing
     // errors using exceptions.
     try {
-        parser.ParseArgs(arguments);
+        TEV_ASSERT(arguments.size() > 0, "Number of arguments must be bigger than 0.");
+
+        parser.Prog(arguments.front());
+        parser.ParseArgs(begin(arguments) + 1, end(arguments));
     } catch (Help) {
         std::cout << parser;
         return 0;
@@ -226,7 +229,7 @@ int main(int argc, char* argv[]) {
 #endif
     try {
         vector<string> arguments;
-        for (int i = 1; i < argc; ++i) {
+        for (int i = 0; i < argc; ++i) {
 #ifdef _WIN32
             arguments.emplace_back(tev::utf16to8(argv[i]));
 #else
