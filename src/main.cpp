@@ -151,9 +151,9 @@ int mainFunc(const vector<string>& arguments) {
             }
 
             try {
-                ipc->sendToPrimaryInstance(path{imageFile}.make_absolute().str() + ":" + channelSelector);
+                ipc->sendToPrimaryInstance(tfm::format("%s:%s", path{imageFile}.make_absolute(), channelSelector));
             } catch (runtime_error e) {
-                cerr << "Invalid file '" << imageFile << "': " << e.what() << endl;
+                cerr << tfm::format("Invalid file '%s': %s", imageFile, e.what()) << endl;
             }
         }
 
@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
 
         tev::mainFunc(arguments);
     } catch (const exception& e) {
-        cerr << "Uncaught exception: " << e.what() << endl;
+        cerr << tfm::format("Uncaught exception: %s", e.what()) << endl;
         return 1;
     }
 }

@@ -1,7 +1,7 @@
 version: '{build}'
 pull_requests:
   do_not_increment_build_number: true
-os: Visual Studio 2015
+os: Visual Studio 2017
 test: off
 branches:
   only:
@@ -10,8 +10,8 @@ clone_folder: C:\tev
 install:
   - git submodule update --init --recursive
 build_script:
-  - cd c:\tev
-  - cmake -G "Visual Studio 14 2015 Win64"
+  - cd C:\tev
+  - cmake -G "Visual Studio 15 2017 Win64"
   - set MSBuildLogger="C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
   - set MSBuildOptions=/v:m /p:Configuration=Release /logger:%MSBuildLogger%
   - msbuild %MSBuildOptions% tev.sln
