@@ -104,10 +104,10 @@ int mainFunc(const vector<string>& arguments) {
 
     PositionalList<string> imageFiles{
         parser,
-        "images or channel selectors",
+        "images",
         "The image files to be opened by the viewer. "
-        "If a filename starting with a ':' is encountered, "
-        "then this filename is not treated as an image file "
+        "If an argument starting with a ':' is encountered, "
+        "then this argument is not treated as an image file "
         "but as a comma-separated channel selector. Until the next channel "
         "selector is encountered only channels containing "
         "elements from the current selector will be loaded. This is "
