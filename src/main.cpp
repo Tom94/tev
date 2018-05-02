@@ -30,8 +30,7 @@ int mainFunc(const vector<string>& arguments) {
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
-        "Scales the brightness of an image prior to tonemapping by 2^EXPOSURE. "
-        "It can be controlled via the GUI, or by pressing E/Shift+E.",
+        "Scales the brightness of an image prior to tonemapping by 2^EXPOSURE. Default is 0.",
         {'e', "exposure"},
     };
 
@@ -47,7 +46,7 @@ int mainFunc(const vector<string>& arguments) {
     HelpFlag helpFlag{
         parser,
         "HELP",
-        "Display this help menu",
+        "Display this help menu.",
         {'h', "help"},
     };
 
@@ -77,15 +76,14 @@ int mainFunc(const vector<string>& arguments) {
     Flag newWindowFlag{
         parser,
         "NEW WINDOW",
-        "Open a new window of tev, even if one exists already",
+        "Open a new window of tev, even if one exists already.",
         {'n', "new"},
     };
 
     ValueFlag<float> offsetFlag{
         parser,
         "OFFSET",
-        "Add an absolute offset to the image after EXPOSURE has been applied. "
-        "It can be controlled via the GUI, or by pressing O/Shift+O.",
+        "Add an absolute offset to the image after EXPOSURE has been applied. Default is 0.",
         {'o', "offset"},
     };
 
@@ -105,7 +103,7 @@ int mainFunc(const vector<string>& arguments) {
     Flag versionFlag{
         parser,
         "VERSION",
-        "Display the version of tev",
+        "Display the version of tev.",
         {'v', "version"},
     };
 
