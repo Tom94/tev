@@ -22,7 +22,9 @@ TEV_NAMESPACE_BEGIN
 
 int mainFunc(const vector<string>& arguments) {
     ArgumentParser parser{
-        "Inspection tool for images with a high dynamic range.",
+        "tev — The EXR Viewer\n"
+        "version " TEV_VERSION "\n"
+        "Inspection tool for images with high dynamic range",
         "tev was developed by Thomas Müller <thomas94@gmx.net>. "
         "Its source code is available under the BSD 3-Clause License at https://tom94.net",
     };
