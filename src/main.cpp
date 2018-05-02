@@ -29,21 +29,21 @@ int mainFunc(const vector<string>& arguments) {
 
     HelpFlag helpFlag{
         parser,
-        "help",
+        "HELP",
         "Display this help menu",
         {'h', "help"},
     };
 
     Flag newWindowFlag{
         parser,
-        "new window",
+        "NEW WINDOW",
         "Opens a new window of tev, even if one exists already.",
         {'n', "new"},
     };
 
     ValueFlag<float> exposureFlag{
         parser,
-        "exposure",
+        "EXPOSURE",
         "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
         "It can be controlled via the GUI, or by pressing E/Shift+E.",
         {'e', "exposure"},
@@ -51,7 +51,7 @@ int mainFunc(const vector<string>& arguments) {
 
     ValueFlag<string> filterFlag{
         parser,
-        "filter",
+        "FILTER",
         "Filters visible images and layers according to a supplied string. "
         "The string must have the format 'image:layer'. "
         "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
@@ -60,7 +60,7 @@ int mainFunc(const vector<string>& arguments) {
 
     ValueFlag<bool> maximizeFlag{
         parser,
-        "maximize",
+        "MAXIMIZE",
         "Whether to maximize the window on startup or not. "
         "If no images were supplied via the command line, then the default is false. "
         "Otherwise, the default is true.",
@@ -69,23 +69,21 @@ int mainFunc(const vector<string>& arguments) {
 
     ValueFlag<string> metricFlag{
         parser,
-        "metric",
+        "METRIC",
         "The metric to use when comparing two images. "
-        R"(
-        The available metrics are:
-        E   - Error
-        AE  - Absolute Error
-        SE  - Squared Error
-        RAE - Relative Absolute Error
-        RSE - Relative Squared Error
-        )"
+        "The available metrics are:\n"
+        "E   - Error\n"
+        "AE  - Absolute Error\n"
+        "SE  - Squared Error\n"
+        "RAE - Relative Absolute Error\n"
+        "RSE - Relative Squared Error\n"
         "Default is E.",
         {'m', "metric"},
     };
 
     ValueFlag<float> offsetFlag{
         parser,
-        "offset",
+        "OFFSET",
         "The offset is added to the image after exposure has been applied. "
         "It can be controlled via the GUI, or by pressing O/Shift+O.",
         {'o', "offset"},
@@ -93,15 +91,13 @@ int mainFunc(const vector<string>& arguments) {
 
     ValueFlag<string> tonemapFlag{
         parser,
-        "tonemap",
+        "TONEMAP",
         "The tonemapping algorithm to use. "
-        R"(
-        The available tonemaps are:
-        sRGB   - sRGB
-        Gamma  - Gamma curve (2.2)
-        FC     - False Color
-        PN     - Positive=Green, Negative=Red
-        )"
+        "The available tonemaps are:\n"
+        "sRGB   - sRGB\n"
+        "Gamma  - Gamma curve (2.2)\n"
+        "FC     - False Color\n"
+        "PN     - Positive=Green, Negative=Red\n"
         "Default is sRGB.",
         {'t', "tonemap"},
     };
