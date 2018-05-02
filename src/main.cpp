@@ -34,6 +34,13 @@ int mainFunc(const vector<string>& arguments) {
         {'h', "help"},
     };
 
+    Flag versionFlag{
+        parser,
+        "VERSION",
+        "Display the version of tev",
+        {'v', "version"},
+    };
+
     Flag newWindowFlag{
         parser,
         "NEW WINDOW",
@@ -133,6 +140,13 @@ int mainFunc(const vector<string>& arguments) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
         return -2;
+    }
+
+    if (versionFlag) {
+        cout
+            << "tev — The EXR Viewer" << endl
+            << "version " TEV_VERSION << endl;
+        return 0;
     }
 
     auto ipc = make_shared<Ipc>();
