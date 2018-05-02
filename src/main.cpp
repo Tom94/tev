@@ -44,14 +44,14 @@ int mainFunc(const vector<string>& arguments) {
     Flag newWindowFlag{
         parser,
         "NEW WINDOW",
-        "Opens a new window of tev, even if one exists already.",
+        "Open a new window of tev, even if one exists already",
         {'n', "new"},
     };
 
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
-        "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
+        "Scales the brightness of an image prior to tonemapping by 2^EXPOSURE. "
         "It can be controlled via the GUI, or by pressing E/Shift+E.",
         {'e', "exposure"},
     };
@@ -59,7 +59,7 @@ int mainFunc(const vector<string>& arguments) {
     ValueFlag<string> filterFlag{
         parser,
         "FILTER",
-        "Filters visible images and layers according to a supplied string. "
+        "Filter visible images and layers according to a supplied string. "
         "The string must have the format 'image:layer'. "
         "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
         {'f', "filter"},
@@ -68,9 +68,9 @@ int mainFunc(const vector<string>& arguments) {
     ValueFlag<bool> maximizeFlag{
         parser,
         "MAXIMIZE",
-        "Whether to maximize the window on startup or not. "
-        "If no images were supplied via the command line, then the default is false. "
-        "Otherwise, the default is true.",
+        "Maximize the window on startup. "
+        "If no images were supplied via the command line, then the default is FALSE. "
+        "Otherwise, the default is TRUE.",
         {"max", "maximize"},
     };
 
@@ -91,7 +91,7 @@ int mainFunc(const vector<string>& arguments) {
     ValueFlag<float> offsetFlag{
         parser,
         "OFFSET",
-        "The offset is added to the image after exposure has been applied. "
+        "Add an absolute offset to the image after EXPOSURE has been applied. "
         "It can be controlled via the GUI, or by pressing O/Shift+O.",
         {'o', "offset"},
     };
@@ -112,7 +112,7 @@ int mainFunc(const vector<string>& arguments) {
     PositionalList<string> imageFiles{
         parser,
         "images",
-        "The image files to be opened by the viewer. "
+        "The image files to be opened by tev. "
         "If an argument starting with a ':' is encountered, "
         "then this argument is not treated as an image file "
         "but as a comma-separated channel selector. Until the next channel "
