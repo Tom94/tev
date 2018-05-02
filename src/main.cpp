@@ -22,95 +22,99 @@ TEV_NAMESPACE_BEGIN
 
 int mainFunc(const vector<string>& arguments) {
     ArgumentParser parser{
-        "Inspection tool for images with a high dynamic range.",
-        "",
-    };
-
-    HelpFlag helpFlag{
-        parser,
-        "help",
-        "Display this help menu",
-        {'h', "help"},
-    };
-
-    Flag newWindowFlag{
-        parser,
-        "new window",
-        "Opens a new window of tev, even if one exists already.",
-        {'n', "new"},
+        "tev — The EXR Viewer\n"
+        "version " TEV_VERSION "\n"
+        "Inspection tool for images with high dynamic range",
+        "tev was developed by Thomas Müller <thomas94@gmx.net>. "
+        "Its source code is available under the BSD 3-Clause License at https://tom94.net",
     };
 
     ValueFlag<float> exposureFlag{
         parser,
-        "exposure",
-        "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure. "
-        "It can be controlled via the GUI, or by pressing E/Shift+E.",
+        "EXPOSURE",
+        "Scales the brightness of an image prior to tonemapping by 2^EXPOSURE. Default is 0.",
         {'e', "exposure"},
     };
 
     ValueFlag<string> filterFlag{
         parser,
-        "filter",
-        "Filters visible images and layers according to a supplied string. "
+        "FILTER",
+        "Filter visible images and layers according to a supplied string. "
         "The string must have the format 'image:layer'. "
         "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
         {'f', "filter"},
     };
 
+    HelpFlag helpFlag{
+        parser,
+        "HELP",
+        "Display this help menu.",
+        {'h', "help"},
+    };
+
     ValueFlag<bool> maximizeFlag{
         parser,
-        "maximize",
-        "Whether to maximize the window on startup or not. "
-        "If no images were supplied via the command line, then the default is false. "
-        "Otherwise, the default is true.",
+        "MAXIMIZE",
+        "Maximize the window on startup. "
+        "If no images were supplied via the command line, then the default is FALSE. "
+        "Otherwise, the default is TRUE.",
         {"max", "maximize"},
     };
 
     ValueFlag<string> metricFlag{
         parser,
-        "metric",
+        "METRIC",
         "The metric to use when comparing two images. "
-        R"(
-        The available metrics are:
-        E   - Error
-        AE  - Absolute Error
-        SE  - Squared Error
-        RAE - Relative Absolute Error
-        RSE - Relative Squared Error
-        )"
+        "The available metrics are:\n"
+        "E   - Error\n"
+        "AE  - Absolute Error\n"
+        "SE  - Squared Error\n"
+        "RAE - Relative Absolute Error\n"
+        "RSE - Relative Squared Error\n"
         "Default is E.",
         {'m', "metric"},
     };
 
+    Flag newWindowFlag{
+        parser,
+        "NEW WINDOW",
+        "Open a new window of tev, even if one exists already.",
+        {'n', "new"},
+    };
+
     ValueFlag<float> offsetFlag{
         parser,
-        "offset",
-        "The offset is added to the image after exposure has been applied. "
-        "It can be controlled via the GUI, or by pressing O/Shift+O.",
+        "OFFSET",
+        "Add an absolute offset to the image after EXPOSURE has been applied. Default is 0.",
         {'o', "offset"},
     };
 
     ValueFlag<string> tonemapFlag{
         parser,
-        "tonemap",
+        "TONEMAP",
         "The tonemapping algorithm to use. "
-        R"(
-        The available tonemaps are:
-        sRGB   - sRGB
-        Gamma  - Gamma curve (2.2)
-        FC     - False Color
-        PN     - Positive=Green, Negative=Red
-        )"
+        "The available tonemaps are:\n"
+        "sRGB   - sRGB\n"
+        "Gamma  - Gamma curve (2.2)\n"
+        "FC     - False Color\n"
+        "PN     - Positive=Green, Negative=Red\n"
         "Default is sRGB.",
         {'t', "tonemap"},
     };
 
+    Flag versionFlag{
+        parser,
+        "VERSION",
+        "Display the version of tev.",
+        {'v', "version"},
+    };
+
     PositionalList<string> imageFiles{
         parser,
-        "images or channel selectors",
-        "The image files to be opened by the viewer. "
-        "If a filename starting with a ':' is encountered, "
-        "then this filename is not treated as an image file "
+        "images",
+        "The image files to be opened by tev. "
+        "If an argument starting with a ':' is encountered, "
+        "then this argument is not treated as an image file "
         "but as a comma-separated channel selector. Until the next channel "
         "selector is encountered only channels containing "
         "elements from the current selector will be loaded. This is "
@@ -136,6 +140,13 @@ int mainFunc(const vector<string>& arguments) {
         std::cerr << e.what() << std::endl;
         std::cerr << parser;
         return -2;
+    }
+
+    if (versionFlag) {
+        cout
+            << "tev — The EXR Viewer" << endl
+            << "version " TEV_VERSION << endl;
+        return 0;
     }
 
     auto ipc = make_shared<Ipc>();

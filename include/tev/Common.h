@@ -40,6 +40,10 @@
     if (UNLIKELY(!(cond))) \
         throw std::runtime_error{tfm::format(description, ##__VA_ARGS__)};
 
+#ifndef TEV_VERSION
+#   define TEV_VERSION "undefined"
+#endif
+
 struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
