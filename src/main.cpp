@@ -27,27 +27,6 @@ int mainFunc(const vector<string>& arguments) {
         "Its source code is available under the BSD 3-Clause License at https://tom94.net",
     };
 
-    HelpFlag helpFlag{
-        parser,
-        "HELP",
-        "Display this help menu",
-        {'h', "help"},
-    };
-
-    Flag versionFlag{
-        parser,
-        "VERSION",
-        "Display the version of tev",
-        {'v', "version"},
-    };
-
-    Flag newWindowFlag{
-        parser,
-        "NEW WINDOW",
-        "Open a new window of tev, even if one exists already",
-        {'n', "new"},
-    };
-
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
@@ -63,6 +42,13 @@ int mainFunc(const vector<string>& arguments) {
         "The string must have the format 'image:layer'. "
         "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
         {'f', "filter"},
+    };
+
+    HelpFlag helpFlag{
+        parser,
+        "HELP",
+        "Display this help menu",
+        {'h', "help"},
     };
 
     ValueFlag<bool> maximizeFlag{
@@ -88,6 +74,13 @@ int mainFunc(const vector<string>& arguments) {
         {'m', "metric"},
     };
 
+    Flag newWindowFlag{
+        parser,
+        "NEW WINDOW",
+        "Open a new window of tev, even if one exists already",
+        {'n', "new"},
+    };
+
     ValueFlag<float> offsetFlag{
         parser,
         "OFFSET",
@@ -107,6 +100,13 @@ int mainFunc(const vector<string>& arguments) {
         "PN     - Positive=Green, Negative=Red\n"
         "Default is sRGB.",
         {'t', "tonemap"},
+    };
+
+    Flag versionFlag{
+        parser,
+        "VERSION",
+        "Display the version of tev",
+        {'v', "version"},
     };
 
     PositionalList<string> imageFiles{
