@@ -129,23 +129,21 @@ int mainFunc(const vector<string>& arguments) {
 
         parser.Prog(arguments.front());
         parser.ParseArgs(begin(arguments) + 1, end(arguments));
-    } catch (Help) {
-        std::cout << parser;
+    } catch (const Help&) {
+        cout << parser;
         return 0;
-    } catch (ParseError e) {
-        std::cerr << e.what() << std::endl;
-        std::cerr << parser;
+    } catch (const ParseError& e) {
+        cerr << e.what() << endl;
+        cerr << parser;
         return -1;
-    } catch (ValidationError e) {
-        std::cerr << e.what() << std::endl;
-        std::cerr << parser;
+    } catch (const ValidationError& e) {
+        cerr << e.what() << endl;
+        cerr << parser;
         return -2;
     }
 
     if (versionFlag) {
-        cout
-            << "tev — The EXR Viewer" << endl
-            << "version " TEV_VERSION << endl;
+        tlog::None() << "tev — The EXR Viewer\nversion " TEV_VERSION;
         return 0;
     }
 
