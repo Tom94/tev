@@ -138,6 +138,7 @@ include_directories(
     ${OPENEXR_INCLUDE_DIRS}
     ${STB_INCLUDE}
     ${TINYFORMAT_INCLUDE}
+    ${TINYLOGGER_INCLUDE}
     ${UTFCPP_INCLUDE}
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
