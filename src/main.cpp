@@ -162,7 +162,7 @@ int mainFunc(const vector<string>& arguments) {
             try {
                 ipc->sendToPrimaryInstance(tfm::format("%s:%s", path{imageFile}.make_absolute(), channelSelector));
             } catch (runtime_error e) {
-                cerr << tfm::format("Invalid file '%s': %s", imageFile, e.what()) << endl;
+                tlog::Error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
             }
         }
 
@@ -171,7 +171,7 @@ int mainFunc(const vector<string>& arguments) {
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
-    cout << "Loading window..." << endl;
+    tlog::Info() << "Loading window...";
 
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
@@ -254,7 +254,7 @@ int main(int argc, char* argv[]) {
 
         tev::mainFunc(arguments);
     } catch (const exception& e) {
-        cerr << tfm::format("Uncaught exception: %s", e.what()) << endl;
+        tlog::Error() << tfm::format("Uncaught exception: %s", e.what());
         return 1;
     }
 }

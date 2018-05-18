@@ -59,7 +59,6 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
         mName = path.str();
     }
 
-    cout << "Loading " << mPath;
     auto start = chrono::system_clock::now();
 
     ifstream f{nativeString(mPath), ios_base::binary};
@@ -68,20 +67,20 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
     }
 
     if (isExrFile(f)) {
-        cout << " via OpenEXR... " << flush;
+        tlog::Info() << tfm::format("Loading '%s' via OpenEXR.", mPath);
         readExr(f);
     } else if (isPfmFile(f)) {
-        cout << " via PFM... " << flush;
+        tlog::Info() << tfm::format("Loading '%s' via PFM.", mPath);
         readPfm(f);
     } else {
-        cout << " via STBI... " << flush;
+        tlog::Info() << tfm::format("Loading '%s' via STBI.", mPath);
         readStbi(f);
     }
 
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
-    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+    tlog::Success() << tfm::format("Loaded '%s' after %.3f seconds.", mPath, elapsedSeconds.count());
 
     ensureValid();
 }
@@ -506,14 +505,22 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
         // try to open the image at the given path just to make sure.
     }
 
+    auto handleException = [&](const exception& e) {
+        if (channelSelector.empty()) {
+            tlog::Error() << tfm::format("Could not load '%s'. %s", path, e.what());
+        } else {
+            tlog::Error() << tfm::format("Could not load '%s:%s'. %s", path, channelSelector, e.what());
+        }
+    };
+
     try {
         return make_shared<Image>(path, channelSelector);
-    } catch (invalid_argument e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", path, channelSelector, e.what());
-    } catch (runtime_error e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", path, channelSelector, e.what());
-    } catch (Iex::BaseExc& e) {
-        tfm::format(cerr, "Could not load image from %s:%s - %s\n", path, channelSelector, e.what());
+    } catch (const invalid_argument& e) {
+        handleException(e);
+    } catch (const runtime_error& e) {
+        handleException(e);
+    } catch (const Iex::BaseExc& e) {
+        handleException(e);
     }
 
     return nullptr;

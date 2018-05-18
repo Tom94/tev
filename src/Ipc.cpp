@@ -92,7 +92,7 @@ Ipc::Ipc() {
             }
         }
     } catch (runtime_error e) {
-        cerr << "Error initializing IPC. " << e.what() << endl;
+        tlog::Warning() << "Could not initialize IPC; assuming primary instance. " << e.what();
         mIsPrimaryInstance = true;
     }
 }
