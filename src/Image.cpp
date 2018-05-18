@@ -66,21 +66,22 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
         throw invalid_argument{tfm::format("File %s could not be opened.", mPath)};
     }
 
+    std::string loadMethod;
     if (isExrFile(f)) {
-        tlog::info() << tfm::format("Loading '%s' via OpenEXR.", mPath);
+        loadMethod = "OpenEXR";
         readExr(f);
     } else if (isPfmFile(f)) {
-        tlog::info() << tfm::format("Loading '%s' via PFM.", mPath);
+        loadMethod = "PFM";
         readPfm(f);
     } else {
-        tlog::info() << tfm::format("Loading '%s' via STBI.", mPath);
+        loadMethod = "STBI";
         readStbi(f);
     }
 
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
-    tlog::success() << tfm::format("Loaded '%s' after %.3f seconds.", mPath, elapsedSeconds.count());
+    tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mPath, loadMethod, elapsedSeconds.count());
 
     ensureValid();
 }
