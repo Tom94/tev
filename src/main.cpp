@@ -143,7 +143,7 @@ int mainFunc(const vector<string>& arguments) {
     }
 
     if (versionFlag) {
-        tlog::None() << "tev — The EXR Viewer\nversion " TEV_VERSION;
+        tlog::none() << "tev — The EXR Viewer\nversion " TEV_VERSION;
         return 0;
     }
 
@@ -162,7 +162,7 @@ int mainFunc(const vector<string>& arguments) {
             try {
                 ipc->sendToPrimaryInstance(tfm::format("%s:%s", path{imageFile}.make_absolute(), channelSelector));
             } catch (runtime_error e) {
-                tlog::Error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
+                tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
             }
         }
 
@@ -171,7 +171,7 @@ int mainFunc(const vector<string>& arguments) {
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
-    tlog::Info() << "Loading window...";
+    tlog::info() << "Loading window...";
 
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
@@ -254,7 +254,7 @@ int main(int argc, char* argv[]) {
 
         tev::mainFunc(arguments);
     } catch (const exception& e) {
-        tlog::Error() << tfm::format("Uncaught exception: %s", e.what());
+        tlog::error() << tfm::format("Uncaught exception: %s", e.what());
         return 1;
     }
 }

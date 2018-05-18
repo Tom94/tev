@@ -67,20 +67,20 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
     }
 
     if (isExrFile(f)) {
-        tlog::Info() << tfm::format("Loading '%s' via OpenEXR.", mPath);
+        tlog::info() << tfm::format("Loading '%s' via OpenEXR.", mPath);
         readExr(f);
     } else if (isPfmFile(f)) {
-        tlog::Info() << tfm::format("Loading '%s' via PFM.", mPath);
+        tlog::info() << tfm::format("Loading '%s' via PFM.", mPath);
         readPfm(f);
     } else {
-        tlog::Info() << tfm::format("Loading '%s' via STBI.", mPath);
+        tlog::info() << tfm::format("Loading '%s' via STBI.", mPath);
         readStbi(f);
     }
 
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
-    tlog::Success() << tfm::format("Loaded '%s' after %.3f seconds.", mPath, elapsedSeconds.count());
+    tlog::success() << tfm::format("Loaded '%s' after %.3f seconds.", mPath, elapsedSeconds.count());
 
     ensureValid();
 }
@@ -507,9 +507,9 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
 
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::Error() << tfm::format("Could not load '%s'. %s", path, e.what());
+            tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
         } else {
-            tlog::Error() << tfm::format("Could not load '%s:%s'. %s", path, channelSelector, e.what());
+            tlog::error() << tfm::format("Could not load '%s:%s'. %s", path, channelSelector, e.what());
         }
     };
 
