@@ -4,6 +4,7 @@
 #pragma once
 
 #include <tinyformat.h>
+#include <tinylogger/tinylogger.h>
 
 #include <algorithm>
 #include <cmath>

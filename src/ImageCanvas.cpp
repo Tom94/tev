@@ -355,7 +355,7 @@ void ImageCanvas::saveImage(const path& path) {
         return;
     }
 
-    cout << "Saving currently displayed image as " << path << "... " << flush;
+    tlog::info() << "Saving currently displayed image as '" << path << "'.";
     auto start = chrono::system_clock::now();
 
     ofstream f{nativeString(path), ios_base::binary};
@@ -423,7 +423,7 @@ void ImageCanvas::saveImage(const path& path) {
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
-    cout << tfm::format("done after %.3f seconds.\n", elapsedSeconds.count());
+    tlog::success() << tfm::format("Saved '%s' after %.3f seconds.", path, elapsedSeconds.count());
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {

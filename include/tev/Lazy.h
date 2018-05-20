@@ -35,7 +35,7 @@ public:
         if (mAsyncValue.valid()) {
             mValue = mAsyncValue.get();
         } else {
-            mValue = mCompute();
+            mValue = compute();
         }
 
         mIsComputed = true;
@@ -68,13 +68,19 @@ public:
         }
 
         if (mThreadPool) {
-            mAsyncValue = mThreadPool->enqueueTask(mCompute, true);
+            mAsyncValue = mThreadPool->enqueueTask([this]() { return compute(); }, true);
         } else {
-            mAsyncValue = std::async(std::launch::async, mCompute);
+            mAsyncValue = std::async(std::launch::async, [this]() { return compute(); });
         }
     }
 
 private:
+    T compute() {
+        T result = mCompute();
+        mCompute = std::function<T(void)>{};
+        return result;
+    }
+
     // If this thread pool is present, use it to run tasks
     // instead of std::async.
     ThreadPool* mThreadPool = nullptr;

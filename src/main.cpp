@@ -129,23 +129,21 @@ int mainFunc(const vector<string>& arguments) {
 
         parser.Prog(arguments.front());
         parser.ParseArgs(begin(arguments) + 1, end(arguments));
-    } catch (Help) {
-        std::cout << parser;
+    } catch (const Help&) {
+        cout << parser;
         return 0;
-    } catch (ParseError e) {
-        std::cerr << e.what() << std::endl;
-        std::cerr << parser;
+    } catch (const ParseError& e) {
+        cerr << e.what() << endl;
+        cerr << parser;
         return -1;
-    } catch (ValidationError e) {
-        std::cerr << e.what() << std::endl;
-        std::cerr << parser;
+    } catch (const ValidationError& e) {
+        cerr << e.what() << endl;
+        cerr << parser;
         return -2;
     }
 
     if (versionFlag) {
-        cout
-            << "tev — The EXR Viewer" << endl
-            << "version " TEV_VERSION << endl;
+        tlog::none() << "tev — The EXR Viewer\nversion " TEV_VERSION;
         return 0;
     }
 
@@ -164,7 +162,7 @@ int mainFunc(const vector<string>& arguments) {
             try {
                 ipc->sendToPrimaryInstance(tfm::format("%s:%s", path{imageFile}.make_absolute(), channelSelector));
             } catch (runtime_error e) {
-                cerr << tfm::format("Invalid file '%s': %s", imageFile, e.what()) << endl;
+                tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
             }
         }
 
@@ -173,7 +171,7 @@ int mainFunc(const vector<string>& arguments) {
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
-    cout << "Loading window..." << endl;
+    tlog::info() << "Loading window...";
 
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
@@ -256,7 +254,7 @@ int main(int argc, char* argv[]) {
 
         tev::mainFunc(arguments);
     } catch (const exception& e) {
-        cerr << tfm::format("Uncaught exception: %s", e.what()) << endl;
+        tlog::error() << tfm::format("Uncaught exception: %s", e.what());
         return 1;
     }
 }

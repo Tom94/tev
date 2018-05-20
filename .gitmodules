@@ -19,3 +19,6 @@
 [submodule "dependencies/utfcpp"]
 	path = dependencies/utfcpp
 	url = https://github.com/Tom94/utfcpp
+[submodule "dependencies/tinylogger"]
+	path = dependencies/tinylogger
+	url = https://github.com/Tom94/tinylogger

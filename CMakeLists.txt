@@ -138,6 +138,7 @@ include_directories(
     ${OPENEXR_INCLUDE_DIRS}
     ${STB_INCLUDE}
     ${TINYFORMAT_INCLUDE}
+    ${TINYLOGGER_INCLUDE}
     ${UTFCPP_INCLUDE}
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
@@ -149,7 +150,7 @@ target_link_libraries(tev ${TEV_LIBS})
 if (APPLE)
     install(TARGETS tev BUNDLE DESTINATION "/Applications")
     install(SCRIPT scripts/mac-post-install.cmake)
-elseif(WIN32)
+elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
 else()
     install(TARGETS tev RUNTIME DESTINATION "bin")
