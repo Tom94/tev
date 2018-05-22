@@ -243,6 +243,13 @@ vector<string> ImageCanvas::getChannels(const Image& image, const string& reques
         result.emplace_back(alphaChannelName);
     }
 
+    // If we found just an alpha channel, let's display is as grayscale by duplicating it twice
+    // (similar to the single-non-alpha-channel case).
+    if (result.size() == 1) {
+        result.push_back(result[0]);
+        result.push_back(result[0]);
+    }
+
     return result;
 }
 
@@ -469,6 +476,8 @@ vector<Channel> ImageCanvas::channelsFromImages(
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
     }
 
+    bool onlyAlpha = all_of(begin(result), end(result), [](const Channel& c) { return c.name() == "A"; });
+
     if (!reference) {
         ThreadPool pool;
         pool.parallelFor(0, (int)channelNames.size(), [&](int i) {
@@ -485,7 +494,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         ThreadPool pool;
         pool.parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
             const auto* chan = image->channel(channelNames[i]);
-            bool isAlpha = result[i].name() == "A";
+            bool isAlpha = !onlyAlpha && result[i].name() == "A";
 
             if (i < referenceChannels.size()) {
                 const Channel* referenceChan = reference->channel(referenceChannels[i]);
@@ -544,7 +553,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
 
     const Channel* alphaChannel = nullptr;
     // Only treat the alpha channel specially if it is not the only channel of the image.
-    if (flattened.size() > 1) {
+    if (!all_of(begin(flattened), end(flattened), [](const Channel& c) { return c.name() == "A"; })) {
         for (auto& channel : flattened) {
             if (channel.name() == "A") {
                 alphaChannel = &channel;
