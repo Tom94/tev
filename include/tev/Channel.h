@@ -14,7 +14,6 @@ class Channel {
 public:
     using RowMatrixXf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-    Channel(size_t index, Eigen::Vector2i size);
     Channel(const std::string& name, Eigen::Vector2i size);
 
     const std::string& name() const {

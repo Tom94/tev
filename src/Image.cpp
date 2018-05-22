@@ -49,6 +49,21 @@ bool isPfmFile(ifstream& f) {
     return result;
 }
 
+vector<Channel> makeNChannels(int numChannels, Vector2i size) {
+    vector<Channel> channels;
+    if (numChannels > 1) {
+        const vector<string> channelNames = {"R", "G", "B", "A"};
+        for (int c = 0; c < numChannels; ++c) {
+            string name = c < (int)channelNames.size() ? channelNames[c] : to_string(c);
+            channels.emplace_back(name, size);
+        }
+    } else {
+        channels.emplace_back("L", size);
+    }
+
+    return channels;
+}
+
 atomic<int> Image::sId(0);
 
 Image::Image(const filesystem::path& path, const string& channelSelector)
@@ -206,10 +221,7 @@ void Image::readPfm(ifstream& f) {
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
 
-    vector<Channel> channels;
-    for (int c = 0; c < numChannels; ++c) {
-        channels.emplace_back(c, size);
-    }
+    vector<Channel> channels = makeNChannels(numChannels, size);
 
     auto numPixels = (DenseIndex)size.x() * size.y();
     auto numFloats = numPixels * numChannels;
@@ -296,10 +308,7 @@ void Image::readStbi(ifstream& f) {
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
-    vector<Channel> channels;
-    for (int c = 0; c < numChannels; ++c) {
-        channels.emplace_back(c, size);
-    }
+    vector<Channel> channels = makeNChannels(numChannels, size);
 
     auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
