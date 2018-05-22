@@ -135,7 +135,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
                         string str = tfm::format("%.4f", values[i]);
                         Vector2f pos{
                             mPos.x() + nano.x(),
-                            mPos.y() + nano.y() + (i - 0.5f * (values.size() - 1)) * fontSize,
+                            mPos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
                         };
 
                         Color col = colors[i];
