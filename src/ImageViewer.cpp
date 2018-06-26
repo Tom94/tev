@@ -15,6 +15,7 @@
 #include <nanogui/popupbutton.h>
 #include <nanogui/screen.h>
 #include <nanogui/textbox.h>
+#include <nanogui/theme.h>
 #include <nanogui/vscrollpanel.h>
 
 #include <chrono>
@@ -54,7 +55,7 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
 
     mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixelRatio()};
 
-    // Exposure label and slider
+    // Tonemapping section
     {
         auto panel = new Widget{mSidebarLayout};
         panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
@@ -63,39 +64,56 @@ ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAdditi
             "Various tonemapping options. Hover the individual controls to learn more!"
         );
 
-        panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        // Exposure label and slider
+        {
+            panel = new Widget{mSidebarLayout};
+            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
-        mExposureLabel = new Label{panel, "", "sans-bold", 15};
+            mExposureLabel = new Label{panel, "", "sans-bold", 15};
 
-        mExposureSlider = new Slider{panel};
-        mExposureSlider->setRange({-5.0f, 5.0f});
-        mExposureSlider->setCallback([this](float value) {
-            setExposure(value);
-        });
-        setExposure(0);
+            mExposureSlider = new Slider{panel};
+            mExposureSlider->setRange({-5.0f, 5.0f});
+            mExposureSlider->setCallback([this](float value) {
+                setExposure(value);
+            });
+            setExposure(0);
 
-        panel->setTooltip(
-            "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n\n"
-            "Keyboard shortcuts:\nE and Shift+E"
-        );
+            panel->setTooltip(
+                "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n\n"
+                "Keyboard shortcuts:\nE and Shift+E"
+            );
+        }
 
-        panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        // Offset/Gamma label and slider
+        {
+            panel = new Widget{mSidebarLayout};
+            panel->setLayout(new GridLayout{Orientation::Vertical, 2, Alignment::Fill, 5, 0});
 
-        mOffsetLabel = new Label{panel, "", "sans-bold", 15};
+            mOffsetLabel = new Label{panel, "", "sans-bold", 15};
 
-        mOffsetSlider = new Slider{panel};
-        mOffsetSlider->setRange({-1.0f, 1.0f});
-        mOffsetSlider->setCallback([this](float value) {
-            setOffset(value);
-        });
-        setOffset(0);
+            mOffsetSlider = new Slider{panel};
+            mOffsetSlider->setRange({-1.0f, 1.0f});
+            mOffsetSlider->setCallback([this](float value) {
+                setOffset(value);
+            });
+            setOffset(0);
 
-        panel->setTooltip(
-            "The offset is added to the image after exposure has been applied.\n\n"
-            "Keyboard shortcuts:\nO and Shift+O"
-        );
+            mGammaLabel = new Label{panel, "", "sans-bold", 15};
+
+            mGammaSlider = new Slider{panel};
+            mGammaSlider->setRange({0.01f, 5.0f});
+            mGammaSlider->setCallback([this](float value) {
+                setGamma(value);
+            });
+            setGamma(2.2f);
+
+            panel->setTooltip(
+                "The offset is added to the image after exposure has been applied.\n"
+                "Keyboard shortcuts: O and Shift+O\n\n"
+                "Gamma is the exponent used when gamma-tonemapping.\n"
+                "Keyboard shortcuts: G and Shift+G\n\n"
+            );
+        }
     }
 
     // Exposure/offset buttons
@@ -636,6 +654,16 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         }
 
+        if (mGammaSlider->enabled()) {
+            if (key == GLFW_KEY_G) {
+                if (modifiers & GLFW_MOD_SHIFT) {
+                    setGamma(gamma() - 0.1f);
+                } else {
+                    setGamma(gamma() + 0.1f);
+                }
+            }
+        }
+
         if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
             removeImage(mCurrentImage);
         } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
@@ -1067,6 +1095,14 @@ void ImageViewer::setOffset(float value) {
     mImageCanvas->setOffset(value);
 }
 
+void ImageViewer::setGamma(float value) {
+    value = round(value, 2.0f);
+    mGammaSlider->setValue(value);
+    mGammaLabel->setCaption(tfm::format("Gamma: %+.2f", value));
+
+    mImageCanvas->setGamma(value);
+}
+
 void ImageViewer::normalizeExposureAndOffset() {
     if (!mCurrentImage) {
         return;
@@ -1093,6 +1129,7 @@ void ImageViewer::normalizeExposureAndOffset() {
 void ImageViewer::resetImage() {
     setExposure(0);
     setOffset(0);
+    setGamma(2.2f);
     mImageCanvas->resetTransform();
 }
 
@@ -1103,6 +1140,11 @@ void ImageViewer::setTonemap(ETonemap tonemap) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->setPushed((ETonemap)i == tonemap);
     }
+
+    mGammaSlider->setEnabled(tonemap == ETonemap::Gamma);
+    mGammaLabel->setColor(
+        tonemap == ETonemap::Gamma ? mGammaLabel->theme()->mTextColor : Color{0.5f, 1.0f}
+    );
 }
 
 void ImageViewer::setMetric(EMetric metric) {
