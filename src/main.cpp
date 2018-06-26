@@ -45,6 +45,13 @@ int mainFunc(const vector<string>& arguments) {
         {'f', "filter"},
     };
 
+    ValueFlag<float> gammaFlag{
+        parser,
+        "GAMMA",
+        "The exponent used when TONEMAP is 'Gamma'. Default is 2.2.",
+        {'g', "gamma"},
+    };
+
     HelpFlag helpFlag{
         parser,
         "HELP",
@@ -95,7 +102,7 @@ int mainFunc(const vector<string>& arguments) {
         "The tonemapping algorithm to use. "
         "The available tonemaps are:\n"
         "sRGB   - sRGB\n"
-        "Gamma  - Gamma curve (2.2)\n"
+        "Gamma  - Gamma curve\n"
         "FC     - False Color\n"
         "PN     - Positive=Green, Negative=Red\n"
         "Default is sRGB.",
@@ -209,6 +216,7 @@ int mainFunc(const vector<string>& arguments) {
         // Apply parameter flags
         if (exposureFlag) { app->setExposure(get(exposureFlag)); }
         if (filterFlag)   { app->setFilter(get(filterFlag)); }
+        if (gammaFlag)    { app->setGamma(get(gammaFlag)); }
         if (metricFlag)   { app->setMetric(toMetric(get(metricFlag))); }
         if (offsetFlag)   { app->setOffset(get(offsetFlag)); }
         if (tonemapFlag)  { app->setTonemap(toTonemap(get(tonemapFlag))); }

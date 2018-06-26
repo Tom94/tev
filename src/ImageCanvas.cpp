@@ -62,6 +62,7 @@ void ImageCanvas::drawGL() {
             transform(mImage.get()).inverse().matrix(),
             mExposure,
             mOffset,
+            mGamma,
             mTonemap
         );
         return;
@@ -78,6 +79,7 @@ void ImageCanvas::drawGL() {
         transform(mReference.get()).inverse().matrix(),
         mExposure,
         mOffset,
+        mGamma,
         mTonemap,
         mMetric
     );
@@ -288,7 +290,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
     }
 }
 
-Vector3f ImageCanvas::applyTonemap(const Vector3f& value, ETonemap tonemap) {
+Vector3f ImageCanvas::applyTonemap(const Vector3f& value, float gamma, ETonemap tonemap) {
     Vector3f result;
     switch (tonemap) {
         case ETonemap::SRGB:
@@ -298,7 +300,6 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, ETonemap tonemap) {
             }
         case ETonemap::Gamma:
             {
-                static const float gamma = 2.2f;
                 result = {pow(value.x(), 1 / gamma), pow(value.y(), 1 / gamma), pow(value.z(), 1 / gamma)};
                 break;
             }

@@ -42,6 +42,10 @@ public:
         mOffset = offset;
     }
 
+    void setGamma(float gamma) {
+        mGamma = gamma;
+    }
+
     float applyExposureAndOffset(float value);
 
     void setImage(std::shared_ptr<Image> image) {
@@ -78,9 +82,9 @@ public:
         mTonemap = tonemap;
     }
 
-    static Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value, ETonemap tonemap);
+    static Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value, float gamma, ETonemap tonemap);
     Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value) const {
-        return applyTonemap(value, mTonemap);
+        return applyTonemap(value, mGamma, mTonemap);
     }
 
     EMetric metric() const {
@@ -136,6 +140,8 @@ private:
     float mPixelRatio = 1;
     float mExposure = 0;
     float mOffset = 0;
+    float mGamma = 2.2f;
+
     std::shared_ptr<Image> mImage;
     std::shared_ptr<Image> mReference;
 

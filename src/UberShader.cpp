@@ -62,6 +62,7 @@ UberShader::UberShader()
 
         uniform float exposure;
         uniform float offset;
+        uniform float gamma;
         uniform int tonemap;
         uniform int metric;
 
@@ -101,7 +102,7 @@ UberShader::UberShader()
         vec3 applyTonemap(vec3 col) {
             switch (tonemap) {
                 case SRGB:        return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
-                case GAMMA:       return pow(col, vec3(1.0 / 2.2));
+                case GAMMA:       return pow(col, vec3(1.0 / gamma));
                 // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
                 case FALSE_COLOR: return falseColor(log2(average(col)) / 10.0 + 0.5);
                 case POS_NEG:     return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0);
@@ -198,11 +199,12 @@ void UberShader::draw(
     const Matrix3f& transformImage,
     float exposure,
     float offset,
+    float gamma,
     ETonemap tonemap
 ) {
     mShader.bind();
     bindCheckerboardData(pixelSize, checkerSize);
-    bindImageData(textureImage, transformImage, exposure, offset, tonemap);
+    bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     mShader.setUniform("hasImage", true);
     mShader.setUniform("hasReference", false);
     mShader.drawIndexed(GL_TRIANGLES, 0, 2);
@@ -217,12 +219,13 @@ void UberShader::draw(
     const Matrix3f& transformReference,
     float exposure,
     float offset,
+    float gamma,
     ETonemap tonemap,
     EMetric metric
 ) {
     mShader.bind();
     bindCheckerboardData(pixelSize, checkerSize);
-    bindImageData(textureImage, transformImage, exposure, offset, tonemap);
+    bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
     mShader.setUniform("hasImage", true);
     mShader.setUniform("hasReference", true);
@@ -240,6 +243,7 @@ void UberShader::bindImageData(
     const Matrix3f& transformImage,
     float exposure,
     float offset,
+    float gamma,
     ETonemap tonemap
 ) {
     glActiveTexture(GL_TEXTURE0);
@@ -251,6 +255,7 @@ void UberShader::bindImageData(
 
     mShader.setUniform("exposure", exposure);
     mShader.setUniform("offset", offset);
+    mShader.setUniform("gamma", gamma);
     mShader.setUniform("tonemap", static_cast<int>(tonemap));
 
     glActiveTexture(GL_TEXTURE2);

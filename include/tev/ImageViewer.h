@@ -72,6 +72,12 @@ public:
 
     void setOffset(float value);
 
+    float gamma() {
+        return mGammaSlider->value();
+    }
+
+    void setGamma(float value);
+
     void normalizeExposureAndOffset();
     void resetImage();
 
@@ -158,6 +164,9 @@ private:
 
     nanogui::Label* mOffsetLabel;
     nanogui::Slider* mOffsetSlider;
+
+    nanogui::Label* mGammaLabel;
+    nanogui::Slider* mGammaSlider;
 
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;
