@@ -143,7 +143,15 @@ include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-add_definitions(-DTEV_VERSION="${TEV_VERSION}" ${NANOGUI_EXTRA_DEFS})
+set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION}")
+if (APPLE)
+    # Starting with macOS Mojave OpenGL is deprecated. tev will switch
+    # away from OpenGL once the underlying nanogui does, so there is no
+    # point in keeping the warnings around.
+    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DGL_SILENCE_DEPRECATION)
+endif()
+
+add_definitions(${TEV_DEFINITIONS} ${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev ${TEV_LIBS})
 
