@@ -16,7 +16,12 @@ set(NANOGUI_BUILD_SHARED OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL " " FORCE)
 set(NANOGUI_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(nanogui)
-set_property(TARGET glfw glfw_objects nanogui nanogui-obj PROPERTY FOLDER "dependencies")
+
+set(NANOGUI_TARGETS nanogui nanogui-obj)
+if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
+    list(APPEND NANOGUI_TARGETS glfw glfw_objects)
+endif()
+set_property(TARGET ${NANOGUI_TARGETS} PROPERTY FOLDER "dependencies")
 
 # Compile zlib (only on Windows)
 if (WIN32)
@@ -45,7 +50,9 @@ set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
 
 set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/eigen PARENT_SCOPE)
 
-set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)
+if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
+    set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)
+endif()
 
 set(NANOGUI_INCLUDE
     ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/nanovg/src
