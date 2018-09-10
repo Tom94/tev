@@ -55,6 +55,10 @@ if (MSVC)
     endforeach()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++11")
+
+    if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s USE_ZLIB=1 -s DISABLE_EXCEPTION_CATCHING=0")
+    endif()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)

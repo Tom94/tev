@@ -8,6 +8,9 @@ using socklen_t = int;
 #else
 #   include <arpa/inet.h>
 #   include <cstring>
+#   ifdef EMSCRIPTEN
+#       include <fcntl.h>
+#   endif
 #   include <sys/file.h>
 #   include <unistd.h>
 #   define SOCKET_ERROR (-1)
