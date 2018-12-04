@@ -2,7 +2,7 @@
 
 cd "$(dirname ${BASH_SOURCE[0]})"
 
-echo "Building backwards-compatible tev..."
+echo "Building tev for mojave..."
 
 BUILD_DIR="build-dmg"
 
