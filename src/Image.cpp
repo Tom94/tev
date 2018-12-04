@@ -228,7 +228,8 @@ void Image::readPfm(ifstream& f) {
     auto numBytes = numFloats * sizeof(float);
 
     // Skip last newline at the end of the header.
-    f.seekg(1, ios_base::cur);
+    string line;
+    getline(f, line);
 
     // Read entire file in binary mode.
     vector<float> data(numFloats);
