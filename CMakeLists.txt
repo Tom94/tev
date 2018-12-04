@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 
 project(tev)
-set(TEV_VERSION "1.12")
+set(TEV_VERSION "1.13")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
