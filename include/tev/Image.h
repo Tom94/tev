@@ -14,6 +14,13 @@
 
 TEV_NAMESPACE_BEGIN
 
+class ImageLoader;
+
+struct ImageData {
+    std::map<std::string, Channel> channels;
+    std::vector<std::string> layers;
+};
+
 class Image {
 public:
     Image(const filesystem::path& path, const std::string& channelSelector);
@@ -33,12 +40,12 @@ public:
     std::string shortName() const;
 
     bool hasChannel(const std::string& channelName) const {
-        return mChannels.count(channelName) != 0;
+        return mData.channels.count(channelName) != 0;
     }
 
     const Channel* channel(const std::string& channelName) const {
         if (hasChannel(channelName)) {
-            return &mChannels.at(channelName);
+            return &mData.channels.at(channelName);
         } else {
             return nullptr;
         }
@@ -49,15 +56,15 @@ public:
     std::vector<std::string> channelsInLayer(std::string layerName) const;
 
     Eigen::Vector2i size() const {
-        return mChannels.begin()->second.size();
+        return mData.channels.begin()->second.size();
     }
 
     Eigen::DenseIndex count() const {
-        return mChannels.begin()->second.count();
+        return mData.channels.begin()->second.count();
     }
 
     const std::vector<std::string>& layers() const {
-        return mLayers;
+        return mData.layers;
     }
 
     int id() const {
@@ -71,19 +78,14 @@ private:
 
     void ensureValid();
 
-    void readPfm(std::ifstream& f);
-    void readStbi(std::ifstream& f);
-    void readExr(std::ifstream& f);
-
     filesystem::path mPath;
     std::string mChannelSelector;
 
     std::string mName;
 
-    std::map<std::string, Channel> mChannels;
     std::map<std::string, GlTexture> mTextures;
 
-    std::vector<std::string> mLayers;
+    ImageData mData;
 
     const int mId;
 };
