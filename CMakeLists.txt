@@ -91,6 +91,11 @@ if (MSVC)
 endif()
 
 set(TEV_SOURCES
+    include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
+    include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
+    include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
+    include/tev/imageio/StbiImageLoader.h src/imageio/StbiImageLoader.cpp
+
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
@@ -106,6 +111,7 @@ set(TEV_SOURCES
     include/tev/SharedQueue.h src/SharedQueue.cpp
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp
+
     src/main.cpp
 )
 if (MSVC)
