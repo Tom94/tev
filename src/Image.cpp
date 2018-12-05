@@ -37,14 +37,16 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
     for (const auto& imageLoader : ImageLoader::getLoaders()) {
         // If we arrived at the last loader, then we want to at least try loading the image,
         // even if it is likely to fail.
-        if (imageLoader->canLoadFile(f) || imageLoader == ImageLoader::getLoaders().back()) {
+        bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(f);
+
+        // Reset file cursor in case file load check changed it.
+        f.seekg(0);
+
+        if (useLoader) {
             loadMethod = imageLoader->name();
             mData = imageLoader->load(f, mPath, mChannelSelector);
             break;
         }
-
-        // Ensure there is no lingering non-zero file cursor.
-        f.seekg(0);
     }
 
     auto end = chrono::system_clock::now();
