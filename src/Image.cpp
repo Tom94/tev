@@ -7,11 +7,8 @@
 
 #include <Iex.h>
 
-#include <algorithm>
-#include <array>
 #include <chrono>
 #include <iostream>
-#include <set>
 
 using namespace Eigen;
 using namespace filesystem;
