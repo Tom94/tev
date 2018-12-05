@@ -38,6 +38,8 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
 
     std::string loadMethod;
     for (const auto& imageLoader : ImageLoader::getLoaders()) {
+        // If we arrived at the last loader, then we want to at least try loading the image,
+        // even if it is likely to fail.
         if (imageLoader->canLoadFile(f) || imageLoader == ImageLoader::getLoaders().back()) {
             loadMethod = imageLoader->name();
             mData = imageLoader->load(f, mPath, mChannelSelector);
