@@ -11,7 +11,7 @@ install:
   - git submodule update --init --recursive
 build_script:
   - cd C:\tev
-  - cmake -G "Visual Studio 15 2017 Win64"
+  - cmake -G "Visual Studio 15 2017 Win64" .
   - set MSBuildLogger="C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
   - set MSBuildOptions=/v:m /p:Configuration=Release /logger:%MSBuildLogger%
   - msbuild %MSBuildOptions% tev.sln

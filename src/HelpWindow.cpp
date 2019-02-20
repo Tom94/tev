@@ -86,10 +86,12 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         auto referenceSelection = new Widget{shortcuts};
         referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
+        addRow(referenceSelection, "Shift (hold)",                                "View currently selected Reference");
         addRow(referenceSelection, "Shift+Left Click or Right Click",             "Select Hovered Image as Reference");
         addRow(referenceSelection, "Shift+1…9",                                   "Select N-th Image as Reference");
         addRow(referenceSelection, "Shift+Down or Shift+S / Shift+Up or Shift+W", "Select Next / Previous Image as Reference");
 
+        addRow(referenceSelection, "Ctrl (hold)",                                "View selected Image if Reference is selected");
         addRow(referenceSelection, "Ctrl+Right or Ctrl+D / Ctrl+Left or Ctrl+A", "Select Next / Previous Error Metric");
 
         new Label{shortcuts, "Layer Options", "sans-bold", 18};

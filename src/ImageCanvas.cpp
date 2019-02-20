@@ -44,7 +44,10 @@ bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
 }
 
 void ImageCanvas::drawGL() {
-    if (!mImage) {
+    auto* glfwWindow = screen()->glfwWindow();
+    Image* image = (mReference && glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT)) ? mReference.get() : mImage.get();
+
+    if (!image) {
         mShader.draw(
             2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
             Vector2f::Constant(20)
@@ -52,14 +55,14 @@ void ImageCanvas::drawGL() {
         return;
     }
 
-    if (!mReference) {
+    if (!mReference || glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || image == mReference.get()) {
         mShader.draw(
             2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
             Vector2f::Constant(20),
-            mImage->texture(getChannels(*mImage)),
+            image->texture(getChannels(*image)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
-            transform(mImage.get()).inverse().matrix(),
+            transform(image).inverse().matrix(),
             mExposure,
             mOffset,
             mGamma,
