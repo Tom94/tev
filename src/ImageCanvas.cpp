@@ -74,10 +74,10 @@ void ImageCanvas::drawGL() {
     mShader.draw(
         2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
         Vector2f::Constant(20),
-        image->texture(getChannels(*image)),
+        mImage->texture(getChannels(*mImage)),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
-        transform(image).inverse().matrix(),
+        transform(mImage.get()).inverse().matrix(),
         mReference->texture(getChannels(*mReference)),
         transform(mReference.get()).inverse().matrix(),
         mExposure,
