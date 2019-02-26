@@ -192,7 +192,9 @@ int mainFunc(const vector<string>& arguments) {
     thread stdinThread{[&]() {
         string channelSelector;
         while (!shallShutdown) {
-            for (string imageFile; getline(cin, imageFile);) {
+            for (string line; getline(cin, line);) {
+                string imageFile = tev::ensureUtf8(line);
+
                 if (imageFile.empty()) {
                     continue;
                 }
