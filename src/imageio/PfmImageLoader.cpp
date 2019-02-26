@@ -21,7 +21,7 @@ bool PfmImageLoader::canLoadFile(ifstream& f) const {
     return result;
 }
 
-ImageData PfmImageLoader::load(ifstream& f, const filesystem::path& path, const string& channelSelector) const {
+ImageData PfmImageLoader::load(ifstream& f, const filesystem::path&, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 
