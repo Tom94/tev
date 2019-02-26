@@ -194,6 +194,34 @@ int mainFunc(const vector<string>& arguments) {
 
     atomic<bool> shallShutdown = false;
 
+    // Spawn a background thread that opens images passed via stdin.
+    // To allow whitespace characters in filenames, we use the convention that
+    // paths in stdin must be separated by newlines.
+    thread stdinThread{[&]() {
+        string channelSelector;
+        while (!shallShutdown) {
+            for (string imageFile; getline(cin, imageFile);) {
+                if (imageFile.empty()) {
+                    continue;
+                }
+
+                if (imageFile[0] == ':') {
+                    channelSelector = imageFile.substr(1);
+                    continue;
+                }
+
+                tryLoadImageBackground(imageFile, channelSelector, false);
+            }
+
+            this_thread::sleep_for(chrono::milliseconds{100});
+        }
+    }};
+
+    // It is unfortunately not easily possible to poll/timeout on cin in a portable manner,
+    // so instead we resort to simply detaching this thread, causing it to be forcefully
+    // terminated as the main thread terminates.
+    stdinThread.detach();
+
     // Spawn another background thread, this one dealing with images passed to us
     // via inter-process communication (IPC). This happens when
     // a user starts another instance of tev while one is already running. Note, that this
@@ -263,6 +291,10 @@ int mainFunc(const vector<string>& arguments) {
 
     if (ipcThread.joinable()) {
         ipcThread.join();
+    }
+
+    if (stdinThread.joinable()) {
+        stdinThread.join();
     }
 
     // Let all threads gracefully terminate.
