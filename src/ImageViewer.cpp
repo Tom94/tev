@@ -29,8 +29,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops)
-: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mIpc{ipc}, mImagesToAdd{imagesToAdd} {
+ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops)
+: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesToAdd{imagesToAdd} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -700,29 +700,25 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::drawContents() {
-    bool receivedFileViaIpc = false;
-    if (mIpc->isPrimaryInstance()) {
-        while (mIpc->receiveFromSecondaryInstance([this](const string& reveicedString) {
-            string imageString = ensureUtf8(reveicedString);
-            size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
-            tryLoadImageBackground(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), true);
-        })) {
-            receivedFileViaIpc = true;
-        }
-    }
-
+    // In case any images got loaded in the background, they sit in mImagesToAdd. Here is the
+    // place where we actually add them to the GUI. Focus the application in case one of the
+    // new images is meant to override the current selection.
+    bool newFocus = false;
     try {
         while (true) {
             auto addition = mImagesToAdd->tryPop();
+            newFocus |= addition.shallSelect;
             addImage(addition.image, addition.shallSelect);
         }
     } catch (runtime_error) {
     }
 
-    if (receivedFileViaIpc) {
+    if (newFocus) {
         glfwFocusWindow(mGLFWWindow);
     }
 
+    // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
+    // callbacks from background threads 
     try {
         while (true) {
             mTaskQueue.tryPop()();

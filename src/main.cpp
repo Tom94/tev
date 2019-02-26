@@ -11,6 +11,8 @@
 
 #include <utf8.h>
 
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <thread>
 
@@ -180,10 +182,41 @@ int mainFunc(const vector<string>& arguments) {
 
     tlog::info() << "Loading window...";
 
+    shared_ptr<SharedQueue<ImageAddition>> imagesToAdd = make_shared<SharedQueue<ImageAddition>>();
+    auto tryLoadImageBackground = [&imagesToAdd](const path& path, const string& channelSelector, bool shallSelect) {
+        ThreadPool::singleWorker().enqueueTask([path, channelSelector, shallSelect, &imagesToAdd] {
+            auto image = tryLoadImage(path, channelSelector);
+            if (image) {
+                imagesToAdd->push({ shallSelect, image });
+            }
+        });
+    };
+
+    atomic<bool> shallShutdown = false;
+
+    // Spawn another background thread, this one dealing with images passed to us
+    // via inter-process communication (IPC). This happens when
+    // a user starts another instance of tev while one is already running. Note, that this
+    // behavior can be overridden by the -n flag, so not _all_ secondary instances send their
+    // paths to the primary instance.
+    thread ipcThread;
+    if (ipc->isPrimaryInstance()) {
+        ipcThread = thread{[&]() {
+            while (!shallShutdown) {
+                while (ipc->receiveFromSecondaryInstance([&](const string& reveicedString) {
+                    string imageString = ensureUtf8(reveicedString);
+                    size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
+                    tryLoadImageBackground(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), true);
+                })) { }
+
+                this_thread::sleep_for(chrono::milliseconds{100});
+            }
+        }};
+    }
+
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
     // by the potentially slow initialization of opengl / glfw.
-    shared_ptr<SharedQueue<ImageAddition>> imagesToAdd = make_shared<SharedQueue<ImageAddition>>();
     string channelSelector;
     for (auto imageFile : get(imageFiles)) {
         if (!imageFile.empty() && imageFile[0] == ':') {
@@ -191,19 +224,14 @@ int mainFunc(const vector<string>& arguments) {
             continue;
         }
 
-        ThreadPool::singleWorker().enqueueTask([imageFile, channelSelector, &imagesToAdd] {
-            auto image = tryLoadImage(imageFile, channelSelector);
-            if (image) {
-                imagesToAdd->push({false, image});
-            }
-        });
+        tryLoadImageBackground(imageFile, channelSelector, false);
     }
 
     // Init nanogui application
     nanogui::init();
 
     {
-        auto app = unique_ptr<ImageViewer>{new ImageViewer{ipc, imagesToAdd, !imageFiles}};
+        auto app = unique_ptr<ImageViewer>{new ImageViewer{imagesToAdd, !imageFiles}};
         app->drawAll();
         app->setVisible(true);
 
@@ -226,10 +254,16 @@ int mainFunc(const vector<string>& arguments) {
         nanogui::mainloop(250);
     }
 
+    shallShutdown = true;
+
     // On some linux distributions glfwTerminate() (which is called by
     // nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
     //nanogui::shutdown();
+
+    if (ipcThread.joinable()) {
+        ipcThread.join();
+    }
 
     // Let all threads gracefully terminate.
     ThreadPool::shutdown();

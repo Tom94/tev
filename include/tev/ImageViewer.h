@@ -30,7 +30,7 @@ struct ImageAddition {
 
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(std::shared_ptr<Ipc> ipc, std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops);
+    ImageViewer(std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops);
     virtual ~ImageViewer();
 
     bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
@@ -147,7 +147,6 @@ private:
         return mFooter->visible() ? mFooter->fixedHeight() : 0;
     }
 
-    std::shared_ptr<Ipc> mIpc;
     SharedQueue<std::function<void(void)>> mTaskQueue;
 
     bool mRequiresFilterUpdate = true;
