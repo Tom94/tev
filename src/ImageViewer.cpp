@@ -503,14 +503,7 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        path imageFile = ensureUtf8(filenames[i]);
-        bool shallSelect = i == filenames.size() - 1;
-        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
-            auto image = tryLoadImage(imageFile, "");
-            if (image) {
-                mImagesToAdd->push({shallSelect, image});
-            }
-        });
+        tryLoadImageBackground(ensureUtf8(filenames[i]), "", i == filenames.size() - 1);
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -711,13 +704,8 @@ void ImageViewer::drawContents() {
     if (mIpc->isPrimaryInstance()) {
         while (mIpc->receiveFromSecondaryInstance([this](const string& reveicedString) {
             string imageString = ensureUtf8(reveicedString);
-            ThreadPool::singleWorker().enqueueTask([imageString, this] {
-                size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
-                auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
-                if (image) {
-                    mImagesToAdd->push({true, image});
-                }
-            });
+            size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
+            tryLoadImageBackground(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), true);
         })) {
             receivedFileViaIpc = true;
         }
@@ -902,6 +890,15 @@ void ImageViewer::reloadAllImages() {
     if (id != -1) {
         selectImage(mImages[id]);
     }
+}
+
+void ImageViewer::tryLoadImageBackground(const path& path, const string& channelSelector, bool shallSelect) {
+    ThreadPool::singleWorker().enqueueTask([path, channelSelector, shallSelect, this] {
+        auto image = tryLoadImage(path, channelSelector);
+        if (image) {
+            mImagesToAdd->push({ shallSelect, image });
+        }
+    });
 }
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
@@ -1273,12 +1270,7 @@ void ImageViewer::openImageDialog() {
     for (size_t i = 0; i < paths.size(); ++i) {
         path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
-        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
-            auto image = tryLoadImage(imageFile, "");
-            if (image) {
-                mImagesToAdd->push({shallSelect, image});
-            }
-        });
+        tryLoadImageBackground(imageFile, "", shallSelect);
     }
 
     // Make sure we gain focus after seleting a file to be loaded.

@@ -54,6 +54,8 @@ public:
 
     void reloadAllImages();
 
+    void tryLoadImageBackground(const filesystem::path& path, const std::string& channelSelector, bool shallSelect = false);
+
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
     void selectLayer(std::string name);
