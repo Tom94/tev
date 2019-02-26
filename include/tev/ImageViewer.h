@@ -7,7 +7,6 @@
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
 #include <tev/ImageCanvas.h>
-#include <tev/Ipc.h>
 #include <tev/Lazy.h>
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
@@ -23,14 +22,9 @@
 
 TEV_NAMESPACE_BEGIN
 
-struct ImageAddition {
-    bool shallSelect;
-    std::shared_ptr<Image> image;
-};
-
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(std::shared_ptr<Ipc> ipc, std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops);
+    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops);
     virtual ~ImageViewer();
 
     bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
@@ -145,7 +139,6 @@ private:
         return mFooter->visible() ? mFooter->fixedHeight() : 0;
     }
 
-    std::shared_ptr<Ipc> mIpc;
     SharedQueue<std::function<void(void)>> mTaskQueue;
 
     bool mRequiresFilterUpdate = true;
@@ -171,7 +164,8 @@ private:
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;
 
-    std::shared_ptr<SharedQueue<ImageAddition>> mImagesToAdd;
+    std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
+
     std::shared_ptr<Image> mCurrentImage;
     std::shared_ptr<Image> mCurrentReference;
 

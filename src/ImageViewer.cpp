@@ -2,7 +2,6 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/ImageViewer.h>
-#include <tev/ThreadPool.h>
 
 #include <filesystem/path.h>
 
@@ -29,8 +28,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(shared_ptr<Ipc> ipc, shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops)
-: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mIpc{ipc}, mImagesToAdd{imagesToAdd} {
+ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops)
+: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesLoader{imagesLoader} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -503,14 +502,7 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        path imageFile = ensureUtf8(filenames[i]);
-        bool shallSelect = i == filenames.size() - 1;
-        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
-            auto image = tryLoadImage(imageFile, "");
-            if (image) {
-                mImagesToAdd->push({shallSelect, image});
-            }
-        });
+        mImagesLoader->enqueue(ensureUtf8(filenames[i]), "", i == filenames.size() - 1);
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -707,34 +699,25 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::drawContents() {
-    bool receivedFileViaIpc = false;
-    if (mIpc->isPrimaryInstance()) {
-        while (mIpc->receiveFromSecondaryInstance([this](const string& reveicedString) {
-            string imageString = ensureUtf8(reveicedString);
-            ThreadPool::singleWorker().enqueueTask([imageString, this] {
-                size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
-                auto image = tryLoadImage(imageString.substr(0, colonPos), imageString.substr(colonPos + 1));
-                if (image) {
-                    mImagesToAdd->push({true, image});
-                }
-            });
-        })) {
-            receivedFileViaIpc = true;
-        }
-    }
-
+    // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
+    // place where we actually add them to the GUI. Focus the application in case one of the
+    // new images is meant to override the current selection.
+    bool newFocus = false;
     try {
         while (true) {
-            auto addition = mImagesToAdd->tryPop();
+            auto addition = mImagesLoader->tryPop();
+            newFocus |= addition.shallSelect;
             addImage(addition.image, addition.shallSelect);
         }
     } catch (runtime_error) {
     }
 
-    if (receivedFileViaIpc) {
+    if (newFocus) {
         glfwFocusWindow(mGLFWWindow);
     }
 
+    // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
+    // callbacks from background threads 
     try {
         while (true) {
             mTaskQueue.tryPop()();
@@ -1273,12 +1256,7 @@ void ImageViewer::openImageDialog() {
     for (size_t i = 0; i < paths.size(); ++i) {
         path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
-        ThreadPool::singleWorker().enqueueTask([imageFile, shallSelect, this] {
-            auto image = tryLoadImage(imageFile, "");
-            if (image) {
-                mImagesToAdd->push({shallSelect, image});
-            }
-        });
+        mImagesLoader->enqueue(imageFile, "", shallSelect);
     }
 
     // Make sure we gain focus after seleting a file to be loaded.

@@ -11,13 +11,13 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool StbiImageLoader::canLoadFile(ifstream& f) const {
+bool StbiImageLoader::canLoadFile(ifstream&) const {
     // Pretend you can load any file and throw exception on failure.
     // TODO: Add proper check.
     return true;
 }
 
-ImageData StbiImageLoader::load(ifstream& f, const filesystem::path& path, const string& channelSelector) const {
+ImageData StbiImageLoader::load(ifstream& f, const filesystem::path&, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 

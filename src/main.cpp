@@ -1,9 +1,9 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
+#include <tev/Image.h>
 #include <tev/ImageViewer.h>
 #include <tev/Ipc.h>
-#include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 
 #include <args.hxx>
@@ -11,6 +11,8 @@
 
 #include <utf8.h>
 
+#include <atomic>
+#include <chrono>
 #include <iostream>
 #include <thread>
 
@@ -180,10 +182,63 @@ int mainFunc(const vector<string>& arguments) {
 
     tlog::info() << "Loading window...";
 
+    shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
+
+    atomic<bool> shallShutdown{false};
+
+    // Spawn a background thread that opens images passed via stdin.
+    // To allow whitespace characters in filenames, we use the convention that
+    // paths in stdin must be separated by newlines.
+    thread stdinThread{[&]() {
+        string channelSelector;
+        while (!shallShutdown) {
+            for (string line; getline(cin, line);) {
+                string imageFile = tev::ensureUtf8(line);
+
+                if (imageFile.empty()) {
+                    continue;
+                }
+
+                if (imageFile[0] == ':') {
+                    channelSelector = imageFile.substr(1);
+                    continue;
+                }
+
+                imagesLoader->enqueue(imageFile, channelSelector, false);
+            }
+
+            this_thread::sleep_for(chrono::milliseconds{100});
+        }
+    }};
+
+    // It is unfortunately not easily possible to poll/timeout on cin in a portable manner,
+    // so instead we resort to simply detaching this thread, causing it to be forcefully
+    // terminated as the main thread terminates.
+    stdinThread.detach();
+
+    // Spawn another background thread, this one dealing with images passed to us
+    // via inter-process communication (IPC). This happens when
+    // a user starts another instance of tev while one is already running. Note, that this
+    // behavior can be overridden by the -n flag, so not _all_ secondary instances send their
+    // paths to the primary instance.
+    thread ipcThread;
+    if (ipc->isPrimaryInstance()) {
+        ipcThread = thread{[&]() {
+            while (!shallShutdown) {
+                while (ipc->receiveFromSecondaryInstance([&](const string& reveicedString) {
+                    string imageString = ensureUtf8(reveicedString);
+                    size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
+                    imagesLoader->enqueue(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), true);
+                })) { }
+
+                this_thread::sleep_for(chrono::milliseconds{100});
+            }
+        }};
+    }
+
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
     // by the potentially slow initialization of opengl / glfw.
-    shared_ptr<SharedQueue<ImageAddition>> imagesToAdd = make_shared<SharedQueue<ImageAddition>>();
     string channelSelector;
     for (auto imageFile : get(imageFiles)) {
         if (!imageFile.empty() && imageFile[0] == ':') {
@@ -191,19 +246,14 @@ int mainFunc(const vector<string>& arguments) {
             continue;
         }
 
-        ThreadPool::singleWorker().enqueueTask([imageFile, channelSelector, &imagesToAdd] {
-            auto image = tryLoadImage(imageFile, channelSelector);
-            if (image) {
-                imagesToAdd->push({false, image});
-            }
-        });
+        imagesLoader->enqueue(imageFile, channelSelector, false);
     }
 
     // Init nanogui application
     nanogui::init();
 
     {
-        auto app = unique_ptr<ImageViewer>{new ImageViewer{ipc, imagesToAdd, !imageFiles}};
+        auto app = unique_ptr<ImageViewer>{new ImageViewer{imagesLoader, !imageFiles}};
         app->drawAll();
         app->setVisible(true);
 
@@ -226,13 +276,20 @@ int mainFunc(const vector<string>& arguments) {
         nanogui::mainloop(250);
     }
 
+    shallShutdown = true;
+
     // On some linux distributions glfwTerminate() (which is called by
     // nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
     //nanogui::shutdown();
 
-    // Let all threads gracefully terminate.
-    ThreadPool::shutdown();
+    if (ipcThread.joinable()) {
+        ipcThread.join();
+    }
+
+    if (stdinThread.joinable()) {
+        stdinThread.join();
+    }
 
     return 0;
 }
