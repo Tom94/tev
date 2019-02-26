@@ -5,6 +5,8 @@
 
 #include <tev/Channel.h>
 #include <tev/GlTexture.h>
+#include <tev/SharedQueue.h>
+#include <tev/ThreadPool.h>
 
 #include <atomic>
 #include <map>
@@ -91,5 +93,21 @@ private:
 };
 
 std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::string channelSelector);
+
+struct ImageAddition {
+    bool shallSelect;
+    std::shared_ptr<Image> image;
+};
+
+class BackgroundImagesLoader {
+public:
+    void enqueue(const filesystem::path& path, const std::string& channelSelector, bool shallSelect);
+    ImageAddition tryPop() { return mLoadedImages.tryPop(); }
+
+private:
+    // A single worker is enough, since parallelization will happen _within_ each image load.
+    ThreadPool mWorkers{1};
+    SharedQueue<ImageAddition> mLoadedImages;
+};
 
 TEV_NAMESPACE_END

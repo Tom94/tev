@@ -79,15 +79,6 @@ public:
         waitUntilFinished();
     }
 
-    static ThreadPool& singleWorker() {
-        static ThreadPool threadPool{1};
-        return threadPool;
-    }
-
-    static void shutdown() {
-        singleWorker().shutdownThreads(1);
-    }
-
 private:
     size_t mNumThreads = 0;
     std::vector<std::thread> mThreads;

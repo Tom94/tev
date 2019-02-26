@@ -204,4 +204,13 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     return nullptr;
 }
 
+void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
+    mWorkers.enqueueTask([path, channelSelector, shallSelect, this] {
+        auto image = tryLoadImage(path, channelSelector);
+        if (image) {
+            mLoadedImages.push({ shallSelect, image });
+        }
+    });
+}
+
 TEV_NAMESPACE_END

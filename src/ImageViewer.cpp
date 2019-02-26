@@ -29,8 +29,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops)
-: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesToAdd{imagesToAdd} {
+ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops)
+: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesLoader{imagesLoader} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -503,7 +503,7 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        tryLoadImageBackground(ensureUtf8(filenames[i]), "", i == filenames.size() - 1);
+        mImagesLoader->enqueue(ensureUtf8(filenames[i]), "", i == filenames.size() - 1);
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -700,13 +700,13 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::drawContents() {
-    // In case any images got loaded in the background, they sit in mImagesToAdd. Here is the
+    // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
     bool newFocus = false;
     try {
         while (true) {
-            auto addition = mImagesToAdd->tryPop();
+            auto addition = mImagesLoader->tryPop();
             newFocus |= addition.shallSelect;
             addImage(addition.image, addition.shallSelect);
         }
@@ -886,15 +886,6 @@ void ImageViewer::reloadAllImages() {
     if (id != -1) {
         selectImage(mImages[id]);
     }
-}
-
-void ImageViewer::tryLoadImageBackground(const path& path, const string& channelSelector, bool shallSelect) {
-    ThreadPool::singleWorker().enqueueTask([path, channelSelector, shallSelect, this] {
-        auto image = tryLoadImage(path, channelSelector);
-        if (image) {
-            mImagesToAdd->push({ shallSelect, image });
-        }
-    });
 }
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
@@ -1266,7 +1257,7 @@ void ImageViewer::openImageDialog() {
     for (size_t i = 0; i < paths.size(); ++i) {
         path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
-        tryLoadImageBackground(imageFile, "", shallSelect);
+        mImagesLoader->enqueue(imageFile, "", shallSelect);
     }
 
     // Make sure we gain focus after seleting a file to be loaded.

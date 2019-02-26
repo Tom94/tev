@@ -1,9 +1,9 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
+#include <tev/Image.h>
 #include <tev/ImageViewer.h>
 #include <tev/Ipc.h>
-#include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 
 #include <args.hxx>
@@ -182,15 +182,7 @@ int mainFunc(const vector<string>& arguments) {
 
     tlog::info() << "Loading window...";
 
-    shared_ptr<SharedQueue<ImageAddition>> imagesToAdd = make_shared<SharedQueue<ImageAddition>>();
-    auto tryLoadImageBackground = [&imagesToAdd](const path& path, const string& channelSelector, bool shallSelect) {
-        ThreadPool::singleWorker().enqueueTask([path, channelSelector, shallSelect, &imagesToAdd] {
-            auto image = tryLoadImage(path, channelSelector);
-            if (image) {
-                imagesToAdd->push({ shallSelect, image });
-            }
-        });
-    };
+    shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
 
     atomic<bool> shallShutdown = false;
 
@@ -210,7 +202,7 @@ int mainFunc(const vector<string>& arguments) {
                     continue;
                 }
 
-                tryLoadImageBackground(imageFile, channelSelector, false);
+                imagesLoader->enqueue(imageFile, channelSelector, false);
             }
 
             this_thread::sleep_for(chrono::milliseconds{100});
@@ -234,7 +226,7 @@ int mainFunc(const vector<string>& arguments) {
                 while (ipc->receiveFromSecondaryInstance([&](const string& reveicedString) {
                     string imageString = ensureUtf8(reveicedString);
                     size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
-                    tryLoadImageBackground(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), true);
+                    imagesLoader->enqueue(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), true);
                 })) { }
 
                 this_thread::sleep_for(chrono::milliseconds{100});
@@ -252,14 +244,14 @@ int mainFunc(const vector<string>& arguments) {
             continue;
         }
 
-        tryLoadImageBackground(imageFile, channelSelector, false);
+        imagesLoader->enqueue(imageFile, channelSelector, false);
     }
 
     // Init nanogui application
     nanogui::init();
 
     {
-        auto app = unique_ptr<ImageViewer>{new ImageViewer{imagesToAdd, !imageFiles}};
+        auto app = unique_ptr<ImageViewer>{new ImageViewer{imagesLoader, !imageFiles}};
         app->drawAll();
         app->setVisible(true);
 
@@ -296,9 +288,6 @@ int mainFunc(const vector<string>& arguments) {
     if (stdinThread.joinable()) {
         stdinThread.join();
     }
-
-    // Let all threads gracefully terminate.
-    ThreadPool::shutdown();
 
     return 0;
 }

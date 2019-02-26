@@ -23,14 +23,9 @@
 
 TEV_NAMESPACE_BEGIN
 
-struct ImageAddition {
-    bool shallSelect;
-    std::shared_ptr<Image> image;
-};
-
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(std::shared_ptr<SharedQueue<ImageAddition>> imagesToAdd, bool processPendingDrops);
+    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops);
     virtual ~ImageViewer();
 
     bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
@@ -53,8 +48,6 @@ public:
     void reloadImage(std::shared_ptr<Image> image);
 
     void reloadAllImages();
-
-    void tryLoadImageBackground(const filesystem::path& path, const std::string& channelSelector, bool shallSelect = false);
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
@@ -172,7 +165,8 @@ private:
     nanogui::Widget* mTonemapButtonContainer;
     nanogui::Widget* mMetricButtonContainer;
 
-    std::shared_ptr<SharedQueue<ImageAddition>> mImagesToAdd;
+    std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
+
     std::shared_ptr<Image> mCurrentImage;
     std::shared_ptr<Image> mCurrentReference;
 
