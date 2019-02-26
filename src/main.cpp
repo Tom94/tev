@@ -184,7 +184,7 @@ int mainFunc(const vector<string>& arguments) {
 
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
 
-    atomic<bool> shallShutdown = false;
+    atomic<bool> shallShutdown{false};
 
     // Spawn a background thread that opens images passed via stdin.
     // To allow whitespace characters in filenames, we use the convention that
