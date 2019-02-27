@@ -15,7 +15,7 @@
 	url = https://github.com/mitsuba-renderer/tinyformat
 [submodule "dependencies/filesystem"]
 	path = dependencies/filesystem
-	url = https://github.com/wjakob/filesystem
+	url = https://github.com/Tom94/filesystem
 [submodule "dependencies/utfcpp"]
 	path = dependencies/utfcpp
 	url = https://github.com/Tom94/utfcpp
