@@ -1238,19 +1238,21 @@ void ImageViewer::openImageDialog() {
     vector<string> paths = file_dialog(
     {
         // HDR formats
-        {"exr",  "OpenEXR Image"},
-        {"hdr",  "HDR Image"},
-        {"pfm",  "Portable Float Map Image"},
+        {"exr",  "OpenEXR image"},
+        {"hdr",  "HDR image"},
+        {"pfm",  "Portable Float Map image"},
         // LDR formats
         {"bmp",  "Bitmap Image File"},
-        {"gif",  "Graphics Interchange Format Image"},
-        {"jpg",  "JPEG Image"},
-        {"jpeg", "JPEG Image"},
-        {"pic",  "PIC Image"},
-        {"png",  "Portable Network Graphics Image"},
-        {"pnm",  "Portable Any Map Image"},
-        {"psd",  "PSD Image"},
-        {"tga",  "Truevision TGA Image"},
+        {"gif",  "Graphics Interchange Format image"},
+        {"jpg",  "JPEG image"},
+        {"jpeg", "JPEG image"},
+        {"pic",  "PIC image"},
+        {"pgm",  "Portable GrayMap image"},
+        {"png",  "Portable Network Graphics image"},
+        {"pnm",  "Portable AnyMap image"},
+        {"ppm",  "Portable PixMap image"},
+        {"psd",  "PSD image"},
+        {"tga",  "Truevision TGA image"},
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
