@@ -656,7 +656,9 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         }
 
-        if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
+        if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD && modifiers & GLFW_MOD_SHIFT) {
+            removeAllImages();
+        } else if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
             removeImage(mCurrentImage);
         } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             if (modifiers & GLFW_MOD_SHIFT) {
@@ -717,7 +719,7 @@ void ImageViewer::drawContents() {
     }
 
     // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
-    // callbacks from background threads 
+    // callbacks from background threads
     try {
         while (true) {
             mTaskQueue.tryPop()();
@@ -854,6 +856,27 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
 
     if (mCurrentReference == image) {
         selectReference(nextCandidate);
+    }
+}
+
+void ImageViewer::removeAllImages() {
+    if (mImages.empty())
+        return;
+
+    // Reset all focus as a workaround a crash caused by nanogui.
+    // TODO: Remove once a fix exists.
+    requestFocus();
+
+    for (long i = mImages.size() - 1; i >= 0; --i) {
+        mImageButtonContainer->removeChild(i);
+    }
+    mImages.clear();
+
+    // No images left to select
+    selectImage(nullptr);
+    selectReference(nullptr);
+    for (auto button : mAnyImageButtons) {
+        button->setEnabled(false);
     }
 }
 
