@@ -656,10 +656,12 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             }
         }
 
-        if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD && modifiers & GLFW_MOD_SHIFT) {
-            removeAllImages();
-        } else if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
-            removeImage(mCurrentImage);
+        if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                removeAllImages();
+            } else {
+                removeImage(mCurrentImage);
+            }
         } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 selectReference(nextImage(mCurrentReference, Backward));
@@ -867,8 +869,8 @@ void ImageViewer::removeAllImages() {
     // TODO: Remove once a fix exists.
     requestFocus();
 
-    for (long i = mImages.size() - 1; i >= 0; --i) {
-        mImageButtonContainer->removeChild(i);
+    for (size_t i = mImages.size(); i > 0; --i) {
+        mImageButtonContainer->removeChild(i - 1);
     }
     mImages.clear();
 

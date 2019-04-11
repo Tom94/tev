@@ -43,13 +43,10 @@ public:
     }
 
     void removeImage(std::shared_ptr<Image> image);
-
     void removeAllImages();
 
     void reloadImage(std::shared_ptr<Image> image);
-
     void reloadAllImages();
-
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
