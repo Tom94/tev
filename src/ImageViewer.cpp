@@ -387,8 +387,16 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-                removeImage(mCurrentImage);
-            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
+                auto* glfwWindow = screen()->glfwWindow();
+                // There is no explicit access to the currently pressed modifier keys here, so we
+                // need to directly ask GLFW. In case this is needed more often, it may be worth
+                // inheriting Button and overriding mouseButtonEvent (similar to ImageButton).
+                if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
+                    removeAllImages();
+                } else {
+                    removeImage(mCurrentImage);
+                }
+            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W); Close All (%s+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             spacer = new Widget{mSidebarLayout};
             spacer->setHeight(3);
@@ -657,7 +665,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
         }
 
         if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
-            removeImage(mCurrentImage);
+            if (modifiers & GLFW_MOD_SHIFT) {
+                removeAllImages();
+            } else {
+                removeImage(mCurrentImage);
+            }
         } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 selectReference(nextImage(mCurrentReference, Backward));
@@ -717,7 +729,7 @@ void ImageViewer::drawContents() {
     }
 
     // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
-    // callbacks from background threads 
+    // callbacks from background threads
     try {
         while (true) {
             mTaskQueue.tryPop()();
@@ -854,6 +866,27 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
 
     if (mCurrentReference == image) {
         selectReference(nextCandidate);
+    }
+}
+
+void ImageViewer::removeAllImages() {
+    if (mImages.empty())
+        return;
+
+    // Reset all focus as a workaround a crash caused by nanogui.
+    // TODO: Remove once a fix exists.
+    requestFocus();
+
+    for (size_t i = mImages.size(); i > 0; --i) {
+        mImageButtonContainer->removeChild(i - 1);
+    }
+    mImages.clear();
+
+    // No images left to select
+    selectImage(nullptr);
+    selectReference(nullptr);
+    for (auto button : mAnyImageButtons) {
+        button->setEnabled(false);
     }
 }
 
