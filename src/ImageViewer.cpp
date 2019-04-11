@@ -387,8 +387,16 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-                removeImage(mCurrentImage);
-            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W)", HelpWindow::COMMAND)));
+                auto* glfwWindow = screen()->glfwWindow();
+                // There is no explicit access to the currently pressed modifier keys here, so we
+                // need to directly ask GLFW. In case this is needed more often, it may be worth
+                // inheriting Button and overriding mouseButtonEvent (similar to ImageButton).
+                if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
+                    removeAllImages();
+                } else {
+                    removeImage(mCurrentImage);
+                }
+            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W); Close All (%s+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             spacer = new Widget{mSidebarLayout};
             spacer->setHeight(3);
