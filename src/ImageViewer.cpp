@@ -878,7 +878,7 @@ void ImageViewer::removeAllImages() {
     requestFocus();
 
     for (size_t i = mImages.size(); i > 0; --i) {
-        mImageButtonContainer->removeChild(i - 1);
+        mImageButtonContainer->removeChild((int)(i - 1));
     }
     mImages.clear();
 
