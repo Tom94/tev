@@ -83,7 +83,7 @@ ImageData PfmImageLoader::load(ifstream& f, const filesystem::path&, const strin
 
     for (auto& channel : channels) {
         string name = channel.name();
-        if (matches(name, channelSelector, false)) {
+        if (matchesFuzzy(name, channelSelector)) {
             result.channels.emplace(move(name), move(channel));
         }
     }

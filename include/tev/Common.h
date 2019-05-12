@@ -139,7 +139,11 @@ std::vector<std::string> split(std::string text, const std::string& delim);
 std::string toLower(std::string str);
 std::string toUpper(std::string str);
 
-bool matches(std::string text, std::string filter, bool isRegex);
+bool matchesFuzzy(std::string text, std::string filter, size_t* matchedPartId = nullptr);
+bool matchesRegex(std::string text, std::string filter);
+inline bool matchesFuzzyOrRegex(const std::string& text, const std::string& filter, bool isRegex) {
+    return isRegex ? matchesRegex(text, filter) : matchesFuzzy(text, filter);
+}
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
 

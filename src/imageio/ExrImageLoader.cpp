@@ -48,7 +48,7 @@ ImageData ExrImageLoader::load(ifstream& f, const filesystem::path& path, const 
         const Imf::ChannelList& imfChannels = part.header().channels();
 
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            if (matches(c.name(), channelSelector, false)) {
+            if (matchesFuzzy(c.name(), channelSelector)) {
                 partIdx = i;
                 goto l_foundPart;
             }
@@ -140,7 +140,7 @@ l_foundPart:
     set<string> layerNames;
 
     for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-        if (matches(c.name(), channelSelector, false)) {
+        if (matchesFuzzy(c.name(), channelSelector)) {
             rawChannels.emplace_back(c.name(), c.channel().type);
             layerNames.insert(Channel::head(c.name()));
         }
