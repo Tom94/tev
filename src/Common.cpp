@@ -46,14 +46,15 @@ string utf16to8(const wstring& utf16) {
 
 vector<string> split(string text, const string& delim) {
     vector<string> result;
+    size_t begin = 0;
     while (true) {
-        size_t begin = text.find_last_of(delim);
-        if (begin == string::npos) {
-            result.emplace_back(text);
+        size_t end = text.find_first_of(delim, begin);
+        if (end == string::npos) {
+            result.emplace_back(text.substr(begin));
             return result;
         } else {
-            result.emplace_back(text.substr(begin + 1));
-            text.resize(begin);
+            result.emplace_back(text.substr(begin, end - begin));
+            begin = end + 1;
         }
     }
 
