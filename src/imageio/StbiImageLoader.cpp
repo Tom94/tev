@@ -77,11 +77,20 @@ ImageData StbiImageLoader::load(ifstream& f, const filesystem::path&, const stri
         });
     }
 
-    for (auto& channel : channels) {
-        string name = channel.name();
-        if (matchesFuzzy(name, channelSelector)) {
-            result.channels.emplace(move(name), move(channel));
+    vector<pair<size_t, size_t>> matches;
+    for (size_t i = 0; i < channels.size(); ++i) {
+        size_t matchId;
+        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
+            matches.emplace_back(matchId, i);
         }
+    }
+
+    if (!channelSelector.empty()) {
+        sort(begin(matches), end(matches));
+    }
+
+    for (const auto& match : matches) {
+        result.channels.emplace_back(move(channels[match.second]));
     }
 
     // STBI can not load layers, so all channels simply reside
