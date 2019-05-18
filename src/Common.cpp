@@ -46,14 +46,15 @@ string utf16to8(const wstring& utf16) {
 
 vector<string> split(string text, const string& delim) {
     vector<string> result;
+    size_t begin = 0;
     while (true) {
-        size_t begin = text.find_last_of(delim);
-        if (begin == string::npos) {
-            result.emplace_back(text);
+        size_t end = text.find_first_of(delim, begin);
+        if (end == string::npos) {
+            result.emplace_back(text.substr(begin));
             return result;
         } else {
-            result.emplace_back(text.substr(begin + 1));
-            text.resize(begin);
+            result.emplace_back(text.substr(begin, end - begin));
+            begin = end + 1;
         }
     }
 
@@ -70,48 +71,53 @@ string toUpper(string str) {
     return str;
 }
 
-bool matches(string text, string filter, bool isRegex) {
-    auto matchesFuzzy = [](string text, string filter) {
-        if (filter.empty()) {
-            return true;
-        }
+bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
+    if (matchedPartId) {
+        // Default value of 0. Is actually returned when the filter
+        // is empty or when there is no match.
+        *matchedPartId = 0;
+    }
 
-        // Perform matching on lowercase strings
-        text = toLower(text);
-        filter = toLower(filter);
+    if (filter.empty()) {
+        return true;
+    }
 
-        auto words = split(filter, ", ");
-        // We don't want people entering multiple spaces in a row to match everything.
-        words.erase(remove(begin(words), end(words), ""), end(words));
+    // Perform matching on lowercase strings
+    text = toLower(text);
+    filter = toLower(filter);
 
-        if (words.empty()) {
-            return true;
-        }
+    auto words = split(filter, ", ");
+    // We don't want people entering multiple spaces in a row to match everything.
+    words.erase(remove(begin(words), end(words), ""), end(words));
 
-        // Match every word of the filter separately.
-        for (const auto& word : words) {
-            if (text.find(word) != string::npos) {
-                return true;
+    if (words.empty()) {
+        return true;
+    }
+
+    // Match every word of the filter separately.
+    for (size_t i = 0; i < words.size(); ++i) {
+        if (text.find(words[i]) != string::npos) {
+            if (matchedPartId) {
+                *matchedPartId = i;
             }
-        }
-
-        return false;
-    };
-
-    auto matchesRegex = [](string text, string filter) {
-        if (filter.empty()) {
             return true;
         }
+    }
 
-        try {
-            regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
-            return regex_search(text, searchRegex);
-        } catch (const regex_error&) {
-            return false;
-        }
-    };
+    return false;
+}
 
-    return isRegex ? matchesRegex(text, filter) : matchesFuzzy(text, filter);
+bool matchesRegex(string text, string filter) {
+    if (filter.empty()) {
+        return true;
+    }
+
+    try {
+        regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
+        return regex_search(text, searchRegex);
+    } catch (const regex_error&) {
+        return false;
+    }
 }
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float shadowAlpha) {

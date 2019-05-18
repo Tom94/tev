@@ -48,7 +48,7 @@ ImageData ExrImageLoader::load(ifstream& f, const filesystem::path& path, const 
         const Imf::ChannelList& imfChannels = part.header().channels();
 
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            if (matches(c.name(), channelSelector, false)) {
+            if (matchesFuzzy(c.name(), channelSelector)) {
                 partIdx = i;
                 goto l_foundPart;
             }
@@ -139,11 +139,24 @@ l_foundPart:
     const Imf::ChannelList& imfChannels = file.header().channels();
     set<string> layerNames;
 
+    using match_t = pair<size_t, Imf::ChannelList::ConstIterator>;
+    vector<match_t> matches;
     for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-        if (matches(c.name(), channelSelector, false)) {
-            rawChannels.emplace_back(c.name(), c.channel().type);
+        size_t matchId;
+        if (matchesFuzzy(c.name(), channelSelector, &matchId)) {
+            matches.emplace_back(matchId, c);
             layerNames.insert(Channel::head(c.name()));
         }
+    }
+
+    // Sort matched channels by matched component of the selector, if one exists.
+    if (!channelSelector.empty()) {
+        sort(begin(matches), end(matches), [](const match_t& m1, const match_t& m2) { return m1.first < m2.first; });
+    }
+
+    for (const auto& match : matches) {
+        const auto& c = match.second;
+        rawChannels.emplace_back(c.name(), c.channel().type);
     }
 
     if (rawChannels.empty()) {
@@ -166,11 +179,11 @@ l_foundPart:
     file.readPixels(dw.min.y, dw.max.y);
 
     for (const auto& rawChannel : rawChannels) {
-        result.channels.emplace(rawChannel.name(), Channel{rawChannel.name(), size});
+        result.channels.emplace_back(Channel{rawChannel.name(), size});
     }
 
     for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].copyTo(result.channels.at(rawChannels[i].name()), threadPool);
+        rawChannels[i].copyTo(result.channels[i], threadPool);
     }
 
     threadPool.waitUntilFinished();

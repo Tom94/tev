@@ -1350,11 +1350,11 @@ void ImageViewer::updateFilter() {
         // This is the case if the image name matches the image part
         // and at least one of the image's layers matches the layer part.
         auto doesImageMatch = [&](const shared_ptr<Image>& image) {
-            bool doesMatch = matches(image->name(), imagePart, useRegex());
+            bool doesMatch = matchesFuzzyOrRegex(image->name(), imagePart, useRegex());
             if (doesMatch) {
                 bool anyLayersMatch = false;
                 for (const auto& layer : image->layers()) {
-                    if (matches(layer, layerPart, useRegex())) {
+                    if (matchesFuzzyOrRegex(layer, layerPart, useRegex())) {
                         anyLayersMatch = true;
                         break;
                     }
@@ -1439,7 +1439,7 @@ void ImageViewer::updateFilter() {
             selectImage(nthVisibleImage(0));
         }
 
-        if (mCurrentReference && !matches(mCurrentReference->name(), imagePart, useRegex())) {
+        if (mCurrentReference && !matchesFuzzyOrRegex(mCurrentReference->name(), imagePart, useRegex())) {
             selectReference(nullptr);
         }
     }
@@ -1451,13 +1451,13 @@ void ImageViewer::updateFilter() {
         const auto& buttons = mLayerButtonContainer->children();
         for (Widget* button : buttons) {
             ImageButton* ib = dynamic_cast<ImageButton*>(button);
-            ib->setVisible(matches(ib->caption(), layerPart, useRegex()));
+            ib->setVisible(matchesFuzzyOrRegex(ib->caption(), layerPart, useRegex()));
             if (ib->visible()) {
                 ib->setId(id++);
             }
         }
 
-        if (!matches(mCurrentLayer, layerPart, useRegex())) {
+        if (!matchesFuzzyOrRegex(mCurrentLayer, layerPart, useRegex())) {
             selectLayer(nthVisibleLayer(0));
         }
     }

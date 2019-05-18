@@ -116,20 +116,20 @@ vector<string> Image::channelsInLayer(string layerName) const {
     vector<string> result;
 
     if (layerName.empty()) {
-        for (const auto& kv : mData.channels) {
-            if (kv.first.find(".") == string::npos) {
-                result.emplace_back(kv.first);
+        for (const auto& c : mData.channels) {
+            if (c.name().find(".") == string::npos) {
+                result.emplace_back(c.name());
             }
         }
     } else {
-        for (const auto& kv : mData.channels) {
+        for (const auto& c : mData.channels) {
             // If the layer name starts at the beginning, and
             // if no other dot is found after the end of the layer name,
             // then we have found a channel of this layer.
-            if (kv.first.find(layerName) == 0 && kv.first.length() > layerName.length()) {
-                const auto& channelWithoutLayer = kv.first.substr(layerName.length() + 1);
+            if (c.name().find(layerName) == 0 && c.name().length() > layerName.length()) {
+                const auto& channelWithoutLayer = c.name().substr(layerName.length() + 1);
                 if (channelWithoutLayer.find(".") == string::npos) {
-                    result.emplace_back(kv.first);
+                    result.emplace_back(c.name());
                 }
             }
         }
@@ -165,11 +165,11 @@ void Image::ensureValid() {
         throw runtime_error{"Images must have at least one channel."};
     }
 
-    for (const auto& kv : mData.channels) {
-        if (kv.second.size() != size()) {
+    for (const auto& c : mData.channels) {
+        if (c.size() != size()) {
             throw runtime_error{tfm::format(
                 "All channels must have the same size as their image. (%s:%dx%d != %dx%d)",
-                kv.first, kv.second.size().x(), kv.second.size().y(), size().x(), size().y()
+                c.name(), c.size().x(), c.size().y(), size().x(), size().y()
             )};
         }
     }

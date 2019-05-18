@@ -19,7 +19,7 @@ TEV_NAMESPACE_BEGIN
 class ImageLoader;
 
 struct ImageData {
-    std::map<std::string, Channel> channels;
+    std::vector<Channel> channels;
     std::vector<std::string> layers;
 };
 
@@ -42,12 +42,13 @@ public:
     std::string shortName() const;
 
     bool hasChannel(const std::string& channelName) const {
-        return mData.channels.count(channelName) != 0;
+        return channel(channelName) != nullptr;
     }
 
     const Channel* channel(const std::string& channelName) const {
-        if (hasChannel(channelName)) {
-            return &mData.channels.at(channelName);
+        auto it = std::find_if(std::begin(mData.channels), std::end(mData.channels), [&channelName](const Channel& c) { return c.name() == channelName; });
+        if (it != std::end(mData.channels)) {
+            return &(*it);
         } else {
             return nullptr;
         }
@@ -58,11 +59,11 @@ public:
     std::vector<std::string> channelsInLayer(std::string layerName) const;
 
     Eigen::Vector2i size() const {
-        return mData.channels.begin()->second.size();
+        return mData.channels.front().size();
     }
 
     Eigen::DenseIndex count() const {
-        return mData.channels.begin()->second.count();
+        return mData.channels.front().count();
     }
 
     const std::vector<std::string>& layers() const {
