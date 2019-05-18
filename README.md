@@ -3,9 +3,9 @@
 [![Travis Build Status](https://travis-ci.org/Tom94/tev.svg?branch=master)](https://travis-ci.org/Tom94/tev)
 [![Appveyor Build Status](https://ci.appveyor.com/api/projects/status/y9pdd25v9b8s5cv1/branch/master?svg=true)](https://ci.appveyor.com/project/Tom94/tev)
 
-A high dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof). To avoid clutter, opened images and their layers can be filtered by keywords.
+A high dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between images and visualizing various error metrics (L1, L2, and relative versions thereof). To avoid clutter, images and their layers can be filtered by keywords.
 
-While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
+While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
 - __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
@@ -21,25 +21,27 @@ _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Ima
 
 ### Graphical User Interface
 
-Images can be opened via a file dialog or simply by dragging them into __tev__. They can be reloaded, closed, or filtered at any time, so don't worry about opening more images than exactly needed.
+Images can be opened via a file dialog or simply by dragging them into __tev__. They can be reloaded, closed, or filtered at any time, so opening more images than exactly needed is encouraged.
 
-Select an image by left-clicking it, and optionally select a reference image to compare the current selection to by right-clicking. For convenience, the current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts simply click the little "?" icon at the top (or press "h").
+Select an image by left-clicking it, and optionally select a reference image to compare the current selection to by right-clicking. The current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts click the little "?" icon at the top or press "h" on your keyboard.
 
-If the interface seems overwhelming, simply hover any controls to view an explanatory tooltip.
+If the interface seems overwhelming, simply hover over any control to view an explanatory tooltip.
 
 ### Command Line
 
-Simply supply images as positional command-line arguments.
+__tev__ understands positional command-line arguments (with and without wildcards).
 ```sh
 $ tev foo.exr bar.exr
 ```
+
+The filenames can also be supplied using a pipe.
 
 By default, all layers and channels are loaded, but individual layers or channels can also be specified. In the following example, the *depth* layer of *foo.exr* and the *r*, *g*, and *b* channels of *foo.exr* and *bar.exr* are loaded.
 ```sh
 $ tev :depth foo.exr :r,g,b foo.exr bar.exr
 ```
 
-Other command-line arguments also exist (e.g. for starting __tev__ with a pre-set exposure value). For a list of all valid arguments simply invoke
+Other command-line arguments exist (e.g. for starting __tev__ with a pre-set exposure value). For a list of all valid arguments simply invoke
 ```sh
 $ tev -h
 ```
@@ -90,7 +92,7 @@ $ make install
 
 ### Windows
 
-On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2017 or higher!
+On Windows, install [CMake](https://cmake.org/download/), open the included `cmake-gui` application, and point it to the root directory of __tev__. CMake will then offer a selection of compilers. Visual Studio 2019 is officially supported, but __tev__ likely also compiles using Visual Studio 2017 and 2015.
 
 ## License
 
