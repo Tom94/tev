@@ -3,9 +3,7 @@
 /x64
 
 # Automatically generated files by .vscode
-/.vscode/.cmaketools.json
-/.vscode/.ropeproject
-/.vscode/settings.json
+/.vscode
 
 # Development project files
 *.sublime-project
