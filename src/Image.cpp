@@ -40,6 +40,7 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
         bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(f);
 
         // Reset file cursor in case file load check changed it.
+        f.clear();
         f.seekg(0);
 
         if (useLoader) {

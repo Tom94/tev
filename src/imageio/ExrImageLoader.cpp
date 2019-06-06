@@ -19,11 +19,10 @@ bool ExrImageLoader::canLoadFile(ifstream& f) const {
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
     char b[4];
     f.read(b, sizeof(b));
-    if (f.gcount() < 4) {
-        return false;
-    }
 
-    bool result = !!f && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    bool result = !!f && f.gcount() == sizeof(b) && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+
+    f.clear();
     f.seekg(0);
     return result;
 }
