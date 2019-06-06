@@ -42,6 +42,7 @@ ImageData StbiImageLoader::load(ifstream& f, const filesystem::path&, const stri
     int numChannels;
     Vector2i size;
     bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &f) != 0;
+    f.clear();
     f.seekg(0);
 
     if (isHdr) {

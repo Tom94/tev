@@ -12,11 +12,10 @@ TEV_NAMESPACE_BEGIN
 bool PfmImageLoader::canLoadFile(ifstream& f) const {
     char b[2];
     f.read(b, sizeof(b));
-    if (f.gcount() < 2) {
-        return false;
-    }
 
-    bool result = !!f && b[0] == 'P' && (b[1] == 'F' || b[1] == 'f');
+    bool result = !!f && f.gcount() == sizeof(b) && b[0] == 'P' && (b[1] == 'F' || b[1] == 'f');
+
+    f.clear();
     f.seekg(0);
     return result;
 }
