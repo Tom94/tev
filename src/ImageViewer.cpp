@@ -452,9 +452,11 @@ bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int
     if (down) {
         if (canDragSidebarFrom(p)) {
             mIsDraggingSidebar = true;
+            mDraggingStartPosition = p.cast<float>();
             return true;
         } else if (mImageCanvas->contains(p)) {
             mIsDraggingImage = true;
+            mDraggingStartPosition = p.cast<float>();
             return true;
         }
     } else {
@@ -497,7 +499,7 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
 
         // If middle mouse button is held, zoom in-out with up-down mouse movement
         if ((button & 4) != 0) {
-            mImageCanvas->scale(relativeMovement.y() / 10.0f, p.cast<float>());
+            mImageCanvas->scale(relativeMovement.y() / 10.0f, mDraggingStartPosition);
         }
     }
 
