@@ -200,6 +200,8 @@ private:
 
     bool mIsDraggingSidebar = false;
     bool mIsDraggingImage = false;
+
+    Eigen::Vector2f mDraggingStartPosition;
 };
 
 TEV_NAMESPACE_END
