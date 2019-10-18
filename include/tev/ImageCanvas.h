@@ -67,10 +67,10 @@ public:
 
     Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
 
-    void getValuesAtNanoPos(Eigen::Vector2i nanoPos, std::vector<float>& result);
-    std::vector<float> getValuesAtNanoPos(Eigen::Vector2i mousePos) {
+    void getValuesAtNanoPos(Eigen::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);
+    std::vector<float> getValuesAtNanoPos(Eigen::Vector2i nanoPos, const std::vector<std::string>& channels) {
         std::vector<float> result;
-        getValuesAtNanoPos(mousePos, result);
+        getValuesAtNanoPos(nanoPos, result, channels);
         return result;
     }
 

@@ -132,7 +132,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
                 for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
                     Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
-                    getValuesAtNanoPos(nano, values);
+                    getValuesAtNanoPos(nano, values, channels);
 
                     TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
 
@@ -266,22 +266,20 @@ Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
     };
 }
 
-void ImageCanvas::getValuesAtNanoPos(Vector2i mousePos, vector<float>& result) {
+void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, const vector<string>& channels) {
     result.clear();
     if (!mImage) {
         return;
     }
 
-    Vector2i imageCoords = getImageCoords(*mImage, mousePos);
-    const auto& channels = getChannels(*mImage);
-
+    Vector2i imageCoords = getImageCoords(*mImage, nanoPos);
     for (const auto& channel : channels) {
         result.push_back(mImage->channel(channel)->eval(imageCoords));
     }
 
     // Subtract reference if it exists.
     if (mReference) {
-        Vector2i referenceCoords = getImageCoords(*mReference, mousePos);
+        Vector2i referenceCoords = getImageCoords(*mReference, nanoPos);
         const auto& referenceChannels = getChannels(*mReference);
         for (size_t i = 0; i < result.size(); ++i) {
             float reference = i < referenceChannels.size() ?

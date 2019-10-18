@@ -1498,28 +1498,29 @@ void ImageViewer::updateTitle() {
         auto channels = mImageCanvas->getChannels(*mCurrentImage);
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
-        transform(begin(channels), end(channels), begin(channels), Channel::tail);
 
-        string channelsString = join(channels, ",");
+        auto readableChannels = channels;
+        transform(begin(readableChannels), end(readableChannels), begin(readableChannels), Channel::tail);
+        string channelsString = join(readableChannels, ",");
         caption = mCurrentImage->shortName();
 
         if (mCurrentLayer.empty()) {
             caption += string{" – "} + channelsString;
         } else {
             caption += string{" – "} + mCurrentLayer;
-            if (channels.size() == 1) {
+            if (readableChannels.size() == 1) {
                 caption += string{"."} + channelsString;
             } else {
                 caption += string{".("} + channelsString + ")";
             }
         }
 
-        vector<float> values = mImageCanvas->getValuesAtNanoPos(mousePos() - mImageCanvas->position());
+        vector<float> values = mImageCanvas->getValuesAtNanoPos(mousePos() - mImageCanvas->position(), channels);
         Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, mousePos() - mImageCanvas->position());
-        TEV_ASSERT(values.size() >= channels.size(), "Should obtain a value for every existing channel.");
+        TEV_ASSERT(values.size() >= readableChannels.size(), "Should obtain a value for every existing channel.");
 
         string valuesString;
-        for (size_t i = 0; i < channels.size(); ++i) {
+        for (size_t i = 0; i < readableChannels.size(); ++i) {
             valuesString += tfm::format("%.2f,", values[i]);
         }
         valuesString.pop_back();
