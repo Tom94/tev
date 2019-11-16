@@ -127,6 +127,9 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             nvgFontFace(ctx, "sans");
             nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 
+            auto* glfwWindow = screen()->glfwWindow();
+            bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
+
             Vector2i cur;
             vector<float> values;
             for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
@@ -137,11 +140,26 @@ void ImageCanvas::draw(NVGcontext *ctx) {
                     TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
 
                     for (size_t i = 0; i < colors.size(); ++i) {
-                        string str = tfm::format("%.4f", values[i]);
-                        Vector2f pos{
-                            mPos.x() + nano.x(),
-                            mPos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
-                        };
+                        string str;
+                        Vector2f pos;
+                        
+                        if (altHeld) {
+                            float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
+                            unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
+                            str = tfm::format("%02X", discretizedValue);
+
+                            pos = Vector2f{
+                                mPos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
+                                mPos.y() + nano.y(),
+                            };
+                        } else {
+                            str = tfm::format("%.4f", values[i]);
+
+                            pos = Vector2f{
+                                mPos.x() + nano.x(),
+                                mPos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
+                            };
+                        }
 
                         Color col = colors[i];
                         nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));

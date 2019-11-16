@@ -1524,6 +1524,12 @@ void ImageViewer::updateTitle() {
             valuesString += tfm::format("%.2f,", values[i]);
         }
         valuesString.pop_back();
+        valuesString += " / 0x";
+        for (size_t i = 0; i < readableChannels.size(); ++i) {
+            float tonemappedValue = readableChannels[i] == "A" ? values[i] : toSRGB(values[i]);
+            unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
+            valuesString += tfm::format("%02X", discretizedValue);
+        }
 
         caption += tfm::format(" – @(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
     }
