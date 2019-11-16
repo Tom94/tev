@@ -83,6 +83,8 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(imageSelection, "E / Shift+E", "Increase / Decrease Exposure by 0.5");
         addRow(imageSelection, "O / Shift+O", "Increase / Decrease Offset by 0.1");
 
+        addRow(imageSelection, ALT + " (hold)", "Display raw bytes on pixels when zoomed-in");
+
         new Label{shortcuts, "Reference Options", "sans-bold", 18};
         auto referenceSelection = new Widget{shortcuts};
         referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
