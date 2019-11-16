@@ -1,0 +1,36 @@
+name: CI
+
+on: 
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build_native_unix:
+    name: Build native on linux
+    runs-on: [ubuntu-latest, ubuntu-16.04, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: Build
+        run: |
+          cmake .
+          make -j
+
+  build_native_windows:
+    name: Build native on Windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: Setup MSBuild.exe
+        uses: warrenbuckley/Setup-MSBuild@v1
+
+      - name: Build
+        run: |
+          cmake .
+          msbuild /v:m /p:Configuration=Release tev.sln
