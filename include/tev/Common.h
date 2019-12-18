@@ -21,6 +21,15 @@
 #   pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
 #endif
 
+// Define command key for windows/mac/linux
+#ifdef __APPLE__
+#define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_SUPER
+#define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_SUPER
+#else
+#define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_CONTROL
+#define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
+#endif
+
 // Needs to be included _after_ Windows.h to ensure NOMINMAX has an effect
 #include <filesystem/path.h>
 

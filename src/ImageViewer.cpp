@@ -490,6 +490,8 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
         // need to directly ask GLFW.
         if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
             relativeMovement /= 10;
+        } else if (glfwGetKey(glfwWindow, SYSTEM_COMMAND_LEFT) || glfwGetKey(glfwWindow, SYSTEM_COMMAND_RIGHT)) {
+            relativeMovement /= std::log2(1.1f);
         }
 
         // If left mouse button is held, move the image with mouse movement
@@ -628,6 +630,8 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             float scaleAmount = 1.0f;
             if (modifiers & GLFW_MOD_SHIFT) {
                 scaleAmount /= 10;
+            } else if (modifiers & SYSTEM_COMMAND_MOD) {
+                scaleAmount /= std::log2(1.1f);
             }
 
             if (key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
@@ -1532,6 +1536,7 @@ void ImageViewer::updateTitle() {
         }
 
         caption += tfm::format(" – @(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
+        caption += tfm::format(" – %d%%", (int)std::round(mImageCanvas->extractScale() * 100));
     }
 
     setCaption(caption);

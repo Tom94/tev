@@ -37,6 +37,8 @@ bool ImageCanvas::scrollEvent(const Vector2i& p, const Vector2f& rel) {
     // need to directly ask GLFW.
     if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
         scaleAmount /= 10;
+    } else if (glfwGetKey(glfwWindow, SYSTEM_COMMAND_LEFT) || glfwGetKey(glfwWindow, SYSTEM_COMMAND_RIGHT)) {
+        scaleAmount /= std::log2(1.1f);
     }
 
     scale(scaleAmount, p.cast<float>());

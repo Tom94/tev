@@ -52,7 +52,7 @@ ImageData StbiImageLoader::load(ifstream& f, const filesystem::path&, const stri
     }
 
     if (!data) {
-        throw invalid_argument{"Could not load texture data"};
+        throw invalid_argument{tfm::format("Could not load texture data: %s", stbi_failure_reason())};
     }
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
