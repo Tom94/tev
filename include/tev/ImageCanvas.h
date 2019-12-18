@@ -33,6 +33,9 @@ public:
 
     void translate(const Eigen::Vector2f& amount);
     void scale(float amount, const Eigen::Vector2f& origin);
+    float extractScale() const {
+        return std::sqrt(mTransform.linear().determinant());
+    }
 
     void setExposure(float exposure) {
         mExposure = exposure;

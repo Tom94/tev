@@ -1532,6 +1532,7 @@ void ImageViewer::updateTitle() {
         }
 
         caption += tfm::format(" – @(%d,%d)%s", imageCoords.x(), imageCoords.y(), valuesString);
+        caption += tfm::format(" – %d%%", (int)std::round(mImageCanvas->extractScale() * 100));
     }
 
     setCaption(caption);
