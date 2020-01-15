@@ -45,6 +45,10 @@ ImageData PfmImageLoader::load(ifstream& f, const filesystem::path&, const strin
     vector<Channel> channels = makeNChannels(numChannels, size);
 
     auto numPixels = (DenseIndex)size.x() * size.y();
+    if (numPixels == 0) {
+        throw invalid_argument{"Image has zero pixels."};
+    }
+    
     auto numFloats = numPixels * numChannels;
     auto numBytes = numFloats * sizeof(float);
 

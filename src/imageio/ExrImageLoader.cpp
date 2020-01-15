@@ -59,6 +59,10 @@ l_foundPart:
     Imath::Box2i dw = file.header().dataWindow();
     Vector2i size = {dw.max.x - dw.min.x + 1 , dw.max.y - dw.min.y + 1};
 
+    if (size.x() == 0 || size.y() == 0) {
+        throw invalid_argument{"EXR image has zero pixels."};
+    }
+
     // Inline helper class for dealing with the raw channels loaded from an exr file.
     class RawChannel {
     public:

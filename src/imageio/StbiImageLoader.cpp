@@ -52,7 +52,11 @@ ImageData StbiImageLoader::load(ifstream& f, const filesystem::path&, const stri
     }
 
     if (!data) {
-        throw invalid_argument{tfm::format("Could not load texture data: %s", stbi_failure_reason())};
+        throw invalid_argument{tfm::format("%s", stbi_failure_reason())};
+    }
+
+    if (size.x() == 0 || size.y() == 0) {
+        throw invalid_argument{"Image has zero pixels."};
     }
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
