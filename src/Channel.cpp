@@ -51,4 +51,14 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
+void Channel::divideByAsync(const Channel& other, ThreadPool& pool) {
+    pool.parallelForNoWait<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+        if (other.at(i) != 0) {
+            at(i) /= other.at(i);
+        } else {
+            at(i) = 0;
+        }
+    });
+}
+
 TEV_NAMESPACE_END

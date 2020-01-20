@@ -20,6 +20,8 @@ public:
 
     virtual std::string name() const = 0;
 
+    virtual bool hasPremultipliedAlpha() const = 0;
+
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
 
 protected:

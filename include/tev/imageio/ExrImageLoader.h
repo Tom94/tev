@@ -18,6 +18,10 @@ public:
     std::string name() const override {
         return "OpenEXR";
     }
+
+    bool hasPremultipliedAlpha() const override {
+        return true;
+    }
 };
 
 TEV_NAMESPACE_END

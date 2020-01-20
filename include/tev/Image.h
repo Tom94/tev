@@ -79,6 +79,17 @@ public:
 private:
     static std::atomic<int> sId;
 
+    Channel* mutableChannel(const std::string& channelName) {
+        auto it = std::find_if(std::begin(mData.channels), std::end(mData.channels), [&channelName](const Channel& c) { return c.name() == channelName; });
+        if (it != std::end(mData.channels)) {
+            return &(*it);
+        } else {
+            return nullptr;
+        }
+    }
+
+    void unmultiplyAlpha();
+
     void ensureValid();
 
     filesystem::path mPath;

@@ -46,6 +46,11 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
         if (useLoader) {
             loadMethod = imageLoader->name();
             mData = imageLoader->load(f, mPath, mChannelSelector);
+            ensureValid();
+
+            if (imageLoader->hasPremultipliedAlpha()) {
+                unmultiplyAlpha();
+            }
             break;
         }
     }
@@ -53,9 +58,9 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
-    tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mPath, loadMethod, elapsedSeconds.count());
-
     ensureValid();
+
+    tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mPath, loadMethod, elapsedSeconds.count());
 }
 
 string Image::shortName() const {
@@ -155,6 +160,28 @@ string Image::toString() const {
     });
 
     return result + join(localLayers, "\n");
+}
+
+void Image::unmultiplyAlpha() {
+    ThreadPool threadPool;
+
+    for (const auto& layer : mData.layers) {
+        string layerPrefix = layer.empty() ? "" : (layer + ".");
+        string alphaChannelName = layerPrefix + "A";
+
+        if (!hasChannel(alphaChannelName)) {
+            continue;
+        }
+
+        const Channel* alphaChannel = channel(alphaChannelName);
+        for (auto& channelName : channelsInLayer(layer)) {
+            if (channelName != alphaChannelName) {
+                mutableChannel(channelName)->divideByAsync(*alphaChannel, threadPool);
+            }
+        }
+    }
+
+    threadPool.waitUntilFinished();
 }
 
 void Image::ensureValid() {

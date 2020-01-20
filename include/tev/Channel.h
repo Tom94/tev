@@ -4,6 +4,7 @@
 #pragma once
 
 #include <tev/GlTexture.h>
+#include <tev/ThreadPool.h>
 
 #include <vector>
 #include <string>
@@ -44,6 +45,10 @@ public:
         return mData(index);
     }
 
+    float at(Eigen::DenseIndex index) const {
+        return mData(index);
+    }
+
     float& at(Eigen::Vector2i index) {
         return at(index.x() + index.y() * mData.cols());
     }
@@ -55,6 +60,8 @@ public:
     Eigen::Vector2i size() const {
         return {mData.cols(), mData.rows()};
     }
+
+    void divideByAsync(const Channel& other, ThreadPool& pool);
 
     static std::pair<std::string, std::string> split(const std::string& fullChannel);
 
