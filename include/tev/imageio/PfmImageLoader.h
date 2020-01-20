@@ -18,6 +18,10 @@ public:
     std::string name() const override {
         return "PFM";
     }
+
+    bool hasPremultipliedAlpha() const override {
+        return false;
+    }
 };
 
 TEV_NAMESPACE_END
