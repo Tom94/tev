@@ -157,6 +157,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addSpacer(about, 30);
 
         addLibrary(about, "args",              "", "Single-Header Argument Parsing Library");
+        addLibrary(about, "clip",              "", "Cross-Platform Clipboard Library");
         addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra");
         addLibrary(about, "filesystem",        "", "Lightweight Path Manipulation Library");
         addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
@@ -167,6 +168,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format");
         addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
         addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement");
+        addLibrary(about, "tinylogger",        "", "Minimal Pretty-Logging Library");
         addLibrary(about, "UTF8-CPP",          "", "Lightweight UTF-8 String Manipulation Library");
     }
 
