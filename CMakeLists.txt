@@ -93,8 +93,11 @@ endif()
 set(TEV_SOURCES
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
+    include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
+    include/tev/imageio/StbiHdrImageSaver.h src/imageio/StbiHdrImageSaver.cpp
     include/tev/imageio/StbiImageLoader.h src/imageio/StbiImageLoader.cpp
+    include/tev/imageio/StbiLdrImageSaver.h src/imageio/StbiLdrImageSaver.cpp
 
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp

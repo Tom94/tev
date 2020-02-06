@@ -5,11 +5,10 @@
 #include <tev/ImageCanvas.h>
 #include <tev/ThreadPool.h>
 
+#include <tev/imageio/ImageSaver.h>
+
 #include <nanogui/theme.h>
 #include <nanogui/screen.h>
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
 
 #include <fstream>
 #include <numeric>
@@ -410,49 +409,56 @@ void ImageCanvas::saveImage(const path& path) {
         }
     }
 
-    static const auto stbiOfstreamWrite = [](void* context, void* data, int size) {
-        reinterpret_cast<ofstream*>(context)->write(reinterpret_cast<char*>(data), size);
-    };
-
-    string extension = toLower(path.extension());
-    if (extension == "hdr") {
-        // Store as HDR image.
-        stbi_write_hdr_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, floatData.data());
-    } else {
-        // Store as LDR image.
-        vector<char> byteData(floatData.size());
-        pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
-            size_t start = 4 * i;
-            Vector3f value = applyTonemap({
-                applyExposureAndOffset(floatData[start]),
-                applyExposureAndOffset(floatData[start + 1]),
-                applyExposureAndOffset(floatData[start + 2]),
-            });
-            for (int j = 0; j < 3; ++j) {
-                floatData[start + j] = value[j];
-            }
-            for (int j = 0; j < 4; ++j) {
-                byteData[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
-            }
-        });
-
-        if (extension == "jpg" || extension == "jpeg") {
-            stbi_write_jpg_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data(), 100);
-        } else if (extension == "png") {
-            stbi_write_png_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data(), 0);
-        } else if (extension == "bmp") {
-            stbi_write_bmp_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data());
-        } else if (extension == "tga") {
-            stbi_write_tga_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), 4, byteData.data());
-        } else {
-            throw invalid_argument{tfm::format("Image '%s' has unknown format.", path)};
+    for (const auto& saver : ImageSaver::getSavers()) {
+        if (!saver->canSaveFile(path)) {
+            continue;
         }
+
+        // Premultiply alpha if needed
+        if (saver->hasPremultipliedAlpha()) {
+            pool.parallelFor(0, min((int)channels.size(), 3), [&floatData,numPixels](int i) {
+                for (DenseIndex j = 0; j < numPixels; ++j) {
+                    floatData[j * 4 + i] *= floatData[j * 4 + 3];
+                }
+            });
+        }
+
+        const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
+        const auto* ldrSaver = dynamic_cast<const TypedImageSaver<char>*>(saver.get());
+
+        TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
+
+        if (hdrSaver) {
+            hdrSaver->save(f, path, floatData, imageSize, 4);
+        } else if (ldrSaver) {
+            // Store as LDR image.
+            vector<char> byteData(floatData.size());
+            pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+                size_t start = 4 * i;
+                Vector3f value = applyTonemap({
+                    applyExposureAndOffset(floatData[start]),
+                    applyExposureAndOffset(floatData[start + 1]),
+                    applyExposureAndOffset(floatData[start + 2]),
+                });
+                for (int j = 0; j < 3; ++j) {
+                    floatData[start + j] = value[j];
+                }
+                for (int j = 0; j < 4; ++j) {
+                    byteData[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
+                }
+            });
+
+            ldrSaver->save(f, path, byteData, imageSize, 4);
+        }
+
+        auto end = chrono::system_clock::now();
+        chrono::duration<double> elapsedSeconds = end - start;
+
+        tlog::success() << tfm::format("Saved '%s' after %.3f seconds.", path, elapsedSeconds.count());
+        return;
     }
 
-    auto end = chrono::system_clock::now();
-    chrono::duration<double> elapsedSeconds = end - start;
-
-    tlog::success() << tfm::format("Saved '%s' after %.3f seconds.", path, elapsedSeconds.count());
+    throw invalid_argument{tfm::format("No save routine for image type '%s' found.", path.extension())};
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
