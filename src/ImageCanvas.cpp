@@ -208,7 +208,7 @@ void ImageCanvas::scale(float amount, const Vector2f& origin) {
     mTransform = scaleTransform * mTransform;
 }
 
-float ImageCanvas::applyExposureAndOffset(float value) {
+float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
@@ -368,20 +368,90 @@ void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
 }
 
-void ImageCanvas::saveImage(const path& path) {
+std::vector<float> ImageCanvas::getHdrImageData(bool premultiplyAlpha) const {
+    std::vector<float> result;
+
+    if (!mImage) {
+        return result;
+    }
+
+    const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
+    auto numPixels = mImage->count();
+
+    if (channels.empty()) {
+        return result;
+    }
+
+    int nChannelsToSave = std::min((int)channels.size(), 4);
+
+    // Flatten image into vector
+    result.resize(4 * numPixels, 0);
+
+    ThreadPool pool;
+    pool.parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
+        const auto& channelData = channels[i].data();
+        for (DenseIndex j = 0; j < channelData.size(); ++j) {
+            result[j * 4 + i] = channelData(j);
+        }
+    });
+
+    // Manually set alpha channel to 1 if the image does not have one.
+    if (nChannelsToSave < 4) {
+        for (DenseIndex i = 0; i < numPixels; ++i) {
+            result[i * 4 + 3] = 1;
+        }
+    }
+
+    // Premultiply alpha if needed
+    if (premultiplyAlpha) {
+        pool.parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
+            for (DenseIndex j = 0; j < numPixels; ++j) {
+                result[j * 4 + i] *= result[j * 4 + 3];
+            }
+        });
+    }
+
+    return result;
+}
+
+std::vector<char> ImageCanvas::getLdrImageData(bool premultiplyAlpha) const {
+    std::vector<char> result;
+
+    if (!mImage) {
+        return result;
+    }
+
+    auto numPixels = mImage->count();
+    auto floatData = getHdrImageData(premultiplyAlpha);
+
+    // Store as LDR image.
+    result.resize(floatData.size());
+
+    ThreadPool pool;
+    pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        size_t start = 4 * i;
+        Vector3f value = applyTonemap({
+            applyExposureAndOffset(floatData[start]),
+            applyExposureAndOffset(floatData[start + 1]),
+            applyExposureAndOffset(floatData[start + 2]),
+        });
+        for (int j = 0; j < 3; ++j) {
+            floatData[start + j] = value[j];
+        }
+        for (int j = 0; j < 4; ++j) {
+            result[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
+        }
+    });
+
+    return result;
+}
+
+void ImageCanvas::saveImage(const path& path) const {
     if (!mImage) {
         return;
     }
 
-    const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
     Vector2i imageSize = mImage->size();
-    auto numPixels = mImage->count();
-
-    TEV_ASSERT(channels.size() <= 4, "Can not save an image with more than 4 channels.");
-
-    if (channels.empty()) {
-        return;
-    }
 
     tlog::info() << "Saving currently displayed image as '" << path << "'.";
     auto start = chrono::system_clock::now();
@@ -391,36 +461,9 @@ void ImageCanvas::saveImage(const path& path) {
         throw invalid_argument{tfm::format("Could not open file %s", path)};
     }
 
-    // Flatten channels into single array
-    vector<float> floatData(4 * channels.front().count(), 0);
-
-    ThreadPool pool;
-    pool.parallelFor(0, (int)channels.size(), [&channels, &floatData](int i) {
-        const auto& channelData = channels[i].data();
-        for (DenseIndex j = 0; j < channelData.size(); ++j) {
-            floatData[j * 4 + i] = channelData(j);
-        }
-    });
-
-    // Manually set alpha channel to 1 if the image does not have one.
-    if (channels.size() < 4) {
-        for (DenseIndex i = 0; i < numPixels; ++i) {
-            floatData[i * 4 + 3] = 1;
-        }
-    }
-
     for (const auto& saver : ImageSaver::getSavers()) {
         if (!saver->canSaveFile(path)) {
             continue;
-        }
-
-        // Premultiply alpha if needed
-        if (saver->hasPremultipliedAlpha()) {
-            pool.parallelFor(0, min((int)channels.size(), 3), [&floatData,numPixels](int i) {
-                for (DenseIndex j = 0; j < numPixels; ++j) {
-                    floatData[j * 4 + i] *= floatData[j * 4 + 3];
-                }
-            });
         }
 
         const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
@@ -429,26 +472,9 @@ void ImageCanvas::saveImage(const path& path) {
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, floatData, imageSize, 4);
+            hdrSaver->save(f, path, getHdrImageData(saver->hasPremultipliedAlpha()), imageSize, 4);
         } else if (ldrSaver) {
-            // Store as LDR image.
-            vector<char> byteData(floatData.size());
-            pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
-                size_t start = 4 * i;
-                Vector3f value = applyTonemap({
-                    applyExposureAndOffset(floatData[start]),
-                    applyExposureAndOffset(floatData[start + 1]),
-                    applyExposureAndOffset(floatData[start + 2]),
-                });
-                for (int j = 0; j < 3; ++j) {
-                    floatData[start + j] = value[j];
-                }
-                for (int j = 0; j < 4; ++j) {
-                    byteData[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
-                }
-            });
-
-            ldrSaver->save(f, path, byteData, imageSize, 4);
+            ldrSaver->save(f, path, getLdrImageData(saver->hasPremultipliedAlpha()), imageSize, 4);
         }
 
         auto end = chrono::system_clock::now();

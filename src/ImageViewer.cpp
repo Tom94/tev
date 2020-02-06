@@ -3,6 +3,8 @@
 
 #include <tev/ImageViewer.h>
 
+#include <clip.h>
+
 #include <filesystem/path.h>
 
 #include <nanogui/button.h>
@@ -619,7 +621,35 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             setVisible(false);
             return true;
         } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
-            glfwSetClipboardString(mGLFWWindow, mCurrentImage->name().c_str());
+            using namespace clip;
+
+            if (mImageScrollContainer->focused()) {
+                set_text(mCurrentImage->name());
+                tlog::success() << "Image path copied to clipboard.";
+            } else {
+                auto imageSize = mCurrentImage->size();
+
+                image_spec imageMetadata;
+                imageMetadata.width = imageSize.x();
+                imageMetadata.height = imageSize.y();
+                imageMetadata.bits_per_pixel = 32;
+                imageMetadata.bytes_per_row = imageMetadata.bits_per_pixel / 8 * imageMetadata.width;
+
+                imageMetadata.red_mask    = 0x000000ff;
+                imageMetadata.green_mask  = 0x0000ff00;
+                imageMetadata.blue_mask   = 0x00ff0000;
+                imageMetadata.alpha_mask  = 0xff000000;
+                imageMetadata.red_shift   = 0;
+                imageMetadata.green_shift = 8;
+                imageMetadata.blue_shift  = 16;
+                imageMetadata.alpha_shift = 24;
+
+                auto imageData = mImageCanvas->getLdrImageData(false);
+                image image(imageData.data(), imageMetadata);
+
+                set_image(image);
+                tlog::success() << "Image copied to clipboard.";
+            }
         }
     }
 

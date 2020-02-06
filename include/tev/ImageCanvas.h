@@ -49,7 +49,7 @@ public:
         mGamma = gamma;
     }
 
-    float applyExposureAndOffset(float value);
+    float applyExposureAndOffset(float value) const;
 
     void setImage(std::shared_ptr<Image> image) {
         mImage = image;
@@ -114,7 +114,10 @@ public:
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
-    void saveImage(const filesystem::path& filename);
+    std::vector<float> getHdrImageData(bool premultiplyAlpha) const;
+    std::vector<char> getLdrImageData(bool premultiplyAlpha) const;
+
+    void saveImage(const filesystem::path& filename) const;
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
