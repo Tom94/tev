@@ -7,10 +7,10 @@ echo "Building backwards-compatible tev..."
 BUILD_DIR="build-dmg"
 
 mkdir $BUILD_DIR && cd $BUILD_DIR
-MACOSX_DEPLOYMENT_TARGET=10.9
+MACOSX_DEPLOYMENT_TARGET=10.10
 cmake \
-    -DCMAKE_OSX_SYSROOT=/Users/tom94/Projects/MacOSX-SDKs/MacOSX10.9.sdk/ \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 \
+    -DCMAKE_OSX_SYSROOT=/Users/tom94/Projects/MacOSX-SDKs/MacOSX10.10.sdk/ \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=10.10 \
     -DTEV_DEPLOY=1 \
     ../..
 make -j
