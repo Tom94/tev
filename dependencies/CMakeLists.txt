@@ -46,13 +46,14 @@ add_subdirectory(openexr EXCLUDE_FROM_ALL)
 set_property(TARGET b44ExpLogTable CopyIlmBaseLibs dwaLookups eLut Half Iex IlmImf IlmImf-obj IlmThread Imath toFloat PROPERTY FOLDER "dependencies")
 
 # Compile clip
-set(CLIP_EXAMPLES off)
-set(CLIP_TESTS off)
+set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
+set(CLIP_TESTS OFF CACHE BOOL " " FORCE)
 add_subdirectory(clip)
-set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
 
 # Manually populate locations of our included dependencies.
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
+
+set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
 
 set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/eigen PARENT_SCOPE)
 
