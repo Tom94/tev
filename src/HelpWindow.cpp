@@ -62,6 +62,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(imageLoading, COMMAND + "+Shift+R or " + COMMAND + "+F5", "Reload All Images");
         addRow(imageLoading, COMMAND + "+W",                             "Close Image");
         addRow(imageLoading, COMMAND + "+Shift+W",                       "Close All Images");
+        addRow(imageLoading, COMMAND + "+C",                             "Copy Image or Path to Clipboard");
 
         new Label{shortcuts, "Image Options", "sans-bold", 18};
         auto imageSelection = new Widget{shortcuts};
