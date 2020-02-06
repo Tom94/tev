@@ -85,7 +85,7 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
     endif()
 endif()
 
-set(TEV_LIBS IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+set(TEV_LIBS clip IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
 endif()
@@ -143,6 +143,7 @@ endif()
 
 include_directories(
     ${ARGS_INCLUDE}
+    ${CLIP_INCLUDE}
     ${EIGEN_INCLUDE}
     ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}

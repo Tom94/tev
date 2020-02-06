@@ -22,3 +22,6 @@
 [submodule "dependencies/tinylogger"]
 	path = dependencies/tinylogger
 	url = https://github.com/Tom94/tinylogger
+[submodule "dependencies/clip"]
+	path = dependencies/clip
+	url = https://github.com/dacap/clip
