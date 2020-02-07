@@ -11,44 +11,44 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool StbiImageLoader::canLoadFile(ifstream&) const {
+bool StbiImageLoader::canLoadFile(istream&) const {
     // Pretend you can load any file and throw exception on failure.
     // TODO: Add proper check.
     return true;
 }
 
-ImageData StbiImageLoader::load(ifstream& f, const filesystem::path&, const string& channelSelector) const {
+ImageData StbiImageLoader::load(istream& iStream, const filesystem::path&, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 
     static const stbi_io_callbacks callbacks = {
         // Read
         [](void* context, char* data, int size) {
-            auto stream = reinterpret_cast<ifstream*>(context);
+            auto stream = reinterpret_cast<istream*>(context);
             stream->read(data, size);
             return (int)stream->gcount();
         },
         // Seek
         [](void* context, int size) {
-            reinterpret_cast<ifstream*>(context)->seekg(size, ios_base::cur);
+            reinterpret_cast<istream*>(context)->seekg(size, ios_base::cur);
         },
         // EOF
         [](void* context) {
-            return (int)!!(*reinterpret_cast<ifstream*>(context));
+            return (int)!!(*reinterpret_cast<istream*>(context));
         },
     };
 
     void* data;
     int numChannels;
     Vector2i size;
-    bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &f) != 0;
-    f.clear();
-    f.seekg(0);
+    bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &iStream) != 0;
+    iStream.clear();
+    iStream.seekg(0);
 
     if (isHdr) {
-        data = stbi_loadf_from_callbacks(&callbacks, &f, &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_loadf_from_callbacks(&callbacks, &iStream, &size.x(), &size.y(), &numChannels, 0);
     } else {
-        data = stbi_load_from_callbacks(&callbacks, &f, &size.x(), &size.y(), &numChannels, 0);
+        data = stbi_load_from_callbacks(&callbacks, &iStream, &size.x(), &size.y(), &numChannels, 0);
     }
 
     if (!data) {

@@ -6,14 +6,14 @@
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
 
-#include <fstream>
+#include <istream>
 
 TEV_NAMESPACE_BEGIN
 
 class ExrImageLoader : public ImageLoader {
 public:
-    bool canLoadFile(std::ifstream& f) const override;
-    ImageData load(std::ifstream& f, const filesystem::path& path, const std::string& channelSelector) const override;
+    bool canLoadFile(std::istream& iStream) const override;
+    ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector) const override;
 
     std::string name() const override {
         return "OpenEXR";

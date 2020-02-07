@@ -9,30 +9,93 @@
 #include <ImfInputPart.h>
 #include <ImfMultiPartInputFile.h>
 #include <ImfStdIO.h>
+#include <Iex.h>
+
+#include <fstream>
+#include <sstream>
+
+#include <errno.h>
 
 using namespace Eigen;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-bool ExrImageLoader::canLoadFile(ifstream& f) const {
+
+class StdIStream: public Imf::IStream
+{
+public:
+    StdIStream(istream& stream, const char fileName[])
+    : Imf::IStream{fileName}, mStream{stream} {
+
+    }
+
+    bool read(char c[/*n*/], int n) override {
+        if (!mStream)
+            throw IEX_NAMESPACE::InputExc("Unexpected end of file.");
+
+        clearError();
+        mStream.read(c, n);
+        return checkError(mStream, n);
+    }
+
+    Imf::Int64 tellg() override {
+        return streamoff(mStream.tellg());
+    }
+
+    void seekg(Imf::Int64 pos) override {
+        mStream.seekg(pos);
+        checkError(mStream);
+    }
+
+    void clear() override {
+        mStream.clear();
+    }
+
+private:
+    // The following error-checking functions were copy&pasted from the OpenEXR source code
+    static void clearError() {
+        errno = 0;
+    }
+
+    static bool checkError(istream& is, streamsize expected = 0) {
+        if (!is) {
+            if (errno) {
+                IEX_NAMESPACE::throwErrnoExc();
+            }
+
+            if (is.gcount() < expected) {
+                THROW (IEX_NAMESPACE::InputExc, "Early end of file: read " << is.gcount() 
+                    << " out of " << expected << " requested bytes.");
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    istream& mStream;
+};
+
+bool ExrImageLoader::canLoadFile(istream& iStream) const {
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
     char b[4];
-    f.read(b, sizeof(b));
+    iStream.read(b, sizeof(b));
 
-    bool result = !!f && f.gcount() == sizeof(b) && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
+    bool result = !!iStream && iStream.gcount() == sizeof(b) && b[0] == 0x76 && b[1] == 0x2f && b[2] == 0x31 && b[3] == 0x01;
 
-    f.clear();
-    f.seekg(0);
+    iStream.clear();
+    iStream.seekg(0);
     return result;
 }
 
-ImageData ExrImageLoader::load(ifstream& f, const filesystem::path& path, const string& channelSelector) const {
+ImageData ExrImageLoader::load(istream& iStream, const filesystem::path& path, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 
-    Imf::StdIFStream imfStream{f, path.str().c_str()};
-    Imf::MultiPartInputFile multiPartFile{imfStream};
+    StdIStream stdIStream{iStream, path.str().c_str()};
+    Imf::MultiPartInputFile multiPartFile{stdIStream};
     int numParts = multiPartFile.parts();
 
     if (numParts <= 0) {
