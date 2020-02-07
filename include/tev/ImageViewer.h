@@ -202,6 +202,8 @@ private:
     bool mIsDraggingImage = false;
 
     Eigen::Vector2f mDraggingStartPosition;
+
+    size_t mClipboardIndex = 0;
 };
 
 TEV_NAMESPACE_END
