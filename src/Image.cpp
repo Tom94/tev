@@ -8,7 +8,8 @@
 #include <Iex.h>
 
 #include <chrono>
-#include <iostream>
+#include <fstream>
+#include <istream>
 
 using namespace Eigen;
 using namespace filesystem;

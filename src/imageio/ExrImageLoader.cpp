@@ -8,11 +8,9 @@
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
 #include <ImfMultiPartInputFile.h>
-#include <ImfStdIO.h>
 #include <Iex.h>
 
-#include <fstream>
-#include <sstream>
+#include <istream>
 
 #include <errno.h>
 

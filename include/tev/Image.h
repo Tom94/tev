@@ -9,7 +9,7 @@
 #include <tev/ThreadPool.h>
 
 #include <atomic>
-#include <fstream>
+#include <istream>
 #include <map>
 #include <memory>
 #include <string>

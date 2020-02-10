@@ -15,11 +15,11 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 void StbiHdrImageSaver::save(ostream& oStream, const path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
-    static const auto stbiOfstreamWrite = [](void* context, void* data, int size) {
+    static const auto stbiOStreamWrite = [](void* context, void* data, int size) {
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(data), size);
     };
 
-    stbi_write_hdr_to_func(stbiOfstreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
+    stbi_write_hdr_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
 }
 
 TEV_NAMESPACE_END
