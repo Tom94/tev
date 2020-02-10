@@ -621,15 +621,16 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             setVisible(false);
             return true;
         } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
-            using namespace clip;
-
             if (mImageScrollContainer->focused()) {
-                set_text(mCurrentImage->name());
-                tlog::success() << "Image path copied to clipboard.";
+                if (clip::set_text(mCurrentImage->name())) {
+                    tlog::success() << "Image path copied to clipboard.";
+                } else {
+                    tlog::error() << "Failed to copy image path to clipboard.";
+                }
             } else {
                 auto imageSize = mCurrentImage->size();
 
-                image_spec imageMetadata;
+                clip::image_spec imageMetadata;
                 imageMetadata.width = imageSize.x();
                 imageMetadata.height = imageSize.y();
                 imageMetadata.bits_per_pixel = 32;
@@ -645,10 +646,48 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                 imageMetadata.alpha_shift = 24;
 
                 auto imageData = mImageCanvas->getLdrImageData(false);
-                image image(imageData.data(), imageMetadata);
+                clip::image image(imageData.data(), imageMetadata);
 
-                set_image(image);
-                tlog::success() << "Image copied to clipboard.";
+                if (clip::set_image(image)) {
+                    tlog::success() << "Image copied to clipboard.";
+                } else {
+                    tlog::error() << "Failed to copy image to clipboard.";
+                }
+            }
+        } else if (key == GLFW_KEY_V && (modifiers & SYSTEM_COMMAND_MOD)) {
+            // if (clip::has(clip::text_format())) {
+            //     string path;
+            //     if (!clip::get_text(path)) {
+            //         tlog::error() << "Failed to paste text from clipboard.";
+            //     } else {
+            //         auto image = tryLoadImage(path, "");
+            //         if (image) {
+            //             addImage(image, true);
+            //         } else {
+            //             tlog::error() << tfm::format("Failed to load image from clipboard path: %s", path);
+            //         }
+            //     }
+            // } else
+            if (clip::has(clip::image_format())) {
+                clip::image clipImage;
+                if (!clip::get_image(clipImage)) {
+                    tlog::error() << "Failed to paste image from clipboard.";
+                } else {
+                    tlog::info() << "Loading image from clipboard...";
+                    stringstream imageStream;
+                    imageStream
+                        << "clip"
+                        << string(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec))
+                        << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height)
+                        ;
+
+                    auto image = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "");
+                    if (image) {
+                        addImage(image, true);
+                    } else {
+                        tlog::error() << "Failed to load image from clipboard data.";
+                    }
+                }
             }
         }
     }

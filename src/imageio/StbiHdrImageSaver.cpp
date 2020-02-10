@@ -5,7 +5,7 @@
 
 #include <stb_image_write.h>
 
-#include <fstream>
+#include <ostream>
 #include <vector>
 
 using namespace Eigen;
@@ -14,12 +14,12 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-void StbiHdrImageSaver::save(ofstream& f, const path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
-    static const auto stbiOfstreamWrite = [](void* context, void* data, int size) {
-        reinterpret_cast<ofstream*>(context)->write(reinterpret_cast<char*>(data), size);
+void StbiHdrImageSaver::save(ostream& oStream, const path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
+    static const auto stbiOStreamWrite = [](void* context, void* data, int size) {
+        reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(data), size);
     };
 
-    stbi_write_hdr_to_func(stbiOfstreamWrite, &f, imageSize.x(), imageSize.y(), nChannels, data.data());
+    stbi_write_hdr_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
 }
 
 TEV_NAMESPACE_END

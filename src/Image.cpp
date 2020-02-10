@@ -8,7 +8,8 @@
 #include <Iex.h>
 
 #include <chrono>
-#include <iostream>
+#include <fstream>
+#include <istream>
 
 using namespace Eigen;
 using namespace filesystem;
@@ -18,34 +19,29 @@ TEV_NAMESPACE_BEGIN
 
 atomic<int> Image::sId(0);
 
-Image::Image(const filesystem::path& path, const string& channelSelector)
+Image::Image(const filesystem::path& path, istream& iStream, const string& channelSelector)
 : mPath{path}, mChannelSelector{channelSelector}, mId{sId++} {
-    if (!channelSelector.empty()) {
-        mName = tfm::format("%s:%s", path, channelSelector);
-    } else {
-        mName = path.str();
-    }
+    mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
 
     auto start = chrono::system_clock::now();
 
-    ifstream f{nativeString(mPath), ios_base::binary};
-    if (!f) {
-        throw invalid_argument{tfm::format("File %s could not be opened.", mPath)};
+    if (!iStream) {
+        throw invalid_argument{tfm::format("Image %s could not be opened.", mName)};
     }
 
     std::string loadMethod;
     for (const auto& imageLoader : ImageLoader::getLoaders()) {
         // If we arrived at the last loader, then we want to at least try loading the image,
         // even if it is likely to fail.
-        bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(f);
+        bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(iStream);
 
         // Reset file cursor in case file load check changed it.
-        f.clear();
-        f.seekg(0);
+        iStream.clear();
+        iStream.seekg(0);
 
         if (useLoader) {
             loadMethod = imageLoader->name();
-            mData = imageLoader->load(f, mPath, mChannelSelector);
+            mData = imageLoader->load(iStream, mPath, mChannelSelector);
             ensureValid();
 
             if (imageLoader->hasPremultipliedAlpha()) {
@@ -60,7 +56,7 @@ Image::Image(const filesystem::path& path, const string& channelSelector)
 
     ensureValid();
 
-    tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mPath, loadMethod, elapsedSeconds.count());
+    tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mName, loadMethod, elapsedSeconds.count());
 }
 
 string Image::shortName() const {
@@ -203,14 +199,7 @@ void Image::ensureValid() {
     }
 }
 
-shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
-    try {
-        path = path.make_absolute();
-    } catch (runtime_error e) {
-        // If for some strange reason we can not obtain an absolute path, let's still
-        // try to open the image at the given path just to make sure.
-    }
-
+shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
@@ -220,7 +209,7 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     };
 
     try {
-        return make_shared<Image>(path, channelSelector);
+        return make_shared<Image>(path, iStream, channelSelector);
     } catch (const invalid_argument& e) {
         handleException(e);
     } catch (const runtime_error& e) {
@@ -230,6 +219,18 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     }
 
     return nullptr;
+}
+
+shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
+    try {
+        path = path.make_absolute();
+    } catch (runtime_error e) {
+        // If for some strange reason we can not obtain an absolute path, let's still
+        // try to open the image at the given path just to make sure.
+    }
+
+    ifstream fileStream{nativeString(path), ios_base::binary};
+    return tryLoadImage(path, fileStream, channelSelector);
 }
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {

@@ -6,7 +6,7 @@
 #include <tev/Channel.h>
 #include <tev/Image.h>
 
-#include <fstream>
+#include <istream>
 #include <string>
 
 TEV_NAMESPACE_BEGIN
@@ -15,8 +15,8 @@ class ImageLoader {
 public:
     virtual ~ImageLoader() {}
 
-    virtual bool canLoadFile(std::ifstream& f) const = 0;
-    virtual ImageData load(std::ifstream& f, const filesystem::path& path, const std::string& channelSelector) const = 0;
+    virtual bool canLoadFile(std::istream& iStream) const = 0;
+    virtual ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector) const = 0;
 
     virtual std::string name() const = 0;
 

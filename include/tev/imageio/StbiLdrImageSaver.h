@@ -5,13 +5,13 @@
 
 #include <tev/imageio/ImageSaver.h>
 
-#include <fstream>
+#include <ostream>
 
 TEV_NAMESPACE_BEGIN
 
 class StbiLdrImageSaver : public TypedImageSaver<char> {
 public:
-    void save(std::ofstream& f, const filesystem::path& path, const std::vector<char>& data, const Eigen::Vector2i& imageSize, int nChannels) const override;
+    void save(std::ostream& oStream, const filesystem::path& path, const std::vector<char>& data, const Eigen::Vector2i& imageSize, int nChannels) const override;
 
     bool hasPremultipliedAlpha() const override {
         return false;

@@ -10,17 +10,17 @@
 
 TEV_NAMESPACE_BEGIN
 
-class ExrImageLoader : public ImageLoader {
+class ClipboardImageLoader : public ImageLoader {
 public:
     bool canLoadFile(std::istream& iStream) const override;
     ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector) const override;
 
     std::string name() const override {
-        return "OpenEXR";
+        return "clipboard";
     }
 
     bool hasPremultipliedAlpha() const override {
-        return true;
+        return false;
     }
 };
 

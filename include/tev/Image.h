@@ -9,6 +9,7 @@
 #include <tev/ThreadPool.h>
 
 #include <atomic>
+#include <istream>
 #include <map>
 #include <memory>
 #include <string>
@@ -25,7 +26,7 @@ struct ImageData {
 
 class Image {
 public:
-    Image(const filesystem::path& path, const std::string& channelSelector);
+    Image(const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
 
     const filesystem::path& path() const {
         return mPath;
@@ -104,6 +105,7 @@ private:
     const int mId;
 };
 
+std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);
 std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::string channelSelector);
 
 struct ImageAddition {
