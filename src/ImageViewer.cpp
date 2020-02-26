@@ -1199,7 +1199,7 @@ void ImageViewer::normalizeExposureAndOffset() {
         return;
     }
 
-    auto channels = mImageCanvas->getChannels(*mCurrentImage);
+    auto channels = mImageCanvas->getGroupedChannels(*mCurrentImage);
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::min();
