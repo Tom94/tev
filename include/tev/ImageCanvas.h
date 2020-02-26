@@ -63,6 +63,11 @@ public:
         mRequestedLayer = layerName;
     }
 
+    static std::vector<std::string> getGroupedChannels(const Image& image, const std::string& requestedLayer);
+    std::vector<std::string> getGroupedChannels(const Image& image) const {
+        return getGroupedChannels(image, mRequestedLayer);
+    }
+
     static std::vector<std::string> getChannels(const Image& image, const std::string& requestedLayer);
     std::vector<std::string> getChannels(const Image& image) const {
         return getChannels(image, mRequestedLayer);

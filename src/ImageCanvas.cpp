@@ -60,7 +60,7 @@ void ImageCanvas::drawGL() {
         mShader.draw(
             2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
             Vector2f::Constant(20),
-            image->texture(getChannels(*image)),
+            image->texture(getGroupedChannels(*image)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(image).inverse().matrix(),
@@ -75,11 +75,11 @@ void ImageCanvas::drawGL() {
     mShader.draw(
         2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
         Vector2f::Constant(20),
-        mImage->texture(getChannels(*mImage)),
+        mImage->texture(getGroupedChannels(*mImage)),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
         transform(mImage.get()).inverse().matrix(),
-        mReference->texture(getChannels(*mReference)),
+        mReference->texture(getGroupedChannels(*mReference)),
         transform(mReference.get()).inverse().matrix(),
         mExposure,
         mOffset,
@@ -112,9 +112,6 @@ void ImageCanvas::draw(NVGcontext *ctx) {
         };
 
         if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
-            float fontSize = pixelSize.x() / 6;
-            float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
-
             vector<string> channels = getChannels(*mImage);
             // Remove duplicates
             channels.erase(unique(begin(channels), end(channels)), end(channels));
@@ -123,6 +120,12 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             for (const auto& channel : channels) {
                 colors.emplace_back(Channel::color(channel));
             }
+
+            float fontSize = pixelSize.x() / 6;
+            if (colors.size() > 4) {
+                fontSize *= 4.0f / colors.size();
+            }
+            float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
 
             nvgFontSize(ctx, fontSize);
             nvgFontFace(ctx, "sans");
@@ -212,7 +215,7 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-vector<string> ImageCanvas::getChannels(const Image& image, const string& requestedLayer) {
+vector<string> ImageCanvas::getGroupedChannels(const Image& image, const string& requestedLayer) {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
         { "r", "g", "b" },
@@ -228,8 +231,8 @@ vector<string> ImageCanvas::getChannels(const Image& image, const string& reques
 
     vector<string> result;
     for (const auto& group : groups) {
-        for (size_t i = 0; i < group.size(); ++i) {
-            const auto& name = layerPrefix + group[i];
+        for (const string& channel : group) {
+            string name = layerPrefix + channel;
             if (image.hasChannel(name)) {
                 result.emplace_back(name);
             }
@@ -277,6 +280,17 @@ vector<string> ImageCanvas::getChannels(const Image& image, const string& reques
     return result;
 }
 
+vector<string> ImageCanvas::getChannels(const Image& image, const string& requestedLayer) {
+    vector<string> result = getGroupedChannels(image, requestedLayer);
+    const auto& allChannelNames = image.channelsInLayer(requestedLayer);
+    for (const auto& name : allChannelNames) {
+        if (find(begin(result), end(result), name) == end(result)) {
+            result.emplace_back(name);
+        }
+    }
+    return result;
+}
+
 Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
     Vector2f imagePos = textureToNanogui(&image).inverse() * mousePos.cast<float>();
     return {
@@ -299,7 +313,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
     // Subtract reference if it exists.
     if (mReference) {
         Vector2i referenceCoords = getImageCoords(*mReference, nanoPos);
-        const auto& referenceChannels = getChannels(*mReference);
+        const auto& referenceChannels = getGroupedChannels(*mReference);
         for (size_t i = 0; i < result.size(); ++i) {
             float reference = i < referenceChannels.size() ?
                 mReference->channel(referenceChannels[i])->eval(referenceCoords) :
@@ -492,7 +506,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         return nullptr;
     }
 
-    string channels = join(getChannels(*mImage), ",");
+    string channels = join(getGroupedChannels(*mImage), ",");
     string key = mReference ?
         tfm::format("%d-%s-%d-%d", mImage->id(), channels, mReference->id(), mMetric) :
         tfm::format("%d-%s", mImage->id(), channels);
@@ -525,7 +539,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     }
 
     vector<Channel> result;
-    const auto& channelNames = getChannels(*image, requestedLayer);
+    const auto& channelNames = getGroupedChannels(*image, requestedLayer);
     for (size_t i = 0; i < channelNames.size(); ++i) {
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
     }
@@ -543,7 +557,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     } else {
         Vector2i size = image->size();
         Vector2i offset = (reference->size() - size) / 2;
-        const auto& referenceChannels = getChannels(*reference, requestedLayer);
+        const auto& referenceChannels = getGroupedChannels(*reference, requestedLayer);
 
         ThreadPool pool;
         pool.parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
