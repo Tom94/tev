@@ -1380,7 +1380,7 @@ void ImageViewer::saveImageDialog() {
 
     path path = ensureUtf8(file_dialog(
     {
-        //{"exr",  "OpenEXR image"},
+        {"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},
         {"bmp",  "Bitmap Image File"},
         {"jpg",  "JPEG image"},

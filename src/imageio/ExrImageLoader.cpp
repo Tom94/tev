@@ -19,14 +19,11 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-
 class StdIStream: public Imf::IStream
 {
 public:
     StdIStream(istream& stream, const char fileName[])
-    : Imf::IStream{fileName}, mStream{stream} {
-
-    }
+    : Imf::IStream{fileName}, mStream{stream} { }
 
     bool read(char c[/*n*/], int n) override {
         if (!mStream)
