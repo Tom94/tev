@@ -61,4 +61,10 @@ void Channel::divideByAsync(const Channel& other, ThreadPool& pool) {
     });
 }
 
+void Channel::multiplyWithAsync(const Channel& other, ThreadPool& pool) {
+    pool.parallelForNoWait<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+        at(i) *= other.at(i);
+    });
+}
+
 TEV_NAMESPACE_END

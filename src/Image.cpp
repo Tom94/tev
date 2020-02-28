@@ -44,8 +44,9 @@ Image::Image(const filesystem::path& path, istream& iStream, const string& chann
             mData = imageLoader->load(iStream, mPath, mChannelSelector);
             ensureValid();
 
-            if (imageLoader->hasPremultipliedAlpha()) {
-                unmultiplyAlpha();
+            // We assume an internal pre-multiplied-alpha representation
+            if (!imageLoader->hasPremultipliedAlpha()) {
+                multiplyAlpha();
             }
             break;
         }
@@ -158,9 +159,7 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
-void Image::unmultiplyAlpha() {
-    ThreadPool threadPool;
-
+void Image::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
     for (const auto& layer : mData.layers) {
         string layerPrefix = layer.empty() ? "" : (layer + ".");
         string alphaChannelName = layerPrefix + "A";
@@ -172,11 +171,25 @@ void Image::unmultiplyAlpha() {
         const Channel* alphaChannel = channel(alphaChannelName);
         for (auto& channelName : channelsInLayer(layer)) {
             if (channelName != alphaChannelName) {
-                mutableChannel(channelName)->divideByAsync(*alphaChannel, threadPool);
+                func(*mutableChannel(channelName), *alphaChannel);
             }
         }
     }
+}
 
+void Image::multiplyAlpha() {
+    ThreadPool threadPool;
+    alphaOperation([&] (Channel& target, const Channel& alpha) {
+        target.multiplyWithAsync(alpha, threadPool);
+    });
+    threadPool.waitUntilFinished();
+}
+
+void Image::unmultiplyAlpha() {
+    ThreadPool threadPool;
+    alphaOperation([&] (Channel& target, const Channel& alpha) {
+        target.divideByAsync(alpha, threadPool);
+    });
     threadPool.waitUntilFinished();
 }
 

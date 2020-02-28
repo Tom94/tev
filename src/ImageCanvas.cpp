@@ -382,7 +382,7 @@ void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
 }
 
-std::vector<float> ImageCanvas::getHdrImageData(bool premultiplyAlpha) const {
+std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
     std::vector<float> result;
 
     if (!mImage) {
@@ -417,10 +417,15 @@ std::vector<float> ImageCanvas::getHdrImageData(bool premultiplyAlpha) const {
     }
 
     // Premultiply alpha if needed
-    if (premultiplyAlpha) {
+    if (divideAlpha) {
         pool.parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
             for (DenseIndex j = 0; j < numPixels; ++j) {
-                result[j * 4 + i] *= result[j * 4 + 3];
+                float alpha = result[j * 4 + 3];
+                if (alpha == 0) {
+                    result[j * 4 + i] = 0;
+                } else {
+                    result[j * 4 + i] /= result[j * 4 + 3];
+                }
             }
         });
     }
@@ -428,7 +433,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool premultiplyAlpha) const {
     return result;
 }
 
-std::vector<char> ImageCanvas::getLdrImageData(bool premultiplyAlpha) const {
+std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
     std::vector<char> result;
 
     if (!mImage) {
@@ -436,7 +441,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool premultiplyAlpha) const {
     }
 
     auto numPixels = mImage->count();
-    auto floatData = getHdrImageData(premultiplyAlpha);
+    auto floatData = getHdrImageData(divideAlpha);
 
     // Store as LDR image.
     result.resize(floatData.size());
@@ -486,9 +491,9 @@ void ImageCanvas::saveImage(const path& path) const {
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, getHdrImageData(saver->hasPremultipliedAlpha()), imageSize, 4);
+            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha()), imageSize, 4);
         } else if (ldrSaver) {
-            ldrSaver->save(f, path, getLdrImageData(saver->hasPremultipliedAlpha()), imageSize, 4);
+            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha()), imageSize, 4);
         }
 
         auto end = chrono::system_clock::now();

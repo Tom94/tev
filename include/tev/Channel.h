@@ -62,6 +62,7 @@ public:
     }
 
     void divideByAsync(const Channel& other, ThreadPool& pool);
+    void multiplyWithAsync(const Channel& other, ThreadPool& pool);
 
     static std::pair<std::string, std::string> split(const std::string& fullChannel);
 
