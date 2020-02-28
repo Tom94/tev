@@ -62,6 +62,7 @@ ImageData StbiImageLoader::load(istream& iStream, const filesystem::path&, const
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
     vector<Channel> channels = makeNChannels(numChannels, size);
+    int alphaChannelIndex = 3;
 
     auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
@@ -77,7 +78,11 @@ ImageData StbiImageLoader::load(istream& iStream, const filesystem::path&, const
         threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                if (c == alphaChannelIndex) {
+                    channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
+                } else {
+                    channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                }
             }
         });
     }
