@@ -416,7 +416,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
         }
     }
 
-    // Premultiply alpha if needed
+    // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
         pool.parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
             for (DenseIndex j = 0; j < numPixels; ++j) {
@@ -424,7 +424,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
                 if (alpha == 0) {
                     result[j * 4 + i] = 0;
                 } else {
-                    result[j * 4 + i] /= result[j * 4 + 3];
+                    result[j * 4 + i] /= alpha;
                 }
             }
         });

@@ -162,8 +162,6 @@ UberShader::UberShader()
                 return;
             }
 
-
-
             vec4 imageVal = sample(image, imageUv);
             if (!hasReference) {
                 color = vec4(
