@@ -82,9 +82,25 @@ UberShader::UberShader()
             return pow(2.0, exposure) * col + offset;
         }
 
+        vec3 applyInverseExposureAndOffset(vec3 col) {
+            return pow(2.0, -exposure) * (col - offset);
+        }
+
         vec3 falseColor(float v) {
             v = clamp(v, 0.0, 1.0);
             return texture(colormap, vec2(v, 0.5)).rgb;
+        }
+
+        float linear(float sRGB) {
+            if (sRGB > 1.0) {
+                return 1.0;
+            } else if (sRGB < 0.0) {
+                return 0.0;
+            } else if (sRGB <= 0.04045) {
+                return sRGB / 12.92;
+            } else {
+                return pow((sRGB + 0.055) / 1.055, 2.4);
+            }
         }
 
         float sRGB(float linear) {
@@ -99,13 +115,20 @@ UberShader::UberShader()
             }
         }
 
-        vec3 applyTonemap(vec3 col) {
+        vec3 applyTonemap(vec3 col, vec4 background) {
             switch (tonemap) {
-                case SRGB:        return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
-                case GAMMA:       return pow(col, vec3(1.0 / gamma));
+                case SRGB:
+                    col = col +
+                        (vec3(linear(background.r), linear(background.g), linear(background.b)) - offset) * background.a;
+                    return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
+                case GAMMA:
+                    col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
+                    return pow(col, vec3(1.0 / gamma));
                 // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
-                case FALSE_COLOR: return falseColor(log2(average(col)) / 10.0 + 0.5);
-                case POS_NEG:     return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0);
+                case FALSE_COLOR:
+                    return falseColor(log2(average(col)) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
+                case POS_NEG:
+                    return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0) + background.rgb * background.a;
             }
             return vec3(0.0);
         }
@@ -142,8 +165,7 @@ UberShader::UberShader()
             vec4 imageVal = sample(image, imageUv);
             if (!hasReference) {
                 color = vec4(
-                    applyTonemap(applyExposureAndOffset(imageVal.rgb)) * imageVal.a +
-                    checker * (1.0 - imageVal.a),
+                    applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                     1.0
                 );
                 return;
@@ -154,8 +176,7 @@ UberShader::UberShader()
             vec3 difference = imageVal.rgb - referenceVal.rgb;
             float alpha = (imageVal.a + referenceVal.a) * 0.5;
             color = vec4(
-                applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb))) * alpha +
-                checker * (1.0 - alpha),
+                applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
                 1.0
             );
         })"

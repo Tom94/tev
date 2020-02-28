@@ -119,8 +119,8 @@ public:
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
-    std::vector<float> getHdrImageData(bool premultiplyAlpha) const;
-    std::vector<char> getLdrImageData(bool premultiplyAlpha) const;
+    std::vector<float> getHdrImageData(bool divideAlpha) const;
+    std::vector<char> getLdrImageData(bool divideAlpha) const;
 
     void saveImage(const filesystem::path& filename) const;
 

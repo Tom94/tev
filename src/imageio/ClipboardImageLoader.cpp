@@ -49,8 +49,14 @@ ImageData ClipboardImageLoader::load(istream& iStream, const filesystem::path&, 
     }
 
     auto numChannels = (int)(spec.bits_per_pixel / 8);
+    if (numChannels > 4) {
+        throw invalid_argument{"Image has too many channels."};
+    }
+
+
     auto numBytesPerRow = numChannels * size.x();
     auto numBytes = (DenseIndex)numBytesPerRow * size.y();
+    int alphaChannelIndex = 3;
 
     vector<Channel> channels = makeNChannels(numChannels, size);
 
@@ -73,12 +79,22 @@ ImageData ClipboardImageLoader::load(istream& iStream, const filesystem::path&, 
         }
     }
 
+    // TODO: figure out when alpha is already premultiplied (prior to tonemapping).
+    //       clip doesn't properly handle this... so copy&pasting transparent images
+    //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
+    bool premultipliedAlpha = false && numChannels >= 4;
     threadPool.parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = y * numBytesPerRow + x * numChannels;
-            for (int c = 0; c < numChannels; ++c) {
+            for (int c = numChannels-1; c >= 0; --c) {
                 unsigned char val = data[baseIdx + shifts[c]];
-                channels[c].at({x, y}) = toLinear(val / 255.0f);
+                if (c == alphaChannelIndex) {
+                    channels[c].at({x, y}) = val / 255.0f;
+                } else {
+                    float alpha = premultipliedAlpha ? channels[alphaChannelIndex].at({x, y}) : 1.0f;
+                    float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
+                    channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+                }
             }
         }
     });

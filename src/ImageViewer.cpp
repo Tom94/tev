@@ -645,7 +645,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                 imageMetadata.blue_shift  = 16;
                 imageMetadata.alpha_shift = 24;
 
-                auto imageData = mImageCanvas->getLdrImageData(false);
+                auto imageData = mImageCanvas->getLdrImageData(true);
                 clip::image image(imageData.data(), imageMetadata);
 
                 if (clip::set_image(image)) {

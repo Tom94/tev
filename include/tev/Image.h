@@ -89,6 +89,9 @@ private:
         }
     }
 
+    void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
+
+    void multiplyAlpha();
     void unmultiplyAlpha();
 
     void ensureValid();
