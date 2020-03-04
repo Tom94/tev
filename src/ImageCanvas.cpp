@@ -340,12 +340,12 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, float gamma, ETonemap 
         case ETonemap::FalseColor:
             {
                 static const auto falseColor = [](float linear) {
-                    static const auto& fcd = falseColorData();
+                    static const auto& fcd = colormap::turbo();
                     int start = 4 * clamp((int)(linear * (fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
                     return Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
                 };
 
-                result = falseColor(log2(value.mean()) / 10 + 0.5f);
+                result = falseColor(log2(value.mean() + 0.03125f) / 10 + 0.5f);
                 break;
             }
         case ETonemap::PositiveNegative:

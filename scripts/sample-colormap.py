@@ -20,9 +20,14 @@ def main(arguments):
 
     args = parser.parse_args(arguments)
 
-    cmap = plt.get_cmap(args.name)
     xs = np.linspace(0, 1, 256)
-    samples = cmap(xs)
+
+    if args.name.lower() == "turbo":
+        from turbo_colormap import interpolate, turbo_colormap_data
+        samples = [interpolate(turbo_colormap_data, x) for x in xs]
+    else:
+        cmap = plt.get_cmap(args.name)
+        samples = cmap(xs)
 
     samples = ",\n".join([", ".join([str(y) + "f" for y in x]) for x in samples]) + ","
     print(samples)

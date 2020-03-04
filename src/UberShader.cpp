@@ -126,7 +126,7 @@ UberShader::UberShader()
                     return pow(col, vec3(1.0 / gamma));
                 // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
                 case FALSE_COLOR:
-                    return falseColor(log2(average(col)) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
+                    return falseColor(log2(average(col)+0.03125) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
                 case POS_NEG:
                     return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0) + background.rgb * background.a;
             }
@@ -197,7 +197,7 @@ UberShader::UberShader()
     mShader.uploadIndices(indices);
     mShader.uploadAttrib("position", positions);
 
-    const auto& fcd = falseColorData();
+    const auto& fcd = colormap::turbo();
     mColorMap.setData(fcd, Vector2i{(int)fcd.size() / 4, 1}, 4);
 }
 

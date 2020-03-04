@@ -11,6 +11,9 @@
 
 TEV_NAMESPACE_BEGIN
 
-const std::vector<float>& falseColorData();
+namespace colormap {
+    const std::vector<float>& turbo();
+    const std::vector<float>& viridis();
+}
 
 TEV_NAMESPACE_END
