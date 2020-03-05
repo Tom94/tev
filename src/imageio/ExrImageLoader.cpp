@@ -15,6 +15,7 @@
 #include <errno.h>
 
 using namespace Eigen;
+using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -85,7 +86,7 @@ bool ExrImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData ExrImageLoader::load(istream& iStream, const filesystem::path& path, const string& channelSelector) const {
+ImageData ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 
@@ -146,7 +147,7 @@ l_foundPart:
             // TODO: Switch to generic lambda once C++14 is used
             switch (mImfChannel.type) {
                 case Imf::HALF: {
-                    auto data = reinterpret_cast<const half*>(mData.data());
+                    auto data = reinterpret_cast<const ::half*>(mData.data());
                     threadPool.parallelForNoWait<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
                         channel.at(i) = data[i];
                     });
@@ -181,7 +182,7 @@ l_foundPart:
     private:
         int bytesPerPixel() const {
             switch (mImfChannel.type) {
-                case Imf::HALF:  return sizeof(half);
+                case Imf::HALF:  return sizeof(::half);
                 case Imf::FLOAT: return sizeof(float);
                 case Imf::UINT:  return sizeof(uint32_t);
                 default:

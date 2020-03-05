@@ -7,6 +7,7 @@
 #include <clip.h>
 
 using namespace Eigen;
+using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -22,7 +23,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData ClipboardImageLoader::load(istream& iStream, const filesystem::path&, const string& channelSelector) const {
+ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 

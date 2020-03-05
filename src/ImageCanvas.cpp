@@ -687,7 +687,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     }
 
     auto numElements = image->count();
-    Eigen::MatrixXf indices(numElements, nChannels);
+    Eigen::MatrixXi indices(numElements, nChannels);
 
     ThreadPool pool;
     for (int i = 0; i < nChannels; ++i) {
