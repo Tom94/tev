@@ -5,6 +5,7 @@
 #include <tev/ThreadPool.h>
 
 using namespace Eigen;
+using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -20,7 +21,7 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData PfmImageLoader::load(istream& iStream, const filesystem::path&, const string& channelSelector) const {
+ImageData PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 

@@ -7,6 +7,7 @@
 #include <stb_image.h>
 
 using namespace Eigen;
+using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -17,7 +18,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-ImageData StbiImageLoader::load(istream& iStream, const filesystem::path&, const string& channelSelector) const {
+ImageData StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector) const {
     ImageData result;
     ThreadPool threadPool;
 

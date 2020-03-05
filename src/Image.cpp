@@ -19,7 +19,7 @@ TEV_NAMESPACE_BEGIN
 
 atomic<int> Image::sId(0);
 
-Image::Image(const filesystem::path& path, istream& iStream, const string& channelSelector)
+Image::Image(const class path& path, istream& iStream, const string& channelSelector)
 : mPath{path}, mChannelSelector{channelSelector}, mId{sId++} {
     mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
 
@@ -90,7 +90,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
     vector<float> data(numPixels * 4);
 
     ThreadPool pool;
-    pool.parallelForNoWait(0, 4, [&](size_t i) {
+    for (size_t i = 0; i < 4; ++i) {
         if (i < channelNames.size()) {
             const auto& channelName = channelNames[i];
             const auto* chan = channel(channelName);
@@ -108,7 +108,7 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
                 data[j * 4 + i] = val;
             });
         }
-    });
+    }
     pool.waitUntilFinished();
 
     texture.setData(data, size(), 4);
