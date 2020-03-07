@@ -533,13 +533,12 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
         size_t i = 0;
         for (; i < buttons.size(); ++i) {
             const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
-            if(relMousePos.y() < (imgButton->position() + imgButton->size()).y()){
+            if(relMousePos.y() < (imgButton->position() + imgButton->size()).y()) {
                 break;
             }
         }
         i = std::min(i, buttons.size()-1);
-        if(mImageIdInListBeingDragged != i)
-        {
+        if(mImageIdInListBeingDragged != i) {
             moveImageInList(mImageIdInListBeingDragged, i);
             mImageIdInListBeingDragged = i;
         }
@@ -942,8 +941,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
 }
 
 void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
-    if(oldIndex == newIndex)
-    {
+    if(oldIndex == newIndex) {
         return;
     }
 
@@ -958,8 +956,7 @@ void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
 
     auto startI = std::min(oldIndex, newIndex);
     auto endI = std::max(oldIndex, newIndex);
-    for(size_t i = startI; i <= endI; ++i)
-    {
+    for(size_t i = startI; i <= endI; ++i) {
         auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->childAt(i));
         curButton->setId(i+1);
     }
