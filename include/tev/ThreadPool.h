@@ -17,7 +17,7 @@ TEV_NAMESPACE_BEGIN
 class ThreadPool {
 public:
     ThreadPool();
-    ThreadPool(size_t numThreads);
+    ThreadPool(size_t maxNumThreads, bool force = false);
     virtual ~ThreadPool();
 
     template<class F>
