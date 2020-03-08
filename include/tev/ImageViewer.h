@@ -201,8 +201,8 @@ private:
 
     bool mIsDraggingSidebar = false;
     bool mIsDraggingImage = false;
-    bool mIsDraggingImageInList = false;
-    size_t mImageIdInListBeingDragged;
+    bool mIsDraggingImageButton = false;
+    size_t mDraggedImageButtonId;
 
     Eigen::Vector2f mDraggingStartPosition;
 
