@@ -447,11 +447,31 @@ ImageViewer::~ImageViewer() {
 }
 
 bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
+    // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
+    // This has to occur before Screen::mouseButtonEvent as the button would absorb the event.
+    if (down) {
+        if (mImageScrollContainer->contains(p)) {
+            auto& buttons = mImageButtonContainer->children();
+
+            Eigen::Vector2i relMousePos = (absolutePosition() + p) - mImageButtonContainer->absolutePosition();
+
+            for (size_t i = 0; i < buttons.size(); ++i) {
+                const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
+                if (imgButton->contains(relMousePos)) {
+                    mDraggedImageButtonId = i;
+                    mIsDraggingImageButton = true;
+                    mDraggingStartPosition = (relMousePos - imgButton->position()).cast<float>();
+                    break;
+                }
+            }
+        }
+    }
+
     if (Screen::mouseButtonEvent(p, button, down, modifiers)) {
         return true;
     }
 
-    if (down) {
+    if (down && !mIsDraggingImageButton) {
         if (canDragSidebarFrom(p)) {
             mIsDraggingSidebar = true;
             mDraggingStartPosition = p.cast<float>();
@@ -462,8 +482,13 @@ bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int
             return true;
         }
     } else {
+        if (mIsDraggingImageButton) {
+            requestLayoutUpdate();
+        }
+
         mIsDraggingSidebar = false;
         mIsDraggingImage = false;
+        mIsDraggingImageButton = false;
     }
 
     return false;
@@ -505,6 +530,27 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
         if ((button & 4) != 0) {
             mImageCanvas->scale(relativeMovement.y() / 10.0f, mDraggingStartPosition);
         }
+    } else if (mIsDraggingImageButton) {
+        auto& buttons = mImageButtonContainer->children();
+        Eigen::Vector2i relMousePos = (absolutePosition() + p) - mImageButtonContainer->absolutePosition();
+        for (size_t i = 0; i < buttons.size(); ++i) {
+            if (i == mDraggedImageButtonId) {
+                continue;
+            }
+            auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
+            if (imgButton->contains(relMousePos)) {
+                Vector2i pos = imgButton->position();
+                pos.y() += (mDraggedImageButtonId - i) * imgButton->size().y();
+                imgButton->setPosition(pos);
+                imgButton->mouseEnterEvent(relMousePos, false);
+
+                moveImageInList(mDraggedImageButtonId, i);
+                mDraggedImageButtonId = i;
+                break;
+            }
+        }
+        
+        dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->setPosition(relMousePos - mDraggingStartPosition.cast<int>());
     }
 
     return false;
@@ -818,8 +864,17 @@ void ImageViewer::drawContents() {
     }
 
     if (mRequiresLayoutUpdate) {
+        Vector2i oldDraggedImageButtonPos;
+        auto& buttons = mImageButtonContainer->children();
+        if (mIsDraggingImageButton) {
+            oldDraggedImageButtonPos = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->position();
+        }
         updateLayout();
         mRequiresLayoutUpdate = false;
+
+        if (mIsDraggingImageButton) {
+            dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->setPosition(oldDraggedImageButtonPos);
+        }
     }
 
     updateTitle();
@@ -863,6 +918,10 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
         throw invalid_argument{"Image may not be null."};
     }
 
+    if (mIsDraggingImageButton && index <= mDraggedImageButtonId) {
+        ++mDraggedImageButtonId;
+    }
+
     for (auto button : mAnyImageButtons) {
         button->setEnabled(true);
     }
@@ -903,10 +962,48 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     }
 }
 
+void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
+    if (oldIndex == newIndex) {
+        return;
+    }
+
+    TEV_ASSERT(oldIndex < mImages.size(), "oldIndex must be smaller than the number of images.");
+    TEV_ASSERT(newIndex < mImages.size(), "newIndex must be smaller than the number of images.");
+
+    auto* button = mImageButtonContainer->childAt(oldIndex);
+    button->incRef();
+    mImageButtonContainer->removeChild(oldIndex);
+    mImageButtonContainer->addChild(newIndex, button);
+    button->decRef();
+
+    auto startI = std::min(oldIndex, newIndex);
+    auto endI = std::max(oldIndex, newIndex);
+    for (size_t i = startI; i <= endI; ++i) {
+        auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->childAt(i));
+        curButton->setId(i+1);
+    }
+
+    auto img = mImages[oldIndex];
+    mImages.erase(mImages.begin() + oldIndex);
+    mImages.insert(mImages.begin() + newIndex, img);
+    
+    requestLayoutUpdate();
+}
+
 void ImageViewer::removeImage(shared_ptr<Image> image) {
     int id = imageId(image);
     if (id == -1) {
         return;
+    }
+
+    if (mIsDraggingImageButton) {
+        // If we're currently dragging the to-be-removed image, stop.
+        if ((size_t)id == mDraggedImageButtonId) {
+            requestLayoutUpdate();
+            mIsDraggingImageButton = false;
+        } else if ((size_t)id < mDraggedImageButtonId) {
+            --mDraggedImageButtonId;
+        }
     }
 
     auto nextCandidate = nextImage(image, Forward);

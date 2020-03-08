@@ -37,6 +37,7 @@ public:
     void drawContents() override;
 
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
+    void moveImageInList(size_t oldIndex, size_t newIndex);
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false) {
         insertImage(image, mImages.size(), shallSelect);
@@ -200,6 +201,8 @@ private:
 
     bool mIsDraggingSidebar = false;
     bool mIsDraggingImage = false;
+    bool mIsDraggingImageButton = false;
+    size_t mDraggedImageButtonId;
 
     Eigen::Vector2f mDraggingStartPosition;
 
