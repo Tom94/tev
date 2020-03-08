@@ -63,16 +63,6 @@ public:
         mRequestedLayer = layerName;
     }
 
-    static std::vector<std::string> getGroupedChannels(const Image& image, const std::string& requestedLayer);
-    std::vector<std::string> getGroupedChannels(const Image& image) const {
-        return getGroupedChannels(image, mRequestedLayer);
-    }
-
-    static std::vector<std::string> getChannels(const Image& image, const std::string& requestedLayer);
-    std::vector<std::string> getChannels(const Image& image) const {
-        return getChannels(image, mRequestedLayer);
-    }
-
     Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
 
     void getValuesAtNanoPos(Eigen::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);

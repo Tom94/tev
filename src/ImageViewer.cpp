@@ -1296,7 +1296,7 @@ void ImageViewer::normalizeExposureAndOffset() {
         return;
     }
 
-    auto channels = mImageCanvas->getGroupedChannels(*mCurrentImage);
+    auto channels = mCurrentImage->getGroupedChannels(mCurrentLayer)[0];
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::min();
@@ -1665,7 +1665,7 @@ void ImageViewer::updateLayout() {
 void ImageViewer::updateTitle() {
     string caption = "tev";
     if (mCurrentImage) {
-        auto channels = mImageCanvas->getChannels(*mCurrentImage);
+        auto channels = mCurrentImage->getSortedChannels(mCurrentLayer);
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
 

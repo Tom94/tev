@@ -55,9 +55,12 @@ public:
         }
     }
 
+    const GlTexture* texture(const std::string& layerName);
     const GlTexture* texture(const std::vector<std::string>& channelNames);
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
+    std::vector<std::vector<std::string>> getGroupedChannels(const std::string& layerName) const;
+    std::vector<std::string> getSortedChannels(const std::string& layerName) const;
 
     Eigen::Vector2i size() const {
         return mData.channels.front().size();

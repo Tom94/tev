@@ -76,6 +76,10 @@ string Image::shortName() const {
     return result;
 }
 
+const GlTexture* Image::texture(const string& layerName) {
+    return texture(getGroupedChannels(layerName)[0]);
+}
+
 const GlTexture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
@@ -135,6 +139,96 @@ vector<string> Image::channelsInLayer(string layerName) const {
                     result.emplace_back(c.name());
                 }
             }
+        }
+    }
+
+    return result;
+}
+
+vector<vector<string>> Image::getGroupedChannels(const string& layerName) const {
+    vector<vector<string>> groups = {
+        { "R", "G", "B" },
+        { "r", "g", "b" },
+        { "X", "Y", "Z" },
+        { "x", "y", "z" },
+        { "U", "V" },
+        { "u", "v" },
+        { "Z" },
+        { "z" },
+    };
+
+    string layerPrefix = layerName.empty() ? "" : (layerName + ".");
+    string alphaChannelName = layerPrefix + "A";
+
+    vector<string> allChannels = channelsInLayer(layerName);
+
+    auto alphaIt = find(begin(allChannels), end(allChannels), alphaChannelName);
+    bool hasAlpha = alphaIt != end(allChannels);
+    if (hasAlpha) {
+        allChannels.erase(alphaIt);
+    }
+
+    vector<vector<string>> result;
+
+    for (const auto& group : groups) {
+        vector<string> groupChannels;
+        for (const string& channel : group) {
+            string name = layerPrefix + channel;
+            auto it = find(begin(allChannels), end(allChannels), name);
+            if (it != end(allChannels)) {
+                groupChannels.emplace_back(name);
+                allChannels.erase(it);
+            }
+        }
+
+        if (!groupChannels.empty()) {
+            if (groupChannels.size() == 1) {
+                groupChannels.emplace_back(groupChannels.front());
+                groupChannels.emplace_back(groupChannels.front());
+            }
+
+            if (hasAlpha) {
+                groupChannels.emplace_back(alphaChannelName);
+            }
+
+            result.emplace_back(move(groupChannels));
+        }
+    }
+
+    for (const auto& name : allChannels) {
+        if (hasAlpha) {
+            result.emplace_back(vector<string>{name, name, name, alphaChannelName});
+        } else {
+            result.emplace_back(vector<string>{name, name, name});
+        }
+    }
+
+    if (hasAlpha && result.empty()) {
+        result.emplace_back(vector<string>{alphaChannelName, alphaChannelName, alphaChannelName});
+    }
+
+    TEV_ASSERT(!result.empty(), "Images with no channels should never exist.");
+
+    return result;
+}
+
+vector<string> Image::getSortedChannels(const string& layerName) const {
+    string layerPrefix = layerName.empty() ? "" : (layerName + ".");
+    string alphaChannelName = layerPrefix + "A";
+    
+    bool includesAlphaChannel = false;
+
+    vector<string> result;
+    for (auto channelNames : getGroupedChannels(layerName)) {
+        for (auto name : channelNames) {
+            if (name == alphaChannelName) {
+                if (includesAlphaChannel) {
+                    continue;
+                }
+                
+                includesAlphaChannel = true;
+            }
+            result.emplace_back(name);
         }
     }
 
