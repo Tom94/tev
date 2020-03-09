@@ -540,7 +540,7 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
             auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
             if (imgButton->contains(relMousePos)) {
                 Vector2i pos = imgButton->position();
-                pos.y() += (mDraggedImageButtonId - i) * imgButton->size().y();
+                pos.y() += ((int)mDraggedImageButtonId - (int)i) * imgButton->size().y();
                 imgButton->setPosition(pos);
                 imgButton->mouseEnterEvent(relMousePos, false);
 
@@ -864,11 +864,12 @@ void ImageViewer::drawContents() {
     }
 
     if (mRequiresLayoutUpdate) {
-        Vector2i oldDraggedImageButtonPos;
+        Vector2i oldDraggedImageButtonPos{0, 0};
         auto& buttons = mImageButtonContainer->children();
         if (mIsDraggingImageButton) {
             oldDraggedImageButtonPos = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->position();
         }
+        
         updateLayout();
         mRequiresLayoutUpdate = false;
 
@@ -970,16 +971,16 @@ void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
     TEV_ASSERT(oldIndex < mImages.size(), "oldIndex must be smaller than the number of images.");
     TEV_ASSERT(newIndex < mImages.size(), "newIndex must be smaller than the number of images.");
 
-    auto* button = mImageButtonContainer->childAt(oldIndex);
+    auto* button = mImageButtonContainer->childAt((int)oldIndex);
     button->incRef();
-    mImageButtonContainer->removeChild(oldIndex);
-    mImageButtonContainer->addChild(newIndex, button);
+    mImageButtonContainer->removeChild((int)oldIndex);
+    mImageButtonContainer->addChild((int)newIndex, button);
     button->decRef();
 
     auto startI = std::min(oldIndex, newIndex);
     auto endI = std::max(oldIndex, newIndex);
     for (size_t i = startI; i <= endI; ++i) {
-        auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->childAt(i));
+        auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->childAt((int)i));
         curButton->setId(i+1);
     }
 
