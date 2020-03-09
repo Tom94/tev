@@ -24,6 +24,11 @@ struct ImageData {
     std::vector<std::string> layers;
 };
 
+struct ChannelGroup {
+    std::string name;
+    std::vector<std::string> channels;
+};
+
 class Image {
 public:
     Image(const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
@@ -55,11 +60,10 @@ public:
         }
     }
 
-    const GlTexture* texture(const std::string& layerName);
+    const GlTexture* texture(const std::string& channelGroupName);
     const GlTexture* texture(const std::vector<std::string>& channelNames);
 
-    std::vector<std::string> channelsInLayer(std::string layerName) const;
-    std::vector<std::vector<std::string>> getGroupedChannels(const std::string& layerName) const;
+    std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
 
     Eigen::Vector2i size() const {
@@ -70,9 +74,11 @@ public:
         return mData.channels.front().count();
     }
 
-    const std::vector<std::string>& layers() const {
-        return mData.layers;
+    const std::vector<ChannelGroup>& channelGroups() const {
+        return mChannelGroups;
     }
+
+    const ChannelGroup& channelGroup(const std::string& groupName) const;
 
     int id() const {
         return mId;
@@ -92,6 +98,9 @@ private:
         }
     }
 
+    std::vector<std::string> channelsInLayer(std::string layerName) const;
+    std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
+
     void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
 
     void multiplyAlpha();
@@ -107,6 +116,8 @@ private:
     std::map<std::string, GlTexture> mTextures;
 
     ImageData mData;
+    
+    std::vector<ChannelGroup> mChannelGroups;
 
     const int mId;
 };

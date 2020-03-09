@@ -41,9 +41,9 @@ int mainFunc(const vector<string>& arguments) {
     ValueFlag<string> filterFlag{
         parser,
         "FILTER",
-        "Filter visible images and layers according to a supplied string. "
-        "The string must have the format 'image:layer'. "
-        "Only images whose name contains 'image' and layers whose name contains 'layer' will be visible.",
+        "Filter visible images and groups according to a supplied string. "
+        "The string must have the format 'image:group'. "
+        "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.",
         {'f', "filter"},
     };
 

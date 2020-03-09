@@ -52,6 +52,11 @@ Image::Image(const class path& path, istream& iStream, const string& channelSele
         }
     }
 
+    for (const auto& layer : mData.layers) {
+        auto groups = getGroupedChannels(layer);
+        mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
+    }
+
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
@@ -76,8 +81,8 @@ string Image::shortName() const {
     return result;
 }
 
-const GlTexture* Image::texture(const string& layerName) {
-    return texture(getGroupedChannels(layerName)[0]);
+const GlTexture* Image::texture(const string& channelGroupName) {
+    return texture(channelsInGroup(channelGroupName));
 }
 
 const GlTexture* Image::texture(const vector<string>& channelNames) {
@@ -145,7 +150,17 @@ vector<string> Image::channelsInLayer(string layerName) const {
     return result;
 }
 
-vector<vector<string>> Image::getGroupedChannels(const string& layerName) const {
+vector<string> Image::channelsInGroup(const string& groupName) const {
+    for (const auto& group : mChannelGroups) {
+        if (group.name == groupName) {
+            return group.channels;
+        }
+    }
+
+    return {};
+}
+
+vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
         { "r", "g", "b" },
@@ -155,6 +170,27 @@ vector<vector<string>> Image::getGroupedChannels(const string& layerName) const 
         { "u", "v" },
         { "Z" },
         { "z" },
+    };
+
+    auto createChannelGroup = [](string layer, vector<string> channels) {
+        TEV_ASSERT(!channels.empty(), "Can't create a channel group without channels.");
+
+        auto channelTails = channels;
+        // Remove duplicates
+        channelTails.erase(unique(begin(channelTails), end(channelTails)), end(channelTails));
+        transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
+        string channelsString = join(channelTails, ",");
+
+        string name;
+        if (layer.empty()) {
+            name = channelsString;
+        } else if (channelTails.size() == 1) {
+            name = layer + "." + channelsString;
+        } else {
+            name = layer + ".(" + channelsString + ")";
+        }
+
+        return ChannelGroup{name, move(channels)};
     };
 
     string layerPrefix = layerName.empty() ? "" : (layerName + ".");
@@ -168,7 +204,7 @@ vector<vector<string>> Image::getGroupedChannels(const string& layerName) const 
         allChannels.erase(alphaIt);
     }
 
-    vector<vector<string>> result;
+    vector<ChannelGroup> result;
 
     for (const auto& group : groups) {
         vector<string> groupChannels;
@@ -191,20 +227,26 @@ vector<vector<string>> Image::getGroupedChannels(const string& layerName) const 
                 groupChannels.emplace_back(alphaChannelName);
             }
 
-            result.emplace_back(move(groupChannels));
+            result.emplace_back(createChannelGroup(layerName, move(groupChannels)));
         }
     }
 
     for (const auto& name : allChannels) {
         if (hasAlpha) {
-            result.emplace_back(vector<string>{name, name, name, alphaChannelName});
+            result.emplace_back(
+                createChannelGroup(layerName, vector<string>{name, name, name, alphaChannelName})
+            );
         } else {
-            result.emplace_back(vector<string>{name, name, name});
+            result.emplace_back(
+                createChannelGroup(layerName, vector<string>{name, name, name})
+            );
         }
     }
 
     if (hasAlpha && result.empty()) {
-        result.emplace_back(vector<string>{alphaChannelName, alphaChannelName, alphaChannelName});
+        result.emplace_back(
+            createChannelGroup(layerName, vector<string>{alphaChannelName, alphaChannelName, alphaChannelName})
+        );
     }
 
     TEV_ASSERT(!result.empty(), "Images with no channels should never exist.");
@@ -219,8 +261,8 @@ vector<string> Image::getSortedChannels(const string& layerName) const {
     bool includesAlphaChannel = false;
 
     vector<string> result;
-    for (auto channelNames : getGroupedChannels(layerName)) {
-        for (auto name : channelNames) {
+    for (const auto& group : getGroupedChannels(layerName)) {
+        for (auto name : group.channels) {
             if (name == alphaChannelName) {
                 if (includesAlphaChannel) {
                     continue;

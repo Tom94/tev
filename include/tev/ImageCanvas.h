@@ -59,8 +59,8 @@ public:
         mReference = reference;
     }
 
-    void setRequestedLayer(const std::string& layerName) {
-        mRequestedLayer = layerName;
+    void setRequestedChannelGroup(const std::string& groupName) {
+        mRequestedChannelGroup = groupName;
     }
 
     Eigen::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
@@ -120,14 +120,14 @@ private:
     static std::vector<Channel> channelsFromImages(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
-        const std::string& requestedLayer,
+        const std::string& requestedChannelGroup,
         EMetric metric
     );
 
     static std::shared_ptr<CanvasStatistics> computeCanvasStatistics(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
-        const std::string& requestedLayer,
+        const std::string& requestedChannelGroup,
         EMetric metric
     );
 
@@ -146,7 +146,7 @@ private:
     std::shared_ptr<Image> mImage;
     std::shared_ptr<Image> mReference;
 
-    std::string mRequestedLayer;
+    std::string mRequestedChannelGroup = "";
 
     Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
 
