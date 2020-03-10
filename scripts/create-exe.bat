@@ -3,7 +3,7 @@
 set cwd=%cd%
 cd /D %~dp0
 
-set DevCmd="C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\Common7\Tools\VsDevCmd.bat"
+set DevCmd="C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\Tools\VsDevCmd.bat"
 set MSBuildOptions=/v:m /p:Configuration=Release
 set BuildDir64="build-exe-64"
 set BuildDir32="build-exe-32"
