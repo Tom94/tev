@@ -13,8 +13,11 @@ ThreadPool::ThreadPool()
 : ThreadPool{thread::hardware_concurrency()} {
 }
 
-ThreadPool::ThreadPool(size_t numThreads) {
-    startThreads(numThreads);
+ThreadPool::ThreadPool(size_t maxNumThreads, bool force) {
+    if (!force) {
+        maxNumThreads = min((size_t)thread::hardware_concurrency(), maxNumThreads);
+    }
+    startThreads(maxNumThreads);
     mNumTasksInSystem.store(0);
 }
 

@@ -51,7 +51,7 @@ public:
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
-    void selectLayer(std::string name);
+    void selectGroup(std::string name);
 
     void selectReference(const std::shared_ptr<Image>& image);
 
@@ -117,13 +117,13 @@ private:
     void updateFilter();
     void updateLayout();
     void updateTitle();
-    std::string layerName(size_t index);
+    std::string groupName(size_t index);
 
-    int layerId(const std::string& layer) const;
+    int groupId(const std::string& groupName) const;
     int imageId(const std::shared_ptr<Image>& image) const;
 
-    std::string nextLayer(const std::string& layer, EDirection direction);
-    std::string nthVisibleLayer(size_t n);
+    std::string nextGroup(const std::string& groupName, EDirection direction);
+    std::string nthVisibleGroup(size_t n);
 
     std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
@@ -194,8 +194,8 @@ private:
 
     ImageCanvas* mImageCanvas;
 
-    nanogui::Widget* mLayerButtonContainer;
-    std::string mCurrentLayer;
+    nanogui::Widget* mGroupButtonContainer;
+    std::string mCurrentGroup;
 
     HelpWindow* mHelpWindow = nullptr;
 

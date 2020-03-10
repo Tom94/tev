@@ -99,13 +99,13 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(referenceSelection, "Ctrl (hold)",                                "View selected Image if Reference is selected");
         addRow(referenceSelection, "Ctrl+Right or Ctrl+D / Ctrl+Left or Ctrl+A", "Select Next / Previous Error Metric");
 
-        new Label{shortcuts, "Layer Options", "sans-bold", 18};
-        auto layerSelection = new Widget{shortcuts};
-        layerSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        new Label{shortcuts, "Channel Group Options", "sans-bold", 18};
+        auto groupSelection = new Widget{shortcuts};
+        groupSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-        addRow(layerSelection, "Left Click",             "Select Hovered Layer");
-        addRow(layerSelection, "Ctrl+1…9",               "Select N-th Layer");
-        addRow(layerSelection, "Right or D / Left or A", "Select Next / Previous Layer");
+        addRow(groupSelection, "Left Click",             "Select Hovered Channel Group");
+        addRow(groupSelection, "Ctrl+1…9",               "Select N-th Channel Group");
+        addRow(groupSelection, "Right or D / Left or A", "Select Next / Previous Channel Group");
 
         new Label{shortcuts, "Interface", "sans-bold", 18};
         auto ui = new Widget{shortcuts};
@@ -114,7 +114,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(ui, ALT + "+Enter", "Maximize");
         addRow(ui, COMMAND + "+B", "Toggle GUI");
         addRow(ui, "H",            "Show Help (this Window)");
-        addRow(ui, COMMAND + "+P", "Find Image or Layer");
+        addRow(ui, COMMAND + "+P", "Find Image or Channel Group");
         addRow(ui, "Q or Esc",     "Quit");
     }
 

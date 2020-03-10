@@ -12,6 +12,7 @@
 
 #include <fstream>
 #include <numeric>
+#include <set>
 
 using namespace Eigen;
 using namespace filesystem;
@@ -60,7 +61,7 @@ void ImageCanvas::drawGL() {
         mShader.draw(
             2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
             Vector2f::Constant(20),
-            image->texture(getGroupedChannels(*image)),
+            image->texture(mRequestedChannelGroup),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             transform(image).inverse().matrix(),
@@ -75,11 +76,11 @@ void ImageCanvas::drawGL() {
     mShader.draw(
         2.0f * mSize.cast<float>().cwiseInverse() / mPixelRatio,
         Vector2f::Constant(20),
-        mImage->texture(getGroupedChannels(*mImage)),
+        mImage->texture(mRequestedChannelGroup),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
         transform(mImage.get()).inverse().matrix(),
-        mReference->texture(getGroupedChannels(*mReference)),
+        mReference->texture(mRequestedChannelGroup),
         transform(mReference.get()).inverse().matrix(),
         mExposure,
         mOffset,
@@ -112,7 +113,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
         };
 
         if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
-            vector<string> channels = getChannels(*mImage);
+            vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
             // Remove duplicates
             channels.erase(unique(begin(channels), end(channels)), end(channels));
 
@@ -215,82 +216,6 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-vector<string> ImageCanvas::getGroupedChannels(const Image& image, const string& requestedLayer) {
-    vector<vector<string>> groups = {
-        { "R", "G", "B" },
-        { "r", "g", "b" },
-        { "X", "Y", "Z" },
-        { "x", "y", "z" },
-        { "U", "V" },
-        { "u", "v" },
-        { "Z" },
-        { "z" },
-    };
-
-    string layerPrefix = requestedLayer.empty() ? "" : (requestedLayer + ".");
-
-    vector<string> result;
-    for (const auto& group : groups) {
-        for (const string& channel : group) {
-            string name = layerPrefix + channel;
-            if (image.hasChannel(name)) {
-                result.emplace_back(name);
-            }
-        }
-
-        if (!result.empty()) {
-            break;
-        }
-    }
-
-    string alphaChannelName = layerPrefix + "A";
-
-    // No channels match the given groups; fall back to the first 3 channels.
-    if (result.empty()) {
-        const auto& channelNames = image.channelsInLayer(requestedLayer);
-        for (const auto& name : channelNames) {
-            if (name != alphaChannelName) {
-                result.emplace_back(name);
-            }
-
-            if (result.size() >= 3) {
-                break;
-            }
-        }
-    }
-
-    // If we found just 1 channel, let's display is as grayscale by duplicating it twice.
-    if (result.size() == 1) {
-        result.push_back(result[0]);
-        result.push_back(result[0]);
-    }
-
-    // If there is an alpha layer, use it
-    if (image.hasChannel(alphaChannelName)) {
-        result.emplace_back(alphaChannelName);
-    }
-
-    // If we found just an alpha channel, let's display is as grayscale by duplicating it twice
-    // (similar to the single-non-alpha-channel case).
-    if (result.size() == 1) {
-        result.push_back(result[0]);
-        result.push_back(result[0]);
-    }
-
-    return result;
-}
-
-vector<string> ImageCanvas::getChannels(const Image& image, const string& requestedLayer) {
-    vector<string> result = getGroupedChannels(image, requestedLayer);
-    const auto& allChannelNames = image.channelsInLayer(requestedLayer);
-    for (const auto& name : allChannelNames) {
-        if (find(begin(result), end(result), name) == end(result)) {
-            result.emplace_back(name);
-        }
-    }
-    return result;
-}
-
 Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
     Vector2f imagePos = textureToNanogui(&image).inverse() * mousePos.cast<float>();
     return {
@@ -307,13 +232,15 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
 
     Vector2i imageCoords = getImageCoords(*mImage, nanoPos);
     for (const auto& channel : channels) {
-        result.push_back(mImage->channel(channel)->eval(imageCoords));
+        const Channel* c = mImage->channel(channel);
+        TEV_ASSERT(c, "Requested channel must exist.");
+        result.push_back(c->eval(imageCoords));
     }
 
     // Subtract reference if it exists.
     if (mReference) {
         Vector2i referenceCoords = getImageCoords(*mReference, nanoPos);
-        const auto& referenceChannels = getGroupedChannels(*mReference);
+        auto referenceChannels = mReference->channelsInGroup(mRequestedChannelGroup);
         for (size_t i = 0; i < result.size(); ++i) {
             float reference = i < referenceChannels.size() ?
                 mReference->channel(referenceChannels[i])->eval(referenceCoords) :
@@ -389,7 +316,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
         return result;
     }
 
-    const auto& channels = channelsFromImages(mImage, mReference, mRequestedLayer, mMetric);
+    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric);
     auto numPixels = mImage->count();
 
     if (channels.empty()) {
@@ -511,7 +438,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         return nullptr;
     }
 
-    string channels = join(getGroupedChannels(*mImage), ",");
+    string channels = join(mImage->channelsInGroup(mRequestedChannelGroup), ",");
     string key = mReference ?
         tfm::format("%d-%s-%d-%d", mImage->id(), channels, mReference->id(), mMetric) :
         tfm::format("%d-%s", mImage->id(), channels);
@@ -522,10 +449,10 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     }
 
     auto image = mImage, reference = mReference;
-    auto requestedLayer = mRequestedLayer;
+    auto requestedChannelGroup = mRequestedChannelGroup;
     auto metric = mMetric;
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedLayer, metric]() {
-        return computeCanvasStatistics(image, reference, requestedLayer, metric);
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedChannelGroup, metric]() {
+        return computeCanvasStatistics(image, reference, requestedChannelGroup, metric);
     }, &mMeanValueThreadPool)));
 
     auto val = mMeanValues.at(key);
@@ -536,7 +463,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
 vector<Channel> ImageCanvas::channelsFromImages(
     shared_ptr<Image> image,
     shared_ptr<Image> reference,
-    const string& requestedLayer,
+    const string& requestedChannelGroup,
     EMetric metric
 ) {
     if (!image) {
@@ -544,7 +471,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     }
 
     vector<Channel> result;
-    const auto& channelNames = getGroupedChannels(*image, requestedLayer);
+    auto channelNames = image->channelsInGroup(requestedChannelGroup);
     for (size_t i = 0; i < channelNames.size(); ++i) {
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
     }
@@ -562,7 +489,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     } else {
         Vector2i size = image->size();
         Vector2i offset = (reference->size() - size) / 2;
-        const auto& referenceChannels = getGroupedChannels(*reference, requestedLayer);
+        auto referenceChannels = reference->channelsInGroup(requestedChannelGroup);
 
         ThreadPool pool;
         pool.parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
@@ -615,10 +542,10 @@ vector<Channel> ImageCanvas::channelsFromImages(
 shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     std::shared_ptr<Image> image,
     std::shared_ptr<Image> reference,
-    const std::string& requestedLayer,
+    const string& requestedChannelGroup,
     EMetric metric
 ) {
-    auto flattened = channelsFromImages(image, reference, requestedLayer, metric);
+    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric);
 
     float mean = 0;
     float maximum = -numeric_limits<float>::infinity();
