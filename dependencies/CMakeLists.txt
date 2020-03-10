@@ -32,7 +32,7 @@ if (WIN32)
     set_property(TARGET zlibstatic PROPERTY FOLDER "dependencies")
 
     set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib" CACHE PATH " " FORCE)
-    set(ZLIB_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/zlib/$<CONFIGURATION>/zlibstatic.lib" CACHE FILEPATH " " FORCE)
+    set(ZLIB_LIBRARY zlibstatic)
 
     include_directories(${ZLIB_INCLUDE_DIR} "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 endif()
