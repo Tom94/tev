@@ -245,7 +245,7 @@ int mainFunc(const vector<string>& arguments) {
                             case IpcPacket::OpenImage: {
                                 auto info = packet.interpretAsOpenImage();
                                 string imageString = ensureUtf8(info.imagePath);
-                                size_t colonPos = min(imageString.length() - 1, imageString.find_last_of(":"));
+                                size_t colonPos = min(imageString.length(), imageString.find_last_of(":"));
                                 imagesLoader->enqueue(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), info.grabFocus);
                                 break;
                             }
