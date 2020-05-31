@@ -239,7 +239,7 @@ int mainFunc(const vector<string>& arguments) {
     if (ipc->isPrimaryInstance()) {
         ipcThread = thread{[&]() {
             while (!shallShutdown) {
-                while (ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
+                ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
                     try {
                         switch (packet.type()) {
                             case IpcPacket::OpenImage: {
@@ -287,9 +287,9 @@ int mainFunc(const vector<string>& arguments) {
                     } catch (const runtime_error& e) {
                         tlog::warning() << "Malformed IPC packet: " << e.what();
                     }
-                })) { }
+                });
 
-                this_thread::sleep_for(chrono::milliseconds{100});
+                this_thread::sleep_for(chrono::milliseconds{1});
             }
         }};
     }

@@ -7,9 +7,7 @@
 
 #include <filesystem/path.h>
 
-#ifndef _WIN32
-#   include <netinet/in.h>
-#endif
+#include <enet/enet.h>
 
 #include <vector>
 
@@ -176,18 +174,22 @@ public:
     }
 
     void sendToPrimaryInstance(const IpcPacket& message);
-    bool receiveFromSecondaryInstance(std::function<void(const IpcPacket&)> callback);
+    void receiveFromSecondaryInstance(std::function<void(const IpcPacket&)> callback);
 
 private:
     bool mIsPrimaryInstance;
-    sockaddr_in mAddress;
+    
+    ENetAddress mAddress;
+    ENetHost* mSocket = nullptr;
+
+    // Represents the server when this is a
+    // secondary instance of tev.
+    ENetPeer* mPeer = nullptr;
 
 #ifdef _WIN32
     HANDLE mInstanceMutex;
-    SOCKET mSocket;
 #else
     int mLockFileDescriptor;
-    int mSocket;
     filesystem::path mLockFile;
 #endif
 };
