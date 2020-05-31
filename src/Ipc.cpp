@@ -1,10 +1,13 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
+// ENet must come first to prevent compilation failure on windows
+#define NOMINMAX
+#include <enet/enet.h>
+#undef NOMINMAX
+
 #include <tev/Common.h>
 #include <tev/Ipc.h>
-
-#include <enet/enet.h>
 
 #ifndef _WIN32
 #   include <cstring>

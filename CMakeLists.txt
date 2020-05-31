@@ -87,7 +87,7 @@ endif()
 
 set(TEV_LIBS clip IlmImf nanogui enet ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
-    set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
+    set(TEV_LIBS ${TEV_LIBS} zlibstatic winmm ws2_32)
 endif()
 
 set(TEV_SOURCES

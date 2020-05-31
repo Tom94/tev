@@ -3,11 +3,14 @@
 
 #pragma once
 
+// ENet must come first to prevent compilation failure on windows
+#define NOMINMAX
+#include <enet/enet.h>
+#undef NOMINMAX
+
 #include <tev/Common.h>
 
 #include <filesystem/path.h>
-
-#include <enet/enet.h>
 
 #include <vector>
 

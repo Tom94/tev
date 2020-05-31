@@ -286,7 +286,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
 
     chan->updateTile(x, y, width, height, data);
 
-    // TODO: update textures that are cached for this channel
+    // Update textures that are cached for this channel
     for (auto& kv : mTextures) {
         auto& imageTexture = kv.second;
         if (find(begin(imageTexture.channels), end(imageTexture.channels), channelName) == end(imageTexture.channels)) {
@@ -294,30 +294,30 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
         }
 
         auto numPixels = width * height;
-        vector<float> data(numPixels * 4);
+        vector<float> textureData(numPixels * 4);
 
         // Populate data for sub-region of the texture to be updated
         for (size_t i = 0; i < 4; ++i) {
             if (i < imageTexture.channels.size()) {
-                const auto& channelName = imageTexture.channels[i];
-                const auto* chan = channel(channelName);
-                TEV_ASSERT(chan, "Channel to be updated must exist");
+                const auto& localChannelName = imageTexture.channels[i];
+                const auto* localChan = channel(localChannelName);
+                TEV_ASSERT(localChan, "Channel to be updated must exist");
 
                 for (int posY = 0; posY < height; ++posY) {
                     for (int posX = 0; posX < width; ++posX) {
                         int tileIdx = posX + posY * width;
-                        data[tileIdx * 4 + i] = chan->at({x + posX, y + posY});
+                        textureData[tileIdx * 4 + i] = localChan->at({x + posX, y + posY});
                     }
                 }
             } else {
                 float val = i == 3 ? 1 : 0;
                 for (DenseIndex j = 0; j < numPixels; ++j) {
-                    data[j * 4 + i] = val;
+                    textureData[j * 4 + i] = val;
                 }
             }
         }
 
-        imageTexture.glTexture.setDataSub(data, {x, y}, {width, height}, 4);
+        imageTexture.glTexture.setDataSub(textureData, {x, y}, {width, height}, 4);
     }
 }
 
