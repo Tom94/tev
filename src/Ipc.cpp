@@ -121,6 +121,16 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     payload >> result.imagePath;
     payload >> result.channel;
     payload >> result.x >> result.y >> result.width >> result.height;
+
+    size_t nPixels = result.width * result.height;
+
+    // This is a very conservative upper bound on how many floats
+    // fit into a UDP packet
+    if (nPixels > 100000) {
+        throw runtime_error{"Too many pixels in UpdateImage IPC packet."};
+    }
+
+    result.imageData.resize(nPixels);
     payload >> result.imageData;
     return result;
 }

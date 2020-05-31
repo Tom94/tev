@@ -951,7 +951,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     mImageButtonContainer->addChild((int)index, button);
     mImages.insert(begin(mImages) + index, image);
 
-    // The following call will show the footer if there is not an image
+    // The following call will show thefooter if there is not an image
     // with more than 1 group.
     setUiVisible(isUiVisible());
 
@@ -961,7 +961,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     requestLayoutUpdate();
 
     // First image got added, let's select it.
-    if (index == 0 || shallSelect) {
+    if ((index == 0 && mImages.size() == 1) || shallSelect) {
         selectImage(image);
         resizeToFitImage(image);
     }
@@ -1068,10 +1068,15 @@ void ImageViewer::removeAllImages() {
 }
 
 void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
+    int currentId = imageId(mCurrentImage);
     int id = imageId(image);
     if (id == -1) {
         return;
     }
+
+    // If we already have the image selected, we must re-select it
+    // regardless of the `shallSelect` parameter.
+    shallSelect |= currentId == id;
 
     int referenceId = imageId(mCurrentReference);
 

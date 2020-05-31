@@ -253,8 +253,8 @@ int mainFunc(const vector<string>& arguments) {
                             case IpcPacket::ReloadImage: {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsReloadImage();
-                                string imageString = ensureUtf8(info.imagePath);
-                                imageViewer->scheduleToUiThread([&] {
+                                imageViewer->scheduleToUiThread([&,info] {
+                                    string imageString = ensureUtf8(info.imagePath);
                                     imageViewer->reloadImage(imageString, info.grabFocus);
                                 });
                                 break;
@@ -263,8 +263,8 @@ int mainFunc(const vector<string>& arguments) {
                             case IpcPacket::CloseImage: {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsCloseImage();
-                                string imageString = ensureUtf8(info.imagePath);
-                                imageViewer->scheduleToUiThread([&] {
+                                imageViewer->scheduleToUiThread([&,info] {
+                                    string imageString = ensureUtf8(info.imagePath);
                                     imageViewer->removeImage(imageString);
                                 });
                                 break;
@@ -273,8 +273,8 @@ int mainFunc(const vector<string>& arguments) {
                             case IpcPacket::UpdateImage: {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsUpdateImage();
-                                string imageString = ensureUtf8(info.imagePath);
-                                imageViewer->scheduleToUiThread([&] {
+                                imageViewer->scheduleToUiThread([&,info] {
+                                    string imageString = ensureUtf8(info.imagePath);
                                     imageViewer->updateImage(imageString, info.grabFocus, info.channel, info.x, info.y, info.width, info.height, info.imageData);
                                 });
                                 break;
