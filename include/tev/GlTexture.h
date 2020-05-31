@@ -39,6 +39,7 @@ public:
     const Eigen::Vector2i& size() const { return mSize; }
 
     void setData(const std::vector<float>& data, const Eigen::Vector2i& size, int numChannels);
+    void setDataSub(const std::vector<float>& data, const Eigen::Vector2i& origin, const Eigen::Vector2i& size, int numChannels);
 
 private:
     GLuint mId = 0;

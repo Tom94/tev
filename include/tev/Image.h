@@ -29,6 +29,11 @@ struct ChannelGroup {
     std::vector<std::string> channels;
 };
 
+struct ImageTexture {
+    GlTexture glTexture;
+    std::vector<std::string> channels;
+};
+
 class Image {
 public:
     Image(const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
@@ -78,11 +83,11 @@ public:
         return mChannelGroups;
     }
 
-    const ChannelGroup& channelGroup(const std::string& groupName) const;
-
     int id() const {
         return mId;
     }
+
+    void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
 
     std::string toString() const;
 
@@ -113,7 +118,7 @@ private:
 
     std::string mName;
 
-    std::map<std::string, GlTexture> mTextures;
+    std::map<std::string, ImageTexture> mTextures;
 
     ImageData mData;
     

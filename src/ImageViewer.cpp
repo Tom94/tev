@@ -566,7 +566,7 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
     }
 
     // Make sure we gain focus after dragging files into here.
-    glfwFocusWindow(mGLFWWindow);
+    focusWindow();
     return true;
 }
 
@@ -831,6 +831,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
     return false;
 }
 
+void ImageViewer::focusWindow() {
+    glfwFocusWindow(mGLFWWindow);
+}
+
 void ImageViewer::drawContents() {
     // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
     // place where we actually add them to the GUI. Focus the application in case one of the
@@ -846,7 +850,7 @@ void ImageViewer::drawContents() {
     }
 
     if (newFocus) {
-        glfwFocusWindow(mGLFWWindow);
+        focusWindow();
     }
 
     // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
@@ -1063,7 +1067,7 @@ void ImageViewer::removeAllImages() {
     }
 }
 
-void ImageViewer::reloadImage(shared_ptr<Image> image) {
+void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
     int id = imageId(image);
     if (id == -1) {
         return;
@@ -1074,7 +1078,7 @@ void ImageViewer::reloadImage(shared_ptr<Image> image) {
     auto newImage = tryLoadImage(image->path(), image->channelSelector());
     if (newImage) {
         removeImage(image);
-        insertImage(newImage, id, true);
+        insertImage(newImage, id, shallSelect);
     }
 
     if (referenceId != -1) {
@@ -1090,6 +1094,26 @@ void ImageViewer::reloadAllImages() {
 
     if (id != -1) {
         selectImage(mImages[id]);
+    }
+}
+
+void ImageViewer::updateImage(
+    const string& imageName,
+    bool shallSelect,
+    const string& channel,
+    int x, int y,
+    int width, int height,
+    const vector<float>& imageData
+) {
+    auto image = imageByName(imageName);
+    if (!image) {
+        tlog::warning() << "Image " << imageName << " could not be updated, because it does not exist.";
+        return;
+    }
+
+    image->updateChannel(channel, x, y, width, height, imageData);
+    if (shallSelect) {
+        selectImage(image);
     }
 }
 
@@ -1468,7 +1492,7 @@ void ImageViewer::openImageDialog() {
     }
 
     // Make sure we gain focus after seleting a file to be loaded.
-    glfwFocusWindow(mGLFWWindow);
+    focusWindow();
 }
 
 void ImageViewer::saveImageDialog() {
@@ -1503,7 +1527,7 @@ void ImageViewer::saveImageDialog() {
     }
 
     // Make sure we gain focus after seleting a file to be loaded.
-    glfwFocusWindow(mGLFWWindow);
+    focusWindow();
 }
 
 void ImageViewer::updateFilter() {
@@ -1727,6 +1751,13 @@ int ImageViewer::imageId(const shared_ptr<Image>& image) const {
     return pos >= mImages.size() ? -1 : (int)pos;
 }
 
+int ImageViewer::imageId(const string& imageName) const {
+    auto pos = static_cast<size_t>(distance(begin(mImages), find_if(begin(mImages), end(mImages), [&](const shared_ptr<Image>& image) {
+        return image->name() == imageName;
+    })));
+    return pos >= mImages.size() ? -1 : (int)pos;
+}
+
 string ImageViewer::nextGroup(const string& group, EDirection direction) {
     if (mGroupButtonContainer->childCount() == 0) {
         return mCurrentGroup;
@@ -1789,6 +1820,15 @@ shared_ptr<Image> ImageViewer::nthVisibleImage(size_t n) {
         }
     }
     return lastVisible;
+}
+
+shared_ptr<Image> ImageViewer::imageByName(const string& imageName) {
+    int id = imageId(imageName);
+    if (id != -1) {
+        return mImages[id];
+    } else {
+        return nullptr;
+    }
 }
 
 TEV_NAMESPACE_END

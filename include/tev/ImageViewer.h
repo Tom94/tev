@@ -34,6 +34,8 @@ public:
 
     bool keyboardEvent(int key, int scancode, int action, int modifiers) override;
 
+    void focusWindow();
+
     void drawContents() override;
 
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
@@ -44,10 +46,25 @@ public:
     }
 
     void removeImage(std::shared_ptr<Image> image);
+    void removeImage(const std::string& imageName) {
+        removeImage(imageByName(imageName));
+    }
     void removeAllImages();
 
-    void reloadImage(std::shared_ptr<Image> image);
+    void reloadImage(std::shared_ptr<Image> image, bool shallSelect = false);
+    void reloadImage(const std::string& imageName, bool shallSelect = false) {
+        reloadImage(imageByName(imageName), shallSelect);
+    }
     void reloadAllImages();
+
+    void updateImage(
+        const std::string& imageName,
+        bool shallSelect,
+        const std::string& channel,
+        int x, int y,
+        int width, int height,
+        const std::vector<float>& imageData
+    );
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
@@ -113,6 +130,11 @@ public:
         mRequiresLayoutUpdate = true;
     }
 
+    template <typename T>
+    void scheduleToUiThread(const T& fun) {
+        mTaskQueue.push(fun);
+    }
+
 private:
     void updateFilter();
     void updateLayout();
@@ -121,12 +143,14 @@ private:
 
     int groupId(const std::string& groupName) const;
     int imageId(const std::shared_ptr<Image>& image) const;
+    int imageId(const std::string& imageName) const;
 
     std::string nextGroup(const std::string& groupName, EDirection direction);
     std::string nthVisibleGroup(size_t n);
 
     std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
+    std::shared_ptr<Image> imageByName(const std::string& imageName);
 
     bool canDragSidebarFrom(const Eigen::Vector2i& p) {
         return mSidebar->visible() && p.x() - mSidebar->fixedWidth() < 10 && p.x() - mSidebar->fixedWidth() > -5;

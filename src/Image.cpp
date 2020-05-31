@@ -89,11 +89,11 @@ const GlTexture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
-        return &iter->second;
+        return &iter->second.glTexture;
     }
 
-    mTextures.emplace(lookup, GlTexture{});
-    auto& texture = mTextures.at(lookup);
+    mTextures.emplace(lookup, ImageTexture{GlTexture{}, channelNames});
+    auto& texture = mTextures.at(lookup).glTexture;
 
     auto numPixels = count();
     vector<float> data(numPixels * 4);
@@ -275,6 +275,50 @@ vector<string> Image::getSortedChannels(const string& layerName) const {
     }
 
     return result;
+}
+
+void Image::updateChannel(const string& channelName, int x, int y, int width, int height, const vector<float>& data) {
+    Channel* chan = mutableChannel(channelName);
+    if (!chan) {
+        tlog::warning() << "Channel " << channelName << " could not be updated, because it does not exist.";
+        return;
+    }
+
+    chan->updateTile(x, y, width, height, data);
+
+    // TODO: update textures that are cached for this channel
+    for (auto& kv : mTextures) {
+        auto& imageTexture = kv.second;
+        if (find(begin(imageTexture.channels), end(imageTexture.channels), channelName) == end(imageTexture.channels)) {
+            continue;
+        }
+
+        auto numPixels = width * height;
+        vector<float> data(numPixels * 4);
+
+        // Populate data for sub-region of the texture to be updated
+        for (size_t i = 0; i < 4; ++i) {
+            if (i < imageTexture.channels.size()) {
+                const auto& channelName = imageTexture.channels[i];
+                const auto* chan = channel(channelName);
+                TEV_ASSERT(chan, "Channel to be updated must exist");
+
+                for (int posY = 0; posY < height; ++posY) {
+                    for (int posX = 0; posX < width; ++posX) {
+                        int tileIdx = posX + posY * width;
+                        data[tileIdx * 4 + i] = chan->at({x + posX, y + posY});
+                    }
+                }
+            } else {
+                float val = i == 3 ? 1 : 0;
+                for (DenseIndex j = 0; j < numPixels; ++j) {
+                    data[j * 4 + i] = val;
+                }
+            }
+        }
+
+        imageTexture.glTexture.setDataSub(data, {x, y}, {width, height}, 4);
+    }
 }
 
 string Image::toString() const {

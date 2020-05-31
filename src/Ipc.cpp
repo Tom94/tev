@@ -1,6 +1,7 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
+#include <tev/Common.h>
 #include <tev/Ipc.h>
 
 #ifdef _WIN32
@@ -21,10 +22,116 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-Ipc::Ipc() {
-    static const string lockName = ".tev-lock";
-    static const string localhost = "127.0.0.1";
-    static const short port = 14158;
+IpcPacket::IpcPacket(const char* data, size_t length) {
+    if (length <= 0) {
+        throw runtime_error{"Cannot construct an IPC packet from no data."};
+    }
+    mPayload.assign(data, data+length);
+}
+
+void IpcPacket::setOpenImage(const string& imagePath, bool grabFocus) {
+    OStream payload{mPayload};
+    payload << Type::OpenImage;
+    payload << grabFocus;
+    payload << imagePath;
+}
+
+void IpcPacket::setReloadImage(const string& imagePath, bool grabFocus) {
+    OStream payload{mPayload};
+    payload << Type::ReloadImage;
+    payload << grabFocus;
+    payload << imagePath;
+}
+
+void IpcPacket::setCloseImage(const string& imagePath) {
+    OStream payload{mPayload};
+    payload << Type::CloseImage;
+    payload << imagePath;
+}
+
+void IpcPacket::setUpdateImage(const string& imagePath, bool grabFocus, const string& channel, int x, int y, int width, int height, const vector<float>& imageData) {
+    if ((int)imageData.size() != width * height) {
+        throw runtime_error{"UpdateImage IPC packet's data size does not match crop windows."};
+    }
+
+    OStream payload{mPayload};
+    payload << Type::UpdateImage;
+    payload << grabFocus;
+    payload << imagePath;
+    payload << channel;
+    payload << x << y << width << height;
+    payload << imageData;
+}
+
+IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
+    IpcPacketOpenImage result;
+    IStream payload{mPayload};
+
+    Type type;
+    payload >> type;
+    if (type != Type::OpenImage) {
+        throw runtime_error{"Cannot interpret IPC packet as OpenImage."};
+    }
+
+    payload >> result.grabFocus;
+    payload >> result.imagePath;
+    return result;
+}
+
+IpcPacketReloadImage IpcPacket::interpretAsReloadImage() const {
+    IpcPacketReloadImage result;
+    IStream payload{mPayload};
+
+    Type type;
+    payload >> type;
+    if (type != Type::ReloadImage) {
+        throw runtime_error{"Cannot interpret IPC packet as ReloadImage."};
+    }
+
+    payload >> result.grabFocus;
+    payload >> result.imagePath;
+    return result;
+}
+
+IpcPacketCloseImage IpcPacket::interpretAsCloseImage() const {
+    IpcPacketCloseImage result;
+    IStream payload{mPayload};
+
+    Type type;
+    payload >> type;
+    if (type != Type::CloseImage) {
+        throw runtime_error{"Cannot interpret IPC packet as CloseImage."};
+    }
+
+    payload >> result.imagePath;
+    return result;
+}
+
+IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
+    IpcPacketUpdateImage result;
+    IStream payload{mPayload};
+
+    Type type;
+    payload >> type;
+    if (type != Type::UpdateImage) {
+        throw runtime_error{"Cannot interpret IPC packet as UpdateImage."};
+    }
+
+    payload >> result.grabFocus;
+    payload >> result.imagePath;
+    payload >> result.channel;
+    payload >> result.x >> result.y >> result.width >> result.height;
+    payload >> result.imageData;
+    return result;
+}
+
+
+Ipc::Ipc(const string& hostname) {
+    const string lockName = string{".tev-lock."} + hostname;
+
+    auto parts = split(hostname, ":");
+    const string& ip = parts.front();
+    short port = (short)atoi(parts.back().c_str());
 
     memset((char*)&mAddress, 0, sizeof(mAddress));
 
@@ -68,9 +175,9 @@ Ipc::Ipc() {
         mAddress.sin_port = htons(port);
 
 #ifdef _WIN32
-        mAddress.sin_addr.S_un.S_addr = inet_addr(localhost.c_str());
+        mAddress.sin_addr.S_un.S_addr = inet_addr(hostname.c_str());
 #else
-        inet_aton(localhost.c_str(), &mAddress.sin_addr);
+        inet_aton(hostname.c_str(), &mAddress.sin_addr);
 #endif
 
         mSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -98,6 +205,8 @@ Ipc::Ipc() {
         tlog::warning() << "Could not initialize IPC; assuming primary instance. " << e.what();
         mIsPrimaryInstance = true;
     }
+
+    tlog::success() << "Initialized IPC, listening on " << ip << ":" << port;
 }
 
 Ipc::~Ipc() {
@@ -126,37 +235,38 @@ Ipc::~Ipc() {
 #endif
 }
 
-void Ipc::sendToPrimaryInstance(const string& message) {
+void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
     if (mIsPrimaryInstance) {
         throw runtime_error{"Must be a secondary instance to send to the primary instance."};
     }
 
-    int bytesSent = sendto(mSocket, message.c_str(), (int)message.length() + 1, 0, (sockaddr*)&mAddress, sizeof(mAddress));
+    int bytesSent = sendto(mSocket, message.data(), (int)message.size(), 0, (sockaddr*)&mAddress, sizeof(mAddress));
     if (bytesSent == -1) {
         throw runtime_error{tfm::format("Could not send to primary instance: %s", errorString(lastSocketError()))};
     }
 }
 
-bool Ipc::receiveFromSecondaryInstance(function<void(const string&)> callback) {
+bool Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback) {
     if (!mIsPrimaryInstance) {
         throw runtime_error{"Must be the primary instance to receive from a secondary instance."};
     }
 
     sockaddr_in recvAddress;
     socklen_t recvAddressSize = sizeof(recvAddress);
-    char recvBuffer[16384];
+    char recvBuffer[8192];
 
     int bytesReceived = recvfrom(mSocket, recvBuffer, sizeof(recvBuffer), 0, (sockaddr*)&recvAddress, &recvAddressSize);
     if (bytesReceived <= 0) {
         return false;
     }
 
-    if (recvBuffer[bytesReceived - 1] == '\0') {
-        // We probably received a valid string. Let's pass it to our callback function.
-        // TODO: Proper handling of multiple concatenated and partial packets.
-        callback(recvBuffer);
+    if (bytesReceived >= (int)sizeof(recvBuffer)) {
+        tlog::warning() << "IPC packet was too big (>=" << sizeof(recvBuffer) << ")";
+        return false;
     }
 
+    IpcPacket packet{recvBuffer, (size_t)bytesReceived};
+    callback(packet);
     return true;
 }
 
