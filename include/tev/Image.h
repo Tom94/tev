@@ -87,6 +87,10 @@ public:
         return mId;
     }
 
+    void bumpId() {
+        mId = sId++;
+    }
+
     void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
 
     std::string toString() const;
@@ -124,7 +128,7 @@ private:
     
     std::vector<ChannelGroup> mChannelGroups;
 
-    const int mId;
+    int mId;
 };
 
 std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);

@@ -18,6 +18,7 @@
 #include <nanogui/textbox.h>
 
 #include <memory>
+#include <set>
 #include <vector>
 
 TEV_NAMESPACE_BEGIN
@@ -197,6 +198,7 @@ private:
     std::vector<std::shared_ptr<Image>> mImages;
 
     MultiGraph* mHistogram;
+    std::set<std::shared_ptr<Image>> mToBump;
 
     nanogui::TextBox* mFilter;
     nanogui::Button* mRegexButton;

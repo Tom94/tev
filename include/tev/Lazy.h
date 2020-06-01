@@ -59,6 +59,14 @@ public:
         return mAsyncValue.wait_for(std::chrono::seconds{0}) == std::future_status::ready;
     }
 
+    std::chrono::steady_clock::time_point becameReadyAt() const {
+        if (!isReady()) {
+            return std::chrono::steady_clock::now();
+        } else {
+            return mBecameReadyAt;
+        }
+    }
+
     void computeAsync() {
         // No need to perform an async computation if we
         // already computed the value before or if one is
@@ -68,9 +76,17 @@ public:
         }
 
         if (mThreadPool) {
-            mAsyncValue = mThreadPool->enqueueTask([this]() { return compute(); }, true);
+            mAsyncValue = mThreadPool->enqueueTask([this]() {
+                T result = compute();
+                mBecameReadyAt = std::chrono::steady_clock::now();
+                return result;
+            }, true);
         } else {
-            mAsyncValue = std::async(std::launch::async, [this]() { return compute(); });
+            mAsyncValue = std::async(std::launch::async, [this]() {
+                T result = compute();
+                mBecameReadyAt = std::chrono::steady_clock::now();
+                return result;
+            });
         }
     }
 
@@ -89,6 +105,7 @@ private:
     std::future<T> mAsyncValue;
     T mValue;
     bool mIsComputed = false;
+    std::chrono::steady_clock::time_point mBecameReadyAt;
 };
 
 TEV_NAMESPACE_END

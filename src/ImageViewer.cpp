@@ -862,6 +862,21 @@ void ImageViewer::drawContents() {
     } catch (runtime_error) {
     }
 
+    for (auto it = begin(mToBump); it != end(mToBump); ) {
+        auto& image = *it;
+        bool isShown = image == mCurrentImage || image == mCurrentReference;
+
+        // If the image is no longer shown, bump ID immediately. Otherwise, wait until canvas statistics were ready for over 200 ms.
+        if (!isShown || (std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt()) > std::chrono::milliseconds{200}) {
+            image->bumpId();
+            auto localIt = it;
+            ++it;
+            mToBump.erase(localIt);
+        } else {
+            ++it;
+        }
+    }
+
     if (mRequiresFilterUpdate) {
         updateFilter();
         mRequiresFilterUpdate = false;
@@ -1119,6 +1134,16 @@ void ImageViewer::updateImage(
     image->updateChannel(channel, x, y, width, height, imageData);
     if (shallSelect) {
         selectImage(image);
+    }
+
+    // This image needs newly computed statistics... so give it a new ID.
+    // However, if the image is currently shown, we don't want to overwhelm
+    // the CPU, so we only launch new statistics computations every so often.
+    // These computations are scheduled from `drawContents` via the `mToBump` set.
+    if (image != mCurrentImage && image != mCurrentReference) {
+        image->bumpId();
+    } else {
+        mToBump.insert(image);
     }
 }
 
