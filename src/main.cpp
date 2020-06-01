@@ -259,6 +259,8 @@ int mainFunc(const vector<string>& arguments) {
                                     string imageString = ensureUtf8(info.imagePath);
                                     imageViewer->reloadImage(imageString, info.grabFocus);
                                 });
+
+                                glfwPostEmptyEvent();
                                 break;
                             }
 
@@ -269,6 +271,8 @@ int mainFunc(const vector<string>& arguments) {
                                     string imageString = ensureUtf8(info.imagePath);
                                     imageViewer->removeImage(imageString);
                                 });
+
+                                glfwPostEmptyEvent();
                                 break;
                             }
 
@@ -279,6 +283,8 @@ int mainFunc(const vector<string>& arguments) {
                                     string imageString = ensureUtf8(info.imagePath);
                                     imageViewer->updateImage(imageString, info.grabFocus, info.channel, info.x, info.y, info.width, info.height, info.imageData);
                                 });
+
+                                glfwPostEmptyEvent();
                                 break;
                             }
 
