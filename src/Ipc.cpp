@@ -334,7 +334,8 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
     ENetPacket* packet = enet_packet_create(message.data(), message.size(), ENET_PACKET_FLAG_RELIABLE);
     enet_peer_send(mPeer, 0, packet);
 
-    enet_host_flush(mSocket);
+    ENetEvent event;
+    enet_host_service(mSocket, &event, 0);
 }
 
 void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback) {
