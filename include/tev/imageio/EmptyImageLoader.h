@@ -16,7 +16,7 @@ public:
     ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector) const override;
 
     std::string name() const override {
-        return "Empty";
+        return "IPC";
     }
 
     bool hasPremultipliedAlpha() const override {
