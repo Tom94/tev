@@ -330,7 +330,7 @@ int mainFunc(const vector<string>& arguments) {
                     }
                 });
 
-                this_thread::sleep_for(chrono::milliseconds{1});
+                this_thread::sleep_for(chrono::milliseconds{10});
             }
         }};
     }
