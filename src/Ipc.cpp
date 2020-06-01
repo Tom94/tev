@@ -36,20 +36,20 @@ void IpcPacket::setOpenImage(const string& imagePath, bool grabFocus) {
     payload << imagePath;
 }
 
-void IpcPacket::setReloadImage(const string& imagePath, bool grabFocus) {
+void IpcPacket::setReloadImage(const string& imageName, bool grabFocus) {
     OStream payload{mPayload};
     payload << Type::ReloadImage;
     payload << grabFocus;
-    payload << imagePath;
+    payload << imageName;
 }
 
-void IpcPacket::setCloseImage(const string& imagePath) {
+void IpcPacket::setCloseImage(const string& imageName) {
     OStream payload{mPayload};
     payload << Type::CloseImage;
-    payload << imagePath;
+    payload << imageName;
 }
 
-void IpcPacket::setUpdateImage(const string& imagePath, bool grabFocus, const string& channel, int x, int y, int width, int height, const vector<float>& imageData) {
+void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const string& channel, int x, int y, int width, int height, const vector<float>& imageData) {
     if ((int)imageData.size() != width * height) {
         throw runtime_error{"UpdateImage IPC packet's data size does not match crop windows."};
     }
@@ -57,10 +57,24 @@ void IpcPacket::setUpdateImage(const string& imagePath, bool grabFocus, const st
     OStream payload{mPayload};
     payload << Type::UpdateImage;
     payload << grabFocus;
-    payload << imagePath;
+    payload << imageName;
     payload << channel;
     payload << x << y << width << height;
     payload << imageData;
+}
+
+void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int width, int height, int nChannels, const std::vector<std::string>& channelNames) {
+    if ((int)channelNames.size() != nChannels) {
+        throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
+    }
+
+    OStream payload{mPayload};
+    payload << Type::CreateImage;
+    payload << grabFocus;
+    payload << imageName;
+    payload << width << height;
+    payload << nChannels;
+    payload << channelNames;
 }
 
 IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
@@ -89,7 +103,7 @@ IpcPacketReloadImage IpcPacket::interpretAsReloadImage() const {
     }
 
     payload >> result.grabFocus;
-    payload >> result.imagePath;
+    payload >> result.imageName;
     return result;
 }
 
@@ -103,7 +117,7 @@ IpcPacketCloseImage IpcPacket::interpretAsCloseImage() const {
         throw runtime_error{"Cannot interpret IPC packet as CloseImage."};
     }
 
-    payload >> result.imagePath;
+    payload >> result.imageName;
     return result;
 }
 
@@ -118,7 +132,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     }
 
     payload >> result.grabFocus;
-    payload >> result.imagePath;
+    payload >> result.imageName;
     payload >> result.channel;
     payload >> result.x >> result.y >> result.width >> result.height;
 
@@ -132,6 +146,33 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 
     result.imageData.resize(nPixels);
     payload >> result.imageData;
+    return result;
+}
+
+IpcPacketCreateImage IpcPacket::interpretAsCreateImage() const {
+    IpcPacketCreateImage result;
+    IStream payload{mPayload};
+
+    Type type;
+    payload >> type;
+    if (type != Type::CreateImage) {
+        throw runtime_error{"Cannot interpret IPC packet as CreateImage."};
+    }
+
+    payload >> result.grabFocus;
+    payload >> result.imageName;
+    payload >> result.width >> result.height;
+    payload >> result.nChannels;
+
+    // This is a very conservative upper bound on how many channel names
+    // fit into a UDP packet
+    if (result.nChannels > 10000) {
+        throw runtime_error{"Too many channels in CreateImage IPC packet."};
+    }
+
+    result.channelNames.resize(result.nChannels);
+    payload >> result.channelNames;
+
     return result;
 }
 

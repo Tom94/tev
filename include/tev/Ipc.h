@@ -22,12 +22,12 @@ struct IpcPacketOpenImage {
 };
 
 struct IpcPacketReloadImage {
-    std::string imagePath;
+    std::string imageName;
     bool grabFocus;
 };
 
 struct IpcPacketUpdateImage {
-    std::string imagePath;
+    std::string imageName;
     bool grabFocus;
     std::string channel;
     int32_t x, y, width, height;
@@ -35,7 +35,15 @@ struct IpcPacketUpdateImage {
 };
 
 struct IpcPacketCloseImage {
-    std::string imagePath;
+    std::string imageName;
+};
+
+struct IpcPacketCreateImage {
+    std::string imageName;
+    bool grabFocus;
+    int32_t width, height;
+    int32_t nChannels;
+    std::vector<std::string> channelNames;
 };
 
 class IpcPacket {
@@ -45,6 +53,7 @@ public:
         ReloadImage = 1,
         CloseImage = 2,
         UpdateImage = 3,
+        CreateImage = 4,
     };
 
     IpcPacket() = default;
@@ -63,14 +72,16 @@ public:
     }
 
     void setOpenImage(const std::string& imagePath, bool grabFocus);
-    void setReloadImage(const std::string& imagePath, bool grabFocus);
-    void setCloseImage(const std::string& imagePath);
-    void setUpdateImage(const std::string& imagePath, bool grabFocus, const std::string& channel, int x, int y, int width, int height, const std::vector<float>& imageData);
+    void setReloadImage(const std::string& imageName, bool grabFocus);
+    void setCloseImage(const std::string& imageName);
+    void setUpdateImage(const std::string& imageName, bool grabFocus, const std::string& channel, int x, int y, int width, int height, const std::vector<float>& imageData);
+    void setCreateImage(const std::string& imageName, bool grabFocus, int width, int height, int nChannels, const std::vector<std::string>& channelNames);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
     IpcPacketCloseImage interpretAsCloseImage() const;
     IpcPacketUpdateImage interpretAsUpdateImage() const;
+    IpcPacketCreateImage interpretAsCreateImage() const;
 
 private:
     std::vector<char> mPayload;

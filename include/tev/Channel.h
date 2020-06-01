@@ -68,6 +68,8 @@ public:
     void divideByAsync(const Channel& other, ThreadPool& pool);
     void multiplyWithAsync(const Channel& other, ThreadPool& pool);
 
+    void setZero() { mData.setZero(); }
+
     void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
 
     static std::pair<std::string, std::string> split(const std::string& fullChannel);

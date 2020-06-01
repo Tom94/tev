@@ -260,7 +260,7 @@ int mainFunc(const vector<string>& arguments) {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsReloadImage();
                                 imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imagePath);
+                                    string imageString = ensureUtf8(info.imageName);
                                     imageViewer->reloadImage(imageString, info.grabFocus);
                                 });
 
@@ -272,7 +272,7 @@ int mainFunc(const vector<string>& arguments) {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsCloseImage();
                                 imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imagePath);
+                                    string imageString = ensureUtf8(info.imageName);
                                     imageViewer->removeImage(imageString);
                                 });
 
@@ -284,8 +284,37 @@ int mainFunc(const vector<string>& arguments) {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsUpdateImage();
                                 imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imagePath);
+                                    string imageString = ensureUtf8(info.imageName);
                                     imageViewer->updateImage(imageString, info.grabFocus, info.channel, info.x, info.y, info.width, info.height, info.imageData);
+                                });
+
+                                glfwPostEmptyEvent();
+                                break;
+                            }
+
+                            case IpcPacket::CreateImage: {
+                                while (!imageViewer) { }
+                                auto info = packet.interpretAsCreateImage();
+                                imageViewer->scheduleToUiThread([&,info] {
+                                    string imageString = ensureUtf8(info.imageName);
+                                    stringstream imageStream;
+                                    imageStream
+                                        << "empty" << " "
+                                        << info.width << " "
+                                        << info.height << " "
+                                        << info.nChannels << " "
+                                        ;
+                                    for (int i = 0; i < info.nChannels; ++i) {
+                                        // The following lines encode strings by prefixing their length.
+                                        // The reason for using this encoding is to allow  arbitrary characters,
+                                        // including whitespaces, in the channel names.
+                                        imageStream << info.channelNames[i].length() << info.channelNames[i];
+                                    }
+
+                                    auto image = tryLoadImage(imageString, imageStream, "");
+                                    if (image) {
+                                        imageViewer->addImage(image, info.grabFocus);
+                                    }
                                 });
 
                                 glfwPostEmptyEvent();
