@@ -65,8 +65,8 @@ public:
         }
     }
 
-    const GlTexture* texture(const std::string& channelGroupName);
-    const GlTexture* texture(const std::vector<std::string>& channelNames);
+    GlTexture* texture(const std::string& channelGroupName);
+    GlTexture* texture(const std::vector<std::string>& channelNames);
 
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;

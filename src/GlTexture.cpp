@@ -47,7 +47,7 @@ void GlTexture::setData(const vector<float>& data, const Vector2i& size, int num
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, mClamping);
 
     if (mMipmap) {
-        glGenerateMipmap(GL_TEXTURE_2D);
+        mRequiresMipmapping = true;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     } else {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mFiltering);
@@ -83,8 +83,18 @@ void GlTexture::setDataSub(const vector<float>& data, const Vector2i& origin, co
 
     // Regenerate the mipmap... this is probably the most expensive part about updating the texture
     if (mMipmap) {
+        mRequiresMipmapping = true;
         glGenerateMipmap(GL_TEXTURE_2D);
     }
+}
+
+void GlTexture::bind() {
+    if (mRequiresMipmapping) {
+        glGenerateMipmap(GL_TEXTURE_2D);
+        mRequiresMipmapping = false;
+    }
+
+    glBindTexture(GL_TEXTURE_2D, mId);
 }
 
 TEV_NAMESPACE_END

@@ -34,10 +34,10 @@ public:
         }
     }
 
-    GLuint id() const { return mId; }
     const std::vector<float>& data() const { return mData; }
     const Eigen::Vector2i& size() const { return mSize; }
 
+    void bind();
     void setData(const std::vector<float>& data, const Eigen::Vector2i& size, int numChannels);
     void setDataSub(const std::vector<float>& data, const Eigen::Vector2i& origin, const Eigen::Vector2i& size, int numChannels);
 
@@ -46,6 +46,7 @@ private:
     GLint mClamping;
     GLint mFiltering;
     bool mMipmap;
+    bool mRequiresMipmapping = false;
 
     Eigen::Vector2i mSize = Eigen::Vector2i::Constant(0);
     int mNumChannels = 0;

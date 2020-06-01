@@ -81,11 +81,11 @@ string Image::shortName() const {
     return result;
 }
 
-const GlTexture* Image::texture(const string& channelGroupName) {
+GlTexture* Image::texture(const string& channelGroupName) {
     return texture(channelsInGroup(channelGroupName));
 }
 
-const GlTexture* Image::texture(const vector<string>& channelNames) {
+GlTexture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
