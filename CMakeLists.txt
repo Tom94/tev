@@ -85,13 +85,14 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
     endif()
 endif()
 
-set(TEV_LIBS clip IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+set(TEV_LIBS clip IlmImf nanogui enet ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
-    set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
+    set(TEV_LIBS ${TEV_LIBS} zlibstatic winmm ws2_32)
 endif()
 
 set(TEV_SOURCES
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
+    include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
     include/tev/imageio/ExrImageSaver.h src/imageio/ExrImageSaver.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
@@ -147,6 +148,7 @@ include_directories(
     ${ARGS_INCLUDE}
     ${CLIP_INCLUDE}
     ${EIGEN_INCLUDE}
+    ${ENET_INCLUDE}
     ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}
     ${NANOGUI_EXTRA_INCS}

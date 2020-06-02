@@ -2,6 +2,7 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/imageio/ClipboardImageLoader.h>
+#include <tev/imageio/EmptyImageLoader.h>
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
@@ -18,6 +19,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new ExrImageLoader());
         imageLoaders.emplace_back(new PfmImageLoader());
         imageLoaders.emplace_back(new ClipboardImageLoader());
+        imageLoaders.emplace_back(new EmptyImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());
         return imageLoaders;
     };

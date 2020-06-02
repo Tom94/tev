@@ -53,6 +53,10 @@ public:
         return at(index.x() + index.y() * mData.cols());
     }
 
+    float at(Eigen::Vector2i index) const {
+        return at(index.x() + index.y() * mData.cols());
+    }
+
     Eigen::DenseIndex count() const {
         return mData.size();
     }
@@ -63,6 +67,10 @@ public:
 
     void divideByAsync(const Channel& other, ThreadPool& pool);
     void multiplyWithAsync(const Channel& other, ThreadPool& pool);
+
+    void setZero() { mData.setZero(); }
+
+    void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
 
     static std::pair<std::string, std::string> split(const std::string& fullChannel);
 

@@ -29,6 +29,11 @@ struct ChannelGroup {
     std::vector<std::string> channels;
 };
 
+struct ImageTexture {
+    GlTexture glTexture;
+    std::vector<std::string> channels;
+};
+
 class Image {
 public:
     Image(const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
@@ -60,8 +65,8 @@ public:
         }
     }
 
-    const GlTexture* texture(const std::string& channelGroupName);
-    const GlTexture* texture(const std::vector<std::string>& channelNames);
+    GlTexture* texture(const std::string& channelGroupName);
+    GlTexture* texture(const std::vector<std::string>& channelNames);
 
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
@@ -78,11 +83,15 @@ public:
         return mChannelGroups;
     }
 
-    const ChannelGroup& channelGroup(const std::string& groupName) const;
-
     int id() const {
         return mId;
     }
+
+    void bumpId() {
+        mId = sId++;
+    }
+
+    void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
 
     std::string toString() const;
 
@@ -113,13 +122,13 @@ private:
 
     std::string mName;
 
-    std::map<std::string, GlTexture> mTextures;
+    std::map<std::string, ImageTexture> mTextures;
 
     ImageData mData;
     
     std::vector<ChannelGroup> mChannelGroups;
 
-    const int mId;
+    int mId;
 };
 
 std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);

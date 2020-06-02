@@ -216,7 +216,7 @@ void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    const GlTexture* textureImage,
+    GlTexture* textureImage,
     const Matrix3f& transformImage,
     float exposure,
     float offset,
@@ -234,9 +234,9 @@ void UberShader::draw(
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    const GlTexture* textureImage,
+    GlTexture* textureImage,
     const Matrix3f& transformImage,
-    const GlTexture* textureReference,
+    GlTexture* textureReference,
     const Matrix3f& transformReference,
     float exposure,
     float offset,
@@ -260,7 +260,7 @@ void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f&
 }
 
 void UberShader::bindImageData(
-    const GlTexture* textureImage,
+    GlTexture* textureImage,
     const Matrix3f& transformImage,
     float exposure,
     float offset,
@@ -268,7 +268,7 @@ void UberShader::bindImageData(
     ETonemap tonemap
 ) {
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textureImage->id());
+    textureImage->bind();
 
     mShader.bind();
     mShader.setUniform("image", 0);
@@ -280,17 +280,17 @@ void UberShader::bindImageData(
     mShader.setUniform("tonemap", static_cast<int>(tonemap));
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, mColorMap.id());
+    mColorMap.bind();
     mShader.setUniform("colormap", 2);
 }
 
 void UberShader::bindReferenceData(
-    const GlTexture* textureReference,
+    GlTexture* textureReference,
     const Matrix3f& transformReference,
     EMetric metric
 ) {
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, textureReference->id());
+    textureReference->bind();
 
     mShader.setUniform("reference", 1);
     mShader.setUniform("referenceTransform", transformReference);

@@ -50,12 +50,17 @@ set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(CLIP_TESTS OFF CACHE BOOL " " FORCE)
 add_subdirectory(clip)
 
+# Conpile enet
+add_subdirectory(enet)
+
 # Manually populate locations of our included dependencies.
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
 
 set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
 
 set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/eigen PARENT_SCOPE)
+
+set(ENET_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/enet/include PARENT_SCOPE)
 
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
     set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)

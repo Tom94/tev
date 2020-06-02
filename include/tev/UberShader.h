@@ -21,7 +21,7 @@ public:
     void draw(
         const Eigen::Vector2f& pixelSize,
         const Eigen::Vector2f& checkerSize,
-        const GlTexture* textureImage,
+        GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
         float exposure,
         float offset,
@@ -33,9 +33,9 @@ public:
     void draw(
         const Eigen::Vector2f& pixelSize,
         const Eigen::Vector2f& checkerSize,
-        const GlTexture* textureImage,
+        GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
-        const GlTexture* textureReference,
+        GlTexture* textureReference,
         const Eigen::Matrix3f& transformReference,
         float exposure,
         float offset,
@@ -56,7 +56,7 @@ private:
     void bindCheckerboardData(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
 
     void bindImageData(
-        const GlTexture* textureImage,
+        GlTexture* textureImage,
         const Eigen::Matrix3f& transformImage,
         float exposure,
         float offset,
@@ -65,7 +65,7 @@ private:
     );
 
     void bindReferenceData(
-        const GlTexture* textureReference,
+        GlTexture* textureReference,
         const Eigen::Matrix3f& transformReference,
         EMetric metric
     );
