@@ -84,17 +84,16 @@ void GlTexture::setDataSub(const vector<float>& data, const Vector2i& origin, co
     // Regenerate the mipmap... this is probably the most expensive part about updating the texture
     if (mMipmap) {
         mRequiresMipmapping = true;
-        glGenerateMipmap(GL_TEXTURE_2D);
     }
 }
 
 void GlTexture::bind() {
+    glBindTexture(GL_TEXTURE_2D, mId);
+
     if (mRequiresMipmapping) {
         glGenerateMipmap(GL_TEXTURE_2D);
         mRequiresMipmapping = false;
     }
-
-    glBindTexture(GL_TEXTURE_2D, mId);
 }
 
 TEV_NAMESPACE_END
