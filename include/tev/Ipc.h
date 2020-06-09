@@ -197,7 +197,7 @@ public:
 
     void service(std::function<void(const IpcPacket&)> callback);
 
-    bool isClosed() const { return mFd == -1; }
+    bool isClosed() const;
 
 private:
     int mFd;
@@ -225,12 +225,13 @@ public:
 private:
     bool mIsPrimaryInstance;
 
-    int mSocketFd;
     std::list<SocketConnection> mSocketConnections;
 
 #ifdef _WIN32
+    SOCKET mSocketFd;
     HANDLE mInstanceMutex;
 #else
+    int mSocketFd;
     int mLockFileDescriptor;
     filesystem::path mLockFile;
 #endif
