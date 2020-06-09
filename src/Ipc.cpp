@@ -9,6 +9,7 @@
 #   ifdef EMSCRIPTEN
 #       include <fcntl.h>
 #   endif
+#   include <signal.h>
 #   include <sys/file.h>
 #   include <sys/socket.h>
 #   include <unistd.h>
