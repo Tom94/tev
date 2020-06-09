@@ -182,6 +182,14 @@ static void makeSocketNonBlocking(Ipc::socket_t socketFd) {
 #endif
 }
 
+static int closeSocket(Ipc::socket_t socket) {
+#ifdef _WIN32
+    return closesocket(socket);
+#else
+    return close(socket);
+#endif
+}
+
 Ipc::Ipc(const string& hostname) {
     const string lockName = string{".tev-lock."} + hostname;
 
@@ -228,8 +236,7 @@ Ipc::Ipc(const string& hostname) {
             throw runtime_error{tfm::format("Could not initialize WSA: %s", errorString(wsaStartupResult))};
         }
 #else
-        // We don't care about getting a SIGPIPE if the display server goes
-        // away...
+        // We don't care about getting a SIGPIPE if the display server goes away...
         signal(SIGPIPE, SIG_IGN);
 #endif
 
@@ -289,7 +296,7 @@ Ipc::Ipc(const string& hostname) {
                         tlog::info() << tfm::format("connect() failed: %s", errorString(errorId));
                     }
 
-                    close(mSocketFd);
+                    closeSocket(mSocketFd);
                     mSocketFd = INVALID_SOCKET;
                     continue;
                 }
@@ -326,7 +333,7 @@ Ipc::~Ipc() {
 
     // Networking
     if (mSocketFd != INVALID_SOCKET) {
-        if (close(mSocketFd) == SOCKET_ERROR) {
+        if (closeSocket(mSocketFd) == SOCKET_ERROR) {
             tlog::warning() << "Error closing socket listen fd " << mSocketFd << ": " << errorString(lastSocketError());
         }
     }
@@ -414,7 +421,7 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         // happens.
         if (bytesReceived == 0) {
             tlog::info() << "Client disconnected from socket fd " << mSocketFd;
-            close(mSocketFd);
+            closeSocket(mSocketFd);
             mSocketFd = INVALID_SOCKET;
             return;
         }
