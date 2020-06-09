@@ -3,15 +3,11 @@
 
 #pragma once
 
-// ENet must come first to prevent compilation failure on windows
-#define NOMINMAX
-#include <enet/enet.h>
-#undef NOMINMAX
-
 #include <tev/Common.h>
 
 #include <filesystem/path.h>
 
+#include <list>
 #include <vector>
 
 TEV_NAMESPACE_BEGIN
@@ -68,7 +64,8 @@ public:
     }
 
     Type type() const {
-        return (Type)mPayload[0];
+        // The first 4 bytes encode the message size.
+        return (Type)mPayload[4];
     }
 
     void setOpenImage(const std::string& imagePath, bool grabFocus);
@@ -84,6 +81,10 @@ public:
     IpcPacketCreateImage interpretAsCreateImage() const;
 
 private:
+    void setMessageLength() {
+        *((int *)mPayload.data()) = int(size());
+    }
+
     std::vector<char> mPayload;
 
     class IStream {
@@ -178,6 +179,25 @@ private:
     };
 };
 
+class SocketConnection {
+public:
+    SocketConnection(int fd);
+
+    void Service(std::function<void(const IpcPacket&)> callback);
+
+    bool Closed() const { return fd == -1; }
+
+private:
+    int fd;
+
+    // Because TCP socket recv() calls return as much data as is available
+    // (which may have the partial contents of a client-side send() call,
+    // we need to buffer it up in SocketConnection.
+    std::vector<char> buffer;
+    // Offset into buffer where next recv() call should start writing.
+    int recvOffset = 0;
+};
+
 class Ipc {
 public:
     Ipc(const std::string& hostname);
@@ -192,13 +212,9 @@ public:
 
 private:
     bool mIsPrimaryInstance;
-    
-    ENetAddress mAddress;
-    ENetHost* mSocket = nullptr;
 
-    // Represents the server when this is a
-    // secondary instance of tev.
-    ENetPeer* mPeer = nullptr;
+    int socketFd;
+    std::list<SocketConnection> socketConnections;
 
 #ifdef _WIN32
     HANDLE mInstanceMutex;
