@@ -312,7 +312,7 @@ Ipc::Ipc(const string& hostname) {
                     continue;
                 }
 
-                if (connect(mSocketFd, ptr->ai_addr, ptr->ai_addrlen) == SOCKET_ERROR) {
+                if (connect(mSocketFd, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
                     int errorId = lastSocketError();
                     if (errorId == SocketError::ConnRefused) {
                         throw runtime_error{"Connection to primary refused"};
@@ -373,7 +373,7 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
         throw runtime_error{"Must be a secondary instance to send to the primary instance."};
     }
 
-    int bytesSent = send(mSocketFd, message.data(), message.size(), 0 /* flags */);
+    int bytesSent = send(mSocketFd, message.data(), (int)message.size(), 0 /* flags */);
     if (bytesSent != int(message.size())) {
         throw runtime_error{tfm::format("send() failed: %s", errorString(lastSocketError()))};
     }
@@ -393,7 +393,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
         if (errorId == SocketError::WouldBlock) {
             // no problem; no one is trying to connect
         } else {
-            tlog::warning() << "accept() error: " << errorString(errorId);
+            tlog::warning() << "accept() error: " << errorId << " " << errorString(errorId);
         }
     } else {
         uint32_t ip = ntohl(client.sin_addr.s_addr);
@@ -427,8 +427,8 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
 
     while (true) {
         // Receive as much data as we can, up to the capacity of 'mBuffer'.
-        int maxBytes = mBuffer.size() - mRecvOffset;
-        int bytesReceived = recv(mSocketFd, mBuffer.data() + mRecvOffset, maxBytes, 0);
+        size_t maxBytes = mBuffer.size() - mRecvOffset;
+        int bytesReceived = recv(mSocketFd, mBuffer.data() + mRecvOffset, (int)maxBytes, 0);
         if (bytesReceived == SOCKET_ERROR) {
             int errorId = lastSocketError();
             // no more data; this is fine.
@@ -438,11 +438,12 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
                 throw runtime_error{tfm::format("Error reading from socket: ", errorString(errorId))};
             }
         }
-        mRecvOffset += bytesReceived;
+
+        TEV_ASSERT(bytesReceived >= 0, "With no error, the number of bytes received should be positive.");
+        mRecvOffset += (size_t)bytesReceived;
 
         // Since we aren't getting annoying SIGPIPE signals when a client
-        // disconnects, a zero-byte read here is how we know when that
-        // happens.
+        // disconnects, a zero-byte read here is how we know when that happens.
         if (bytesReceived == 0) {
             tlog::info() << "Client disconnected from socket fd " << mSocketFd;
             closeSocket(mSocketFd);
@@ -452,16 +453,15 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
 
         // Go through the buffer and service as many complete messages as
         // we can find.
-        int processedOffset = 0;
+        size_t processedOffset = 0;
         while (processedOffset + 4 <= mRecvOffset) {
-            // There's at least enough to figure out the next message's
-            // length.
-            char* messagePtr = mBuffer.data() + processedOffset;
-            int messageLength = *((int *)messagePtr);
+            // There's at least enough to figure out the next message's length.
+            const char* messagePtr = mBuffer.data() + processedOffset;
+            uint32_t messageLength = *((uint32_t*)messagePtr);
 
             if (processedOffset + messageLength <= mRecvOffset) {
                 // We have a full message.
-                callback(IpcPacket(messagePtr, messageLength));
+                callback(IpcPacket{messagePtr, messageLength});
                 processedOffset += messageLength;
             } else {
                 // It's a partial message; we'll need to recv() more.

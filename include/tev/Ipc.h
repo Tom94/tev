@@ -236,7 +236,7 @@ private:
         // we need to buffer it up in SocketConnection.
         std::vector<char> mBuffer;
         // Offset into buffer where next recv() call should start writing.
-        int mRecvOffset = 0;
+        size_t mRecvOffset = 0;
     };
 
     std::list<SocketConnection> mSocketConnections;
