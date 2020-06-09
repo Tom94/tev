@@ -178,18 +178,6 @@ int lastError();
 int lastSocketError();
 std::string errorString(int errorId);
 
-enum SocketError : int {
-#ifdef _WIN32
-    Again = WSAAGAIN,
-    ConnRefused = WSACONNREFUSED,
-    WouldBlock = WSAWOULDBLOCK,
-#else
-    Again = EAGAIN,
-    ConnRefused = ECONNREFUSED,
-    WouldBlock = EWOULDBLOCK,
-#endif
-};
-
 filesystem::path homeDirectory();
 
 void toggleConsole();

@@ -1,6 +1,13 @@
 // This file was developed by Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
+#ifdef _WIN32
+#   define NOMINMAX
+#   include <winsock2.h>
+#   include <Ws2tcpip.h>
+#   undef NOMINMAX
+#endif
+
 #include <tev/Common.h>
 #include <tev/Ipc.h>
 
@@ -25,6 +32,18 @@ using socklen_t = int;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
+
+enum SocketError : int {
+#ifdef _WIN32
+    Again = EAGAIN,
+    ConnRefused = WSAECONNREFUSED,
+    WouldBlock = WSAEWOULDBLOCK,
+#else
+    Again = EAGAIN,
+    ConnRefused = ECONNREFUSED,
+    WouldBlock = EWOULDBLOCK,
+#endif
+};
 
 IpcPacket::IpcPacket(const char* data, size_t length) {
     if (length <= 0) {
