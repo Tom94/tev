@@ -263,22 +263,20 @@ Ipc::Ipc(const string& hostname) {
         if (mIsPrimaryInstance) {
             mSocketFd = socket(AF_INET, SOCK_STREAM, 0);
             if (mSocketFd == INVALID_SOCKET) {
-                throw runtime_error{"socket() call failed"};
+                throw runtime_error{tfm::format("socket() call failed: %s", errorString(lastSocketError()))};
             }
 
             makeSocketNonBlocking(mSocketFd);
 
-            // Avoid address in use error that occurs if we quit with a
-            // client connected.
+            // Avoid address in use error that occurs if we quit with a client connected.
             int t = 1;
-            int ret = setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char *)&t, sizeof(int));
-            if (ret == SOCKET_ERROR) {
-                throw runtime_error{"setsockopt() call failed"};
+            if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&t, sizeof(int)) == SOCKET_ERROR) {
+                throw runtime_error{tfm::format("setsockopt() call failed: %s", errorString(lastSocketError()))};
             }
 
             struct sockaddr_in addr;
             addr.sin_family = AF_INET;
-            addr.sin_port = htons((short)atoi(port.c_str()));
+            addr.sin_port = htons((uint16_t)atoi(port.c_str()));
 
 #ifdef _WIN32
             InetPton(AF_INET, ip.c_str(), &addr.sin_addr);
@@ -286,12 +284,12 @@ Ipc::Ipc(const string& hostname) {
             inet_aton(ip.c_str(), &addr.sin_addr);
 #endif
 
-            if (::bind(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR) {
-                throw runtime_error{"bind() call failed"};
+            if (::bind(mSocketFd, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+                throw runtime_error{tfm::format("bind() call failed: %s", errorString(lastSocketError()))};
             }
 
             if (listen(mSocketFd, 5) == SOCKET_ERROR) {
-                throw runtime_error{"listen() call failed"};
+                throw runtime_error{tfm::format("listen() call failed: %s", errorString(lastSocketError()))};
             }
 
             tlog::success() << "Initialized IPC, listening on " << ip << ":" << port;
@@ -301,23 +299,25 @@ Ipc::Ipc(const string& hostname) {
             hints.ai_socktype = SOCK_STREAM;
             int err = getaddrinfo(ip.c_str(), port.c_str(), &hints, &addrinfo);
             if (err != 0) {
-                throw runtime_error{tfm::format("getaddrinfo: %s", gai_strerror(err))};
+                throw runtime_error{tfm::format("getaddrinfo() failed: %s", gai_strerror(err))};
             }
+
+            ScopeGuard addrinfoGuard{[addrinfo] { freeaddrinfo(addrinfo); }};
 
             mSocketFd = INVALID_SOCKET;
             for (struct addrinfo* ptr = addrinfo; ptr; ptr = ptr->ai_next) {
                 mSocketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
                 if (mSocketFd == INVALID_SOCKET) {
-                    tlog::info() << tfm::format("socket() failed: %s", errorString(lastSocketError()));
+                    tlog::warning() << tfm::format("socket() failed: %s", errorString(lastSocketError()));
                     continue;
                 }
 
                 if (connect(mSocketFd, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
                     int errorId = lastSocketError();
                     if (errorId == SocketError::ConnRefused) {
-                        throw runtime_error{"Connection to primary refused"};
+                        throw runtime_error{"Connection to primary instance refused"};
                     } else {
-                        tlog::info() << tfm::format("connect() failed: %s", errorString(errorId));
+                        tlog::warning() << tfm::format("connect() failed: %s", errorString(errorId));
                     }
 
                     closeSocket(mSocketFd);
@@ -325,11 +325,13 @@ Ipc::Ipc(const string& hostname) {
                     continue;
                 }
 
-                tlog::info() << "Connected to primary instance";
+                tlog::success() << "Connected to primary instance at " << ip << ":" << port;
                 break; // success
             }
 
-            freeaddrinfo(addrinfo);
+            if (mSocketFd == INVALID_SOCKET) {
+                throw runtime_error{"Unable to connect to primary instance."};
+            }
         }
     } catch (runtime_error e) {
         tlog::warning() << "Could not initialize IPC; assuming primary instance. " << e.what();
@@ -387,7 +389,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     // Check for new connections.
     struct sockaddr_in client;
     socklen_t addrlen = sizeof(client);
-    int fd = accept(mSocketFd, (struct sockaddr *)&client, &addrlen);
+    int fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
     if (fd == INVALID_SOCKET) {
         int errorId = lastSocketError();
         if (errorId == SocketError::WouldBlock) {
@@ -397,17 +399,19 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
         }
     } else {
         uint32_t ip = ntohl(client.sin_addr.s_addr);
-        tlog::info() << tfm::format("Got socket connection from %d.%d.%d.%d", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff);
+        uint16_t port = ntohs(client.sin_port);
+        tlog::info() << tfm::format("Accepted IPC client connection into socket fd %d (host: %d.%d.%d.%d:%d)", fd, ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
         mSocketConnections.push_back(SocketConnection(fd));
     }
 
     // Service existing connections.
     for (auto iter = mSocketConnections.begin(); iter != mSocketConnections.end();) {
         auto cur = iter++;
+        cur->service(callback);
+
+        // If the connection became closed, stop keeping track of it.
         if (cur->isClosed()) {
             mSocketConnections.erase(cur);
-        } else {
-            cur->service(callback);
         }
     }
 }
@@ -416,7 +420,9 @@ Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd) : mSocketFd(fd) {
     TEV_ASSERT(mSocketFd != INVALID_SOCKET, "SocketConnection must receive a valid socket.");
 
     makeSocketNonBlocking(mSocketFd);
-    mBuffer.resize(512 * 1024);
+
+    // 1MB ought to be enough for each individual packet.
+    mBuffer.resize(1024 * 1024);
 }
 
 void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
@@ -446,8 +452,7 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         // disconnects, a zero-byte read here is how we know when that happens.
         if (bytesReceived == 0) {
             tlog::info() << "Client disconnected from socket fd " << mSocketFd;
-            closeSocket(mSocketFd);
-            mSocketFd = INVALID_SOCKET;
+            close();
             return;
         }
 
@@ -458,6 +463,12 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             // There's at least enough to figure out the next message's length.
             const char* messagePtr = mBuffer.data() + processedOffset;
             uint32_t messageLength = *((uint32_t*)messagePtr);
+
+            if (messageLength > mBuffer.size()) {
+                tlog::warning() << "Client attempted to send a packet larger than our buffer size. Connection terminated.";
+                close();
+                return;
+            }
 
             if (processedOffset + messageLength <= mRecvOffset) {
                 // We have a full message.
@@ -477,6 +488,13 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             memcpy(mBuffer.data(), mBuffer.data() + processedOffset, mRecvOffset - processedOffset);
             mRecvOffset -= processedOffset;
         }
+    }
+}
+
+void Ipc::SocketConnection::close() {
+    if (!isClosed()) {
+        closeSocket(mSocketFd);
+        mSocketFd = INVALID_SOCKET;
     }
 }
 

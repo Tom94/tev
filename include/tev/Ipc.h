@@ -226,6 +226,8 @@ private:
 
         void service(std::function<void(const IpcPacket&)> callback);
 
+        void close();
+
         bool isClosed() const;
 
     private:
