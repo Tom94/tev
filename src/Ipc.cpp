@@ -240,20 +240,20 @@ Ipc::Ipc(const string& hostname) {
 
         // If we're the primary instance, create a server. Otherwise, create a client.
         if (mIsPrimaryInstance) {
-            socketFd = socket(AF_INET, SOCK_STREAM, 0);
-            if (socketFd == -1) {
+            mSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+            if (mSocketFd == -1) {
                 throw runtime_error{"socket() call failed"};
             }
 
-            if (fcntl(socketFd, F_SETFL,
-                      fcntl(socketFd, F_GETFL, 0) | O_NONBLOCK) == -1) {
+            if (fcntl(mSocketFd, F_SETFL,
+                      fcntl(mSocketFd, F_GETFL, 0) | O_NONBLOCK) == -1) {
                 throw runtime_error{"fcntl() to make socket non-blocking failed"};
             }
 
             // Avoid address in use error that occurs if we quit with a
             // client connected.
             int t = 1;
-            int ret = setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, (const char *)&t,
+            int ret = setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char *)&t,
                                  sizeof(int));
             if (ret == -1) {
                 throw runtime_error{"setsockopt() call failed"};
@@ -264,11 +264,11 @@ Ipc::Ipc(const string& hostname) {
             addr.sin_addr.s_addr = INADDR_ANY;
             addr.sin_port = htons((short)atoi(port.c_str()));
 
-            if (::bind(socketFd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+            if (::bind(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
                 throw runtime_error{"bind() call failed"};
             }
 
-            if (listen(socketFd, 5) == -1) {
+            if (listen(mSocketFd, 5) == -1) {
                 throw runtime_error{"listen() call failed"};
             }
 
@@ -282,15 +282,15 @@ Ipc::Ipc(const string& hostname) {
                 throw runtime_error{tfm::format("getaddrinfo: %s", gai_strerror(err))};
             }
 
-            socketFd = -1;
+            mSocketFd = -1;
             for (struct addrinfo* ptr = addrinfo; ptr; ptr = ptr->ai_next) {
-                socketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-                if (socketFd < 0) {
+                mSocketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+                if (mSocketFd < 0) {
                     tlog::info() << tfm::format("socket() failed: %s", errorString(lastSocketError()));
                     continue;
                 }
 
-                if (connect(socketFd, ptr->ai_addr, ptr->ai_addrlen) < 0) {
+                if (connect(mSocketFd, ptr->ai_addr, ptr->ai_addrlen) < 0) {
                     int errorId = lastSocketError();
                     if (errorId == SocketError::ConnRefused) {
                         throw runtime_error{"Connection to primary refused"};
@@ -298,8 +298,8 @@ Ipc::Ipc(const string& hostname) {
                         tlog::info() << tfm::format("connect() failed: %s", errorString(errorId));
                     }
 
-                    close(socketFd);
-                    socketFd = -1;
+                    close(mSocketFd);
+                    mSocketFd = -1;
                     continue;
                 }
 
@@ -334,9 +334,9 @@ Ipc::~Ipc() {
 #endif
 
     // Networking
-    if (socketFd != -1) {
-        if (close(socketFd) == -1) {
-            tlog::warning() << "Error closing socket listen fd " << socketFd;
+    if (mSocketFd != -1) {
+        if (close(mSocketFd) == -1) {
+            tlog::warning() << "Error closing socket listen fd " << mSocketFd;
         }
     }
 
@@ -351,7 +351,7 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
         throw runtime_error{"Must be a secondary instance to send to the primary instance."};
     }
 
-    int bytesSent = send(socketFd, message.data(), message.size(), 0 /* flags */);
+    int bytesSent = send(mSocketFd, message.data(), message.size(), 0 /* flags */);
     if (bytesSent != int(message.size())) {
         throw runtime_error{tfm::format("send() failed: %s", errorString(lastSocketError()))};
     }
@@ -365,7 +365,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     // Check for new connections.
     struct sockaddr_in client;
     socklen_t addrlen = sizeof(client);
-    int fd = accept(socketFd, (struct sockaddr *)&client, &addrlen);
+    int fd = accept(mSocketFd, (struct sockaddr *)&client, &addrlen);
     if (fd == -1) {
         int errorId = lastSocketError();
         if (errorId == SocketError::WouldBlock) {
@@ -376,14 +376,14 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     } else {
         uint32_t ip = ntohl(client.sin_addr.s_addr);
         tlog::info() << tfm::format("Got socket connection from %d.%d.%d.%d", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff);
-        socketConnections.push_back(SocketConnection(fd));
+        mSocketConnections.push_back(SocketConnection(fd));
     }
 
     // Service existing connections.
-    for (auto iter = socketConnections.begin(); iter != socketConnections.end();) {
+    for (auto iter = mSocketConnections.begin(); iter != mSocketConnections.end();) {
         auto cur = iter++;
         if (cur->isClosed()) {
-            socketConnections.erase(cur);
+            mSocketConnections.erase(cur);
         } else {
             cur->service(callback);
         }

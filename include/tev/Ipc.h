@@ -213,8 +213,8 @@ public:
 private:
     bool mIsPrimaryInstance;
 
-    int socketFd;
-    std::list<SocketConnection> socketConnections;
+    int mSocketFd;
+    std::list<SocketConnection> mSocketConnections;
 
 #ifdef _WIN32
     HANDLE mInstanceMutex;
