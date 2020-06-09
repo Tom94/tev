@@ -23,7 +23,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData EmptyImageLoader::load(istream& iStream, const path& path, const string& channelSelector) const {
+ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&) const {
     ImageData result;
 
     string magic;
