@@ -160,7 +160,6 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addLibrary(about, "args",              "", "Single-Header Argument Parsing Library");
         addLibrary(about, "clip",              "", "Cross-Platform Clipboard Library");
         addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra");
-        addLibrary(about, "ENet",              "", "Reliable UDP-like datagrams for IPC");
         addLibrary(about, "filesystem",        "", "Lightweight Path Manipulation Library");
         addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
         addLibrary(about, "GLEW",              "", "The OpenGL Extension Wrangler Library");
