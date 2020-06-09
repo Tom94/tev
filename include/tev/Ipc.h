@@ -183,19 +183,19 @@ class SocketConnection {
 public:
     SocketConnection(int fd);
 
-    void Service(std::function<void(const IpcPacket&)> callback);
+    void service(std::function<void(const IpcPacket&)> callback);
 
-    bool Closed() const { return fd == -1; }
+    bool isClosed() const { return mFd == -1; }
 
 private:
-    int fd;
+    int mFd;
 
     // Because TCP socket recv() calls return as much data as is available
     // (which may have the partial contents of a client-side send() call,
     // we need to buffer it up in SocketConnection.
-    std::vector<char> buffer;
+    std::vector<char> mBuffer;
     // Offset into buffer where next recv() call should start writing.
-    int recvOffset = 0;
+    int mRecvOffset = 0;
 };
 
 class Ipc {

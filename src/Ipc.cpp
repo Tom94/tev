@@ -13,7 +13,6 @@
 #   include <sys/file.h>
 #   include <sys/socket.h>
 #   include <unistd.h>
-#   include <errno.h>
 #   include <arpa/inet.h>
 #   include <netdb.h>
 #   include <netinet/in.h>
@@ -287,16 +286,16 @@ Ipc::Ipc(const string& hostname) {
             for (struct addrinfo* ptr = addrinfo; ptr; ptr = ptr->ai_next) {
                 socketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
                 if (socketFd < 0) {
-                    tlog::info() << tfm::format("socket() failed: %s", errorString(lastError()));
+                    tlog::info() << tfm::format("socket() failed: %s", errorString(lastSocketError()));
                     continue;
                 }
 
                 if (connect(socketFd, ptr->ai_addr, ptr->ai_addrlen) < 0) {
-                    if (errno == ECONNREFUSED) {
+                    int errorId = lastSocketError();
+                    if (errorId == SocketError::ConnRefused) {
                         throw runtime_error{"Connection to primary refused"};
-                    }
-                    else {
-                        tlog::info() << tfm::format("connect() failed: %s", errorString(lastError()));
+                    } else {
+                        tlog::info() << tfm::format("connect() failed: %s", errorString(errorId));
                     }
 
                     close(socketFd);
@@ -354,7 +353,7 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
 
     int bytesSent = send(socketFd, message.data(), message.size(), 0 /* flags */);
     if (bytesSent != int(message.size())) {
-        throw runtime_error{tfm::format("send() failed: %s", errorString(lastError()))};
+        throw runtime_error{tfm::format("send() failed: %s", errorString(lastSocketError()))};
     }
 }
 
@@ -368,82 +367,85 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     socklen_t addrlen = sizeof(client);
     int fd = accept(socketFd, (struct sockaddr *)&client, &addrlen);
     if (fd == -1) {
-        if (errno == EWOULDBLOCK) {
+        int errorId = lastSocketError();
+        if (errorId == SocketError::WouldBlock) {
             // no problem; no one is trying to connect
-        } else
-            tlog::error() << "accept() error: " << strerror(errno);
+        } else {
+            tlog::warning() << "accept() error: " << errorString(errorId);
+        }
     } else {
         uint32_t ip = ntohl(client.sin_addr.s_addr);
         tlog::info() << tfm::format("Got socket connection from %d.%d.%d.%d", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff);
-        // Only allow local connections (??)
-        // if (client.sin_addr.s_addr != htonl(LOCALHOST_IP))
-        //     close(fd);
-        // else ....
         socketConnections.push_back(SocketConnection(fd));
     }
 
     // Service existing connections.
-    for (auto iter = socketConnections.begin(); iter != socketConnections.end(); ) {
+    for (auto iter = socketConnections.begin(); iter != socketConnections.end();) {
         auto cur = iter++;
-        if (cur->Closed())
+        if (cur->isClosed()) {
             socketConnections.erase(cur);
-        else
-            cur->Service(callback);
+        } else {
+            cur->service(callback);
+        }
     }
 }
 
-SocketConnection::SocketConnection(int fd)
-    : fd(fd) {
-    if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK) == -1) {
-        throw runtime_error{tfm::format("Could not make socket non-blocking: ", errorString(lastError()))};
+SocketConnection::SocketConnection(int fd) : mFd(fd) {
+    if (fcntl(mFd, F_SETFL, fcntl(mFd, F_GETFL, 0) | O_NONBLOCK) == -1) {
+        throw runtime_error{tfm::format("Could not make socket non-blocking: ", errorString(lastSocketError()))};
     }
 
-    buffer.resize(512 * 1024);
+    mBuffer.resize(512 * 1024);
 }
 
-void SocketConnection::Service(function<void(const IpcPacket&)> callback) {
-    if (fd == -1)
+void SocketConnection::service(function<void(const IpcPacket&)> callback) {
+    if (isClosed()) {
         // Client disconnected, so don't bother.
         return;
+    }
 
     while (true) {
-        // Receive as much data as we can, up to the capacity of 'buffer'.
-        int maxBytes = buffer.size() - recvOffset;
-        int bytesReceived = recv(fd, buffer.data() + recvOffset, maxBytes, 0);
+        // Receive as much data as we can, up to the capacity of 'mBuffer'.
+        int maxBytes = mBuffer.size() - mRecvOffset;
+        int bytesReceived = recv(mFd, mBuffer.data() + mRecvOffset, maxBytes, 0);
         if (bytesReceived == -1) {
-            if (errno == EAGAIN) // no more data; this is fine.
+            int errorId = lastSocketError();
+            // no more data; this is fine.
+            if (errorId == SocketError::Again) {
                 break;
-            else
-                throw runtime_error{tfm::format("Error reading from socket: ", errorString(lastError()))};
+            } else {
+                throw runtime_error{tfm::format("Error reading from socket: ", errorString(errorId))};
+            }
         }
-        recvOffset += bytesReceived;
+        mRecvOffset += bytesReceived;
 
         // Since we aren't getting annoying SIGPIPE signals when a client
         // disconnects, a zero-byte read here is how we know when that
         // happens.
         if (bytesReceived == 0) {
-            tlog::info() << "Client disconnected from socket fd " << fd;
-            close(fd);
-            fd = -1;
+            tlog::info() << "Client disconnected from socket fd " << mFd;
+            close(mFd);
+            mFd = -1;
             return;
         }
 
         // Go through the buffer and service as many complete messages as
         // we can find.
         int processedOffset = 0;
-        while (processedOffset + 4 <= recvOffset) {
+        while (processedOffset + 4 <= mRecvOffset) {
             // There's at least enough to figure out the next message's
             // length.
-            char* messagePtr = buffer.data() + processedOffset;
+            char* messagePtr = mBuffer.data() + processedOffset;
             int messageLength = *((int *)messagePtr);
 
-            if (processedOffset + messageLength <= recvOffset) {
+            if (processedOffset + messageLength <= mRecvOffset) {
                 // We have a full message.
                 callback(IpcPacket(messagePtr, messageLength));
                 processedOffset += messageLength;
-            } else
+            } else {
                 // It's a partial message; we'll need to recv() more.
                 break;
+            }
         }
 
         // TODO: we could save the memcpy by treating 'buffer' as a ring-buffer,
@@ -451,8 +453,8 @@ void SocketConnection::Service(function<void(const IpcPacket&)> callback) {
         if (processedOffset > 0) {
             // There's a partial message; copy it to the start of 'buffer'
             // and update the offsets accordingly.
-            memcpy(buffer.data(), buffer.data() + processedOffset, recvOffset - processedOffset);
-            recvOffset -= processedOffset;
+            memcpy(mBuffer.data(), mBuffer.data() + processedOffset, mRecvOffset - processedOffset);
+            mRecvOffset -= processedOffset;
         }
     }
 }
