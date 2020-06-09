@@ -81,15 +81,17 @@ public:
     IpcPacketCreateImage interpretAsCreateImage() const;
 
 private:
-    void setMessageLength() {
-        *((int *)mPayload.data()) = int(size());
-    }
-
     std::vector<char> mPayload;
 
     class IStream {
     public:
-        IStream(const std::vector<char>& data) : mData{data} {}
+        IStream(const std::vector<char>& data) : mData{data} {
+            uint32_t size;
+            *this >> size;
+            if ((size_t)size != data.size()) {
+                throw std::runtime_error{"Trying to read IPC packet with incorrect size."};
+            }
+        }
 
         IStream& operator>>(bool& var) {
             if (mData.size() < mIdx + 1) {
@@ -135,7 +137,11 @@ private:
 
     class OStream {
     public:
-        OStream(std::vector<char>& data) : mData{data} {}
+        OStream(std::vector<char>& data) : mData{data} {
+            // Reserve space for an integer denoting the size
+            // of the packet.
+            *this << (uint32_t)0;
+        }
 
         template <typename T>
         OStream& operator<<(const std::vector<T>& var) {
@@ -160,6 +166,7 @@ private:
 
             mData[mIdx] = var ? 1 : 0;
             ++mIdx;
+            updateSize();
             return *this;
         }
 
@@ -171,9 +178,14 @@ private:
 
             *(T*)&mData[mIdx] = var;
             mIdx += sizeof(T);
+            updateSize();
             return *this;
         }
     private:
+        void updateSize() {
+            *((uint32_t*)mData.data()) = (uint32_t)mIdx;
+        }
+
         std::vector<char>& mData;
         size_t mIdx = 0;
     };

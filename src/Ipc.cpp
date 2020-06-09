@@ -31,27 +31,22 @@ IpcPacket::IpcPacket(const char* data, size_t length) {
 
 void IpcPacket::setOpenImage(const string& imagePath, bool grabFocus) {
     OStream payload{mPayload};
-    payload << int(0); // save space for message length
     payload << Type::OpenImage;
     payload << grabFocus;
     payload << imagePath;
-    setMessageLength();
 }
 
 void IpcPacket::setReloadImage(const string& imageName, bool grabFocus) {
     OStream payload{mPayload};
-    payload << int(0); // save space for message length
     payload << Type::ReloadImage;
     payload << grabFocus;
     payload << imageName;
-    setMessageLength();
 }
 
 void IpcPacket::setCloseImage(const string& imageName) {
     OStream payload{mPayload};
     payload << Type::CloseImage;
     payload << imageName;
-    setMessageLength();
 }
 
 void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const string& channel, int x, int y, int width, int height, const vector<float>& imageData) {
@@ -60,14 +55,12 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
     }
 
     OStream payload{mPayload};
-    payload << int(0); // save space for message length
     payload << Type::UpdateImage;
     payload << grabFocus;
     payload << imageName;
     payload << channel;
     payload << x << y << width << height;
     payload << imageData;
-    setMessageLength();
 }
 
 void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int width, int height, int nChannels, const std::vector<std::string>& channelNames) {
@@ -76,22 +69,17 @@ void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int
     }
 
     OStream payload{mPayload};
-    payload << int(0); // save space for message length
     payload << Type::CreateImage;
     payload << grabFocus;
     payload << imageName;
     payload << width << height;
     payload << nChannels;
     payload << channelNames;
-    setMessageLength();
 }
 
 IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
     IpcPacketOpenImage result;
     IStream payload{mPayload};
-
-    int messageLength;
-    payload >> messageLength;  // unused
 
     Type type;
     payload >> type;
@@ -108,9 +96,6 @@ IpcPacketReloadImage IpcPacket::interpretAsReloadImage() const {
     IpcPacketReloadImage result;
     IStream payload{mPayload};
 
-    int messageLength;
-    payload >> messageLength;  // unused
-
     Type type;
     payload >> type;
     if (type != Type::ReloadImage) {
@@ -126,9 +111,6 @@ IpcPacketCloseImage IpcPacket::interpretAsCloseImage() const {
     IpcPacketCloseImage result;
     IStream payload{mPayload};
 
-    int messageLength;
-    payload >> messageLength;  // unused
-
     Type type;
     payload >> type;
     if (type != Type::CloseImage) {
@@ -142,9 +124,6 @@ IpcPacketCloseImage IpcPacket::interpretAsCloseImage() const {
 IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     IpcPacketUpdateImage result;
     IStream payload{mPayload};
-
-    int messageLength;
-    payload >> messageLength;  // unused
 
     Type type;
     payload >> type;
@@ -166,9 +145,6 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 IpcPacketCreateImage IpcPacket::interpretAsCreateImage() const {
     IpcPacketCreateImage result;
     IStream payload{mPayload};
-
-    int messageLength;
-    payload >> messageLength;  // unused
 
     Type type;
     payload >> type;
