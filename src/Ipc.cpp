@@ -259,8 +259,13 @@ Ipc::Ipc(const string& hostname) {
 
             struct sockaddr_in addr;
             addr.sin_family = AF_INET;
-            addr.sin_addr.s_addr = INADDR_ANY;
             addr.sin_port = htons((short)atoi(port.c_str()));
+
+#ifdef _WIN32
+            InetPton(AF_INET, ip.c_str(), &addr.sin_addr);
+#else
+            inet_aton(ip.c_str(), &addr.sin_addr);
+#endif
 
             if (::bind(mSocketFd, (struct sockaddr *)&addr, sizeof(addr)) == SOCKET_ERROR) {
                 throw runtime_error{"bind() call failed"};
