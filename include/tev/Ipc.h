@@ -191,27 +191,14 @@ private:
     };
 };
 
-class SocketConnection {
-public:
-    SocketConnection(int fd);
-
-    void service(std::function<void(const IpcPacket&)> callback);
-
-    bool isClosed() const;
-
-private:
-    int mFd;
-
-    // Because TCP socket recv() calls return as much data as is available
-    // (which may have the partial contents of a client-side send() call,
-    // we need to buffer it up in SocketConnection.
-    std::vector<char> mBuffer;
-    // Offset into buffer where next recv() call should start writing.
-    int mRecvOffset = 0;
-};
-
 class Ipc {
 public:
+#ifdef _WIN32
+    using socket_t = SOCKET;
+#else
+    using socket_t = int;
+#endif
+
     Ipc(const std::string& hostname);
     virtual ~Ipc();
 
@@ -224,17 +211,35 @@ public:
 
 private:
     bool mIsPrimaryInstance;
-
-    std::list<SocketConnection> mSocketConnections;
+    socket_t mSocketFd;
 
 #ifdef _WIN32
-    SOCKET mSocketFd;
     HANDLE mInstanceMutex;
 #else
-    int mSocketFd;
     int mLockFileDescriptor;
     filesystem::path mLockFile;
 #endif
+
+    class SocketConnection {
+    public:
+        SocketConnection(Ipc::socket_t fd);
+
+        void service(std::function<void(const IpcPacket&)> callback);
+
+        bool isClosed() const;
+
+    private:
+        Ipc::socket_t mSocketFd;
+
+        // Because TCP socket recv() calls return as much data as is available
+        // (which may have the partial contents of a client-side send() call,
+        // we need to buffer it up in SocketConnection.
+        std::vector<char> mBuffer;
+        // Offset into buffer where next recv() call should start writing.
+        int mRecvOffset = 0;
+    };
+
+    std::list<SocketConnection> mSocketConnections;
 };
 
 TEV_NAMESPACE_END

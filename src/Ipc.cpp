@@ -168,6 +168,20 @@ IpcPacketCreateImage IpcPacket::interpretAsCreateImage() const {
 }
 
 
+static void makeSocketNonBlocking(Ipc::socket_t socketFd) {
+#ifdef _WIN32
+    u_long mode = 1;
+    int ioctlsocketResult = ioctlsocket(socketFd, FIONBIO, &mode);
+    if (ioctlsocketResult != NO_ERROR) {
+        throw runtime_error{tfm::format("ioctlsocket() to make socket non-blocking failed: %s", errorString(ioctlsocketResult))};
+    }
+#else
+    if (fcntl(socketFd, F_SETFL, fcntl(socketFd, F_GETFL, 0) | O_NONBLOCK) == SOCKET_ERROR) {
+        throw runtime_error{tfm::format("fcntl() to make socket non-blocking failed: %s", errorString(lastSocketError()))};
+    }
+#endif
+}
+
 Ipc::Ipc(const string& hostname) {
     const string lockName = string{".tev-lock."} + hostname;
 
@@ -226,9 +240,7 @@ Ipc::Ipc(const string& hostname) {
                 throw runtime_error{"socket() call failed"};
             }
 
-            if (fcntl(mSocketFd, F_SETFL, fcntl(mSocketFd, F_GETFL, 0) | O_NONBLOCK) == SOCKET_ERROR) {
-                throw runtime_error{"fcntl() to make socket non-blocking failed"};
-            }
+            makeSocketNonBlocking(mSocketFd);
 
             // Avoid address in use error that occurs if we quit with a
             // client connected.
@@ -369,15 +381,14 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     }
 }
 
-SocketConnection::SocketConnection(int fd) : mFd(fd) {
-    if (fcntl(mFd, F_SETFL, fcntl(mFd, F_GETFL, 0) | O_NONBLOCK) == SOCKET_ERROR) {
-        throw runtime_error{tfm::format("Could not make socket non-blocking: ", errorString(lastSocketError()))};
-    }
+Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd) : mSocketFd(fd) {
+    TEV_ASSERT(mSocketFd != INVALID_SOCKET, "SocketConnection must receive a valid socket.");
 
+    makeSocketNonBlocking(mSocketFd);
     mBuffer.resize(512 * 1024);
 }
 
-void SocketConnection::service(function<void(const IpcPacket&)> callback) {
+void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
     if (isClosed()) {
         // Client disconnected, so don't bother.
         return;
@@ -386,7 +397,7 @@ void SocketConnection::service(function<void(const IpcPacket&)> callback) {
     while (true) {
         // Receive as much data as we can, up to the capacity of 'mBuffer'.
         int maxBytes = mBuffer.size() - mRecvOffset;
-        int bytesReceived = recv(mFd, mBuffer.data() + mRecvOffset, maxBytes, 0);
+        int bytesReceived = recv(mSocketFd, mBuffer.data() + mRecvOffset, maxBytes, 0);
         if (bytesReceived == SOCKET_ERROR) {
             int errorId = lastSocketError();
             // no more data; this is fine.
@@ -402,9 +413,9 @@ void SocketConnection::service(function<void(const IpcPacket&)> callback) {
         // disconnects, a zero-byte read here is how we know when that
         // happens.
         if (bytesReceived == 0) {
-            tlog::info() << "Client disconnected from socket fd " << mFd;
-            close(mFd);
-            mFd = INVALID_SOCKET;
+            tlog::info() << "Client disconnected from socket fd " << mSocketFd;
+            close(mSocketFd);
+            mSocketFd = INVALID_SOCKET;
             return;
         }
 
@@ -438,8 +449,8 @@ void SocketConnection::service(function<void(const IpcPacket&)> callback) {
     }
 }
 
-bool SocketConnection::isClosed() const {
-    return mFd == INVALID_SOCKET;
+bool Ipc::SocketConnection::isClosed() const {
+    return mSocketFd == INVALID_SOCKET;
 }
 
 TEV_NAMESPACE_END
