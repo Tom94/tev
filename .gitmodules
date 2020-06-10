@@ -25,6 +25,3 @@
 [submodule "dependencies/clip"]
 	path = dependencies/clip
 	url = https://github.com/Tom94/clip
-[submodule "dependencies/enet"]
-	path = dependencies/enet
-	url = https://github.com/lsalzman/enet

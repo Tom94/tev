@@ -3,15 +3,11 @@
 
 #pragma once
 
-// ENet must come first to prevent compilation failure on windows
-#define NOMINMAX
-#include <enet/enet.h>
-#undef NOMINMAX
-
 #include <tev/Common.h>
 
 #include <filesystem/path.h>
 
+#include <list>
 #include <vector>
 
 TEV_NAMESPACE_BEGIN
@@ -68,7 +64,8 @@ public:
     }
 
     Type type() const {
-        return (Type)mPayload[0];
+        // The first 4 bytes encode the message size.
+        return (Type)mPayload[4];
     }
 
     void setOpenImage(const std::string& imagePath, bool grabFocus);
@@ -88,7 +85,13 @@ private:
 
     class IStream {
     public:
-        IStream(const std::vector<char>& data) : mData{data} {}
+        IStream(const std::vector<char>& data) : mData{data} {
+            uint32_t size;
+            *this >> size;
+            if ((size_t)size != data.size()) {
+                throw std::runtime_error{"Trying to read IPC packet with incorrect size."};
+            }
+        }
 
         IStream& operator>>(bool& var) {
             if (mData.size() < mIdx + 1) {
@@ -134,7 +137,11 @@ private:
 
     class OStream {
     public:
-        OStream(std::vector<char>& data) : mData{data} {}
+        OStream(std::vector<char>& data) : mData{data} {
+            // Reserve space for an integer denoting the size
+            // of the packet.
+            *this << (uint32_t)0;
+        }
 
         template <typename T>
         OStream& operator<<(const std::vector<T>& var) {
@@ -159,6 +166,7 @@ private:
 
             mData[mIdx] = var ? 1 : 0;
             ++mIdx;
+            updateSize();
             return *this;
         }
 
@@ -170,9 +178,14 @@ private:
 
             *(T*)&mData[mIdx] = var;
             mIdx += sizeof(T);
+            updateSize();
             return *this;
         }
     private:
+        void updateSize() {
+            *((uint32_t*)mData.data()) = (uint32_t)mIdx;
+        }
+
         std::vector<char>& mData;
         size_t mIdx = 0;
     };
@@ -180,6 +193,12 @@ private:
 
 class Ipc {
 public:
+#ifdef _WIN32
+    using socket_t = SOCKET;
+#else
+    using socket_t = int;
+#endif
+
     Ipc(const std::string& hostname);
     virtual ~Ipc();
 
@@ -192,13 +211,7 @@ public:
 
 private:
     bool mIsPrimaryInstance;
-    
-    ENetAddress mAddress;
-    ENetHost* mSocket = nullptr;
-
-    // Represents the server when this is a
-    // secondary instance of tev.
-    ENetPeer* mPeer = nullptr;
+    socket_t mSocketFd;
 
 #ifdef _WIN32
     HANDLE mInstanceMutex;
@@ -206,6 +219,29 @@ private:
     int mLockFileDescriptor;
     filesystem::path mLockFile;
 #endif
+
+    class SocketConnection {
+    public:
+        SocketConnection(Ipc::socket_t fd);
+
+        void service(std::function<void(const IpcPacket&)> callback);
+
+        void close();
+
+        bool isClosed() const;
+
+    private:
+        Ipc::socket_t mSocketFd;
+
+        // Because TCP socket recv() calls return as much data as is available
+        // (which may have the partial contents of a client-side send() call,
+        // we need to buffer it up in SocketConnection.
+        std::vector<char> mBuffer;
+        // Offset into buffer where next recv() call should start writing.
+        size_t mRecvOffset = 0;
+    };
+
+    std::list<SocketConnection> mSocketConnections;
 };
 
 TEV_NAMESPACE_END
