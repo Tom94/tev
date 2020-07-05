@@ -237,7 +237,7 @@ Ipc::Ipc(const string& hostname) {
 
         mLockFileDescriptor = open(mLockFile.str().c_str(), O_RDWR | O_CREAT, 0666);
         if (mLockFileDescriptor == -1) {
-            throw runtime_error{tfm::format("Could not create lock file: ", errorString(lastError()))};
+            throw runtime_error{tfm::format("Could not create lock file: %s", errorString(lastError()))};
         }
 
         mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
@@ -438,10 +438,12 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         if (bytesReceived == SOCKET_ERROR) {
             int errorId = lastSocketError();
             // no more data; this is fine.
-            if (errorId == SocketError::Again) {
+            if (errorId == SocketError::Again || errorId == SocketError::WouldBlock) {
                 break;
             } else {
-                throw runtime_error{tfm::format("Error reading from socket: ", errorString(errorId))};
+                tlog::warning() << "Error while reading from socket. " << errorString(errorId) << " Connection terminated.";
+                close();
+                return;
             }
         }
 
