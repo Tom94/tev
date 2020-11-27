@@ -39,7 +39,19 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
         throw invalid_argument{tfm::format("Invalid PFM scale %f", scale)};
     }
 
-    int numChannels = magic[1] == 'F' ? 3 : 1;
+    int numChannels = 1;
+    if (magic[1] == 'F')
+    {
+        if (magic.size() == 3 && magic[2] == '4')
+        {
+            numChannels = 4;
+        }
+        else
+        {
+            numChannels = 3;
+        }
+    }
+    
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
 
@@ -54,8 +66,8 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
     auto numBytes = numFloats * sizeof(float);
 
     // Skip last newline at the end of the header.
-    string line;
-    getline(iStream, line);
+    char c;
+    while (iStream.get(c) && c != '\r' && c != '\n');
 
     // Read entire file in binary mode.
     vector<float> data(numFloats);
