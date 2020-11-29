@@ -31,7 +31,7 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
 
     iStream >> magic >> size.x() >> size.y() >> scale;
 
-    if (magic != "PF" && magic != "Pf") {
+    if (magic != "PF" && magic != "Pf" && magic != "PF4") {
         throw invalid_argument{tfm::format("Invalid magic PFM string %s", magic)};
     }
 
