@@ -31,7 +31,14 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
 
     iStream >> magic >> size.x() >> size.y() >> scale;
 
-    if (magic != "PF" && magic != "Pf" && magic != "PF4") {
+    int numChannels;
+    if (magic == "Pf") {
+        numChannels = 1;
+    } else if (magic == "PF") {
+        numChannels = 3;
+    } else if (magic == "PF4") {
+        numChannels = 4;
+    } else {
         throw invalid_argument{tfm::format("Invalid magic PFM string %s", magic)};
     }
 
@@ -39,19 +46,6 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
         throw invalid_argument{tfm::format("Invalid PFM scale %f", scale)};
     }
 
-    int numChannels = 1;
-    if (magic[1] == 'F')
-    {
-        if (magic.size() == 3 && magic[2] == '4')
-        {
-            numChannels = 4;
-        }
-        else
-        {
-            numChannels = 3;
-        }
-    }
-    
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
 
@@ -61,7 +55,7 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
-    
+
     auto numFloats = numPixels * numChannels;
     auto numBytes = numFloats * sizeof(float);
 
