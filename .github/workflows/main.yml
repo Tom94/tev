@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Install dependencies
-        run: sudo apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
+        run: sudo apt-get update && sudo apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
       - uses: actions/checkout@v1
         with:
           submodules: recursive
