@@ -1,6 +1,6 @@
 name: CI
 
-on: 
+on:
   push:
     branches:
       - master
@@ -50,7 +50,7 @@ jobs:
           submodules: recursive
 
       - name: Setup MSBuild.exe
-        uses: warrenbuckley/Setup-MSBuild@v1
+        uses: microsoft/setup-msbuild@v1.0.2
 
       - name: CMake
         run: cmake .
