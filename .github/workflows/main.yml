@@ -1,6 +1,6 @@
 name: CI
 
-on: 
+on:
   push:
     branches:
       - master
@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Install dependencies
-        run: sudo apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
+        run: sudo apt-get update && sudo apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
       - uses: actions/checkout@v1
         with:
           submodules: recursive
@@ -50,7 +50,7 @@ jobs:
           submodules: recursive
 
       - name: Setup MSBuild.exe
-        uses: warrenbuckley/Setup-MSBuild@v1
+        uses: microsoft/setup-msbuild@v1.0.2
 
       - name: CMake
         run: cmake .

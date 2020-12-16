@@ -31,7 +31,14 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
 
     iStream >> magic >> size.x() >> size.y() >> scale;
 
-    if (magic != "PF" && magic != "Pf") {
+    int numChannels;
+    if (magic == "Pf") {
+        numChannels = 1;
+    } else if (magic == "PF") {
+        numChannels = 3;
+    } else if (magic == "PF4") {
+        numChannels = 4;
+    } else {
         throw invalid_argument{tfm::format("Invalid magic PFM string %s", magic)};
     }
 
@@ -39,7 +46,6 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
         throw invalid_argument{tfm::format("Invalid PFM scale %f", scale)};
     }
 
-    int numChannels = magic[1] == 'F' ? 3 : 1;
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
 
@@ -49,13 +55,13 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
-    
+
     auto numFloats = numPixels * numChannels;
     auto numBytes = numFloats * sizeof(float);
 
     // Skip last newline at the end of the header.
-    string line;
-    getline(iStream, line);
+    char c;
+    while (iStream.get(c) && c != '\r' && c != '\n');
 
     // Read entire file in binary mode.
     vector<float> data(numFloats);
