@@ -30,6 +30,15 @@ struct IpcPacketUpdateImage {
     std::vector<float> imageData;
 };
 
+struct IpcPacketUpdateImageMultiChannel {
+    std::string imageName;
+    bool grabFocus;
+    int32_t nChannels;
+    std::vector<std::string> channelNames;
+    int32_t x, y, width, height;
+    std::vector<std::vector<float>> imageData; // One set of data per channel
+};
+
 struct IpcPacketCloseImage {
     std::string imageName;
 };
@@ -50,6 +59,7 @@ public:
         CloseImage = 2,
         UpdateImage = 3,
         CreateImage = 4,
+        UpdateImageMultiChannel = 5,
     };
 
     IpcPacket() = default;
@@ -72,12 +82,14 @@ public:
     void setReloadImage(const std::string& imageName, bool grabFocus);
     void setCloseImage(const std::string& imageName);
     void setUpdateImage(const std::string& imageName, bool grabFocus, const std::string& channel, int x, int y, int width, int height, const std::vector<float>& imageData);
+    void setUpdateImageMultiChannel(const std::string& imageName, bool grabFocus, int nChannels, const std::vector<std::string>& channelNames, int x, int y, int width, int height, const std::vector<std::vector<float>>& imageData);
     void setCreateImage(const std::string& imageName, bool grabFocus, int width, int height, int nChannels, const std::vector<std::string>& channelNames);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
     IpcPacketCloseImage interpretAsCloseImage() const;
     IpcPacketUpdateImage interpretAsUpdateImage() const;
+    IpcPacketUpdateImageMultiChannel interpretAsUpdateImageMultiChannel() const;
     IpcPacketCreateImage interpretAsCreateImage() const;
 
 private:
