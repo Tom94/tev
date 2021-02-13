@@ -72,8 +72,8 @@ void IpcPacket::setCloseImage(const string& imageName) {
     payload << imageName;
 }
 
-void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const string& channel, int x, int y, int width, int height, const vector<float>& imageData) {
-    if ((int)imageData.size() != width * height) {
+void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const string& channel, int32_t x, int32_t y, int32_t width, int32_t height, const vector<float>& imageData) {
+    if ((int32_t)imageData.size() != width * height) {
         throw runtime_error{"UpdateImage IPC packet's data size does not match crop windows."};
     }
 
@@ -86,8 +86,35 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
     payload << imageData;
 }
 
-void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int width, int height, int nChannels, const std::vector<std::string>& channelNames) {
-    if ((int)channelNames.size() != nChannels) {
+void IpcPacket::setUpdateImageMultiChannel(const string& imageName, bool grabFocus, int32_t nChannels, const std::vector<std::string>& channelNames, int32_t x, int32_t y, int32_t width, int32_t height, const vector<vector<float>>& imageData) {
+    if (nChannels <= 0) {
+        throw runtime_error{"UpdateImageMultiChannel IPC packet's number of channels must be positive."};
+    }
+
+    if ((int32_t)channelNames.size() != nChannels) {
+        throw runtime_error{"UpdateImageMultiChannel IPC packet's channel names size does not match number of channels."};
+    }
+
+    if ((int32_t)imageData.size() != nChannels) {
+        throw runtime_error{"UpdateImageMultiChannel IPC packet's data does not match number of channels."};
+    }
+
+    if ((int32_t)imageData.front().size() != width * height) {
+        throw runtime_error{"UpdateImageMultiChannel IPC packet's data does not match size does not match crop windows."};
+    }
+
+    OStream payload{mPayload};
+    payload << Type::UpdateImageMultiChannel;
+    payload << grabFocus;
+    payload << imageName;
+    payload << nChannels;
+    payload << channelNames;
+    payload << x << y << width << height;
+    payload << imageData;
+}
+
+void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames) {
+    if ((int32_t)channelNames.size() != nChannels) {
         throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
     }
 
@@ -161,6 +188,34 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 
     size_t nPixels = result.width * result.height;
     result.imageData.resize(nPixels);
+    payload >> result.imageData;
+    return result;
+}
+
+IpcPacketUpdateImageMultiChannel IpcPacket::interpretAsUpdateImageMultiChannel() const {
+    IpcPacketUpdateImageMultiChannel result;
+    IStream payload{mPayload};
+
+    Type type;
+    payload >> type;
+    if (type != Type::UpdateImageMultiChannel) {
+        throw runtime_error{"Cannot interpret IPC packet as UpdateImageMultiChannel."};
+    }
+
+    payload >> result.grabFocus;
+    payload >> result.imageName;
+
+    payload >> result.nChannels;
+    result.channelNames.resize(result.nChannels);
+    payload >> result.channelNames;
+
+    payload >> result.x >> result.y >> result.width >> result.height;
+
+    size_t nPixels = result.width * result.height;
+    result.imageData.resize(result.nChannels);
+    for (int32_t i = 0; i < result.nChannels; ++i) {
+        result.imageData[i].resize(nPixels);
+    }
     payload >> result.imageData;
     return result;
 }
@@ -421,7 +476,7 @@ Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd) : mSocketFd(fd) {
 
     makeSocketNonBlocking(mSocketFd);
 
-    // 1MB ought to be enough for each individual packet.
+    // 1 MiB is a good default buffer size. If larger is required, it'll be automatizally resized.
     mBuffer.resize(1024 * 1024);
 }
 
@@ -467,9 +522,8 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             uint32_t messageLength = *((uint32_t*)messagePtr);
 
             if (messageLength > mBuffer.size()) {
-                tlog::warning() << "Client attempted to send a packet larger than our buffer size. Connection terminated.";
-                close();
-                return;
+                mBuffer.resize(messageLength);
+                break;
             }
 
             if (processedOffset + messageLength <= mRecvOffset) {
@@ -483,7 +537,8 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         }
 
         // TODO: we could save the memcpy by treating 'buffer' as a ring-buffer,
-        // but it's probably not worth the trouble.
+        // but it's probably not worth the trouble. Revisit when someone throws around
+        // buffers with a size of gigabytes.
         if (processedOffset > 0) {
             // There's a partial message; copy it to the start of 'buffer'
             // and update the offsets accordingly.

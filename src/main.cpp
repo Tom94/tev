@@ -290,6 +290,20 @@ int mainFunc(const vector<string>& arguments) {
                                 break;
                             }
 
+                            case IpcPacket::UpdateImageMultiChannel: {
+                                while (!imageViewer) { }
+                                auto info = packet.interpretAsUpdateImageMultiChannel();
+                                imageViewer->scheduleToUiThread([&,info] {
+                                    string imageString = ensureUtf8(info.imageName);
+                                    for (int i = 0; i < info.nChannels; ++i) {
+                                        imageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
+                                    }
+                                });
+
+                                glfwPostEmptyEvent();
+                                break;
+                            }
+
                             case IpcPacket::CreateImage: {
                                 while (!imageViewer) { }
                                 auto info = packet.interpretAsCreateImage();
