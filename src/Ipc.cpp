@@ -476,7 +476,7 @@ Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd) : mSocketFd(fd) {
 
     makeSocketNonBlocking(mSocketFd);
 
-    // 1MB ought to be enough for each individual packet.
+    // 1 MiB is a good default buffer size. If larger is required, it'll be automatizally resized.
     mBuffer.resize(1024 * 1024);
 }
 
@@ -522,9 +522,8 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             uint32_t messageLength = *((uint32_t*)messagePtr);
 
             if (messageLength > mBuffer.size()) {
-                tlog::warning() << "Client attempted to send a packet larger than our buffer size. Connection terminated.";
-                close();
-                return;
+                mBuffer.resize(messageLength);
+                break;
             }
 
             if (processedOffset + messageLength <= mRecvOffset) {
@@ -538,7 +537,8 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         }
 
         // TODO: we could save the memcpy by treating 'buffer' as a ring-buffer,
-        // but it's probably not worth the trouble.
+        // but it's probably not worth the trouble. Revisit when someone throws around
+        // buffers with a size of gigabytes.
         if (processedOffset > 0) {
             // There's a partial message; copy it to the start of 'buffer'
             // and update the offsets accordingly.
