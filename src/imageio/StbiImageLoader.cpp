@@ -18,7 +18,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-ImageData StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector) const {
+ImageData StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
     ThreadPool threadPool;
 
@@ -107,6 +107,8 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
     // STBI can not load layers, so all channels simply reside
     // within a topmost root layer.
     result.layers.emplace_back("");
+
+    hasPremultipliedAlpha = false;
 
     return result;
 }

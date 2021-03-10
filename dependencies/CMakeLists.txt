@@ -37,6 +37,18 @@ if (WIN32)
     include_directories(${ZLIB_INCLUDE_DIR} "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 endif()
 
+# Compile DirectXTex (only on Windows)
+if (WIN32)
+    set (BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
+    add_subdirectory(DirectXTex)
+    set_property(TARGET DirectXTex PROPERTY FOLDER "dependencies")
+
+    set(DIRECTXTEX_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/DirectXTex/DirectXTex" CACHE PATH " " FORCE)
+    set(DIRECTXTEX_LIBRARY DirectXTex)
+
+    include_directories(${DIRECTXTEX_INCLUDE_DIR})
+endif()
+
 # Compile OpenEXR
 set(ILMBASE_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)

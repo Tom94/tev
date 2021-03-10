@@ -21,7 +21,7 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector) const {
+ImageData PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
     ThreadPool threadPool;
 
@@ -110,6 +110,8 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
     // PFM can not contain layers, so all channels simply reside
     // within a topmost root layer.
     result.layers.emplace_back("");
+
+    hasPremultipliedAlpha = false;
 
     return result;
 }

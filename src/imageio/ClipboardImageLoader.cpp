@@ -23,7 +23,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector) const {
+ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
     ThreadPool threadPool;
 
@@ -119,6 +119,8 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
     // The clipboard can not contain layers, so all channels simply reside
     // within a topmost root layer.
     result.layers.emplace_back("");
+
+    hasPremultipliedAlpha = false;
 
     return result;
 }

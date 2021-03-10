@@ -5,19 +5,21 @@
 
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
-
 #include <istream>
+#include <DirectXTex.h>
 
 TEV_NAMESPACE_BEGIN
 
-class StbiImageLoader : public ImageLoader {
+class DdsImageLoader : public ImageLoader {
 public:
     bool canLoadFile(std::istream& iStream) const override;
     ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, bool& hasPremultipliedAlpha) const override;
 
     std::string name() const override {
-        return "STBI";
+        return "DDS";
     }
+private:
+    int getDxgiChannelCount(DXGI_FORMAT fmt) const;
 };
 
 TEV_NAMESPACE_END

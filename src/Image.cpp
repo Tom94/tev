@@ -41,11 +41,12 @@ Image::Image(const class path& path, istream& iStream, const string& channelSele
 
         if (useLoader) {
             loadMethod = imageLoader->name();
-            mData = imageLoader->load(iStream, mPath, mChannelSelector);
+            bool hasPremultipliedAlpha = false;
+            mData = imageLoader->load(iStream, mPath, mChannelSelector, hasPremultipliedAlpha);
             ensureValid();
 
             // We assume an internal pre-multiplied-alpha representation
-            if (!imageLoader->hasPremultipliedAlpha()) {
+            if (!hasPremultipliedAlpha) {
                 multiplyAlpha();
             }
             break;

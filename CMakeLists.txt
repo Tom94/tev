@@ -87,7 +87,7 @@ endif()
 
 set(TEV_LIBS clip IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
-    set(TEV_LIBS ${TEV_LIBS} zlibstatic wsock32 ws2_32)
+    set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
 
 set(TEV_SOURCES
@@ -122,6 +122,7 @@ set(TEV_SOURCES
 )
 if (MSVC)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
+    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/DdsImageLoader.h src/imageio/DdsImageLoader.cpp)
 elseif (APPLE)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/mac-run-tev.sh)
 endif()
@@ -147,6 +148,7 @@ endif()
 include_directories(
     ${ARGS_INCLUDE}
     ${CLIP_INCLUDE}
+    ${DIRECTXTEX_INCLUDE}
     ${EIGEN_INCLUDE}
     ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}
