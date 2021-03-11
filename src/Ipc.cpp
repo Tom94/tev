@@ -10,6 +10,9 @@
 
 #include <tev/Common.h>
 #include <tev/Ipc.h>
+#include <tev/ThreadPool.h>
+
+#include <Eigen/Dense>
 
 #ifdef _WIN32
 using socklen_t = int;
@@ -29,6 +32,7 @@ using socklen_t = int;
 #   define INVALID_SOCKET (-1)
 #endif
 
+using namespace Eigen;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -72,45 +76,44 @@ void IpcPacket::setCloseImage(const string& imageName) {
     payload << imageName;
 }
 
-void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const string& channel, int32_t x, int32_t y, int32_t width, int32_t height, const vector<float>& imageData) {
-    if ((int32_t)imageData.size() != width * height) {
-        throw runtime_error{"UpdateImage IPC packet's data size does not match crop windows."};
+void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const std::vector<IpcPacket::ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const vector<float>& stridedImageData) {
+    if (channelDescs.empty()) {
+        throw runtime_error{"UpdateImage IPC packet must have a non-zero channel count."};
+    }
+
+    int32_t nChannels = (int32_t)channelDescs.size();
+    vector<std::string> channelNames(nChannels);
+    vector<int64_t> channelOffsets(nChannels);
+    vector<int64_t> channelStrides(nChannels);
+
+    for (int32_t i = 0; i < nChannels; ++i) {
+        channelNames[i] = channelDescs[i].name;
+        channelOffsets[i] = channelDescs[i].offset;
+        channelStrides[i] = channelDescs[i].stride;
     }
 
     OStream payload{mPayload};
-    payload << Type::UpdateImage;
-    payload << grabFocus;
-    payload << imageName;
-    payload << channel;
-    payload << x << y << width << height;
-    payload << imageData;
-}
-
-void IpcPacket::setUpdateImageMultiChannel(const string& imageName, bool grabFocus, int32_t nChannels, const std::vector<std::string>& channelNames, int32_t x, int32_t y, int32_t width, int32_t height, const vector<vector<float>>& imageData) {
-    if (nChannels <= 0) {
-        throw runtime_error{"UpdateImageMultiChannel IPC packet's number of channels must be positive."};
-    }
-
-    if ((int32_t)channelNames.size() != nChannels) {
-        throw runtime_error{"UpdateImageMultiChannel IPC packet's channel names size does not match number of channels."};
-    }
-
-    if ((int32_t)imageData.size() != nChannels) {
-        throw runtime_error{"UpdateImageMultiChannel IPC packet's data does not match number of channels."};
-    }
-
-    if ((int32_t)imageData.front().size() != width * height) {
-        throw runtime_error{"UpdateImageMultiChannel IPC packet's data does not match size does not match crop windows."};
-    }
-
-    OStream payload{mPayload};
-    payload << Type::UpdateImageMultiChannel;
+    payload << Type::UpdateImageV3;
     payload << grabFocus;
     payload << imageName;
     payload << nChannels;
     payload << channelNames;
     payload << x << y << width << height;
-    payload << imageData;
+    payload << channelOffsets;
+    payload << channelStrides;
+
+    DenseIndex nPixels = width * height;
+
+    DenseIndex stridedImageDataSize = 0;
+    for (int32_t c = 0; c < nChannels; ++c) {
+        stridedImageDataSize = std::max(stridedImageDataSize, (DenseIndex)(channelOffsets[c] + (nPixels-1) * channelStrides[c] + 1));
+    }
+
+    if ((DenseIndex)stridedImageData.size() != stridedImageDataSize) {
+        throw runtime_error{tfm::format("UpdateImage IPC packet's data size does not match specified dimensions, offset, and stride. (Expected: %d)", stridedImageDataSize)};
+    }
+
+    payload << stridedImageData;
 }
 
 void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames) {
@@ -177,46 +180,59 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 
     Type type;
     payload >> type;
-    if (type != Type::UpdateImage) {
+    if (type != Type::UpdateImage && type != Type::UpdateImageV2 && type != Type::UpdateImageV3) {
         throw runtime_error{"Cannot interpret IPC packet as UpdateImage."};
     }
 
     payload >> result.grabFocus;
     payload >> result.imageName;
-    payload >> result.channel;
-    payload >> result.x >> result.y >> result.width >> result.height;
 
-    size_t nPixels = result.width * result.height;
-    result.imageData.resize(nPixels);
-    payload >> result.imageData;
-    return result;
-}
-
-IpcPacketUpdateImageMultiChannel IpcPacket::interpretAsUpdateImageMultiChannel() const {
-    IpcPacketUpdateImageMultiChannel result;
-    IStream payload{mPayload};
-
-    Type type;
-    payload >> type;
-    if (type != Type::UpdateImageMultiChannel) {
-        throw runtime_error{"Cannot interpret IPC packet as UpdateImageMultiChannel."};
+    if (type >= Type::UpdateImageV2) {
+        // multi-channel support
+        payload >> result.nChannels;
+    } else {
+        result.nChannels = 1;
     }
 
-    payload >> result.grabFocus;
-    payload >> result.imageName;
-
-    payload >> result.nChannels;
     result.channelNames.resize(result.nChannels);
     payload >> result.channelNames;
 
-    payload >> result.x >> result.y >> result.width >> result.height;
+    result.channelOffsets.resize(result.nChannels);
+    result.channelStrides.resize(result.nChannels, 1);
 
-    size_t nPixels = result.width * result.height;
+    payload >> result.x >> result.y >> result.width >> result.height;
+    DenseIndex nPixels = result.width * result.height;
+
+    if (type >= Type::UpdateImageV3) {
+        // custom offset/stride support
+        payload >> result.channelOffsets;
+        payload >> result.channelStrides;
+    } else {
+        for (int32_t i = 0; i < result.nChannels; ++i) {
+            result.channelOffsets[i] = nPixels * i;
+        }
+    }
+
     result.imageData.resize(result.nChannels);
     for (int32_t i = 0; i < result.nChannels; ++i) {
         result.imageData[i].resize(nPixels);
     }
-    payload >> result.imageData;
+
+    DenseIndex stridedImageDataSize = 0;
+    for (int32_t c = 0; c < result.nChannels; ++c) {
+        stridedImageDataSize = std::max(stridedImageDataSize, (DenseIndex)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
+    }
+
+    vector<float> stridedImageData(stridedImageDataSize);
+    payload >> stridedImageData;
+
+    ThreadPool threadPool;
+    threadPool.parallelFor<DenseIndex>(0, nPixels, [&](DenseIndex px) {
+        for (int32_t c = 0; c < result.nChannels; ++c) {
+            result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
+        }
+    });
+
     return result;
 }
 

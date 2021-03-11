@@ -25,16 +25,10 @@ struct IpcPacketReloadImage {
 struct IpcPacketUpdateImage {
     std::string imageName;
     bool grabFocus;
-    std::string channel;
-    int32_t x, y, width, height;
-    std::vector<float> imageData;
-};
-
-struct IpcPacketUpdateImageMultiChannel {
-    std::string imageName;
-    bool grabFocus;
     int32_t nChannels;
     std::vector<std::string> channelNames;
+    std::vector<int64_t> channelOffsets;
+    std::vector<int64_t> channelStrides;
     int32_t x, y, width, height;
     std::vector<std::vector<float>> imageData; // One set of data per channel
 };
@@ -59,7 +53,8 @@ public:
         CloseImage = 2,
         UpdateImage = 3,
         CreateImage = 4,
-        UpdateImageMultiChannel = 5,
+        UpdateImageV2 = 5, // Adds multi-channel support
+        UpdateImageV3 = 6, // Adds custom striding/offset support
     };
 
     IpcPacket() = default;
@@ -78,19 +73,25 @@ public:
         return (Type)mPayload[4];
     }
 
+    struct ChannelDesc {
+        std::string name;
+        int64_t offset;
+        int64_t stride;
+    };
+
     void setOpenImage(const std::string& imagePath, bool grabFocus);
     void setReloadImage(const std::string& imageName, bool grabFocus);
     void setCloseImage(const std::string& imageName);
-    void setUpdateImage(const std::string& imageName, bool grabFocus, const std::string& channel, int x, int y, int width, int height, const std::vector<float>& imageData);
-    void setUpdateImageMultiChannel(const std::string& imageName, bool grabFocus, int nChannels, const std::vector<std::string>& channelNames, int x, int y, int width, int height, const std::vector<std::vector<float>>& imageData);
-    void setCreateImage(const std::string& imageName, bool grabFocus, int width, int height, int nChannels, const std::vector<std::string>& channelNames);
+    void setUpdateImage(const std::string& imageName, bool grabFocus, const std::vector<ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const std::vector<float>& stridedImageData);
+    void setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
     IpcPacketCloseImage interpretAsCloseImage() const;
     IpcPacketUpdateImage interpretAsUpdateImage() const;
-    IpcPacketUpdateImageMultiChannel interpretAsUpdateImageMultiChannel() const;
     IpcPacketCreateImage interpretAsCreateImage() const;
+    IpcPacketUpdateImage interpretAsUpdateImageV2() const;
+    IpcPacketUpdateImage interpretAsUpdateImageV3() const;
 
 private:
     std::vector<char> mPayload;
