@@ -22,6 +22,95 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
+void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, const std::unique_ptr<ImageViewer>& imageViewer) {
+    switch (packet.type()) {
+        case IpcPacket::OpenImage: {
+            auto info = packet.interpretAsOpenImage();
+            string imageString = ensureUtf8(info.imagePath);
+            size_t colonPos = imageString.find_last_of(":");
+            if (colonPos == std::string::npos) {
+                imagesLoader->enqueue(imageString, "", info.grabFocus);
+            } else {
+                imagesLoader->enqueue(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), info.grabFocus);
+            }
+            break;
+        }
+
+        case IpcPacket::ReloadImage: {
+            while (!imageViewer) { }
+            auto info = packet.interpretAsReloadImage();
+            imageViewer->scheduleToUiThread([&,info] {
+                string imageString = ensureUtf8(info.imageName);
+                imageViewer->reloadImage(imageString, info.grabFocus);
+            });
+
+            glfwPostEmptyEvent();
+            break;
+        }
+
+        case IpcPacket::CloseImage: {
+            while (!imageViewer) { }
+            auto info = packet.interpretAsCloseImage();
+            imageViewer->scheduleToUiThread([&,info] {
+                string imageString = ensureUtf8(info.imageName);
+                imageViewer->removeImage(imageString);
+            });
+
+            glfwPostEmptyEvent();
+            break;
+        }
+
+        case IpcPacket::UpdateImage:
+        case IpcPacket::UpdateImageV2:
+        case IpcPacket::UpdateImageV3: {
+            while (!imageViewer) { }
+            auto info = packet.interpretAsUpdateImage();
+            imageViewer->scheduleToUiThread([&,info] {
+                string imageString = ensureUtf8(info.imageName);
+                for (int i = 0; i < info.nChannels; ++i) {
+                    imageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
+                }
+            });
+
+            glfwPostEmptyEvent();
+            break;
+        }
+
+        case IpcPacket::CreateImage: {
+            while (!imageViewer) { }
+            auto info = packet.interpretAsCreateImage();
+            imageViewer->scheduleToUiThread([&,info] {
+                string imageString = ensureUtf8(info.imageName);
+                stringstream imageStream;
+                imageStream
+                    << "empty" << " "
+                    << info.width << " "
+                    << info.height << " "
+                    << info.nChannels << " "
+                    ;
+                for (int i = 0; i < info.nChannels; ++i) {
+                    // The following lines encode strings by prefixing their length.
+                    // The reason for using this encoding is to allow  arbitrary characters,
+                    // including whitespaces, in the channel names.
+                    imageStream << info.channelNames[i].length() << info.channelNames[i];
+                }
+
+                auto image = tryLoadImage(imageString, imageStream, "");
+                if (image) {
+                    imageViewer->addImage(image, info.grabFocus);
+                }
+            });
+
+            glfwPostEmptyEvent();
+            break;
+        }
+
+        default: {
+            throw runtime_error{tfm::format("Invalid IPC packet type %d", (int)packet.type())};
+        }
+    }
+}
+
 int mainFunc(const vector<string>& arguments) {
     ArgumentParser parser{
         "tev — The EXR Viewer\n"
@@ -241,102 +330,7 @@ int mainFunc(const vector<string>& arguments) {
             while (!shallShutdown) {
                 ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
                     try {
-                        switch (packet.type()) {
-                            case IpcPacket::OpenImage: {
-                                auto info = packet.interpretAsOpenImage();
-                                string imageString = ensureUtf8(info.imagePath);
-                                size_t colonPos = imageString.find_last_of(":");
-                                if (colonPos == std::string::npos) {
-                                    imagesLoader->enqueue(imageString, "", info.grabFocus);
-                                } else {
-                                    imagesLoader->enqueue(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), info.grabFocus);
-                                }
-                                break;
-                            }
-
-                            case IpcPacket::ReloadImage: {
-                                while (!imageViewer) { }
-                                auto info = packet.interpretAsReloadImage();
-                                imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imageName);
-                                    imageViewer->reloadImage(imageString, info.grabFocus);
-                                });
-
-                                glfwPostEmptyEvent();
-                                break;
-                            }
-
-                            case IpcPacket::CloseImage: {
-                                while (!imageViewer) { }
-                                auto info = packet.interpretAsCloseImage();
-                                imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imageName);
-                                    imageViewer->removeImage(imageString);
-                                });
-
-                                glfwPostEmptyEvent();
-                                break;
-                            }
-
-                            case IpcPacket::UpdateImage: {
-                                while (!imageViewer) { }
-                                auto info = packet.interpretAsUpdateImage();
-                                imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imageName);
-                                    imageViewer->updateImage(imageString, info.grabFocus, info.channel, info.x, info.y, info.width, info.height, info.imageData);
-                                });
-
-                                glfwPostEmptyEvent();
-                                break;
-                            }
-
-                            case IpcPacket::UpdateImageMultiChannel: {
-                                while (!imageViewer) { }
-                                auto info = packet.interpretAsUpdateImageMultiChannel();
-                                imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imageName);
-                                    for (int i = 0; i < info.nChannels; ++i) {
-                                        imageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
-                                    }
-                                });
-
-                                glfwPostEmptyEvent();
-                                break;
-                            }
-
-                            case IpcPacket::CreateImage: {
-                                while (!imageViewer) { }
-                                auto info = packet.interpretAsCreateImage();
-                                imageViewer->scheduleToUiThread([&,info] {
-                                    string imageString = ensureUtf8(info.imageName);
-                                    stringstream imageStream;
-                                    imageStream
-                                        << "empty" << " "
-                                        << info.width << " "
-                                        << info.height << " "
-                                        << info.nChannels << " "
-                                        ;
-                                    for (int i = 0; i < info.nChannels; ++i) {
-                                        // The following lines encode strings by prefixing their length.
-                                        // The reason for using this encoding is to allow  arbitrary characters,
-                                        // including whitespaces, in the channel names.
-                                        imageStream << info.channelNames[i].length() << info.channelNames[i];
-                                    }
-
-                                    auto image = tryLoadImage(imageString, imageStream, "");
-                                    if (image) {
-                                        imageViewer->addImage(image, info.grabFocus);
-                                    }
-                                });
-
-                                glfwPostEmptyEvent();
-                                break;
-                            }
-
-                            default: {
-                                throw runtime_error{tfm::format("Invalid IPC packet type %d", (int)packet.type())};
-                            }
-                        }
+                        handleIpcPacket(packet, imagesLoader, imageViewer);
                     } catch (const runtime_error& e) {
                         tlog::warning() << "Malformed IPC packet: " << e.what();
                     }
