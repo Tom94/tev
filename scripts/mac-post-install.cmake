@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 2.8.12)
 
 # We want to explicitly symlink the newly installed app bundle
 # such that the icon and executable match up correctly.

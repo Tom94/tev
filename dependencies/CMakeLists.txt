@@ -1,6 +1,6 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
 # PBRT-v3 can be found here: https://github.com/mmp/pbrt-v3
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 2.8.12)
 
 if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
     message(FATAL_ERROR
