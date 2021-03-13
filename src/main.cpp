@@ -24,15 +24,10 @@ TEV_NAMESPACE_BEGIN
 
 void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, const std::unique_ptr<ImageViewer>& imageViewer) {
     switch (packet.type()) {
-        case IpcPacket::OpenImage: {
+        case IpcPacket::OpenImage:
+        case IpcPacket::OpenImageV2: {
             auto info = packet.interpretAsOpenImage();
-            string imageString = ensureUtf8(info.imagePath);
-            size_t colonPos = imageString.find_last_of(":");
-            if (colonPos == std::string::npos) {
-                imagesLoader->enqueue(imageString, "", info.grabFocus);
-            } else {
-                imagesLoader->enqueue(imageString.substr(0, colonPos), imageString.substr(colonPos + 1), info.grabFocus);
-            }
+            imagesLoader->enqueue(ensureUtf8(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
             break;
         }
 
@@ -269,7 +264,7 @@ int mainFunc(const vector<string>& arguments) {
 
             try {
                 IpcPacket packet;
-                packet.setOpenImage(tfm::format("%s:%s", path{imageFile}.make_absolute(), channelSelector), true);
+                packet.setOpenImage(path{imageFile}.make_absolute().str(), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
             } catch (runtime_error e) {
                 tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());

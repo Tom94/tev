@@ -14,6 +14,7 @@ TEV_NAMESPACE_BEGIN
 
 struct IpcPacketOpenImage {
     std::string imagePath;
+    std::string channelSelector;
     bool grabFocus;
 };
 
@@ -55,6 +56,7 @@ public:
         CreateImage = 4,
         UpdateImageV2 = 5, // Adds multi-channel support
         UpdateImageV3 = 6, // Adds custom striding/offset support
+        OpenImageV2 = 7, // Explicit separation of image name and channel selector
     };
 
     IpcPacket() = default;
@@ -79,7 +81,7 @@ public:
         int64_t stride;
     };
 
-    void setOpenImage(const std::string& imagePath, bool grabFocus);
+    void setOpenImage(const std::string& imagePath, const std::string& channelSelector, bool grabFocus);
     void setReloadImage(const std::string& imageName, bool grabFocus);
     void setCloseImage(const std::string& imageName);
     void setUpdateImage(const std::string& imageName, bool grabFocus, const std::vector<ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const std::vector<float>& stridedImageData);
@@ -90,8 +92,6 @@ public:
     IpcPacketCloseImage interpretAsCloseImage() const;
     IpcPacketUpdateImage interpretAsUpdateImage() const;
     IpcPacketCreateImage interpretAsCreateImage() const;
-    IpcPacketUpdateImage interpretAsUpdateImageV2() const;
-    IpcPacketUpdateImage interpretAsUpdateImageV3() const;
 
 private:
     std::vector<char> mPayload;
@@ -108,7 +108,7 @@ private:
 
         IStream& operator>>(bool& var) {
             if (mData.size() < mIdx + 1) {
-                throw std::runtime_error{"Trying to read beyond the bounds of the IPC packet payload."};
+                throw std::runtime_error{"Trying to read bool beyond the bounds of the IPC packet payload."};
             }
 
             var = mData[mIdx] == 1;
@@ -119,6 +119,10 @@ private:
         IStream& operator>>(std::string& var) {
             std::vector<char> buffer;
             do {
+                if (mData.size() < mIdx + 1) {
+                    throw std::runtime_error{"Trying to read string beyond the bounds of the IPC packet payload."};
+                }
+
                 buffer.push_back(mData[mIdx]);
             } while (mData[mIdx++] != '\0');
             var = buffer.data();
@@ -127,6 +131,10 @@ private:
 
         template <typename T>
         IStream& operator>>(std::vector<T>& var) {
+            if (mData.size() < mIdx + sizeof(T) * var.size()) {
+                throw std::runtime_error{"Trying to read vector beyond the bounds of the IPC packet payload."};
+            }
+
             for (auto& elem : var) {
                 *this >> elem;
             }
@@ -136,7 +144,7 @@ private:
         template <typename T>
         IStream& operator>>(T& var) {
             if (mData.size() < mIdx + sizeof(T)) {
-                throw std::runtime_error{"Trying to read beyond the bounds of the IPC packet payload."};
+                throw std::runtime_error{"Trying to read generic type beyond the bounds of the IPC packet payload."};
             }
 
             var = *(T*)&mData[mIdx];
