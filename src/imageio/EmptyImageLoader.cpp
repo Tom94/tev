@@ -23,7 +23,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&) const {
+ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&, bool& hasPremultipliedAlpha) const {
     ImageData result;
 
     string magic;
@@ -61,6 +61,8 @@ ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&) c
     for (const string& layer : layerNames) {
         result.layers.emplace_back(layer);
     }
+
+    hasPremultipliedAlpha = true;
 
     return result;
 }

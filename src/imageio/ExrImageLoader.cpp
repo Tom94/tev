@@ -86,7 +86,7 @@ bool ExrImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector) const {
+ImageData ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
     ThreadPool threadPool;
 
@@ -249,6 +249,8 @@ l_foundPart:
     }
 
     threadPool.waitUntilFinished();
+
+    hasPremultipliedAlpha = true;
 
     return result;
 }

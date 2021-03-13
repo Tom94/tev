@@ -1,6 +1,6 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
 # PBRT-v3 can be found here: https://github.com/mmp/pbrt-v3
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 2.8.12)
 
 if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
     message(FATAL_ERROR
@@ -35,6 +35,21 @@ if (WIN32)
     set(ZLIB_LIBRARY zlibstatic)
 
     include_directories(${ZLIB_INCLUDE_DIR} "${CMAKE_CURRENT_BINARY_DIR}/zlib")
+endif()
+
+# Compile DirectXTex (only on Windows)
+if (WIN32)
+    set(BUILD_TOOLS OFF CACHE BOOL " " FORCE)
+    set(BUILD_DX11 OFF CACHE BOOL " " FORCE)
+    set(BUILD_DX12 OFF CACHE BOOL " " FORCE)
+    set(BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
+    add_subdirectory(DirectXTex)
+    set_property(TARGET DirectXTex PROPERTY FOLDER "dependencies")
+
+    set(DIRECTXTEX_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/DirectXTex/DirectXTex" CACHE PATH " " FORCE)
+    set(DIRECTXTEX_LIBRARY DirectXTex)
+
+    include_directories(${DIRECTXTEX_INCLUDE_DIR})
 endif()
 
 # Compile OpenEXR

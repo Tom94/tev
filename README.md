@@ -7,6 +7,9 @@ A high dynamic range (HDR) image comparison tool for graphics people. __tev__ al
 While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
+- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
+    - Supports BC1-BC7 compressed formats. 
+    - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
 - __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
     - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
     - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
@@ -55,7 +58,7 @@ Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit) are availa
 
 ## Building tev
 
-All that is required for building __tev__ is a C++11-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
+All that is required for building __tev__ is a C++11-compatible compiler (C++17 on Windows). Begin by cloning this repository and all its submodules using the following command:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
 ```

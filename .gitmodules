@@ -25,3 +25,6 @@
 [submodule "dependencies/clip"]
 	path = dependencies/clip
 	url = https://github.com/Tom94/clip
+[submodule "dependencies/DirectXTex"]
+	path = dependencies/DirectXTex
+	url = https://github.com/microsoft/DirectXTex.git
