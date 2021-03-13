@@ -56,11 +56,12 @@ IpcPacket::IpcPacket(const char* data, size_t length) {
     mPayload.assign(data, data+length);
 }
 
-void IpcPacket::setOpenImage(const string& imagePath, bool grabFocus) {
+void IpcPacket::setOpenImage(const string& imagePath, const string& channelSelector, bool grabFocus) {
     OStream payload{mPayload};
-    payload << Type::OpenImage;
+    payload << Type::OpenImageV2;
     payload << grabFocus;
     payload << imagePath;
+    payload << channelSelector;
 }
 
 void IpcPacket::setReloadImage(const string& imageName, bool grabFocus) {
@@ -136,12 +137,33 @@ IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
 
     Type type;
     payload >> type;
-    if (type != Type::OpenImage) {
+    if (type != Type::OpenImage && type != Type::OpenImageV2) {
         throw runtime_error{"Cannot interpret IPC packet as OpenImage."};
     }
 
     payload >> result.grabFocus;
-    payload >> result.imagePath;
+
+    string imageString;
+    payload >> imageString;
+
+    if (type >= Type::OpenImageV2) {
+        result.imagePath = imageString;
+        payload >> result.channelSelector;
+        return result;
+    }
+
+    size_t colonPos = imageString.find_last_of(":");
+    if (colonPos == std::string::npos ||
+        colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/') /* windows path of the form X:/* or X:\* */
+    ) {
+        std::cout << imageString << std::endl;
+        result.imagePath = imageString;
+        result.channelSelector = "";
+    } else {
+        result.imagePath = imageString.substr(0, colonPos);
+        result.channelSelector = imageString.substr(colonPos + 1);
+    }
+
     return result;
 }
 

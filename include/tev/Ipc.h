@@ -14,6 +14,7 @@ TEV_NAMESPACE_BEGIN
 
 struct IpcPacketOpenImage {
     std::string imagePath;
+    std::string channelSelector;
     bool grabFocus;
 };
 
@@ -55,6 +56,7 @@ public:
         CreateImage = 4,
         UpdateImageV2 = 5, // Adds multi-channel support
         UpdateImageV3 = 6, // Adds custom striding/offset support
+        OpenImageV2 = 7, // Explicit separation of image name and channel selector
     };
 
     IpcPacket() = default;
@@ -79,7 +81,7 @@ public:
         int64_t stride;
     };
 
-    void setOpenImage(const std::string& imagePath, bool grabFocus);
+    void setOpenImage(const std::string& imagePath, const std::string& channelSelector, bool grabFocus);
     void setReloadImage(const std::string& imageName, bool grabFocus);
     void setCloseImage(const std::string& imageName);
     void setUpdateImage(const std::string& imageName, bool grabFocus, const std::vector<ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const std::vector<float>& stridedImageData);
