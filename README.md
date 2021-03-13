@@ -55,7 +55,7 @@ Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit) are availa
 
 ## Building tev
 
-All that is required for building __tev__ is a C++11-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
+All that is required for building __tev__ is a C++11-compatible compiler (C++17 on Windows). Begin by cloning this repository and all its submodules using the following command:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
 ```
