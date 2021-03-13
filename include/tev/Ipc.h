@@ -92,8 +92,6 @@ public:
     IpcPacketCloseImage interpretAsCloseImage() const;
     IpcPacketUpdateImage interpretAsUpdateImage() const;
     IpcPacketCreateImage interpretAsCreateImage() const;
-    IpcPacketUpdateImage interpretAsUpdateImageV2() const;
-    IpcPacketUpdateImage interpretAsUpdateImageV3() const;
 
 private:
     std::vector<char> mPayload;
