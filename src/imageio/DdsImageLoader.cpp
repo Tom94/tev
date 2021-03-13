@@ -4,6 +4,8 @@
 #include <tev/imageio/DdsImageLoader.h>
 #include <tev/ThreadPool.h>
 
+#include <DirectXTex.h>
+
 using namespace Eigen;
 using namespace filesystem;
 using namespace std;
@@ -21,7 +23,7 @@ bool DdsImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-int DdsImageLoader::getDxgiChannelCount(DXGI_FORMAT fmt) const {
+static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     switch (fmt) {
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
         case DXGI_FORMAT_R32G32B32A32_FLOAT:

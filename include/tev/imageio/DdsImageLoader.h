@@ -5,8 +5,8 @@
 
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
+
 #include <istream>
-#include <DirectXTex.h>
 
 TEV_NAMESPACE_BEGIN
 
@@ -18,8 +18,6 @@ public:
     std::string name() const override {
         return "DDS";
     }
-private:
-    int getDxgiChannelCount(DXGI_FORMAT fmt) const;
 };
 
 TEV_NAMESPACE_END
