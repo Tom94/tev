@@ -153,21 +153,12 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-// Utility class to robustly initialize and uninitialize COM on the thread executing load().
-class ComHelper {
-public:
-    ComHelper() {
-        if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
-            throw invalid_argument{"Failed to initialize COM."};
-        }
-    }
-    ~ComHelper() {
-        CoUninitialize();
-    }
-};
-
 ImageData DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
-    ComHelper comHelper;
+    // COM must be initialized on the thread executing load().
+    if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
+        throw invalid_argument{"Failed to initialize COM."};
+    }
+    ScopeGuard comScopeGuard{ []() { CoUninitialize(); } };
 
     ImageData result;
     ThreadPool threadPool;
