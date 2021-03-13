@@ -8,7 +8,7 @@
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/StbiImageLoader.h>
 #ifdef _WIN32
-#include <tev/imageio/DdsImageLoader.h>
+#   include <tev/imageio/DdsImageLoader.h>
 #endif
 
 using namespace Eigen;

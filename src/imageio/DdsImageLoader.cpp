@@ -156,7 +156,7 @@ class ComHelper {
 public:
     ComHelper() {
         if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
-            throw invalid_argument{ "Failed to initialize COM." };
+            throw invalid_argument{"Failed to initialize COM."};
         }
     }
     ~ComHelper() {
@@ -178,7 +178,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
     if (DirectX::LoadFromDDSMemory(data.data(), dataSize, DirectX::DDS_FLAGS_NONE, &metadata, scratchImage) != S_OK) {
-        throw invalid_argument{ "Failed to read DDS file." };
+        throw invalid_argument{"Failed to read DDS file."};
     }
 
     DXGI_FORMAT format;
@@ -204,17 +204,15 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
     // Use DirectXTex to either decompress or convert to the target floating point format.
     if (DirectX::IsCompressed(metadata.format)) {
         DirectX::ScratchImage decompImage;
-        if (DirectX::Decompress(*scratchImage.GetImage(0, 0, 0), format, decompImage) != S_OK)
-        {
-            throw invalid_argument{ "Failed to decompress image." };
+        if (DirectX::Decompress(*scratchImage.GetImage(0, 0, 0), format, decompImage) != S_OK) {
+            throw invalid_argument{"Failed to decompress DDS image."};
         }
         std::swap(scratchImage, decompImage);
     }
     else if (metadata.format != format) {
         DirectX::ScratchImage convertedImage;
-        if (DirectX::Convert(*scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage) != S_OK)
-        {
-            throw invalid_argument{ "Failed to convert image." };
+        if (DirectX::Convert(*scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage) != S_OK) {
+            throw invalid_argument{"Failed to convert DDS image."};
         }
         std::swap(scratchImage, convertedImage);
     }
@@ -223,7 +221,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
 
     auto numPixels = (DenseIndex)metadata.width * metadata.height;
     if (numPixels == 0) {
-        throw invalid_argument{ "Image has zero pixels." };
+        throw invalid_argument{"DDS image has zero pixels."};
     }
 
     bool isFloat = DirectX::FormatDataType(metadata.format) == DirectX::FORMAT_TYPE_FLOAT;
@@ -249,8 +247,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {
                     channels[c].at(i) = typedData[baseIdx + c];
-                }
-                else {
+                } else {
                     channels[c].at(i) = toLinear(typedData[baseIdx + c]);
                 }
             }

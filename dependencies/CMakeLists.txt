@@ -39,7 +39,7 @@ endif()
 
 # Compile DirectXTex (only on Windows)
 if (WIN32)
-    set (BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
+    set(BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
     add_subdirectory(DirectXTex)
     set_property(TARGET DirectXTex PROPERTY FOLDER "dependencies")
 
