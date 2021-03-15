@@ -201,8 +201,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
             throw invalid_argument{"Failed to decompress DDS image."};
         }
         std::swap(scratchImage, decompImage);
-    }
-    else if (metadata.format != format) {
+    } else if (metadata.format != format) {
         DirectX::ScratchImage convertedImage;
         if (DirectX::Convert(*scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage) != S_OK) {
             throw invalid_argument{"Failed to convert DDS image."};

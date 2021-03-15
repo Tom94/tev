@@ -9,7 +9,7 @@ TEV_NAMESPACE_BEGIN
 
 namespace colormap {
     const vector<float>& turbo() {
-        // "viridis" colormap data generated with scripts/sample-colormap.py
+        // "turbo" colormap data generated with scripts/sample-colormap.py
         static const vector<float> data = {
             0.18995f, 0.07176f, 0.23217f, 1.0f,
             0.19483f, 0.08339f, 0.26149f, 1.0f,
