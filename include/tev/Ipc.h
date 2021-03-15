@@ -131,10 +131,6 @@ private:
 
         template <typename T>
         IStream& operator>>(std::vector<T>& var) {
-            if (mData.size() < mIdx + sizeof(T) * var.size()) {
-                throw std::runtime_error{"Trying to read vector beyond the bounds of the IPC packet payload."};
-            }
-
             for (auto& elem : var) {
                 *this >> elem;
             }
