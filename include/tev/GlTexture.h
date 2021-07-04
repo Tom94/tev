@@ -13,6 +13,7 @@ class GlTexture {
 public:
     GlTexture(GLint clamping = GL_CLAMP_TO_EDGE, GLint filtering = GL_NEAREST, bool mipmap = true);
 
+    GlTexture(GlTexture& other) = delete;
     GlTexture(const GlTexture& other) = delete;
     GlTexture(GlTexture&& other) noexcept
     : mId{other.mId}, mClamping{other.mClamping}, mFiltering{other.mFiltering}, mMipmap{other.mMipmap} {
@@ -30,7 +31,13 @@ public:
 
     ~GlTexture() noexcept {
         if (mId) {
-            glDeleteTextures(1, &mId);
+            // Local variable to allow capturing for subsequent scheduling to the main thread.
+            // Not capturing would lead to a referencing of deleted memory.
+            GLuint localId = mId;
+            scheduleToMainThread([localId] {
+                glDeleteTextures(1, &localId);
+            });
+            mId = 0;
         }
     }
 

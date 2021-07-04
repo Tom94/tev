@@ -182,6 +182,9 @@ filesystem::path homeDirectory();
 
 void toggleConsole();
 
+// Implemented in main.cpp
+void scheduleToMainThread(const std::function<void()>& fun);
+
 enum ETonemap : int {
     SRGB = 0,
     Gamma,
