@@ -31,10 +31,12 @@ TEV_NAMESPACE_BEGIN
 // Currently, the only use case is the destruction of
 // OpenGL textures, which _must_ happen on the thread
 // on which the GL context is "current".
-static std::unique_ptr<ImageViewer> sImageViewer;
+ImageViewer* sImageViewer = nullptr;
 
 void scheduleToMainThread(const std::function<void()>& fun) {
-    sImageViewer->scheduleToUiThread(fun);
+    if (sImageViewer) {
+        sImageViewer->scheduleToUiThread(fun);
+    }
 }
 
 void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
@@ -365,7 +367,21 @@ int mainFunc(const vector<string>& arguments) {
     // Init nanogui application
     nanogui::init();
 
-    sImageViewer.reset(new ImageViewer{imagesLoader, !imageFiles});
+    ScopeGuard imageViewerGuard{[] {
+        // Make sure sImagePointer is no longer accessible
+        // while it is being destructed. This is to avoid
+        // nested GlTextures' destructors calling `scheduleToMainThread`
+        // to access sImageViewer in a partially-destructed state.
+        // This is a horrible hack, yet the path of least resistance
+        // that I could find to properly descruct GlTextures on the main
+        // thread (and stopping to care about them when the program
+        // terminates anyway).
+        ImageViewer* localImageViewerPtr = sImageViewer;
+        sImageViewer = nullptr;
+        delete localImageViewerPtr;
+    }};
+    sImageViewer = new ImageViewer{imagesLoader, !imageFiles};
+
     sImageViewer->drawAll();
     sImageViewer->setVisible(true);
 
@@ -401,8 +417,6 @@ int mainFunc(const vector<string>& arguments) {
     if (stdinThread.joinable()) {
         stdinThread.join();
     }
-
-    sImageViewer.reset();
 
     return 0;
 }
