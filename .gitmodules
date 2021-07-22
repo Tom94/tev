@@ -1,6 +1,3 @@
-[submodule "dependencies/nanogui"]
-	path = dependencies/nanogui
-	url = https://github.com/Tom94/nanogui
 [submodule "dependencies/args"]
 	path = dependencies/args
 	url = https://github.com/Taywee/args
@@ -28,3 +25,6 @@
 [submodule "dependencies/DirectXTex"]
 	path = dependencies/DirectXTex
 	url = https://github.com/microsoft/DirectXTex.git
+[submodule "dependencies/nanogui"]
+	path = dependencies/nanogui
+	url = https://github.com/mitsuba-renderer/nanogui
