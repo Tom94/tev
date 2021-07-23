@@ -9,7 +9,7 @@
 
 #include <nanogui/button.h>
 #include <nanogui/colorwheel.h>
-#include <nanogui/entypo.h>
+#include <nanogui/icons.h>
 #include <nanogui/label.h>
 #include <nanogui/layout.h>
 #include <nanogui/messagedialog.h>
@@ -31,55 +31,55 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops)
-: nanogui::Screen{Vector2i{1024, 799}, "tev"}, mImagesLoader{imagesLoader} {
+: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev"}, mImagesLoader{imagesLoader} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
-    mBackground = Color{0.23f, 1.0f};
+    m_background = Color{0.23f, 1.0f};
 
     mVerticalScreenSplit = new Widget{this};
-    mVerticalScreenSplit->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+    mVerticalScreenSplit->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
     auto horizontalScreenSplit = new Widget(mVerticalScreenSplit);
-    horizontalScreenSplit->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+    horizontalScreenSplit->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
     mSidebar = new Widget{horizontalScreenSplit};
-    mSidebar->setFixedWidth(205);
+    mSidebar->set_fixed_width(205);
 
-    mHelpButton = new Button{mSidebar, "", ENTYPO_ICON_HELP};
-    mHelpButton->setCallback([this]() { toggleHelpWindow(); });
-    mHelpButton->setFontSize(15);
-    mHelpButton->setTooltip("Information about using tev.");
+    mHelpButton = new Button{mSidebar, "", FA_QUESTION};
+    mHelpButton->set_callback([this]() { toggleHelpWindow(); });
+    mHelpButton->set_font_size(15);
+    mHelpButton->set_tooltip("Information about using tev.");
 
     mSidebarLayout = new Widget{mSidebar};
-    mSidebarLayout->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixelRatio()};
+    mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixel_ratio()};
 
     // Tonemapping section
     {
         auto panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
+        panel->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
         new Label{panel, "Tonemapping", "sans-bold", 25};
-        panel->setTooltip(
+        panel->set_tooltip(
             "Various tonemapping options. Hover the individual controls to learn more!"
         );
 
         // Exposure label and slider
         {
             panel = new Widget{mSidebarLayout};
-            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+            panel->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
             mExposureLabel = new Label{panel, "", "sans-bold", 15};
 
             mExposureSlider = new Slider{panel};
-            mExposureSlider->setRange({-5.0f, 5.0f});
-            mExposureSlider->setCallback([this](float value) {
+            mExposureSlider->set_range({-5.0f, 5.0f});
+            mExposureSlider->set_callback([this](float value) {
                 setExposure(value);
             });
             setExposure(0);
 
-            panel->setTooltip(
+            panel->set_tooltip(
                 "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n\n"
                 "Keyboard shortcuts:\nE and Shift+E"
             );
@@ -88,13 +88,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Offset/Gamma label and slider
         {
             panel = new Widget{mSidebarLayout};
-            panel->setLayout(new GridLayout{Orientation::Vertical, 2, Alignment::Fill, 5, 0});
+            panel->set_layout(new GridLayout{Orientation::Vertical, 2, Alignment::Fill, 5, 0});
 
             mOffsetLabel = new Label{panel, "", "sans-bold", 15};
 
             mOffsetSlider = new Slider{panel};
-            mOffsetSlider->setRange({-1.0f, 1.0f});
-            mOffsetSlider->setCallback([this](float value) {
+            mOffsetSlider->set_range({-1.0f, 1.0f});
+            mOffsetSlider->set_callback([this](float value) {
                 setOffset(value);
             });
             setOffset(0);
@@ -102,13 +102,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             mGammaLabel = new Label{panel, "", "sans-bold", 15};
 
             mGammaSlider = new Slider{panel};
-            mGammaSlider->setRange({0.01f, 5.0f});
-            mGammaSlider->setCallback([this](float value) {
+            mGammaSlider->set_range({0.01f, 5.0f});
+            mGammaSlider->set_callback([this](float value) {
                 setGamma(value);
             });
             setGamma(2.2f);
 
-            panel->setTooltip(
+            panel->set_tooltip(
                 "The offset is added to the image after exposure has been applied.\n"
                 "Keyboard shortcuts: O and Shift+O\n\n"
                 "Gamma is the exponent used when gamma-tonemapping.\n"
@@ -120,13 +120,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // Exposure/offset buttons
     {
         auto buttonContainer = new Widget{mSidebarLayout};
-        buttonContainer->setLayout(new GridLayout{Orientation::Horizontal, 3, Alignment::Fill, 5, 2});
+        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, 3, Alignment::Fill, 5, 2});
 
         auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
-            button->setFontSize(15);
-            button->setCallback(callback);
-            button->setTooltip(tooltip);
+            button->set_font_size(15);
+            button->set_callback(callback);
+            button->set_tooltip(tooltip);
             return button;
         };
 
@@ -135,26 +135,26 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         );
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
 
-        auto popupBtn = new PopupButton{buttonContainer, "", ENTYPO_ICON_BRUSH};
-        popupBtn->setFontSize(15);
-        popupBtn->setChevronIcon(0);
-        popupBtn->setTooltip("Background Color");
+        auto popupBtn = new PopupButton{buttonContainer, "", FA_BRUSH};
+        popupBtn->set_font_size(15);
+        popupBtn->set_chevron_icon(0);
+        popupBtn->set_tooltip("Background Color");
 
         // Background color popup
         {
             auto popup = popupBtn->popup();
-            popup->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
+            popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "Background Color"};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
-            colorwheel->setColor(popupBtn->backgroundColor());
+            auto colorwheel = new ColorWheel{popup, mImageCanvas->background_color()};
+            colorwheel->set_color(popupBtn->background_color());
 
             new Label{popup, "Background Alpha"};
             auto bgAlphaSlider = new Slider{popup};
-            bgAlphaSlider->setRange({0.0f, 1.0f});
-            bgAlphaSlider->setCallback([this](float value) {
-                auto col = mImageCanvas->backgroundColor();
-                mImageCanvas->setBackgroundColor(Color{
+            bgAlphaSlider->set_range({0.0f, 1.0f});
+            bgAlphaSlider->set_callback([this](float value) {
+                auto col = mImageCanvas->background_color();
+                mImageCanvas->set_background_color(Color{
                     col.r(),
                     col.g(),
                     col.b(),
@@ -162,11 +162,11 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                 });
             });
 
-            bgAlphaSlider->setValue(0);
+            bgAlphaSlider->set_value(0);
 
-            colorwheel->setCallback([bgAlphaSlider, this](const Color& value) {
-                //popupBtn->setBackgroundColor(value);
-                mImageCanvas->setBackgroundColor(Color{
+            colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
+                //popupBtn->set_background_color(value);
+                mImageCanvas->set_background_color(Color{
                     value.r(),
                     value.g(),
                     value.b(),
@@ -179,13 +179,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // Tonemap options
     {
         mTonemapButtonContainer = new Widget{mSidebarLayout};
-        mTonemapButtonContainer->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+        mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mTonemapButtonContainer, name};
-            button->setFlags(Button::RadioButton);
-            button->setFontSize(15);
-            button->setCallback(callback);
+            button->set_flags(Button::RadioButton);
+            button->set_font_size(15);
+            button->set_callback(callback);
             return button;
         };
 
@@ -196,7 +196,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
         setTonemap(ETonemap::SRGB);
 
-        mTonemapButtonContainer->setTooltip(
+        mTonemapButtonContainer->set_tooltip(
             "Tonemap operator selection:\n\n"
 
             "sRGB\n"
@@ -216,13 +216,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // Error metrics
     {
         mMetricButtonContainer = new Widget{mSidebarLayout};
-        mMetricButtonContainer->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
+        mMetricButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeMetricButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mMetricButtonContainer, name};
-            button->setFlags(Button::RadioButton);
-            button->setFontSize(15);
-            button->setCallback(callback);
+            button->set_flags(Button::RadioButton);
+            button->set_font_size(15);
+            button->set_callback(callback);
             return button;
         };
 
@@ -234,7 +234,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
         setMetric(EMetric::AbsoluteError);
 
-        mMetricButtonContainer->setTooltip(
+        mMetricButtonContainer->set_tooltip(
             "Error metric selection. Given a reference image r and the selected image i, "
             "the following operators are available:\n\n"
 
@@ -258,12 +258,12 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // Image selection
     {
         auto spacer = new Widget{mSidebarLayout};
-        spacer->setHeight(10);
+        spacer->set_height(10);
 
         auto panel = new Widget{mSidebarLayout};
-        panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+        panel->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
         auto label = new Label{panel, "Images", "sans-bold", 25};
-        label->setTooltip(
+        label->set_tooltip(
             "Select images either by left-clicking on them or by pressing arrow/number keys on your keyboard.\n"
             "Right-clicking an image marks it as the 'reference' image. "
             "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
@@ -272,7 +272,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Histogram of selected image
         {
             panel = new Widget{mSidebarLayout};
-            panel->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+            panel->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
             mHistogram = new MultiGraph{panel, ""};
         }
@@ -280,17 +280,17 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Fuzzy filter of open images
         {
             panel = new Widget{mSidebarLayout};
-            panel->setLayout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+            panel->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
             mFilter = new TextBox{panel, ""};
-            mFilter->setEditable(true);
-            mFilter->setAlignment(TextBox::Alignment::Left);
-            mFilter->setCallback([this](const string& filter) {
+            mFilter->set_editable(true);
+            mFilter->set_alignment(TextBox::Alignment::Left);
+            mFilter->set_callback([this](const string& filter) {
                 return setFilter(filter);
             });
 
-            mFilter->setPlaceholder("Find");
-            mFilter->setTooltip(tfm::format(
+            mFilter->set_placeholder("Find");
+            mFilter->set_tooltip(tfm::format(
                 "Filters visible images and channel groups according to a supplied string. "
                 "The string must have the format 'image:group'. "
                 "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
@@ -298,12 +298,12 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                 HelpWindow::COMMAND
             ));
 
-            mRegexButton = new Button{panel, "", ENTYPO_ICON_SEARCH};
-            mRegexButton->setTooltip("Treat filter as regular expression");
-            mRegexButton->setPushed(false);
-            mRegexButton->setFlags(Button::ToggleButton);
-            mRegexButton->setFontSize(15);
-            mRegexButton->setChangeCallback([this](bool value) {
+            mRegexButton = new Button{panel, "", FA_SEARCH};
+            mRegexButton->set_tooltip("Treat filter as regular expression");
+            mRegexButton->set_pushed(false);
+            mRegexButton->set_flags(Button::ToggleButton);
+            mRegexButton->set_font_size(15);
+            mRegexButton->set_change_callback([this](bool value) {
                 setUseRegex(value);
             });
         }
@@ -311,36 +311,37 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Playback controls
         {
             auto playback = new Widget{mSidebarLayout};
-            playback->setLayout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+            playback->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
             auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{playback, name, icon};
-                button->setCallback(callback);
-                button->setTooltip(tooltip);
-                button->setFontSize(15);
-                button->setEnabled(enabled);
+                button->set_callback(callback);
+                button->set_tooltip(tooltip);
+                button->set_font_size(15);
+                button->set_enabled(enabled);
                 return button;
             };
 
-            mPlayButton = makePlaybackButton("", true, []{}, ENTYPO_ICON_PLAY, "Play (Space)");
-            mPlayButton->setFlags(Button::ToggleButton);
+            mPlayButton = makePlaybackButton("", true, []{}, FA_PLAY, "Play (Space)");
+            mPlayButton->set_flags(Button::ToggleButton);
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
                 selectImage(nthVisibleImage(0));
-            }, ENTYPO_ICON_TO_START, "Front (Home)"));
+            }, FA_FAST_BACKWARD, "Front (Home)"));
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
                 selectImage(nthVisibleImage(mImages.size()));
-            }, ENTYPO_ICON_TO_END, "Back (End)"));
+            }, FA_FAST_FORWARD, "Back (End)"));
 
             mFpsTextBox = new IntBox<int>{playback, 24};
-            mFpsTextBox->setDefaultValue("24");
-            mFpsTextBox->setUnits("fps");
-            mFpsTextBox->setEditable(true);
-            mFpsTextBox->setAlignment(TextBox::Alignment::Right);
-            mFpsTextBox->setMinMaxValues(1, 1000);
-            mFpsTextBox->setSpinnable(true);
-            mFpsTextBox->setFixedTextWidth(42);
+            mFpsTextBox->set_default_value("24");
+            mFpsTextBox->set_units("fps");
+            mFpsTextBox->set_editable(true);
+            mFpsTextBox->set_alignment(TextBox::Alignment::Right);
+            mFpsTextBox->set_min_max_values(1, 1000);
+            mFpsTextBox->set_spinnable(true);
+            //TODO: restore
+            // mFpsTextBox->set_fixed_text_width(42);
 
             mPlaybackThread = thread{[&]() {
                 while (mShallRunPlaybackThread) {
@@ -361,59 +362,59 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Save, refresh, load, close
         {
             auto tools = new Widget{mSidebarLayout};
-            tools->setLayout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
+            tools->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
 
             auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{tools, name, icon};
-                button->setCallback(callback);
-                button->setTooltip(tooltip);
-                button->setFontSize(15);
-                button->setEnabled(enabled);
+                button->set_callback(callback);
+                button->set_tooltip(tooltip);
+                button->set_font_size(15);
+                button->set_enabled(enabled);
                 return button;
             };
 
             makeImageButton("", true, [this] {
                 openImageDialog();
-            }, ENTYPO_ICON_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
+            }, FA_FOLDER, tfm::format("Open (%s+O)", HelpWindow::COMMAND));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
                 saveImageDialog();
-            }, ENTYPO_ICON_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
+            }, FA_SAVE, tfm::format("Save (%s+S)", HelpWindow::COMMAND)));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
                 reloadImage(mCurrentImage);
-            }, ENTYPO_ICON_CYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
+            }, FA_RECYCLE, tfm::format("Reload (%s+R or F5)", HelpWindow::COMMAND)));
 
             mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
                 reloadAllImages();
-            }, ENTYPO_ICON_CYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, FA_RECYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
-                auto* glfwWindow = screen()->glfwWindow();
+                auto* glfwWindow = screen()->glfw_window();
                 // There is no explicit access to the currently pressed modifier keys here, so we
                 // need to directly ask GLFW. In case this is needed more often, it may be worth
-                // inheriting Button and overriding mouseButtonEvent (similar to ImageButton).
+                // inheriting Button and overriding mouse_button_event (similar to ImageButton).
                 if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
                     removeAllImages();
                 } else {
                     removeImage(mCurrentImage);
                 }
-            }, ENTYPO_ICON_CIRCLED_CROSS, tfm::format("Close (%s+W); Close All (%s+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, FA_WINDOW_CLOSE, tfm::format("Close (%s+W); Close All (%s+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             spacer = new Widget{mSidebarLayout};
-            spacer->setHeight(3);
+            spacer->set_height(3);
         }
 
         // List of open images
         {
             mImageScrollContainer = new VScrollPanel{mSidebarLayout};
-            mImageScrollContainer->setFixedWidth(mSidebarLayout->fixedWidth());
+            mImageScrollContainer->set_fixed_width(mSidebarLayout->fixed_width());
 
             mScrollContent = new Widget{mImageScrollContainer};
-            mScrollContent->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+            mScrollContent->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
 
             mImageButtonContainer = new Widget{mScrollContent};
-            mImageButtonContainer->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+            mImageButtonContainer->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
         }
     }
 
@@ -422,21 +423,22 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         mFooter = new Widget{mVerticalScreenSplit};
 
         mGroupButtonContainer = new Widget{mFooter};
-        mGroupButtonContainer->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
-        mGroupButtonContainer->setFixedHeight(25);
-        mFooter->setFixedHeight(25);
-        mFooter->setVisible(false);
+        mGroupButtonContainer->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
+        mGroupButtonContainer->set_fixed_height(25);
+        mFooter->set_fixed_height(25);
+        mFooter->set_visible(false);
     }
 
-    setResizeCallback([this](Vector2i) { requestLayoutUpdate(); });
+    set_resize_callback([this](nanogui::Vector2i) { requestLayoutUpdate(); });
 
-    this->setSize(Vector2i(1024, 800));
+    this->set_size(nanogui::Vector2i(1024, 800));
     selectImage(nullptr);
     selectReference(nullptr);
 
-    if (processPendingDrops) {
-        dropEvent(mPendingDrops);
-    }
+    //TODO: Restore
+    // if (processPendingDrops) {
+    //     drop_event(mPendingDrops);
+    // }
 }
 
 ImageViewer::~ImageViewer() {
@@ -446,39 +448,39 @@ ImageViewer::~ImageViewer() {
     }
 }
 
-bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
+bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
-    // This has to occur before Screen::mouseButtonEvent as the button would absorb the event.
+    // This has to occur before Screen::mouse_button_event as the button would absorb the event.
     if (down) {
         if (mImageScrollContainer->contains(p)) {
             auto& buttons = mImageButtonContainer->children();
 
-            Eigen::Vector2i relMousePos = (absolutePosition() + p) - mImageButtonContainer->absolutePosition();
+            nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
 
             for (size_t i = 0; i < buttons.size(); ++i) {
                 const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
                 if (imgButton->contains(relMousePos)) {
                     mDraggedImageButtonId = i;
                     mIsDraggingImageButton = true;
-                    mDraggingStartPosition = (relMousePos - imgButton->position()).cast<float>();
+                    mDraggingStartPosition = nanogui::Vector2f(relMousePos - imgButton->position());
                     break;
                 }
             }
         }
     }
 
-    if (Screen::mouseButtonEvent(p, button, down, modifiers)) {
+    if (Screen::mouse_button_event(p, button, down, modifiers)) {
         return true;
     }
 
     if (down && !mIsDraggingImageButton) {
         if (canDragSidebarFrom(p)) {
             mIsDraggingSidebar = true;
-            mDraggingStartPosition = p.cast<float>();
+            mDraggingStartPosition = nanogui::Vector2f(p);
             return true;
         } else if (mImageCanvas->contains(p)) {
             mIsDraggingImage = true;
-            mDraggingStartPosition = p.cast<float>();
+            mDraggingStartPosition = nanogui::Vector2f(p);
             return true;
         }
     } else {
@@ -494,25 +496,25 @@ bool ImageViewer::mouseButtonEvent(const Vector2i &p, int button, bool down, int
     return false;
 }
 
-bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int button, int modifiers) {
-    if (Screen::mouseMotionEvent(p, rel, button, modifiers)) {
+bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) {
+    if (Screen::mouse_motion_event(p, rel, button, modifiers)) {
         return true;
     }
 
     if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
-        mSidebarLayout->setCursor(Cursor::HResize);
-        mImageCanvas->setCursor(Cursor::HResize);
+        mSidebarLayout->set_cursor(Cursor::HResize);
+        mImageCanvas->set_cursor(Cursor::HResize);
     } else {
-        mSidebarLayout->setCursor(Cursor::Arrow);
-        mImageCanvas->setCursor(Cursor::Arrow);
+        mSidebarLayout->set_cursor(Cursor::Arrow);
+        mImageCanvas->set_cursor(Cursor::Arrow);
     }
 
     if (mIsDraggingSidebar) {
-        mSidebar->setFixedWidth(clamp(p.x(), 205, mSize.x() - 10));
+        mSidebar->set_fixed_width(clamp(p.x(), 205, m_size.x() - 10));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
-        Vector2f relativeMovement = rel.cast<float>();
-        auto* glfwWindow = screen()->glfwWindow();
+        Eigen::Vector2f relativeMovement = {rel.x(), rel.y()};
+        auto* glfwWindow = screen()->glfw_window();
         // There is no explicit access to the currently pressed modifier keys here, so we
         // need to directly ask GLFW.
         if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
@@ -528,21 +530,21 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
 
         // If middle mouse button is held, zoom in-out with up-down mouse movement
         if ((button & 4) != 0) {
-            mImageCanvas->scale(relativeMovement.y() / 10.0f, mDraggingStartPosition);
+            mImageCanvas->scale(relativeMovement.y() / 10.0f, {mDraggingStartPosition.x(), mDraggingStartPosition.y()});
         }
     } else if (mIsDraggingImageButton) {
         auto& buttons = mImageButtonContainer->children();
-        Eigen::Vector2i relMousePos = (absolutePosition() + p) - mImageButtonContainer->absolutePosition();
+        nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
         for (size_t i = 0; i < buttons.size(); ++i) {
             if (i == mDraggedImageButtonId) {
                 continue;
             }
             auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
             if (imgButton->contains(relMousePos)) {
-                Vector2i pos = imgButton->position();
+                nanogui::Vector2i pos = imgButton->position();
                 pos.y() += ((int)mDraggedImageButtonId - (int)i) * imgButton->size().y();
-                imgButton->setPosition(pos);
-                imgButton->mouseEnterEvent(relMousePos, false);
+                imgButton->set_position(pos);
+                imgButton->mouse_enter_event(relMousePos, false);
 
                 moveImageInList(mDraggedImageButtonId, i);
                 mDraggedImageButtonId = i;
@@ -550,14 +552,14 @@ bool ImageViewer::mouseMotionEvent(const Vector2i& p, const Vector2i& rel, int b
             }
         }
         
-        dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->setPosition(relMousePos - mDraggingStartPosition.cast<int>());
+        dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(relMousePos - nanogui::Vector2i(mDraggingStartPosition));
     }
 
     return false;
 }
 
-bool ImageViewer::dropEvent(const vector<string>& filenames) {
-    if (Screen::dropEvent(filenames)) {
+bool ImageViewer::drop_event(const vector<string>& filenames) {
+    if (Screen::drop_event(filenames)) {
         return true;
     }
 
@@ -570,12 +572,12 @@ bool ImageViewer::dropEvent(const vector<string>& filenames) {
     return true;
 }
 
-bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers) {
-    if (Screen::keyboardEvent(key, scancode, action, modifiers)) {
+bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifiers) {
+    if (Screen::keyboard_event(key, scancode, action, modifiers)) {
         return true;
     }
 
-    int numGroups = mGroupButtonContainer->childCount();
+    int numGroups = mGroupButtonContainer->child_count();
 
     // Keybindings which should _not_ respond to repeats
     if (action == GLFW_PRESS) {
@@ -636,7 +638,7 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             saveImageDialog();
             return true;
         } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
-            mFilter->requestFocus();
+            mFilter->request_focus();
             return true;
         } else if (key == GLFW_KEY_F) {
             if (mCurrentImage) {
@@ -661,10 +663,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
             toggleConsole();
             return true;
         } else if (key == GLFW_KEY_SPACE) {
-            mPlayButton->setPushed(!mPlayButton->pushed());
+            mPlayButton->set_pushed(!mPlayButton->pushed());
             return true;
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
-            setVisible(false);
+            set_visible(false);
             return true;
         } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
             if (mImageScrollContainer->focused()) {
@@ -753,9 +755,11 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
                 scaleAmount = -scaleAmount;
             }
 
+            nanogui::Vector2f origin = nanogui::Vector2f{mImageCanvas->position()} + nanogui::Vector2f{mImageCanvas->size()};
+
             mImageCanvas->scale(
                 scaleAmount,
-                mImageCanvas->position().cast<float>() + mImageCanvas->size().cast<float>() / 2
+                {origin.x(), origin.y()}
             );
         }
 
@@ -832,10 +836,10 @@ bool ImageViewer::keyboardEvent(int key, int scancode, int action, int modifiers
 }
 
 void ImageViewer::focusWindow() {
-    glfwFocusWindow(mGLFWWindow);
+    glfwFocusWindow(m_glfw_window);
 }
 
-void ImageViewer::drawContents() {
+void ImageViewer::draw_contents() {
     // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
@@ -883,7 +887,7 @@ void ImageViewer::drawContents() {
     }
 
     if (mRequiresLayoutUpdate) {
-        Vector2i oldDraggedImageButtonPos{0, 0};
+        nanogui::Vector2i oldDraggedImageButtonPos{0, 0};
         auto& buttons = mImageButtonContainer->children();
         if (mIsDraggingImageButton) {
             oldDraggedImageButtonPos = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->position();
@@ -893,7 +897,7 @@ void ImageViewer::drawContents() {
         mRequiresLayoutUpdate = false;
 
         if (mIsDraggingImageButton) {
-            dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->setPosition(oldDraggedImageButtonPos);
+            dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(oldDraggedImageButtonPos);
         }
     }
 
@@ -910,7 +914,7 @@ void ImageViewer::drawContents() {
             mHistogram->setMean(statistics->mean);
             mHistogram->setMaximum(statistics->maximum);
             mHistogram->setZero(statistics->histogramZero);
-            mHistogram->setTooltip(tfm::format(
+            mHistogram->set_tooltip(tfm::format(
                 "%s\n\n"
                 "Minimum: %.3f\n"
                 "Mean: %.3f\n"
@@ -927,7 +931,7 @@ void ImageViewer::drawContents() {
         mHistogram->setMean(0);
         mHistogram->setMaximum(0);
         mHistogram->setZero(0);
-        mHistogram->setTooltip(
+        mHistogram->set_tooltip(
             tfm::format("%s", histogramTooltipBase)
         );
     }
@@ -943,13 +947,13 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     }
 
     for (auto button : mAnyImageButtons) {
-        button->setEnabled(true);
+        button->set_enabled(true);
     }
 
     auto button = new ImageButton{nullptr, image->name(), true};
-    button->setFontSize(15);
+    button->set_font_size(15);
     button->setId(index + 1);
-    button->setTooltip(image->toString());
+    button->set_tooltip(image->toString());
 
     button->setSelectedCallback([this, image]() {
         selectImage(image);
@@ -963,7 +967,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
         }
     });
 
-    mImageButtonContainer->addChild((int)index, button);
+    mImageButtonContainer->add_child((int)index, button);
     mImages.insert(begin(mImages) + index, image);
 
     // The following call will show thefooter if there is not an image
@@ -990,16 +994,16 @@ void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
     TEV_ASSERT(oldIndex < mImages.size(), "oldIndex must be smaller than the number of images.");
     TEV_ASSERT(newIndex < mImages.size(), "newIndex must be smaller than the number of images.");
 
-    auto* button = mImageButtonContainer->childAt((int)oldIndex);
-    button->incRef();
-    mImageButtonContainer->removeChild((int)oldIndex);
-    mImageButtonContainer->addChild((int)newIndex, button);
-    button->decRef();
+    auto* button = mImageButtonContainer->child_at((int)oldIndex);
+    button->inc_ref();
+    mImageButtonContainer->remove_child_at((int)oldIndex);
+    mImageButtonContainer->add_child((int)newIndex, button);
+    button->dec_ref();
 
     auto startI = std::min(oldIndex, newIndex);
     auto endI = std::max(oldIndex, newIndex);
     for (size_t i = startI; i <= endI; ++i) {
-        auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->childAt((int)i));
+        auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->child_at((int)i));
         curButton->setId(i+1);
     }
 
@@ -1036,17 +1040,17 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
 
     // Reset all focus as a workaround a crash caused by nanogui.
     // TODO: Remove once a fix exists.
-    requestFocus();
+    request_focus();
 
     mImages.erase(begin(mImages) + id);
-    mImageButtonContainer->removeChild(id);
+    mImageButtonContainer->remove_child_at(id);
 
     if (mImages.empty()) {
         selectImage(nullptr);
         selectReference(nullptr);
 
         for (auto button : mAnyImageButtons) {
-            button->setEnabled(false);
+            button->set_enabled(false);
         }
 
         return;
@@ -1067,10 +1071,10 @@ void ImageViewer::removeAllImages() {
 
     // Reset all focus as a workaround a crash caused by nanogui.
     // TODO: Remove once a fix exists.
-    requestFocus();
+    request_focus();
 
     for (size_t i = mImages.size(); i > 0; --i) {
-        mImageButtonContainer->removeChild((int)(i - 1));
+        mImageButtonContainer->remove_child_at((int)(i - 1));
     }
     mImages.clear();
 
@@ -1078,7 +1082,7 @@ void ImageViewer::removeAllImages() {
     selectImage(nullptr);
     selectReference(nullptr);
     for (auto button : mAnyImageButtons) {
-        button->setEnabled(false);
+        button->set_enabled(false);
     }
 }
 
@@ -1149,11 +1153,11 @@ void ImageViewer::updateImage(
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
     if (stopPlayback) {
-        mPlayButton->setPushed(false);
+        mPlayButton->set_pushed(false);
     }
 
     for (auto button : mCurrentImageButtons) {
-        button->setEnabled(image != nullptr);
+        button->set_enabled(image != nullptr);
     }
 
     if (!image) {
@@ -1166,8 +1170,8 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         mImageCanvas->setImage(nullptr);
 
         // Clear group buttons
-        while (mGroupButtonContainer->childCount() > 0) {
-            mGroupButtonContainer->removeChild(mGroupButtonContainer->childCount() - 1);
+        while (mGroupButtonContainer->child_count() > 0) {
+            mGroupButtonContainer->remove_child_at(mGroupButtonContainer->child_count() - 1);
         }
 
         requestLayoutUpdate();
@@ -1177,7 +1181,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
     size_t id = (size_t)max(0, imageId(image));
 
     // Don't do anything if the image that wants to be selected is not visible.
-    if (!mImageButtonContainer->childAt((int)id)->visible()) {
+    if (!mImageButtonContainer->child_at((int)id)->visible()) {
         return;
     }
 
@@ -1190,15 +1194,15 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
     mImageCanvas->setImage(mCurrentImage);
 
     // Clear group buttons
-    while (mGroupButtonContainer->childCount() > 0) {
-        mGroupButtonContainer->removeChild(mGroupButtonContainer->childCount() - 1);
+    while (mGroupButtonContainer->child_count() > 0) {
+        mGroupButtonContainer->remove_child_at(mGroupButtonContainer->child_count() - 1);
     }
 
     size_t numGroups = mCurrentImage->channelGroups().size();
     for (size_t i = 0; i < numGroups; ++i) {
         auto group = groupName(i);
         auto button = new ImageButton{mGroupButtonContainer, group, false};
-        button->setFontSize(15);
+        button->set_font_size(15);
         button->setId(i + 1);
 
         button->setSelectedCallback([this, group]() {
@@ -1226,7 +1230,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
     if (activeImageButton) {
         float divisor = mScrollContent->height() - mImageScrollContainer->height();
         if (divisor > 0) {
-            mImageScrollContainer->setScroll(clamp(
+            mImageScrollContainer->set_scroll(clamp(
                 mImageScrollContainer->scroll(),
                 (activeImageButton->position().y() + activeImageButton->height() - mImageScrollContainer->height()) / divisor,
                 activeImageButton->position().y() / divisor
@@ -1258,11 +1262,11 @@ void ImageViewer::selectGroup(string group) {
 
     // Ensure the currently active group button is always fully on-screen
     if (activeGroupButton) {
-        mGroupButtonContainer->setPosition(Vector2i{
+        mGroupButtonContainer->set_position(nanogui::Vector2i{
             clamp(
                 mGroupButtonContainer->position().x(),
                 -activeGroupButton->position().x(),
-                mSize.x() - activeGroupButton->position().x() - activeGroupButton->width()
+                m_size.x() - activeGroupButton->position().x() - activeGroupButton->width()
             ),
             0
         });
@@ -1278,7 +1282,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 
         auto& metricButtons = mMetricButtonContainer->children();
         for (size_t i = 0; i < metricButtons.size(); ++i) {
-            dynamic_cast<Button*>(metricButtons[i])->setEnabled(false);
+            dynamic_cast<Button*>(metricButtons[i])->set_enabled(false);
         }
 
         mCurrentReference = nullptr;
@@ -1295,7 +1299,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 
     auto& metricButtons = mMetricButtonContainer->children();
     for (size_t i = 0; i < metricButtons.size(); ++i) {
-        dynamic_cast<Button*>(metricButtons[i])->setEnabled(true);
+        dynamic_cast<Button*>(metricButtons[i])->set_enabled(true);
     }
 
     mCurrentReference = image;
@@ -1313,7 +1317,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
     if (activeReferenceButton) {
         float divisor = mScrollContent->height() - mImageScrollContainer->height();
         if (divisor > 0) {
-            mImageScrollContainer->setScroll(clamp(
+            mImageScrollContainer->set_scroll(clamp(
                 mImageScrollContainer->scroll(),
                 (activeReferenceButton->position().y() + activeReferenceButton->height() - mImageScrollContainer->height()) / divisor,
                 activeReferenceButton->position().y() / divisor
@@ -1324,24 +1328,24 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
-    mExposureSlider->setValue(value);
-    mExposureLabel->setCaption(tfm::format("Exposure: %+.1f", value));
+    mExposureSlider->set_value(value);
+    mExposureLabel->set_caption(tfm::format("Exposure: %+.1f", value));
 
     mImageCanvas->setExposure(value);
 }
 
 void ImageViewer::setOffset(float value) {
     value = round(value, 2.0f);
-    mOffsetSlider->setValue(value);
-    mOffsetLabel->setCaption(tfm::format("Offset: %+.2f", value));
+    mOffsetSlider->set_value(value);
+    mOffsetLabel->set_caption(tfm::format("Offset: %+.2f", value));
 
     mImageCanvas->setOffset(value);
 }
 
 void ImageViewer::setGamma(float value) {
     value = round(value, 2.0f);
-    mGammaSlider->setValue(value);
-    mGammaLabel->setCaption(tfm::format("Gamma: %+.2f", value));
+    mGammaSlider->set_value(value);
+    mGammaLabel->set_caption(tfm::format("Gamma: %+.2f", value));
 
     mImageCanvas->setGamma(value);
 }
@@ -1381,12 +1385,12 @@ void ImageViewer::setTonemap(ETonemap tonemap) {
     auto& buttons = mTonemapButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
-        b->setPushed((ETonemap)i == tonemap);
+        b->set_pushed((ETonemap)i == tonemap);
     }
 
-    mGammaSlider->setEnabled(tonemap == ETonemap::Gamma);
-    mGammaLabel->setColor(
-        tonemap == ETonemap::Gamma ? mGammaLabel->theme()->mTextColor : Color{0.5f, 1.0f}
+    mGammaSlider->set_enabled(tonemap == ETonemap::Gamma);
+    mGammaLabel->set_color(
+        tonemap == ETonemap::Gamma ? mGammaLabel->theme()->m_text_color : Color{0.5f, 1.0f}
     );
 }
 
@@ -1395,7 +1399,7 @@ void ImageViewer::setMetric(EMetric metric) {
     auto& buttons = mMetricButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
-        b->setPushed((EMetric)i == metric);
+        b->set_pushed((EMetric)i == metric);
     }
 }
 
@@ -1404,22 +1408,22 @@ void ImageViewer::resizeToFitImage(const shared_ptr<Image>& image) {
         return;
     }
 
-    Vector2i requiredSize = image->size();
+    nanogui::Vector2i requiredSize{image->size().x(), image->size().y()};
 
     // Convert from image pixel coordinates to nanogui coordinates.
-    requiredSize = (requiredSize.cast<float>() / pixelRatio()).cast<int>();
+    requiredSize = nanogui::Vector2i{nanogui::Vector2f{requiredSize} / pixel_ratio()};
 
     // Take into account the size of the UI.
     if (mSidebar->visible()) {
-        requiredSize.x() += mSidebar->fixedWidth();
+        requiredSize.x() += mSidebar->fixed_width();
     }
 
     if (mFooter->visible()) {
-        requiredSize.y() += mFooter->fixedHeight();
+        requiredSize.y() += mFooter->fixed_height();
     }
 
     // Only increase our current size if we are larger than the current size of the window.
-    setSize(mSize.cwiseMax(requiredSize));
+    set_size(max(m_size, requiredSize));
 }
 
 void ImageViewer::resizeToFitAllImages() {
@@ -1429,7 +1433,7 @@ void ImageViewer::resizeToFitAllImages() {
 }
 
 bool ImageViewer::setFilter(const string& filter) {
-    mFilter->setValue(filter);
+    mFilter->set_value(filter);
     mRequiresFilterUpdate = true;
     return true;
 }
@@ -1439,21 +1443,21 @@ bool ImageViewer::useRegex() {
 }
 
 void ImageViewer::setUseRegex(bool value) {
-    mRegexButton->setPushed(value);
+    mRegexButton->set_pushed(value);
     mRequiresFilterUpdate = true;
 }
 
 void ImageViewer::maximize() {
-    glfwMaximizeWindow(mGLFWWindow);
+    glfwMaximizeWindow(m_glfw_window);
 }
 
 bool ImageViewer::isMaximized() {
-    return glfwGetWindowAttrib(mGLFWWindow, GLFW_MAXIMIZED) != 0;
+    return glfwGetWindowAttrib(m_glfw_window, GLFW_MAXIMIZED) != 0;
 }
 
 void ImageViewer::toggleMaximized() {
     if (isMaximized()) {
-        glfwRestoreWindow(mGLFWWindow);
+        glfwRestoreWindow(m_glfw_window);
     } else {
         maximize();
     }
@@ -1464,7 +1468,7 @@ void ImageViewer::setUiVisible(bool shouldBeVisible) {
         mIsDraggingSidebar = false;
     }
 
-    mSidebar->setVisible(shouldBeVisible);
+    mSidebar->set_visible(shouldBeVisible);
 
     bool shouldFooterBeVisible = false;
     for (const auto& image : mImages) {
@@ -1476,7 +1480,7 @@ void ImageViewer::setUiVisible(bool shouldBeVisible) {
         }
     }
 
-    mFooter->setVisible(shouldFooterBeVisible && shouldBeVisible);
+    mFooter->set_visible(shouldFooterBeVisible && shouldBeVisible);
 
     requestLayoutUpdate();
 }
@@ -1488,7 +1492,7 @@ void ImageViewer::toggleHelpWindow() {
     } else {
         mHelpWindow = new HelpWindow{this, [this] { toggleHelpWindow(); }};
         mHelpWindow->center();
-        mHelpWindow->requestFocus();
+        mHelpWindow->request_focus();
     }
 
     requestLayoutUpdate();
@@ -1599,7 +1603,7 @@ void ImageViewer::updateFilter() {
         size_t id = 1;
         for (size_t i = 0; i < mImages.size(); ++i) {
             ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
-            ib->setVisible(doesImageMatch(mImages[i]));
+            ib->set_visible(doesImageMatch(mImages[i]));
             if (ib->visible()) {
                 ib->setId(id++);
                 activeImageNames.emplace_back(mImages[i]->name());
@@ -1677,7 +1681,7 @@ void ImageViewer::updateFilter() {
         const auto& buttons = mGroupButtonContainer->children();
         for (Widget* button : buttons) {
             ImageButton* ib = dynamic_cast<ImageButton*>(button);
-            ib->setVisible(matchesFuzzyOrRegex(ib->caption(), groupPart, useRegex()));
+            ib->set_visible(matchesFuzzyOrRegex(ib->caption(), groupPart, useRegex()));
             if (ib->visible()) {
                 ib->setId(id++);
             }
@@ -1694,26 +1698,26 @@ void ImageViewer::updateFilter() {
 void ImageViewer::updateLayout() {
     int sidebarWidth = visibleSidebarWidth();
     int footerHeight = visibleFooterHeight();
-    mImageCanvas->setFixedSize(mSize - Vector2i{sidebarWidth - 1, footerHeight - 1});
-    mSidebar->setFixedHeight(mSize.y() - footerHeight);
+    mImageCanvas->set_fixed_size(m_size - nanogui::Vector2i{sidebarWidth - 1, footerHeight - 1});
+    mSidebar->set_fixed_height(m_size.y() - footerHeight);
 
-    mHelpButton->setPosition(Vector2i{mSidebar->fixedWidth() - 38, 5});
-    mFilter->setFixedWidth(mSidebar->fixedWidth() - 50);
-    mSidebarLayout->setFixedWidth(mSidebar->fixedWidth());
+    mHelpButton->set_position(nanogui::Vector2i{mSidebar->fixed_width() - 38, 5});
+    mFilter->set_fixed_width(mSidebar->fixed_width() - 50);
+    mSidebarLayout->set_fixed_width(mSidebar->fixed_width());
 
-    mVerticalScreenSplit->setFixedSize(mSize);
-    mImageScrollContainer->setFixedHeight(
-        mSize.y() - mImageScrollContainer->position().y() - footerHeight
+    mVerticalScreenSplit->set_fixed_size(m_size);
+    mImageScrollContainer->set_fixed_height(
+        m_size.y() - mImageScrollContainer->position().y() - footerHeight
     );
 
-    performLayout();
+    perform_layout();
 
     // With a changed layout the relative position of the mouse
     // within children changes and therefore should get updated.
     // nanogui does not handle this for us.
     double x, y;
-    glfwGetCursorPos(mGLFWWindow, &x, &y);
-    cursorPosCallbackEvent(x, y);
+    glfwGetCursorPos(m_glfw_window, &x, &y);
+    cursor_pos_callback_event(x, y);
 }
 
 void ImageViewer::updateTitle() {
@@ -1729,8 +1733,9 @@ void ImageViewer::updateTitle() {
         caption = mCurrentImage->shortName();
         caption += string{" – "} + mCurrentGroup;
 
-        vector<float> values = mImageCanvas->getValuesAtNanoPos(mousePos() - mImageCanvas->position(), channels);
-        Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, mousePos() - mImageCanvas->position());
+        auto rel = mouse_pos() - mImageCanvas->position();
+        vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
+        Eigen::Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
         TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
         string valuesString;
@@ -1749,7 +1754,7 @@ void ImageViewer::updateTitle() {
         caption += tfm::format(" – %d%%", (int)std::round(mImageCanvas->extractScale() * 100));
     }
 
-    setCaption(caption);
+    set_caption(caption);
 }
 
 string ImageViewer::groupName(size_t index) {
@@ -1789,7 +1794,7 @@ int ImageViewer::imageId(const string& imageName) const {
 }
 
 string ImageViewer::nextGroup(const string& group, EDirection direction) {
-    if (mGroupButtonContainer->childCount() == 0) {
+    if (mGroupButtonContainer->child_count() == 0) {
         return mCurrentGroup;
     }
 
@@ -1800,16 +1805,16 @@ string ImageViewer::nextGroup(const string& group, EDirection direction) {
 
     int id = startId;
     do {
-        id = (id + mGroupButtonContainer->childCount() + dir) % mGroupButtonContainer->childCount();
-    } while (!mGroupButtonContainer->childAt(id)->visible() && id != startId);
+        id = (id + mGroupButtonContainer->child_count() + dir) % mGroupButtonContainer->child_count();
+    } while (!mGroupButtonContainer->child_at(id)->visible() && id != startId);
 
     return groupName(id);
 }
 
 string ImageViewer::nthVisibleGroup(size_t n) {
     string lastVisible = mCurrentGroup;
-    for (int i = 0; i < mGroupButtonContainer->childCount(); ++i) {
-        if (mGroupButtonContainer->childAt(i)->visible()) {
+    for (int i = 0; i < mGroupButtonContainer->child_count(); ++i) {
+        if (mGroupButtonContainer->child_at(i)->visible()) {
             lastVisible = groupName(i);
             if (n == 0) {
                 break;
@@ -1832,8 +1837,8 @@ shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image, EDirect
 
     int id = startId;
     do {
-        id = (id + mImageButtonContainer->childCount() + dir) % mImageButtonContainer->childCount();
-    } while (!mImageButtonContainer->childAt(id)->visible() && id != startId);
+        id = (id + mImageButtonContainer->child_count() + dir) % mImageButtonContainer->child_count();
+    } while (!mImageButtonContainer->child_at(id)->visible() && id != startId);
 
     return mImages[id];
 }

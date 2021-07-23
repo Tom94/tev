@@ -8,7 +8,6 @@
 #include <nanogui/theme.h>
 #include <nanogui/opengl.h>
 
-using namespace Eigen;
 using namespace nanogui;
 using namespace std;
 
@@ -21,7 +20,7 @@ MultiGraph::MultiGraph(Widget *parent, const std::string &caption)
     mTextColor = Color(240, 192);
 }
 
-Vector2i MultiGraph::preferredSize(NVGcontext *) const {
+Vector2i MultiGraph::preferred_size(NVGcontext *) const {
     return Vector2i(180, 80);
 }
 
@@ -29,12 +28,12 @@ void MultiGraph::draw(NVGcontext *ctx) {
     Widget::draw(ctx);
 
     NVGpaint bg = nvgBoxGradient(ctx,
-        mPos.x() + 1, mPos.y() + 1 + 1.0f, mSize.x() - 2, mSize.y() - 2,
+        m_pos.x() + 1, m_pos.y() + 1 + 1.0f, m_size.x() - 2, m_size.y() - 2,
         3, 4, Color(120, 32), Color(32, 32));
 
     nvgBeginPath(ctx);
-    nvgRoundedRect(ctx, mPos.x() + 1, mPos.y() + 1 + 1.0f, mSize.x() - 2,
-        mSize.y() - 2, 3);
+    nvgRoundedRect(ctx, m_pos.x() + 1, m_pos.y() + 1 + 1.0f, m_size.x() - 2,
+        m_size.y() - 2, 3);
 
     nvgFillPaint(ctx, bg);
 
@@ -53,17 +52,17 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         for (size_t i = 0; i < (size_t)mValues.cols(); i++) {
             nvgBeginPath(ctx);
-            nvgMoveTo(ctx, mPos.x(), mPos.y() + mSize.y());
+            nvgMoveTo(ctx, m_pos.x(), m_pos.y() + m_size.y());
             
             for (size_t j = 0; j < (size_t)mValues.rows(); j++) {
                 float value = mValues(j, i);
-                float vx = mPos.x() + 2 + j * (mSize.x() - 4) / (float)(mValues.rows() - 1);
-                float vy = mPos.y() + (1 - value) * mSize.y();
+                float vx = m_pos.x() + 2 + j * (m_size.x() - 4) / (float)(mValues.rows() - 1);
+                float vy = m_pos.y() + (1 - value) * m_size.y();
                 nvgLineTo(ctx, vx, vy);
             }
 
             auto color = i < colors.size() ? colors[i] : mForegroundColor;
-            nvgLineTo(ctx, mPos.x() + mSize.x(), mPos.y() + mSize.y());
+            nvgLineTo(ctx, m_pos.x() + m_size.x(), m_pos.y() + m_size.y());
             nvgFillColor(ctx, color);
             nvgFill(ctx);
         }
@@ -72,11 +71,11 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         if (mZeroBin > 0) {
             nvgBeginPath(ctx);
-            nvgRect(ctx, mPos.x() + 1 + mZeroBin * (mSize.x() - 4) / (float)(mValues.rows() - 1), mPos.y() + 15, 4, mSize.y() - 15);
+            nvgRect(ctx, m_pos.x() + 1 + mZeroBin * (m_size.x() - 4) / (float)(mValues.rows() - 1), m_pos.y() + 15, 4, m_size.y() - 15);
             nvgFillColor(ctx, Color(0, 128));
             nvgFill(ctx);
             nvgBeginPath(ctx);
-            nvgRect(ctx, mPos.x() + 2 + mZeroBin * (mSize.x() - 4) / (float)(mValues.rows() - 1), mPos.y() + 15, 2, mSize.y() - 15);
+            nvgRect(ctx, m_pos.x() + 2 + mZeroBin * (m_size.x() - 4) / (float)(mValues.rows() - 1), m_pos.y() + 15, 2, m_size.y() - 15);
             nvgFillColor(ctx, Color(200, 255));
             nvgFill(ctx);
         }
@@ -86,50 +85,50 @@ void MultiGraph::draw(NVGcontext *ctx) {
         nvgFontSize(ctx, 15.0f);
         nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        drawTextWithShadow(ctx, mPos.x() + 3, mPos.y() + 1, tfm::format("%.3f", mMinimum));
+        drawTextWithShadow(ctx, m_pos.x() + 3, m_pos.y() + 1, tfm::format("%.3f", mMinimum));
 
         nvgTextAlign(ctx, NVG_ALIGN_MIDDLE | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
         string meanString = tfm::format("%.3f", mMean);
         float textWidth = nvgTextBounds(ctx, 0, 0, meanString.c_str(), nullptr, nullptr);
-        drawTextWithShadow(ctx, mPos.x() + mSize.x() / 2 - textWidth / 2, mPos.y() + 1, meanString);
+        drawTextWithShadow(ctx, m_pos.x() + m_size.x() / 2 - textWidth / 2, m_pos.y() + 1, meanString);
 
         nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        drawTextWithShadow(ctx, mPos.x() + mSize.x() - 3, mPos.y() + 1, tfm::format("%.3f", mMaximum));
+        drawTextWithShadow(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, tfm::format("%.3f", mMaximum));
 
         if (!mCaption.empty()) {
             nvgFontSize(ctx, 14.0f);
             nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
             nvgFillColor(ctx, mTextColor);
-            nvgText(ctx, mPos.x() + 3, mPos.y() + 1, mCaption.c_str(), NULL);
+            nvgText(ctx, m_pos.x() + 3, m_pos.y() + 1, mCaption.c_str(), NULL);
         }
 
         if (!mHeader.empty()) {
             nvgFontSize(ctx, 18.0f);
             nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
             nvgFillColor(ctx, mTextColor);
-            nvgText(ctx, mPos.x() + mSize.x() - 3, mPos.y() + 1, mHeader.c_str(), NULL);
+            nvgText(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, mHeader.c_str(), NULL);
         }
 
         if (!mFooter.empty()) {
             nvgFontSize(ctx, 15.0f);
             nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
             nvgFillColor(ctx, mTextColor);
-            nvgText(ctx, mPos.x() + mSize.x() - 3, mPos.y() + mSize.y() - 1, mFooter.c_str(), NULL);
+            nvgText(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + m_size.y() - 1, mFooter.c_str(), NULL);
         }
     }
 
     nvgBeginPath(ctx);
-    nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
-    nvgRoundedRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y(), 2.5f);
+    nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
+    nvgRoundedRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y(), 2.5f);
     nvgPathWinding(ctx, NVG_HOLE);
     nvgFillColor(ctx, Color(0.23f, 1.0f));
     nvgFill(ctx);
 
     nvgBeginPath(ctx);
-    nvgRoundedRect(ctx, mPos.x() + 0.5f, mPos.y() + 0.5f, mSize.x() - 1,
-        mSize.y() - 1, 2.5f);
+    nvgRoundedRect(ctx, m_pos.x() + 0.5f, m_pos.y() + 0.5f, m_size.x() - 1,
+        m_size.y() - 1, 2.5f);
     nvgStrokeColor(ctx, Color(0, 48));
     nvgStroke(ctx);
 }

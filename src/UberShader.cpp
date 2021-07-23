@@ -4,26 +4,18 @@
 #include <tev/FalseColor.h>
 #include <tev/UberShader.h>
 
+#include <Eigen/Dense>
+
 using namespace Eigen;
-using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-UberShader::UberShader()
-: mColorMap{GL_CLAMP_TO_EDGE, GL_LINEAR, false} {
-    mShader.define("SRGB",        to_string(ETonemap::SRGB));
-    mShader.define("GAMMA",       to_string(ETonemap::Gamma));
-    mShader.define("FALSE_COLOR", to_string(ETonemap::FalseColor));
-    mShader.define("POS_NEG",     to_string(ETonemap::PositiveNegative));
-
-    mShader.define("ERROR",                   to_string(EMetric::Error));
-    mShader.define("ABSOLUTE_ERROR",          to_string(EMetric::AbsoluteError));
-    mShader.define("SQUARED_ERROR",           to_string(EMetric::SquaredError));
-    mShader.define("RELATIVE_ABSOLUTE_ERROR", to_string(EMetric::RelativeAbsoluteError));
-    mShader.define("RELATIVE_SQUARED_ERROR",  to_string(EMetric::RelativeSquaredError));
-
-    mShader.init(
+UberShader::UberShader(nanogui::RenderPass* renderPass)
+: mColorMap{GL_CLAMP_TO_EDGE, GL_LINEAR, false}
+{
+    mShader = new nanogui::Shader{
+        renderPass,
         "ubershader",
 
         // Vertex shader
@@ -51,6 +43,17 @@ UberShader::UberShader()
 
         // Fragment shader
         R"(#version 330
+
+        #define SRGB        0
+        #define GAMMA       1
+        #define FALSE_COLOR 2
+        #define POS_NEG     3
+
+        #define ERROR                   0
+        #define ABSOLUTE_ERROR          1
+        #define SQUARED_ERROR           2
+        #define RELATIVE_ABSOLUTE_ERROR 3
+        #define RELATIVE_SQUARED_ERROR  4
 
         uniform sampler2D image;
         uniform bool hasImage;
@@ -180,37 +183,37 @@ UberShader::UberShader()
                 1.0
             );
         })"
-    );
+    };
 
     // 2 Triangles
-    MatrixXu indices(3, 2);
-    indices.col(0) << 0, 1, 2;
-    indices.col(1) << 2, 3, 0;
+    uint32_t indices[3*2] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+    float positions[3*4] = {
+        -1, -1, 0,
+        1, -1, 0,
+        1, 1, 0,
+        -1, 1, 0,
+    };
 
-    MatrixXf positions(2, 4);
-    positions.col(0) << -1, -1;
-    positions.col(1) <<  1, -1;
-    positions.col(2) <<  1,  1;
-    positions.col(3) << -1,  1;
-
-    mShader.bind();
-    mShader.uploadIndices(indices);
-    mShader.uploadAttrib("position", positions);
+    mShader->set_buffer("indices", nanogui::VariableType::UInt32, {3*2}, indices);
+    mShader->set_buffer("position", nanogui::VariableType::Float32, {4, 3}, positions);
 
     const auto& fcd = colormap::turbo();
     mColorMap.setData(fcd, Vector2i{(int)fcd.size() / 4, 1}, 4);
 }
 
-UberShader::~UberShader() {
-    mShader.free();
-}
+UberShader::~UberShader() { }
 
 void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    mShader.bind();
     bindCheckerboardData(pixelSize, checkerSize);
-    mShader.setUniform("hasImage", false);
-    mShader.setUniform("hasReference", false);
-    mShader.drawIndexed(GL_TRIANGLES, 0, 2);
+    mShader->set_uniform("hasImage", false);
+    mShader->set_uniform("hasReference", false);
+
+    mShader->begin();
+    mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);
+    mShader->end();
 }
 
 void UberShader::draw(
@@ -223,12 +226,14 @@ void UberShader::draw(
     float gamma,
     ETonemap tonemap
 ) {
-    mShader.bind();
     bindCheckerboardData(pixelSize, checkerSize);
     bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
-    mShader.setUniform("hasImage", true);
-    mShader.setUniform("hasReference", false);
-    mShader.drawIndexed(GL_TRIANGLES, 0, 2);
+    mShader->set_uniform("hasImage", true);
+    mShader->set_uniform("hasReference", false);
+
+    mShader->begin();
+    mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);
+    mShader->end();
 }
 
 void UberShader::draw(
@@ -244,19 +249,21 @@ void UberShader::draw(
     ETonemap tonemap,
     EMetric metric
 ) {
-    mShader.bind();
     bindCheckerboardData(pixelSize, checkerSize);
     bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
-    mShader.setUniform("hasImage", true);
-    mShader.setUniform("hasReference", true);
-    mShader.drawIndexed(GL_TRIANGLES, 0, 2);
+    mShader->set_uniform("hasImage", true);
+    mShader->set_uniform("hasReference", true);
+
+    mShader->begin();
+    mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);
+    mShader->end();
 }
 
 void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    mShader.setUniform("pixelSize", pixelSize);
-    mShader.setUniform("checkerSize", checkerSize);
-    mShader.setUniform("bgColor", mBackgroundColor);
+    mShader->set_uniform("pixelSize", pixelSize);
+    mShader->set_uniform("checkerSize", checkerSize);
+    mShader->set_uniform("bgColor", mBackgroundColor);
 }
 
 void UberShader::bindImageData(
@@ -270,18 +277,17 @@ void UberShader::bindImageData(
     glActiveTexture(GL_TEXTURE0);
     textureImage->bind();
 
-    mShader.bind();
-    mShader.setUniform("image", 0);
-    mShader.setUniform("imageTransform", transformImage);
+    mShader->set_uniform("image", 0);
+    mShader->set_uniform("imageTransform", transformImage);
 
-    mShader.setUniform("exposure", exposure);
-    mShader.setUniform("offset", offset);
-    mShader.setUniform("gamma", gamma);
-    mShader.setUniform("tonemap", static_cast<int>(tonemap));
+    mShader->set_uniform("exposure", exposure);
+    mShader->set_uniform("offset", offset);
+    mShader->set_uniform("gamma", gamma);
+    mShader->set_uniform("tonemap", static_cast<int>(tonemap));
 
     glActiveTexture(GL_TEXTURE2);
     mColorMap.bind();
-    mShader.setUniform("colormap", 2);
+    mShader->set_uniform("colormap", 2);
 }
 
 void UberShader::bindReferenceData(
@@ -292,10 +298,10 @@ void UberShader::bindReferenceData(
     glActiveTexture(GL_TEXTURE1);
     textureReference->bind();
 
-    mShader.setUniform("reference", 1);
-    mShader.setUniform("referenceTransform", transformReference);
+    mShader->set_uniform("reference", 1);
+    mShader->set_uniform("referenceTransform", transformReference);
 
-    mShader.setUniform("metric", static_cast<int>(metric));
+    mShader->set_uniform("metric", static_cast<int>(metric));
 }
 
 TEV_NAMESPACE_END

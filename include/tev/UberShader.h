@@ -5,13 +5,13 @@
 
 #include <tev/GlTexture.h>
 
-#include <nanogui/glutil.h>
+#include <nanogui/shader.h>
 
 TEV_NAMESPACE_BEGIN
 
 class UberShader {
 public:
-    UberShader();
+    UberShader(nanogui::RenderPass* renderPass);
     virtual ~UberShader();
 
     // Draws just a checkerboard.
@@ -70,7 +70,7 @@ private:
         EMetric metric
     );
 
-    nanogui::GLShader mShader;
+    nanogui::ref<nanogui::Shader> mShader;
     GlTexture mColorMap;
 
     nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);

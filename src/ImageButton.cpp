@@ -16,24 +16,24 @@ ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeRefere
 : Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
 }
 
-Vector2i ImageButton::preferredSize(NVGcontext *ctx) const {
-    nvgFontSize(ctx, mFontSize);
+Vector2i ImageButton::preferred_size(NVGcontext *ctx) const {
+    nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans-bold");
     string idString = to_string(mId);
     float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
 
-    nvgFontSize(ctx, mFontSize);
+    nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
-    return Vector2i(static_cast<int>(tw + idSize) + 15, mFontSize + 6);
+    return Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
 }
 
-bool ImageButton::mouseButtonEvent(const Vector2i &p, int button, bool down, int modifiers) {
-    if (Widget::mouseButtonEvent(p, button, down, modifiers)) {
+bool ImageButton::mouse_button_event(const Vector2i &p, int button, bool down, int modifiers) {
+    if (Widget::mouse_button_event(p, button, down, modifiers)) {
         return true;
     }
 
-    if (!mEnabled || !down) {
+    if (!m_enabled || !down) {
         return false;
     }
 
@@ -84,19 +84,19 @@ void ImageButton::draw(NVGcontext *ctx) {
 
     if (mIsReference) {
         nvgBeginPath(ctx);
-        nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
+        nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
         nvgFillColor(ctx, Color(0.7f, 0.4f, 0.4f, 1.0f));
         nvgFill(ctx);
     }
 
     // Fill the button with color.
-    if (mIsSelected || mMouseFocus) {
+    if (mIsSelected || m_mouse_focus) {
         nvgBeginPath(ctx);
 
         if (mIsReference) {
-            nvgRect(ctx, mPos.x() + 2, mPos.y() + 2, mSize.x() - 4, mSize.y() - 4);
+            nvgRect(ctx, m_pos.x() + 2, m_pos.y() + 2, m_size.x() - 4, m_size.y() - 4);
         } else {
-            nvgRect(ctx, mPos.x(), mPos.y(), mSize.x(), mSize.y());
+            nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
         }
 
         nvgFillColor(ctx, mIsSelected ? Color(0.35f, 0.35f, 0.8f, 1.0f) : Color(1.0f, 0.1f));
@@ -106,21 +106,21 @@ void ImageButton::draw(NVGcontext *ctx) {
 
     string idString = to_string(mId);
 
-    if (mSize.x() == preferredSize(ctx).x()) {
+    if (m_size.x() == preferred_size(ctx).x()) {
         mCutoff = 0;
-    } else if (mSize != mSizeForWhichCutoffWasComputed) {
+    } else if (m_size != mSizeForWhichCutoffWasComputed) {
         mCutoff = 0;
 
-        nvgFontSize(ctx, mFontSize + 2);
+        nvgFontSize(ctx, m_font_size + 2);
         nvgFontFace(ctx, "sans-bold");
         float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
 
-        nvgFontSize(ctx, mFontSize);
-        while (mCutoff < mCaption.size() && nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > mSize.x() - 25 - idSize) {
+        nvgFontSize(ctx, m_font_size);
+        while (mCutoff < mCaption.size() && nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > m_size.x() - 25 - idSize) {
             mCutoff += codePointLength(mCaption[mCutoff]);;
         }
 
-        mSizeForWhichCutoffWasComputed = mSize;
+        mSizeForWhichCutoffWasComputed = m_size;
     }
 
     // Image name
@@ -147,16 +147,16 @@ void ImageButton::draw(NVGcontext *ctx) {
         pieces.back() = string{"…"} + pieces.back();
     }
 
-    Vector2f center = mPos.cast<float>() + mSize.cast<float>() * 0.5f;
-    Vector2f bottomRight = mPos.cast<float>() + mSize.cast<float>();
-    Vector2f textPos(bottomRight.x() - 5, center.y() + 0.5f * (mFontSize + 1));
+    Vector2f center = Vector2f{m_pos} + Vector2f{m_size} * 0.5f;
+    Vector2f bottomRight = Vector2f{m_pos} + Vector2f{m_size};
+    Vector2f textPos(bottomRight.x() - 5, center.y() + 0.5f * (m_font_size + 1));
     NVGcolor regularTextColor = mCanBeReference ? Color(150, 255) : Color(190, 255);
     NVGcolor hightlightedTextColor = Color(190, 255);
-    if (mIsSelected || mIsReference || mMouseFocus) {
+    if (mIsSelected || mIsReference || m_mouse_focus) {
         regularTextColor = hightlightedTextColor = Color(255, 255);
     }
 
-    nvgFontSize(ctx, mFontSize);
+    nvgFontSize(ctx, m_font_size);
     nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
 
     for (size_t i = 0; i < pieces.size(); ++i) {
@@ -168,15 +168,15 @@ void ImageButton::draw(NVGcontext *ctx) {
 
     // Image number
     NVGcolor idColor = Color(200, 255);
-    if (mIsSelected || mIsReference || mMouseFocus) {
+    if (mIsSelected || mIsReference || m_mouse_focus) {
         idColor = Color(255, 255);
     }
 
-    nvgFontSize(ctx, mFontSize + 2);
+    nvgFontSize(ctx, m_font_size + 2);
     nvgFontFace(ctx, "sans-bold");
     nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     nvgFillColor(ctx, idColor);
-    nvgText(ctx, mPos.x() + 5, textPos.y(), idString.c_str(), nullptr);
+    nvgText(ctx, m_pos.x() + 5, textPos.y(), idString.c_str(), nullptr);
 }
 
 void ImageButton::setHighlightRange(size_t begin, size_t end) {

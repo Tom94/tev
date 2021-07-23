@@ -154,7 +154,8 @@ IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
 
     size_t colonPos = imageString.find_last_of(":");
     if (colonPos == std::string::npos ||
-        colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/') /* windows path of the form X:/* or X:\* */
+        // windows path of the form X:/* or X:\*
+        (colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/'))
     ) {
         std::cout << imageString << std::endl;
         result.imagePath = imageString;

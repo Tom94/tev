@@ -7,7 +7,7 @@
 #include <tev/Image.h>
 #include <tev/Lazy.h>
 
-#include <nanogui/glcanvas.h>
+#include <nanogui/canvas.h>
 
 #include <memory>
 
@@ -21,13 +21,13 @@ struct CanvasStatistics {
     int histogramZero;
 };
 
-class ImageCanvas : public nanogui::GLCanvas {
+class ImageCanvas : public nanogui::Canvas {
 public:
     ImageCanvas(nanogui::Widget* parent, float pixelRatio);
 
-    bool scrollEvent(const Eigen::Vector2i& p, const Eigen::Vector2f& rel) override;
+    bool scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) override;
 
-    void drawGL() override;
+    void draw_contents() override;
 
     void draw(NVGcontext *ctx) override;
 

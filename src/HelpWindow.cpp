@@ -4,7 +4,7 @@
 #include <tev/HelpWindow.h>
 
 #include <nanogui/button.h>
-#include <nanogui/entypo.h>
+#include <nanogui/icons.h>
 #include <nanogui/label.h>
 #include <nanogui/layout.h>
 #include <nanogui/opengl.h>
@@ -31,30 +31,31 @@ string HelpWindow::ALT = "Alt";
 HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     : Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
-    auto closeButton = new Button{buttonPanel(), "", ENTYPO_ICON_CROSS};
-    closeButton->setCallback(mCloseCallback);
+    auto closeButton = new Button{button_panel(), "", FA_CROSS};
+    closeButton->set_callback(mCloseCallback);
 
-    setLayout(new GroupLayout{});
-    setFixedWidth(600);
+    set_layout(new GroupLayout{});
+    set_fixed_width(600);
 
     TabWidget* tabWidget = new TabWidget{this};
 
     // Keybindings tab
     {
-        Widget* shortcuts = tabWidget->createTab("Keybindings");
-        shortcuts->setLayout(new GroupLayout{});
+        Widget* shortcuts = new Widget(tabWidget);
+        tabWidget->append_tab("Keybindings", shortcuts);
+        shortcuts->set_layout(new GroupLayout{});
 
         auto addRow = [](Widget* current, string keys, string desc) {
             auto row = new Widget{current};
-            row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 0, 10});
+            row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 0, 10});
             auto descWidget = new Label{row, desc, "sans"};
-            descWidget->setFixedWidth(250);
+            descWidget->set_fixed_width(250);
             new Label{row, keys, "sans-bold"};
         };
 
         new Label{shortcuts, "Image Loading", "sans-bold", 18};
         auto imageLoading = new Widget{shortcuts};
-        imageLoading->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        imageLoading->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
         addRow(imageLoading, COMMAND + "+O",                             "Open Image");
         addRow(imageLoading, COMMAND + "+S",                             "Save View as Image");
@@ -67,7 +68,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         new Label{shortcuts, "Image Options", "sans-bold", 18};
         auto imageSelection = new Widget{shortcuts};
-        imageSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        imageSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
         addRow(imageSelection, "Left Click",          "Select Hovered Image");
         addRow(imageSelection, "1…9",                 "Select N-th Image");
@@ -89,7 +90,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         new Label{shortcuts, "Reference Options", "sans-bold", 18};
         auto referenceSelection = new Widget{shortcuts};
-        referenceSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        referenceSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
         addRow(referenceSelection, "Shift (hold)",                                "View currently selected Reference");
         addRow(referenceSelection, "Shift+Left Click or Right Click",             "Select Hovered Image as Reference");
@@ -101,7 +102,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         new Label{shortcuts, "Channel Group Options", "sans-bold", 18};
         auto groupSelection = new Widget{shortcuts};
-        groupSelection->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        groupSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
         addRow(groupSelection, "Left Click",             "Select Hovered Channel Group");
         addRow(groupSelection, "Ctrl+1…9",               "Select N-th Channel Group");
@@ -109,7 +110,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         new Label{shortcuts, "Interface", "sans-bold", 18};
         auto ui = new Widget{shortcuts};
-        ui->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        ui->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
         addRow(ui, ALT + "+Enter", "Maximize");
         addRow(ui, COMMAND + "+B", "Toggle GUI");
@@ -120,21 +121,22 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
     // About tab
     {
-        Widget* about = tabWidget->createTab("About");
-        about->setLayout(new GroupLayout{});
+        Widget* about = new Widget(tabWidget);
+        tabWidget->append_tab("About", about);
+        about->set_layout(new GroupLayout{});
 
         auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
             auto row = new Widget{current};
-            row->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
+            row->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
             new Label{row, text, font, fontSize };
         };
 
         auto addLibrary = [](Widget* current, string name, string license, string desc) {
             auto row = new Widget{current};
-            row->setLayout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 30});
+            row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 30});
             auto leftColumn = new Widget{row};
-            leftColumn->setLayout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
-            leftColumn->setFixedWidth(135);
+            leftColumn->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
+            leftColumn->set_fixed_width(135);
 
             new Label{leftColumn, name, "sans-bold", 18};
             new Label{row, desc, "sans", 18};
@@ -142,7 +144,7 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
 
         auto addSpacer = [](Widget* current, int space) {
             auto row = new Widget{current};
-            row->setHeight(space);
+            row->set_height(space);
         };
 
         addSpacer(about, 15);
@@ -173,11 +175,11 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addLibrary(about, "UTF8-CPP",          "", "Lightweight UTF-8 String Manipulation Library");
     }
 
-    tabWidget->setActiveTab(0);
+    tabWidget->set_selected_id(0);
 }
 
-bool HelpWindow::keyboardEvent(int key, int scancode, int action, int modifiers) {
-    if (Window::keyboardEvent(key, scancode, action, modifiers)) {
+bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers) {
+    if (Window::keyboard_event(key, scancode, action, modifiers)) {
         return true;
     }
 

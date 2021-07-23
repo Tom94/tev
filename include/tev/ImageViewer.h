@@ -11,7 +11,6 @@
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
 
-#include <nanogui/glutil.h>
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
@@ -28,16 +27,16 @@ public:
     ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops);
     virtual ~ImageViewer();
 
-    bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
-    bool mouseMotionEvent(const Eigen::Vector2i& p, const Eigen::Vector2i& rel, int button, int modifiers) override;
+    bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
+    bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;
 
-    bool dropEvent(const std::vector<std::string>& filenames) override;
+    bool drop_event(const std::vector<std::string>& filenames) override;
 
-    bool keyboardEvent(int key, int scancode, int action, int modifiers) override;
+    bool keyboard_event(int key, int scancode, int action, int modifiers) override;
 
     void focusWindow();
 
-    void drawContents() override;
+    void draw_contents() override;
 
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
@@ -153,16 +152,16 @@ private:
     std::shared_ptr<Image> nthVisibleImage(size_t n);
     std::shared_ptr<Image> imageByName(const std::string& imageName);
 
-    bool canDragSidebarFrom(const Eigen::Vector2i& p) {
-        return mSidebar->visible() && p.x() - mSidebar->fixedWidth() < 10 && p.x() - mSidebar->fixedWidth() > -5;
+    bool canDragSidebarFrom(const nanogui::Vector2i& p) {
+        return mSidebar->visible() && p.x() - mSidebar->fixed_width() < 10 && p.x() - mSidebar->fixed_width() > -5;
     }
 
     int visibleSidebarWidth() {
-        return mSidebar->visible() ? mSidebar->fixedWidth() : 0;
+        return mSidebar->visible() ? mSidebar->fixed_width() : 0;
     }
 
     int visibleFooterHeight() {
-        return mFooter->visible() ? mFooter->fixedHeight() : 0;
+        return mFooter->visible() ? mFooter->fixed_height() : 0;
     }
 
     SharedQueue<std::function<void(void)>> mTaskQueue;
@@ -230,7 +229,7 @@ private:
     bool mIsDraggingImageButton = false;
     size_t mDraggedImageButtonId;
 
-    Eigen::Vector2f mDraggingStartPosition;
+    nanogui::Vector2f mDraggingStartPosition;
 
     size_t mClipboardIndex = 0;
 };

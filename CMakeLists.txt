@@ -30,6 +30,9 @@ if (APPLE)
     set(CMAKE_MACOSX_RPATH ON)
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+# set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+
 if (MSVC)
     # Disable annoying secure CRT warnings
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
@@ -54,14 +57,14 @@ if (MSVC)
         string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
     endforeach()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++11")
-
     if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s USE_ZLIB=1 -s DISABLE_EXCEPTION_CATCHING=0")
     endif()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
+
+add_compile_options(${NANOGUI_NATIVE_FLAGS})
 
 # Enable more warnings
 if (MSVC)
