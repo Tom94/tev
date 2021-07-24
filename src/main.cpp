@@ -384,6 +384,7 @@ int mainFunc(const vector<string>& arguments) {
 
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);
+    sImageViewer->redraw();
 
     // Do what the maximize flag tells us---if it exists---and
     // maximize if we have images otherwise.
