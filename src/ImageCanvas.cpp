@@ -7,8 +7,10 @@
 
 #include <tev/imageio/ImageSaver.h>
 
-#include <nanogui/theme.h>
+#include <nanogui/opengl.h>
 #include <nanogui/screen.h>
+#include <nanogui/theme.h>
+#include <nanogui/vector.h>
 
 #include <fstream>
 #include <numeric>

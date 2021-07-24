@@ -7,6 +7,8 @@
 
 #include <Iex.h>
 
+#include <GLFW/glfw3.h>
+
 #include <chrono>
 #include <fstream>
 #include <istream>

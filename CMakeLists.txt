@@ -108,7 +108,6 @@ set(TEV_SOURCES
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
-    include/tev/GlTexture.h src/GlTexture.cpp
     include/tev/HelpWindow.h src/HelpWindow.cpp
     include/tev/Image.h src/Image.cpp
     include/tev/ImageButton.h src/ImageButton.cpp

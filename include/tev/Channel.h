@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include <tev/GlTexture.h>
 #include <tev/ThreadPool.h>
+
+#include <nanogui/vector.h>
 
 #include <vector>
 #include <string>
