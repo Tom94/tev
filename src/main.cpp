@@ -56,7 +56,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 sImageViewer->reloadImage(imageString, info.grabFocus);
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -68,7 +68,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 sImageViewer->removeImage(imageString);
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -84,7 +84,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 }
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -113,7 +113,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 }
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -380,8 +380,9 @@ int mainFunc(const vector<string>& arguments) {
         sImageViewer = nullptr;
         delete localImageViewerPtr;
     }};
+    
     sImageViewer = new ImageViewer{imagesLoader, !imageFiles};
-
+    
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);
     sImageViewer->redraw();

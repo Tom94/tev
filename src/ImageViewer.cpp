@@ -449,6 +449,8 @@ ImageViewer::~ImageViewer() {
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
+    redraw();
+
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
     // This has to occur before Screen::mouse_button_event as the button would absorb the event.
     if (down) {
@@ -472,8 +474,6 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
     if (Screen::mouse_button_event(p, button, down, modifiers)) {
         return true;
     }
-
-    redraw();
 
     if (down && !mIsDraggingImageButton) {
         if (canDragSidebarFrom(p)) {
@@ -503,6 +503,10 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         return true;
     }
 
+    // Only need high refresh rate responsiveness if tev is actually in focus.
+    if (focused())
+        redraw();
+
     if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
         mSidebarLayout->set_cursor(Cursor::HResize);
         mImageCanvas->set_cursor(Cursor::HResize);
@@ -514,7 +518,6 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
     if (mIsDraggingSidebar) {
         mSidebar->set_fixed_width(clamp(p.x(), 205, m_size.x() - 10));
         requestLayoutUpdate();
-        redraw();
     } else if (mIsDraggingImage) {
         Eigen::Vector2f relativeMovement = {rel.x(), rel.y()};
         auto* glfwWindow = screen()->glfw_window();
@@ -535,7 +538,6 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         if ((button & 4) != 0) {
             mImageCanvas->scale(relativeMovement.y() / 10.0f, {mDraggingStartPosition.x(), mDraggingStartPosition.y()});
         }
-        redraw();
     } else if (mIsDraggingImageButton) {
         auto& buttons = mImageButtonContainer->children();
         nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
@@ -557,7 +559,6 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         }
 
         dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(relMousePos - nanogui::Vector2i(mDraggingStartPosition));
-        redraw();
     }
 
     return false;

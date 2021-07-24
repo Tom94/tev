@@ -101,6 +101,9 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
         {size().x(), size().y()},
         nanogui::Texture::InterpolationMode::Trilinear,
         nanogui::Texture::InterpolationMode::Nearest,
+        nanogui::Texture::WrapMode::ClampToEdge,
+        1, nanogui::Texture::TextureFlags::ShaderRead,
+        true,
     }, channelNames});
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
@@ -326,8 +329,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
             }
         }
 
-        //TODO: restore
-        // imageTexture.glTexture.setDataSub(textureData, {x, y}, {width, height}, 4);
+        imageTexture.nanoguiTexture->upload_sub_region((uint8_t*)textureData.data(), {x, y}, {width, height});
     }
 }
 
