@@ -82,19 +82,25 @@ string Image::shortName() const {
     return result;
 }
 
-GlTexture* Image::texture(const string& channelGroupName) {
+nanogui::Texture* Image::texture(const string& channelGroupName) {
     return texture(channelsInGroup(channelGroupName));
 }
 
-GlTexture* Image::texture(const vector<string>& channelNames) {
+nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
-        return &iter->second.glTexture;
+        return iter->second.nanoguiTexture.get();
     }
 
-    mTextures.emplace(lookup, ImageTexture{GlTexture{}, channelNames});
-    auto& texture = mTextures.at(lookup).glTexture;
+    mTextures.emplace(lookup, ImageTexture{new nanogui::Texture{
+        nanogui::Texture::PixelFormat::RGBA,
+        nanogui::Texture::ComponentFormat::Float32,
+        {size().x(), size().y()},
+        nanogui::Texture::InterpolationMode::Trilinear,
+        nanogui::Texture::InterpolationMode::Nearest,
+    }, channelNames});
+    auto& texture = mTextures.at(lookup).nanoguiTexture;
 
     auto numPixels = count();
     vector<float> data(numPixels * 4);
@@ -121,8 +127,8 @@ GlTexture* Image::texture(const vector<string>& channelNames) {
     }
     pool.waitUntilFinished();
 
-    texture.setData(data, size(), 4);
-    return &texture;
+    texture->upload((uint8_t*)data.data());
+    return texture.get();
 }
 
 vector<string> Image::channelsInLayer(string layerName) const {
@@ -258,7 +264,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
 vector<string> Image::getSortedChannels(const string& layerName) const {
     string layerPrefix = layerName.empty() ? "" : (layerName + ".");
     string alphaChannelName = layerPrefix + "A";
-    
+
     bool includesAlphaChannel = false;
 
     vector<string> result;
@@ -268,7 +274,7 @@ vector<string> Image::getSortedChannels(const string& layerName) const {
                 if (includesAlphaChannel) {
                     continue;
                 }
-                
+
                 includesAlphaChannel = true;
             }
             result.emplace_back(name);
@@ -318,7 +324,8 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
             }
         }
 
-        imageTexture.glTexture.setDataSub(textureData, {x, y}, {width, height}, 4);
+        //TODO: restore
+        // imageTexture.glTexture.setDataSub(textureData, {x, y}, {width, height}, 4);
     }
 }
 

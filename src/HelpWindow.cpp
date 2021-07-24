@@ -31,7 +31,7 @@ string HelpWindow::ALT = "Alt";
 HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     : Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
-    auto closeButton = new Button{button_panel(), "", FA_CROSS};
+    auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
     set_layout(new GroupLayout{});

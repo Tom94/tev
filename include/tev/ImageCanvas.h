@@ -99,11 +99,11 @@ public:
     }
 
     const nanogui::Color& backgroundColor() {
-        return mShader.backgroundColor();
+        return mShader->backgroundColor();
     }
 
     void setBackgroundColor(const nanogui::Color& color) {
-        mShader.setBackgroundColor(color);
+        mShader->setBackgroundColor(color);
     }
 
     void fitImageToScreen(const Image& image);
@@ -115,6 +115,16 @@ public:
     void saveImage(const filesystem::path& filename) const;
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
+
+    static nanogui::Matrix3f toNanogui(const Eigen::Matrix3f& transform) {
+        nanogui::Matrix3f result;
+        for (int m = 0; m < 3; ++m) {
+            for (int n = 0; n < 3; ++n) {
+                result.m[n][m] = transform(m, n);
+            }
+        }
+        return result;
+    }
 
 private:
     static std::vector<Channel> channelsFromImages(
@@ -150,7 +160,7 @@ private:
 
     Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
 
-    UberShader mShader;
+    std::unique_ptr<UberShader> mShader;
 
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;

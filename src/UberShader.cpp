@@ -11,9 +11,7 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-UberShader::UberShader(nanogui::RenderPass* renderPass)
-: mColorMap{GL_CLAMP_TO_EDGE, GL_LINEAR, false}
-{
+UberShader::UberShader(nanogui::RenderPass* renderPass) {
     mShader = new nanogui::Shader{
         renderPass,
         "ubershader",
@@ -188,20 +186,26 @@ UberShader::UberShader(nanogui::RenderPass* renderPass)
     // 2 Triangles
     uint32_t indices[3*2] = {
         0, 1, 2,
-        2, 3, 0
+        2, 3, 0,
     };
-    float positions[3*4] = {
-        -1, -1, 0,
-        1, -1, 0,
-        1, 1, 0,
-        -1, 1, 0,
+    float positions[2*4] = {
+        -1.f, -1.f,
+        1.f, -1.f,
+        1.f, 1.f,
+        -1.f, 1.f,
     };
 
     mShader->set_buffer("indices", nanogui::VariableType::UInt32, {3*2}, indices);
-    mShader->set_buffer("position", nanogui::VariableType::Float32, {4, 3}, positions);
+    mShader->set_buffer("position", nanogui::VariableType::Float32, {4, 2}, positions);
 
     const auto& fcd = colormap::turbo();
-    mColorMap.setData(fcd, Vector2i{(int)fcd.size() / 4, 1}, 4);
+
+    mColorMap = new nanogui::Texture{
+        nanogui::Texture::PixelFormat::RGBA,
+        nanogui::Texture::ComponentFormat::Float32,
+        nanogui::Vector2i{(int)fcd.size() / 4, 1}
+    };
+    mColorMap->upload((uint8_t*)fcd.data());
 }
 
 UberShader::~UberShader() { }
@@ -219,8 +223,8 @@ void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    GlTexture* textureImage,
-    const Matrix3f& transformImage,
+    nanogui::Texture* textureImage,
+    const nanogui::Matrix3f& transformImage,
     float exposure,
     float offset,
     float gamma,
@@ -239,10 +243,10 @@ void UberShader::draw(
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    GlTexture* textureImage,
-    const Matrix3f& transformImage,
-    GlTexture* textureReference,
-    const Matrix3f& transformReference,
+    nanogui::Texture* textureImage,
+    const nanogui::Matrix3f& transformImage,
+    nanogui::Texture* textureReference,
+    const nanogui::Matrix3f& transformReference,
     float exposure,
     float offset,
     float gamma,
@@ -261,23 +265,20 @@ void UberShader::draw(
 }
 
 void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    mShader->set_uniform("pixelSize", pixelSize);
-    mShader->set_uniform("checkerSize", checkerSize);
+    mShader->set_uniform("pixelSize", nanogui::Vector2f{pixelSize.x(), pixelSize.y()});
+    mShader->set_uniform("checkerSize", nanogui::Vector2f{checkerSize.x(), checkerSize.y()});
     mShader->set_uniform("bgColor", mBackgroundColor);
 }
 
 void UberShader::bindImageData(
-    GlTexture* textureImage,
-    const Matrix3f& transformImage,
+    nanogui::Texture* textureImage,
+    const nanogui::Matrix3f& transformImage,
     float exposure,
     float offset,
     float gamma,
     ETonemap tonemap
 ) {
-    glActiveTexture(GL_TEXTURE0);
-    textureImage->bind();
-
-    mShader->set_uniform("image", 0);
+    mShader->set_texture("image", textureImage);
     mShader->set_uniform("imageTransform", transformImage);
 
     mShader->set_uniform("exposure", exposure);
@@ -285,20 +286,15 @@ void UberShader::bindImageData(
     mShader->set_uniform("gamma", gamma);
     mShader->set_uniform("tonemap", static_cast<int>(tonemap));
 
-    glActiveTexture(GL_TEXTURE2);
-    mColorMap.bind();
-    mShader->set_uniform("colormap", 2);
+    mShader->set_texture("colormap", mColorMap.get());
 }
 
 void UberShader::bindReferenceData(
-    GlTexture* textureReference,
-    const Matrix3f& transformReference,
+    nanogui::Texture* textureReference,
+    const nanogui::Matrix3f& transformReference,
     EMetric metric
 ) {
-    glActiveTexture(GL_TEXTURE1);
-    textureReference->bind();
-
-    mShader->set_uniform("reference", 1);
+    mShader->set_texture("reference", textureReference);
     mShader->set_uniform("referenceTransform", transformReference);
 
     mShader->set_uniform("metric", static_cast<int>(metric));

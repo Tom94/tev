@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <tev/GlTexture.h>
+#include <nanogui/texture.h>
 
 #include <nanogui/shader.h>
 
@@ -21,8 +21,8 @@ public:
     void draw(
         const Eigen::Vector2f& pixelSize,
         const Eigen::Vector2f& checkerSize,
-        GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
         float exposure,
         float offset,
         float gamma,
@@ -33,10 +33,10 @@ public:
     void draw(
         const Eigen::Vector2f& pixelSize,
         const Eigen::Vector2f& checkerSize,
-        GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
-        GlTexture* textureReference,
-        const Eigen::Matrix3f& transformReference,
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
+        nanogui::Texture* textureReference,
+        const nanogui::Matrix3f& transformReference,
         float exposure,
         float offset,
         float gamma,
@@ -56,8 +56,8 @@ private:
     void bindCheckerboardData(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
 
     void bindImageData(
-        GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
         float exposure,
         float offset,
         float gamma,
@@ -65,13 +65,13 @@ private:
     );
 
     void bindReferenceData(
-        GlTexture* textureReference,
-        const Eigen::Matrix3f& transformReference,
+        nanogui::Texture* textureReference,
+        const nanogui::Matrix3f& transformReference,
         EMetric metric
     );
 
     nanogui::ref<nanogui::Shader> mShader;
-    GlTexture mColorMap;
+    nanogui::ref<nanogui::Texture> mColorMap;
 
     nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 };

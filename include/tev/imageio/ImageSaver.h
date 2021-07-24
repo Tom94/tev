@@ -5,8 +5,6 @@
 
 #include <tev/Common.h>
 
-#include <Eigen/Core>
-
 #include <ostream>
 #include <string>
 #include <vector>
@@ -33,7 +31,7 @@ public:
 template <typename T>
 class TypedImageSaver : public ImageSaver {
 public:
-    virtual void save(std::ostream& oStream, const filesystem::path& path, const std::vector<T>& data, const Eigen::Vector2i& imageSize, int nChannels) const = 0;
+    virtual void save(std::ostream& oStream, const ::filesystem::path& path, const std::vector<T>& data, const Eigen::Vector2i& imageSize, int nChannels) const = 0;
 };
 
 TEV_NAMESPACE_END

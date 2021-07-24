@@ -21,7 +21,8 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
-: Canvas{parent}, mPixelRatio{pixelRatio}, mShader{render_pass()} {
+: Canvas{parent, 1, false, false, false}, mPixelRatio{pixelRatio} {
+    mShader.reset(new UberShader{render_pass()});
     set_draw_border(false);
 }
 
@@ -49,7 +50,7 @@ void ImageCanvas::draw_contents() {
     Image* image = (mReference && glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT)) ? mReference.get() : mImage.get();
 
     if (!image) {
-        mShader.draw(
+        mShader->draw(
             2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
             Vector2f::Constant(20)
         );
@@ -57,13 +58,13 @@ void ImageCanvas::draw_contents() {
     }
 
     if (!mReference || glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || image == mReference.get()) {
-        mShader.draw(
+        mShader->draw(
             2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
             Vector2f::Constant(20),
             image->texture(mRequestedChannelGroup),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
-            transform(image).inverse().matrix(),
+            toNanogui(transform(image).inverse().matrix()),
             mExposure,
             mOffset,
             mGamma,
@@ -72,15 +73,15 @@ void ImageCanvas::draw_contents() {
         return;
     }
 
-    mShader.draw(
+    mShader->draw(
         2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
         Vector2f::Constant(20),
         mImage->texture(mRequestedChannelGroup),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
-        transform(mImage.get()).inverse().matrix(),
+        toNanogui(transform(mImage.get()).inverse().matrix()),
         mReference->texture(mRequestedChannelGroup),
-        transform(mReference.get()).inverse().matrix(),
+        toNanogui(transform(mReference.get()).inverse().matrix()),
         mExposure,
         mOffset,
         mGamma,
@@ -146,7 +147,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
                     for (size_t i = 0; i < colors.size(); ++i) {
                         string str;
                         Vector2f pos;
-                        
+
                         if (altHeld) {
                             float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
                             unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);

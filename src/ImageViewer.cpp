@@ -31,7 +31,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops)
-: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev"}, mImagesLoader{imagesLoader} {
+: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true}, mImagesLoader{imagesLoader} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -135,7 +135,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         );
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
 
-        auto popupBtn = new PopupButton{buttonContainer, "", FA_BRUSH};
+        auto popupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
         popupBtn->set_font_size(15);
         popupBtn->set_chevron_icon(0);
         popupBtn->set_tooltip("Background Color");
@@ -154,7 +154,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             bgAlphaSlider->set_range({0.0f, 1.0f});
             bgAlphaSlider->set_callback([this](float value) {
                 auto col = mImageCanvas->background_color();
-                mImageCanvas->set_background_color(Color{
+                mImageCanvas->setBackgroundColor(Color{
                     col.r(),
                     col.g(),
                     col.b(),
@@ -166,7 +166,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
             colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
                 //popupBtn->set_background_color(value);
-                mImageCanvas->set_background_color(Color{
+                mImageCanvas->setBackgroundColor(Color{
                     value.r(),
                     value.g(),
                     value.b(),
@@ -353,7 +353,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                         mTaskQueue.push([&]() {
                             selectImage(nextImage(mCurrentImage, Forward), false);
                         });
-                        glfwPostEmptyEvent();
+                        redraw();
                     }
                 }
             }};
@@ -399,7 +399,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                 } else {
                     removeImage(mCurrentImage);
                 }
-            }, FA_WINDOW_CLOSE, tfm::format("Close (%s+W); Close All (%s+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, FA_TIMES, tfm::format("Close (%s+W); Close All (%s+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             spacer = new Widget{mSidebarLayout};
             spacer->set_height(3);
@@ -473,6 +473,8 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
         return true;
     }
 
+    redraw();
+
     if (down && !mIsDraggingImageButton) {
         if (canDragSidebarFrom(p)) {
             mIsDraggingSidebar = true;
@@ -512,6 +514,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
     if (mIsDraggingSidebar) {
         mSidebar->set_fixed_width(clamp(p.x(), 205, m_size.x() - 10));
         requestLayoutUpdate();
+        redraw();
     } else if (mIsDraggingImage) {
         Eigen::Vector2f relativeMovement = {rel.x(), rel.y()};
         auto* glfwWindow = screen()->glfw_window();
@@ -532,6 +535,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         if ((button & 4) != 0) {
             mImageCanvas->scale(relativeMovement.y() / 10.0f, {mDraggingStartPosition.x(), mDraggingStartPosition.y()});
         }
+        redraw();
     } else if (mIsDraggingImageButton) {
         auto& buttons = mImageButtonContainer->children();
         nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
@@ -551,8 +555,9 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
                 break;
             }
         }
-        
+
         dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(relMousePos - nanogui::Vector2i(mDraggingStartPosition));
+        redraw();
     }
 
     return false;
@@ -569,6 +574,7 @@ bool ImageViewer::drop_event(const vector<string>& filenames) {
 
     // Make sure we gain focus after dragging files into here.
     focusWindow();
+    redraw();
     return true;
 }
 
@@ -576,6 +582,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
     if (Screen::keyboard_event(key, scancode, action, modifiers)) {
         return true;
     }
+
+    redraw();
 
     int numGroups = mGroupButtonContainer->child_count();
 
@@ -840,6 +848,8 @@ void ImageViewer::focusWindow() {
 }
 
 void ImageViewer::draw_contents() {
+    clear();
+
     // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
@@ -892,7 +902,7 @@ void ImageViewer::draw_contents() {
         if (mIsDraggingImageButton) {
             oldDraggedImageButtonPos = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->position();
         }
-        
+
         updateLayout();
         mRequiresLayoutUpdate = false;
 
@@ -1010,7 +1020,7 @@ void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
     auto img = mImages[oldIndex];
     mImages.erase(mImages.begin() + oldIndex);
     mImages.insert(mImages.begin() + newIndex, img);
-    
+
     requestLayoutUpdate();
 }
 

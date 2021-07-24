@@ -4,9 +4,10 @@
 #pragma once
 
 #include <tev/Channel.h>
-#include <tev/GlTexture.h>
 #include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
+
+#include <nanogui/texture.h>
 
 #include <atomic>
 #include <istream>
@@ -30,7 +31,7 @@ struct ChannelGroup {
 };
 
 struct ImageTexture {
-    GlTexture glTexture;
+    nanogui::ref<nanogui::Texture> nanoguiTexture;
     std::vector<std::string> channels;
 };
 
@@ -65,8 +66,8 @@ public:
         }
     }
 
-    GlTexture* texture(const std::string& channelGroupName);
-    GlTexture* texture(const std::vector<std::string>& channelNames);
+    nanogui::Texture* texture(const std::string& channelGroupName);
+    nanogui::Texture* texture(const std::vector<std::string>& channelNames);
 
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
@@ -125,7 +126,7 @@ private:
     std::map<std::string, ImageTexture> mTextures;
 
     ImageData mData;
-    
+
     std::vector<ChannelGroup> mChannelGroups;
 
     int mId;
