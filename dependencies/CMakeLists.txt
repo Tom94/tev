@@ -51,12 +51,13 @@ if (WIN32)
 endif()
 
 # Compile OpenEXR
+set(PYILMBASE_ENABLE OFF CACHE BOOL " " FORCE)
 set(ILMBASE_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(ILMBASE_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 set(OPENEXR_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 add_subdirectory(openexr EXCLUDE_FROM_ALL)
-set_property(TARGET b44ExpLogTable CopyIlmBaseLibs dwaLookups eLut Half Iex IlmImf IlmImf-obj IlmThread Imath toFloat PROPERTY FOLDER "dependencies")
+set_property(TARGET Half Iex IlmImf IlmThread Imath PROPERTY FOLDER "dependencies")
 
 # Compile clip
 set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
