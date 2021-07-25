@@ -11,6 +11,11 @@
 
 #include <utf8.h>
 
+#ifdef __APPLE__
+#define GLFW_EXPOSE_NATIVE_COCOA
+#include <GLFW/glfw3native.h>
+#endif
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -415,6 +420,17 @@ int mainFunc(const vector<string>& arguments) {
     // Init nanogui application
     nanogui::init();
 
+#ifdef __APPLE__
+    if (!imageFiles) {
+        // If we didn't get any command line arguments for files to open,
+        // then, on macOS, they might have been supplies through the NS api.
+        const char* const* openedFiles = glfwGetOpenedFilenames();
+        for (auto p = openedFiles; *p; ++p) {
+            imagesLoader->enqueue(*p, "", false);
+        }
+    }
+#endif
+
     auto [capability10bit, capabilityEdr] = nanogui::test_10bit_edr_support();
     if (get(ldrFlag)) {
         capability10bit = false;
@@ -431,7 +447,7 @@ int mainFunc(const vector<string>& arguments) {
     // sImageViewer is a raw pointer to make sure it will never
     // get deleted. nanogui crashes upon cleanup, so we better
     // not try.
-    sImageViewer = new ImageViewer{imagesLoader, !imageFiles, maximize, requestFloatBuffer};
+    sImageViewer = new ImageViewer{imagesLoader, maximize, requestFloatBuffer};
     
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);
