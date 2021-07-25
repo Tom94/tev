@@ -171,6 +171,13 @@ int mainFunc(const vector<string>& arguments) {
         {"host", "hostname"},
     };
 
+    Flag ldrFlag{
+        parser,
+        "LDR",
+        "Force low dynamic range (8-bit) display colors.",
+        {"ldr"},
+    };
+
     ValueFlag<bool> maximizeFlag{
         parser,
         "MAXIMIZE",
@@ -288,6 +295,47 @@ int mainFunc(const vector<string>& arguments) {
             }
         }
 
+        IpcPacket packet;
+        // packet.setCreateImage("test", true, 500, 500, 3, {"R", "G", "B"});
+        std::vector<float> data_on(100*100, 1.0f);
+        std::vector<float> data_off(100*100, 0.0f);
+        std::vector<std::string> channels = {"R", "G", "B"};
+
+        for (int channel = 0; channel < 100; ++channel) {
+            for (int x = 0; x < 3; ++x) {
+                for (int y = 0; y < 3; ++y) {
+                    packet.setUpdateImage(
+                        "/Users/tom94/Projects/openexr-images/ScanLines/Blobbies.exr",
+                        true,
+                        {{channels[channel%3], 0, 1}},
+                        100*x, 100*y, 100, 100,
+                        data_on
+                    );
+                    ipc->sendToPrimaryInstance(packet);
+
+                    packet.setUpdateImage(
+                        "/Users/tom94/Projects/openexr-images/ScanLines/Blobbies.exr",
+                        true,
+                        {{channels[(channel+1)%3], 0, 1}},
+                        100*x, 100*y, 100, 100,
+                        data_off
+                    );
+                    ipc->sendToPrimaryInstance(packet);
+
+                    packet.setUpdateImage(
+                        "/Users/tom94/Projects/openexr-images/ScanLines/Blobbies.exr",
+                        true,
+                        {{channels[(channel+2)%3], 0, 1}},
+                        100*x, 100*y, 100, 100,
+                        data_off
+                    );
+                    ipc->sendToPrimaryInstance(packet);
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+                }
+            }
+        }
+
         return 0;
     }
 
@@ -367,20 +415,27 @@ int mainFunc(const vector<string>& arguments) {
     // Init nanogui application
     nanogui::init();
 
+    auto [capability10bit, capabilityEdr] = nanogui::test_10bit_edr_support();
+    if (get(ldrFlag)) {
+        capability10bit = false;
+        capabilityEdr = false;
+    }
+    bool requestFloatBuffer = capability10bit || capabilityEdr;
+
+    tlog::info() << "Launching with " << (capability10bit ? 10 : 8) << " bits of color and " << (capabilityEdr ? "HDR" : "LDR") << " display support.";
+
+    // Do what the maximize flag tells us---if it exists---and
+    // maximize if we have images otherwise.
+    bool maximize = maximizeFlag ? get(maximizeFlag) : imageFiles;
+
     // sImageViewer is a raw pointer to make sure it will never
     // get deleted. nanogui crashes upon cleanup, so we better
     // not try.
-    sImageViewer = new ImageViewer{imagesLoader, !imageFiles};
+    sImageViewer = new ImageViewer{imagesLoader, !imageFiles, maximize, requestFloatBuffer};
     
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);
     sImageViewer->redraw();
-
-    // Do what the maximize flag tells us---if it exists---and
-    // maximize if we have images otherwise.
-    if (maximizeFlag ? get(maximizeFlag) : imageFiles) {
-        sImageViewer->maximize();
-    }
 
     // Apply parameter flags
     if (exposureFlag) { sImageViewer->setExposure(get(exposureFlag)); }

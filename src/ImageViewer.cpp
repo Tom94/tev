@@ -30,8 +30,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops)
-: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true}, mImagesLoader{imagesLoader} {
+ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops, bool fullscreen, bool floatBuffer)
+: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, false, false, false, floatBuffer}, mImagesLoader{imagesLoader} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -431,7 +431,6 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
     set_resize_callback([this](nanogui::Vector2i) { requestLayoutUpdate(); });
 
-    this->set_size(nanogui::Vector2i(1024, 800));
     selectImage(nullptr);
     selectReference(nullptr);
 
@@ -439,6 +438,12 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // if (processPendingDrops) {
     //     drop_event(mPendingDrops);
     // }
+
+    if (!fullscreen) {
+        this->set_size(nanogui::Vector2i(1024, 800));
+    } else {
+        this->maximize();
+    }
 }
 
 ImageViewer::~ImageViewer() {

@@ -24,7 +24,7 @@ TEV_NAMESPACE_BEGIN
 
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops);
+    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops, bool fullscreen, bool floatBuffer);
     virtual ~ImageViewer();
 
     bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;

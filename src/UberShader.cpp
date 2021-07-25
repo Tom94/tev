@@ -94,26 +94,24 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
             }
 
             float linear(float sRGB) {
-                if (sRGB > 1.0) {
-                    return 1.0;
-                } else if (sRGB < 0.0) {
-                    return 0.0;
-                } else if (sRGB <= 0.04045) {
-                    return sRGB / 12.92;
+                float outSign = sign(sRGB);
+                sRGB = abs(sRGB);
+
+                if (sRGB <= 0.04045) {
+                    return outSign * sRGB / 12.92;
                 } else {
-                    return pow((sRGB + 0.055) / 1.055, 2.4);
+                    return outSign * pow((sRGB + 0.055) / 1.055, 2.4);
                 }
             }
 
             float sRGB(float linear) {
-                if (linear > 1.0) {
-                    return 1.0;
-                } else if (linear < 0.0) {
-                    return 0.0;
-                } else if (linear < 0.0031308) {
-                    return 12.92 * linear;
+                float outSign = sign(linear);
+                linear = abs(linear);
+
+                if (linear < 0.0031308f) {
+                    return outSign * 12.92 * linear;
                 } else {
-                    return 1.055 * pow(linear, 0.41666) - 0.055;
+                    return outSign * 1.055 * pow(linear, 0.41666) - 0.055;
                 }
             }
 
@@ -125,7 +123,7 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                         return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
                     case GAMMA:
                         col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
-                        return pow(col, vec3(1.0 / gamma));
+                        return sign(col) * pow(abs(col), vec3(1.0 / gamma));
                     // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
                     case FALSE_COLOR:
                         return falseColor(log2(average(col)+0.03125) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
@@ -243,26 +241,24 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
             }
 
             float linear(float sRGB) {
-                if (sRGB > 1.0f) {
-                    return 1.0f;
-                } else if (sRGB < 0.0f) {
-                    return 0.0f;
-                } else if (sRGB <= 0.04045f) {
-                    return sRGB / 12.92f;
+                float outSign = sign(sRGB);
+                sRGB = abs(sRGB);
+
+                if (sRGB <= 0.04045f) {
+                    return outSign * sRGB / 12.92f;
                 } else {
-                    return pow((sRGB + 0.055f) / 1.055f, 2.4f);
+                    return outSign * pow((sRGB + 0.055f) / 1.055f, 2.4f);
                 }
             }
 
             float sRGB(float linear) {
-                if (linear > 1.0f) {
-                    return 1.0f;
-                } else if (linear < 0.0f) {
-                    return 0.0f;
-                } else if (linear < 0.0031308f) {
-                    return 12.92f * linear;
+                float outSign = sign(linear);
+                linear = abs(linear);
+
+                if (linear < 0.0031308f) {
+                    return outSign * 12.92f * linear;
                 } else {
-                    return 1.055f * pow(linear, 0.41666f) - 0.055f;
+                    return outSign * 1.055f * pow(linear, 0.41666f) - 0.055f;
                 }
             }
 
@@ -274,7 +270,7 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                         return float3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
                     case GAMMA:
                         col = col + (pow(background.rgb, float3(gamma)) - offset) * background.a;
-                        return pow(col, float3(1.0 / gamma));
+                        return sign(col) * pow(abs(col), float3(1.0 / gamma));
                     // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
                     case FALSE_COLOR:
                         return falseColor(log2(average(col)+0.03125f) / 10.0f + 0.5f, colormap, colormapSampler) + (background.rgb - falseColor(0.0f, colormap, colormapSampler)) * background.a;
