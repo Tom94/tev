@@ -42,8 +42,8 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     // Keybindings tab
     {
         Widget* shortcuts = new Widget(tabWidget);
-        tabWidget->append_tab("Keybindings", shortcuts);
         shortcuts->set_layout(new GroupLayout{});
+        tabWidget->append_tab("Keybindings", shortcuts);
 
         auto addRow = [](Widget* current, string keys, string desc) {
             auto row = new Widget{current};
@@ -122,8 +122,8 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     // About tab
     {
         Widget* about = new Widget(tabWidget);
-        tabWidget->append_tab("About", about);
         about->set_layout(new GroupLayout{});
+        tabWidget->append_tab("About", about);
 
         auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
             auto row = new Widget{current};
@@ -164,7 +164,6 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra");
         addLibrary(about, "filesystem",        "", "Lightweight Path Manipulation Library");
         addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
-        addLibrary(about, "GLEW",              "", "The OpenGL Extension Wrangler Library");
         addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library");
         addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL");
         addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library");
@@ -176,6 +175,9 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
     }
 
     tabWidget->set_selected_id(0);
+    tabWidget->set_callback([tabWidget] (int id) mutable {
+        tabWidget->set_selected_id(id);
+    });
 }
 
 bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers) {
