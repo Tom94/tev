@@ -367,20 +367,9 @@ int mainFunc(const vector<string>& arguments) {
     // Init nanogui application
     nanogui::init();
 
-    ScopeGuard imageViewerGuard{[] {
-        // Make sure sImagePointer is no longer accessible
-        // while it is being destructed. This is to avoid
-        // nested GlTextures' destructors calling `scheduleToMainThread`
-        // to access sImageViewer in a partially-destructed state.
-        // This is a horrible hack, yet the path of least resistance
-        // that I could find to properly descruct GlTextures on the main
-        // thread (and stopping to care about them when the program
-        // terminates anyway).
-        ImageViewer* localImageViewerPtr = sImageViewer;
-        sImageViewer = nullptr;
-        delete localImageViewerPtr;
-    }};
-    
+    // sImageViewer is a raw pointer to make sure it will never
+    // get deleted. nanogui crashes upon cleanup, so we better
+    // not try.
     sImageViewer = new ImageViewer{imagesLoader, !imageFiles};
     
     sImageViewer->draw_all();
