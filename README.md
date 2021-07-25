@@ -4,6 +4,8 @@
 
 A high dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof). To avoid clutter, opened images and their layers can be filtered by keywords.
 
+__New__: __tev__ can display true HDR on Apple extended dynamic range (EDR) and 10-bit displays.
+
 While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
@@ -58,7 +60,7 @@ Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit) are availa
 
 ## Building tev
 
-All that is required for building __tev__ is a C++11-compatible compiler (C++17 on Windows). Begin by cloning this repository and all its submodules using the following command:
+All that is required for building __tev__ is a C++17-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
 ```
