@@ -68,6 +68,13 @@ Image::Image(const class path& path, istream& iStream, const string& channelSele
     tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mName, loadMethod, elapsedSeconds.count());
 }
 
+Image::~Image() {
+    // Move the texture pointers to the main thread such that their reference count
+    // hits zero there. This is required, because OpenGL calls must always happen
+    // on the main thread.
+    scheduleToMainThread([textures = std::move(mTextures)] {});
+}
+
 string Image::shortName() const {
     string result = mName;
 

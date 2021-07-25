@@ -38,6 +38,7 @@ struct ImageTexture {
 class Image {
 public:
     Image(const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
+    virtual ~Image();
 
     const filesystem::path& path() const {
         return mPath;
