@@ -31,7 +31,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool processPendingDrops, bool fullscreen, bool floatBuffer)
-: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, false, false, false, floatBuffer}, mImagesLoader{imagesLoader} {
+: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
