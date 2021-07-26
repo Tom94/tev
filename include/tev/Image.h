@@ -33,6 +33,7 @@ struct ChannelGroup {
 struct ImageTexture {
     nanogui::ref<nanogui::Texture> nanoguiTexture;
     std::vector<std::string> channels;
+    bool mipmapDirty;
 };
 
 class Image {

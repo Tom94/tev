@@ -99,19 +99,28 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
-        return iter->second.nanoguiTexture.get();
+        auto& texture = iter->second;
+        if (texture.mipmapDirty) {
+            texture.nanoguiTexture->generate_mipmap();
+            texture.mipmapDirty = false;
+        }
+        return texture.nanoguiTexture.get();
     }
 
-    mTextures.emplace(lookup, ImageTexture{new nanogui::Texture{
-        nanogui::Texture::PixelFormat::RGBA,
-        nanogui::Texture::ComponentFormat::Float32,
-        {size().x(), size().y()},
-        nanogui::Texture::InterpolationMode::Trilinear,
-        nanogui::Texture::InterpolationMode::Nearest,
-        nanogui::Texture::WrapMode::ClampToEdge,
-        1, nanogui::Texture::TextureFlags::ShaderRead,
-        true,
-    }, channelNames});
+    mTextures.emplace(lookup, ImageTexture{
+        new nanogui::Texture{
+            nanogui::Texture::PixelFormat::RGBA,
+            nanogui::Texture::ComponentFormat::Float32,
+            {size().x(), size().y()},
+            nanogui::Texture::InterpolationMode::Trilinear,
+            nanogui::Texture::InterpolationMode::Nearest,
+            nanogui::Texture::WrapMode::ClampToEdge,
+            1, nanogui::Texture::TextureFlags::ShaderRead,
+            true,
+        },
+        channelNames,
+        false,
+    });
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
     auto numPixels = count();
@@ -140,6 +149,7 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     pool.waitUntilFinished();
 
     texture->upload((uint8_t*)data.data());
+    texture->generate_mipmap();
     return texture.get();
 }
 
@@ -337,6 +347,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
         }
 
         imageTexture.nanoguiTexture->upload_sub_region((uint8_t*)textureData.data(), {x, y}, {width, height});
+        imageTexture.mipmapDirty = true;
     }
 }
 
