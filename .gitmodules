@@ -6,7 +6,7 @@
 	url = https://github.com/mitsuba-renderer/openexr
 [submodule "dependencies/zlib"]
 	path = dependencies/zlib
-	url = https://github.com/mitsuba-renderer/zlib
+	url = https://github.com/Tom94/zlib
 [submodule "dependencies/tinyformat"]
 	path = dependencies/tinyformat
 	url = https://github.com/mitsuba-renderer/tinyformat
@@ -27,7 +27,7 @@
 	url = https://github.com/microsoft/DirectXTex.git
 [submodule "dependencies/nanogui"]
 	path = dependencies/nanogui
-	url = https://github.com/mitsuba-renderer/nanogui
+	url = https://github.com/Tom94/nanogui-1
 [submodule "dependencies/eigen"]
 	path = dependencies/eigen
 	url = https://gitlab.com/libeigen/eigen.git
