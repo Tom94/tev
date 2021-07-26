@@ -397,7 +397,6 @@ int mainFunc(const vector<string>& arguments) {
         capability10bit = false;
         capabilityEdr = false;
     }
-    bool requestFloatBuffer = capability10bit || capabilityEdr;
 
     tlog::info() << "Launching with " << (capability10bit ? 10 : 8) << " bits of color and " << (capabilityEdr ? "HDR" : "LDR") << " display support.";
 
@@ -408,7 +407,7 @@ int mainFunc(const vector<string>& arguments) {
     // sImageViewer is a raw pointer to make sure it will never
     // get deleted. nanogui crashes upon cleanup, so we better
     // not try.
-    sImageViewer = new ImageViewer{imagesLoader, maximize, requestFloatBuffer};
+    sImageViewer = new ImageViewer{imagesLoader, maximize, !get(ldrFlag)};
     
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);
