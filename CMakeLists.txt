@@ -1,9 +1,14 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
 # PBRT-v3 can be found here: https://github.com/mmp/pbrt-v3
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.13)
 
-project(tev)
-set(TEV_VERSION "1.17")
+project(
+    tev
+    VERSION 1.18
+    DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
+    LANGUAGES C CXX
+)
+set(TEV_VERSION "1.18")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
