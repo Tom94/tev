@@ -9,7 +9,7 @@
 	url = https://github.com/Tom94/zlib
 [submodule "dependencies/tinyformat"]
 	path = dependencies/tinyformat
-	url = https://github.com/mitsuba-renderer/tinyformat
+	url = https://github.com/c42f/tinyformat
 [submodule "dependencies/filesystem"]
 	path = dependencies/filesystem
 	url = https://github.com/Tom94/filesystem
