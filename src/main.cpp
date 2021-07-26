@@ -295,7 +295,7 @@ int mainFunc(const vector<string>& arguments) {
                 IpcPacket packet;
                 packet.setOpenImage(path{imageFile}.make_absolute().str(), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
-            } catch (runtime_error e) {
+            } catch (const runtime_error& e) {
                 tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
             }
         }
@@ -408,7 +408,7 @@ int mainFunc(const vector<string>& arguments) {
     // get deleted. nanogui crashes upon cleanup, so we better
     // not try.
     sImageViewer = new ImageViewer{imagesLoader, maximize, !get(ldrFlag)};
-    
+
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);
     sImageViewer->redraw();

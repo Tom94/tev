@@ -370,7 +370,7 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
             })"
 #endif
         };
-    } catch (runtime_error e) {
+    } catch (const runtime_error& e) {
         tlog::error() << tfm::format("Unable to compile shader: %s", e.what());
     }
 

@@ -427,7 +427,7 @@ Ipc::Ipc(const string& hostname) {
                 throw runtime_error{"Unable to connect to primary instance."};
             }
         }
-    } catch (runtime_error e) {
+    } catch (const runtime_error& e) {
         tlog::warning() << "Could not initialize IPC; assuming primary instance. " << e.what();
         mIsPrimaryInstance = true;
     }

@@ -865,7 +865,7 @@ void ImageViewer::draw_contents() {
             newFocus |= addition.shallSelect;
             addImage(addition.image, addition.shallSelect);
         }
-    } catch (runtime_error) {
+    } catch (const runtime_error&) {
     }
 
     if (newFocus) {
@@ -878,7 +878,7 @@ void ImageViewer::draw_contents() {
         while (true) {
             mTaskQueue.tryPop()();
         }
-    } catch (runtime_error) {
+    } catch (const runtime_error&) {
     }
 
     for (auto it = begin(mToBump); it != end(mToBump); ) {
@@ -1566,7 +1566,7 @@ void ImageViewer::saveImageDialog() {
 
     try {
         mImageCanvas->saveImage(path);
-    } catch (invalid_argument e) {
+    } catch (const invalid_argument& e) {
         new MessageDialog(
             this,
             MessageDialog::Type::Warning,

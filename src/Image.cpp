@@ -447,7 +447,7 @@ shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelect
 shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     try {
         path = path.make_absolute();
-    } catch (runtime_error e) {
+    } catch (const runtime_error& e) {
         // If for some strange reason we can not obtain an absolute path, let's still
         // try to open the image at the given path just to make sure.
     }
