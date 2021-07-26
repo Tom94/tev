@@ -300,47 +300,6 @@ int mainFunc(const vector<string>& arguments) {
             }
         }
 
-        IpcPacket packet;
-        // packet.setCreateImage("test", true, 500, 500, 3, {"R", "G", "B"});
-        std::vector<float> data_on(100*100, 1.0f);
-        std::vector<float> data_off(100*100, 0.0f);
-        std::vector<std::string> channels = {"R", "G", "B"};
-
-        for (int channel = 0; channel < 100; ++channel) {
-            for (int x = 0; x < 3; ++x) {
-                for (int y = 0; y < 3; ++y) {
-                    packet.setUpdateImage(
-                        "/Users/tom94/Projects/openexr-images/ScanLines/Blobbies.exr",
-                        true,
-                        {{channels[channel%3], 0, 1}},
-                        100*x, 100*y, 100, 100,
-                        data_on
-                    );
-                    ipc->sendToPrimaryInstance(packet);
-
-                    packet.setUpdateImage(
-                        "/Users/tom94/Projects/openexr-images/ScanLines/Blobbies.exr",
-                        true,
-                        {{channels[(channel+1)%3], 0, 1}},
-                        100*x, 100*y, 100, 100,
-                        data_off
-                    );
-                    ipc->sendToPrimaryInstance(packet);
-
-                    packet.setUpdateImage(
-                        "/Users/tom94/Projects/openexr-images/ScanLines/Blobbies.exr",
-                        true,
-                        {{channels[(channel+2)%3], 0, 1}},
-                        100*x, 100*y, 100, 100,
-                        data_off
-                    );
-                    ipc->sendToPrimaryInstance(packet);
-
-                    std::this_thread::sleep_for(std::chrono::milliseconds{10});
-                }
-            }
-        }
-
         return 0;
     }
 
@@ -423,10 +382,12 @@ int mainFunc(const vector<string>& arguments) {
 #ifdef __APPLE__
     if (!imageFiles) {
         // If we didn't get any command line arguments for files to open,
-        // then, on macOS, they might have been supplies through the NS api.
+        // then, on macOS, they might have been supplied through the NS api.
         const char* const* openedFiles = glfwGetOpenedFilenames();
-        for (auto p = openedFiles; *p; ++p) {
-            imagesLoader->enqueue(*p, "", false);
+        if (openedFiles) {
+            for (auto p = openedFiles; *p; ++p) {
+                imagesLoader->enqueue(*p, "", false);
+            }
         }
     }
 #endif
