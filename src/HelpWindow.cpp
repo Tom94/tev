@@ -28,7 +28,7 @@ string HelpWindow::ALT = "Opt";
 string HelpWindow::ALT = "Alt";
 #endif
 
-HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
+HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeCallback)
     : Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
@@ -80,6 +80,9 @@ HelpWindow::HelpWindow(Widget *parent, function<void()> closeCallback)
         addRow(imageSelection, "F", "Fit Image to Screen");
         addRow(imageSelection, "N", "Normalize Image to [0, 1]");
         addRow(imageSelection, "R", "Reset Image Parameters");
+        if (supportsHdr) {
+            addRow(imageSelection, "L", "Display the image as if on an LDR screen");
+        }
 
         addRow(imageSelection, "Shift+Right or Shift+D / Shift+Left or Shift+A", "Select Next / Previous Tonemap");
 

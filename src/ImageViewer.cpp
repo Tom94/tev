@@ -30,11 +30,12 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer)
+ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool supportsHdr)
 : nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
     if (floatBuffer && !m_float_buffer) {
         tlog::warning() << "Failed to create floating point frame buffer.";
     }
+    mSupportsHdr = m_float_buffer && supportsHdr;
 
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
@@ -48,7 +49,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     horizontalScreenSplit->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
     mSidebar = new Widget{horizontalScreenSplit};
-    mSidebar->set_fixed_width(205);
+    mSidebar->set_fixed_width(210);
 
     mHelpButton = new Button{mSidebar, "", FA_QUESTION};
     mHelpButton->set_callback([this]() { toggleHelpWindow(); });
@@ -124,7 +125,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // Exposure/offset buttons
     {
         auto buttonContainer = new Widget{mSidebarLayout};
-        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, 3, Alignment::Fill, 5, 2});
+        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, mSupportsHdr ? 4 : 3, Alignment::Fill, 5, 2});
 
         auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
@@ -138,6 +139,19 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             makeButton("Normalize", [this]() { normalizeExposureAndOffset(); }, 0, "Shortcut: N")
         );
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
+
+        if (mSupportsHdr) {
+            mClipToLdrButton = new Button{buttonContainer, "LDR", 0};
+            mClipToLdrButton->set_font_size(15);
+            mClipToLdrButton->set_change_callback([this](bool value) {
+                mImageCanvas->setClipToLdr(value);
+            });
+            mClipToLdrButton->set_tooltip(
+                "Clips the image to [0,1] as if displayed on an LDR screen.\n\n"
+                "Shortcut: L"
+            );
+            mClipToLdrButton->set_flags(Button::ToggleButton);
+        }
 
         auto popupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
         popupBtn->set_font_size(15);
@@ -520,7 +534,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
     }
 
     if (mIsDraggingSidebar) {
-        mSidebar->set_fixed_width(clamp(p.x(), 205, m_size.x() - 10));
+        mSidebar->set_fixed_width(clamp(p.x(), 210, m_size.x() - 10));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
         Eigen::Vector2f relativeMovement = {rel.x(), rel.y()};
@@ -677,6 +691,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_SPACE) {
             mPlayButton->set_pushed(!mPlayButton->pushed());
+            return true;
+        } else if (key == GLFW_KEY_L && mSupportsHdr) {
+            mClipToLdrButton->set_pushed(!mClipToLdrButton->pushed());
+            mImageCanvas->setClipToLdr(mClipToLdrButton->pushed());
             return true;
         } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             set_visible(false);
@@ -1505,7 +1523,7 @@ void ImageViewer::toggleHelpWindow() {
         mHelpWindow->dispose();
         mHelpWindow = nullptr;
     } else {
-        mHelpWindow = new HelpWindow{this, [this] { toggleHelpWindow(); }};
+        mHelpWindow = new HelpWindow{this, mSupportsHdr, [this] { toggleHelpWindow(); }};
         mHelpWindow->center();
         mHelpWindow->request_focus();
     }

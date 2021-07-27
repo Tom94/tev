@@ -70,6 +70,7 @@ void ImageCanvas::draw_contents() {
             mExposure,
             mOffset,
             mGamma,
+            mClipToLdr,
             mTonemap
         );
         return;
@@ -87,6 +88,7 @@ void ImageCanvas::draw_contents() {
         mExposure,
         mOffset,
         mGamma,
+        mClipToLdr,
         mTonemap,
         mMetric
     );

@@ -407,7 +407,7 @@ int mainFunc(const vector<string>& arguments) {
     // sImageViewer is a raw pointer to make sure it will never
     // get deleted. nanogui crashes upon cleanup, so we better
     // not try.
-    sImageViewer = new ImageViewer{imagesLoader, maximize, !get(ldrFlag)};
+    sImageViewer = new ImageViewer{imagesLoader, maximize, !get(ldrFlag), capabilityEdr};
 
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);

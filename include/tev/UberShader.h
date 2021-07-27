@@ -26,6 +26,7 @@ public:
         float exposure,
         float offset,
         float gamma,
+        bool clipToLdr,
         ETonemap tonemap
     );
 
@@ -40,6 +41,7 @@ public:
         float exposure,
         float offset,
         float gamma,
+        bool clipToLdr,
         ETonemap tonemap,
         EMetric metric
     );

@@ -24,7 +24,7 @@ TEV_NAMESPACE_BEGIN
 
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer);
+    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool supportsHdr);
     virtual ~ImageViewer();
 
     bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
@@ -232,6 +232,9 @@ private:
     nanogui::Vector2f mDraggingStartPosition;
 
     size_t mClipboardIndex = 0;
+
+    bool mSupportsHdr = false;
+    nanogui::Button* mClipToLdrButton;
 };
 
 TEV_NAMESPACE_END

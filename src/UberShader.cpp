@@ -69,6 +69,7 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
             uniform float exposure;
             uniform float offset;
             uniform float gamma;
+            uniform bool clipToLdr;
             uniform int tonemap;
             uniform int metric;
 
@@ -169,6 +170,11 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                         1.0
                     );
+
+                    if (clipToLdr) {
+                        color.rgb = clamp(color.rgb, 0.0, 1.0);
+                    }
+
                     return;
                 }
 
@@ -180,6 +186,10 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                     applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
                     1.0
                 );
+
+                if (clipToLdr) {
+                    color.rgb = clamp(color.rgb, 0.0, 1.0);
+                }
             })"
 #elif defined(NANOGUI_USE_GLES)
             "", "" // TODO: write
@@ -319,6 +329,7 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                 const constant float& exposure,
                 const constant float& offset,
                 const constant float& gamma,
+                const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
                 const constant float4& bgColor
@@ -346,6 +357,9 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                         ),
                         1.0f
                     );
+                    if (clipToLdr) {
+                        color.rgb = clamp(color.rgb, 0.0f, 1.0f);
+                    }
                     return color;
                 }
 
@@ -365,7 +379,9 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
                     ),
                     1.0f
                 );
-
+                if (clipToLdr) {
+                    color.rgb = clamp(color.rgb, 0.0f, 1.0f);
+                }
                 return color;
             })"
 #endif
@@ -402,15 +418,12 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
 UberShader::~UberShader() { }
 
 void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    bindCheckerboardData(pixelSize, checkerSize);
-    bindImageData(mColorMap.get(), nanogui::Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, ETonemap::SRGB);
-    bindReferenceData(mColorMap.get(), nanogui::Matrix3f{0.0f}, EMetric::Error);
-    mShader->set_uniform("hasImage", false);
-    mShader->set_uniform("hasReference", false);
-
-    mShader->begin();
-    mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);
-    mShader->end();
+    draw(
+        pixelSize, checkerSize,
+        nullptr, nanogui::Matrix3f{0.0f},
+        0.0f, 0.0f, 0.0f, false,
+        ETonemap::SRGB
+    );
 }
 
 void UberShader::draw(
@@ -421,17 +434,16 @@ void UberShader::draw(
     float exposure,
     float offset,
     float gamma,
+    bool clipToLdr,
     ETonemap tonemap
 ) {
-    bindCheckerboardData(pixelSize, checkerSize);
-    bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
-    bindReferenceData(textureImage, transformImage, EMetric::Error);
-    mShader->set_uniform("hasImage", true);
-    mShader->set_uniform("hasReference", false);
-
-    mShader->begin();
-    mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);
-    mShader->end();
+    draw(
+        pixelSize, checkerSize,
+        textureImage, transformImage,
+        nullptr, nanogui::Matrix3f{0.0f},
+        exposure, offset, gamma, clipToLdr,
+        tonemap, EMetric::Error
+    );
 }
 
 void UberShader::draw(
@@ -444,14 +456,28 @@ void UberShader::draw(
     float exposure,
     float offset,
     float gamma,
+    bool clipToLdr,
     ETonemap tonemap,
     EMetric metric
 ) {
+    bool hasImage = textureImage;
+    if (!hasImage) {
+        // Just to have _some_ valid texture to bind. Will be ignored.
+        textureImage = mColorMap.get();
+    }
+
+    bool hasReference = textureReference;
+    if (!hasReference) {
+        // Just to have _some_ valid texture to bind. Will be ignored.
+        textureReference = textureImage;
+    }
+
     bindCheckerboardData(pixelSize, checkerSize);
     bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
-    mShader->set_uniform("hasImage", true);
-    mShader->set_uniform("hasReference", true);
+    mShader->set_uniform("hasImage", hasImage);
+    mShader->set_uniform("hasReference", hasReference);
+    mShader->set_uniform("clipToLdr", clipToLdr);
 
     mShader->begin();
     mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);

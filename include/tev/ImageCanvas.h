@@ -109,6 +109,14 @@ public:
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
+    void setClipToLdr(bool value) {
+        mClipToLdr = value;
+    }
+
+    bool clipToLdr() const {
+        return mClipToLdr;
+    }
+
     std::vector<float> getHdrImageData(bool divideAlpha) const;
     std::vector<char> getLdrImageData(bool divideAlpha) const;
 
@@ -152,6 +160,8 @@ private:
     float mExposure = 0;
     float mOffset = 0;
     float mGamma = 2.2f;
+
+    bool mClipToLdr = false;
 
     std::shared_ptr<Image> mImage;
     std::shared_ptr<Image> mReference;
