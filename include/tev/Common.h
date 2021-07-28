@@ -6,6 +6,8 @@
 #include <tinyformat.h>
 #include <tinylogger/tinylogger.h>
 
+#include <Eigen/Dense>
+
 #include <algorithm>
 #include <cmath>
 #include <functional>

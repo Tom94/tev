@@ -21,8 +21,8 @@ public:
     virtual ~ThreadPool();
 
     template<class F>
-    std::future<typename std::result_of<F(void)>::type> enqueueTask(F&& f, bool highPriority = false) {
-        typedef typename std::result_of<F(void)>::type return_type;
+    auto enqueueTask(F&& f, bool highPriority = false) -> std::future<std::invoke_result_t<decltype(f)>> {
+        using return_type = std::invoke_result_t<decltype(f)>;
 
         ++mNumTasksInSystem;
 

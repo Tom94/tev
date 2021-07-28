@@ -11,7 +11,7 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-Channel::Channel(const std::string& name, Vector2i size)
+Channel::Channel(const std::string& name, Eigen::Vector2i size)
 : mName{name} {
     mData.resize(size.y(), size.x());
 }

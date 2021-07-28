@@ -11,6 +11,11 @@
 
 #include <utf8.h>
 
+#ifdef __APPLE__
+#define GLFW_EXPOSE_NATIVE_COCOA
+#include <GLFW/glfw3native.h>
+#endif
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -56,7 +61,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 sImageViewer->reloadImage(imageString, info.grabFocus);
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -68,7 +73,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 sImageViewer->removeImage(imageString);
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -84,7 +89,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 }
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -113,7 +118,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                 }
             });
 
-            glfwPostEmptyEvent();
+            sImageViewer->redraw();
             break;
         }
 
@@ -169,6 +174,13 @@ int mainFunc(const vector<string>& arguments) {
         "tev can have a distinct primary instance for each unique hostname in use. "
         "Default is 127.0.0.1:14158",
         {"host", "hostname"},
+    };
+
+    Flag ldrFlag{
+        parser,
+        "LDR",
+        "Force low dynamic range (8-bit) display colors.",
+        {"ldr"},
     };
 
     ValueFlag<bool> maximizeFlag{
@@ -283,7 +295,7 @@ int mainFunc(const vector<string>& arguments) {
                 IpcPacket packet;
                 packet.setOpenImage(path{imageFile}.make_absolute().str(), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
-            } catch (runtime_error e) {
+            } catch (const runtime_error& e) {
                 tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
             }
         }
@@ -367,29 +379,39 @@ int mainFunc(const vector<string>& arguments) {
     // Init nanogui application
     nanogui::init();
 
-    ScopeGuard imageViewerGuard{[] {
-        // Make sure sImagePointer is no longer accessible
-        // while it is being destructed. This is to avoid
-        // nested GlTextures' destructors calling `scheduleToMainThread`
-        // to access sImageViewer in a partially-destructed state.
-        // This is a horrible hack, yet the path of least resistance
-        // that I could find to properly descruct GlTextures on the main
-        // thread (and stopping to care about them when the program
-        // terminates anyway).
-        ImageViewer* localImageViewerPtr = sImageViewer;
-        sImageViewer = nullptr;
-        delete localImageViewerPtr;
-    }};
-    sImageViewer = new ImageViewer{imagesLoader, !imageFiles};
+#ifdef __APPLE__
+    if (!imageFiles) {
+        // If we didn't get any command line arguments for files to open,
+        // then, on macOS, they might have been supplied through the NS api.
+        const char* const* openedFiles = glfwGetOpenedFilenames();
+        if (openedFiles) {
+            for (auto p = openedFiles; *p; ++p) {
+                imagesLoader->enqueue(*p, "", false);
+            }
+        }
+    }
+#endif
 
-    sImageViewer->drawAll();
-    sImageViewer->setVisible(true);
+    auto [capability10bit, capabilityEdr] = nanogui::test_10bit_edr_support();
+    if (get(ldrFlag)) {
+        capability10bit = false;
+        capabilityEdr = false;
+    }
+
+    tlog::info() << "Launching with " << (capability10bit ? 10 : 8) << " bits of color and " << (capabilityEdr ? "HDR" : "LDR") << " display support.";
 
     // Do what the maximize flag tells us---if it exists---and
     // maximize if we have images otherwise.
-    if (maximizeFlag ? get(maximizeFlag) : imageFiles) {
-        sImageViewer->maximize();
-    }
+    bool maximize = maximizeFlag ? get(maximizeFlag) : imageFiles;
+
+    // sImageViewer is a raw pointer to make sure it will never
+    // get deleted. nanogui crashes upon cleanup, so we better
+    // not try.
+    sImageViewer = new ImageViewer{imagesLoader, maximize, !get(ldrFlag), capabilityEdr};
+
+    sImageViewer->draw_all();
+    sImageViewer->set_visible(true);
+    sImageViewer->redraw();
 
     // Apply parameter flags
     if (exposureFlag) { sImageViewer->setExposure(get(exposureFlag)); }

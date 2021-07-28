@@ -1,6 +1,6 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
 # PBRT-v3 can be found here: https://github.com/mmp/pbrt-v3
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.13)
 
 if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
     message(FATAL_ERROR
@@ -11,16 +11,13 @@ if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
 endif()
 
 # Compile nanogui
-set(NANOGUI_BUILD_EXAMPLE OFF CACHE BOOL " " FORCE)
+set(NANOGUI_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL " " FORCE)
 set(NANOGUI_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(nanogui)
 
-set(NANOGUI_TARGETS nanogui nanogui-obj)
-if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
-    list(APPEND NANOGUI_TARGETS glfw glfw_objects)
-endif()
+set(NANOGUI_TARGETS nanogui glfw glfw_objects)
 set_property(TARGET ${NANOGUI_TARGETS} PROPERTY FOLDER "dependencies")
 
 # Compile zlib (only on Windows)
@@ -53,12 +50,13 @@ if (WIN32)
 endif()
 
 # Compile OpenEXR
+set(PYILMBASE_ENABLE OFF CACHE BOOL " " FORCE)
 set(ILMBASE_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(ILMBASE_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 set(OPENEXR_NAMESPACE_VERSIONING OFF CACHE BOOL " " FORCE)
 add_subdirectory(openexr EXCLUDE_FROM_ALL)
-set_property(TARGET b44ExpLogTable CopyIlmBaseLibs dwaLookups eLut Half Iex IlmImf IlmImf-obj IlmThread Imath toFloat PROPERTY FOLDER "dependencies")
+set_property(TARGET Half Iex IlmImf IlmThread Imath PROPERTY FOLDER "dependencies")
 
 # Compile clip
 set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
@@ -70,7 +68,7 @@ set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
 
 set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
 
-set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/eigen PARENT_SCOPE)
+set(EIGEN_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/eigen PARENT_SCOPE)
 
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
     set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)

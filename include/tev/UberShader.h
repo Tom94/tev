@@ -3,15 +3,15 @@
 
 #pragma once
 
-#include <tev/GlTexture.h>
+#include <nanogui/texture.h>
 
-#include <nanogui/glutil.h>
+#include <nanogui/shader.h>
 
 TEV_NAMESPACE_BEGIN
 
 class UberShader {
 public:
-    UberShader();
+    UberShader(nanogui::RenderPass* renderPass);
     virtual ~UberShader();
 
     // Draws just a checkerboard.
@@ -21,11 +21,12 @@ public:
     void draw(
         const Eigen::Vector2f& pixelSize,
         const Eigen::Vector2f& checkerSize,
-        GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
         float exposure,
         float offset,
         float gamma,
+        bool clipToLdr,
         ETonemap tonemap
     );
 
@@ -33,13 +34,14 @@ public:
     void draw(
         const Eigen::Vector2f& pixelSize,
         const Eigen::Vector2f& checkerSize,
-        GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
-        GlTexture* textureReference,
-        const Eigen::Matrix3f& transformReference,
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
+        nanogui::Texture* textureReference,
+        const nanogui::Matrix3f& transformReference,
         float exposure,
         float offset,
         float gamma,
+        bool clipToLdr,
         ETonemap tonemap,
         EMetric metric
     );
@@ -56,8 +58,8 @@ private:
     void bindCheckerboardData(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
 
     void bindImageData(
-        GlTexture* textureImage,
-        const Eigen::Matrix3f& transformImage,
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
         float exposure,
         float offset,
         float gamma,
@@ -65,13 +67,13 @@ private:
     );
 
     void bindReferenceData(
-        GlTexture* textureReference,
-        const Eigen::Matrix3f& transformReference,
+        nanogui::Texture* textureReference,
+        const nanogui::Matrix3f& transformReference,
         EMetric metric
     );
 
-    nanogui::GLShader mShader;
-    GlTexture mColorMap;
+    nanogui::ref<nanogui::Shader> mShader;
+    nanogui::ref<nanogui::Texture> mColorMap;
 
     nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 };

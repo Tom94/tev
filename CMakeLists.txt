@@ -1,9 +1,14 @@
 # Some components of this file were taken from PBRT-v3 (BSD 2-clause "Simplified" License)
 # PBRT-v3 can be found here: https://github.com/mmp/pbrt-v3
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.13)
 
-project(tev)
-set(TEV_VERSION "1.17")
+project(
+    tev
+    VERSION 1.18
+    DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
+    LANGUAGES C CXX
+)
+set(TEV_VERSION "1.18")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
@@ -30,6 +35,8 @@ if (APPLE)
     set(CMAKE_MACOSX_RPATH ON)
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+
 if (MSVC)
     # Disable annoying secure CRT warnings
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
@@ -54,14 +61,14 @@ if (MSVC)
         string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
     endforeach()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++11")
-
     if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s USE_ZLIB=1 -s DISABLE_EXCEPTION_CATCHING=0")
     endif()
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
+
+add_compile_options(${NANOGUI_NATIVE_FLAGS})
 
 # Enable more warnings
 if (MSVC)
@@ -105,7 +112,6 @@ set(TEV_SOURCES
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
-    include/tev/GlTexture.h src/GlTexture.cpp
     include/tev/HelpWindow.h src/HelpWindow.cpp
     include/tev/Image.h src/Image.cpp
     include/tev/ImageButton.h src/ImageButton.cpp

@@ -37,7 +37,7 @@ public:
     Eigen::MatrixXf &values() { return mValues; }
     void setValues(const Eigen::MatrixXf &values) { mValues = values; }
 
-    virtual Eigen::Vector2i preferredSize(NVGcontext *ctx) const override;
+    virtual nanogui::Vector2i preferred_size(NVGcontext *ctx) const override;
     virtual void draw(NVGcontext *ctx) override;
 
     void setMinimum(float minimum) {

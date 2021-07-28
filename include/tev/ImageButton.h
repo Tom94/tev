@@ -15,9 +15,9 @@ class ImageButton : public nanogui::Widget {
 public:
     ImageButton(nanogui::Widget* parent, const std::string& caption, bool canBeReference);
 
-    Eigen::Vector2i preferredSize(NVGcontext *ctx) const override;
+    nanogui::Vector2i preferred_size(NVGcontext *ctx) const override;
 
-    bool mouseButtonEvent(const Eigen::Vector2i &p, int button, bool down, int modifiers) override;
+    bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
 
     void draw(NVGcontext *ctx) override;
 
@@ -67,7 +67,7 @@ private:
 
     size_t mId = 0;
     size_t mCutoff = 0;
-    Eigen::Vector2i mSizeForWhichCutoffWasComputed = Eigen::Vector2i::Constant(0);
+    nanogui::Vector2i mSizeForWhichCutoffWasComputed = {0};
 
     size_t mHighlightBegin = 0;
     size_t mHighlightEnd = 0;
