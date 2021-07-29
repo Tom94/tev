@@ -9,6 +9,8 @@
 
 #include <nanogui/widget.h>
 
+#include <Eigen/Dense>
+
 TEV_NAMESPACE_BEGIN
 
 class MultiGraph : public nanogui::Widget {

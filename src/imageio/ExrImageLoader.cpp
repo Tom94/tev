@@ -155,7 +155,6 @@ private:
 
 ImageData ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
-    ThreadPool threadPool;
 
     StdIStream stdIStream{iStream, path.str().c_str()};
     Imf::MultiPartInputFile multiPartFile{stdIStream};
@@ -188,6 +187,78 @@ l_foundPart:
     if (size.x() == 0 || size.y() == 0) {
         throw invalid_argument{"EXR image has zero pixels."};
     }
+
+    // Inline helper class for dealing with the raw channels loaded from an exr file.
+    class RawChannel {
+    public:
+        RawChannel(string name, Imf::Channel imfChannel)
+        : mName(name), mImfChannel(imfChannel) {
+        }
+
+        void resize(size_t size) {
+            mData.resize(size * bytesPerPixel());
+        }
+
+        void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
+            int width = dw.max.x - dw.min.x + 1;
+            frameBuffer.insert(mName.c_str(), Imf::Slice(
+                mImfChannel.type,
+                mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
+                bytesPerPixel(), bytesPerPixel() * width,
+                mImfChannel.xSampling, mImfChannel.ySampling, 0
+            ));
+        }
+
+        void copyTo(Channel& channel, vector<future<void>>& futures) const {
+            switch (mImfChannel.type) {
+                case Imf::HALF: {
+                    auto data = reinterpret_cast<const ::half*>(mData.data());
+                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                        channel.at(i) = data[i];
+                    }, futures);
+                    break;
+                }
+
+                case Imf::FLOAT: {
+                    auto data = reinterpret_cast<const float*>(mData.data());
+                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                        channel.at(i) = data[i];
+                    }, futures);
+                    break;
+                }
+
+                case Imf::UINT: {
+                    auto data = reinterpret_cast<const uint32_t*>(mData.data());
+                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                        channel.at(i) = data[i];
+                    }, futures);
+                    break;
+                }
+
+                default:
+                    throw runtime_error("Invalid pixel type encountered.");
+            }
+        }
+
+        const string& name() const {
+            return mName;
+        }
+
+    private:
+        int bytesPerPixel() const {
+            switch (mImfChannel.type) {
+                case Imf::HALF:  return sizeof(::half);
+                case Imf::FLOAT: return sizeof(float);
+                case Imf::UINT:  return sizeof(uint32_t);
+                default:
+                    throw runtime_error("Invalid pixel type encountered.");
+            }
+        }
+
+        string mName;
+        Imf::Channel mImfChannel;
+        vector<char> mData;
+    };
 
     vector<RawChannel> rawChannels;
     Imf::FrameBuffer frameBuffer;
@@ -223,7 +294,7 @@ l_foundPart:
         result.layers.emplace_back(layer);
     }
 
-    threadPool.parallelFor(0, (int)rawChannels.size(), [&](int i) {
+    gThreadPool->parallelFor(0, (int)rawChannels.size(), [&](int i) {
         rawChannels[i].resize((DenseIndex)size.x() * size.y());
     });
 
@@ -238,11 +309,11 @@ l_foundPart:
         result.channels.emplace_back(Channel{rawChannel.name(), size});
     }
 
+    vector<future<void>> futures;
     for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].copyTo(result.channels[i], threadPool);
+        rawChannels[i].copyTo(result.channels[i], futures);
     }
-
-    threadPool.waitUntilFinished();
+    waitAll(futures);
 
     hasPremultipliedAlpha = true;
 

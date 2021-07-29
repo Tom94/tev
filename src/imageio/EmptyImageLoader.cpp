@@ -2,7 +2,6 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/imageio/EmptyImageLoader.h>
-#include <tev/ThreadPool.h>
 
 #include <istream>
 

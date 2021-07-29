@@ -2,6 +2,7 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/Channel.h>
+#include <tev/ThreadPool.h>
 
 #include <numeric>
 
@@ -51,20 +52,20 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
-void Channel::divideByAsync(const Channel& other, ThreadPool& pool) {
-    pool.parallelForNoWait<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+void Channel::divideByAsync(const Channel& other, vector<future<void>>& futures) {
+    gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
         if (other.at(i) != 0) {
             at(i) /= other.at(i);
         } else {
             at(i) = 0;
         }
-    });
+    }, futures);
 }
 
-void Channel::multiplyWithAsync(const Channel& other, ThreadPool& pool) {
-    pool.parallelForNoWait<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+void Channel::multiplyWithAsync(const Channel& other, vector<future<void>>& futures) {
+    gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
         at(i) *= other.at(i);
-    });
+    }, futures);
 }
 
 void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {

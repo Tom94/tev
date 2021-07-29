@@ -27,6 +27,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
+ThreadPool* gThreadPool = new ThreadPool{};
+
 // Image viewer is a static variable to allow other
 // parts of the program to easily schedule operations
 // onto the main nanogui thread loop.
@@ -36,7 +38,7 @@ TEV_NAMESPACE_BEGIN
 // Currently, the only use case is the destruction of
 // OpenGL textures, which _must_ happen on the thread
 // on which the GL context is "current".
-ImageViewer* sImageViewer = nullptr;
+static ImageViewer* sImageViewer = nullptr;
 
 void scheduleToMainThread(const std::function<void()>& fun) {
     if (sImageViewer) {

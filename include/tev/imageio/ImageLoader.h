@@ -6,6 +6,8 @@
 #include <tev/Channel.h>
 #include <tev/Image.h>
 
+#include <Eigen/Dense>
+
 #include <istream>
 #include <string>
 

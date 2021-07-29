@@ -23,7 +23,6 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
 
 ImageData PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
-    ThreadPool threadPool;
 
     string magic;
     Vector2i size;
@@ -73,7 +72,7 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
     // Reverse bytes of every float if endianness does not match up with system
     const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
 
-    threadPool.parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    gThreadPool->parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = (y * size.x() + x) * numChannels;
             for (int c = 0; c < numChannels; ++c) {

@@ -3,12 +3,15 @@
 
 #pragma once
 
-#include <tev/ThreadPool.h>
+#include <tev/Common.h>
 
 #include <nanogui/vector.h>
 
-#include <vector>
+#include <Eigen/Dense>
+
+#include <future>
 #include <string>
+#include <vector>
 
 TEV_NAMESPACE_BEGIN
 
@@ -66,8 +69,8 @@ public:
         return {mData.cols(), mData.rows()};
     }
 
-    void divideByAsync(const Channel& other, ThreadPool& pool);
-    void multiplyWithAsync(const Channel& other, ThreadPool& pool);
+    void divideByAsync(const Channel& other, std::vector<std::future<void>>& futures);
+    void multiplyWithAsync(const Channel& other, std::vector<std::future<void>>& futures);
 
     void setZero() { mData.setZero(); }
 

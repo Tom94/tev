@@ -126,7 +126,7 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     auto numPixels = count();
     vector<float> data(numPixels * 4);
 
-    ThreadPool pool;
+    vector<future<void>> futures;
     for (size_t i = 0; i < 4; ++i) {
         if (i < channelNames.size()) {
             const auto& channelName = channelNames[i];
@@ -136,17 +136,17 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
             }
 
             const auto& channelData = chan->data();
-            pool.parallelForNoWait<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
+            gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
                 data[j * 4 + i] = channelData(j);
-            });
+            }, futures);
         } else {
             float val = i == 3 ? 1 : 0;
-            pool.parallelForNoWait<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
+            gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
                 data[j * 4 + i] = val;
-            });
+            }, futures);
         }
     }
-    pool.waitUntilFinished();
+    waitAll(futures);
 
     texture->upload((uint8_t*)data.data());
     texture->generate_mipmap();
@@ -388,19 +388,19 @@ void Image::alphaOperation(const function<void(Channel&, const Channel&)>& func)
 }
 
 void Image::multiplyAlpha() {
-    ThreadPool threadPool;
+    vector<future<void>> futures;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
-        target.multiplyWithAsync(alpha, threadPool);
+        target.multiplyWithAsync(alpha, futures);
     });
-    threadPool.waitUntilFinished();
+    waitAll(futures);
 }
 
 void Image::unmultiplyAlpha() {
-    ThreadPool threadPool;
+    vector<future<void>> futures;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
-        target.divideByAsync(alpha, threadPool);
+        target.divideByAsync(alpha, futures);
     });
-    threadPool.waitUntilFinished();
+    waitAll(futures);
 }
 
 void Image::ensureValid() {

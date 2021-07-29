@@ -20,7 +20,6 @@ bool StbiImageLoader::canLoadFile(istream&) const {
 
 ImageData StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
-    ThreadPool threadPool;
 
     static const stbi_io_callbacks callbacks = {
         // Read
@@ -68,7 +67,7 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
     auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
         auto typedData = reinterpret_cast<float*>(data);
-        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
@@ -76,7 +75,7 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
         });
     } else {
         auto typedData = reinterpret_cast<unsigned char*>(data);
-        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == alphaChannelIndex) {

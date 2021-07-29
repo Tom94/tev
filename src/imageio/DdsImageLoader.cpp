@@ -161,7 +161,6 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
     ScopeGuard comScopeGuard{ []() { CoUninitialize(); } };
 
     ImageData result;
-    ThreadPool threadPool;
     iStream.seekg(0, iStream.end);
     size_t dataSize = iStream.tellg();
     iStream.seekg(0, iStream.beg);
@@ -222,7 +221,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
         assert(!DirectX::IsSRGB(metadata.format));
         // Assume that the image data is already in linear space.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
@@ -234,7 +233,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
         // RGB(A) DDS images tend to be in sRGB space, even those not
         // explicitly stored in an *_SRGB format.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        threadPool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {
