@@ -48,6 +48,34 @@ Other command-line arguments also exist (e.g. for starting __tev__ with a pre-se
 $ tev -h
 ```
 
+### Over the Network
+
+__tev__ supports inter-process communication (IPC) over the network. With IPC, __tev__ can be remote controlled by other applications. The `--host` command line argument controls on which IP and port __tev__ is listening to. The default is `127.0.0.1:14158`, i.e. __tev__ does not respond to requests from external machines by default.
+
+The following kinds of operations are supported:
+
+| Operation | Function
+| :--- | :---------- 
+| `OpenImage` | Opens an image from a specified path from the disk of the machine __tev__ is running on.
+| `CreateImage` | Create a blank image with a specified size and a specified set of channel names ("R", "G", "B" [, "A"] is what you should use if you are rendering an image.)
+| `UpdateImage` | Lets you send updated pixel values to a specified image region and a specified set of channels
+| `CloseImage` | Closes the image with specified path.
+| `ReloadImage` | Reloads the image with specified path from the disk of the machine __tev__ is running on.
+
+__tev__'s IPC protocol is already implemented in the following languages:
+- [Python](src/python/ipc.py) by Thomáš Iser
+- [Rust](https://crates.io/crates/tev_client) by Karel Peeters
+
+
+In case you need a custom implementation: IPC uses a simple protocol over TCP, where each packet has the form
+```
+[uint32_t total_length_in_bytes][char operation_type][char[] operation_specific_payload]
+```
+Every integer must be encoded in little endian format.
+
+There are helper functions in [Ipc.cpp](src/ipc.cpp) (`IpcPacket::set*`) that show exactly how each packet has to be assembled. These functions do not rely on external dependencies, so it is recommended to copy and paste them into your project for interfacing with __tev__.
+
+
 ## Obtaining tev
 
 ### macOS / Windows
