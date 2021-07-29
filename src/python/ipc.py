@@ -30,6 +30,9 @@ class TevIpc:
             raise Exception("Communication was not started")
         self._socket.__exit__(exc_type, exc_val, exc_tb)
 
+    """
+        Opens an image from a specified path from the disk of the machine tev is running on.
+    """
     def open_image(self, path: str, channel_selector: str = "", grab_focus = True):
         if self._socket is None:
             raise Exception("Communication was not started")
@@ -46,6 +49,9 @@ class TevIpc:
 
         self._socket.sendall(data_bytes)
 
+    """
+        Reloads the image with specified path from the disk of the machine tev is running on.
+    """
     def reload_image(self, name: str, grab_focus = True):
         if self._socket is None:
             raise Exception("Communication was not started")
@@ -60,6 +66,9 @@ class TevIpc:
 
         self._socket.sendall(data_bytes)
 
+    """
+        Closes a specified image.
+    """
     def close_image(self, name: str):
         if self._socket is None:
             raise Exception("Communication was not started")
@@ -73,7 +82,11 @@ class TevIpc:
 
         self._socket.sendall(data_bytes)
 
-    def create_image(self, name: str, width: int, height: int, channel_names, grab_focus = True):
+    """
+        Create a blank image with a specified size and a specified set of channel names.
+        "R", "G", "B" [, "A"] is what should be used if an image is rendered.
+    """
+    def create_image(self, name: str, width: int, height: int, channel_names  = ["R", "G", "B", "A"], grab_focus = True):
         if self._socket is None:
             raise Exception("Communication was not started")
 
@@ -93,6 +106,11 @@ class TevIpc:
 
         self._socket.sendall(data_bytes)
 
+    """
+        Updates the pixel values of a specified image region and a specified set of channels.
+        The `image` parameter must be laid out in row-major format, i.e. from most to least
+        significant: [col][row][channel], where the channel axis is optional.
+    """
     def update_image(self, name: str, image, channel_names = ["R", "G", "B", "A"], x = 0, y = 0, grab_focus = False, perform_tiling = True):
         if self._socket is None:
             raise Exception("Communication was not started")
@@ -112,7 +130,7 @@ class TevIpc:
             for j in range(0, image.shape[1], tile_size[1]):
                 tile = image[
                     i:(min(i+tile_size[0], image.shape[0])),
-                    j:(min(j+tile_size[j], image.shape[1])),
+                    j:(min(j+tile_size[1], image.shape[1])),
                     ...
                 ]
 

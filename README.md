@@ -57,9 +57,9 @@ The following kinds of operations are supported:
 | Operation | Function
 | :--- | :---------- 
 | `OpenImage` | Opens an image from a specified path from the disk of the machine __tev__ is running on.
-| `CreateImage` | Create a blank image with a specified size and a specified set of channel names ("R", "G", "B" [, "A"] is what you should use if you are rendering an image.)
-| `UpdateImage` | Lets you send updated pixel values to a specified image region and a specified set of channels
-| `CloseImage` | Closes the image with specified path.
+| `CreateImage` | Create a blank image with a specified name, size and set of channel names. "R", "G", "B" [, "A"] is what should be used if an image is rendered.
+| `UpdateImage` | Updates the pixel values of a specified image region and a specified set of channels.
+| `CloseImage` | Closes a specified image.
 | `ReloadImage` | Reloads the image with specified path from the disk of the machine __tev__ is running on.
 
 __tev__'s IPC protocol is already implemented in the following languages:
