@@ -5,6 +5,9 @@
 # Automatically generated files by .vscode
 /.vscode
 
+# Python cache
+__pycache__
+
 # Development project files
 *.sublime-project
 
