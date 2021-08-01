@@ -1775,7 +1775,7 @@ void ImageViewer::updateTitle() {
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
         caption = mCurrentImage->shortName();
-        caption += string{" – "} + mCurrentGroup;
+        caption += " – "s + mCurrentGroup;
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
