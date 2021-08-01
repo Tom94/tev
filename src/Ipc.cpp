@@ -303,7 +303,7 @@ static int closeSocket(Ipc::socket_t socket) {
 }
 
 Ipc::Ipc(const string& hostname) {
-    const string lockName = string{".tev-lock."} + hostname;
+    const string lockName = ".tev-lock."s + hostname;
 
     auto parts = split(hostname, ":");
     const string& ip = parts.front();
