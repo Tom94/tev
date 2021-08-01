@@ -147,6 +147,14 @@ private:
             mIdx += sizeof(T);
             return *this;
         }
+
+        size_t remainingBytes() const {
+            return mData.size() - mIdx;
+        }
+
+        const char* get() const {
+            return &mData[mIdx];
+        }
     private:
         const std::vector<char>& mData;
         size_t mIdx = 0;
