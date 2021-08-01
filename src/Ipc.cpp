@@ -246,8 +246,11 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
         stridedImageDataSize = std::max(stridedImageDataSize, (DenseIndex)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
     }
 
-    vector<float> stridedImageData(stridedImageDataSize);
-    payload >> stridedImageData;
+    if (payload.remainingBytes() < stridedImageDataSize * sizeof(float)) {
+        throw std::runtime_error{"UpdateImage: insufficient image data."};
+    }
+
+    const float* stridedImageData = (const float*)payload.get();
 
     gThreadPool->parallelFor<DenseIndex>(0, nPixels, [&](DenseIndex px) {
         for (int32_t c = 0; c < result.nChannels; ++c) {
