@@ -18,7 +18,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-ImageData StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
+std::tuple<ImageData, bool> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     static const stbi_io_callbacks callbacks = {
@@ -72,7 +72,7 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
             }
-        });
+        }, priority);
     } else {
         auto typedData = reinterpret_cast<unsigned char*>(data);
         gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
@@ -84,7 +84,7 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
                     channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
                 }
             }
-        });
+        }, priority);
     }
 
     vector<pair<size_t, size_t>> matches;
@@ -107,9 +107,7 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    hasPremultipliedAlpha = false;
-
-    return result;
+    return {result, false};
 }
 
 TEV_NAMESPACE_END
