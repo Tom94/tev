@@ -23,7 +23,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
+std::tuple<ImageData, bool> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     char magic[4];
@@ -97,7 +97,7 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
                 }
             }
         }
-    });
+    }, priority);
 
     vector<pair<size_t, size_t>> matches;
     for (size_t i = 0; i < channels.size(); ++i) {
@@ -119,9 +119,7 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    hasPremultipliedAlpha = false;
-
-    return result;
+    return {result, false};
 }
 
 TEV_NAMESPACE_END

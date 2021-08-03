@@ -153,7 +153,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-ImageData DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
+std::tuple<ImageData, bool> DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};
@@ -265,9 +265,7 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
-
-    return result;
+    return {result, scratchImage.GetMetadata().IsPMAlpha()};
 }
 
 TEV_NAMESPACE_END

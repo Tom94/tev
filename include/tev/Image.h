@@ -41,7 +41,7 @@ struct ImageTexture {
 
 class Image {
 public:
-    Image(const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
+    Image(int id, const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
     virtual ~Image();
 
     const filesystem::path& path() const {
@@ -97,6 +97,10 @@ public:
         mId = sId++;
     }
 
+    static int drawId() {
+        return sId++;
+    }
+
     void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
 
     std::string toString() const;
@@ -139,7 +143,9 @@ private:
     int mId;
 };
 
+std::shared_ptr<Image> tryLoadImage(int imageId, filesystem::path path, std::istream& iStream, std::string channelSelector);
 std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);
+std::shared_ptr<Image> tryLoadImage(int imageId, filesystem::path path, std::string channelSelector);
 std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::string channelSelector);
 
 struct ImageAddition {
@@ -152,10 +158,15 @@ public:
     void enqueue(const filesystem::path& path, const std::string& channelSelector, bool shallSelect);
     ImageAddition tryPop() { return mLoadedImages.tryPop(); }
 
+    void wait() {
+        return mWorkers.waitUntilFinished();
+    }
+
 private:
-    // A single worker is enough, since parallelization will happen _within_ each image load.
-    // We want to focus all resources to load images in order as fast as possible, rather than
-    // our of order.
+    // A separate threadpool (other than the global threadpool) is
+    // required to prevent deadlocking: if more images are loaded
+    // simultaneously than threads are available, they will starve the
+    // global thread pool of workers.
     ThreadPool mWorkers{1};
     SharedQueue<ImageAddition> mLoadedImages;
 };

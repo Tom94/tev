@@ -6,9 +6,9 @@
 #include <tev/Common.h>
 
 #include <atomic>
-#include <deque>
 #include <functional>
 #include <future>
+#include <queue>
 #include <thread>
 #include <vector>
 
@@ -28,7 +28,7 @@ public:
     virtual ~ThreadPool();
 
     template<class F>
-    auto enqueueTask(F&& f, bool highPriority = false) -> std::future<std::invoke_result_t<decltype(f)>> {
+    auto enqueueTask(F&& f, int priority) -> std::future<std::invoke_result_t<decltype(f)>> {
         using return_type = std::invoke_result_t<decltype(f)>;
 
         ++mNumTasksInSystem;
@@ -39,12 +39,7 @@ public:
 
         {
             std::lock_guard<std::mutex> lock{mTaskQueueMutex};
-
-            if (highPriority) {
-                mTaskQueue.emplace_front([task]() { (*task)(); });
-            } else {
-                mTaskQueue.emplace_back([task]() { (*task)(); });
-            }
+            mTaskQueue.push({priority, [task]() { (*task)(); }});
         }
 
         mWorkerCondition.notify_one();
@@ -63,7 +58,7 @@ public:
     void flushQueue();
 
     template <typename Int, typename F>
-    void parallelForAsync(Int start, Int end, F body, std::vector<std::future<void>>& futures) {
+    void parallelForAsync(Int start, Int end, F body, std::vector<std::future<void>>& futures, int priority) {
         Int localNumThreads = (Int)mNumThreads;
 
         Int range = end - start;
@@ -76,27 +71,38 @@ public:
                 for (Int j = innerStart; j < innerEnd; ++j) {
                     body(j);
                 }
-            }));
+            }, priority));
         }
     }
 
     template <typename Int, typename F>
-    std::vector<std::future<void>> parallelForAsync(Int start, Int end, F body) {
+    std::vector<std::future<void>> parallelForAsync(Int start, Int end, F body, int priority) {
         std::vector<std::future<void>> futures;
-        parallelForAsync(start, end, body, futures);
+        parallelForAsync(start, end, body, futures, priority);
         return futures;
     }
 
     template <typename Int, typename F>
-    void parallelFor(Int start, Int end, F body) {
-        waitAll(parallelForAsync(start, end, body));
+    void parallelFor(Int start, Int end, F body, int priority) {
+        waitAll(parallelForAsync(start, end, body, priority));
     }
 
 private:
     size_t mNumThreads = 0;
     std::vector<std::thread> mThreads;
 
-    std::deque<std::function<void()>> mTaskQueue;
+    struct Task {
+        int priority;
+        std::function<void()> fun;
+
+        struct Comparator {
+            bool operator()(const Task& a, const Task& b) {
+                return a.priority < b.priority;
+            }
+        };
+    };
+
+    std::priority_queue<Task, std::vector<Task>, Task::Comparator> mTaskQueue;
     std::mutex mTaskQueueMutex;
     std::condition_variable mWorkerCondition;
 

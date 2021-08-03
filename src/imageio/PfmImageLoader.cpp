@@ -21,7 +21,7 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
+std::tuple<ImageData, bool> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     string magic;
@@ -88,7 +88,7 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
                 channels[c].at({x, size.y() - y - 1}) = scale * val;
             }
         }
-    });
+    }, priority);
 
     vector<pair<size_t, size_t>> matches;
     for (size_t i = 0; i < channels.size(); ++i) {
@@ -110,9 +110,7 @@ ImageData PfmImageLoader::load(istream& iStream, const path&, const string& chan
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    hasPremultipliedAlpha = false;
-
-    return result;
+    return {result, false};
 }
 
 TEV_NAMESPACE_END

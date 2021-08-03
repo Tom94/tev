@@ -117,8 +117,8 @@ public:
         return mClipToLdr;
     }
 
-    std::vector<float> getHdrImageData(bool divideAlpha) const;
-    std::vector<char> getLdrImageData(bool divideAlpha) const;
+    std::vector<float> getHdrImageData(bool divideAlpha, int priority) const;
+    std::vector<char> getLdrImageData(bool divideAlpha, int priority) const;
 
     void saveImage(const filesystem::path& filename) const;
 
@@ -139,14 +139,16 @@ private:
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
         const std::string& requestedChannelGroup,
-        EMetric metric
+        EMetric metric,
+        int priority
     );
 
     static std::shared_ptr<CanvasStatistics> computeCanvasStatistics(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
         const std::string& requestedChannelGroup,
-        EMetric metric
+        EMetric metric,
+        int priority
     );
 
     Eigen::Vector2f pixelOffset(const Eigen::Vector2i& size) const;

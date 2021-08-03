@@ -22,7 +22,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&, bool& hasPremultipliedAlpha) const {
+std::tuple<ImageData, bool> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
     ImageData result;
 
     string magic;
@@ -61,9 +61,7 @@ ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&, b
         result.layers.emplace_back(layer);
     }
 
-    hasPremultipliedAlpha = true;
-
-    return result;
+    return {result, true};
 }
 
 TEV_NAMESPACE_END

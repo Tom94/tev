@@ -251,12 +251,11 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     }
 
     const float* stridedImageData = (const float*)payload.get();
-
     gThreadPool->parallelFor<DenseIndex>(0, nPixels, [&](DenseIndex px) {
         for (int32_t c = 0; c < result.nChannels; ++c) {
             result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
         }
-    });
+    }, std::numeric_limits<int>::max());
 
     return result;
 }

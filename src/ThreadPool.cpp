@@ -42,8 +42,8 @@ void ThreadPool::startThreads(size_t num) {
                     break;
                 }
 
-                function<void()> task{move(mTaskQueue.front())};
-                mTaskQueue.pop_front();
+                function<void()> task{move(mTaskQueue.top().fun)};
+                mTaskQueue.pop();
 
                 // Unlock the lock, so we can process the task without blocking other threads
                 lock.unlock();
@@ -104,7 +104,9 @@ void ThreadPool::flushQueue() {
     lock_guard<mutex> lock{mTaskQueueMutex};
 
     mNumTasksInSystem -= mTaskQueue.size();
-    mTaskQueue.clear();
+    while (!mTaskQueue.empty()) {
+        mTaskQueue.pop();
+    }
 }
 
 TEV_NAMESPACE_END

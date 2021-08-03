@@ -67,7 +67,7 @@ public:
         }
     }
 
-    void computeAsync() {
+    void computeAsync(int priority) {
         // No need to perform an async computation if we
         // already computed the value before or if one is
         // already running.
@@ -80,7 +80,7 @@ public:
                 T result = compute();
                 mBecameReadyAt = std::chrono::steady_clock::now();
                 return result;
-            }, true);
+            }, priority);
         } else {
             mAsyncValue = std::async(std::launch::async, [this]() {
                 T result = compute();

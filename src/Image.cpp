@@ -21,8 +21,8 @@ TEV_NAMESPACE_BEGIN
 
 atomic<int> Image::sId(0);
 
-Image::Image(const class path& path, istream& iStream, const string& channelSelector)
-: mPath{path}, mChannelSelector{channelSelector}, mId{sId++} {
+Image::Image(int id, const class path& path, istream& iStream, const string& channelSelector)
+: mPath{path}, mChannelSelector{channelSelector}, mId{id} {
     mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
 
     auto start = chrono::system_clock::now();
@@ -43,8 +43,8 @@ Image::Image(const class path& path, istream& iStream, const string& channelSele
 
         if (useLoader) {
             loadMethod = imageLoader->name();
-            bool hasPremultipliedAlpha = false;
-            mData = imageLoader->load(iStream, mPath, mChannelSelector, hasPremultipliedAlpha);
+            bool hasPremultipliedAlpha;
+            std::tie(mData, hasPremultipliedAlpha) = imageLoader->load(iStream, mPath, mChannelSelector, -mId);
             ensureValid();
 
             // We assume an internal pre-multiplied-alpha representation
@@ -141,12 +141,12 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
             const auto& channelData = chan->data();
             gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
                 data[j * 4 + i] = channelData(j);
-            }, futures);
+            }, futures, std::numeric_limits<int>::max());
         } else {
             float val = i == 3 ? 1 : 0;
             gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
                 data[j * 4 + i] = val;
-            }, futures);
+            }, futures, std::numeric_limits<int>::max());
         }
     }
     waitAll(futures);
@@ -429,7 +429,7 @@ void Image::alphaOperation(const function<void(Channel&, const Channel&)>& func)
 void Image::multiplyAlpha() {
     vector<future<void>> futures;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
-        target.multiplyWithAsync(alpha, futures);
+        target.multiplyWithAsync(alpha, futures, -mId);
     });
     waitAll(futures);
 }
@@ -437,7 +437,7 @@ void Image::multiplyAlpha() {
 void Image::unmultiplyAlpha() {
     vector<future<void>> futures;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
-        target.divideByAsync(alpha, futures);
+        target.divideByAsync(alpha, futures, -mId);
     });
     waitAll(futures);
 }
@@ -461,7 +461,7 @@ void Image::ensureValid() {
     }
 }
 
-shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelector) {
+shared_ptr<Image> tryLoadImage(int imageId, path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
@@ -471,7 +471,7 @@ shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelect
     };
 
     try {
-        return make_shared<Image>(path, iStream, channelSelector);
+        return make_shared<Image>(imageId, path, iStream, channelSelector);
     } catch (const invalid_argument& e) {
         handleException(e);
     } catch (const runtime_error& e) {
@@ -483,7 +483,11 @@ shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelect
     return nullptr;
 }
 
-shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
+shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelector) {
+    return tryLoadImage(Image::drawId(), path, iStream, channelSelector);
+}
+
+shared_ptr<Image> tryLoadImage(int imageId, path path, string channelSelector) {
     try {
         path = path.make_absolute();
     } catch (const runtime_error& e) {
@@ -492,18 +496,24 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     }
 
     ifstream fileStream{nativeString(path), ios_base::binary};
-    return tryLoadImage(path, fileStream, channelSelector);
+    return tryLoadImage(imageId, path, fileStream, channelSelector);
+}
+
+shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
+    return tryLoadImage(Image::drawId(), path, channelSelector);
 }
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
-    mWorkers.enqueueTask([path, channelSelector, shallSelect, this] {
-        auto image = tryLoadImage(path, channelSelector);
+    int imageId = Image::drawId();
+    
+    mWorkers.enqueueTask([imageId, path, channelSelector, shallSelect, this] {
+        auto image = tryLoadImage(imageId, path, channelSelector);
         if (image) {
             mLoadedImages.push({ shallSelect, image });
         }
 
         glfwPostEmptyEvent();
-    });
+    }, -imageId);
 }
 
 TEV_NAMESPACE_END

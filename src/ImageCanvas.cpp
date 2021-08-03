@@ -313,14 +313,14 @@ void ImageCanvas::resetTransform() {
     mTransform = Affine2f::Identity();
 }
 
-std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
+std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
     std::vector<float> result;
 
     if (!mImage) {
         return result;
     }
 
-    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric);
+    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
     auto numPixels = mImage->count();
 
     if (channels.empty()) {
@@ -337,7 +337,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
         for (DenseIndex j = 0; j < channelData.size(); ++j) {
             result[j * 4 + i] = channelData(j);
         }
-    });
+    }, priority);
 
     // Manually set alpha channel to 1 if the image does not have one.
     if (nChannelsToSave < 4) {
@@ -357,13 +357,13 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
                     result[j * 4 + i] /= alpha;
                 }
             }
-        });
+        }, priority);
     }
 
     return result;
 }
 
-std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
+std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
     std::vector<char> result;
 
     if (!mImage) {
@@ -371,7 +371,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
     }
 
     auto numPixels = mImage->count();
-    auto floatData = getHdrImageData(divideAlpha);
+    auto floatData = getHdrImageData(divideAlpha, priority);
 
     // Store as LDR image.
     result.resize(floatData.size());
@@ -389,7 +389,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
         for (int j = 0; j < 4; ++j) {
             result[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
         }
-    });
+    }, priority);
 
     return result;
 }
@@ -420,9 +420,19 @@ void ImageCanvas::saveImage(const path& path) const {
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha()), imageSize, 4);
+            hdrSaver->save(
+                f, path,
+                getHdrImageData(!saver->hasPremultipliedAlpha(),
+                std::numeric_limits<int>::max()),
+                imageSize, 4
+            );
         } else if (ldrSaver) {
-            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha()), imageSize, 4);
+            ldrSaver->save(
+                f, path,
+                getLdrImageData(!saver->hasPremultipliedAlpha(),
+                std::numeric_limits<int>::max()),
+                imageSize, 4
+            );
         }
 
         auto end = chrono::system_clock::now();
@@ -450,15 +460,19 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         return iter->second;
     }
 
+    static std::atomic<int> sId{0};
+    // Later requests must have higher priority than previous ones.
+    int priority = ++sId;
+
     auto image = mImage, reference = mReference;
     auto requestedChannelGroup = mRequestedChannelGroup;
     auto metric = mMetric;
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedChannelGroup, metric]() {
-        return computeCanvasStatistics(image, reference, requestedChannelGroup, metric);
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedChannelGroup, metric, priority]() {
+        return computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority);
     }, &mMeanValueThreadPool)));
 
     auto val = mMeanValues.at(key);
-    val->computeAsync();
+    val->computeAsync(priority);
     return val;
 }
 
@@ -466,7 +480,8 @@ vector<Channel> ImageCanvas::channelsFromImages(
     shared_ptr<Image> image,
     shared_ptr<Image> reference,
     const string& requestedChannelGroup,
-    EMetric metric
+    EMetric metric,
+    int priority
 ) {
     if (!image) {
         return {};
@@ -486,7 +501,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
             for (DenseIndex j = 0; j < chan->count(); ++j) {
                 result[i].at(j) = chan->eval(j);
             }
-        });
+        }, priority);
     } else {
         Vector2i size = image->size();
         Vector2i offset = (reference->size() - size) / 2;
@@ -533,7 +548,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
                     }
                 }
             }
-        });
+        }, priority);
     }
 
     return result;
@@ -543,9 +558,10 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     std::shared_ptr<Image> image,
     std::shared_ptr<Image> reference,
     const string& requestedChannelGroup,
-    EMetric metric
+    EMetric metric,
+    int priority
 ) {
-    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric);
+    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
     float mean = 0;
     float maximum = -numeric_limits<float>::infinity();
@@ -621,7 +637,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         const auto& channel = flattened[i];
         gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
             indices(j, i) = valToBin(channel.eval(j));
-        }, futures);
+        }, futures, priority);
     }
     waitAll(futures);
 
@@ -629,7 +645,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         for (DenseIndex j = 0; j < numElements; ++j) {
             result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
         }
-    });
+    }, priority);
 
     for (int i = 0; i < NUM_BINS; ++i) {
         result->histogram.row(i) /= binToVal(i + 1) - binToVal(i);
