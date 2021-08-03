@@ -201,12 +201,24 @@ inline std::string nativeString(const filesystem::path& path) {
 }
 #endif
 
+template <typename T>
 class ScopeGuard {
 public:
-    ScopeGuard(const std::function<void(void)>& callback) : mCallback{callback} {}
+    ScopeGuard(const T& callback) : mCallback{callback} {}
+    ScopeGuard(T&& callback) : mCallback{std::move(callback)} {}
     ~ScopeGuard() { mCallback(); }
 private:
-    std::function<void(void)> mCallback;
+    T mCallback;
+};
+
+template <typename T>
+class SharedScopeGuard {
+public:
+    SharedScopeGuard(const T& callback) : mSharedPtr{std::make_shared<ScopeGuard<T>>(callback)} {}
+    SharedScopeGuard(T&& callback) : mSharedPtr{std::make_shared<ScopeGuard<T>>(std::move(callback))} {}
+private:
+    // Causes `callback` to be fired upon last destruction
+    std::shared_ptr<ScopeGuard<T>> mSharedPtr;
 };
 
 template <typename T>

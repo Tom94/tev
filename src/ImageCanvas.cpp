@@ -635,9 +635,11 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     vector<future<void>> futures;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
-            indices(j, i) = valToBin(channel.eval(j));
-        }, futures, priority);
+        futures.emplace_back(
+            gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
+                indices(j, i) = valToBin(channel.eval(j));
+            }, priority)
+        );
     }
     waitAll(futures);
 

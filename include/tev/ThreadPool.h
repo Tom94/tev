@@ -15,9 +15,9 @@
 TEV_NAMESPACE_BEGIN
 
 template <typename T>
-void waitAll(const std::vector<std::future<T>>& futures) {
+void waitAll(std::vector<std::future<T>>& futures) {
     for (auto& f : futures) {
-        f.wait();
+        f.get();
     }
 }
 
@@ -58,32 +58,34 @@ public:
     void flushQueue();
 
     template <typename Int, typename F>
-    void parallelForAsync(Int start, Int end, F body, std::vector<std::future<void>>& futures, int priority) {
+    auto parallelForAsync(Int start, Int end, F body, int priority) {
         Int range = end - start;
         Int nTasks = std::min((Int)mNumThreads, range);
+
+        std::promise<void> promise;
+        auto future = promise.get_future();
+
+        auto callbackGuard = SharedScopeGuard{[p = std::move(promise)] () mutable {
+            p.set_value();
+        }};
 
         for (Int i = 0; i < nTasks; ++i) {
             Int taskStart = start + (range * i / nTasks);
             Int taskEnd = start + (range * (i+1) / nTasks);
             TEV_ASSERT(taskStart != taskEnd, "Shouldn't not produce tasks with empty range.");
-            futures.emplace_back(enqueueTask([taskStart, taskEnd, body] {
+            enqueueTask([callbackGuard, taskStart, taskEnd, body] {
                 for (Int j = taskStart; j < taskEnd; ++j) {
                     body(j);
                 }
-            }, priority));
+            }, priority);
         }
-    }
 
-    template <typename Int, typename F>
-    std::vector<std::future<void>> parallelForAsync(Int start, Int end, F body, int priority) {
-        std::vector<std::future<void>> futures;
-        parallelForAsync(start, end, body, futures, priority);
-        return futures;
+        return future;
     }
 
     template <typename Int, typename F>
     void parallelFor(Int start, Int end, F body, int priority) {
-        waitAll(parallelForAsync(start, end, body, priority));
+        parallelForAsync(start, end, body, priority).get();
     }
 
 private:
