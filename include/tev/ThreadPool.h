@@ -59,16 +59,15 @@ public:
 
     template <typename Int, typename F>
     void parallelForAsync(Int start, Int end, F body, std::vector<std::future<void>>& futures, int priority) {
-        Int localNumThreads = (Int)mNumThreads;
-
         Int range = end - start;
-        Int chunk = (range / localNumThreads) + 1;
+        Int nTasks = std::min((Int)mNumThreads, range);
 
-        for (Int i = 0; i < localNumThreads; ++i) {
-            futures.emplace_back(enqueueTask([i, chunk, start, end, body] {
-                Int innerStart = start + i * chunk;
-                Int innerEnd = std::min(end, start + (i + 1) * chunk);
-                for (Int j = innerStart; j < innerEnd; ++j) {
+        for (Int i = 0; i < nTasks; ++i) {
+            Int taskStart = start + (range * i / nTasks);
+            Int taskEnd = start + (range * (i+1) / nTasks);
+            TEV_ASSERT(taskStart != taskEnd, "Shouldn't not produce tasks with empty range.");
+            futures.emplace_back(enqueueTask([taskStart, taskEnd, body] {
+                for (Int j = taskStart; j < taskEnd; ++j) {
                     body(j);
                 }
             }, priority));
