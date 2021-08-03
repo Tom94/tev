@@ -52,20 +52,20 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
-void Channel::divideByAsync(const Channel& other, vector<future<void>>& futures, int priority) {
-    gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+std::future<void> Channel::divideByAsync(const Channel& other, int priority) {
+    return gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
         if (other.at(i) != 0) {
             at(i) /= other.at(i);
         } else {
             at(i) = 0;
         }
-    }, futures, priority);
+    }, priority);
 }
 
-void Channel::multiplyWithAsync(const Channel& other, vector<future<void>>& futures, int priority) {
-    gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+std::future<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
+    return gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
         at(i) *= other.at(i);
-    }, futures, priority);
+    }, priority);
 }
 
 void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {

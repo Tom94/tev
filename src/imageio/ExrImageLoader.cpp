@@ -144,30 +144,27 @@ l_foundPart:
             ));
         }
 
-        void copyTo(Channel& channel, vector<future<void>>& futures, int priority) const {
+        std::future<void> copyTo(Channel& channel, int priority) const {
             switch (mImfChannel.type) {
                 case Imf::HALF: {
                     auto data = reinterpret_cast<const ::half*>(mData.data());
-                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                    return gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
                         channel.at(i) = data[i];
-                    }, futures, priority);
-                    break;
+                    }, priority);
                 }
 
                 case Imf::FLOAT: {
                     auto data = reinterpret_cast<const float*>(mData.data());
-                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                    return gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
                         channel.at(i) = data[i];
-                    }, futures, priority);
-                    break;
+                    }, priority);
                 }
 
                 case Imf::UINT: {
                     auto data = reinterpret_cast<const uint32_t*>(mData.data());
-                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
+                    return gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
                         channel.at(i) = data[i];
-                    }, futures, priority);
-                    break;
+                    }, priority);
                 }
 
                 default:
@@ -246,7 +243,7 @@ l_foundPart:
 
     vector<future<void>> futures;
     for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].copyTo(result.channels[i], futures, priority);
+        futures.emplace_back(rawChannels[i].copyTo(result.channels[i], priority));
     }
     waitAll(futures);
 

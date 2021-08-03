@@ -69,8 +69,8 @@ public:
         return {mData.cols(), mData.rows()};
     }
 
-    void divideByAsync(const Channel& other, std::vector<std::future<void>>& futures, int priority);
-    void multiplyWithAsync(const Channel& other, std::vector<std::future<void>>& futures, int priority);
+    std::future<void> divideByAsync(const Channel& other, int priority);
+    std::future<void> multiplyWithAsync(const Channel& other, int priority);
 
     void setZero() { mData.setZero(); }
 
