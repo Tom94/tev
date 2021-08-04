@@ -8,9 +8,44 @@
 #include <atomic>
 #include <functional>
 #include <future>
+// #include <latch>
 #include <queue>
 #include <thread>
 #include <vector>
+
+#include <experimental/coroutine>
+
+class Latch {
+public:
+    Latch(int val) : mCounter{val} {}
+    bool countDown() noexcept {
+        bool result = (--mCounter == 0);
+        if (result) {
+            std::unique_lock lock{mMutex};
+            mCv.notify_all();
+        }
+        return result;
+    }
+
+    bool tryWait() {
+        return mCounter == 0;
+    }
+
+    void wait() {
+        if (mCounter <= 0) {
+            return;
+        }
+
+        std::unique_lock lock{mMutex};
+        if (mCounter > 0) {
+            mCv.wait(lock);
+        }
+    }
+private:
+    std::atomic<int> mCounter;
+    std::mutex mMutex;
+    std::condition_variable mCv;
+};
 
 TEV_NAMESPACE_BEGIN
 
@@ -21,6 +56,163 @@ void waitAll(std::vector<std::future<T>>& futures) {
     }
 }
 
+template <typename T>
+struct Task {
+    struct promise_type {
+        std::experimental::coroutine_handle<> precursor;
+        Latch latch{2};
+
+        T data;
+
+        Task get_return_object() noexcept {
+            return {std::experimental::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+
+        std::experimental::suspend_never initial_suspend() const noexcept { return {}; }
+
+        void unhandled_exception() {
+            tlog::error() << "Unhandled exception in Task<T>";
+        }
+
+        // The coroutine is about to complete (via co_return or reaching the end of the coroutine body).
+        // The awaiter returned here defines what happens next
+        auto final_suspend() const noexcept {
+            struct awaiter {
+                // Return false here to return control to the thread's event loop. Remember that we're
+                // running on some async thread at this point.
+                bool await_ready() const noexcept { return false; }
+
+                void await_resume() const noexcept {}
+
+                // Returning a coroutine handle here resumes the coroutine it refers to (needed for
+                // continuation handling). If we wanted, we could instead enqueue that coroutine handle
+                // instead of immediately resuming it by enqueuing it and returning void.
+                std::experimental::coroutine_handle<> await_suspend(std::experimental::coroutine_handle<promise_type> h) const noexcept {
+                    bool isLast = h.promise().latch.countDown();
+                    if (isLast) {
+                        if (!h.promise().precursor) {
+                            tlog::error() << "Precursor must be defined when being last.";
+                        }
+                        return h.promise().precursor;
+                    }
+
+                    return std::experimental::noop_coroutine();
+                }
+            };
+
+            return awaiter{};
+        }
+
+        // When the coroutine co_returns a value, this method is used to publish the result
+        void return_value(T value) noexcept {
+            data = std::move(value);
+        }
+    };
+
+    // The following methods make our task type conform to the awaitable concept, so we can
+    // co_await for a task to complete
+
+    bool await_ready() const noexcept {
+        // No need to suspend if this task has no outstanding work
+        return handle.done();
+    }
+
+    T await_resume() const noexcept {
+        // The returned value here is what `co_await our_task` evaluates to
+        return std::move(handle.promise().data);
+    }
+
+    bool await_suspend(std::experimental::coroutine_handle<> coroutine) const noexcept {
+        // The coroutine itself is being suspended (async work can beget other async work)
+        // Record the argument as the continuation point when this is resumed later. See
+        // the final_suspend awaiter on the promise_type above for where this gets used
+        handle.promise().precursor = coroutine;
+
+        return !handle.promise().latch.countDown();
+    }
+
+    void wait() const {
+        handle.promise().latch.wait();
+    }
+
+    T get() const {
+        wait();
+        return std::move(handle.promise().data);
+    }
+
+    // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
+    std::experimental::coroutine_handle<promise_type> handle;
+};
+
+template <>
+struct Task<void> {
+    struct promise_type {
+        std::experimental::coroutine_handle<> precursor;
+        Latch latch{2};
+
+        Task get_return_object() noexcept {
+            return {std::experimental::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+
+        std::experimental::suspend_never initial_suspend() const noexcept { return {}; }
+
+        void unhandled_exception() {
+            tlog::error() << "Unhandled exception in Task<T>";
+        }
+
+        auto final_suspend() const noexcept {
+            struct awaiter {
+                bool await_ready() const noexcept { return false; }
+                void await_resume() const noexcept {}
+
+                std::experimental::coroutine_handle<> await_suspend(std::experimental::coroutine_handle<promise_type> h) const noexcept {
+                    bool isLast = h.promise().latch.countDown();
+                    if (isLast) {
+                        if (!h.promise().precursor) {
+                            tlog::error() << "Precursor must be defined when being last.";
+                        }
+                        return h.promise().precursor;
+                    }
+
+                    return std::experimental::noop_coroutine();
+                }
+            };
+
+            return awaiter{};
+        }
+
+        // When the coroutine co_returns a value, this method is used to publish the result
+        void return_void() noexcept {}
+    };
+
+    // The following methods make our task type conform to the awaitable concept, so we can
+    // co_await for a task to complete
+
+    bool await_ready() const noexcept {
+        // No need to suspend if this task has no outstanding work
+        return handle.done();
+    }
+
+    void await_resume() const noexcept {}
+
+    bool await_suspend(std::experimental::coroutine_handle<> coroutine) const noexcept {
+        // The coroutine itself is being suspended (async work can beget other async work)
+        // Record the argument as the continuation point when this is resumed later. See
+        // the final_suspend awaiter on the promise_type above for where this gets used
+        handle.promise().precursor = coroutine;
+
+        // No need to suspend if the task has already finished
+        return !handle.promise().latch.countDown();
+    }
+
+    void wait() {
+        handle.promise().latch.wait();
+    }
+
+    // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
+    std::experimental::coroutine_handle<promise_type> handle;
+};
+
 class ThreadPool {
 public:
     ThreadPool();
@@ -28,7 +220,7 @@ public:
     virtual ~ThreadPool();
 
     template<class F>
-    auto enqueueTask(F&& f, int priority) -> std::future<std::invoke_result_t<decltype(f)>> {
+    auto enqueueTask(F&& f, int priority) {
         using return_type = std::invoke_result_t<decltype(f)>;
 
         ++mNumTasksInSystem;
@@ -44,6 +236,35 @@ public:
 
         mWorkerCondition.notify_one();
         return res;
+    }
+
+    inline auto schedule(int priority) noexcept {
+        class Awaiter {
+        public:
+            Awaiter(ThreadPool* pool, int priority)
+            : mPool{pool}, mPriority{priority} {}
+
+            // Unlike the OS event case, there's no case where we suspend and the work
+            // is immediately ready
+            bool await_ready() const noexcept { return false; }
+
+            // Since await_ready() always returns false, when suspend is called, we will
+            // always immediately suspend and call this function (which enqueues the coroutine
+            // for immediate reactivation on a different thread)
+            void await_suspend(std::experimental::coroutine_handle<> coroutine) noexcept {
+                mPool->enqueueTask(coroutine, mPriority);
+            }
+
+            void await_resume() const noexcept {
+                tlog::info() << "Suspended task now running on thread " << std::this_thread::get_id();
+            }
+
+        private:
+            ThreadPool* mPool;
+            int mPriority;
+        };
+
+        return Awaiter{this, priority};
     }
 
     void startThreads(size_t num);

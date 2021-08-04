@@ -5,6 +5,7 @@
 
 #include <tev/Channel.h>
 #include <tev/Image.h>
+#include <tev/ThreadPool.h>
 
 #include <Eigen/Dense>
 
@@ -21,7 +22,7 @@ public:
     virtual bool canLoadFile(std::istream& iStream) const = 0;
 
     // Return loaded image data as well as whether that data has the alpha channel pre-multiplied or not.
-    virtual std::tuple<ImageData, bool> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const = 0;
+    virtual Task<std::tuple<ImageData, bool>> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const = 0;
 
     virtual std::string name() const = 0;
 

@@ -18,7 +18,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-std::tuple<ImageData, bool> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     static const stbi_io_callbacks callbacks = {
@@ -107,7 +107,7 @@ std::tuple<ImageData, bool> StbiImageLoader::load(istream& iStream, const path&,
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    return {result, false};
+    co_return {result, false};
 }
 
 TEV_NAMESPACE_END

@@ -759,7 +759,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                         << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height)
                         ;
 
-                    auto image = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "");
+                    auto image = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "").get();
                     if (image) {
                         addImage(image, true);
                     } else {
@@ -1141,7 +1141,7 @@ void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImage = tryLoadImage(image->path(), image->channelSelector());
+    auto newImage = tryLoadImage(image->path(), image->channelSelector()).get();
     if (newImage) {
         removeImage(image);
         insertImage(newImage, id, shallSelect);

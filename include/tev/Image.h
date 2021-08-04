@@ -26,6 +26,55 @@ struct ImageData {
     std::vector<Channel> channels;
     std::vector<std::string> layers;
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
+
+    Eigen::Vector2i size() const {
+        return channels.front().size();
+    }
+
+    Eigen::DenseIndex count() const {
+        return channels.front().count();
+    }
+
+    std::vector<std::string> channelsInLayer(std::string layerName) const;
+
+    void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
+
+    void multiplyAlpha(int priority);
+    void unmultiplyAlpha(int priority);
+
+    void ensureValid();
+
+    bool hasChannel(const std::string& channelName) const {
+        return channel(channelName) != nullptr;
+    }
+
+    const Channel* channel(const std::string& channelName) const {
+        auto it = std::find_if(
+            std::begin(channels),
+            std::end(channels),
+            [&channelName](const Channel& c) { return c.name() == channelName; }
+        );
+
+        if (it != std::end(channels)) {
+            return &(*it);
+        } else {
+            return nullptr;
+        }
+    }
+
+    Channel* mutableChannel(const std::string& channelName) {
+        auto it = std::find_if(
+            std::begin(channels),
+            std::end(channels),
+            [&channelName](const Channel& c) { return c.name() == channelName; }
+        );
+
+        if (it != std::end(channels)) {
+            return &(*it);
+        } else {
+            return nullptr;
+        }
+    }
 };
 
 struct ChannelGroup {
@@ -41,7 +90,7 @@ struct ImageTexture {
 
 class Image {
 public:
-    Image(int id, const filesystem::path& path, std::istream& iStream, const std::string& channelSelector);
+    Image(int id, const filesystem::path& path, ImageData&& data, const std::string& channelSelector);
     virtual ~Image();
 
     const filesystem::path& path() const {
@@ -59,16 +108,11 @@ public:
     std::string shortName() const;
 
     bool hasChannel(const std::string& channelName) const {
-        return channel(channelName) != nullptr;
+        return mData.hasChannel(channelName);
     }
 
     const Channel* channel(const std::string& channelName) const {
-        auto it = std::find_if(std::begin(mData.channels), std::end(mData.channels), [&channelName](const Channel& c) { return c.name() == channelName; });
-        if (it != std::end(mData.channels)) {
-            return &(*it);
-        } else {
-            return nullptr;
-        }
+        return mData.channel(channelName);
     }
 
     nanogui::Texture* texture(const std::string& channelGroupName);
@@ -78,11 +122,11 @@ public:
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
 
     Eigen::Vector2i size() const {
-        return mData.channels.front().size();
+        return mData.size();
     }
 
     Eigen::DenseIndex count() const {
-        return mData.channels.front().count();
+        return mData.count();
     }
 
     const std::vector<ChannelGroup>& channelGroups() const {
@@ -109,25 +153,12 @@ private:
     static std::atomic<int> sId;
 
     Channel* mutableChannel(const std::string& channelName) {
-        auto it = std::find_if(std::begin(mData.channels), std::end(mData.channels), [&channelName](const Channel& c) { return c.name() == channelName; });
-        if (it != std::end(mData.channels)) {
-            return &(*it);
-        } else {
-            return nullptr;
-        }
+        return mData.mutableChannel(channelName);
     }
 
-    std::vector<std::string> channelsInLayer(std::string layerName) const;
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
 
     void toRec709();
-
-    void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
-
-    void multiplyAlpha();
-    void unmultiplyAlpha();
-
-    void ensureValid();
 
     filesystem::path mPath;
     std::string mChannelSelector;
@@ -143,10 +174,10 @@ private:
     int mId;
 };
 
-std::shared_ptr<Image> tryLoadImage(int imageId, filesystem::path path, std::istream& iStream, std::string channelSelector);
-std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);
-std::shared_ptr<Image> tryLoadImage(int imageId, filesystem::path path, std::string channelSelector);
-std::shared_ptr<Image> tryLoadImage(filesystem::path path, std::string channelSelector);
+Task<std::shared_ptr<Image>> tryLoadImage(int imageId, filesystem::path path, std::istream& iStream, std::string channelSelector);
+Task<std::shared_ptr<Image>> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);
+Task<std::shared_ptr<Image>> tryLoadImage(int imageId, filesystem::path path, std::string channelSelector);
+Task<std::shared_ptr<Image>> tryLoadImage(filesystem::path path, std::string channelSelector);
 
 struct ImageAddition {
     bool shallSelect;
