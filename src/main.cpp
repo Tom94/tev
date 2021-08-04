@@ -114,7 +114,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto image = tryLoadImage(imageString, imageStream, "");
+                auto image = tryLoadImage(imageString, imageStream, "").get();
                 if (image) {
                     sImageViewer->addImage(image, info.grabFocus);
                 }

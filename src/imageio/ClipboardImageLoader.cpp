@@ -23,7 +23,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-std::tuple<ImageData, bool> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     char magic[4];
@@ -119,7 +119,7 @@ std::tuple<ImageData, bool> ClipboardImageLoader::load(istream& iStream, const p
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    return {result, false};
+    co_return {result, false};
 }
 
 TEV_NAMESPACE_END

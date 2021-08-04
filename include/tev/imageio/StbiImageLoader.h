@@ -13,7 +13,7 @@ TEV_NAMESPACE_BEGIN
 class StbiImageLoader : public ImageLoader {
 public:
     bool canLoadFile(std::istream& iStream) const override;
-    std::tuple<ImageData, bool> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const override;
+    Task<std::tuple<ImageData, bool>> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const override;
 
     std::string name() const override {
         return "STBI";

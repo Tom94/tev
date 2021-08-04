@@ -22,7 +22,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-std::tuple<ImageData, bool> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
+Task<std::tuple<ImageData, bool>> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
     ImageData result;
 
     string magic;
@@ -61,7 +61,7 @@ std::tuple<ImageData, bool> EmptyImageLoader::load(istream& iStream, const path&
         result.layers.emplace_back(layer);
     }
 
-    return {result, true};
+    co_return {result, true};
 }
 
 TEV_NAMESPACE_END

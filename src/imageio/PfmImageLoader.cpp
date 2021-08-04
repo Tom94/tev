@@ -21,7 +21,7 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-std::tuple<ImageData, bool> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     string magic;
@@ -110,7 +110,7 @@ std::tuple<ImageData, bool> PfmImageLoader::load(istream& iStream, const path&, 
     // within a topmost root layer.
     result.layers.emplace_back("");
 
-    return {result, false};
+    co_return {result, false};
 }
 
 TEV_NAMESPACE_END
