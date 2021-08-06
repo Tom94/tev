@@ -143,7 +143,7 @@ private:
         int priority
     );
 
-    static std::shared_ptr<CanvasStatistics> computeCanvasStatistics(
+    static Task<std::shared_ptr<CanvasStatistics>> computeCanvasStatistics(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
         const std::string& requestedChannelGroup,

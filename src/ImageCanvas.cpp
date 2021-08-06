@@ -467,9 +467,12 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     auto image = mImage, reference = mReference;
     auto requestedChannelGroup = mRequestedChannelGroup;
     auto metric = mMetric;
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedChannelGroup, metric, priority]() {
-        return computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority);
-    }, &mMeanValueThreadPool)));
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(
+        [image, reference, requestedChannelGroup, metric, priority]() {
+            return computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority).get();
+        },
+        &mMeanValueThreadPool
+    )));
 
     auto val = mMeanValues.at(key);
     val->computeAsync(priority);
@@ -554,7 +557,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     return result;
 }
 
-shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
+Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::shared_ptr<Image> image,
     std::shared_ptr<Image> reference,
     const string& requestedChannelGroup,
@@ -626,24 +629,27 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
     if (nChannels == 0) {
-        return result;
+        co_return result;
     }
 
     auto numElements = image->count();
     Eigen::MatrixXi indices(numElements, nChannels);
 
-    vector<future<void>> futures;
+    vector<Task<void>> tasks;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        futures.emplace_back(
+        tasks.emplace_back(
             gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
                 indices(j, i) = valToBin(channel.eval(j));
             }, priority)
         );
     }
-    waitAll(futures);
 
-    gThreadPool->parallelFor(0, nChannels, [&](int i) {
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    co_await gThreadPool->parallelForAsync(0, nChannels, [&](int i) {
         for (DenseIndex j = 0; j < numElements; ++j) {
             result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
         }
@@ -660,7 +666,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     nth_element(temp.data(), temp.data() + idx, temp.data() + temp.size());
     result->histogram /= max(temp(idx), 0.1f) * 1.3f;
 
-    return result;
+    co_return result;
 }
 
 Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {

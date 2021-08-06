@@ -8,12 +8,13 @@
 #include <atomic>
 #include <functional>
 #include <future>
-// #include <latch>
 #include <queue>
 #include <thread>
 #include <vector>
 
 #include <experimental/coroutine>
+
+TEV_NAMESPACE_BEGIN
 
 class Latch {
 public:
@@ -27,8 +28,8 @@ public:
         return result;
     }
 
-    bool tryWait() {
-        return mCounter == 0;
+    int count() noexcept {
+        return mCounter;
     }
 
     void wait() {
@@ -47,10 +48,8 @@ private:
     std::condition_variable mCv;
 };
 
-TEV_NAMESPACE_BEGIN
-
 template <typename T>
-void waitAll(std::vector<std::future<T>>& futures) {
+void waitAll(std::vector<T>& futures) {
     for (auto& f : futures) {
         f.get();
     }
@@ -101,10 +100,7 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             // instead of immediately resuming it by enqueuing it and returning void.
             std::experimental::coroutine_handle<> await_suspend(std::experimental::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
                 bool isLast = h.promise().latch.countDown();
-                if (isLast) {
-                    if (!h.promise().precursor) {
-                        tlog::error() << "Precursor must be defined when being last.";
-                    }
+                if (isLast && h.promise().precursor) {
                     return h.promise().precursor;
                 }
 
@@ -131,8 +127,10 @@ struct Task {
     }
 
     T await_resume() const noexcept {
-        // The returned value here is what `co_await our_task` evaluates to
-        return std::move(handle.promise().data);
+        if constexpr (!std::is_void_v<T>) {
+            // The returned value here is what `co_await our_task` evaluates to
+            return std::move(handle.promise().data);
+        }
     }
 
     bool await_suspend(std::experimental::coroutine_handle<> coroutine) const noexcept {
@@ -140,11 +138,11 @@ struct Task {
         // Record the argument as the continuation point when this is resumed later. See
         // the final_suspend awaiter on the promise_type above for where this gets used
         handle.promise().precursor = coroutine;
-
         return !handle.promise().latch.countDown();
     }
 
     void wait() const {
+        handle.promise().latch.countDown();
         handle.promise().latch.wait();
     }
 
@@ -198,9 +196,7 @@ public:
                 mPool->enqueueTask(coroutine, mPriority);
             }
 
-            void await_resume() const noexcept {
-                tlog::info() << "Suspended task now running on thread " << std::this_thread::get_id();
-            }
+            void await_resume() const noexcept {}
 
         private:
             ThreadPool* mPool;
@@ -222,29 +218,27 @@ public:
     void flushQueue();
 
     template <typename Int, typename F>
-    auto parallelForAsync(Int start, Int end, F body, int priority) {
+    Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
         Int range = end - start;
         Int nTasks = std::min((Int)mNumThreads, range);
 
-        std::promise<void> promise;
-        auto future = promise.get_future();
-
-        auto callbackGuard = SharedScopeGuard{[p = std::move(promise)] () mutable {
-            p.set_value();
-        }};
-
+        std::vector<Task<void>> tasks;
         for (Int i = 0; i < nTasks; ++i) {
             Int taskStart = start + (range * i / nTasks);
             Int taskEnd = start + (range * (i+1) / nTasks);
             TEV_ASSERT(taskStart != taskEnd, "Shouldn't not produce tasks with empty range.");
-            enqueueTask([callbackGuard, taskStart, taskEnd, body] {
-                for (Int j = taskStart; j < taskEnd; ++j) {
+
+            tasks.emplace_back([this](Int start, Int end, F body, int priority) -> Task<void> {
+                co_await schedule(priority);
+                for (Int j = start; j < end; ++j) {
                     body(j);
                 }
-            }, priority);
+            }(taskStart, taskEnd, body, priority));
         }
 
-        return future;
+        for (auto& task : tasks) {
+            co_await task;
+        }
     }
 
     template <typename Int, typename F>
@@ -256,18 +250,18 @@ private:
     size_t mNumThreads = 0;
     std::vector<std::thread> mThreads;
 
-    struct Task {
+    struct QueuedTask {
         int priority;
         std::function<void()> fun;
 
         struct Comparator {
-            bool operator()(const Task& a, const Task& b) {
+            bool operator()(const QueuedTask& a, const QueuedTask& b) {
                 return a.priority < b.priority;
             }
         };
     };
 
-    std::priority_queue<Task, std::vector<Task>, Task::Comparator> mTaskQueue;
+    std::priority_queue<QueuedTask, std::vector<QueuedTask>, QueuedTask::Comparator> mTaskQueue;
     std::mutex mTaskQueueMutex;
     std::condition_variable mWorkerCondition;
 

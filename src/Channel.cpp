@@ -52,22 +52,6 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
-std::future<void> Channel::divideByAsync(const Channel& other, int priority) {
-    return gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
-        if (other.at(i) != 0) {
-            at(i) /= other.at(i);
-        } else {
-            at(i) = 0;
-        }
-    }, priority);
-}
-
-std::future<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
-    return gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
-        at(i) *= other.at(i);
-    }, priority);
-}
-
 void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {
     if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
         tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height << "] could not be updated because it does not fit into the channel's size " << size();
