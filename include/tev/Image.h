@@ -39,8 +39,8 @@ struct ImageData {
 
     void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
 
-    void multiplyAlpha(int priority);
-    void unmultiplyAlpha(int priority);
+    Task<void> multiplyAlpha(int priority);
+    Task<void> unmultiplyAlpha(int priority);
 
     void ensureValid();
 
@@ -189,16 +189,7 @@ public:
     void enqueue(const filesystem::path& path, const std::string& channelSelector, bool shallSelect);
     ImageAddition tryPop() { return mLoadedImages.tryPop(); }
 
-    void wait() {
-        return mWorkers.waitUntilFinished();
-    }
-
 private:
-    // A separate threadpool (other than the global threadpool) is
-    // required to prevent deadlocking: if more images are loaded
-    // simultaneously than threads are available, they will starve the
-    // global thread pool of workers.
-    ThreadPool mWorkers{1};
     SharedQueue<ImageAddition> mLoadedImages;
 };
 

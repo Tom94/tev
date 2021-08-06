@@ -63,20 +63,24 @@ void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& f
     }
 }
 
-void ImageData::multiplyAlpha(int priority) {
-    vector<future<void>> futures;
+Task<void> ImageData::multiplyAlpha(int priority) {
+    vector<Task<void>> tasks;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
-        futures.emplace_back(target.multiplyWithAsync(alpha, priority));
+        tasks.emplace_back(target.multiplyWithAsync(alpha, priority));
     });
-    waitAll(futures);
+    for (auto& task : tasks) {
+        co_await task;
+    }
 }
 
-void ImageData::unmultiplyAlpha(int priority) {
-    vector<future<void>> futures;
+Task<void> ImageData::unmultiplyAlpha(int priority) {
+    vector<Task<void>> tasks;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
-        futures.emplace_back(target.divideByAsync(alpha, priority));
+        tasks.emplace_back(target.divideByAsync(alpha, priority));
     });
-    waitAll(futures);
+    for (auto& task : tasks) {
+        co_await task;
+    }
 }
 
 void ImageData::ensureValid() {
@@ -171,7 +175,7 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     auto numPixels = count();
     vector<float> data(numPixels * 4);
 
-    vector<future<void>> futures;
+    vector<Task<void>> tasks;
     for (size_t i = 0; i < 4; ++i) {
         if (i < channelNames.size()) {
             const auto& channelName = channelNames[i];
@@ -181,21 +185,21 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
             }
 
             const auto& channelData = chan->data();
-            futures.emplace_back(
+            tasks.emplace_back(
                 gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
                     data[j * 4 + i] = channelData(j);
                 }, std::numeric_limits<int>::max())
             );
         } else {
             float val = i == 3 ? 1 : 0;
-            futures.emplace_back(
+            tasks.emplace_back(
                 gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
                     data[j * 4 + i] = val;
                 }, std::numeric_limits<int>::max())
             );
         }
     }
-    waitAll(futures);
+    waitAll(tasks);
 
     texture->upload((uint8_t*)data.data());
     texture->generate_mipmap();
@@ -493,7 +497,7 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
 }
 
 Task<shared_ptr<Image>> tryLoadImage(path path, istream& iStream, string channelSelector) {
-    return tryLoadImage(Image::drawId(), path, iStream, channelSelector);
+    co_return co_await tryLoadImage(Image::drawId(), path, iStream, channelSelector);
 }
 
 Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, string channelSelector) {
@@ -505,11 +509,11 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, string channelSelec
     }
 
     ifstream fileStream{nativeString(path), ios_base::binary};
-    return tryLoadImage(imageId, path, fileStream, channelSelector);
+    co_return co_await tryLoadImage(imageId, path, fileStream, channelSelector);
 }
 
 Task<shared_ptr<Image>> tryLoadImage(path path, string channelSelector) {
-    return tryLoadImage(Image::drawId(), path, channelSelector);
+    co_return co_await tryLoadImage(Image::drawId(), path, channelSelector);
 }
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
@@ -525,7 +529,7 @@ void BackgroundImagesLoader::enqueue(const path& path, const string& channelSele
     //     }
     // }();
     
-    mWorkers.enqueueTask([imageId, path, channelSelector, shallSelect, this]() -> Task<void> {
+    gThreadPool->enqueueTask([imageId, path, channelSelector, shallSelect, this]() -> Task<void> {
         auto image = co_await tryLoadImage(imageId, path, channelSelector);
         if (image) {
             mLoadedImages.push({ shallSelect, image });

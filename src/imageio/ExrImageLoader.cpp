@@ -144,7 +144,7 @@ l_foundPart:
             ));
         }
 
-        std::future<void> copyTo(Channel& channel, int priority) const {
+        auto copyTo(Channel& channel, int priority) const {
             switch (mImfChannel.type) {
                 case Imf::HALF: {
                     auto data = reinterpret_cast<const ::half*>(mData.data());
@@ -192,7 +192,9 @@ l_foundPart:
         vector<char> mData;
     };
 
-    vector<RawChannel> rawChannels;
+    // Allocate raw channels on the heap, because it'll be references
+    // by nested parallel for coroutine.
+    auto rawChannels = std::make_unique<vector<RawChannel>>();
     Imf::FrameBuffer frameBuffer;
 
     const Imf::ChannelList& imfChannels = file.header().channels();
@@ -215,10 +217,10 @@ l_foundPart:
 
     for (const auto& match : matches) {
         const auto& c = match.second;
-        rawChannels.emplace_back(c.name(), c.channel());
+        rawChannels->emplace_back(c.name(), c.channel().type);
     }
 
-    if (rawChannels.empty()) {
+    if (rawChannels->empty()) {
         throw invalid_argument{tfm::format("No channels match '%s'.", channelSelector)};
     }
 
@@ -226,26 +228,29 @@ l_foundPart:
         result.layers.emplace_back(layer);
     }
 
-    gThreadPool->parallelFor(0, (int)rawChannels.size(), [&](int i) {
-        rawChannels[i].resize((DenseIndex)size.x() * size.y());
+    co_await gThreadPool->parallelForAsync(0, (int)rawChannels->size(), [c = rawChannels.get(), size](int i) {
+        c->at(i).resize((DenseIndex)size.x() * size.y());
     }, priority);
 
-    for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].registerWith(frameBuffer, dw);
+    for (size_t i = 0; i < rawChannels->size(); ++i) {
+        rawChannels->at(i).registerWith(frameBuffer, dw);
     }
 
     file.setFrameBuffer(frameBuffer);
     file.readPixels(dw.min.y, dw.max.y);
 
-    for (const auto& rawChannel : rawChannels) {
+    for (const auto& rawChannel : *rawChannels) {
         result.channels.emplace_back(Channel{rawChannel.name(), size});
     }
 
-    vector<future<void>> futures;
-    for (size_t i = 0; i < rawChannels.size(); ++i) {
-        futures.emplace_back(rawChannels[i].copyTo(result.channels[i], priority));
+    vector<Task<void>> tasks;
+    for (size_t i = 0; i < rawChannels->size(); ++i) {
+        tasks.emplace_back(rawChannels->at(i).copyTo(result.channels[i], priority));
     }
-    waitAll(futures);
+
+    for (auto& task : tasks) {
+        co_await task;
+    }
 
     hasPremultipliedAlpha = true;
 
