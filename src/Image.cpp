@@ -468,7 +468,7 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
 
                 // We assume an internal pre-multiplied-alpha representation
                 if (!hasPremultipliedAlpha) {
-                    data.multiplyAlpha(taskPriority);
+                    co_await data.multiplyAlpha(taskPriority);
                 }
 
                 auto image = make_shared<Image>(imageId, path, std::move(data), channelSelector);
