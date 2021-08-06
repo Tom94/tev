@@ -20,16 +20,12 @@ class Latch {
 public:
     Latch(int val) : mCounter{val} {}
     bool countDown() noexcept {
+        std::unique_lock lock{mMutex};
         bool result = (--mCounter == 0);
         if (result) {
-            std::unique_lock lock{mMutex};
             mCv.notify_all();
         }
         return result;
-    }
-
-    int count() noexcept {
-        return mCounter;
     }
 
     void wait() {
