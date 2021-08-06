@@ -33,7 +33,7 @@ vector<string> ImageData::channelsInLayer(string layerName) const {
             // If the layer name starts at the beginning, and
             // if no other dot is found after the end of the layer name,
             // then we have found a channel of this layer.
-            if (c.name().starts_with(layerName) == 0 && c.name().length() > layerName.length()) {
+            if (c.name().starts_with(layerName) && c.name().length() > layerName.length()) {
                 const auto& channelWithoutLayer = c.name().substr(layerName.length() + 1);
                 if (channelWithoutLayer.find(".") == string::npos) {
                     result.emplace_back(c.name());
