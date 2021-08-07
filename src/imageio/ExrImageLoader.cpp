@@ -217,7 +217,7 @@ l_foundPart:
 
     for (const auto& match : matches) {
         const auto& c = match.second;
-        rawChannels->emplace_back(c.name(), c.channel().type);
+        rawChannels->emplace_back(c.name(), c.channel());
     }
 
     if (rawChannels->empty()) {
