@@ -71,6 +71,7 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
     std::experimental::coroutine_handle<> precursor;
     Latch latch{2};
     std::exception_ptr eptr;
+    std::vector<std::function<void()>> onFinalSuspend;
 
     future_t get_return_object() noexcept {
         return {std::experimental::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this)};
@@ -81,11 +82,19 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
     void unhandled_exception() {
         eptr = std::current_exception();
     }
+
+    template <typename F>
+    void finally(F&& fun) {
+        onFinalSuspend.emplace_back(std::forward<F>(fun));
     }
 
     // The coroutine is about to complete (via co_return or reaching the end of the coroutine body).
     // The awaiter returned here defines what happens next
     auto final_suspend() const noexcept {
+        for (auto& f : onFinalSuspend) {
+            f();
+        }
+
         struct awaiter {
             // Return false here to return control to the thread's event loop. Remember that we're
             // running on some async thread at this point.
@@ -124,6 +133,11 @@ struct Task {
         return handle.done();
     }
 
+    template <typename F>
+    void finally(F&& fun) {
+        handle.promise().finally(std::forward<F>(fun));
+    }
+
     T await_resume() const {
         if (handle.promise().eptr) {
             std::rethrow_exception(handle.promise().eptr);
@@ -158,6 +172,26 @@ struct Task {
         }
     }
 };
+
+template<typename T>
+void coCaptureVar(Task<T>& task, auto* var) {
+    task.finally([var]() {
+        delete var;
+    });
+}
+
+inline auto coLambda(auto&& executor) {
+    return [executor=std::move(executor)]<typename ...Args>(Args&&... args) {
+        using ReturnType = decltype(executor(args...));
+        // copy the lambda into a new std::function pointer
+        auto exec = new std::function<ReturnType(Args...)>(executor);
+        // execute the lambda and save the result
+        auto result = (*exec)(args...);
+        // call custom method to save lambda until task ends
+        coCaptureVar(result, exec);
+        return result;
+    };
+}
 
 class ThreadPool {
 public:
