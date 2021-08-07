@@ -518,25 +518,37 @@ Task<shared_ptr<Image>> tryLoadImage(path path, string channelSelector) {
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
     int imageId = Image::drawId();
-
-    // auto task = [imageId, path, channelSelector, shallSelect, this] {
-    //     co_await gThreadPool->schedule(-imageId);
-
-    //     co_await tryLoadImage(imageId, path, channelSelector);
-
-    //     if (image) {
-    //         mLoadedImages.push({ shallSelect, image });
-    //     }
-    // }();
+    int loadId = mUnsortedLoadCounter++;
     
-    gThreadPool->enqueueTask([imageId, path, channelSelector, shallSelect, this]() -> Task<void> {
+    gThreadPool->enqueueTask(coLambda([imageId, loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
         auto image = co_await tryLoadImage(imageId, path, channelSelector);
-        if (image) {
-            mLoadedImages.push({ shallSelect, image });
+
+        {
+            std::lock_guard lock{mPendingLoadedImagesMutex};
+            mPendingLoadedImages.push({ loadId, shallSelect, image });
         }
 
-        glfwPostEmptyEvent();
-    }, -imageId);
+        if (publishSortedLoads()) {
+            glfwPostEmptyEvent();
+        }
+    }), -imageId);
+}
+
+bool BackgroundImagesLoader::publishSortedLoads() {
+    std::lock_guard lock{mPendingLoadedImagesMutex};
+    bool pushed = false;
+    while (mPendingLoadedImages.top().loadId == mLoadCounter) {
+        ++mLoadCounter;
+
+        // null image pointers indicate failed loads. These shouldn't be pushed.
+        if (mPendingLoadedImages.top().image) {
+            mLoadedImages.push(std::move(mPendingLoadedImages.top()));
+        }
+
+        mPendingLoadedImages.pop();
+        pushed = true;
+    }
+    return pushed;
 }
 
 TEV_NAMESPACE_END
