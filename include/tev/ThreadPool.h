@@ -13,7 +13,15 @@
 #include <thread>
 #include <vector>
 
+#ifdef __APPLE__
 #include <experimental/coroutine>
+#define COROUTINE_NAMESPACE COROUTINE_NAMESPACE
+#else
+#include <coroutine>
+#define COROUTINE_NAMESPACE std
+#endif
+
+
 
 TEV_NAMESPACE_BEGIN
 
@@ -55,7 +63,7 @@ public:
             // Since await_ready() always returns false, when suspend is called, we will
             // always immediately suspend and call this function (which enqueues the coroutine
             // for immediate reactivation on a different thread)
-            void await_suspend(std::experimental::coroutine_handle<> coroutine) noexcept {
+            void await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
                 mPool->enqueueTask(coroutine, mPriority);
             }
 

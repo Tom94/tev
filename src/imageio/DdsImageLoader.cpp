@@ -226,7 +226,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
             }
-        });
+        }, priority);
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in
         // sRGB space, and only they need to converted to linear. However,
@@ -242,7 +242,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
                     channels[c].at(i) = toLinear(typedData[baseIdx + c]);
                 }
             }
-        });
+        }, priority);
     }
 
     vector<pair<size_t, size_t>> matches;

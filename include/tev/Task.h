@@ -5,7 +5,15 @@
 
 #include <tev/Common.h>
 
+#ifdef __APPLE__
 #include <experimental/coroutine>
+#define COROUTINE_NAMESPACE COROUTINE_NAMESPACE
+#else
+#include <coroutine>
+#define COROUTINE_NAMESPACE std
+#endif
+
+#include <mutex>
 
 TEV_NAMESPACE_BEGIN
 
@@ -62,16 +70,16 @@ struct TaskPromiseBase<void> {
 
 template <typename future_t, typename data_t>
 struct TaskPromise : public TaskPromiseBase<data_t> {
-    std::experimental::coroutine_handle<> precursor;
+    COROUTINE_NAMESPACE::coroutine_handle<> precursor;
     Latch latch{2};
     std::exception_ptr eptr;
     std::vector<std::function<void()>> onFinalSuspend;
 
     future_t get_return_object() noexcept {
-        return {std::experimental::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this)};
+        return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this)};
     }
 
-    std::experimental::suspend_never initial_suspend() const noexcept { return {}; }
+    COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
 
     void unhandled_exception() {
         eptr = std::current_exception();
@@ -99,13 +107,13 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             // Returning a coroutine handle here resumes the coroutine it refers to (needed for
             // continuation handling). If we wanted, we could instead enqueue that coroutine handle
             // instead of immediately resuming it by enqueuing it and returning void.
-            std::experimental::coroutine_handle<> await_suspend(std::experimental::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
+            COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
                 bool isLast = h.promise().latch.countDown();
                 if (isLast && h.promise().precursor) {
                     return h.promise().precursor;
                 }
 
-                return std::experimental::noop_coroutine();
+                return COROUTINE_NAMESPACE::noop_coroutine();
             }
         };
 
@@ -118,7 +126,7 @@ struct Task {
     using promise_type = TaskPromise<Task<T>, T>;
 
     // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
-    std::experimental::coroutine_handle<promise_type> handle;
+    COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
 
     // The following methods make our task type conform to the awaitable concept, so we can
     // co_await for a task to complete
@@ -143,7 +151,7 @@ struct Task {
         }
     }
 
-    bool await_suspend(std::experimental::coroutine_handle<> coroutine) const noexcept {
+    bool await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) const noexcept {
         // The coroutine itself is being suspended (async work can beget other async work)
         // Record the argument as the continuation point when this is resumed later. See
         // the final_suspend awaiter on the promise_type above for where this gets used
