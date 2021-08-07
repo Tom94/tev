@@ -17,6 +17,22 @@ Channel::Channel(const std::string& name, Eigen::Vector2i size)
     mData.resize(size.y(), size.x());
 }
 
+Task<void> Channel::divideByAsync(const Channel& other, int priority) {
+    co_await gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+        if (other.at(i) != 0) {
+            at(i) /= other.at(i);
+        } else {
+            at(i) = 0;
+        }
+    }, priority);
+}
+
+Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
+    co_await gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+        at(i) *= other.at(i);
+    }, priority);
+}
+
 pair<string, string> Channel::split(const string& channel) {
     size_t dotPosition = channel.rfind(".");
     if (dotPosition != string::npos) {

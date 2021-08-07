@@ -4,7 +4,7 @@
 #pragma once
 
 #include <tev/Common.h>
-#include <tev/ThreadPool.h>
+#include <tev/Task.h>
 
 #include <nanogui/vector.h>
 
@@ -70,21 +70,9 @@ public:
         return {mData.cols(), mData.rows()};
     }
 
-    auto divideByAsync(const Channel& other, int priority) {
-        return gThreadPool->parallelForAsync<Eigen::DenseIndex>(0, other.count(), [&](Eigen::DenseIndex i) {
-            if (other.at(i) != 0) {
-                at(i) /= other.at(i);
-            } else {
-                at(i) = 0;
-            }
-        }, priority);
-    }
+    Task<void> divideByAsync(const Channel& other, int priority);
 
-    auto multiplyWithAsync(const Channel& other, int priority) {
-        return gThreadPool->parallelForAsync<Eigen::DenseIndex>(0, other.count(), [&](Eigen::DenseIndex i) {
-            at(i) *= other.at(i);
-        }, priority);
-    }
+    Task<void> multiplyWithAsync(const Channel& other, int priority);
 
     void setZero() { mData.setZero(); }
 
