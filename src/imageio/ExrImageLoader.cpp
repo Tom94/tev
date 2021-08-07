@@ -88,6 +88,73 @@ bool ExrImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
+// Helper class for dealing with the raw channels loaded from an exr file.
+class RawChannel {
+public:
+    RawChannel(string name, Imf::Channel imfChannel)
+    : mName(name), mImfChannel(imfChannel) {
+    }
+
+    void resize(size_t size) {
+        mData.resize(size * bytesPerPixel());
+    }
+
+    void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
+        int width = dw.max.x - dw.min.x + 1;
+        frameBuffer.insert(mName.c_str(), Imf::Slice(
+            mImfChannel.type,
+            mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
+            bytesPerPixel(), bytesPerPixel() * (width/mImfChannel.xSampling),
+            mImfChannel.xSampling, mImfChannel.ySampling, 0
+        ));
+    }
+
+    template <typename T>
+    Task<void> copyToTyped(Channel& channel, int priority) const {
+        int width = channel.size().x();
+        int widthSubsampled = width/mImfChannel.ySampling;
+
+        auto data = reinterpret_cast<const T*>(mData.data());
+        co_await gThreadPool->parallelForAsync<int>(0, channel.size().y(), [&, data](int y) {
+            for (int x = 0; x < width; ++x) {
+                channel.at({x, y}) = data[x/mImfChannel.xSampling + (y/mImfChannel.ySampling) * widthSubsampled];
+            }
+        }, priority);
+    }
+
+    Task<void> copyTo(Channel& channel, int priority) const {
+        switch (mImfChannel.type) {
+            case Imf::HALF:
+                co_await copyToTyped<::half>(channel, priority); break;
+            case Imf::FLOAT:
+                co_await copyToTyped<float>(channel, priority); break;
+            case Imf::UINT:
+                co_await copyToTyped<uint32_t>(channel, priority); break;
+            default:
+                throw runtime_error("Invalid pixel type encountered.");
+        }
+    }
+
+    const string& name() const {
+        return mName;
+    }
+
+private:
+    int bytesPerPixel() const {
+        switch (mImfChannel.type) {
+            case Imf::HALF:  return sizeof(::half);
+            case Imf::FLOAT: return sizeof(float);
+            case Imf::UINT:  return sizeof(uint32_t);
+            default:
+                throw runtime_error("Invalid pixel type encountered.");
+        }
+    }
+
+    string mName;
+    Imf::Channel mImfChannel;
+    vector<char> mData;
+};
+
 Task<std::tuple<ImageData, bool>> ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, int priority) const {
     ImageData result;
 
@@ -122,75 +189,6 @@ l_foundPart:
     if (size.x() == 0 || size.y() == 0) {
         throw invalid_argument{"EXR image has zero pixels."};
     }
-
-    // Inline helper class for dealing with the raw channels loaded from an exr file.
-    class RawChannel {
-    public:
-        RawChannel(string name, Imf::Channel imfChannel)
-        : mName(name), mImfChannel(imfChannel) {
-        }
-
-        void resize(size_t size) {
-            mData.resize(size * bytesPerPixel());
-        }
-
-        void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
-            int width = dw.max.x - dw.min.x + 1;
-            frameBuffer.insert(mName.c_str(), Imf::Slice(
-                mImfChannel.type,
-                mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
-                bytesPerPixel(), bytesPerPixel() * width,
-                mImfChannel.xSampling, mImfChannel.ySampling, 0
-            ));
-        }
-
-        auto copyTo(Channel& channel, int priority) const {
-            switch (mImfChannel.type) {
-                case Imf::HALF: {
-                    auto data = reinterpret_cast<const ::half*>(mData.data());
-                    return gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
-                        channel.at(i) = data[i];
-                    }, priority);
-                }
-
-                case Imf::FLOAT: {
-                    auto data = reinterpret_cast<const float*>(mData.data());
-                    return gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
-                        channel.at(i) = data[i];
-                    }, priority);
-                }
-
-                case Imf::UINT: {
-                    auto data = reinterpret_cast<const uint32_t*>(mData.data());
-                    return gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
-                        channel.at(i) = data[i];
-                    }, priority);
-                }
-
-                default:
-                    throw runtime_error("Invalid pixel type encountered.");
-            }
-        }
-
-        const string& name() const {
-            return mName;
-        }
-
-    private:
-        int bytesPerPixel() const {
-            switch (mImfChannel.type) {
-                case Imf::HALF:  return sizeof(::half);
-                case Imf::FLOAT: return sizeof(float);
-                case Imf::UINT:  return sizeof(uint32_t);
-                default:
-                    throw runtime_error("Invalid pixel type encountered.");
-            }
-        }
-
-        string mName;
-        Imf::Channel mImfChannel;
-        vector<char> mData;
-    };
 
     // Allocate raw channels on the heap, because it'll be references
     // by nested parallel for coroutine.
