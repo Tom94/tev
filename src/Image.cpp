@@ -472,7 +472,7 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
                 }
 
                 auto image = make_shared<Image>(imageId, path, std::move(data), channelSelector);
-                
+
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
@@ -503,7 +503,7 @@ Task<shared_ptr<Image>> tryLoadImage(path path, istream& iStream, string channel
 Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, string channelSelector) {
     try {
         path = path.make_absolute();
-    } catch (const runtime_error& e) {
+    } catch (const runtime_error&) {
         // If for some strange reason we can not obtain an absolute path, let's still
         // try to open the image at the given path just to make sure.
     }
@@ -519,7 +519,7 @@ Task<shared_ptr<Image>> tryLoadImage(path path, string channelSelector) {
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
     int imageId = Image::drawId();
     int loadId = mUnsortedLoadCounter++;
-    
+
     gThreadPool->enqueueTask(coLambda([imageId, loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
         auto image = co_await tryLoadImage(imageId, path, channelSelector);
 
@@ -537,7 +537,7 @@ void BackgroundImagesLoader::enqueue(const path& path, const string& channelSele
 bool BackgroundImagesLoader::publishSortedLoads() {
     std::lock_guard lock{mPendingLoadedImagesMutex};
     bool pushed = false;
-    while (mPendingLoadedImages.top().loadId == mLoadCounter) {
+    while (!mPendingLoadedImages.empty() && mPendingLoadedImages.top().loadId == mLoadCounter) {
         ++mLoadCounter;
 
         // null image pointers indicate failed loads. These shouldn't be pushed.
