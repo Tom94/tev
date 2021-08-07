@@ -180,6 +180,9 @@ void coCaptureVar(Task<T>& task, auto* var) {
     });
 }
 
+// Ties the lifetime of a lambda coroutine's captures
+// to that of the coroutine.
+// Taken from https://stackoverflow.com/a/68630143
 inline auto coLambda(auto&& executor) {
     return [executor=std::move(executor)]<typename ...Args>(Args&&... args) {
         using ReturnType = decltype(executor(args...));
