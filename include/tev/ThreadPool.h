@@ -70,6 +70,7 @@ template <typename future_t, typename data_t>
 struct TaskPromise : public TaskPromiseBase<data_t> {
     std::experimental::coroutine_handle<> precursor;
     Latch latch{2};
+    std::exception_ptr eptr;
 
     future_t get_return_object() noexcept {
         return {std::experimental::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this)};
@@ -78,7 +79,8 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
     std::experimental::suspend_never initial_suspend() const noexcept { return {}; }
 
     void unhandled_exception() {
-        tlog::error() << "Unhandled exception in Task<T>";
+        eptr = std::current_exception();
+    }
     }
 
     // The coroutine is about to complete (via co_return or reaching the end of the coroutine body).
@@ -122,7 +124,11 @@ struct Task {
         return handle.done();
     }
 
-    T await_resume() const noexcept {
+    T await_resume() const {
+        if (handle.promise().eptr) {
+            std::rethrow_exception(handle.promise().eptr);
+        }
+
         if constexpr (!std::is_void_v<T>) {
             // The returned value here is what `co_await our_task` evaluates to
             return std::move(handle.promise().data);
@@ -144,6 +150,9 @@ struct Task {
 
     T get() const {
         wait();
+        if (handle.promise().eptr) {
+            std::rethrow_exception(handle.promise().eptr);
+        }
         if constexpr (!std::is_void_v<T>) {
             return std::move(handle.promise().data);
         }
