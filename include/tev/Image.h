@@ -180,8 +180,15 @@ Task<std::shared_ptr<Image>> tryLoadImage(int imageId, filesystem::path path, st
 Task<std::shared_ptr<Image>> tryLoadImage(filesystem::path path, std::string channelSelector);
 
 struct ImageAddition {
+    int loadId;
     bool shallSelect;
     std::shared_ptr<Image> image;
+
+    struct Comparator {
+        bool operator()(const ImageAddition& a, const ImageAddition& b) {
+            return a.loadId > b.loadId;
+        }
+    };
 };
 
 class BackgroundImagesLoader {
@@ -189,8 +196,20 @@ public:
     void enqueue(const filesystem::path& path, const std::string& channelSelector, bool shallSelect);
     ImageAddition tryPop() { return mLoadedImages.tryPop(); }
 
+    bool publishSortedLoads();
+
 private:
     SharedQueue<ImageAddition> mLoadedImages;
+
+    std::priority_queue<
+        ImageAddition,
+        std::vector<ImageAddition>,
+        ImageAddition::Comparator
+    > mPendingLoadedImages;
+    std::mutex mPendingLoadedImagesMutex;
+
+    std::atomic<int> mLoadCounter{0};
+    std::atomic<int> mUnsortedLoadCounter{0};
 };
 
 TEV_NAMESPACE_END
