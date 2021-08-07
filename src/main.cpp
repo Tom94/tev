@@ -432,7 +432,9 @@ int mainFunc(const vector<string>& arguments) {
     // On some linux distributions glfwTerminate() (which is called by
     // nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
-    //nanogui::shutdown();
+#if defined(__APPLE__) or defined(_WIN32)
+    nanogui::shutdown();
+#endif
 
     if (ipcThread.joinable()) {
         ipcThread.join();
