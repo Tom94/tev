@@ -108,26 +108,26 @@ public:
     }
 
     template <typename T>
-    void copyToTyped(Channel& channel, ThreadPool& threadPool) const {
+    void copyToTyped(Channel& channel, vector<future<void>>& futures) const {
         int width = channel.size().x();
         int widthSubsampled = width/mImfChannel.ySampling;
 
         auto data = reinterpret_cast<const T*>(mData.data());
-        threadPool.parallelForNoWait<int>(0, channel.size().y(), [this, &channel, width, widthSubsampled, data](int y) {
+        gThreadPool->parallelForAsync<int>(0, channel.size().y(), [this, &channel, width, widthSubsampled, data](int y) {
             for (int x = 0; x < width; ++x) {
                 channel.at({x, y}) = data[x/mImfChannel.xSampling + (y/mImfChannel.ySampling) * widthSubsampled];
             }
-        });
+        }, futures);
     }
 
-    void copyTo(Channel& channel, ThreadPool& threadPool) const {
+    void copyTo(Channel& channel, vector<future<void>>& futures) const {
         switch (mImfChannel.type) {
             case Imf::HALF:
-                copyToTyped<::half>(channel, threadPool); break;
+                copyToTyped<::half>(channel, futures); break;
             case Imf::FLOAT:
-                copyToTyped<float>(channel, threadPool); break;
+                copyToTyped<float>(channel, futures); break;
             case Imf::UINT:
-                copyToTyped<uint32_t>(channel, threadPool); break;
+                copyToTyped<uint32_t>(channel, futures); break;
             default:
                 throw runtime_error("Invalid pixel type encountered.");
         }
@@ -187,78 +187,6 @@ l_foundPart:
     if (size.x() == 0 || size.y() == 0) {
         throw invalid_argument{"EXR image has zero pixels."};
     }
-
-    // Inline helper class for dealing with the raw channels loaded from an exr file.
-    class RawChannel {
-    public:
-        RawChannel(string name, Imf::Channel imfChannel)
-        : mName(name), mImfChannel(imfChannel) {
-        }
-
-        void resize(size_t size) {
-            mData.resize(size * bytesPerPixel());
-        }
-
-        void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
-            int width = dw.max.x - dw.min.x + 1;
-            frameBuffer.insert(mName.c_str(), Imf::Slice(
-                mImfChannel.type,
-                mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
-                bytesPerPixel(), bytesPerPixel() * width,
-                mImfChannel.xSampling, mImfChannel.ySampling, 0
-            ));
-        }
-
-        void copyTo(Channel& channel, vector<future<void>>& futures) const {
-            switch (mImfChannel.type) {
-                case Imf::HALF: {
-                    auto data = reinterpret_cast<const ::half*>(mData.data());
-                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
-                        channel.at(i) = data[i];
-                    }, futures);
-                    break;
-                }
-
-                case Imf::FLOAT: {
-                    auto data = reinterpret_cast<const float*>(mData.data());
-                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
-                        channel.at(i) = data[i];
-                    }, futures);
-                    break;
-                }
-
-                case Imf::UINT: {
-                    auto data = reinterpret_cast<const uint32_t*>(mData.data());
-                    gThreadPool->parallelForAsync<DenseIndex>(0, channel.count(), [&, data](DenseIndex i) {
-                        channel.at(i) = data[i];
-                    }, futures);
-                    break;
-                }
-
-                default:
-                    throw runtime_error("Invalid pixel type encountered.");
-            }
-        }
-
-        const string& name() const {
-            return mName;
-        }
-
-    private:
-        int bytesPerPixel() const {
-            switch (mImfChannel.type) {
-                case Imf::HALF:  return sizeof(::half);
-                case Imf::FLOAT: return sizeof(float);
-                case Imf::UINT:  return sizeof(uint32_t);
-                default:
-                    throw runtime_error("Invalid pixel type encountered.");
-            }
-        }
-
-        string mName;
-        Imf::Channel mImfChannel;
-        vector<char> mData;
-    };
 
     vector<RawChannel> rawChannels;
     Imf::FrameBuffer frameBuffer;
