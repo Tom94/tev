@@ -14,6 +14,13 @@
 
 TEV_NAMESPACE_BEGIN
 
+template <typename T>
+void waitAll(const std::vector<std::future<T>>& futures) {
+    for (auto& f : futures) {
+        f.wait();
+    }
+}
+
 class ThreadPool {
 public:
     ThreadPool();
@@ -56,27 +63,33 @@ public:
     void flushQueue();
 
     template <typename Int, typename F>
-    void parallelForNoWait(Int start, Int end, F body) {
+    void parallelForAsync(Int start, Int end, F body, std::vector<std::future<void>>& futures) {
         Int localNumThreads = (Int)mNumThreads;
 
         Int range = end - start;
         Int chunk = (range / localNumThreads) + 1;
 
         for (Int i = 0; i < localNumThreads; ++i) {
-            enqueueTask([i, chunk, start, end, body] {
+            futures.emplace_back(enqueueTask([i, chunk, start, end, body] {
                 Int innerStart = start + i * chunk;
                 Int innerEnd = std::min(end, start + (i + 1) * chunk);
                 for (Int j = innerStart; j < innerEnd; ++j) {
                     body(j);
                 }
-            });
+            }));
         }
     }
 
     template <typename Int, typename F>
+    std::vector<std::future<void>> parallelForAsync(Int start, Int end, F body) {
+        std::vector<std::future<void>> futures;
+        parallelForAsync(start, end, body, futures);
+        return futures;
+    }
+
+    template <typename Int, typename F>
     void parallelFor(Int start, Int end, F body) {
-        parallelForNoWait(start, end, body);
-        waitUntilFinished();
+        waitAll(parallelForAsync(start, end, body));
     }
 
 private:

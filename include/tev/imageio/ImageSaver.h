@@ -5,6 +5,8 @@
 
 #include <tev/Common.h>
 
+#include <Eigen/Dense>
+
 #include <ostream>
 #include <string>
 #include <vector>

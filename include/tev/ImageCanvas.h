@@ -176,6 +176,9 @@ private:
     EMetric mMetric = Error;
 
     std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mMeanValues;
+    // A custom threadpool is used to ensure progress
+    // on the global threadpool, even when excessively
+    // many mean value computations are scheduled.
     ThreadPool mMeanValueThreadPool;
 };
 

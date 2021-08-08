@@ -249,8 +249,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     vector<float> stridedImageData(stridedImageDataSize);
     payload >> stridedImageData;
 
-    ThreadPool threadPool;
-    threadPool.parallelFor<DenseIndex>(0, nPixels, [&](DenseIndex px) {
+    gThreadPool->parallelFor<DenseIndex>(0, nPixels, [&](DenseIndex px) {
         for (int32_t c = 0; c < result.nChannels; ++c) {
             result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
         }

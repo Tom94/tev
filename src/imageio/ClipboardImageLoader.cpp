@@ -25,7 +25,6 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
 
 ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
-    ThreadPool threadPool;
 
     char magic[4];
     clip::image_spec spec;
@@ -84,7 +83,7 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
     //       clip doesn't properly handle this... so copy&pasting transparent images
     //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
     bool premultipliedAlpha = false && numChannels >= 4;
-    threadPool.parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    gThreadPool->parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = y * numBytesPerRow + x * numChannels;
             for (int c = numChannels-1; c >= 0; --c) {

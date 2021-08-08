@@ -3,9 +3,10 @@
 
 #pragma once
 
+#include <nanogui/shader.h>
 #include <nanogui/texture.h>
 
-#include <nanogui/shader.h>
+#include <Eigen/Dense>
 
 TEV_NAMESPACE_BEGIN
 

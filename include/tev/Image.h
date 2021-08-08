@@ -9,6 +9,8 @@
 
 #include <nanogui/texture.h>
 
+#include <Eigen/Dense>
+
 #include <atomic>
 #include <istream>
 #include <map>
@@ -149,6 +151,8 @@ public:
 
 private:
     // A single worker is enough, since parallelization will happen _within_ each image load.
+    // We want to focus all resources to load images in order as fast as possible, rather than
+    // our of order.
     ThreadPool mWorkers{1};
     SharedQueue<ImageAddition> mLoadedImages;
 };

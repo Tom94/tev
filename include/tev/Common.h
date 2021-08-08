@@ -6,8 +6,6 @@
 #include <tinyformat.h>
 #include <tinylogger/tinylogger.h>
 
-#include <Eigen/Dense>
-
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -59,6 +57,9 @@
 struct NVGcontext;
 
 TEV_NAMESPACE_BEGIN
+
+class ThreadPool;
+extern ThreadPool* gThreadPool;
 
 inline uint32_t swapBytes(uint32_t value) {
 #ifdef _WIN32

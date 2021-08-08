@@ -108,26 +108,26 @@ public:
     }
 
     template <typename T>
-    void copyToTyped(Channel& channel, ThreadPool& threadPool) const {
+    void copyToTyped(Channel& channel, vector<future<void>>& futures) const {
         int width = channel.size().x();
         int widthSubsampled = width/mImfChannel.ySampling;
 
         auto data = reinterpret_cast<const T*>(mData.data());
-        threadPool.parallelForNoWait<int>(0, channel.size().y(), [this, &channel, width, widthSubsampled, data](int y) {
+        gThreadPool->parallelForAsync<int>(0, channel.size().y(), [this, &channel, width, widthSubsampled, data](int y) {
             for (int x = 0; x < width; ++x) {
                 channel.at({x, y}) = data[x/mImfChannel.xSampling + (y/mImfChannel.ySampling) * widthSubsampled];
             }
-        });
+        }, futures);
     }
 
-    void copyTo(Channel& channel, ThreadPool& threadPool) const {
+    void copyTo(Channel& channel, vector<future<void>>& futures) const {
         switch (mImfChannel.type) {
             case Imf::HALF:
-                copyToTyped<::half>(channel, threadPool); break;
+                copyToTyped<::half>(channel, futures); break;
             case Imf::FLOAT:
-                copyToTyped<float>(channel, threadPool); break;
+                copyToTyped<float>(channel, futures); break;
             case Imf::UINT:
-                copyToTyped<uint32_t>(channel, threadPool); break;
+                copyToTyped<uint32_t>(channel, futures); break;
             default:
                 throw runtime_error("Invalid pixel type encountered.");
         }
@@ -155,7 +155,6 @@ private:
 
 ImageData ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, bool& hasPremultipliedAlpha) const {
     ImageData result;
-    ThreadPool threadPool;
 
     StdIStream stdIStream{iStream, path.str().c_str()};
     Imf::MultiPartInputFile multiPartFile{stdIStream};
@@ -223,7 +222,7 @@ l_foundPart:
         result.layers.emplace_back(layer);
     }
 
-    threadPool.parallelFor(0, (int)rawChannels.size(), [&](int i) {
+    gThreadPool->parallelFor(0, (int)rawChannels.size(), [&](int i) {
         rawChannels[i].resize((DenseIndex)size.x() * size.y());
     });
 
@@ -238,11 +237,11 @@ l_foundPart:
         result.channels.emplace_back(Channel{rawChannel.name(), size});
     }
 
+    vector<future<void>> futures;
     for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].copyTo(result.channels[i], threadPool);
+        rawChannels[i].copyTo(result.channels[i], futures);
     }
-
-    threadPool.waitUntilFinished();
+    waitAll(futures);
 
     hasPremultipliedAlpha = true;
 

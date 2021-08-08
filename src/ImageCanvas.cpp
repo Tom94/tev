@@ -332,8 +332,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
     // Flatten image into vector
     result.resize(4 * numPixels, 0);
 
-    ThreadPool pool;
-    pool.parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
+    gThreadPool->parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
         const auto& channelData = channels[i].data();
         for (DenseIndex j = 0; j < channelData.size(); ++j) {
             result[j * 4 + i] = channelData(j);
@@ -349,7 +348,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
-        pool.parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
+        gThreadPool->parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
             for (DenseIndex j = 0; j < numPixels; ++j) {
                 float alpha = result[j * 4 + 3];
                 if (alpha == 0) {
@@ -377,8 +376,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
     // Store as LDR image.
     result.resize(floatData.size());
 
-    ThreadPool pool;
-    pool.parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+    gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
         size_t start = 4 * i;
         Vector3f value = applyTonemap({
             applyExposureAndOffset(floatData[start]),
@@ -483,8 +481,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     bool onlyAlpha = all_of(begin(result), end(result), [](const Channel& c) { return c.name() == "A"; });
 
     if (!reference) {
-        ThreadPool pool;
-        pool.parallelFor(0, (int)channelNames.size(), [&](int i) {
+        gThreadPool->parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
             for (DenseIndex j = 0; j < chan->count(); ++j) {
                 result[i].at(j) = chan->eval(j);
@@ -495,8 +492,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         Vector2i offset = (reference->size() - size) / 2;
         auto referenceChannels = reference->channelsInGroup(requestedChannelGroup);
 
-        ThreadPool pool;
-        pool.parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
+        gThreadPool->parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
             const auto* chan = image->channel(channelNames[i]);
             bool isAlpha = !onlyAlpha && result[i].name() == "A";
 
@@ -620,16 +616,16 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
     auto numElements = image->count();
     Eigen::MatrixXi indices(numElements, nChannels);
 
-    ThreadPool pool;
+    vector<future<void>> futures;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        pool.parallelForNoWait<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
+        gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
             indices(j, i) = valToBin(channel.eval(j));
-        });
+        }, futures);
     }
-    pool.waitUntilFinished();
+    waitAll(futures);
 
-    pool.parallelFor(0, nChannels, [&](int i) {
+    gThreadPool->parallelFor(0, nChannels, [&](int i) {
         for (DenseIndex j = 0; j < numElements; ++j) {
             result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
         }
