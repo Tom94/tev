@@ -30,12 +30,12 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool supportsHdr)
+ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool /*supportsHdr*/)
 : nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
     if (floatBuffer && !m_float_buffer) {
         tlog::warning() << "Failed to create floating point frame buffer.";
     }
-    mSupportsHdr = m_float_buffer && supportsHdr;
+    mSupportsHdr = m_float_buffer;
 
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
