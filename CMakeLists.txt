@@ -44,11 +44,6 @@ if (MSVC)
     # Parallel build
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 
-    # 32 bit windows
-    if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DEIGEN_DONT_ALIGN")
-    endif()
-
     # Static build
     set(CompilerFlags
         CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
@@ -199,7 +194,6 @@ include_directories(
     ${ARGS_INCLUDE}
     ${CLIP_INCLUDE}
     ${DIRECTXTEX_INCLUDE}
-    ${EIGEN_INCLUDE}
     ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}
     ${NANOGUI_EXTRA_INCS}

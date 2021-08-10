@@ -16,19 +16,19 @@
 #include <numeric>
 #include <set>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
+ImageCanvas::ImageCanvas(Widget* parent, float pixelRatio)
 : Canvas{parent, 1, false, false, false}, mPixelRatio{pixelRatio} {
     mShader.reset(new UberShader{render_pass()});
     set_draw_border(false);
 }
 
-bool ImageCanvas::scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) {
+bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
     if (Canvas::scroll_event(p, rel)) {
         return true;
     }
@@ -43,7 +43,7 @@ bool ImageCanvas::scroll_event(const nanogui::Vector2i& p, const nanogui::Vector
         scaleAmount /= std::log2(1.1f);
     }
 
-    scale(scaleAmount, {p.x(), p.y()});
+    scale(scaleAmount, Vector2f{p});
     return true;
 }
 
@@ -53,20 +53,20 @@ void ImageCanvas::draw_contents() {
 
     if (!image) {
         mShader->draw(
-            2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
-            Vector2f::Constant(20)
+            2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
+            Vector2f{20.0f}
         );
         return;
     }
 
     if (!mReference || glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || image == mReference.get()) {
         mShader->draw(
-            2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
-            Vector2f::Constant(20),
+            2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
+            Vector2f{20.0f},
             image->texture(mRequestedChannelGroup),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
-            toNanogui(transform(image).inverse().matrix()),
+            inverse(transform(image)),
             mExposure,
             mOffset,
             mGamma,
@@ -77,14 +77,14 @@ void ImageCanvas::draw_contents() {
     }
 
     mShader->draw(
-        2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
-        Vector2f::Constant(20),
+        2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
+        Vector2f{20.0f},
         mImage->texture(mRequestedChannelGroup),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
-        toNanogui(transform(mImage.get()).inverse().matrix()),
+        inverse(transform(mImage.get())),
         mReference->texture(mRequestedChannelGroup),
-        toNanogui(transform(mReference.get()).inverse().matrix()),
+        inverse(transform(mReference.get())),
         mExposure,
         mOffset,
         mGamma,
@@ -95,16 +95,16 @@ void ImageCanvas::draw_contents() {
 }
 
 void ImageCanvas::draw(NVGcontext *ctx) {
-    nanogui::Canvas::draw(ctx);
+    Canvas::draw(ctx);
 
     if (mImage) {
         auto texToNano = textureToNanogui(mImage.get());
-        auto nanoToTex = texToNano.inverse();
+        auto nanoToTex = inverse(texToNano);
 
-        Vector2f pixelSize = texToNano * Vector2f::Ones() - texToNano * Vector2f::Zero();
+        Vector2f pixelSize = texToNano * Vector2f{1.0f} - texToNano * Vector2f{0.0f};
 
-        Vector2f topLeft = (nanoToTex * Vector2f::Zero());
-        Vector2f bottomRight = (nanoToTex * Vector2f{m_size.x(), m_size.y()});
+        Vector2f topLeft = (nanoToTex * Vector2f{0.0f});
+        Vector2f bottomRight = (nanoToTex * Vector2f{m_size});
 
         Vector2i startIndices = Vector2i{
             static_cast<int>(floor(topLeft.x())),
@@ -121,7 +121,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             // Remove duplicates
             channels.erase(unique(begin(channels), end(channels)), end(channels));
 
-            vector<nanogui::Color> colors;
+            vector<Color> colors;
             for (const auto& channel : channels) {
                 colors.emplace_back(Channel::color(channel));
             }
@@ -143,7 +143,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
             vector<float> values;
             for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
                 for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
-                    Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
+                    Vector2i nano = Vector2i{texToNano * (Vector2f{cur} + Vector2f{0.5f})};
                     getValuesAtNanoPos(nano, values, channels);
 
                     TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
@@ -159,19 +159,19 @@ void ImageCanvas::draw(NVGcontext *ctx) {
 
                             pos = Vector2f{
                                 m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
-                                m_pos.y() + nano.y(),
+                                (float)m_pos.y() + nano.y(),
                             };
                         } else {
                             str = tfm::format("%.4f", values[i]);
 
                             pos = Vector2f{
-                                m_pos.x() + nano.x(),
+                                (float)m_pos.x() + nano.x(),
                                 m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
                             };
                         }
 
-                        nanogui::Color col = colors[i];
-                        nvgFillColor(ctx, nanogui::Color(col.r(), col.g(), col.b(), fontAlpha));
+                        Color col = colors[i];
+                        nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
                         drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
                     }
                 }
@@ -179,7 +179,7 @@ void ImageCanvas::draw(NVGcontext *ctx) {
         }
     }
 
-    // If we're not in fullscreen mode draw an inner drop shadow. (adapted from nanogui::Window)
+    // If we're not in fullscreen mode draw an inner drop shadow. (adapted from Window)
     if (m_pos.x() != 0) {
         int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
         NVGpaint shadowPaint = nvgBoxGradient(
@@ -200,18 +200,18 @@ void ImageCanvas::draw(NVGcontext *ctx) {
 }
 
 void ImageCanvas::translate(const Vector2f& amount) {
-    mTransform = Translation2f(amount) * mTransform;
+    mTransform = Matrix3f::translate(amount) * mTransform;
 }
 
 void ImageCanvas::scale(float amount, const Vector2f& origin) {
     float scaleFactor = pow(1.1f, amount);
 
     // Use the current cursor position as the origin to scale around.
-    Vector2f offset = -(origin - Eigen::Vector2f(position().x(), position().y())) + 0.5f * Eigen::Vector2f(m_size.x(), m_size.y());
+    Vector2f offset = -(origin - Vector2f{position()}) + 0.5f * Vector2f{m_size};
     auto scaleTransform =
-        Translation2f(-offset) *
-        Scaling(scaleFactor) *
-        Translation2f(offset);
+        Matrix3f::translate(-offset) *
+        Matrix3f::scale(Vector2f{scaleFactor}) *
+        Matrix3f::translate(offset);
 
     mTransform = scaleTransform * mTransform;
 }
@@ -220,8 +220,8 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-nanogui::Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
-    Vector2f imagePos = textureToNanogui(&image).inverse() * mousePos.cast<float>();
+Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
+    Vector2f imagePos = inverse(textureToNanogui(&image)) * Vector2f{mousePos};
     return {
         static_cast<int>(floor(imagePos.x())),
         static_cast<int>(floor(imagePos.y())),
@@ -276,19 +276,19 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, float gamma, ETonemap 
                     return Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
                 };
 
-                result = falseColor(log2(value.mean() + 0.03125f) / 10 + 0.5f);
+                result = falseColor(log2(mean(value) + 0.03125f) / 10 + 0.5f);
                 break;
             }
         case ETonemap::PositiveNegative:
             {
-                result = {-2.0f * value.cwiseMin(Vector3f::Zero()).mean(), 2.0f * value.cwiseMax(Vector3f::Zero()).mean(), 0.0f};
+                result = {-2.0f * mean(min(value, Vector3f{0.0f})), 2.0f * mean(max(value, Vector3f{0.0f})), 0.0f};
                 break;
             }
         default:
             throw runtime_error{"Invalid tonemap selected."};
     }
 
-    return result.cwiseMax(Vector3f::Zero()).cwiseMin(Vector3f::Ones());
+    return min(max(result, Vector3f{0.0f}), Vector3f{1.0f});
 }
 
 float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
@@ -305,12 +305,12 @@ float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
 }
 
 void ImageCanvas::fitImageToScreen(const Image& image) {
-    Vector2f nanoguiImageSize = Vector2f{image.size().x(), image.size().y()} / mPixelRatio;
-    mTransform = Scaling(Vector2f{m_size.x(), m_size.y()}.cwiseQuotient(nanoguiImageSize).minCoeff());
+    Vector2f nanoguiImageSize = Vector2f{image.size()} / mPixelRatio;
+    mTransform = Matrix3f::scale(Vector2f{m_size} / min(nanoguiImageSize.x(), nanoguiImageSize.y()));
 }
 
 void ImageCanvas::resetTransform() {
-    mTransform = Affine2f::Identity();
+    mTransform = Matrix3f::scale(Vector2f{1.0f});
 }
 
 std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
@@ -376,7 +376,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
     // Store as LDR image.
     result.resize(floatData.size());
 
-    gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+    gThreadPool->parallelFor<size_t>(0, numPixels, [&](size_t i) {
         size_t start = 4 * i;
         Vector3f value = applyTonemap({
             applyExposureAndOffset(floatData[start]),
@@ -399,7 +399,7 @@ void ImageCanvas::saveImage(const path& path) const {
         return;
     }
 
-    nanogui::Vector2i imageSize = mImage->size();
+    Vector2i imageSize = mImage->size();
 
     tlog::info() << "Saving currently displayed image as '" << path << "'.";
     auto start = chrono::system_clock::now();
@@ -585,7 +585,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    int nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
+    auto result = make_shared<CanvasStatistics>();
+
+    int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
@@ -595,15 +597,13 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         minimum = min(minimum, cmin);
     }
 
-    auto result = make_shared<CanvasStatistics>();
-
     result->mean = nChannels > 0 ? (mean / nChannels) : 0;
     result->maximum = maximum;
     result->minimum = minimum;
 
     // Now that we know the maximum and minimum value we can define our histogram bin size.
     static const int NUM_BINS = 400;
-    result->histogram = MatrixXf::Zero(NUM_BINS, nChannels);
+    result->histogram.resize(NUM_BINS*nChannels);
 
     // We're going to draw our histogram in log space.
     static const float addition = 0.001f;
@@ -634,14 +634,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     auto numElements = image->count();
-    Eigen::MatrixXi indices(numElements, nChannels);
+    std::vector<int> indices(numElements*nChannels);
 
     vector<Task<void>> tasks;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
             gThreadPool->parallelForAsync<size_t>(0, numElements, [&, i](size_t j) {
-                indices(j, i) = valToBin(channel.eval(j));
+                indices[j + i * numElements] = valToBin(channel.eval(j));
             }, priority)
         );
     }
@@ -652,25 +652,33 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     co_await gThreadPool->parallelForAsync(0, nChannels, [&](int i) {
         for (size_t j = 0; j < numElements; ++j) {
-            result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
+            result->histogram[indices[j + i * numElements] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
         }
     }, priority);
 
-    for (int i = 0; i < NUM_BINS; ++i) {
-        result->histogram.row(i) /= binToVal(i + 1) - binToVal(i);
+    for (int i = 0; i < nChannels; ++i) {
+        for (int j = 0; j < NUM_BINS; ++j) {
+            result->histogram[j + i * NUM_BINS] /= binToVal(j + 1) - binToVal(j);
+        }
     }
 
     // Normalize the histogram according to the 10th-largest
     // element to avoid a couple spikes ruining the entire graph.
-    MatrixXf temp = result->histogram;
-    DenseIndex idx = temp.size() - 10;
-    nth_element(temp.data(), temp.data() + idx, temp.data() + temp.size());
-    result->histogram /= max(temp(idx), 0.1f) * 1.3f;
+    auto tmp = result->histogram;
+    size_t idx = tmp.size() - 10;
+    nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
+
+    float norm = 1.0f / (max(tmp[idx], 0.1f) * 1.3f);
+    for (int i = 0; i < nChannels; ++i) {
+        for (int j = 0; j < NUM_BINS; ++j) {
+            result->histogram[j + i * NUM_BINS] *= norm;
+        }
+    }
 
     co_return result;
 }
 
-Vector2f ImageCanvas::pixelOffset(const nanogui::Vector2i& size) const {
+Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
     // Translate by half of a pixel to avoid pixel boundaries aligning perfectly with texels.
     // The translation only needs to happen for axes with even resolution. Odd-resolution
     // axes are implicitly shifted by half a pixel due to the centering operation.
@@ -679,36 +687,36 @@ Vector2f ImageCanvas::pixelOffset(const nanogui::Vector2i& size) const {
     return Vector2f{
         size.x() % 2 == 0 ?  0.5f : 0.0f,
         size.y() % 2 == 0 ? -0.5f : 0.0f,
-    } + Vector2f::Constant(0.1111111f);
+    } + Vector2f{0.1111111f};
 }
 
-Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
+Matrix3f ImageCanvas::transform(const Image* image) {
     if (!image) {
-        return Transform<float, 2, 0>::Identity();
+        return Matrix3f::scale(Vector2f{1.0f});
     }
 
     // Center image, scale to pixel space, translate to desired position,
     // then rescale to the [-1, 1] square for drawing.
     return
-        Scaling(2.0f / m_size.x(), -2.0f / m_size.y()) *
+        Matrix3f::scale(Vector2f{2.0f / m_size.x(), -2.0f / m_size.y()}) *
         mTransform *
-        Scaling(1.0f / mPixelRatio) *
-        Translation2f(pixelOffset(image->size())) *
-        Scaling(Vector2f{image->size().x(), image->size().y()}) *
-        Translation2f(Vector2f::Constant(-0.5f));
+        Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
+        Matrix3f::translate(pixelOffset(image->size())) *
+        Matrix3f::scale(Vector2f{image->size()}) *
+        Matrix3f::translate(Vector2f{-0.5f});
 }
 
-Transform<float, 2, 2> ImageCanvas::textureToNanogui(const Image* image) {
+Matrix3f ImageCanvas::textureToNanogui(const Image* image) {
     if (!image) {
-        return Transform<float, 2, 0>::Identity();
+        return Matrix3f::scale(Vector2f{1.0f});
     }
 
     // Move origin to centre of image, scale pixels, apply our transform, move origin back to top-left.
     return
-        Translation2f(0.5f * Vector2f{m_size.x(), m_size.y()}) *
+        Matrix3f::translate(0.5f * Vector2f{m_size}) *
         mTransform *
-        Scaling(1.0f / mPixelRatio) *
-        Translation2f(-0.5f * Vector2f{image->size().x(), image->size().y()} + pixelOffset(image->size()));
+        Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
+        Matrix3f::translate(-0.5f * Vector2f{image->size()} + pixelOffset(image->size()));
 }
 
 TEV_NAMESPACE_END

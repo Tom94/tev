@@ -5,8 +5,7 @@
 
 #include <nanogui/shader.h>
 #include <nanogui/texture.h>
-
-#include <Eigen/Dense>
+#include <nanogui/vector.h>
 
 TEV_NAMESPACE_BEGIN
 
@@ -16,12 +15,12 @@ public:
     virtual ~UberShader();
 
     // Draws just a checkerboard.
-    void draw(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
+    void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
 
     // Draws an image.
     void draw(
-        const Eigen::Vector2f& pixelSize,
-        const Eigen::Vector2f& checkerSize,
+        const nanogui::Vector2f& pixelSize,
+        const nanogui::Vector2f& checkerSize,
         nanogui::Texture* textureImage,
         const nanogui::Matrix3f& transformImage,
         float exposure,
@@ -33,8 +32,8 @@ public:
 
     // Draws a difference between a reference and an image.
     void draw(
-        const Eigen::Vector2f& pixelSize,
-        const Eigen::Vector2f& checkerSize,
+        const nanogui::Vector2f& pixelSize,
+        const nanogui::Vector2f& checkerSize,
         nanogui::Texture* textureImage,
         const nanogui::Matrix3f& transformImage,
         nanogui::Texture* textureReference,
@@ -56,7 +55,7 @@ public:
     }
 
 private:
-    void bindCheckerboardData(const Eigen::Vector2f& pixelSize, const Eigen::Vector2f& checkerSize);
+    void bindCheckerboardData(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
 
     void bindImageData(
         nanogui::Texture* textureImage,

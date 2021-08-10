@@ -23,7 +23,6 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace Eigen;
 using namespace filesystem;
 using namespace nanogui;
 using namespace std;
@@ -536,7 +535,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         mSidebar->set_fixed_width(clamp(p.x(), 210, m_size.x() - 10));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
-        Eigen::Vector2f relativeMovement = {rel.x(), rel.y()};
+        nanogui::Vector2f relativeMovement = {rel};
         auto* glfwWindow = screen()->glfw_window();
         // There is no explicit access to the currently pressed modifier keys here, so we
         // need to directly ask GLFW.
@@ -949,6 +948,7 @@ void ImageViewer::draw_contents() {
     if (lazyCanvasStatistics) {
         if (lazyCanvasStatistics->isReady()) {
             auto statistics = lazyCanvasStatistics->get();
+            mHistogram->setNChannels(statistics->nChannels);
             mHistogram->setValues(statistics->histogram);
             mHistogram->setMinimum(statistics->minimum);
             mHistogram->setMean(statistics->mean);
@@ -966,7 +966,8 @@ void ImageViewer::draw_contents() {
             );
         }
     } else {
-        mHistogram->setValues(MatrixXf::Zero(1, 1));
+        mHistogram->setNChannels({1});
+        mHistogram->setValues({0.0f});
         mHistogram->setMinimum(0);
         mHistogram->setMean(0);
         mHistogram->setMaximum(0);
