@@ -5,8 +5,8 @@
 
 #include <istream>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -34,7 +34,7 @@ Task<std::tuple<ImageData, bool>> EmptyImageLoader::load(istream& iStream, const
         throw invalid_argument{tfm::format("Invalid magic empty string %s", magic)};
     }
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }

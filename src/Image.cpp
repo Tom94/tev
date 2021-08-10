@@ -13,8 +13,8 @@
 #include <fstream>
 #include <istream>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -140,11 +140,11 @@ string Image::shortName() const {
     return result;
 }
 
-nanogui::Texture* Image::texture(const string& channelGroupName) {
+Texture* Image::texture(const string& channelGroupName) {
     return texture(channelsInGroup(channelGroupName));
 }
 
-nanogui::Texture* Image::texture(const vector<string>& channelNames) {
+Texture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
@@ -157,14 +157,14 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     }
 
     mTextures.emplace(lookup, ImageTexture{
-        new nanogui::Texture{
-            nanogui::Texture::PixelFormat::RGBA,
-            nanogui::Texture::ComponentFormat::Float32,
+        new Texture{
+            Texture::PixelFormat::RGBA,
+            Texture::ComponentFormat::Float32,
             {size().x(), size().y()},
-            nanogui::Texture::InterpolationMode::Trilinear,
-            nanogui::Texture::InterpolationMode::Nearest,
-            nanogui::Texture::WrapMode::ClampToEdge,
-            1, nanogui::Texture::TextureFlags::ShaderRead,
+            Texture::InterpolationMode::Trilinear,
+            Texture::InterpolationMode::Nearest,
+            Texture::WrapMode::ClampToEdge,
+            1, Texture::TextureFlags::ShaderRead,
             true,
         },
         channelNames,
@@ -186,14 +186,14 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
 
             const auto& channelData = chan->data();
             tasks.emplace_back(
-                gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
-                    data[j * 4 + i] = channelData(j);
+                gThreadPool->parallelForAsync<size_t>(0, numPixels, [&channelData, &data, i](size_t j) {
+                    data[j * 4 + i] = channelData[j];
                 }, std::numeric_limits<int>::max())
             );
         } else {
             float val = i == 3 ? 1 : 0;
             tasks.emplace_back(
-                gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
+                gThreadPool->parallelForAsync<size_t>(0, numPixels, [&data, val, i](size_t j) {
                     data[j * 4 + i] = val;
                 }, std::numeric_limits<int>::max())
             );
@@ -349,7 +349,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
             continue;
         }
 
-        auto numPixels = width * height;
+        auto numPixels = (size_t)width * height;
         vector<float> textureData(numPixels * 4);
 
         // Populate data for sub-region of the texture to be updated
@@ -367,7 +367,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
                 }
             } else {
                 float val = i == 3 ? 1 : 0;
-                for (DenseIndex j = 0; j < numPixels; ++j) {
+                for (size_t j = 0; j < numPixels; ++j) {
                     textureData[j * 4 + i] = val;
                 }
             }

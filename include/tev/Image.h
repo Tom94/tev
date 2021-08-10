@@ -9,8 +9,6 @@
 
 #include <nanogui/texture.h>
 
-#include <Eigen/Dense>
-
 #include <atomic>
 #include <istream>
 #include <map>
@@ -27,11 +25,11 @@ struct ImageData {
     std::vector<std::string> layers;
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
 
-    Eigen::Vector2i size() const {
+    nanogui::Vector2i size() const {
         return channels.front().size();
     }
 
-    Eigen::DenseIndex count() const {
+    size_t count() const {
         return channels.front().count();
     }
 
@@ -121,11 +119,11 @@ public:
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
 
-    Eigen::Vector2i size() const {
+    nanogui::Vector2i size() const {
         return mData.size();
     }
 
-    Eigen::DenseIndex count() const {
+    size_t count() const {
         return mData.count();
     }
 

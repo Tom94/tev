@@ -7,7 +7,7 @@
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
 
-#include <Eigen/Dense>
+#include <nanogui/vector.h>
 
 #include <istream>
 #include <tuple>
@@ -29,7 +29,7 @@ public:
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
 
 protected:
-    static std::vector<Channel> makeNChannels(int numChannels, Eigen::Vector2i size);
+    static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size);
 };
 
 TEV_NAMESPACE_END

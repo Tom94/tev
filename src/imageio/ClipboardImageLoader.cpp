@@ -6,8 +6,8 @@
 
 #include <clip.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -41,9 +41,9 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
         throw invalid_argument{tfm::format("Not sufficient bytes to read image spec (%d vs %d)", iStream.gcount(), sizeof(clip::image_spec))};
     }
 
-    Vector2i size{spec.width, spec.height};
+    Vector2i size{(int)spec.width, (int)spec.height};
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
@@ -55,7 +55,7 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
 
 
     auto numBytesPerRow = numChannels * size.x();
-    auto numBytes = (DenseIndex)numBytesPerRow * size.y();
+    auto numBytes = (size_t)numBytesPerRow * size.y();
     int alphaChannelIndex = 3;
 
     vector<Channel> channels = makeNChannels(numChannels, size);
@@ -83,7 +83,7 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
     //       clip doesn't properly handle this... so copy&pasting transparent images
     //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
     bool premultipliedAlpha = false && numChannels >= 4;
-    co_await gThreadPool->parallelForAsync<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    co_await gThreadPool->parallelForAsync(0, size.y(), [&](int y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = y * numBytesPerRow + x * numChannels;
             for (int c = numChannels-1; c >= 0; --c) {

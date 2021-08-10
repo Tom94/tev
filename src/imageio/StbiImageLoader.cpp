@@ -6,8 +6,8 @@
 
 #include <stb_image.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -61,21 +61,21 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
-    vector<Channel> channels = makeNChannels(numChannels, size);
+    auto channels = makeNChannels(numChannels, size);
     int alphaChannelIndex = 3;
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (isHdr) {
-        auto typedData = reinterpret_cast<float*>(data);
-        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            auto typedData = reinterpret_cast<float*>(data);
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
             }
         }, priority);
     } else {
-        auto typedData = reinterpret_cast<unsigned char*>(data);
-        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            auto typedData = reinterpret_cast<unsigned char*>(data);
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == alphaChannelIndex) {
@@ -90,7 +90,7 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
     vector<pair<size_t, size_t>> matches;
     for (size_t i = 0; i < channels.size(); ++i) {
         size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
+        if (matchesFuzzy(channels.at(i).name(), channelSelector, &matchId)) {
             matches.emplace_back(matchId, i);
         }
     }
@@ -100,7 +100,7 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
     }
 
     for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
+        result.channels.emplace_back(move(channels.at(match.second)));
     }
 
     // STBI can not load layers, so all channels simply reside

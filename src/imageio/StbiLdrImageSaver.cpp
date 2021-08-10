@@ -9,8 +9,8 @@
 #include <ostream>
 #include <vector>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN

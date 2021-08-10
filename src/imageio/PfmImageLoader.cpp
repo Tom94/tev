@@ -4,8 +4,8 @@
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/ThreadPool.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -50,7 +50,7 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
 
     vector<Channel> channels = makeNChannels(numChannels, size);
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
@@ -72,7 +72,7 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
     // Reverse bytes of every float if endianness does not match up with system
     const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
 
-    co_await gThreadPool->parallelForAsync<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    co_await gThreadPool->parallelForAsync(0, size.y(), [&](int y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = (y * size.x() + x) * numChannels;
             for (int c = 0; c < numChannels; ++c) {
@@ -85,7 +85,7 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
                 }
 
                 // Flip image vertically due to PFM format
-                channels[c].at({x, size.y() - y - 1}) = scale * val;
+                channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
             }
         }
     }, priority);
