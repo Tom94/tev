@@ -6,19 +6,20 @@
 
 #include <numeric>
 
-using namespace Eigen;
 using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-Channel::Channel(const std::string& name, Eigen::Vector2i size)
+Channel::Channel(const std::string& name, nanogui::Vector2i size)
 : mName{name} {
-    mData.resize(size.y(), size.x());
+    mCols = size.x();
+    mRows = size.y();
+    mData.resize((size_t)mCols * mRows);
 }
 
 Task<void> Channel::divideByAsync(const Channel& other, int priority) {
-    co_await gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+    co_await gThreadPool->parallelForAsync<size_t>(0, other.count(), [&](size_t i) {
         if (other.at(i) != 0) {
             at(i) /= other.at(i);
         } else {
@@ -28,7 +29,7 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
-    co_await gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
+    co_await gThreadPool->parallelForAsync<size_t>(0, other.count(), [&](size_t i) {
         at(i) *= other.at(i);
     }, priority);
 }

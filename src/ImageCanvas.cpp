@@ -220,7 +220,7 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
+nanogui::Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
     Vector2f imagePos = textureToNanogui(&image).inverse() * mousePos.cast<float>();
     return {
         static_cast<int>(floor(imagePos.x())),
@@ -234,7 +234,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
         return;
     }
 
-    Vector2i imageCoords = getImageCoords(*mImage, nanoPos);
+    auto imageCoords = getImageCoords(*mImage, nanoPos);
     for (const auto& channel : channels) {
         const Channel* c = mImage->channel(channel);
         TEV_ASSERT(c, "Requested channel must exist.");
@@ -243,7 +243,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
 
     // Subtract reference if it exists.
     if (mReference) {
-        Vector2i referenceCoords = getImageCoords(*mReference, nanoPos);
+        auto referenceCoords = getImageCoords(*mReference, nanoPos);
         auto referenceChannels = mReference->channelsInGroup(mRequestedChannelGroup);
         for (size_t i = 0; i < result.size(); ++i) {
             float reference = i < referenceChannels.size() ?
@@ -305,7 +305,7 @@ float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
 }
 
 void ImageCanvas::fitImageToScreen(const Image& image) {
-    Vector2f nanoguiImageSize = image.size().cast<float>() / mPixelRatio;
+    Vector2f nanoguiImageSize = Vector2f{image.size().x(), image.size().y()} / mPixelRatio;
     mTransform = Scaling(Vector2f{m_size.x(), m_size.y()}.cwiseQuotient(nanoguiImageSize).minCoeff());
 }
 
@@ -334,14 +334,14 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
 
     gThreadPool->parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
         const auto& channelData = channels[i].data();
-        for (DenseIndex j = 0; j < channelData.size(); ++j) {
-            result[j * 4 + i] = channelData(j);
+        for (size_t j = 0; j < channelData.size(); ++j) {
+            result[j * 4 + i] = channelData[j];
         }
     }, priority);
 
     // Manually set alpha channel to 1 if the image does not have one.
     if (nChannelsToSave < 4) {
-        for (DenseIndex i = 0; i < numPixels; ++i) {
+        for (size_t i = 0; i < numPixels; ++i) {
             result[i * 4 + 3] = 1;
         }
     }
@@ -349,7 +349,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
         gThreadPool->parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
-            for (DenseIndex j = 0; j < numPixels; ++j) {
+            for (size_t j = 0; j < numPixels; ++j) {
                 float alpha = result[j * 4 + 3];
                 if (alpha == 0) {
                     result[j * 4 + i] = 0;
@@ -399,7 +399,7 @@ void ImageCanvas::saveImage(const path& path) const {
         return;
     }
 
-    Vector2i imageSize = mImage->size();
+    nanogui::Vector2i imageSize = mImage->size();
 
     tlog::info() << "Saving currently displayed image as '" << path << "'.";
     auto start = chrono::system_clock::now();
@@ -501,13 +501,13 @@ vector<Channel> ImageCanvas::channelsFromImages(
     if (!reference) {
         gThreadPool->parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
-            for (DenseIndex j = 0; j < chan->count(); ++j) {
+            for (size_t j = 0; j < chan->count(); ++j) {
                 result[i].at(j) = chan->eval(j);
             }
         }, priority);
     } else {
-        Vector2i size = image->size();
-        Vector2i offset = (reference->size() - size) / 2;
+        Vector2i size = Vector2i{image->size().x(), image->size().y()};
+        Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
         auto referenceChannels = reference->channelsInGroup(requestedChannelGroup);
 
         gThreadPool->parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
@@ -589,9 +589,10 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        mean += channel.data().mean();
-        maximum = max(maximum, channel.data().maxCoeff());
-        minimum = min(minimum, channel.data().minCoeff());
+        auto [cmin, cmax, cmean] = channel.minMaxMean();
+        mean += cmean;
+        maximum = max(maximum, cmax);
+        minimum = min(minimum, cmin);
     }
 
     auto result = make_shared<CanvasStatistics>();
@@ -639,7 +640,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
-            gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
+            gThreadPool->parallelForAsync<size_t>(0, numElements, [&, i](size_t j) {
                 indices(j, i) = valToBin(channel.eval(j));
             }, priority)
         );
@@ -650,7 +651,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     co_await gThreadPool->parallelForAsync(0, nChannels, [&](int i) {
-        for (DenseIndex j = 0; j < numElements; ++j) {
+        for (size_t j = 0; j < numElements; ++j) {
             result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
         }
     }, priority);
@@ -669,7 +670,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     co_return result;
 }
 
-Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
+Vector2f ImageCanvas::pixelOffset(const nanogui::Vector2i& size) const {
     // Translate by half of a pixel to avoid pixel boundaries aligning perfectly with texels.
     // The translation only needs to happen for axes with even resolution. Odd-resolution
     // axes are implicitly shifted by half a pixel due to the centering operation.
@@ -693,7 +694,7 @@ Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
         mTransform *
         Scaling(1.0f / mPixelRatio) *
         Translation2f(pixelOffset(image->size())) *
-        Scaling(image->size().cast<float>()) *
+        Scaling(Vector2f{image->size().x(), image->size().y()}) *
         Translation2f(Vector2f::Constant(-0.5f));
 }
 
@@ -707,7 +708,7 @@ Transform<float, 2, 2> ImageCanvas::textureToNanogui(const Image* image) {
         Translation2f(0.5f * Vector2f{m_size.x(), m_size.y()}) *
         mTransform *
         Scaling(1.0f / mPixelRatio) *
-        Translation2f(-0.5f * image->size().cast<float>() + pixelOffset(image->size()));
+        Translation2f(-0.5f * Vector2f{image->size().x(), image->size().y()} + pixelOffset(image->size()));
 }
 
 TEV_NAMESPACE_END

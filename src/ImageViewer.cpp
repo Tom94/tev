@@ -1403,11 +1403,9 @@ void ImageViewer::normalizeExposureAndOffset() {
     float maximum = numeric_limits<float>::min();
     for (const auto& channelName : channels) {
         const auto& channel = mCurrentImage->channel(channelName);
-        for (DenseIndex i = 0; i < channel->count(); ++i) {
-            float val = channel->eval(i);
-            maximum = max(maximum, val);
-            minimum = min(minimum, val);
-        }
+        auto [cmin, cmax, cmean] = channel->minMaxMean();
+        maximum = max(maximum, cmax);
+        minimum = min(minimum, cmin);
     }
 
     float factor = 1.0f / (maximum - minimum);
@@ -1779,7 +1777,7 @@ void ImageViewer::updateTitle() {
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
-        Eigen::Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
+        nanogui::Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
         TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
         string valuesString;
