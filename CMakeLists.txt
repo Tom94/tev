@@ -117,6 +117,10 @@ if (MSVC)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
     endif()
 
+    # Disable warnings that are present in dependencies and irrelevant to us
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4100") # unused arguments
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd5054") # deprecated enum & operator
+
     # To allow for wildcards in command-line path arguments on windows,
     # we need to link to wsetargv.obj
     # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
