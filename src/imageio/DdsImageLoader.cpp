@@ -6,8 +6,8 @@
 
 #include <DirectXTex.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -208,9 +208,9 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         std::swap(scratchImage, convertedImage);
     }
 
-    vector<Channel> channels = makeNChannels(numChannels, { metadata.width, metadata.height });
+    vector<Channel> channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
 
-    auto numPixels = (DenseIndex)metadata.width * metadata.height;
+    auto numPixels = (size_t)metadata.width * metadata.height;
     if (numPixels == 0) {
         throw invalid_argument{"DDS image has zero pixels."};
     }
@@ -221,7 +221,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         assert(!DirectX::IsSRGB(metadata.format));
         // Assume that the image data is already in linear space.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
@@ -233,8 +233,8 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         // RGB(A) DDS images tend to be in sRGB space, even those not
         // explicitly stored in an *_SRGB format.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
-            int baseIdx = i * numChannels;
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {
                     channels[c].at(i) = typedData[baseIdx + c];
