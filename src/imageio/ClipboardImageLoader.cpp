@@ -83,7 +83,7 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
     //       clip doesn't properly handle this... so copy&pasting transparent images
     //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
     bool premultipliedAlpha = false && numChannels >= 4;
-    gThreadPool->parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    co_await gThreadPool->parallelForAsync<DenseIndex>(0, size.y(), [&](DenseIndex y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = y * numBytesPerRow + x * numChannels;
             for (int c = numChannels-1; c >= 0; --c) {

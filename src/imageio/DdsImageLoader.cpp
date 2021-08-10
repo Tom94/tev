@@ -221,7 +221,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         assert(!DirectX::IsSRGB(metadata.format));
         // Assume that the image data is already in linear space.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
@@ -233,7 +233,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         // RGB(A) DDS images tend to be in sRGB space, even those not
         // explicitly stored in an *_SRGB format.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {

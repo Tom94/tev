@@ -72,7 +72,7 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
     // Reverse bytes of every float if endianness does not match up with system
     const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
 
-    gThreadPool->parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    co_await gThreadPool->parallelForAsync<DenseIndex>(0, size.y(), [&](DenseIndex y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = (y * size.x() + x) * numChannels;
             for (int c = 0; c < numChannels; ++c) {
