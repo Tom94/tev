@@ -13,15 +13,6 @@
 #include <thread>
 #include <vector>
 
-#ifdef __APPLE__
-#include <experimental/coroutine>
-#define COROUTINE_NAMESPACE COROUTINE_NAMESPACE
-#else
-#include <coroutine>
-#define COROUTINE_NAMESPACE std
-#endif
-
-
 
 TEV_NAMESPACE_BEGIN
 
