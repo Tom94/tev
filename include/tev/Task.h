@@ -7,7 +7,7 @@
 
 #ifdef __APPLE__
 #include <experimental/coroutine>
-#define COROUTINE_NAMESPACE COROUTINE_NAMESPACE
+#define COROUTINE_NAMESPACE std::experimental
 #else
 #include <coroutine>
 #define COROUTINE_NAMESPACE std
