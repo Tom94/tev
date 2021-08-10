@@ -67,7 +67,7 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
     auto numPixels = (DenseIndex)size.x() * size.y();
     if (isHdr) {
         auto typedData = reinterpret_cast<float*>(data);
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 channels[c].at(i) = typedData[baseIdx + c];
@@ -75,7 +75,7 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
         }, priority);
     } else {
         auto typedData = reinterpret_cast<unsigned char*>(data);
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&](DenseIndex i) {
             int baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == alphaChannelIndex) {
