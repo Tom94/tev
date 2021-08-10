@@ -9,8 +9,6 @@
 
 #include <nanogui/widget.h>
 
-#include <Eigen/Dense>
-
 TEV_NAMESPACE_BEGIN
 
 class MultiGraph : public nanogui::Widget {
@@ -35,9 +33,11 @@ public:
     const nanogui::Color &textColor() const { return mTextColor; }
     void setTextColor(const nanogui::Color &textColor) { mTextColor = textColor; }
 
-    const Eigen::MatrixXf &values() const { return mValues; }
-    Eigen::MatrixXf &values() { return mValues; }
-    void setValues(const Eigen::MatrixXf &values) { mValues = values; }
+    const std::vector<float> &values() const { return mValues; }
+    std::vector<float> &values() { return mValues; }
+    void setValues(const std::vector<float> &values) { mValues = values; }
+
+    void setNChannels(int nChannels) { mNChannels = nChannels; }
 
     virtual nanogui::Vector2i preferred_size(NVGcontext *ctx) const override;
     virtual void draw(NVGcontext *ctx) override;
@@ -61,11 +61,10 @@ public:
 protected:
     std::string mCaption, mHeader, mFooter;
     nanogui::Color mBackgroundColor, mForegroundColor, mTextColor;
-    Eigen::MatrixXf mValues;
+    std::vector<float> mValues;
+    int mNChannels = 1;
     float mMinimum = 0, mMean = 0, mMaximum = 0;
     int mZeroBin = 0;
-public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
 TEV_NAMESPACE_END

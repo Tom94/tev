@@ -17,7 +17,8 @@ struct CanvasStatistics {
     float mean;
     float maximum;
     float minimum;
-    Eigen::MatrixXf histogram;
+    std::vector<float> histogram;
+    int nChannels;
     int histogramZero;
 };
 
@@ -31,10 +32,11 @@ public:
 
     void draw(NVGcontext *ctx) override;
 
-    void translate(const Eigen::Vector2f& amount);
-    void scale(float amount, const Eigen::Vector2f& origin);
+    void translate(const nanogui::Vector2f& amount);
+    void scale(float amount, const nanogui::Vector2f& origin);
     float extractScale() const {
-        return std::sqrt(mTransform.linear().determinant());
+        float det = mTransform.m[0][0] * mTransform.m[1][1] - mTransform.m[0][1] * mTransform.m[1][0];
+        return std::sqrt(det);
     }
 
     void setExposure(float exposure) {
@@ -63,10 +65,10 @@ public:
         mRequestedChannelGroup = groupName;
     }
 
-    nanogui::Vector2i getImageCoords(const Image& image, Eigen::Vector2i mousePos);
+    nanogui::Vector2i getImageCoords(const Image& image, nanogui::Vector2i mousePos);
 
-    void getValuesAtNanoPos(Eigen::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);
-    std::vector<float> getValuesAtNanoPos(Eigen::Vector2i nanoPos, const std::vector<std::string>& channels) {
+    void getValuesAtNanoPos(nanogui::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);
+    std::vector<float> getValuesAtNanoPos(nanogui::Vector2i nanoPos, const std::vector<std::string>& channels) {
         std::vector<float> result;
         getValuesAtNanoPos(nanoPos, result, channels);
         return result;
@@ -80,8 +82,8 @@ public:
         mTonemap = tonemap;
     }
 
-    static Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value, float gamma, ETonemap tonemap);
-    Eigen::Vector3f applyTonemap(const Eigen::Vector3f& value) const {
+    static nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap);
+    nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value) const {
         return applyTonemap(value, mGamma, mTonemap);
     }
 
@@ -124,16 +126,6 @@ public:
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
-    static nanogui::Matrix3f toNanogui(const Eigen::Matrix3f& transform) {
-        nanogui::Matrix3f result;
-        for (int m = 0; m < 3; ++m) {
-            for (int n = 0; n < 3; ++n) {
-                result.m[n][m] = transform(m, n);
-            }
-        }
-        return result;
-    }
-
 private:
     static std::vector<Channel> channelsFromImages(
         std::shared_ptr<Image> image,
@@ -151,12 +143,12 @@ private:
         int priority
     );
 
-    Eigen::Vector2f pixelOffset(const nanogui::Vector2i& size) const;
+    nanogui::Vector2f pixelOffset(const nanogui::Vector2i& size) const;
 
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
-    Eigen::Transform<float, 2, 2> transform(const Image* image);
-    Eigen::Transform<float, 2, 2> textureToNanogui(const Image* image);
+    nanogui::Matrix3f transform(const Image* image);
+    nanogui::Matrix3f textureToNanogui(const Image* image);
 
     float mPixelRatio = 1;
     float mExposure = 0;
@@ -170,7 +162,7 @@ private:
 
     std::string mRequestedChannelGroup = "";
 
-    Eigen::Transform<float, 2, 2> mTransform = Eigen::Affine2f::Identity();
+    nanogui::Matrix3f mTransform = nanogui::Matrix3f::scale(nanogui::Vector3f(1.0f));
 
     std::unique_ptr<UberShader> mShader;
 

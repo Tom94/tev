@@ -12,8 +12,6 @@
 #include <tev/Ipc.h>
 #include <tev/ThreadPool.h>
 
-#include <Eigen/Dense>
-
 #ifdef _WIN32
 using socklen_t = int;
 #else
@@ -32,7 +30,6 @@ using socklen_t = int;
 #   define INVALID_SOCKET (-1)
 #endif
 
-using namespace Eigen;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -103,14 +100,14 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
     payload << channelOffsets;
     payload << channelStrides;
 
-    DenseIndex nPixels = width * height;
+    size_t nPixels = width * height;
 
-    DenseIndex stridedImageDataSize = 0;
+    size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < nChannels; ++c) {
-        stridedImageDataSize = std::max(stridedImageDataSize, (DenseIndex)(channelOffsets[c] + (nPixels-1) * channelStrides[c] + 1));
+        stridedImageDataSize = std::max(stridedImageDataSize, (size_t)(channelOffsets[c] + (nPixels-1) * channelStrides[c] + 1));
     }
 
-    if ((DenseIndex)stridedImageData.size() != stridedImageDataSize) {
+    if (stridedImageData.size() != stridedImageDataSize) {
         throw runtime_error{tfm::format("UpdateImage IPC packet's data size does not match specified dimensions, offset, and stride. (Expected: %d)", stridedImageDataSize)};
     }
 
@@ -224,7 +221,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     result.channelStrides.resize(result.nChannels, 1);
 
     payload >> result.x >> result.y >> result.width >> result.height;
-    DenseIndex nPixels = result.width * result.height;
+    size_t nPixels = (size_t)result.width * result.height;
 
     if (type >= Type::UpdateImageV3) {
         // custom offset/stride support
@@ -241,9 +238,9 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
         result.imageData[i].resize(nPixels);
     }
 
-    DenseIndex stridedImageDataSize = 0;
+    size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < result.nChannels; ++c) {
-        stridedImageDataSize = std::max(stridedImageDataSize, (DenseIndex)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
+        stridedImageDataSize = std::max(stridedImageDataSize, (size_t)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
     }
 
     if (payload.remainingBytes() < stridedImageDataSize * sizeof(float)) {
@@ -251,7 +248,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     }
 
     const float* stridedImageData = (const float*)payload.get();
-    gThreadPool->parallelFor<DenseIndex>(0, nPixels, [&](DenseIndex px) {
+    gThreadPool->parallelFor<size_t>(0, nPixels, [&](size_t px) {
         for (int32_t c = 0; c < result.nChannels; ++c) {
             result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
         }

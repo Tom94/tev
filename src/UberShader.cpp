@@ -4,16 +4,14 @@
 #include <tev/FalseColor.h>
 #include <tev/UberShader.h>
 
-#include <Eigen/Dense>
-
-using namespace Eigen;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-UberShader::UberShader(nanogui::RenderPass* renderPass) {
+UberShader::UberShader(RenderPass* renderPass) {
     try {
-        mShader = new nanogui::Shader{
+        mShader = new Shader{
             renderPass,
             "ubershader",
 
@@ -402,15 +400,15 @@ UberShader::UberShader(nanogui::RenderPass* renderPass) {
         -1.f, 1.f,
     };
 
-    mShader->set_buffer("indices", nanogui::VariableType::UInt32, {3*2}, indices);
-    mShader->set_buffer("position", nanogui::VariableType::Float32, {4, 2}, positions);
+    mShader->set_buffer("indices", VariableType::UInt32, {3*2}, indices);
+    mShader->set_buffer("position", VariableType::Float32, {4, 2}, positions);
 
     const auto& fcd = colormap::turbo();
 
-    mColorMap = new nanogui::Texture{
-        nanogui::Texture::PixelFormat::RGBA,
-        nanogui::Texture::ComponentFormat::Float32,
-        nanogui::Vector2i{(int)fcd.size() / 4, 1}
+    mColorMap = new Texture{
+        Texture::PixelFormat::RGBA,
+        Texture::ComponentFormat::Float32,
+        Vector2i{(int)fcd.size() / 4, 1}
     };
     mColorMap->upload((uint8_t*)fcd.data());
 }
@@ -420,7 +418,7 @@ UberShader::~UberShader() { }
 void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
     draw(
         pixelSize, checkerSize,
-        nullptr, nanogui::Matrix3f{0.0f},
+        nullptr, Matrix3f{0.0f},
         0.0f, 0.0f, 0.0f, false,
         ETonemap::SRGB
     );
@@ -429,8 +427,8 @@ void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    nanogui::Texture* textureImage,
-    const nanogui::Matrix3f& transformImage,
+    Texture* textureImage,
+    const Matrix3f& transformImage,
     float exposure,
     float offset,
     float gamma,
@@ -440,7 +438,7 @@ void UberShader::draw(
     draw(
         pixelSize, checkerSize,
         textureImage, transformImage,
-        nullptr, nanogui::Matrix3f{0.0f},
+        nullptr, Matrix3f{0.0f},
         exposure, offset, gamma, clipToLdr,
         tonemap, EMetric::Error
     );
@@ -449,10 +447,10 @@ void UberShader::draw(
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    nanogui::Texture* textureImage,
-    const nanogui::Matrix3f& transformImage,
-    nanogui::Texture* textureReference,
-    const nanogui::Matrix3f& transformReference,
+    Texture* textureImage,
+    const Matrix3f& transformImage,
+    Texture* textureReference,
+    const Matrix3f& transformReference,
     float exposure,
     float offset,
     float gamma,
@@ -480,27 +478,27 @@ void UberShader::draw(
     mShader->set_uniform("clipToLdr", clipToLdr);
 
     mShader->begin();
-    mShader->draw_array(nanogui::Shader::PrimitiveType::Triangle, 0, 6, true);
+    mShader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, true);
     mShader->end();
 }
 
 void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    mShader->set_uniform("pixelSize", nanogui::Vector2f{pixelSize.x(), pixelSize.y()});
-    mShader->set_uniform("checkerSize", nanogui::Vector2f{checkerSize.x(), checkerSize.y()});
+    mShader->set_uniform("pixelSize", pixelSize);
+    mShader->set_uniform("checkerSize", checkerSize);
     mShader->set_uniform("bgColor", mBackgroundColor);
 }
 
 void UberShader::bindImageData(
-    nanogui::Texture* textureImage,
-    const nanogui::Matrix3f& transformImage,
+    Texture* textureImage,
+    const Matrix3f& transformImage,
     float exposure,
     float offset,
     float gamma,
     ETonemap tonemap
 ) {
     mShader->set_texture("image", textureImage);
-    mShader->set_uniform("imageScale", nanogui::Vector2f{transformImage.m[0][0], transformImage.m[1][1]});
-    mShader->set_uniform("imageOffset", nanogui::Vector2f{transformImage.m[2][0], transformImage.m[2][1]});
+    mShader->set_uniform("imageScale", Vector2f{transformImage.m[0][0], transformImage.m[1][1]});
+    mShader->set_uniform("imageOffset", Vector2f{transformImage.m[2][0], transformImage.m[2][1]});
 
     mShader->set_uniform("exposure", exposure);
     mShader->set_uniform("offset", offset);
@@ -511,13 +509,13 @@ void UberShader::bindImageData(
 }
 
 void UberShader::bindReferenceData(
-    nanogui::Texture* textureReference,
-    const nanogui::Matrix3f& transformReference,
+    Texture* textureReference,
+    const Matrix3f& transformReference,
     EMetric metric
 ) {
     mShader->set_texture("reference", textureReference);
-    mShader->set_uniform("referenceScale", nanogui::Vector2f{transformReference.m[0][0], transformReference.m[1][1]});
-    mShader->set_uniform("referenceOffset", nanogui::Vector2f{transformReference.m[2][0], transformReference.m[2][1]});
+    mShader->set_uniform("referenceScale", Vector2f{transformReference.m[0][0], transformReference.m[1][1]});
+    mShader->set_uniform("referenceOffset", Vector2f{transformReference.m[2][0], transformReference.m[2][1]});
 
     mShader->set_uniform("metric", static_cast<int>(metric));
 }

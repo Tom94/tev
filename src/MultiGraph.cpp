@@ -39,7 +39,7 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
     nvgFill(ctx);
 
-    if (mValues.cols() >= 1 && mValues.rows() >= 2) {
+    if (mValues.size() >= 2) {
         array<Color, 3> colors = {{
             Color{255, 0, 0, 200},
             Color{0, 255, 0, 200},
@@ -50,13 +50,15 @@ void MultiGraph::draw(NVGcontext *ctx) {
         // Additive blending
         nvgGlobalCompositeBlendFunc(ctx, NVGblendFactor::NVG_SRC_ALPHA, NVGblendFactor::NVG_ONE);
 
-        for (size_t i = 0; i < (size_t)mValues.cols(); i++) {
+        size_t nBins = mValues.size() / mNChannels;
+
+        for (size_t i = 0; i < (size_t)mNChannels; i++) {
             nvgBeginPath(ctx);
             nvgMoveTo(ctx, m_pos.x(), m_pos.y() + m_size.y());
-            
-            for (size_t j = 0; j < (size_t)mValues.rows(); j++) {
-                float value = mValues(j, i);
-                float vx = m_pos.x() + 2 + j * (m_size.x() - 4) / (float)(mValues.rows() - 1);
+
+            for (size_t j = 0; j < (size_t)nBins; j++) {
+                float value = mValues[j + i * nBins];
+                float vx = m_pos.x() + 2 + j * (m_size.x() - 4) / (float)(nBins - 1);
                 float vy = m_pos.y() + (1 - value) * m_size.y();
                 nvgLineTo(ctx, vx, vy);
             }
@@ -71,11 +73,11 @@ void MultiGraph::draw(NVGcontext *ctx) {
 
         if (mZeroBin > 0) {
             nvgBeginPath(ctx);
-            nvgRect(ctx, m_pos.x() + 1 + mZeroBin * (m_size.x() - 4) / (float)(mValues.rows() - 1), m_pos.y() + 15, 4, m_size.y() - 15);
+            nvgRect(ctx, m_pos.x() + 1 + mZeroBin * (m_size.x() - 4) / (float)(nBins - 1), m_pos.y() + 15, 4, m_size.y() - 15);
             nvgFillColor(ctx, Color(0, 128));
             nvgFill(ctx);
             nvgBeginPath(ctx);
-            nvgRect(ctx, m_pos.x() + 2 + mZeroBin * (m_size.x() - 4) / (float)(mValues.rows() - 1), m_pos.y() + 15, 2, m_size.y() - 15);
+            nvgRect(ctx, m_pos.x() + 2 + mZeroBin * (m_size.x() - 4) / (float)(nBins - 1), m_pos.y() + 15, 2, m_size.y() - 15);
             nvgFillColor(ctx, Color(200, 255));
             nvgFill(ctx);
         }

@@ -123,7 +123,7 @@ namespace nanogui {
                 result.v[i] = accum;
             }
         }
-        return result / w;
+        return result;// / w;
     }
 
     template <typename Value, size_t Size>
