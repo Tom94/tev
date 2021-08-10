@@ -167,7 +167,7 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
         addLibrary(about, "filesystem",        "", "Lightweight Path Manipulation Library");
         addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
         addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library");
-        addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL");
+        addLibrary(about, "NanoGUI",           "", "Small GUI Library");
         addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library");
         addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format");
         addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
