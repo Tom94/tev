@@ -47,13 +47,9 @@ public:
             Awaiter(ThreadPool* pool, int priority)
             : mPool{pool}, mPriority{priority} {}
 
-            // Unlike the OS event case, there's no case where we suspend and the work
-            // is immediately ready
             bool await_ready() const noexcept { return false; }
 
-            // Since await_ready() always returns false, when suspend is called, we will
-            // always immediately suspend and call this function (which enqueues the coroutine
-            // for immediate reactivation on a different thread)
+            // Suspend and enqueue coroutine continuation onto the threadpool
             void await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
                 mPool->enqueueTask(coroutine, mPriority);
             }
