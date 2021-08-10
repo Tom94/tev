@@ -53,6 +53,8 @@ void waitAll(std::vector<T>& futures) {
     }
 }
 
+// The task implementation is inspired by a sketch from the following blog post:
+// https://www.jeremyong.com/cpp/2021/01/04/cpp20-coroutines-a-minimal-async-framework/
 template <typename data_t>
 struct TaskPromiseBase {
     data_t data;
@@ -97,16 +99,12 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             f();
         }
 
-        struct awaiter {
-            // Return false here to return control to the thread's event loop. Remember that we're
-            // running on some async thread at this point.
+        struct Awaiter {
             bool await_ready() const noexcept { return false; }
-
             void await_resume() const noexcept {}
 
-            // Returning a coroutine handle here resumes the coroutine it refers to (needed for
-            // continuation handling). If we wanted, we could instead enqueue that coroutine handle
-            // instead of immediately resuming it by enqueuing it and returning void.
+            // Returning the parent coroutine has the effect of destroying this coroutine handle
+            // and continuing execution where the parent co_await'ed us.
             COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
                 bool isLast = h.promise().latch.countDown();
                 if (isLast && h.promise().precursor) {
@@ -117,7 +115,7 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             }
         };
 
-        return awaiter{};
+        return Awaiter{};
     }
 };
 
@@ -128,8 +126,6 @@ struct Task {
     // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
 
-    // The following methods make our task type conform to the awaitable concept, so we can
-    // co_await for a task to complete
     bool await_ready() const noexcept {
         // No need to suspend if this task has no outstanding work
         return handle.done();
