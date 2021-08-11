@@ -41,7 +41,7 @@ public:
         return res;
     }
 
-    inline auto schedule(int priority) noexcept {
+    inline auto enqueueCoroutine(int priority) noexcept {
         class Awaiter {
         public:
             Awaiter(ThreadPool* pool, int priority)
@@ -87,7 +87,7 @@ public:
             TEV_ASSERT(taskStart != taskEnd, "Shouldn't not produce tasks with empty range.");
 
             tasks.emplace_back([this](Int start, Int end, F body, int priority) -> Task<void> {
-                co_await schedule(priority);
+                co_await enqueueCoroutine(priority);
                 for (Int j = start; j < end; ++j) {
                     body(j);
                 }
