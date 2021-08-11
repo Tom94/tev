@@ -18,7 +18,6 @@
 
 TEV_NAMESPACE_BEGIN
 
-// TODO: replace with std::latch when it's supported everywhere
 class Latch {
 public:
     Latch(int val) : mCounter{val} {}
@@ -41,6 +40,7 @@ public:
             mCv.wait(lock);
         }
     }
+
 private:
     std::atomic<int> mCounter;
     std::mutex mMutex;
@@ -93,8 +93,8 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
         onFinalSuspend.emplace_back(std::forward<F>(fun));
     }
 
-    // The coroutine is about to complete (via co_return or reaching the end of the coroutine body).
-    // The awaiter returned here defines what happens next
+    // The coroutine is about to complete (via co_return, reaching the end of the coroutine body,
+    // or an uncaught exception). The awaiter returned here defines what happens next
     auto final_suspend() const noexcept {
         for (auto& f : onFinalSuspend) {
             f();
@@ -104,12 +104,12 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             bool await_ready() const noexcept { return false; }
             void await_resume() const noexcept {}
 
-            // Returning the parent coroutine has the effect of destroying this coroutine handle
-            // and continuing execution where the parent co_await'ed us.
+            // Returning the parent coroutine has the effect of continuing execution where the parent co_await'ed us.
             COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
                 bool isLast = h.promise().latch.countDown();
-                if (isLast && h.promise().precursor) {
-                    return h.promise().precursor;
+                auto precursor = h.promise().precursor;
+                if (isLast && precursor) {
+                    return precursor;
                 }
 
                 return COROUTINE_NAMESPACE::noop_coroutine();
@@ -127,6 +127,23 @@ struct Task {
     // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
 
+    Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle) : handle{handle} {}
+
+    // No copying allowed!
+    Task(const Task& other) = delete;
+    Task(Task&& other) {
+        handle = other.handle;
+        other.detach();
+    }
+
+    ~Task() {
+        // Make sure the coroutine finished and is cleaned up
+        if (handle) {
+            wait();
+            clear();
+        }
+    }
+
     bool await_ready() const noexcept {
         // No need to suspend if this task has no outstanding work
         return handle.done();
@@ -137,18 +154,29 @@ struct Task {
         handle.promise().finally(std::forward<F>(fun));
     }
 
-    T await_resume() const {
-        if (handle.promise().eptr) {
-            std::rethrow_exception(handle.promise().eptr);
+    T await_resume() {
+        TEV_ASSERT(handle, "Should not have been able to co_await a detached Task<T>.");
+
+        auto eptr = handle.promise().eptr;
+        if (eptr) {
+            clear();
+            std::rethrow_exception(eptr);
         }
 
         if constexpr (!std::is_void_v<T>) {
             // The returned value here is what `co_await our_task` evaluates to
-            return std::move(handle.promise().data);
+            T tmp = std::move(handle.promise().data);
+            clear();
+            return tmp;
         }
     }
 
     bool await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) const noexcept {
+        if (!handle) {
+            tlog::error() << "Cannot co_await a detached Task<T>.";
+            std::terminate();
+        }
+
         // The coroutine itself is being suspended (async work can beget other async work)
         // Record the argument as the continuation point when this is resumed later. See
         // the final_suspend awaiter on the promise_type above for where this gets used
@@ -157,17 +185,31 @@ struct Task {
     }
 
     void wait() const {
-        handle.promise().latch.countDown();
-        handle.promise().latch.wait();
+        if (!handle) {
+            throw std::runtime_error{"Cannot wait for a detached Task<T>."};
+        }
+
+        if (!handle.promise().latch.countDown()) {
+            handle.promise().latch.wait();
+        }
     }
 
-    T get() const {
+    T get() {
         wait();
-        if (handle.promise().eptr) {
-            std::rethrow_exception(handle.promise().eptr);
-        }
-        if constexpr (!std::is_void_v<T>) {
-            return std::move(handle.promise().data);
+        return await_resume();
+    }
+
+    COROUTINE_NAMESPACE::coroutine_handle<promise_type> detach() noexcept {
+        auto tmp = handle;
+        handle = nullptr;
+        return tmp;
+    }
+
+private:
+    void clear() noexcept {
+        if (handle) {
+            handle.destroy();
+            handle = nullptr;
         }
     }
 };
