@@ -130,6 +130,11 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
     endif()
 endif()
 
+# Coroutines need to be explicitly enabled on g++
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
+endif()
+
 set(TEV_LIBS clip IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)

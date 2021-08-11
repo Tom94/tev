@@ -13,6 +13,7 @@
 #define COROUTINE_NAMESPACE std
 #endif
 
+#include <condition_variable>
 #include <mutex>
 
 TEV_NAMESPACE_BEGIN
