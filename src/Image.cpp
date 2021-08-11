@@ -520,7 +520,8 @@ void BackgroundImagesLoader::enqueue(const path& path, const string& channelSele
     int imageId = Image::drawId();
     int loadId = mUnsortedLoadCounter++;
 
-    gThreadPool->enqueueTask(coLambda([imageId, loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+    coLambda([imageId, loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+        co_await gThreadPool->enqueueCoroutine(-imageId);
         auto image = co_await tryLoadImage(imageId, path, channelSelector);
 
         {
@@ -531,7 +532,7 @@ void BackgroundImagesLoader::enqueue(const path& path, const string& channelSele
         if (publishSortedLoads()) {
             glfwPostEmptyEvent();
         }
-    }), -imageId);
+    })();
 }
 
 bool BackgroundImagesLoader::publishSortedLoads() {
