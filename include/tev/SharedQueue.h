@@ -43,11 +43,11 @@ public:
         return result;
     }
 
-    T tryPop() {
+    std::optional<T> tryPop() {
         std::unique_lock<std::mutex> lock{mMutex};
 
         if (mRawQueue.empty()) {
-            throw std::runtime_error{"Could not pop."};
+            return {};
         }
 
         T result = std::move(mRawQueue.front());
