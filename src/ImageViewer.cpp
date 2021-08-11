@@ -883,13 +883,9 @@ void ImageViewer::draw_contents() {
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
     bool newFocus = false;
-    try {
-        while (true) {
-            auto addition = mImagesLoader->tryPop();
-            newFocus |= addition.shallSelect;
-            addImage(addition.image, addition.shallSelect);
-        }
-    } catch (const runtime_error&) {
+    while (auto addition = mImagesLoader->tryPop()) {
+        newFocus |= addition->shallSelect;
+        addImage(addition->image, addition->shallSelect);
     }
 
     if (newFocus) {
@@ -898,11 +894,8 @@ void ImageViewer::draw_contents() {
 
     // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
     // callbacks from background threads
-    try {
-        while (true) {
-            mTaskQueue.tryPop()();
-        }
-    } catch (const runtime_error&) {
+    while (auto task = mTaskQueue.tryPop()) {
+        (*task)();
     }
 
     for (auto it = begin(mToBump); it != end(mToBump); ) {
