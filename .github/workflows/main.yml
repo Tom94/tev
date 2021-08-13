@@ -18,18 +18,22 @@ jobs:
 
     steps:
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
+        run: sudo apt-get update && sudo apt-get install cmake gcc-10 g++-10 libglu1-mesa-dev xorg-dev zenity zlib1g-dev
       - uses: actions/checkout@v1
         with:
           submodules: recursive
       - name: CMake
         run: cmake .
+        shell: bash
+        env:
+          CC: gcc-10
+          CXX: g++-10
       - name: Build
         run: make -j
 
   build_macos:
     name: Build on macOS
-    runs-on: macos-latest
+    runs-on: macos-11
 
     steps:
       - uses: actions/checkout@v1
