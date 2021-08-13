@@ -8,6 +8,8 @@
 #include <nanogui/theme.h>
 #include <nanogui/opengl.h>
 
+#include <array>
+
 using namespace nanogui;
 using namespace std;
 
