@@ -520,7 +520,7 @@ void BackgroundImagesLoader::enqueue(const path& path, const string& channelSele
     int imageId = Image::drawId();
     int loadId = mUnsortedLoadCounter++;
 
-    coLambda([imageId, loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+    taskLambda([imageId, loadId, path, channelSelector, shallSelect, this]() -> DetachedTask {
         co_await gThreadPool->enqueueCoroutine(-imageId);
         auto image = co_await tryLoadImage(imageId, path, channelSelector);
 

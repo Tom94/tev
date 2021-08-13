@@ -15,6 +15,7 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <semaphore>
 
 TEV_NAMESPACE_BEGIN
 
@@ -23,11 +24,17 @@ public:
     Latch(int val) : mCounter{val} {}
     bool countDown() noexcept {
         std::unique_lock lock{mMutex};
-        bool result = (--mCounter == 0);
-        if (result) {
+        int val = --mCounter;
+        if (val <= 0) {
             mCv.notify_all();
+            return true;
         }
-        return result;
+
+        if (val < 0) {
+            tlog::warning() << "Latch should never count below zero.";
+        }
+
+        return false;
     }
 
     void wait() {
@@ -75,6 +82,7 @@ template <typename future_t, typename data_t>
 struct TaskPromise : public TaskPromiseBase<data_t> {
     COROUTINE_NAMESPACE::coroutine_handle<> precursor;
     Latch latch{2};
+    std::binary_semaphore done{0};
     std::exception_ptr eptr;
     std::vector<std::function<void()>> onFinalSuspend;
 
@@ -108,6 +116,7 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
                 bool isLast = h.promise().latch.countDown();
                 auto precursor = h.promise().precursor;
+                h.promise().done.release(); // Allow destroying this coroutine's handle
                 if (isLast && precursor) {
                     return precursor;
                 }
@@ -131,7 +140,13 @@ struct Task {
 
     // No copying allowed!
     Task(const Task& other) = delete;
+    Task& operator=(const Task& other) = delete;
+
     Task(Task&& other) {
+        handle = other.handle;
+        other.detach();
+    }
+    Task& operator=(const Task&& other) {
         handle = other.handle;
         other.detach();
     }
@@ -139,6 +154,7 @@ struct Task {
     ~Task() {
         // Make sure the coroutine finished and is cleaned up
         if (handle) {
+            tlog::warning() << "~Task<T> was waiting for completion. This was likely not intended.";
             wait();
             clear();
         }
@@ -157,16 +173,19 @@ struct Task {
     T await_resume() {
         TEV_ASSERT(handle, "Should not have been able to co_await a detached Task<T>.");
 
+        ScopeGuard guard{[this] {
+            handle.promise().done.acquire();
+            clear();
+        }};
+
         auto eptr = handle.promise().eptr;
         if (eptr) {
-            clear();
             std::rethrow_exception(eptr);
         }
 
         if constexpr (!std::is_void_v<T>) {
             // The returned value here is what `co_await our_task` evaluates to
             T tmp = std::move(handle.promise().data);
-            clear();
             return tmp;
         }
     }
@@ -184,14 +203,16 @@ struct Task {
         return !handle.promise().latch.countDown();
     }
 
-    void wait() const {
+    bool wait() const {
         if (!handle) {
             throw std::runtime_error{"Cannot wait for a detached Task<T>."};
         }
 
         if (!handle.promise().latch.countDown()) {
             handle.promise().latch.wait();
+            return true;
         }
+        return false;
     }
 
     T get() {
@@ -214,10 +235,50 @@ private:
     }
 };
 
+struct DetachedTask {
+    struct promise_type {
+        std::vector<std::function<void()>> onFinalSuspend;
+
+        template <typename F>
+        void finally(F&& fun) {
+            onFinalSuspend.emplace_back(std::forward<F>(fun));
+        }
+
+        DetachedTask get_return_object() noexcept {
+            return {COROUTINE_NAMESPACE::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+
+        COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
+        COROUTINE_NAMESPACE::suspend_never final_suspend() const noexcept {
+            for (auto& f : onFinalSuspend) {
+                f();
+            }
+            return {};
+        }
+
+        void return_void() {}
+        void unhandled_exception() {
+            try {
+                std::rethrow_exception(std::current_exception());
+            } catch(const std::exception& e) {
+                tlog::error() << "Unhandled exception in DetachedTask: " << e.what();
+                std::terminate();
+            }
+        }
+    };
+
+    COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
+
+    template <typename F>
+    void finally(F&& fun) {
+        handle.promise().finally(std::forward<F>(fun));
+    }
+};
+
 // Ties the lifetime of a lambda coroutine's captures
-// to that of the coroutine.
+// to that of the task.
 // Taken from https://stackoverflow.com/a/68630143
-auto coLambda(auto&& executor) {
+auto taskLambda(auto&& executor) {
     return [executor=std::move(executor)]<typename ...Args>(Args&&... args) {
         using ReturnType = decltype(executor(args...));
         // copy the lambda into a new std::function pointer
