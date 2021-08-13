@@ -82,7 +82,7 @@ template <typename future_t, typename data_t>
 struct TaskPromise : public TaskPromiseBase<data_t> {
     COROUTINE_NAMESPACE::coroutine_handle<> precursor;
     Latch latch{2};
-    std::binary_semaphore done{0};
+    std::atomic<bool> done = false; // TODO: use a std::binary_semaphore once that's available on macOS
     std::exception_ptr eptr;
     std::vector<std::function<void()>> onFinalSuspend;
 
@@ -116,7 +116,7 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
             COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
                 bool isLast = h.promise().latch.countDown();
                 auto precursor = h.promise().precursor;
-                h.promise().done.release(); // Allow destroying this coroutine's handle
+                h.promise().done = true; // Allow destroying this coroutine's handle
                 if (isLast && precursor) {
                     return precursor;
                 }
@@ -174,7 +174,10 @@ struct Task {
         TEV_ASSERT(handle, "Should not have been able to co_await a detached Task<T>.");
 
         ScopeGuard guard{[this] {
-            handle.promise().done.acquire();
+            // Spinlock is fine since this will always
+            // be set in the next couple of instructions
+            // of the task's executing thread.
+            while (!handle.promise().done) {}
             clear();
         }};
 
