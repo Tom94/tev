@@ -84,14 +84,14 @@ public:
         for (Int i = 0; i < nTasks; ++i) {
             Int taskStart = start + (range * i / nTasks);
             Int taskEnd = start + (range * (i+1) / nTasks);
-            TEV_ASSERT(taskStart != taskEnd, "Shouldn't not produce tasks with empty range.");
+            TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
-            tasks.emplace_back([this](Int start, Int end, F body, int priority) -> Task<void> {
-                co_await enqueueCoroutine(priority);
+            tasks.emplace_back([](Int start, Int end, F body, int priority, ThreadPool* pool) -> Task<void> {
+                co_await pool->enqueueCoroutine(priority);
                 for (Int j = start; j < end; ++j) {
                     body(j);
                 }
-            }(taskStart, taskEnd, body, priority));
+            }(taskStart, taskEnd, body, priority, this));
         }
 
         for (auto& task : tasks) {
