@@ -143,12 +143,17 @@ private:
         int priority
     );
 
+    void drawPixelValuesAsText(NVGcontext *ctx);
+    void drawCoordinateSystem(NVGcontext *ctx);
+    void drawEdgeShadows(NVGcontext *ctx);
+
     nanogui::Vector2f pixelOffset(const nanogui::Vector2i& size) const;
 
     // Assembles the transform from canonical space to
     // the [-1, 1] square for the current image.
     nanogui::Matrix3f transform(const Image* image);
     nanogui::Matrix3f textureToNanogui(const Image* image);
+    nanogui::Matrix3f displayWindowToNanogui(const Image* image);
 
     float mPixelRatio = 1;
     float mExposure = 0;
