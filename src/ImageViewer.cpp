@@ -163,14 +163,14 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "Background Color"};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->background_color()};
+            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
             colorwheel->set_color(popupBtn->background_color());
 
             new Label{popup, "Background Alpha"};
             auto bgAlphaSlider = new Slider{popup};
             bgAlphaSlider->set_range({0.0f, 1.0f});
             bgAlphaSlider->set_callback([this](float value) {
-                auto col = mImageCanvas->background_color();
+                auto col = mImageCanvas->backgroundColor();
                 mImageCanvas->setBackgroundColor(Color{
                     col.r(),
                     col.g(),

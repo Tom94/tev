@@ -100,7 +100,7 @@ public:
         return applyMetric(value, reference, mMetric);
     }
 
-    const nanogui::Color& backgroundColor() {
+    auto backgroundColor() {
         return mShader->backgroundColor();
     }
 
