@@ -24,6 +24,10 @@ struct Box {
         return max - min;
     }
 
+    Vector middle() const {
+        return (min + max) / (T)2;
+    }
+
     bool isValid() const {
         bool result = true;
         for (uint32_t i = 0; i < N_DIMS; ++i) {

@@ -184,7 +184,7 @@ l_foundPart:
 
     Imf::InputPart file{multiPartFile, partIdx};
     Imath::Box2i dataWindow = file.header().dataWindow();
-    Imath::Box2i displayWindow = file.header().dataWindow();
+    Imath::Box2i displayWindow = file.header().displayWindow();
     Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1 , dataWindow.max.y - dataWindow.min.y + 1};
 
     if (size.x() == 0 || size.y() == 0) {

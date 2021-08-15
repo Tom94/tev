@@ -305,8 +305,8 @@ float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
 }
 
 void ImageCanvas::fitImageToScreen(const Image& image) {
-    Vector2f nanoguiImageSize = Vector2f{image.size()} / mPixelRatio;
-    mTransform = Matrix3f::scale(Vector2f{m_size} / min(nanoguiImageSize.x(), nanoguiImageSize.y()));
+    Vector2f nanoguiImageSize = Vector2f{image.displayWindow().size()} / mPixelRatio;
+    mTransform = Matrix3f::scale(Vector2f{min(m_size.x() / nanoguiImageSize.x(), m_size.y() / nanoguiImageSize.y())});
 }
 
 void ImageCanvas::resetTransform() {
@@ -701,7 +701,7 @@ Matrix3f ImageCanvas::transform(const Image* image) {
         Matrix3f::scale(Vector2f{2.0f / m_size.x(), -2.0f / m_size.y()}) *
         mTransform *
         Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
-        Matrix3f::translate(pixelOffset(image->size())) *
+        Matrix3f::translate(image->centerDisplayOffset() + pixelOffset(image->size())) *
         Matrix3f::scale(Vector2f{image->size()}) *
         Matrix3f::translate(Vector2f{-0.5f});
 }
@@ -716,7 +716,7 @@ Matrix3f ImageCanvas::textureToNanogui(const Image* image) {
         Matrix3f::translate(0.5f * Vector2f{m_size}) *
         mTransform *
         Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
-        Matrix3f::translate(-0.5f * Vector2f{image->size()} + pixelOffset(image->size()));
+        Matrix3f::translate(-0.5f * Vector2f{image->size()} + image->centerDisplayOffset() + pixelOffset(image->size()));
 }
 
 TEV_NAMESPACE_END
