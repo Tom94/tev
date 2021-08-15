@@ -321,7 +321,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
     }
 
     const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
-    auto numPixels = mImage->count();
+    auto numPixels = mImage->numPixels();
 
     if (channels.empty()) {
         return result;
@@ -370,7 +370,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
         return result;
     }
 
-    auto numPixels = mImage->count();
+    auto numPixels = mImage->numPixels();
     auto floatData = getHdrImageData(divideAlpha, priority);
 
     // Store as LDR image.
@@ -501,7 +501,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     if (!reference) {
         gThreadPool->parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
-            for (size_t j = 0; j < chan->count(); ++j) {
+            for (size_t j = 0; j < chan->numPixels(); ++j) {
                 result[i].at(j) = chan->eval(j);
             }
         }, priority);
@@ -633,15 +633,15 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_return result;
     }
 
-    auto numElements = image->count();
-    std::vector<int> indices(numElements*nChannels);
+    auto numPixels = image->numPixels();
+    std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
-            gThreadPool->parallelForAsync<size_t>(0, numElements, [&, i](size_t j) {
-                indices[j + i * numElements] = valToBin(channel.eval(j));
+            gThreadPool->parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
+                indices[j + i * numPixels] = valToBin(channel.eval(j));
             }, priority)
         );
     }
@@ -651,8 +651,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     co_await gThreadPool->parallelForAsync(0, nChannels, [&](int i) {
-        for (size_t j = 0; j < numElements; ++j) {
-            result->histogram[indices[j + i * numElements] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
+        for (size_t j = 0; j < numPixels; ++j) {
+            result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
         }
     }, priority);
 

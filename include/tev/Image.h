@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <tev/Box.h>
 #include <tev/Channel.h>
 #include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
@@ -26,12 +27,19 @@ struct ImageData {
     std::vector<std::string> layers;
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
 
+    Box2i dataWindow;
+    Box2i displayWindow;
+
     nanogui::Vector2i size() const {
-        return channels.front().size();
+        return dataWindow.size();
     }
 
-    size_t count() const {
-        return channels.front().count();
+    nanogui::Vector2i displaySize() const {
+        return displayWindow.size();
+    }
+
+    size_t numPixels() const {
+        return channels.front().numPixels();
     }
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
@@ -126,8 +134,16 @@ public:
         return mData.size();
     }
 
-    size_t count() const {
-        return mData.count();
+    const Box2i& dataWindow() const {
+        return mData.dataWindow;
+    }
+
+    const Box2i& displayWindow() const {
+        return mData.displayWindow;
+    }
+
+    size_t numPixels() const {
+        return mData.numPixels();
     }
 
     const std::vector<ChannelGroup>& channelGroups() const {

@@ -110,6 +110,9 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
     // within a topmost root layer.
     result.layers.emplace_back("");
 
+    // PFM images do not have custom data and display windows.
+    result.dataWindow = result.displayWindow = result.channels.front().size();
+
     co_return {result, false};
 }
 

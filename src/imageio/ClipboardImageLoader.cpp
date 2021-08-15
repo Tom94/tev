@@ -119,6 +119,9 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
     // within a topmost root layer.
     result.layers.emplace_back("");
 
+    // Clipboard images do not have non-trivial data and display windows.
+    result.dataWindow = result.displayWindow = result.channels.front().size();
+
     co_return {result, false};
 }
 
