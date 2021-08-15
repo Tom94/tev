@@ -36,8 +36,8 @@ struct Box {
         return result;
     }
 
-    operator bool() const {
-        return isValid();
+    bool operator==(const Box& other) const {
+        return min == other.min && max == other.max;
     }
 
     Vector min, max;

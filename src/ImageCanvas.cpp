@@ -94,108 +94,171 @@ void ImageCanvas::draw_contents() {
     );
 }
 
-void ImageCanvas::draw(NVGcontext *ctx) {
+void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
+    TEV_ASSERT(mImage, "Can only draw pixel values if there exists an image.");
+
+    auto texToNano = textureToNanogui(mImage.get());
+    auto nanoToTex = inverse(texToNano);
+
+    Vector2f pixelSize = texToNano * Vector2f{1.0f} - texToNano * Vector2f{0.0f};
+
+    Vector2f topLeft = (nanoToTex * Vector2f{0.0f});
+    Vector2f bottomRight = (nanoToTex * Vector2f{m_size});
+
+    Vector2i startIndices = Vector2i{
+        static_cast<int>(floor(topLeft.x())),
+        static_cast<int>(floor(topLeft.y())),
+    };
+
+    Vector2i endIndices = Vector2i{
+        static_cast<int>(ceil(bottomRight.x())),
+        static_cast<int>(ceil(bottomRight.y())),
+    };
+
+    if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
+        vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
+        // Remove duplicates
+        channels.erase(unique(begin(channels), end(channels)), end(channels));
+
+        vector<Color> colors;
+        for (const auto& channel : channels) {
+            colors.emplace_back(Channel::color(channel));
+        }
+
+        float fontSize = pixelSize.x() / 6;
+        if (colors.size() > 4) {
+            fontSize *= 4.0f / colors.size();
+        }
+        float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
+
+        nvgFontSize(ctx, fontSize);
+        nvgFontFace(ctx, "sans");
+        nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+
+        auto* glfwWindow = screen()->glfw_window();
+        bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
+
+        Vector2i cur;
+        vector<float> values;
+        for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
+            for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
+                Vector2i nano = Vector2i{texToNano * (Vector2f{cur} + Vector2f{0.5f})};
+                getValuesAtNanoPos(nano, values, channels);
+
+                TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
+
+                for (size_t i = 0; i < colors.size(); ++i) {
+                    string str;
+                    Vector2f pos;
+
+                    if (altHeld) {
+                        float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
+                        unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
+                        str = tfm::format("%02X", discretizedValue);
+
+                        pos = Vector2f{
+                            m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
+                            (float)m_pos.y() + nano.y(),
+                        };
+                    } else {
+                        str = tfm::format("%.4f", values[i]);
+
+                        pos = Vector2f{
+                            (float)m_pos.x() + nano.x(),
+                            m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
+                        };
+                    }
+
+                    Color col = colors[i];
+                    nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
+                    drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
+                }
+            }
+        }
+    }
+}
+
+void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
+    TEV_ASSERT(mImage, "Can only draw coordinate system if there exists an image.");
+
+    auto displayWindowToNano = displayWindowToNanogui(mImage.get());
+
+    auto drawWindow = [&](const Box2i& window, const Color& color, const std::string& name) {
+        Vector2i topLeft     = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.min.x(), (float)window.min.y()}};
+        Vector2i topRight    = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.max.x(), (float)window.min.y()}};
+        Vector2i bottomLeft  = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.min.x(), (float)window.max.y()}};
+        Vector2i bottomRight = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.max.x(), (float)window.max.y()}};
+
+        NVGpaint shadowPaint = nvgLinearGradient(ctx,
+            m_pos.x(), m_pos.y(), m_pos.x(), m_pos.y()+m_size.y(),
+            color, color
+        );
+
+        NVGcolor regularTextColor = Color(150, 255);// : Color(190, 255);
+        NVGcolor hightlightedTextColor = Color(190, 255);
+
+        float fontSize = 30;
+        float strokeWidth = 3.0f;
+
+        nvgSave(ctx);
+        nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+        nvgBeginPath(ctx);
+        nvgMoveTo(ctx, bottomLeft.x(), bottomLeft.y());
+        nvgLineTo(ctx, topLeft.x(), topLeft.y());
+        nvgLineTo(ctx, topRight.x(), topRight.y());
+        nvgLineTo(ctx, bottomRight.x(), bottomRight.y());
+        nvgLineTo(ctx, bottomLeft.x(), bottomLeft.y());
+        nvgStrokeWidth(ctx, strokeWidth);
+        nvgStrokePaint(ctx, shadowPaint);
+        nvgStroke(ctx);
+
+        nvgFontFace(ctx, "sans-bold");
+        nvgFontSize(ctx, fontSize);
+        nvgFillColor(ctx, color);
+        // drawTextWithShadow(ctx, topLeft.x(), topLeft.y() - 20, name, 1.0f);
+        nvgText(ctx, topLeft.x() - strokeWidth/2 - 1.0f, topLeft.y(), name.c_str(), NULL);
+
+        nvgRestore(ctx);
+
+    };
+
+    drawWindow(mImage->displayWindow(), Color(0.7f, 0.4f, 0.4f, 1.0f), "Display window");
+    drawWindow(mImage->dataWindow(), Color(0.35f, 0.35f, 0.8f, 1.0f), "Data window");
+}
+
+void ImageCanvas::drawEdgeShadows(NVGcontext* ctx) {
+    int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
+    NVGpaint shadowPaint = nvgBoxGradient(
+        ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y(), cr * 2, ds * 2,
+        m_theme->m_transparent, m_theme->m_drop_shadow
+    );
+
+    nvgSave(ctx);
+    nvgResetScissor(ctx);
+    nvgBeginPath(ctx);
+    nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
+    nvgRoundedRect(ctx, m_pos.x() + ds, m_pos.y() + ds, m_size.x() - 2 * ds, m_size.y() - 2 * ds, cr);
+    nvgPathWinding(ctx, NVG_HOLE);
+    nvgFillPaint(ctx, shadowPaint);
+    nvgFill(ctx);
+    nvgRestore(ctx);
+}
+
+void ImageCanvas::draw(NVGcontext* ctx) {
     Canvas::draw(ctx);
 
     if (mImage) {
-        auto texToNano = textureToNanogui(mImage.get());
-        auto nanoToTex = inverse(texToNano);
+        drawPixelValuesAsText(ctx);
 
-        Vector2f pixelSize = texToNano * Vector2f{1.0f} - texToNano * Vector2f{0.0f};
-
-        Vector2f topLeft = (nanoToTex * Vector2f{0.0f});
-        Vector2f bottomRight = (nanoToTex * Vector2f{m_size});
-
-        Vector2i startIndices = Vector2i{
-            static_cast<int>(floor(topLeft.x())),
-            static_cast<int>(floor(topLeft.y())),
-        };
-
-        Vector2i endIndices = Vector2i{
-            static_cast<int>(ceil(bottomRight.x())),
-            static_cast<int>(ceil(bottomRight.y())),
-        };
-
-        if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
-            vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
-            // Remove duplicates
-            channels.erase(unique(begin(channels), end(channels)), end(channels));
-
-            vector<Color> colors;
-            for (const auto& channel : channels) {
-                colors.emplace_back(Channel::color(channel));
-            }
-
-            float fontSize = pixelSize.x() / 6;
-            if (colors.size() > 4) {
-                fontSize *= 4.0f / colors.size();
-            }
-            float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
-
-            nvgFontSize(ctx, fontSize);
-            nvgFontFace(ctx, "sans");
-            nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-
-            auto* glfwWindow = screen()->glfw_window();
-            bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
-
-            Vector2i cur;
-            vector<float> values;
-            for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
-                for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
-                    Vector2i nano = Vector2i{texToNano * (Vector2f{cur} + Vector2f{0.5f})};
-                    getValuesAtNanoPos(nano, values, channels);
-
-                    TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
-
-                    for (size_t i = 0; i < colors.size(); ++i) {
-                        string str;
-                        Vector2f pos;
-
-                        if (altHeld) {
-                            float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
-                            unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
-                            str = tfm::format("%02X", discretizedValue);
-
-                            pos = Vector2f{
-                                m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
-                                (float)m_pos.y() + nano.y(),
-                            };
-                        } else {
-                            str = tfm::format("%.4f", values[i]);
-
-                            pos = Vector2f{
-                                (float)m_pos.x() + nano.x(),
-                                m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
-                            };
-                        }
-
-                        Color col = colors[i];
-                        nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
-                        drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
-                    }
-                }
-            }
+        // If the coordinate system is in any sort of way non-trivial, draw it!
+        if (mImage->dataWindow() != mImage->displayWindow() || mImage->displayWindow().min != Vector2i{0}) {
+            drawCoordinateSystem(ctx);
         }
     }
 
     // If we're not in fullscreen mode draw an inner drop shadow. (adapted from Window)
     if (m_pos.x() != 0) {
-        int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
-        NVGpaint shadowPaint = nvgBoxGradient(
-            ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y(), cr * 2, ds * 2,
-            m_theme->m_transparent, m_theme->m_drop_shadow
-        );
-
-        nvgSave(ctx);
-        nvgResetScissor(ctx);
-        nvgBeginPath(ctx);
-        nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
-        nvgRoundedRect(ctx, m_pos.x() + ds, m_pos.y() + ds, m_size.x() - 2 * ds, m_size.y() - 2 * ds, cr);
-        nvgPathWinding(ctx, NVG_HOLE);
-        nvgFillPaint(ctx, shadowPaint);
-        nvgFill(ctx);
-        nvgRestore(ctx);
+        drawEdgeShadows(ctx);
     }
 }
 
@@ -220,8 +283,8 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
-    Vector2f imagePos = inverse(textureToNanogui(&image)) * Vector2f{mousePos};
+Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i nanoPos) {
+    Vector2f imagePos = inverse(textureToNanogui(&image)) * Vector2f{nanoPos};
     return {
         static_cast<int>(floor(imagePos.x())),
         static_cast<int>(floor(imagePos.y())),
@@ -684,10 +747,11 @@ Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
     // axes are implicitly shifted by half a pixel due to the centering operation.
     // Additionally, add 0.1111111 such that our final position is almost never 0
     // modulo our pixel ratio, which again avoids aligned pixel boundaries with texels.
-    return Vector2f{
-        size.x() % 2 == 0 ?  0.5f : 0.0f,
-        size.y() % 2 == 0 ? -0.5f : 0.0f,
-    } + Vector2f{0.1111111f};
+    // return Vector2f{
+    //     size.x() % 2 == 0 ?  0.5f : 0.0f,
+    //     size.y() % 2 == 0 ? -0.5f : 0.0f,
+    // } + Vector2f{0.1111111f};
+    return Vector2f{0.1111111f};
 }
 
 Matrix3f ImageCanvas::transform(const Image* image) {
@@ -717,6 +781,16 @@ Matrix3f ImageCanvas::textureToNanogui(const Image* image) {
         mTransform *
         Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
         Matrix3f::translate(-0.5f * Vector2f{image->size()} + image->centerDisplayOffset() + pixelOffset(image->size()));
+}
+
+Matrix3f ImageCanvas::displayWindowToNanogui(const Image* image) {
+    if (!image) {
+        return Matrix3f::scale(Vector2f{1.0f});
+    }
+
+    // Shift texture coordinates by the data coordinate offset.
+    // It's that simple.
+    return textureToNanogui(image) * Matrix3f::translate(-image->dataWindow().min);
 }
 
 TEV_NAMESPACE_END
