@@ -142,6 +142,10 @@ public:
         return mData.displayWindow;
     }
 
+    nanogui::Vector2f centerDisplayOffset() const {
+        return Box2f{dataWindow()}.middle() - Box2f{displayWindow()}.middle();
+    }
+
     size_t numPixels() const {
         return mData.numPixels();
     }
