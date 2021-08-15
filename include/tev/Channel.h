@@ -16,7 +16,7 @@ TEV_NAMESPACE_BEGIN
 
 class Channel {
 public:
-    Channel(const std::string& name, nanogui::Vector2i size);
+    Channel(const std::string& name, const nanogui::Vector2i& size);
 
     const std::string& name() const {
         return mName;
@@ -34,12 +34,12 @@ public:
     }
 
     float eval(nanogui::Vector2i index) const {
-        if (index.x() < 0 || index.x() >= mCols ||
-            index.y() < 0 || index.y() >= mRows) {
+        if (index.x() < 0 || index.x() >= mSize.x() ||
+            index.y() < 0 || index.y() >= mSize.y()) {
             return 0;
         }
 
-        return mData[index.x() + index.y() * mCols];
+        return mData[index.x() + index.y() * mSize.x()];
     }
 
     float& at(size_t index) {
@@ -51,19 +51,19 @@ public:
     }
 
     float& at(nanogui::Vector2i index) {
-        return at(index.x() + index.y() * mCols);
+        return at(index.x() + index.y() * mSize.x());
     }
 
     float at(nanogui::Vector2i index) const {
-        return at(index.x() + index.y() * mCols);
+        return at(index.x() + index.y() * mSize.x());
     }
 
-    size_t count() const {
+    size_t numPixels() const {
         return mData.size();
     }
 
-    nanogui::Vector2i size() const {
-        return {mCols, mRows};
+    const nanogui::Vector2i& size() const {
+        return mSize;
     }
 
     std::tuple<float, float, float> minMaxMean() const {
@@ -79,7 +79,7 @@ public:
                 max = f;
             }
         }
-        return {min, max, mean/count()};
+        return {min, max, mean/numPixels()};
     }
 
     Task<void> divideByAsync(const Channel& other, int priority);
@@ -101,7 +101,7 @@ public:
 
 private:
     std::string mName;
-    int mCols, mRows;
+    nanogui::Vector2i mSize;
     std::vector<float> mData;
 };
 

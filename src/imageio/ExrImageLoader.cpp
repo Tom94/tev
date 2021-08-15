@@ -183,12 +183,18 @@ Task<std::tuple<ImageData, bool>> ExrImageLoader::load(istream& iStream, const p
 l_foundPart:
 
     Imf::InputPart file{multiPartFile, partIdx};
-    Imath::Box2i dw = file.header().dataWindow();
-    Vector2i size = {dw.max.x - dw.min.x + 1 , dw.max.y - dw.min.y + 1};
+    Imath::Box2i dataWindow = file.header().dataWindow();
+    Imath::Box2i displayWindow = file.header().dataWindow();
+    Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1 , dataWindow.max.y - dataWindow.min.y + 1};
 
     if (size.x() == 0 || size.y() == 0) {
         throw invalid_argument{"EXR image has zero pixels."};
     }
+
+    // EXR's display- and data windows have inclusive upper ends while tev's upper ends are exclusive.
+    // This allows easy conversion from window to size. Hence the +1.
+    result.dataWindow =    {{dataWindow.min.x,    dataWindow.min.y   }, {dataWindow.max.x+1,    dataWindow.max.y+1   }};
+    result.displayWindow = {{displayWindow.min.x, displayWindow.min.y}, {displayWindow.max.x+1, displayWindow.max.y+1}};
 
     // Allocate raw channels on the heap, because it'll be references
     // by nested parallel for coroutine.
@@ -231,11 +237,11 @@ l_foundPart:
     }, priority);
 
     for (size_t i = 0; i < rawChannels->size(); ++i) {
-        rawChannels->at(i).registerWith(frameBuffer, dw);
+        rawChannels->at(i).registerWith(frameBuffer, dataWindow);
     }
 
     file.setFrameBuffer(frameBuffer);
-    file.readPixels(dw.min.y, dw.max.y);
+    file.readPixels(dataWindow.min.y, dataWindow.max.y);
 
     for (const auto& rawChannel : *rawChannels) {
         result.channels.emplace_back(Channel{rawChannel.name(), size});

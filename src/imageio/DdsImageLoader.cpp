@@ -265,6 +265,9 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
     // within a topmost root layer.
     result.layers.emplace_back("");
 
+    // DDS images do not have non-trivial data and display windows.
+    result.dataWindow = result.displayWindow = result.channels.front().size();
+
     co_return {result, scratchImage.GetMetadata().IsPMAlpha()};
 }
 

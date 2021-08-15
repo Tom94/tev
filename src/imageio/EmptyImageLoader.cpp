@@ -61,6 +61,9 @@ Task<std::tuple<ImageData, bool>> EmptyImageLoader::load(istream& iStream, const
         result.layers.emplace_back(layer);
     }
 
+    // Empty images currently do not support custom data and display windows
+    result.dataWindow = result.displayWindow = result.channels.front().size();
+
     co_return {result, true};
 }
 

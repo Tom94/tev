@@ -135,7 +135,7 @@ void ImageData::ensureValid() {
     for (const auto& c : channels) {
         if (c.size() != size()) {
             throw runtime_error{tfm::format(
-                "All channels must have the same size as their image. (%s:%dx%d != %dx%d)",
+                "All channels must have the same size as the data window. (%s:%dx%d != %dx%d)",
                 c.name(), c.size().x(), c.size().y(), size().x(), size().y()
             )};
         }
@@ -209,7 +209,7 @@ Texture* Image::texture(const vector<string>& channelNames) {
     });
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
-    auto numPixels = count();
+    auto numPixels = this->numPixels();
     vector<float> data(numPixels * 4);
 
     vector<Task<void>> tasks;
