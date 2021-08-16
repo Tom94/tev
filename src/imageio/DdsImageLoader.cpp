@@ -153,7 +153,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<ImageData> DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};
@@ -208,7 +208,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         std::swap(scratchImage, convertedImage);
     }
 
-    vector<Channel> channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
+    result.channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
 
     auto numPixels = (size_t)metadata.width * metadata.height;
     if (numPixels == 0) {
@@ -224,7 +224,7 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
         co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                channels[c].at(i) = typedData[baseIdx + c];
+                result.channels[c].at(i) = typedData[baseIdx + c];
             }
         }, priority);
     } else {
@@ -237,38 +237,17 @@ Task<std::tuple<ImageData, bool>> DdsImageLoader::load(istream& iStream, const p
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {
-                    channels[c].at(i) = typedData[baseIdx + c];
+                    result.channels[c].at(i) = typedData[baseIdx + c];
                 } else {
-                    channels[c].at(i) = toLinear(typedData[baseIdx + c]);
+                    result.channels[c].at(i) = toLinear(typedData[baseIdx + c]);
                 }
             }
         }, priority);
     }
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    result.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
-    }
-
-    // DDS can not contain layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    // DDS images do not have non-trivial data and display windows.
-    result.dataWindow = result.displayWindow = result.channels.front().size();
-
-    co_return {result, scratchImage.GetMetadata().IsPMAlpha()};
+    co_return result;
 }
 
 TEV_NAMESPACE_END

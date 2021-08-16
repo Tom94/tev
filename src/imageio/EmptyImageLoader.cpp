@@ -22,7 +22,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<std::tuple<ImageData, bool>> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
+Task<ImageData> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
     ImageData result;
 
     string magic;
@@ -39,7 +39,6 @@ Task<std::tuple<ImageData, bool>> EmptyImageLoader::load(istream& iStream, const
         throw invalid_argument{"Image has zero pixels."};
     }
 
-    set<string> layerNames;
     for (int i = 0; i < nChannels; ++i) {
         // The following lines decode strings by prefix length.
         // The reason for using sthis encoding is to allow arbitrary characters,
@@ -54,17 +53,11 @@ Task<std::tuple<ImageData, bool>> EmptyImageLoader::load(istream& iStream, const
 
         result.channels.emplace_back(Channel{channelName, size});
         result.channels.back().setZero();
-        layerNames.insert(Channel::head(channelName));
     }
 
-    for (const string& layer : layerNames) {
-        result.layers.emplace_back(layer);
-    }
+    result.hasPremultipliedAlpha = true;
 
-    // Empty images currently do not support custom data and display windows
-    result.dataWindow = result.displayWindow = result.channels.front().size();
-
-    co_return {result, true};
+    co_return result;
 }
 
 TEV_NAMESPACE_END

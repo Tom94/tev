@@ -21,7 +21,7 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<ImageData> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     string magic;
@@ -48,7 +48,7 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
 
-    vector<Channel> channels = makeNChannels(numChannels, size);
+    result.channels = makeNChannels(numChannels, size);
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
@@ -85,35 +85,14 @@ Task<std::tuple<ImageData, bool>> PfmImageLoader::load(istream& iStream, const p
                 }
 
                 // Flip image vertically due to PFM format
-                channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
+                result.channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
             }
         }
     }, priority);
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    result.hasPremultipliedAlpha = false;
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
-    }
-
-    // PFM can not contain layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    // PFM images do not have custom data and display windows.
-    result.dataWindow = result.displayWindow = result.channels.front().size();
-
-    co_return {result, false};
+    co_return result;
 }
 
 TEV_NAMESPACE_END

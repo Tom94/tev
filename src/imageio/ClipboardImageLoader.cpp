@@ -23,7 +23,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<ImageData> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     char magic[4];
@@ -58,7 +58,7 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
     auto numBytes = (size_t)numBytesPerRow * size.y();
     int alphaChannelIndex = 3;
 
-    vector<Channel> channels = makeNChannels(numChannels, size);
+    result.channels = makeNChannels(numChannels, size);
 
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
@@ -89,40 +89,19 @@ Task<std::tuple<ImageData, bool>> ClipboardImageLoader::load(istream& iStream, c
             for (int c = numChannels-1; c >= 0; --c) {
                 unsigned char val = data[baseIdx + shifts[c]];
                 if (c == alphaChannelIndex) {
-                    channels[c].at({x, y}) = val / 255.0f;
+                    result.channels[c].at({x, y}) = val / 255.0f;
                 } else {
-                    float alpha = premultipliedAlpha ? channels[alphaChannelIndex].at({x, y}) : 1.0f;
+                    float alpha = premultipliedAlpha ? result.channels[alphaChannelIndex].at({x, y}) : 1.0f;
                     float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
-                    channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+                    result.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
                 }
             }
         }
     }, priority);
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    result.hasPremultipliedAlpha = false;
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
-    }
-
-    // The clipboard can not contain layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    // Clipboard images do not have non-trivial data and display windows.
-    result.dataWindow = result.displayWindow = result.channels.front().size();
-
-    co_return {result, false};
+    co_return result;
 }
 
 TEV_NAMESPACE_END
