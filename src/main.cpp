@@ -114,9 +114,10 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto image = tryLoadImage(imageString, imageStream, "").get();
-                if (image) {
-                    sImageViewer->addImage(image, info.grabFocus);
+                auto images = tryLoadImage(imageString, imageStream, "").get();
+                if (!images.empty()) {
+                    sImageViewer->addImage(images.front(), info.grabFocus);
+                    TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
                 }
             });
 

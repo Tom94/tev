@@ -198,8 +198,8 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
 atomic<int> Image::sId(0);
 
-Image::Image(int id, const class path& path, ImageData&& data, const string& channelSelector)
-: mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{id} {
+Image::Image(const class path& path, ImageData&& data, const string& channelSelector)
+: mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
     mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
 
     for (const auto& l : mData.layers) {
@@ -496,7 +496,7 @@ string Image::toString() const {
     return sstream.str();
 }
 
-Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
@@ -524,23 +524,22 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
 
             if (useLoader) {
                 // Earlier images should be prioritized when loading.
-                int taskPriority = -imageId;
-
                 loadMethod = imageLoader->name();
-                auto data = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
-                co_await data.ensureValid(channelSelector, taskPriority);
+                auto imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
 
-                // Convert chromaticities to sRGB / Rec 709 if they aren't already.
-                co_await data.convertToRec709(taskPriority);
-
-                auto image = make_shared<Image>(imageId, path, std::move(data), channelSelector);
+                vector<shared_ptr<Image>> images;
+                for (auto& i : imageData) {
+                    co_await i.ensureValid(channelSelector, taskPriority);
+                    co_await i.convertToRec709(taskPriority);
+                    images.emplace_back(make_shared<Image>(path, std::move(i), channelSelector));
+                }
 
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
-                tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", image->name(), loadMethod, elapsedSeconds.count());
+                tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", path, loadMethod, elapsedSeconds.count());
 
-                co_return image;
+                co_return images;
             }
         }
 
@@ -555,14 +554,14 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
         handleException(e);
     }
 
-    co_return nullptr;
+    co_return {};
 }
 
-Task<shared_ptr<Image>> tryLoadImage(path path, istream& iStream, string channelSelector) {
-    co_return co_await tryLoadImage(Image::drawId(), path, iStream, channelSelector);
+Task<vector<shared_ptr<Image>>> tryLoadImage(path path, istream& iStream, string channelSelector) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector);
 }
 
-Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, string channelSelector) {
     try {
         path = path.make_absolute();
     } catch (const runtime_error&) {
@@ -571,24 +570,24 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, string channelSelec
     }
 
     ifstream fileStream{nativeString(path), ios_base::binary};
-    co_return co_await tryLoadImage(imageId, path, fileStream, channelSelector);
+    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector);
 }
 
-Task<shared_ptr<Image>> tryLoadImage(path path, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(path path, string channelSelector) {
     co_return co_await tryLoadImage(Image::drawId(), path, channelSelector);
 }
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
-    int imageId = Image::drawId();
     int loadId = mUnsortedLoadCounter++;
+    invokeTaskDetached([loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+        int taskPriority = -Image::drawId();
 
-    invokeTaskDetached([imageId, loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
-        co_await gThreadPool->enqueueCoroutine(-imageId);
-        auto image = co_await tryLoadImage(imageId, path, channelSelector);
+        co_await gThreadPool->enqueueCoroutine(taskPriority);
+        auto images = co_await tryLoadImage(taskPriority, path, channelSelector);
 
         {
             std::lock_guard lock{mPendingLoadedImagesMutex};
-            mPendingLoadedImages.push({ loadId, shallSelect, image });
+            mPendingLoadedImages.push({ loadId, shallSelect, images });
         }
 
         if (publishSortedLoads()) {
@@ -604,7 +603,7 @@ bool BackgroundImagesLoader::publishSortedLoads() {
         ++mLoadCounter;
 
         // null image pointers indicate failed loads. These shouldn't be pushed.
-        if (mPendingLoadedImages.top().image) {
+        if (!mPendingLoadedImages.top().images.empty()) {
             mLoadedImages.push(std::move(mPendingLoadedImages.top()));
         }
 

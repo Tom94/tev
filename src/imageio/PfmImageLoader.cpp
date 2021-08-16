@@ -21,8 +21,9 @@ bool PfmImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<ImageData> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
-    ImageData result;
+Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     string magic;
     Vector2i size;
@@ -48,7 +49,7 @@ Task<ImageData> PfmImageLoader::load(istream& iStream, const path&, const string
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
 
-    result.channels = makeNChannels(numChannels, size);
+    resultData.channels = makeNChannels(numChannels, size);
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
@@ -85,12 +86,12 @@ Task<ImageData> PfmImageLoader::load(istream& iStream, const path&, const string
                 }
 
                 // Flip image vertically due to PFM format
-                result.channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
+                resultData.channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
             }
         }
     }, priority);
 
-    result.hasPremultipliedAlpha = false;
+    resultData.hasPremultipliedAlpha = false;
 
     co_return result;
 }

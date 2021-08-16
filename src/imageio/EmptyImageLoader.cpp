@@ -22,8 +22,9 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<ImageData> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
-    ImageData result;
+Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& data = result.front();
 
     string magic;
     Vector2i size;
@@ -51,11 +52,11 @@ Task<ImageData> EmptyImageLoader::load(istream& iStream, const path&, const stri
 
         string channelName = channelNameData.data();
 
-        result.channels.emplace_back(Channel{channelName, size});
-        result.channels.back().setZero();
+        data.channels.emplace_back(Channel{channelName, size});
+        data.channels.back().setZero();
     }
 
-    result.hasPremultipliedAlpha = true;
+    data.hasPremultipliedAlpha = true;
 
     co_return result;
 }
