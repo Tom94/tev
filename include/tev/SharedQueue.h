@@ -15,23 +15,23 @@ template <typename T>
 class SharedQueue {
 public:
     bool empty() const {
-        std::lock_guard<std::mutex> lock{mMutex};
+        std::lock_guard lock{mMutex};
         return mRawQueue.empty();
     }
 
     size_t size() const {
-        std::lock_guard<std::mutex> lock{mMutex};
+        std::lock_guard lock{mMutex};
         return mRawQueue.size();
     }
 
     void push(T newElem) {
-        std::lock_guard<std::mutex> lock{mMutex};
+        std::lock_guard lock{mMutex};
         mRawQueue.push_back(newElem);
         mDataCondition.notify_one();
     }
 
     T waitAndPop() {
-        std::unique_lock<std::mutex> lock{mMutex};
+        std::unique_lock lock{mMutex};
 
         while (mRawQueue.empty()) {
             mDataCondition.wait(lock);
@@ -44,7 +44,7 @@ public:
     }
 
     std::optional<T> tryPop() {
-        std::unique_lock<std::mutex> lock{mMutex};
+        std::unique_lock lock{mMutex};
 
         if (mRawQueue.empty()) {
             return {};

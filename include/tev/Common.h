@@ -224,12 +224,6 @@ private:
 };
 
 template <typename T>
-T clamp(T value, T min, T max) {
-    TEV_ASSERT(max >= min, "Minimum (%f) may not be larger than maximum (%f).", min, max);
-    return std::max(std::min(value, max), min);
-}
-
-template <typename T>
 T round(T value, T decimals) {
     auto precision = std::pow(static_cast<T>(10), decimals);
     return std::round(value * precision) / precision;

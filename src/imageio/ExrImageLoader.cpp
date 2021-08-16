@@ -195,18 +195,6 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const path& path,
             return name;
         };
 
-        bool matched = false;
-        for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            matched |= matchesFuzzy(channelName(c), channelSelector);
-            if (matched) {
-                break;
-            }
-        }
-
-        if (!matched) {
-            continue;
-        }
-
         Imath::Box2i dataWindow = part.header().dataWindow();
         Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1 , dataWindow.max.y - dataWindow.min.y + 1};
 
@@ -215,11 +203,17 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const path& path,
             continue;
         }
 
+        bool matched = false;
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
             string name = channelName(c);
             if (matchesFuzzy(name, channelSelector)) {
                 rawChannels.emplace_back(parts.size(), name, c.name(), c.channel(), size);
+                matched = true;
             }
+        }
+
+        if (!matched) {
+            continue;
         }
 
         parts.emplace_back(part);

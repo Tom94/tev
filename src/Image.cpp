@@ -325,7 +325,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
         auto channelTails = channels;
         // Remove duplicates
         channelTails.erase(unique(begin(channelTails), end(channelTails)), end(channelTails));
-        transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
+        ranges::transform(channelTails, begin(channelTails), Channel::tail);
         string channelsString = join(channelTails, ",");
 
         string name;
@@ -345,7 +345,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
 
     vector<string> allChannels = mData.channelsInLayer(layerName);
 
-    auto alphaIt = find(begin(allChannels), end(allChannels), alphaChannelName);
+    auto alphaIt = ranges::find(allChannels, alphaChannelName);
     bool hasAlpha = alphaIt != end(allChannels);
     if (hasAlpha) {
         allChannels.erase(alphaIt);
@@ -357,7 +357,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
         vector<string> groupChannels;
         for (const string& channel : group) {
             string name = layerPrefix + channel;
-            auto it = find(begin(allChannels), end(allChannels), name);
+            auto it = ranges::find(allChannels, name);
             if (it != end(allChannels)) {
                 groupChannels.emplace_back(name);
                 allChannels.erase(it);
@@ -436,7 +436,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     // Update textures that are cached for this channel
     for (auto& kv : mTextures) {
         auto& imageTexture = kv.second;
-        if (find(begin(imageTexture.channels), end(imageTexture.channels), channelName) == end(imageTexture.channels)) {
+        if (ranges::find(imageTexture.channels, channelName) == end(imageTexture.channels)) {
             continue;
         }
 
@@ -481,9 +481,9 @@ string Image::toString() const {
     sstream << "\nChannels:\n";
 
     auto localLayers = mData.layers;
-    transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
+    ranges::transform(localLayers, begin(localLayers), [this](string layer) {
         auto channels = mData.channelsInLayer(layer);
-        transform(begin(channels), end(channels), begin(channels), [](string channel) {
+        ranges::transform(channels, begin(channels), [](string channel) {
             return Channel::tail(channel);
         });
         if (layer.empty()) {
@@ -539,7 +539,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istrea
                         auto selectorParts = split(channelSelector, ",");
                         if (channelSelector.empty()) {
                             localChannelSelector = i.partName;
-                        } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
+                        } else if (ranges::find(selectorParts, i.partName) == end(selectorParts)) {
                             localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
                         }
                     }
