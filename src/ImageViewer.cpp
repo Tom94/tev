@@ -758,11 +758,13 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                         << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height)
                         ;
 
-                    auto image = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "").get();
-                    if (image) {
-                        addImage(image, true);
-                    } else {
+                    auto images = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "").get();
+                    if (images.empty()) {
                         tlog::error() << "Failed to load image from clipboard data.";
+                    } else {
+                        for (auto& image : images) {
+                            addImage(image, true);
+                        }
                     }
                 }
             }
@@ -885,7 +887,9 @@ void ImageViewer::draw_contents() {
     bool newFocus = false;
     while (auto addition = mImagesLoader->tryPop()) {
         newFocus |= addition->shallSelect;
-        addImage(addition->image, addition->shallSelect);
+        for (auto& image : addition->images) {
+            addImage(image, addition->shallSelect);
+        }
     }
 
     if (newFocus) {
@@ -1135,10 +1139,13 @@ void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImage = tryLoadImage(image->path(), image->channelSelector()).get();
-    if (newImage) {
+    auto newImages = tryLoadImage(image->path(), image->channelSelector()).get();
+    if (!newImages.empty()) {
         removeImage(image);
-        insertImage(newImage, id, shallSelect);
+        insertImage(newImages.front(), id, shallSelect);
+        if (newImages.size() > 1) {
+            tlog::warning() << "Ambiguous image reload.";
+        }
     }
 
     if (referenceId != -1) {

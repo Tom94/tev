@@ -23,8 +23,9 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<ImageData> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
-    ImageData result;
+Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     char magic[4];
     clip::image_spec spec;
@@ -58,7 +59,7 @@ Task<ImageData> ClipboardImageLoader::load(istream& iStream, const path&, const 
     auto numBytes = (size_t)numBytesPerRow * size.y();
     int alphaChannelIndex = 3;
 
-    result.channels = makeNChannels(numChannels, size);
+    resultData.channels = makeNChannels(numChannels, size);
 
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
@@ -89,17 +90,17 @@ Task<ImageData> ClipboardImageLoader::load(istream& iStream, const path&, const 
             for (int c = numChannels-1; c >= 0; --c) {
                 unsigned char val = data[baseIdx + shifts[c]];
                 if (c == alphaChannelIndex) {
-                    result.channels[c].at({x, y}) = val / 255.0f;
+                    resultData.channels[c].at({x, y}) = val / 255.0f;
                 } else {
-                    float alpha = premultipliedAlpha ? result.channels[alphaChannelIndex].at({x, y}) : 1.0f;
+                    float alpha = premultipliedAlpha ? resultData.channels[alphaChannelIndex].at({x, y}) : 1.0f;
                     float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
-                    result.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+                    resultData.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
                 }
             }
         }
     }, priority);
 
-    result.hasPremultipliedAlpha = false;
+    resultData.hasPremultipliedAlpha = false;
 
     co_return result;
 }

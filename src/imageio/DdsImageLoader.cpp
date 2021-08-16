@@ -153,14 +153,16 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<ImageData> DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};
     }
     ScopeGuard comScopeGuard{ []() { CoUninitialize(); } };
 
-    ImageData result;
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
+
     iStream.seekg(0, iStream.end);
     size_t dataSize = iStream.tellg();
     iStream.seekg(0, iStream.beg);
@@ -208,7 +210,7 @@ Task<ImageData> DdsImageLoader::load(istream& iStream, const path&, const string
         std::swap(scratchImage, convertedImage);
     }
 
-    result.channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
+    resultData.channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
 
     auto numPixels = (size_t)metadata.width * metadata.height;
     if (numPixels == 0) {
@@ -224,7 +226,7 @@ Task<ImageData> DdsImageLoader::load(istream& iStream, const path&, const string
         co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                result.channels[c].at(i) = typedData[baseIdx + c];
+                resultData.channels[c].at(i) = typedData[baseIdx + c];
             }
         }, priority);
     } else {
@@ -237,15 +239,15 @@ Task<ImageData> DdsImageLoader::load(istream& iStream, const path&, const string
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {
-                    result.channels[c].at(i) = typedData[baseIdx + c];
+                    resultData.channels[c].at(i) = typedData[baseIdx + c];
                 } else {
-                    result.channels[c].at(i) = toLinear(typedData[baseIdx + c]);
+                    resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c]);
                 }
             }
         }, priority);
     }
 
-    result.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
+    resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
 
     co_return result;
 }

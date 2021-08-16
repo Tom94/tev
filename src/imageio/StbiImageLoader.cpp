@@ -18,8 +18,9 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-Task<ImageData> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
-    ImageData result;
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     static const stbi_io_callbacks callbacks = {
         // Read
@@ -61,7 +62,7 @@ Task<ImageData> StbiImageLoader::load(istream& iStream, const path&, const strin
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
-    result.channels = makeNChannels(numChannels, size);
+    resultData.channels = makeNChannels(numChannels, size);
     int alphaChannelIndex = 3;
 
     auto numPixels = (size_t)size.x() * size.y();
@@ -70,7 +71,7 @@ Task<ImageData> StbiImageLoader::load(istream& iStream, const path&, const strin
             auto typedData = reinterpret_cast<float*>(data);
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                result.channels[c].at(i) = typedData[baseIdx + c];
+                resultData.channels[c].at(i) = typedData[baseIdx + c];
             }
         }, priority);
     } else {
@@ -79,15 +80,15 @@ Task<ImageData> StbiImageLoader::load(istream& iStream, const path&, const strin
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == alphaChannelIndex) {
-                    result.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
+                    resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
                 } else {
-                    result.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                    resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
                 }
             }
         }, priority);
     }
 
-    result.hasPremultipliedAlpha = false;
+    resultData.hasPremultipliedAlpha = false;
 
     co_return result;
 }
