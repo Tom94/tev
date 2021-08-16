@@ -467,16 +467,16 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     auto image = mImage, reference = mReference;
     auto requestedChannelGroup = mRequestedChannelGroup;
     auto metric = mMetric;
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(
-        [image, reference, requestedChannelGroup, metric, priority]() {
-            return computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority).get();
-        },
-        &mMeanValueThreadPool
-    )));
 
-    auto val = mMeanValues.at(key);
-    val->computeAsync(priority);
-    return val;
+    promise<shared_ptr<CanvasStatistics>> promise;
+    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(promise.get_future())));
+
+    invokeTaskDetached([image, reference, requestedChannelGroup, metric, priority, p=std::move(promise)]() mutable -> Task<void> {
+        co_await gThreadPool->enqueueCoroutine(priority);
+        p.set_value(co_await computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority));
+    });
+
+    return mMeanValues.at(key);
 }
 
 vector<Channel> ImageCanvas::channelsFromImages(
