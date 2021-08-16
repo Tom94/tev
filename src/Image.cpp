@@ -470,7 +470,15 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
 }
 
 string Image::toString() const {
-    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, size().x(), size().y());
+    stringstream sstream;
+    sstream << "Path: " << mName << "\n\n";
+    sstream << "Resolution: (" << size().x() << ", " << size().y() << ")\n";
+    if (displayWindow() != dataWindow() || displayWindow().min != Vector2i{0}) {
+        sstream << "Display window: (" << displayWindow().min.x() << ", " << displayWindow().min.y() << ")(" << displayWindow().max.x() << ", " << displayWindow().max.y() << ")\n";
+        sstream << "Data window: (" << dataWindow().min.x() << ", " << dataWindow().min.y() << ")(" << dataWindow().max.x() << ", " << dataWindow().max.y() << ")\n";
+    }
+
+    sstream << "\nChannels:\n";
 
     auto localLayers = mData.layers;
     transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
@@ -484,7 +492,8 @@ string Image::toString() const {
         return layer + ": " + join(channels, ",");
     });
 
-    return result + join(localLayers, "\n");
+    sstream << join(localLayers, "\n");
+    return sstream.str();
 }
 
 Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, string channelSelector) {

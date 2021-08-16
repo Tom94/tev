@@ -40,6 +40,10 @@ struct Box {
         return min == other.min && max == other.max;
     }
 
+    Box<T, N_DIMS> inflate(T amount) const {
+        return {min - Vector{amount}, max + Vector{amount}};
+    }
+
     Vector min, max;
 };
 
