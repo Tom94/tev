@@ -155,7 +155,7 @@ private:
     vector<char> mData;
 };
 
-Task<std::tuple<ImageData, bool>> ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, int priority) const {
+Task<ImageData> ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, int priority) const {
     ImageData result;
 
     StdIStream stdIStream{iStream, path.str().c_str()};
@@ -196,13 +196,26 @@ l_foundPart:
     result.dataWindow =    {{dataWindow.min.x,    dataWindow.min.y   }, {dataWindow.max.x+1,    dataWindow.max.y+1   }};
     result.displayWindow = {{displayWindow.min.x, displayWindow.min.y}, {displayWindow.max.x+1, displayWindow.max.y+1}};
 
+    if (!result.dataWindow.isValid()) {
+        throw invalid_argument{tfm::format(
+            "EXR image has invalid data window: [%d,%d] - [%d,%d]",
+            result.dataWindow.min.x(), result.dataWindow.min.y(), result.dataWindow.max.x(), result.dataWindow.max.y()
+        )};
+    }
+
+    if (!result.displayWindow.isValid()) {
+        throw invalid_argument{tfm::format(
+            "EXR image has invalid display window: [%d,%d] - [%d,%d]",
+            result.displayWindow.min.x(), result.displayWindow.min.y(), result.displayWindow.max.x(), result.displayWindow.max.y()
+        )};
+    }
+
     // Allocate raw channels on the heap, because it'll be references
     // by nested parallel for coroutine.
     auto rawChannels = std::make_unique<vector<RawChannel>>();
     Imf::FrameBuffer frameBuffer;
 
     const Imf::ChannelList& imfChannels = file.header().channels();
-    set<string> layerNames;
 
     using match_t = pair<size_t, Imf::ChannelList::ConstIterator>;
     vector<match_t> matches;
@@ -210,7 +223,6 @@ l_foundPart:
         size_t matchId;
         if (matchesFuzzy(c.name(), channelSelector, &matchId)) {
             matches.emplace_back(matchId, c);
-            layerNames.insert(Channel::head(c.name()));
         }
     }
 
@@ -226,10 +238,6 @@ l_foundPart:
 
     if (rawChannels->empty()) {
         throw invalid_argument{tfm::format("No channels match '%s'.", channelSelector)};
-    }
-
-    for (const string& layer : layerNames) {
-        result.layers.emplace_back(layer);
     }
 
     co_await gThreadPool->parallelForAsync(0, (int)rawChannels->size(), [c = rawChannels.get(), size](int i) {
@@ -281,7 +289,9 @@ l_foundPart:
         }
     }
 
-    co_return {result, true};
+    result.hasPremultipliedAlpha = true;
+
+    co_return result;
 }
 
 TEV_NAMESPACE_END

@@ -104,6 +104,10 @@ void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& f
 }
 
 Task<void> ImageData::multiplyAlpha(int priority) {
+    if (hasPremultipliedAlpha) {
+        throw runtime_error{"Can't multiply with alpha twice."};
+    }
+
     vector<Task<void>> tasks;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
         tasks.emplace_back(target.multiplyWithAsync(alpha, priority));
@@ -111,9 +115,15 @@ Task<void> ImageData::multiplyAlpha(int priority) {
     for (auto& task : tasks) {
         co_await task;
     }
+
+    hasPremultipliedAlpha = true;
 }
 
 Task<void> ImageData::unmultiplyAlpha(int priority) {
+    if (!hasPremultipliedAlpha) {
+        throw runtime_error{"Can't divide by alpha twice."};
+    }
+
     vector<Task<void>> tasks;
     alphaOperation([&] (Channel& target, const Channel& alpha) {
         tasks.emplace_back(target.divideByAsync(alpha, priority));
@@ -121,15 +131,22 @@ Task<void> ImageData::unmultiplyAlpha(int priority) {
     for (auto& task : tasks) {
         co_await task;
     }
+
+    hasPremultipliedAlpha = false;
 }
 
-void ImageData::ensureValid() {
-    if (layers.empty()) {
-        throw runtime_error{"Images must have at least one layer."};
-    }
-
+Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriority) {
     if (channels.empty()) {
         throw runtime_error{"Images must have at least one channel."};
+    }
+
+    // No data window? Default to the channel size
+    if (!dataWindow.isValid()) {
+        dataWindow = channels.front().size();
+    }
+
+    if (!displayWindow.isValid()) {
+        displayWindow = channels.front().size();
     }
 
     for (const auto& c : channels) {
@@ -140,6 +157,43 @@ void ImageData::ensureValid() {
             )};
         }
     }
+
+    if (!channelSelector.empty()) {
+        vector<pair<size_t, size_t>> matches;
+        for (size_t i = 0; i < channels.size(); ++i) {
+            size_t matchId;
+            if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
+                matches.emplace_back(matchId, i);
+            }
+        }
+
+        sort(begin(matches), end(matches));
+
+        // Prune and sort channels by the channel selector
+        vector<Channel> tmp = move(channels);
+        channels.clear();
+
+        for (const auto& match : matches) {
+            channels.emplace_back(move(tmp[match.second]));
+        }
+    }
+
+    if (layers.empty()) {
+        set<string> layerNames;
+        for (auto& c : channels) {
+            layerNames.insert(Channel::head(c.name()));
+        }
+
+        for (const string& l : layerNames) {
+            layers.emplace_back(l);
+        }
+    }
+
+    if (!hasPremultipliedAlpha) {
+        co_await multiplyAlpha(taskPriority);
+    }
+
+    TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
 }
 
 atomic<int> Image::sId(0);
@@ -148,8 +202,8 @@ Image::Image(int id, const class path& path, ImageData&& data, const string& cha
 : mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{id} {
     mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
 
-    for (const auto& layer : mData.layers) {
-        auto groups = getGroupedChannels(layer);
+    for (const auto& l : mData.layers) {
+        auto groups = getGroupedChannels(l);
         mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
     }
 }
@@ -464,13 +518,8 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
                 int taskPriority = -imageId;
 
                 loadMethod = imageLoader->name();
-                auto [data, hasPremultipliedAlpha] = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
-                data.ensureValid();
-
-                // We assume an internal pre-multiplied-alpha representation
-                if (!hasPremultipliedAlpha) {
-                    co_await data.multiplyAlpha(taskPriority);
-                }
+                auto data = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
+                co_await data.ensureValid(channelSelector, taskPriority);
 
                 // Convert chromaticities to sRGB / Rec 709 if they aren't already.
                 co_await data.convertToRec709(taskPriority);

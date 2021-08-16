@@ -18,7 +18,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<ImageData> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     ImageData result;
 
     static const stbi_io_callbacks callbacks = {
@@ -61,7 +61,7 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
-    auto channels = makeNChannels(numChannels, size);
+    result.channels = makeNChannels(numChannels, size);
     int alphaChannelIndex = 3;
 
     auto numPixels = (size_t)size.x() * size.y();
@@ -70,7 +70,7 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
             auto typedData = reinterpret_cast<float*>(data);
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                channels[c].at(i) = typedData[baseIdx + c];
+                result.channels[c].at(i) = typedData[baseIdx + c];
             }
         }, priority);
     } else {
@@ -79,38 +79,17 @@ Task<std::tuple<ImageData, bool>> StbiImageLoader::load(istream& iStream, const 
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == alphaChannelIndex) {
-                    channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
+                    result.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
                 } else {
-                    channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                    result.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
                 }
             }
         }, priority);
     }
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels.at(i).name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    result.hasPremultipliedAlpha = false;
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels.at(match.second)));
-    }
-
-    // STBI can not load layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    // STBI-loaded images do not have custom data and display windows.
-    result.dataWindow = result.displayWindow = result.channels.front().size();
-
-    co_return {result, false};
+    co_return result;
 }
 
 TEV_NAMESPACE_END
