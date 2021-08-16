@@ -84,7 +84,6 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
     Latch latch{2};
     std::atomic<bool> done = false; // TODO: use a std::binary_semaphore once that's available on macOS
     std::exception_ptr eptr;
-    std::vector<std::function<void()>> onFinalSuspend;
 
     future_t get_return_object() noexcept {
         return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this)};
@@ -96,18 +95,9 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
         eptr = std::current_exception();
     }
 
-    template <typename F>
-    void finally(F&& fun) {
-        onFinalSuspend.emplace_back(std::forward<F>(fun));
-    }
-
     // The coroutine is about to complete (via co_return, reaching the end of the coroutine body,
     // or an uncaught exception). The awaiter returned here defines what happens next
     auto final_suspend() const noexcept {
-        for (auto& f : onFinalSuspend) {
-            f();
-        }
-
         struct Awaiter {
             bool await_ready() const noexcept { return false; }
             void await_resume() const noexcept {}
@@ -163,11 +153,6 @@ struct Task {
     bool await_ready() const noexcept {
         // No need to suspend if this task has no outstanding work
         return handle.done();
-    }
-
-    template <typename F>
-    void finally(F&& fun) {
-        handle.promise().finally(std::forward<F>(fun));
     }
 
     T await_resume() {
@@ -240,24 +225,12 @@ private:
 
 struct DetachedTask {
     struct promise_type {
-        std::vector<std::function<void()>> onFinalSuspend;
-
-        template <typename F>
-        void finally(F&& fun) {
-            onFinalSuspend.emplace_back(std::forward<F>(fun));
-        }
-
         DetachedTask get_return_object() noexcept {
             return {COROUTINE_NAMESPACE::coroutine_handle<promise_type>::from_promise(*this)};
         }
 
         COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
-        COROUTINE_NAMESPACE::suspend_never final_suspend() const noexcept {
-            for (auto& f : onFinalSuspend) {
-                f();
-            }
-            return {};
-        }
+        COROUTINE_NAMESPACE::suspend_never final_suspend() const noexcept { return {}; }
 
         void return_void() {}
         void unhandled_exception() {
@@ -271,27 +244,15 @@ struct DetachedTask {
     };
 
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
-
-    template <typename F>
-    void finally(F&& fun) {
-        handle.promise().finally(std::forward<F>(fun));
-    }
 };
 
 // Ties the lifetime of a lambda coroutine's captures
 // to that of the task.
 // Taken from https://stackoverflow.com/a/68630143
-auto taskLambda(auto&& executor) {
-    return [executor=std::move(executor)]<typename ...Args>(Args&&... args) {
-        using ReturnType = decltype(executor(args...));
-        // copy the lambda into a new std::function pointer
-        auto exec = new std::function<ReturnType(Args...)>(executor);
-        // execute the lambda and save the result
-        auto result = (*exec)(args...);
-        // call custom method to save lambda until task ends
-        result.finally([exec]() { delete exec; });
-        return result;
-    };
+template <typename F, typename ...Args>
+DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
+    auto exec = std::move(executor);
+    co_await exec(args...);
 }
 
 TEV_NAMESPACE_END
