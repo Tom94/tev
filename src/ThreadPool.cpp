@@ -30,7 +30,7 @@ void ThreadPool::startThreads(size_t num) {
     for (size_t i = mThreads.size(); i < mNumThreads; ++i) {
         mThreads.emplace_back([this, i] {
             while (true) {
-                unique_lock<mutex> lock{mTaskQueueMutex};
+                unique_lock lock{mTaskQueueMutex};
 
                 // look for a work item
                 while (i < mNumThreads && mTaskQueue.empty()) {
@@ -53,7 +53,7 @@ void ThreadPool::startThreads(size_t num) {
                 mNumTasksInSystem--;
 
                 {
-                    unique_lock<mutex> localLock{mSystemBusyMutex};
+                    unique_lock localLock{mSystemBusyMutex};
 
                     if (mNumTasksInSystem == 0) {
                         mSystemBusyCondition.notify_all();
@@ -68,7 +68,7 @@ void ThreadPool::shutdownThreads(size_t num) {
     auto numToClose = min(num, mNumThreads);
 
     {
-        lock_guard<mutex> lock{mTaskQueueMutex};
+        lock_guard lock{mTaskQueueMutex};
         mNumThreads -= numToClose;
     }
 
@@ -81,7 +81,7 @@ void ThreadPool::shutdownThreads(size_t num) {
 }
 
 void ThreadPool::waitUntilFinished() {
-    unique_lock<mutex> lock{mSystemBusyMutex};
+    unique_lock lock{mSystemBusyMutex};
 
     if (mNumTasksInSystem == 0) {
         return;
@@ -91,7 +91,7 @@ void ThreadPool::waitUntilFinished() {
 }
 
 void ThreadPool::waitUntilFinishedFor(const chrono::microseconds Duration) {
-    unique_lock<mutex> lock{mSystemBusyMutex};
+    unique_lock lock{mSystemBusyMutex};
 
     if (mNumTasksInSystem == 0) {
         return;
@@ -101,7 +101,7 @@ void ThreadPool::waitUntilFinishedFor(const chrono::microseconds Duration) {
 }
 
 void ThreadPool::flushQueue() {
-    lock_guard<mutex> lock{mTaskQueueMutex};
+    lock_guard lock{mTaskQueueMutex};
 
     mNumTasksInSystem -= mTaskQueue.size();
     while (!mTaskQueue.empty()) {

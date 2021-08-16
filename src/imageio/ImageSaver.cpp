@@ -22,7 +22,7 @@ const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
         return imageSavers;
     };
 
-    static const vector<unique_ptr<ImageSaver>> imageSavers = makeSavers();
+    static const vector imageSavers = makeSavers();
     return imageSavers;
 }
 

@@ -30,7 +30,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         return imageLoaders;
     };
 
-    static const vector<unique_ptr<ImageLoader>> imageLoaders = makeLoaders();
+    static const vector imageLoaders = makeLoaders();
     return imageLoaders;
 }
 
