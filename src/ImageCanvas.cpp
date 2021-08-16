@@ -183,47 +183,92 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
 
     auto displayWindowToNano = displayWindowToNanogui(mImage.get());
 
-    auto drawWindow = [&](const Box2i& window, const Color& color, const std::string& name) {
-        Vector2i topLeft     = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.min.x(), (float)window.min.y()}};
-        Vector2i topRight    = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.max.x(), (float)window.min.y()}};
-        Vector2i bottomLeft  = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.min.x(), (float)window.max.y()}};
-        Vector2i bottomRight = m_pos + Vector2i{displayWindowToNano * Vector2f{(float)window.max.x(), (float)window.max.y()}};
+    enum DrawFlags {
+        Label = 1,
+        Region = 2,
+    };
 
-        NVGpaint shadowPaint = nvgLinearGradient(ctx,
-            m_pos.x(), m_pos.y(), m_pos.x(), m_pos.y()+m_size.y(),
-            color, color
-        );
-
-        NVGcolor regularTextColor = Color(150, 255);// : Color(190, 255);
-        NVGcolor hightlightedTextColor = Color(190, 255);
-
-        float fontSize = 30;
+    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, const std::string& name, DrawFlags flags) {
+        float fontSize = 20;
         float strokeWidth = 3.0f;
 
+        Vector2i topLeft     = m_pos + Vector2i{displayWindowToNano * Vector2f{window.min.x(), window.min.y()}};
+        Vector2i topRight    = m_pos + Vector2i{displayWindowToNano * Vector2f{window.max.x(), window.min.y()}};
+        Vector2i bottomLeft  = m_pos + Vector2i{displayWindowToNano * Vector2f{window.min.x(), window.max.y()}};
+        Vector2i bottomRight = m_pos + Vector2i{displayWindowToNano * Vector2f{window.max.x(), window.max.y()}};
+
         nvgSave(ctx);
-        nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-        nvgBeginPath(ctx);
-        nvgMoveTo(ctx, bottomLeft.x(), bottomLeft.y());
-        nvgLineTo(ctx, topLeft.x(), topLeft.y());
-        nvgLineTo(ctx, topRight.x(), topRight.y());
-        nvgLineTo(ctx, bottomRight.x(), bottomRight.y());
-        nvgLineTo(ctx, bottomLeft.x(), bottomLeft.y());
-        nvgStrokeWidth(ctx, strokeWidth);
-        nvgStrokePaint(ctx, shadowPaint);
-        nvgStroke(ctx);
 
         nvgFontFace(ctx, "sans-bold");
         nvgFontSize(ctx, fontSize);
-        nvgFillColor(ctx, color);
-        // drawTextWithShadow(ctx, topLeft.x(), topLeft.y() - 20, name, 1.0f);
-        nvgText(ctx, topLeft.x() - strokeWidth/2 - 1.0f, topLeft.y(), name.c_str(), NULL);
+        nvgTextAlign(ctx, (right ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT) | (top ? NVG_ALIGN_BOTTOM : NVG_ALIGN_TOP));
+        float textWidth = nvgTextBounds(ctx, 0, 0, name.c_str(), nullptr, nullptr);
+        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 2.0f)), 0.0f);
+        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 1.5f) * 2), 0.0f);
+
+        Color textColor = Color(190, 255);
+        textColor.a() = textAlpha;
+
+        if (flags & Region) {
+            color.a() = regionAlpha;
+
+            nvgBeginPath(ctx);
+            nvgMoveTo(ctx, bottomLeft.x(), bottomLeft.y());
+            nvgLineTo(ctx, topLeft.x(), topLeft.y());
+            nvgLineTo(ctx, topRight.x(), topRight.y());
+            nvgLineTo(ctx, bottomRight.x(), bottomRight.y());
+            nvgLineTo(ctx, bottomLeft.x(), bottomLeft.y());
+            nvgStrokeWidth(ctx, strokeWidth);
+            nvgStrokeColor(ctx, color);
+            nvgStroke(ctx);
+        }
+
+        if (flags & Label) {
+            color.a() = textAlpha;
+
+            nvgBeginPath(ctx);
+            nvgFillColor(ctx, color);
+
+            float cornerRadius = fontSize / 3;
+            float topLeftCornerRadius = top && right ? cornerRadius : 0;
+            float topRightCornerRadius = top && !right ? cornerRadius : 0;
+            float bottomLeftCornerRadius = !top && right ? cornerRadius : 0;
+            float bottomRightCornerRadius = !top && !right ? cornerRadius : 0;
+
+            nvgRoundedRectVarying(
+                ctx, right ? (topRight.x() - textWidth - 4*strokeWidth) : topLeft.x() - strokeWidth/2, topLeft.y() - (top ? fontSize : 0), textWidth + 4*strokeWidth, fontSize,
+                topLeftCornerRadius, topRightCornerRadius, bottomRightCornerRadius, bottomLeftCornerRadius
+            );
+            nvgFill(ctx);
+
+            nvgFillColor(ctx, textColor);
+            nvgText(ctx, right ? (topRight.x() - 2*strokeWidth) : (topLeft.x() + 2*strokeWidth) - strokeWidth/2, topLeft.y(), name.c_str(), NULL);
+        }
 
         nvgRestore(ctx);
-
     };
 
-    drawWindow(mImage->displayWindow(), Color(0.7f, 0.4f, 0.4f, 1.0f), "Display window");
-    drawWindow(mImage->dataWindow(), Color(0.35f, 0.35f, 0.8f, 1.0f), "Data window");
+    Color imageColor = Color(0.35f, 0.35f, 0.8f, 1.0f);
+    Color referenceColor = Color(0.7f, 0.4f, 0.4f, 1.0f);
+
+    auto draw = [&](DrawFlags flags) {
+        if (mReference) {
+            if (mReference->dataWindow() != mImage->dataWindow()) {
+                drawWindow(mReference->dataWindow(), referenceColor, mReference->displayWindow().min.y() > mReference->dataWindow().min.y(), true, "Reference data window", flags);
+            }
+
+            if (mReference->displayWindow() != mImage->displayWindow()) {
+                drawWindow(mReference->displayWindow(), referenceColor, mReference->displayWindow().min.y() <= mReference->dataWindow().min.y(), true, "Reference display window", flags);
+            }
+        }
+
+        drawWindow(mImage->dataWindow(),    imageColor,        mImage->displayWindow().min.y() > mImage->dataWindow().min.y(), false, "Data window", flags);
+        drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(),  false, "Display window", flags);
+    };
+
+    // Draw all labels after the regions to ensure no occlusion
+    draw(Region);
+    draw(Label);
 }
 
 void ImageCanvas::drawEdgeShadows(NVGcontext* ctx) {
@@ -251,7 +296,8 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         drawPixelValuesAsText(ctx);
 
         // If the coordinate system is in any sort of way non-trivial, draw it!
-        if (mImage->dataWindow() != mImage->displayWindow() || mImage->displayWindow().min != Vector2i{0}) {
+        if (mImage->dataWindow() != mImage->displayWindow() || mImage->displayWindow().min != Vector2i{0} ||
+            mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow())) {
             drawCoordinateSystem(ctx);
         }
     }
@@ -759,13 +805,15 @@ Matrix3f ImageCanvas::transform(const Image* image) {
         return Matrix3f::scale(Vector2f{1.0f});
     }
 
+    TEV_ASSERT(mImage, "Coordinates are relative to the currently selected image's display window. So must have an image selected.");
+
     // Center image, scale to pixel space, translate to desired position,
     // then rescale to the [-1, 1] square for drawing.
     return
         Matrix3f::scale(Vector2f{2.0f / m_size.x(), -2.0f / m_size.y()}) *
         mTransform *
         Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
-        Matrix3f::translate(image->centerDisplayOffset() + pixelOffset(image->size())) *
+        Matrix3f::translate(image->centerDisplayOffset(mImage->displayWindow()) + pixelOffset(image->size())) *
         Matrix3f::scale(Vector2f{image->size()}) *
         Matrix3f::translate(Vector2f{-0.5f});
 }
@@ -775,12 +823,14 @@ Matrix3f ImageCanvas::textureToNanogui(const Image* image) {
         return Matrix3f::scale(Vector2f{1.0f});
     }
 
+    TEV_ASSERT(mImage, "Coordinates are relative to the currently selected image's display window. So must have an image selected.");
+
     // Move origin to centre of image, scale pixels, apply our transform, move origin back to top-left.
     return
         Matrix3f::translate(0.5f * Vector2f{m_size}) *
         mTransform *
         Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
-        Matrix3f::translate(-0.5f * Vector2f{image->size()} + image->centerDisplayOffset() + pixelOffset(image->size()));
+        Matrix3f::translate(-0.5f * Vector2f{image->size()} + image->centerDisplayOffset(mImage->displayWindow()) + pixelOffset(image->size()));
 }
 
 Matrix3f ImageCanvas::displayWindowToNanogui(const Image* image) {
