@@ -71,7 +71,7 @@ Task<void> ImageData::convertToRec709(int priority) {
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
         tasks.emplace_back(
-            gThreadPool->parallelForAsync<size_t>(0, r->count(), [r, g, b, this](size_t i) {
+            gThreadPool->parallelForAsync<size_t>(0, r->numPixels(), [r, g, b, this](size_t i) {
                 auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
                 r->at(i) = rgb.x();
                 g->at(i) = rgb.y();
@@ -531,7 +531,20 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istrea
                 for (auto& i : imageData) {
                     co_await i.ensureValid(channelSelector, taskPriority);
                     co_await i.convertToRec709(taskPriority);
-                    images.emplace_back(make_shared<Image>(path, std::move(i), channelSelector));
+
+                    // If multiple image "parts" were loaded and they have names,
+                    // ensure that these names are present in the channel selector.
+                    string localChannelSelector = channelSelector;
+                    if (!i.partName.empty()) {
+                        auto selectorParts = split(channelSelector, ",");
+                        if (channelSelector.empty()) {
+                            localChannelSelector = i.partName;
+                        } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
+                            localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
+                        }
+                    }
+
+                    images.emplace_back(make_shared<Image>(path, std::move(i), localChannelSelector));
                 }
 
                 auto end = chrono::system_clock::now();
