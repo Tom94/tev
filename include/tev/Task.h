@@ -246,9 +246,6 @@ struct DetachedTask {
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
 };
 
-// Ties the lifetime of a lambda coroutine's captures
-// to that of the task.
-// Taken from https://stackoverflow.com/a/68630143
 template <typename F, typename ...Args>
 DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
     auto exec = std::move(executor);
