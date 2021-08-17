@@ -587,7 +587,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, string
 }
 
 Task<vector<shared_ptr<Image>>> tryLoadImage(path path, string channelSelector) {
-    co_return co_await tryLoadImage(Image::drawId(), path, channelSelector);
+    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector);
 }
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
