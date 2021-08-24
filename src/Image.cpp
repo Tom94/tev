@@ -604,7 +604,7 @@ void BackgroundImagesLoader::enqueue(const path& path, const string& channelSele
         }
 
         if (publishSortedLoads()) {
-            glfwPostEmptyEvent();
+            redrawWindow();
         }
     });
 }
