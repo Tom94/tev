@@ -302,42 +302,13 @@ static int closeSocket(Ipc::socket_t socket) {
 }
 
 Ipc::Ipc(const string& hostname) {
-    const string lockName = ".tev-lock."s + hostname;
+    mLockName = ".tev-lock."s + hostname;
 
     auto parts = split(hostname, ":");
-    const string& ip = parts.front();
-    const string& port = parts.back();
+    mIp = parts.front();
+    mPort = parts.back();
 
     try {
-        // Lock file
-#ifdef _WIN32
-        //Make sure at most one instance of the tool is running
-        mInstanceMutex = CreateMutex(NULL, TRUE, lockName.c_str());
-
-        if (!mInstanceMutex) {
-            throw runtime_error{tfm::format("Could not obtain global mutex: %s", errorString(lastError()))};
-        }
-
-        mIsPrimaryInstance = GetLastError() != ERROR_ALREADY_EXISTS;
-        if (!mIsPrimaryInstance) {
-            // No need to keep the handle to the existing mutex if we're not the primary instance.
-            ReleaseMutex(mInstanceMutex);
-            CloseHandle(mInstanceMutex);
-        }
-#else
-        mLockFile = homeDirectory() / lockName;
-
-        mLockFileDescriptor = open(mLockFile.str().c_str(), O_RDWR | O_CREAT, 0666);
-        if (mLockFileDescriptor == -1) {
-            throw runtime_error{tfm::format("Could not create lock file: %s", errorString(lastError()))};
-        }
-
-        mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
-        if (!mIsPrimaryInstance) {
-            close(mLockFileDescriptor);
-        }
-#endif
-
         // Networking
 #ifdef _WIN32
         // FIXME: only do this once if multiple Ipc objects are created.
@@ -351,79 +322,48 @@ Ipc::Ipc(const string& hostname) {
         signal(SIGPIPE, SIG_IGN);
 #endif
 
-        // If we're the primary instance, create a server. Otherwise, create a client.
-        if (mIsPrimaryInstance) {
-            mSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+        if (attemptToBecomePrimaryInstance()) {
+            return;
+        }
+
+        // If we're not the primary instance, try to connect to it as a client
+        struct addrinfo hints = {}, *addrinfo;
+        hints.ai_family = PF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        int err = getaddrinfo(mIp.c_str(), mPort.c_str(), &hints, &addrinfo);
+        if (err != 0) {
+            throw runtime_error{tfm::format("getaddrinfo() failed: %s", gai_strerror(err))};
+        }
+
+        ScopeGuard addrinfoGuard{[addrinfo] { freeaddrinfo(addrinfo); }};
+
+        mSocketFd = INVALID_SOCKET;
+        for (struct addrinfo* ptr = addrinfo; ptr; ptr = ptr->ai_next) {
+            mSocketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
             if (mSocketFd == INVALID_SOCKET) {
-                throw runtime_error{tfm::format("socket() call failed: %s", errorString(lastSocketError()))};
+                tlog::warning() << tfm::format("socket() failed: %s", errorString(lastSocketError()));
+                continue;
             }
 
-            makeSocketNonBlocking(mSocketFd);
-
-            // Avoid address in use error that occurs if we quit with a client connected.
-            int t = 1;
-            if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&t, sizeof(int)) == SOCKET_ERROR) {
-                throw runtime_error{tfm::format("setsockopt() call failed: %s", errorString(lastSocketError()))};
-            }
-
-            struct sockaddr_in addr;
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons((uint16_t)atoi(port.c_str()));
-
-#ifdef _WIN32
-            InetPton(AF_INET, ip.c_str(), &addr.sin_addr);
-#else
-            inet_aton(ip.c_str(), &addr.sin_addr);
-#endif
-
-            if (::bind(mSocketFd, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
-                throw runtime_error{tfm::format("bind() call failed: %s", errorString(lastSocketError()))};
-            }
-
-            if (listen(mSocketFd, 5) == SOCKET_ERROR) {
-                throw runtime_error{tfm::format("listen() call failed: %s", errorString(lastSocketError()))};
-            }
-
-            tlog::success() << "Initialized IPC, listening on " << ip << ":" << port;
-        } else {
-            struct addrinfo hints = {}, *addrinfo;
-            hints.ai_family = PF_UNSPEC;
-            hints.ai_socktype = SOCK_STREAM;
-            int err = getaddrinfo(ip.c_str(), port.c_str(), &hints, &addrinfo);
-            if (err != 0) {
-                throw runtime_error{tfm::format("getaddrinfo() failed: %s", gai_strerror(err))};
-            }
-
-            ScopeGuard addrinfoGuard{[addrinfo] { freeaddrinfo(addrinfo); }};
-
-            mSocketFd = INVALID_SOCKET;
-            for (struct addrinfo* ptr = addrinfo; ptr; ptr = ptr->ai_next) {
-                mSocketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-                if (mSocketFd == INVALID_SOCKET) {
-                    tlog::warning() << tfm::format("socket() failed: %s", errorString(lastSocketError()));
-                    continue;
+            if (connect(mSocketFd, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
+                int errorId = lastSocketError();
+                if (errorId == SocketError::ConnRefused) {
+                    throw runtime_error{"Connection to primary instance refused"};
+                } else {
+                    tlog::warning() << tfm::format("connect() failed: %s", errorString(errorId));
                 }
 
-                if (connect(mSocketFd, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
-                    int errorId = lastSocketError();
-                    if (errorId == SocketError::ConnRefused) {
-                        throw runtime_error{"Connection to primary instance refused"};
-                    } else {
-                        tlog::warning() << tfm::format("connect() failed: %s", errorString(errorId));
-                    }
-
-                    closeSocket(mSocketFd);
-                    mSocketFd = INVALID_SOCKET;
-                    continue;
-                }
-
-                tlog::success() << "Connected to primary instance at " << ip << ":" << port;
-                break; // success
+                closeSocket(mSocketFd);
+                mSocketFd = INVALID_SOCKET;
+                continue;
             }
 
-            if (mSocketFd == INVALID_SOCKET) {
-                throw runtime_error{"Unable to connect to primary instance."};
-            }
+            tlog::success() << "Connected to primary instance at " << mIp << ":" << mPort;
+            break; // success
+        }
+
+        if (mSocketFd == INVALID_SOCKET) {
+            throw runtime_error{"Unable to connect to primary instance."};
         }
     } catch (const runtime_error& e) {
         tlog::warning() << "Could not initialize IPC; assuming primary instance. " << e.what();
@@ -460,6 +400,84 @@ Ipc::~Ipc() {
     // FIXME: only do this when the last Ipc is destroyed
     WSACleanup();
 #endif
+}
+
+bool Ipc::attemptToBecomePrimaryInstance() {
+#ifdef _WIN32
+    // Make sure at most one instance of tev is running
+    mInstanceMutex = CreateMutex(NULL, TRUE, mLockName.c_str());
+
+    if (!mInstanceMutex) {
+        throw runtime_error{tfm::format("Could not obtain global mutex: %s", errorString(lastError()))};
+    }
+
+    mIsPrimaryInstance = GetLastError() != ERROR_ALREADY_EXISTS;
+    if (!mIsPrimaryInstance) {
+        // No need to keep the handle to the existing mutex if we're not the primary instance.
+        ReleaseMutex(mInstanceMutex);
+        CloseHandle(mInstanceMutex);
+    }
+#else
+    mLockFile = homeDirectory() / mLockName;
+
+    mLockFileDescriptor = open(mLockFile.str().c_str(), O_RDWR | O_CREAT, 0666);
+    if (mLockFileDescriptor == -1) {
+        throw runtime_error{tfm::format("Could not create lock file: %s", errorString(lastError()))};
+    }
+
+    mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
+    if (!mIsPrimaryInstance) {
+        close(mLockFileDescriptor);
+    }
+#endif
+
+    if (!mIsPrimaryInstance) {
+        return false;
+    }
+
+    // Managed to become primary instance
+
+    // If we were previously a secondary instance connected with the primary instance, disconnect
+    if (mSocketFd != INVALID_SOCKET) {
+        if (closeSocket(mSocketFd) == SOCKET_ERROR) {
+            tlog::warning() << "Error closing socket upon becoming primary instance " << mSocketFd << ": " << errorString(lastSocketError());
+        }
+    }
+
+    // Set up primary instance network server
+    mSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (mSocketFd == INVALID_SOCKET) {
+        throw runtime_error{tfm::format("socket() call failed: %s", errorString(lastSocketError()))};
+    }
+
+    makeSocketNonBlocking(mSocketFd);
+
+    // Avoid address in use error that occurs if we quit with a client connected.
+    int t = 1;
+    if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&t, sizeof(int)) == SOCKET_ERROR) {
+        throw runtime_error{tfm::format("setsockopt() call failed: %s", errorString(lastSocketError()))};
+    }
+
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)atoi(mPort.c_str()));
+
+#ifdef _WIN32
+    InetPton(AF_INET, mIp.c_str(), &addr.sin_addr);
+#else
+    inet_aton(mIp.c_str(), &addr.sin_addr);
+#endif
+
+    if (::bind(mSocketFd, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        throw runtime_error{tfm::format("bind() call failed: %s", errorString(lastSocketError()))};
+    }
+
+    if (listen(mSocketFd, 5) == SOCKET_ERROR) {
+        throw runtime_error{tfm::format("listen() call failed: %s", errorString(lastSocketError()))};
+    }
+
+    tlog::success() << "Initialized IPC, listening on " << mIp << ":" << mPort;
+    return true;
 }
 
 void Ipc::sendToPrimaryInstance(const IpcPacket& message) {

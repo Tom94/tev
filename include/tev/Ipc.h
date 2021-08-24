@@ -231,6 +231,8 @@ public:
         return mIsPrimaryInstance;
     }
 
+    bool attemptToBecomePrimaryInstance();
+
     void sendToPrimaryInstance(const IpcPacket& message);
     void receiveFromSecondaryInstance(std::function<void(const IpcPacket&)> callback);
 
@@ -267,6 +269,10 @@ private:
     };
 
     std::list<SocketConnection> mSocketConnections;
+
+    std::string mIp;
+    std::string mPort;
+    std::string mLockName;
 };
 
 TEV_NAMESPACE_END

@@ -341,7 +341,7 @@ int mainFunc(const vector<string>& arguments) {
                 imagesLoader->enqueue(imageFile, channelSelector, false);
             }
 
-            this_thread::sleep_for(chrono::milliseconds{100});
+            this_thread::sleep_for(100ms);
         }
     }};
 
@@ -355,10 +355,17 @@ int mainFunc(const vector<string>& arguments) {
     // a user starts another instance of tev while one is already running. Note, that this
     // behavior can be overridden by the -n flag, so not _all_ secondary instances send their
     // paths to the primary instance.
-    thread ipcThread;
-    if (ipc->isPrimaryInstance()) {
-        ipcThread = thread{[&]() {
+    thread ipcThread = thread{[&]() {
+        try {
             while (!shallShutdown) {
+                // Attempt to become primary instance in case the primary instance
+                // got closed at some point. Attempt this with a reasonably low frequency
+                // to not hog CPU/OS resources.
+                if (!ipc->isPrimaryInstance() && !ipc->attemptToBecomePrimaryInstance()) {
+                    this_thread::sleep_for(100ms);
+                    continue;
+                }
+
                 ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
                     try {
                         handleIpcPacket(packet, imagesLoader);
@@ -369,8 +376,10 @@ int mainFunc(const vector<string>& arguments) {
 
                 this_thread::sleep_for(chrono::milliseconds{10});
             }
-        }};
-    }
+        } catch (const runtime_error& e) {
+            tlog::warning() << "Uncaught exception in IPC thread: " << e.what();
+        }
+    }};
 
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
