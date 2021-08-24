@@ -290,9 +290,14 @@ int mainFunc(const vector<string>& arguments) {
     const string hostname = hostnameFlag ? get(hostnameFlag) : "127.0.0.1:14158";
     auto ipc = make_shared<Ipc>(hostname);
 
+    // If we don't have any images to load, create new windows regardless of flag.
+    // (In this case, the user likely wants to open a new instance of tev rather
+    // than focusing the existing one.)
+    bool newWindow = newWindowFlag || !imageFiles;
+
     // If we're not the primary instance and did not request to open a new window,
     // simply send the to-be-opened images to the primary instance.
-    if (!ipc->isPrimaryInstance() && !newWindowFlag) {
+    if (!ipc->isPrimaryInstance() && !newWindow) {
         string channelSelector;
         for (auto imageFile : get(imageFiles)) {
             if (!imageFile.empty() && imageFile[0] == ':') {
