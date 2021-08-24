@@ -46,6 +46,12 @@ void scheduleToMainThread(const std::function<void()>& fun) {
     }
 }
 
+void redrawWindow() {
+    if (sImageViewer) {
+        sImageViewer->redraw();
+    }
+}
+
 void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
     switch (packet.type()) {
         case IpcPacket::OpenImage:
