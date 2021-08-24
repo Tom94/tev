@@ -379,7 +379,7 @@ int mainFunc(const vector<string>& arguments) {
                     }
                 });
 
-                this_thread::sleep_for(chrono::milliseconds{10});
+                this_thread::sleep_for(10ms);
             }
         } catch (const runtime_error& e) {
             tlog::warning() << "Uncaught exception in IPC thread: " << e.what();
