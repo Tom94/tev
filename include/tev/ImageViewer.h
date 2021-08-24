@@ -105,8 +105,8 @@ public:
 
     void setMetric(EMetric metric);
 
-    void resizeToFitImage(const std::shared_ptr<Image>& image);
-    void resizeToFitAllImages();
+    nanogui::Vector2i sizeToFitImage(const std::shared_ptr<Image>& image);
+    nanogui::Vector2i sizeToFitAllImages();
     bool setFilter(const std::string& filter);
 
     bool useRegex();
@@ -235,6 +235,8 @@ private:
 
     bool mSupportsHdr = false;
     nanogui::Button* mClipToLdrButton;
+
+    int mDidFitToImage = 0;
 };
 
 TEV_NAMESPACE_END
