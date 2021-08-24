@@ -301,7 +301,7 @@ static int closeSocket(Ipc::socket_t socket) {
 #endif
 }
 
-Ipc::Ipc(const string& hostname) {
+Ipc::Ipc(const string& hostname) : mSocketFd{INVALID_SOCKET} {
     mLockName = ".tev-lock."s + hostname;
 
     auto parts = split(hostname, ":");
