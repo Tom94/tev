@@ -31,7 +31,7 @@ using namespace std;
 TEV_NAMESPACE_BEGIN
 
 ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool /*supportsHdr*/)
-: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
+: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, fullscreen, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
     if (floatBuffer && !m_float_buffer) {
         tlog::warning() << "Failed to create floating point frame buffer.";
     }
