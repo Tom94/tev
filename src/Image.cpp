@@ -456,7 +456,16 @@ shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
     return tryLoadImage(path, fileStream, channelSelector);
 }
 
-void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
+void BackgroundImagesLoader::enqueue(path path, const string& channelSelector, bool shallSelect) {
+    // The worker thread may not share the main thread's working directory,
+    // so we resolve relative paths here first.
+    try {
+        path = path.make_absolute();
+    } catch (const runtime_error& e) {
+        // If for some strange reason we can not obtain an absolute path, let's still
+        // try to open the image at the given path just to make sure.
+    }
+
     mWorkers.enqueueTask([path, channelSelector, shallSelect, this] {
         auto image = tryLoadImage(path, channelSelector);
         if (image) {
