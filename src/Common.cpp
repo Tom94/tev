@@ -62,12 +62,12 @@ vector<string> split(string text, const string& delim) {
 }
 
 string toLower(string str) {
-    ranges::transform(str, begin(str), [](unsigned char c) { return (char)tolower(c); });
+    transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)tolower(c); });
     return str;
 }
 
 string toUpper(string str) {
-    ranges::transform(str, begin(str), [](unsigned char c) { return (char)toupper(c); });
+    transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)toupper(c); });
     return str;
 }
 
