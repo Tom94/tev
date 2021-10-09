@@ -1771,7 +1771,7 @@ void ImageViewer::updateTitle() {
         channels.erase(unique(begin(channels), end(channels)), end(channels));
 
         auto channelTails = channels;
-        ranges::transform(channelTails, begin(channelTails), Channel::tail);
+        transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
         caption = mCurrentImage->shortName();
         caption += " – "s + mCurrentGroup;
@@ -1825,12 +1825,12 @@ int ImageViewer::groupId(const string& groupName) const {
 }
 
 int ImageViewer::imageId(const shared_ptr<Image>& image) const {
-    auto pos = static_cast<size_t>(distance(begin(mImages), ranges::find(mImages, image)));
+    auto pos = static_cast<size_t>(distance(begin(mImages), find(begin(mImages), end(mImages), image)));
     return pos >= mImages.size() ? -1 : (int)pos;
 }
 
 int ImageViewer::imageId(const string& imageName) const {
-    auto pos = static_cast<size_t>(distance(begin(mImages), ranges::find_if(mImages, [&](const shared_ptr<Image>& image) {
+    auto pos = static_cast<size_t>(distance(begin(mImages), find_if(begin(mImages), end(mImages), [&](const shared_ptr<Image>& image) {
         return image->name() == imageName;
     })));
     return pos >= mImages.size() ? -1 : (int)pos;

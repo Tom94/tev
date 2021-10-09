@@ -297,7 +297,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
 
         // If the coordinate system is in any sort of way non-trivial, draw it!
         if (mImage->dataWindow() != mImage->displayWindow() || mImage->displayWindow().min != Vector2i{0} ||
-            mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow())) {
+            (mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow()))) {
             drawCoordinateSystem(ctx);
         }
     }
