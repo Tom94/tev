@@ -963,7 +963,7 @@ void ImageViewer::draw_contents() {
             );
         }
     } else {
-        mHistogram->setNChannels({1});
+        mHistogram->setNChannels(1);
         mHistogram->setValues({0.0f});
         mHistogram->setMinimum(0);
         mHistogram->setMean(0);
