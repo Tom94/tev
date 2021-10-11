@@ -60,6 +60,9 @@ Image::Image(const class path& path, istream& iStream, const string& channelSele
         mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
     }
 
+    // Convert chromaticities to sRGB / Rec 709 if they aren't already.
+    toRec709();
+
     auto end = chrono::system_clock::now();
     chrono::duration<double> elapsedSeconds = end - start;
 
@@ -367,6 +370,42 @@ string Image::toString() const {
     });
 
     return result + join(localLayers, "\n");
+}
+
+void Image::toRec709() {
+    // No need to do anything for identity transforms
+    if (mData.toRec709 == nanogui::Matrix4f{1.0f}) {
+        return;
+    }
+
+    vector<future<void>> futures;
+
+    for (const auto& layer : mData.layers) {
+        string layerPrefix = layer.empty() ? "" : (layer + ".");
+
+        Channel* r = nullptr;
+        Channel* g = nullptr;
+        Channel* b = nullptr;
+
+        if (!(
+            (r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B")) ||
+            (r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b"))
+        )) {
+            // No RGB-triplet found
+            continue;
+        }
+
+        TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
+
+        gThreadPool->parallelForAsync<DenseIndex>(0, r->count(), [r, g, b, this](DenseIndex i) {
+            auto rgb = mData.toRec709 * nanogui::Vector3f{r->at(i), g->at(i), b->at(i)};
+            r->at(i) = rgb.x();
+            g->at(i) = rgb.y();
+            b->at(i) = rgb.z();
+        }, futures);
+    }
+
+    waitAll(futures);
 }
 
 void Image::alphaOperation(const function<void(Channel&, const Channel&)>& func) {

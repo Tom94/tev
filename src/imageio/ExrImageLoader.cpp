@@ -5,9 +5,11 @@
 #include <tev/ThreadPool.h>
 
 #include <ImfChannelList.h>
+#include <ImfChromaticities.h>
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
 #include <ImfMultiPartInputFile.h>
+#include <ImfStandardAttributes.h>
 #include <Iex.h>
 
 #include <istream>
@@ -244,6 +246,31 @@ l_foundPart:
     waitAll(futures);
 
     hasPremultipliedAlpha = true;
+
+    // equality comparison for Imf::Chromaticities instances
+    auto chromaEq = [](const Imf::Chromaticities& a, const Imf::Chromaticities& b) {
+        return
+            (a.red  - b.red).length2() + (a.green - b.green).length2() +
+            (a.blue - b.blue).length2() + (a.white - b.white).length2() < 1e-6f;
+    };
+
+    Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
+
+    // Check if there is a chromaticity header entry and if so,
+    // expose it to the image data for later conversion to sRGB/Rec709.
+    Imf::Chromaticities chroma;
+    if (Imf::hasChromaticities(file.header())) {
+        chroma = Imf::chromaticities(file.header());
+    }
+
+    if (!chromaEq(chroma, rec709)) {
+        Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
+        for (int m = 0; m < 4; ++m) {
+            for (int n = 0; n < 4; ++n) {
+                result.toRec709.m[m][n] = M.x[m][n];
+            }
+        }
+    }
 
     return result;
 }

@@ -25,6 +25,7 @@ class ImageLoader;
 struct ImageData {
     std::vector<Channel> channels;
     std::vector<std::string> layers;
+    nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
 };
 
 struct ChannelGroup {
@@ -114,6 +115,8 @@ private:
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
+
+    void toRec709();
 
     void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
 
