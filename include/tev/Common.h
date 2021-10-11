@@ -6,6 +6,8 @@
 #include <tinyformat.h>
 #include <tinylogger/tinylogger.h>
 
+#include <nanogui/vector.h>
+
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -55,6 +57,92 @@
 #endif
 
 struct NVGcontext;
+
+namespace nanogui {
+    template <typename Value, size_t Size>
+    Array<Value, Size> inverse(const Array<Value, Size> &a) {
+        Array<Value, Size> result;
+        for (size_t i = 0; i < Size; ++i)
+            result.v[i] = 1.0f / a.v[i];
+        return result;
+    }
+
+    template <typename Value, size_t Size>
+    Value mean(const Array<Value, Size> &a) {
+        Value result = 0;
+        for (size_t i = 0; i < Size; ++i)
+            result += a.v[i];
+        return result / (Value)Size;
+    }
+
+    inline Matrix3f inverse(Matrix3f mat) {
+        float d11 = mat.m[1][1] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][1];
+        float d12 = mat.m[1][0] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][0];
+        float d13 = mat.m[1][0] * mat.m[2][1] + mat.m[1][1] * -mat.m[2][0];
+
+        float det = mat.m[0][0] * d11 - mat.m[0][1] * d12 + mat.m[0][2] * d13;
+
+        if (std::abs(det) == 0.0f) {
+            return Matrix3f{0.0f};
+        }
+
+        det = 1.0f / det;
+
+        float d21 = mat.m[0][1] * mat.m[2][2] + mat.m[0][2] * -mat.m[2][1];
+        float d22 = mat.m[0][0] * mat.m[2][2] + mat.m[0][2] * -mat.m[2][0];
+        float d23 = mat.m[0][0] * mat.m[2][1] + mat.m[0][1] * -mat.m[2][0];
+
+        float d31 = mat.m[0][1] * mat.m[1][2] - mat.m[0][2] * mat.m[1][1];
+        float d32 = mat.m[0][0] * mat.m[1][2] - mat.m[0][2] * mat.m[1][0];
+        float d33 = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
+
+        mat.m[0][0] = +d11 * det;
+        mat.m[0][1] = -d21 * det;
+        mat.m[0][2] = +d31 * det;
+        mat.m[1][0] = -d12 * det;
+        mat.m[1][1] = +d22 * det;
+        mat.m[1][2] = -d32 * det;
+        mat.m[2][0] = +d13 * det;
+        mat.m[2][1] = -d23 * det;
+        mat.m[2][2] = +d33 * det;
+        return mat;
+    }
+
+    template <typename Value, size_t Size>
+    Array<Value, Size-1> operator*(const Matrix<Value, Size>& m, const Array<Value, Size-1>& v) {
+        Array<Value, Size-1> result;
+        Value w = 0;
+        for (size_t i = 0; i < Size; ++i) {
+            Value accum = 0;
+            for (size_t k = 0; k < Size; ++k)
+                accum += m.m[k][i] * (k == Size - 1 ? 1 : v.v[k]);
+
+            if (i == Size-1) {
+                w = accum;
+            } else {
+                result.v[i] = accum;
+            }
+        }
+        return result / w;
+    }
+
+    template <typename Value, size_t Size>
+    bool operator==(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
+        for (int m = 0; m < Size; ++m) {
+            for (int n = 0; n < Size; ++n) {
+                if (a.m[m][n] != b.m[m][n]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    template <typename Value, size_t Size>
+    bool operator!=(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
+        return !(a == b);
+    }
+}
 
 TEV_NAMESPACE_BEGIN
 
