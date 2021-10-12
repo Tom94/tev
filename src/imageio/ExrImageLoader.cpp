@@ -250,8 +250,6 @@ l_foundPart:
         co_await task;
     }
 
-    hasPremultipliedAlpha = true;
-
     // equality comparison for Imf::Chromaticities instances
     auto chromaEq = [](const Imf::Chromaticities& a, const Imf::Chromaticities& b) {
         return

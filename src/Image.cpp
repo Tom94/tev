@@ -45,6 +45,46 @@ vector<string> ImageData::channelsInLayer(string layerName) const {
     return result;
 }
 
+Task<void> ImageData::convertToRec709(int priority) {
+    // No need to do anything for identity transforms
+    if (toRec709 == nanogui::Matrix4f{1.0f}) {
+        co_return;
+    }
+
+    vector<Task<void>> tasks;
+
+    for (const auto& layer : layers) {
+        string layerPrefix = layer.empty() ? "" : (layer + ".");
+
+        Channel* r = nullptr;
+        Channel* g = nullptr;
+        Channel* b = nullptr;
+
+        if (!(
+            (r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B")) ||
+            (r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b"))
+        )) {
+            // No RGB-triplet found
+            continue;
+        }
+
+        TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
+
+        tasks.emplace_back(
+            gThreadPool->parallelForAsync<size_t>(0, r->count(), [r, g, b, this](size_t i) {
+                auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
+                r->at(i) = rgb.x();
+                g->at(i) = rgb.y();
+                b->at(i) = rgb.z();
+            }, priority)
+        );
+    }
+
+    for (auto& task : tasks) {
+        co_await task;
+    }
+}
+
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
     for (const auto& layer : layers) {
         string layerPrefix = layer.empty() ? "" : (layer + ".");
@@ -112,9 +152,6 @@ Image::Image(int id, const class path& path, ImageData&& data, const string& cha
         auto groups = getGroupedChannels(layer);
         mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
     }
-    
-    // Convert chromaticities to sRGB / Rec 709 if they aren't already.
-    toRec709();
 }
 
 Image::~Image() {
@@ -396,42 +433,6 @@ string Image::toString() const {
     return result + join(localLayers, "\n");
 }
 
-void Image::toRec709() {
-    // No need to do anything for identity transforms
-    if (mData.toRec709 == nanogui::Matrix4f{1.0f}) {
-        return;
-    }
-
-    vector<future<void>> futures;
-
-    for (const auto& layer : mData.layers) {
-        string layerPrefix = layer.empty() ? "" : (layer + ".");
-
-        Channel* r = nullptr;
-        Channel* g = nullptr;
-        Channel* b = nullptr;
-
-        if (!(
-            (r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B")) ||
-            (r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b"))
-        )) {
-            // No RGB-triplet found
-            continue;
-        }
-
-        TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
-
-        gThreadPool->parallelForAsync<DenseIndex>(0, r->count(), [r, g, b, this](DenseIndex i) {
-            auto rgb = mData.toRec709 * nanogui::Vector3f{r->at(i), g->at(i), b->at(i)};
-            r->at(i) = rgb.x();
-            g->at(i) = rgb.y();
-            b->at(i) = rgb.z();
-        }, futures);
-    }
-
-    waitAll(futures);
-}
-
 Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
@@ -470,6 +471,9 @@ Task<shared_ptr<Image>> tryLoadImage(int imageId, path path, istream& iStream, s
                 if (!hasPremultipliedAlpha) {
                     co_await data.multiplyAlpha(taskPriority);
                 }
+
+                // Convert chromaticities to sRGB / Rec 709 if they aren't already.
+                co_await data.convertToRec709(taskPriority);
 
                 auto image = make_shared<Image>(imageId, path, std::move(data), channelSelector);
 
