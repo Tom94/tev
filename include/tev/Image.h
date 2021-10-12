@@ -36,6 +36,8 @@ struct ImageData {
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
 
+    Task<void> convertToRec709(int priority);
+
     void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
 
     Task<void> multiplyAlpha(int priority);
@@ -156,8 +158,6 @@ private:
     }
 
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
-
-    void toRec709();
 
     filesystem::path mPath;
     std::string mChannelSelector;
