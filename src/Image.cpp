@@ -47,7 +47,7 @@ vector<string> ImageData::channelsInLayer(string layerName) const {
 
 Task<void> ImageData::convertToRec709(int priority) {
     // No need to do anything for identity transforms
-    if (toRec709 == nanogui::Matrix4f{1.0f}) {
+    if (toRec709 == Matrix4f{1.0f}) {
         co_return;
     }
 
@@ -83,6 +83,10 @@ Task<void> ImageData::convertToRec709(int priority) {
     for (auto& task : tasks) {
         co_await task;
     }
+
+    // Since the image data is now in Rec709 space,
+    // converting to Rec709 is the identity transform.
+    toRec709 = Matrix4f{1.0f};
 }
 
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
@@ -193,7 +197,10 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
         co_await multiplyAlpha(taskPriority);
     }
 
+    co_await convertToRec709(taskPriority);
+
     TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
+    TEV_ASSERT(toRec709 == Matrix4f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 }
 
 atomic<int> Image::sId(0);
@@ -530,7 +537,6 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istrea
                 vector<shared_ptr<Image>> images;
                 for (auto& i : imageData) {
                     co_await i.ensureValid(channelSelector, taskPriority);
-                    co_await i.convertToRec709(taskPriority);
 
                     // If multiple image "parts" were loaded and they have names,
                     // ensure that these names are present in the channel selector.
