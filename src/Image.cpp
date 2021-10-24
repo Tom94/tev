@@ -61,8 +61,8 @@ Task<void> ImageData::convertToRec709(int priority) {
         Channel* b = nullptr;
 
         if (!(
-            (r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B")) ||
-            (r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b"))
+            ((r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B"))) ||
+            ((r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b")))
         )) {
             // No RGB-triplet found
             continue;

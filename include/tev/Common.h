@@ -128,8 +128,8 @@ namespace nanogui {
 
     template <typename Value, size_t Size>
     bool operator==(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
-        for (int m = 0; m < Size; ++m) {
-            for (int n = 0; n < Size; ++n) {
+        for (size_t m = 0; m < Size; ++m) {
+            for (size_t n = 0; n < Size; ++n) {
                 if (a.m[m][n] != b.m[m][n]) {
                     return false;
                 }
