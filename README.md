@@ -123,6 +123,11 @@ Afterwards, __tev__ can be built and installed via
 $ make -j
 $ make install
 ```
+Or install with brew cask:
+
+```bash
+brew install --cask tev
+```
 
 ### Windows
 
