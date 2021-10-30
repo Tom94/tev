@@ -86,6 +86,11 @@ There are helper functions in [Ipc.cpp](src/ipc.cpp) (`IpcPacket::set*`) that sh
 
 Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit) are available on the [releases page](https://github.com/Tom94/tev/releases).
 
+On macOS, __tev__ can also be installed via homebrew:
+```bash
+brew install --cask tev
+```
+
 ### Linux
 
 - Archlinux: available on the [Arch User Repository](https://aur.archlinux.org/packages/tev/)
