@@ -97,7 +97,7 @@ brew install --cask tev
 
 ## Building tev
 
-All that is required for building __tev__ is a C++17-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
+All that is required for building __tev__ is a C++20-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
 ```
@@ -131,7 +131,7 @@ $ make install
 
 ### Windows
 
-On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2017 or higher!
+On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2019 or higher!
 
 ## License
 

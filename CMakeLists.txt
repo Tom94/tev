@@ -36,6 +36,7 @@ if (APPLE)
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (MSVC)
     # Disable annoying secure CRT warnings
