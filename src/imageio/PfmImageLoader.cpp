@@ -4,6 +4,8 @@
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/ThreadPool.h>
 
+#include <bit>
+
 using namespace filesystem;
 using namespace nanogui;
 using namespace std;
@@ -71,7 +73,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const path&, cons
     }
 
     // Reverse bytes of every float if endianness does not match up with system
-    const bool shallSwapBytes = isSystemLittleEndian() != isPfmLittleEndian;
+    const bool shallSwapBytes = (std::endian::native == std::endian::little) != isPfmLittleEndian;
 
     co_await gThreadPool->parallelForAsync(0, size.y(), [&](int y) {
         for (int x = 0; x < size.x(); ++x) {
