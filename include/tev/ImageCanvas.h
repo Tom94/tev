@@ -126,6 +126,8 @@ public:
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
+    void purgeCanvasStatistics(int imageId);
+
 private:
     static std::vector<Channel> channelsFromImages(
         std::shared_ptr<Image> image,
@@ -174,7 +176,8 @@ private:
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
 
-    std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mMeanValues;
+    std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
+    std::map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;
 };
 
 TEV_NAMESPACE_END

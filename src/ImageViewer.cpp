@@ -907,7 +907,7 @@ void ImageViewer::draw_contents() {
         bool isShown = image == mCurrentImage || image == mCurrentReference;
 
         // If the image is no longer shown, bump ID immediately. Otherwise, wait until canvas statistics were ready for over 200 ms.
-        if (!isShown || (std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt()) > 200ms) {
+        if (!isShown || std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt() > 200ms) {
             image->bumpId();
             auto localIt = it;
             ++it;

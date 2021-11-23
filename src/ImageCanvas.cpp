@@ -564,8 +564,8 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         tfm::format("%d-%s-%d-%d", mImage->id(), channels, mReference->id(), mMetric) :
         tfm::format("%d-%s", mImage->id(), channels);
 
-    auto iter = mMeanValues.find(key);
-    if (iter != end(mMeanValues)) {
+    auto iter = mCanvasStatistics.find(key);
+    if (iter != end(mCanvasStatistics)) {
         return iter->second;
     }
 
@@ -578,14 +578,33 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     auto metric = mMetric;
 
     promise<shared_ptr<CanvasStatistics>> promise;
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(promise.get_future())));
+    mCanvasStatistics.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(promise.get_future())));
+
+    // Remember the keys associateed with the participating images. Such that their
+    // canvas statistics can be retrieved and deleted when either of the images
+    // is closed or mutated.
+    mImageIdToCanvasStatisticsKey[mImage->id()].emplace_back(key);
+    mImage->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
+
+    if (mReference) {
+        mImageIdToCanvasStatisticsKey[mReference->id()].emplace_back(key);
+        mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
+    }
 
     invokeTaskDetached([image, reference, requestedChannelGroup, metric, priority, p=std::move(promise)]() mutable -> Task<void> {
         co_await gThreadPool->enqueueCoroutine(priority);
         p.set_value(co_await computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority));
     });
 
-    return mMeanValues.at(key);
+    return mCanvasStatistics.at(key);
+}
+
+void ImageCanvas::purgeCanvasStatistics(int imageId) {
+    for (const auto& key : mImageIdToCanvasStatisticsKey[imageId]) {
+        mCanvasStatistics.erase(key);
+    }
+
+    mImageIdToCanvasStatisticsKey.erase(imageId);
 }
 
 vector<Channel> ImageCanvas::channelsFromImages(

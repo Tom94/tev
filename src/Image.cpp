@@ -220,6 +220,10 @@ Image::~Image() {
     // hits zero there. This is required, because OpenGL calls must always happen
     // on the main thread.
     scheduleToMainThread([textures = std::move(mTextures)] {});
+
+    if (mStaleIdCallback) {
+        mStaleIdCallback(mId);
+    }
 }
 
 string Image::shortName() const {

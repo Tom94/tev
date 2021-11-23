@@ -166,7 +166,12 @@ public:
     }
 
     void bumpId() {
+        int oldId = mId;
         mId = sId++;
+
+        if (mStaleIdCallback) {
+            mStaleIdCallback(oldId);
+        }
     }
 
     static int drawId() {
@@ -174,6 +179,10 @@ public:
     }
 
     void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
+
+    void setStaleIdCallback(const std::function<void(int)>& callback) {
+        mStaleIdCallback = callback;
+    }
 
     std::string toString() const;
 
@@ -196,6 +205,8 @@ private:
     ImageData mData;
 
     std::vector<ChannelGroup> mChannelGroups;
+
+    std::function<void(int)> mStaleIdCallback;
 
     int mId;
 };
