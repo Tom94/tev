@@ -520,8 +520,9 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
     }
 
     // Only need high refresh rate responsiveness if tev is actually in focus.
-    if (focused())
+    if (focused()) {
         redraw();
+    }
 
     if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
         mSidebarLayout->set_cursor(Cursor::HResize);

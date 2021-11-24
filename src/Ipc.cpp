@@ -591,17 +591,14 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             }
         }
 
-        // TODO: we could save the copy by treating 'buffer' as a ring-buffer,
+        // TODO: we could save the memcpy by treating 'buffer' as a ring-buffer,
         // but it's probably not worth the trouble. Revisit when someone throws around
         // buffers with a size of gigabytes.
         if (processedOffset > 0) {
             // There's a partial message; copy it to the start of 'buffer'
             // and update the offsets accordingly.
-            size_t nBytes = mRecvOffset - processedOffset;
-            for (size_t i = 0; i < nBytes; ++i) {
-                mBuffer[i] = mBuffer[i + processedOffset];
-            }
-            mRecvOffset = nBytes;
+            memmove(mBuffer.data(), mBuffer.data() + processedOffset, mRecvOffset - processedOffset);
+            mRecvOffset -= processedOffset;
         }
     }
 }
