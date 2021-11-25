@@ -8,7 +8,7 @@ project(
     DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
     LANGUAGES C CXX
 )
-set(TEV_VERSION "1.19")
+set(TEV_VERSION "1.20")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
