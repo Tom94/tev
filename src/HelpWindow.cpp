@@ -171,6 +171,7 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
         addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL");
         addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library");
         addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format");
+        addLibrary(about, "qoi",               "", "File Format for Fast, Lossless Image Compression");
         addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
         addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement");
         addLibrary(about, "tinylogger",        "", "Minimal Pretty-Logging Library");

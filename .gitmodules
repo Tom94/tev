@@ -31,3 +31,6 @@
 [submodule "dependencies/eigen"]
 	path = dependencies/eigen
 	url = https://gitlab.com/libeigen/eigen.git
+[submodule "dependencies/qoi"]
+	path = dependencies/qoi
+	url = https://github.com/phoboslab/qoi.git

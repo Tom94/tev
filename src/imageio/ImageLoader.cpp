@@ -6,6 +6,7 @@
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
+#include <tev/imageio/QoiImageLoader.h>
 #include <tev/imageio/StbiImageLoader.h>
 #ifdef _WIN32
 #   include <tev/imageio/DdsImageLoader.h>
@@ -26,6 +27,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #ifdef _WIN32
         imageLoaders.emplace_back(new DdsImageLoader());
 #endif
+        imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());
         return imageLoaders;
     };

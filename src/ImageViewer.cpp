@@ -1561,6 +1561,7 @@ void ImageViewer::openImageDialog() {
         {"ppm",  "Portable PixMap image"},
         {"psd",  "PSD image"},
         {"tga",  "Truevision TGA image"},
+        {"qoi",  "Quite OK Image format"},
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
@@ -1587,6 +1588,7 @@ void ImageViewer::saveImageDialog() {
         {"jpeg", "JPEG image"},
         {"png",  "Portable Network Graphics image"},
         {"tga",  "Truevision TGA image"},
+        {"qoi",  "Quite OK Image format"},
     }, true));
 
     if (path.empty()) {

@@ -18,7 +18,7 @@ public:
     virtual ~ImageLoader() {}
 
     virtual bool canLoadFile(std::istream& iStream) const = 0;
-    virtual ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, bool& hasPremultipliedAlpha) const = 0;
+    virtual ImageData load(std::istream& iStream, const ::filesystem::path& path, const std::string& channelSelector, bool& hasPremultipliedAlpha) const = 0;
 
     virtual std::string name() const = 0;
 

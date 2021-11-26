@@ -23,7 +23,7 @@ public:
     virtual bool hasPremultipliedAlpha() const = 0;
 
     virtual bool canSaveFile(const std::string& extension) const = 0;
-    bool canSaveFile(const filesystem::path& path) const {
+    bool canSaveFile(const ::filesystem::path& path) const {
         return canSaveFile(toLower(path.extension()));
     }
 
