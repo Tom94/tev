@@ -4,6 +4,7 @@
 #include <tev/imageio/ImageSaver.h>
 
 #include <tev/imageio/ExrImageSaver.h>
+#include <tev/imageio/QoiImageSaver.h>
 #include <tev/imageio/StbiHdrImageSaver.h>
 #include <tev/imageio/StbiLdrImageSaver.h>
 
@@ -17,6 +18,7 @@ const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
     auto makeSavers = [] {
         vector<unique_ptr<ImageSaver>> imageSavers;
         imageSavers.emplace_back(new ExrImageSaver());
+        imageSavers.emplace_back(new QoiImageSaver());
         imageSavers.emplace_back(new StbiHdrImageSaver());
         imageSavers.emplace_back(new StbiLdrImageSaver());
         return imageSavers;
