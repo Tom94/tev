@@ -3,6 +3,7 @@
 
 #include <tev/imageio/QoiImageSaver.h>
 
+#define QOI_NO_STDIO
 #include <qoi.h>
 
 #include <ostream>
@@ -16,12 +17,18 @@ TEV_NAMESPACE_BEGIN
 
 void QoiImageSaver::save(ostream& oStream, const path&, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
     // The QOI image format expects nChannels to be either 3 for RGB data or 4 for RGBA.
-    if (nChannels != 3 && nChannels != 4) {
+    if (nChannels != 4 && nChannels != 3) {
         throw invalid_argument{tfm::format("Invalid number of channels %d.", nChannels)};
     }
 
+    const qoi_desc desc{
+        .width = static_cast<unsigned int>(imageSize.x()),
+        .height = static_cast<unsigned int>(imageSize.y()),
+        .channels = static_cast<unsigned char>(nChannels),
+        .colorspace = QOI_SRGB_LINEAR_ALPHA,
+    };
     int sizeInBytes = 0;
-    void *encodedData = qoi_encode(data.data(), imageSize.x(), imageSize.y(), nChannels, &sizeInBytes);
+    void *encodedData = qoi_encode(data.data(), &desc, &sizeInBytes);
 
     ScopeGuard encodedDataGuard{[encodedData] { free(encodedData); }};
 

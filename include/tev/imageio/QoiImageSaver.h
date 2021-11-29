@@ -14,8 +14,6 @@ public:
     void save(std::ostream& oStream, const filesystem::path& path, const std::vector<char>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
 
     bool hasPremultipliedAlpha() const override {
-        // TODO: Update this when the final QOI data format is decided.
-        // https://github.com/phoboslab/qoi/issues/37
         return false;
     }
 
