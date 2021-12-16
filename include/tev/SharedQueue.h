@@ -5,9 +5,10 @@
 
 #include <tev/Common.h>
 
+#include <condition_variable>
 #include <deque>
 #include <mutex>
-#include <condition_variable>
+#include <optional>
 
 TEV_NAMESPACE_BEGIN
 
