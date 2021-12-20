@@ -9,13 +9,13 @@ __New__: __tev__ can display true HDR on Apple extended dynamic range (EDR) and 
 While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
+- __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
     - Supports BC1-BC7 compressed formats. 
     - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
 - __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
     - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
     - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
-- __QOI__ (via [qoi](https://github.com/phoboslab/qoi))
 
 ## Screenshot
 
