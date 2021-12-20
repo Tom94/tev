@@ -319,8 +319,6 @@ int mainFunc(const vector<string>& arguments) {
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
-    tlog::info() << "Loading window...";
-
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
 
     atomic<bool> shallShutdown{false};
