@@ -384,6 +384,20 @@ int mainFunc(const vector<string>& arguments) {
         }
     }};
 
+    ScopeGuard backgroundThreadShutdownGuard{[&]() {
+        shallShutdown = true;
+
+        if (ipcThread.joinable()) {
+            ipcThread.join();
+        }
+
+        // stdinThread should not be joinable, since it has been
+        // detached earlier. But better to be safe than sorry.
+        if (stdinThread.joinable()) {
+            stdinThread.join();
+        }
+    }};
+
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
     // by the potentially slow initialization of opengl / glfw.
@@ -399,6 +413,15 @@ int mainFunc(const vector<string>& arguments) {
 
     // Init nanogui application
     nanogui::init();
+
+    ScopeGuard nanoguiShutdownGuard{[&]() {
+        // On some linux distributions glfwTerminate() (which is called by
+        // nanogui::shutdown()) causes segfaults. Since we are done with our
+        // program here anyways, let's let the OS clean up after us.
+#if defined(__APPLE__) or defined(_WIN32)
+        nanogui::shutdown();
+#endif
+    }};
 
 #ifdef __APPLE__
     if (!imageFiles) {
@@ -445,23 +468,6 @@ int mainFunc(const vector<string>& arguments) {
     // Refresh only every 250ms if there are no user interactions.
     // This makes an idling tev surprisingly energy-efficient. :)
     nanogui::mainloop(250);
-
-    shallShutdown = true;
-
-    // On some linux distributions glfwTerminate() (which is called by
-    // nanogui::shutdown()) causes segfaults. Since we are done with our
-    // program here anyways, let's let the OS clean up after us.
-#if defined(__APPLE__) or defined(_WIN32)
-    nanogui::shutdown();
-#endif
-
-    if (ipcThread.joinable()) {
-        ipcThread.join();
-    }
-
-    if (stdinThread.joinable()) {
-        stdinThread.join();
-    }
 
     return 0;
 }
