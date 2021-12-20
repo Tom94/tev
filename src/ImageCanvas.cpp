@@ -49,7 +49,9 @@ bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
 
 void ImageCanvas::draw_contents() {
     auto* glfwWindow = screen()->glfw_window();
-    Image* image = (mReference && glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT)) ? mReference.get() : mImage.get();
+    bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
+    bool ctrlHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL);
+    Image* image = (mReference && altHeld) ? mReference.get() : mImage.get();
 
     if (!image) {
         mShader->draw(
@@ -59,7 +61,7 @@ void ImageCanvas::draw_contents() {
         return;
     }
 
-    if (!mReference || glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || image == mReference.get()) {
+    if (!mReference || ctrlHeld || image == mReference.get()) {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
@@ -136,7 +138,9 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
         nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 
         auto* glfwWindow = screen()->glfw_window();
-        bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
+        bool shiftAndControlHeld =
+            (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) &&
+            (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL));
 
         Vector2i cur;
         vector<float> values;
@@ -151,7 +155,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                     string str;
                     Vector2f pos;
 
-                    if (altHeld) {
+                    if (shiftAndControlHeld) {
                         float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
                         unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
                         str = tfm::format("%02X", discretizedValue);
