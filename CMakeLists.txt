@@ -149,7 +149,7 @@ set(TEV_SOURCES
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
-    include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp src/imageio/QoiImplementation.c
+    include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp
     include/tev/imageio/QoiImageSaver.h src/imageio/QoiImageSaver.cpp
     include/tev/imageio/StbiHdrImageSaver.h src/imageio/StbiHdrImageSaver.cpp
     include/tev/imageio/StbiImageLoader.h src/imageio/StbiImageLoader.cpp

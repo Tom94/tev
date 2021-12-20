@@ -25,7 +25,7 @@ void QoiImageSaver::save(ostream& oStream, const path&, const vector<char>& data
         .width = static_cast<unsigned int>(imageSize.x()),
         .height = static_cast<unsigned int>(imageSize.y()),
         .channels = static_cast<unsigned char>(nChannels),
-        .colorspace = QOI_SRGB_LINEAR_ALPHA,
+        .colorspace = QOI_SRGB,
     };
     int sizeInBytes = 0;
     void *encodedData = qoi_encode(data.data(), &desc, &sizeInBytes);

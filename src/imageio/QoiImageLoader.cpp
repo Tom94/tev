@@ -5,6 +5,7 @@
 #include <tev/ThreadPool.h>
 
 #define QOI_NO_STDIO
+#define QOI_IMPLEMENTATION
 #include <qoi.h>
 
 using namespace filesystem;
@@ -66,42 +67,27 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const path&, cons
     resultData.channels = makeNChannels(numChannels, size);
     resultData.hasPremultipliedAlpha = false;
 
-    // QOI uses a bitmap 0000rgba for 'colorspace', where a bit 1 indicates linear,
-    // however, it is purely informative (meaning it has no effect in en/decoding).
-    // Thus, we interpret the default 0x0 value to mean: sRGB encoded RGB channels
-    // with linear encoded alpha channel:
-    bool isSRGBChannel[4] = {true, true, true, false};
-    switch (desc.colorspace) {
-        case 0x0: // case QOI_SRGB:
-        case QOI_SRGB_LINEAR_ALPHA:
-            break;
-        case QOI_LINEAR:
-            isSRGBChannel[0] = false;
-            isSRGBChannel[1] = false;
-            isSRGBChannel[2] = false;
-            break;
-        default:
-            // FIXME: should we handle "per-channel" encoding information or just the two cases above?
-            // Another option is assuming all values except for QOI_LINEAR mean QOI_SRGB_LINEAR_ALPHA.
-            // throw invalid_argument{tfm::format("Unsupported QOI colorspace: %X", desc.colorspace)};
-            isSRGBChannel[0] = (desc.colorspace & 0x8) == 0x0; // R channel => 0000rgba & 1000 = r000
-            isSRGBChannel[1] = (desc.colorspace & 0x4) == 0x0; // G channel => 0000rgba & 0100 = 0g00
-            isSRGBChannel[2] = (desc.colorspace & 0x2) == 0x0; // B channel => 0000rgba & 0010 = 00b0
-            isSRGBChannel[3] = (desc.colorspace & 0x1) == 0x0; // A channel => 0000rgba & 0001 = 000a
-            break;
-    }
-
-    co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
-        auto typedData = reinterpret_cast<unsigned char*>(decodedData);
-        size_t baseIdx = i * numChannels;
-        for (int c = 0; c < numChannels; ++c) {
-            if (isSRGBChannel[c]) {
-                resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
-            } else {
+    if (desc.colorspace == QOI_LINEAR) {
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            auto typedData = reinterpret_cast<unsigned char*>(decodedData);
+            size_t baseIdx = i * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
                 resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
             }
-        }
-    }, priority);
+        }, priority);
+    } else {
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            auto typedData = reinterpret_cast<unsigned char*>(decodedData);
+            size_t baseIdx = i * numChannels;
+            for (int c = 0; c < numChannels; ++c) {
+                if (c == 3) {
+                    resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
+                } else {
+                    resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                }
+            }
+        }, priority);
+    }
 
     co_return result;
 }
