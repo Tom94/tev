@@ -531,15 +531,13 @@ void ImageCanvas::saveImage(const path& path) const {
         if (hdrSaver) {
             hdrSaver->save(
                 f, path,
-                getHdrImageData(!saver->hasPremultipliedAlpha(),
-                std::numeric_limits<int>::max()),
+                getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()),
                 imageSize, 4
             );
         } else if (ldrSaver) {
             ldrSaver->save(
                 f, path,
-                getLdrImageData(!saver->hasPremultipliedAlpha(),
-                std::numeric_limits<int>::max()),
+                getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()),
                 imageSize, 4
             );
         }
