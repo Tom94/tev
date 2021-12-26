@@ -27,6 +27,10 @@ public:
     : mThreadPool{threadPool}, mCompute{compute} {
     }
 
+    Lazy(std::future<T>&& future)
+    : mAsyncValue{std::move(future)} {
+    }
+
     T get() {
         if (mIsComputed) {
             return mValue;
@@ -39,6 +43,7 @@ public:
         }
 
         mIsComputed = true;
+        mBecameReadyAt = std::chrono::steady_clock::now();
         return mValue;
     }
 
@@ -67,7 +72,7 @@ public:
         }
     }
 
-    void computeAsync() {
+    void computeAsync(int priority) {
         // No need to perform an async computation if we
         // already computed the value before or if one is
         // already running.
@@ -76,17 +81,9 @@ public:
         }
 
         if (mThreadPool) {
-            mAsyncValue = mThreadPool->enqueueTask([this]() {
-                T result = compute();
-                mBecameReadyAt = std::chrono::steady_clock::now();
-                return result;
-            }, true);
+            mAsyncValue = mThreadPool->enqueueTask([this]() { return compute(); }, priority);
         } else {
-            mAsyncValue = std::async(std::launch::async, [this]() {
-                T result = compute();
-                mBecameReadyAt = std::chrono::steady_clock::now();
-                return result;
-            });
+            mAsyncValue = std::async(std::launch::async, [this]() { return compute(); });
         }
     }
 

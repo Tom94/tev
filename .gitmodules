@@ -28,6 +28,6 @@
 [submodule "dependencies/nanogui"]
 	path = dependencies/nanogui
 	url = https://github.com/Tom94/nanogui-1
-[submodule "dependencies/eigen"]
-	path = dependencies/eigen
-	url = https://gitlab.com/libeigen/eigen.git
+[submodule "dependencies/qoi"]
+	path = dependencies/qoi
+	url = https://github.com/phoboslab/qoi.git

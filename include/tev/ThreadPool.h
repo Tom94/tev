@@ -4,22 +4,17 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/Task.h>
 
 #include <atomic>
-#include <deque>
 #include <functional>
 #include <future>
+#include <queue>
 #include <thread>
 #include <vector>
 
-TEV_NAMESPACE_BEGIN
 
-template <typename T>
-void waitAll(const std::vector<std::future<T>>& futures) {
-    for (auto& f : futures) {
-        f.wait();
-    }
-}
+TEV_NAMESPACE_BEGIN
 
 class ThreadPool {
 public:
@@ -28,7 +23,7 @@ public:
     virtual ~ThreadPool();
 
     template<class F>
-    auto enqueueTask(F&& f, bool highPriority = false) -> std::future<std::invoke_result_t<decltype(f)>> {
+    auto enqueueTask(F&& f, int priority) {
         using return_type = std::invoke_result_t<decltype(f)>;
 
         ++mNumTasksInSystem;
@@ -39,16 +34,34 @@ public:
 
         {
             std::lock_guard<std::mutex> lock{mTaskQueueMutex};
-
-            if (highPriority) {
-                mTaskQueue.emplace_front([task]() { (*task)(); });
-            } else {
-                mTaskQueue.emplace_back([task]() { (*task)(); });
-            }
+            mTaskQueue.push({priority, [task]() { (*task)(); }});
         }
 
         mWorkerCondition.notify_one();
         return res;
+    }
+
+    inline auto enqueueCoroutine(int priority) noexcept {
+        class Awaiter {
+        public:
+            Awaiter(ThreadPool* pool, int priority)
+            : mPool{pool}, mPriority{priority} {}
+
+            bool await_ready() const noexcept { return false; }
+
+            // Suspend and enqueue coroutine continuation onto the threadpool
+            void await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
+                mPool->enqueueTask(coroutine, mPriority);
+            }
+
+            void await_resume() const noexcept {}
+
+        private:
+            ThreadPool* mPool;
+            int mPriority;
+        };
+
+        return Awaiter{this, priority};
     }
 
     void startThreads(size_t num);
@@ -63,40 +76,50 @@ public:
     void flushQueue();
 
     template <typename Int, typename F>
-    void parallelForAsync(Int start, Int end, F body, std::vector<std::future<void>>& futures) {
-        Int localNumThreads = (Int)mNumThreads;
-
+    Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
         Int range = end - start;
-        Int chunk = (range / localNumThreads) + 1;
+        Int nTasks = std::min((Int)mNumThreads, range);
 
-        for (Int i = 0; i < localNumThreads; ++i) {
-            futures.emplace_back(enqueueTask([i, chunk, start, end, body] {
-                Int innerStart = start + i * chunk;
-                Int innerEnd = std::min(end, start + (i + 1) * chunk);
-                for (Int j = innerStart; j < innerEnd; ++j) {
+        std::vector<Task<void>> tasks;
+        for (Int i = 0; i < nTasks; ++i) {
+            Int taskStart = start + (range * i / nTasks);
+            Int taskEnd = start + (range * (i+1) / nTasks);
+            TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
+
+            tasks.emplace_back([](Int start, Int end, F body, int priority, ThreadPool* pool) -> Task<void> {
+                co_await pool->enqueueCoroutine(priority);
+                for (Int j = start; j < end; ++j) {
                     body(j);
                 }
-            }));
+            }(taskStart, taskEnd, body, priority, this));
+        }
+
+        for (auto& task : tasks) {
+            co_await task;
         }
     }
 
     template <typename Int, typename F>
-    std::vector<std::future<void>> parallelForAsync(Int start, Int end, F body) {
-        std::vector<std::future<void>> futures;
-        parallelForAsync(start, end, body, futures);
-        return futures;
-    }
-
-    template <typename Int, typename F>
-    void parallelFor(Int start, Int end, F body) {
-        waitAll(parallelForAsync(start, end, body));
+    void parallelFor(Int start, Int end, F body, int priority) {
+        parallelForAsync(start, end, body, priority).get();
     }
 
 private:
     size_t mNumThreads = 0;
     std::vector<std::thread> mThreads;
 
-    std::deque<std::function<void()>> mTaskQueue;
+    struct QueuedTask {
+        int priority;
+        std::function<void()> fun;
+
+        struct Comparator {
+            bool operator()(const QueuedTask& a, const QueuedTask& b) {
+                return a.priority < b.priority;
+            }
+        };
+    };
+
+    std::priority_queue<QueuedTask, std::vector<QueuedTask>, QueuedTask::Comparator> mTaskQueue;
     std::mutex mTaskQueueMutex;
     std::condition_variable mWorkerCondition;
 

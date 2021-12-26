@@ -16,19 +16,19 @@
 #include <numeric>
 #include <set>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-ImageCanvas::ImageCanvas(nanogui::Widget* parent, float pixelRatio)
+ImageCanvas::ImageCanvas(Widget* parent, float pixelRatio)
 : Canvas{parent, 1, false, false, false}, mPixelRatio{pixelRatio} {
     mShader.reset(new UberShader{render_pass()});
     set_draw_border(false);
 }
 
-bool ImageCanvas::scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) {
+bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
     if (Canvas::scroll_event(p, rel)) {
         return true;
     }
@@ -43,30 +43,32 @@ bool ImageCanvas::scroll_event(const nanogui::Vector2i& p, const nanogui::Vector
         scaleAmount /= std::log2(1.1f);
     }
 
-    scale(scaleAmount, {p.x(), p.y()});
+    scale(scaleAmount, Vector2f{p});
     return true;
 }
 
 void ImageCanvas::draw_contents() {
     auto* glfwWindow = screen()->glfw_window();
-    Image* image = (mReference && glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT)) ? mReference.get() : mImage.get();
+    bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
+    bool ctrlHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL);
+    Image* image = (mReference && altHeld) ? mReference.get() : mImage.get();
 
     if (!image) {
         mShader->draw(
-            2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
-            Vector2f::Constant(20)
+            2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
+            Vector2f{20.0f}
         );
         return;
     }
 
-    if (!mReference || glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || image == mReference.get()) {
+    if (!mReference || ctrlHeld || image == mReference.get()) {
         mShader->draw(
-            2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
-            Vector2f::Constant(20),
+            2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
+            Vector2f{20.0f},
             image->texture(mRequestedChannelGroup),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
-            toNanogui(transform(image).inverse().matrix()),
+            inverse(transform(image)),
             mExposure,
             mOffset,
             mGamma,
@@ -77,14 +79,14 @@ void ImageCanvas::draw_contents() {
     }
 
     mShader->draw(
-        2.0f * Vector2f{m_size.x(), m_size.y()}.cwiseInverse() / mPixelRatio,
-        Vector2f::Constant(20),
+        2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
+        Vector2f{20.0f},
         mImage->texture(mRequestedChannelGroup),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
-        toNanogui(transform(mImage.get()).inverse().matrix()),
+        inverse(transform(mImage.get())),
         mReference->texture(mRequestedChannelGroup),
-        toNanogui(transform(mReference.get()).inverse().matrix()),
+        inverse(transform(mReference.get())),
         mExposure,
         mOffset,
         mGamma,
@@ -94,124 +96,235 @@ void ImageCanvas::draw_contents() {
     );
 }
 
-void ImageCanvas::draw(NVGcontext *ctx) {
-    nanogui::Canvas::draw(ctx);
+void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
+    TEV_ASSERT(mImage, "Can only draw pixel values if there exists an image.");
 
-    if (mImage) {
-        auto texToNano = textureToNanogui(mImage.get());
-        auto nanoToTex = texToNano.inverse();
+    auto texToNano = textureToNanogui(mImage.get());
+    auto nanoToTex = inverse(texToNano);
 
-        Vector2f pixelSize = texToNano * Vector2f::Ones() - texToNano * Vector2f::Zero();
+    Vector2f pixelSize = texToNano * Vector2f{1.0f} - texToNano * Vector2f{0.0f};
 
-        Vector2f topLeft = (nanoToTex * Vector2f::Zero());
-        Vector2f bottomRight = (nanoToTex * Vector2f{m_size.x(), m_size.y()});
+    Vector2f topLeft = (nanoToTex * Vector2f{0.0f});
+    Vector2f bottomRight = (nanoToTex * Vector2f{m_size});
 
-        Vector2i startIndices = Vector2i{
-            static_cast<int>(floor(topLeft.x())),
-            static_cast<int>(floor(topLeft.y())),
-        };
+    Vector2i startIndices = Vector2i{
+        static_cast<int>(floor(topLeft.x())),
+        static_cast<int>(floor(topLeft.y())),
+    };
 
-        Vector2i endIndices = Vector2i{
-            static_cast<int>(ceil(bottomRight.x())),
-            static_cast<int>(ceil(bottomRight.y())),
-        };
+    Vector2i endIndices = Vector2i{
+        static_cast<int>(ceil(bottomRight.x())),
+        static_cast<int>(ceil(bottomRight.y())),
+    };
 
-        if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
-            vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
-            // Remove duplicates
-            channels.erase(unique(begin(channels), end(channels)), end(channels));
+    if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
+        vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
+        // Remove duplicates
+        channels.erase(unique(begin(channels), end(channels)), end(channels));
 
-            vector<nanogui::Color> colors;
-            for (const auto& channel : channels) {
-                colors.emplace_back(Channel::color(channel));
-            }
+        vector<Color> colors;
+        for (const auto& channel : channels) {
+            colors.emplace_back(Channel::color(channel));
+        }
 
-            float fontSize = pixelSize.x() / 6;
-            if (colors.size() > 4) {
-                fontSize *= 4.0f / colors.size();
-            }
-            float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
+        float fontSize = pixelSize.x() / 6;
+        if (colors.size() > 4) {
+            fontSize *= 4.0f / colors.size();
+        }
+        float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
 
-            nvgFontSize(ctx, fontSize);
-            nvgFontFace(ctx, "sans");
-            nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFontSize(ctx, fontSize);
+        nvgFontFace(ctx, "sans");
+        nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 
-            auto* glfwWindow = screen()->glfw_window();
-            bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
+        auto* glfwWindow = screen()->glfw_window();
+        bool shiftAndControlHeld =
+            (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) &&
+            (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL));
 
-            Vector2i cur;
-            vector<float> values;
-            for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
-                for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
-                    Vector2i nano = (texToNano * (cur.cast<float>() + Vector2f::Constant(0.5f))).cast<int>();
-                    getValuesAtNanoPos(nano, values, channels);
+        Vector2i cur;
+        vector<float> values;
+        for (cur.y() = startIndices.y(); cur.y() < endIndices.y(); ++cur.y()) {
+            for (cur.x() = startIndices.x(); cur.x() < endIndices.x(); ++cur.x()) {
+                Vector2i nano = Vector2i{texToNano * (Vector2f{cur} + Vector2f{0.5f})};
+                getValuesAtNanoPos(nano, values, channels);
 
-                    TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
+                TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
 
-                    for (size_t i = 0; i < colors.size(); ++i) {
-                        string str;
-                        Vector2f pos;
+                for (size_t i = 0; i < colors.size(); ++i) {
+                    string str;
+                    Vector2f pos;
 
-                        if (altHeld) {
-                            float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
-                            unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
-                            str = tfm::format("%02X", discretizedValue);
+                    if (shiftAndControlHeld) {
+                        float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
+                        unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
+                        str = tfm::format("%02X", discretizedValue);
 
-                            pos = Vector2f{
-                                m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
-                                m_pos.y() + nano.y(),
-                            };
-                        } else {
-                            str = tfm::format("%.4f", values[i]);
+                        pos = Vector2f{
+                            m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
+                            (float)m_pos.y() + nano.y(),
+                        };
+                    } else {
+                        str = tfm::format("%.4f", values[i]);
 
-                            pos = Vector2f{
-                                m_pos.x() + nano.x(),
-                                m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
-                            };
-                        }
-
-                        nanogui::Color col = colors[i];
-                        nvgFillColor(ctx, nanogui::Color(col.r(), col.g(), col.b(), fontAlpha));
-                        drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
+                        pos = Vector2f{
+                            (float)m_pos.x() + nano.x(),
+                            m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
+                        };
                     }
+
+                    Color col = colors[i];
+                    nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
+                    drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
                 }
             }
         }
     }
+}
 
-    // If we're not in fullscreen mode draw an inner drop shadow. (adapted from nanogui::Window)
-    if (m_pos.x() != 0) {
-        int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
-        NVGpaint shadowPaint = nvgBoxGradient(
-            ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y(), cr * 2, ds * 2,
-            m_theme->m_transparent, m_theme->m_drop_shadow
-        );
+void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
+    TEV_ASSERT(mImage, "Can only draw coordinate system if there exists an image.");
+
+    auto displayWindowToNano = displayWindowToNanogui(mImage.get());
+
+    enum DrawFlags {
+        Label = 1,
+        Region = 2,
+    };
+
+    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, const std::string& name, DrawFlags flags) {
+        float fontSize = 20;
+        float strokeWidth = 3.0f;
+
+        Vector2i topLeft     = m_pos + Vector2i{displayWindowToNano * Vector2f{window.min.x(), window.min.y()}};
+        Vector2i topRight    = m_pos + Vector2i{displayWindowToNano * Vector2f{window.max.x(), window.min.y()}};
+        Vector2i bottomLeft  = m_pos + Vector2i{displayWindowToNano * Vector2f{window.min.x(), window.max.y()}};
+        Vector2i bottomRight = m_pos + Vector2i{displayWindowToNano * Vector2f{window.max.x(), window.max.y()}};
 
         nvgSave(ctx);
-        nvgResetScissor(ctx);
-        nvgBeginPath(ctx);
-        nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
-        nvgRoundedRect(ctx, m_pos.x() + ds, m_pos.y() + ds, m_size.x() - 2 * ds, m_size.y() - 2 * ds, cr);
-        nvgPathWinding(ctx, NVG_HOLE);
-        nvgFillPaint(ctx, shadowPaint);
-        nvgFill(ctx);
+
+        nvgFontFace(ctx, "sans-bold");
+        nvgFontSize(ctx, fontSize);
+        nvgTextAlign(ctx, (right ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT) | (top ? NVG_ALIGN_BOTTOM : NVG_ALIGN_TOP));
+        float textWidth = nvgTextBounds(ctx, 0, 0, name.c_str(), nullptr, nullptr);
+        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 2.0f)), 0.0f);
+        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 1.5f) * 2), 0.0f);
+
+        Color textColor = Color(190, 255);
+        textColor.a() = textAlpha;
+
+        if (flags & Region) {
+            color.a() = regionAlpha;
+
+            nvgBeginPath(ctx);
+            nvgMoveTo(ctx, bottomLeft.x(), bottomLeft.y());
+            nvgLineTo(ctx, topLeft.x(), topLeft.y());
+            nvgLineTo(ctx, topRight.x(), topRight.y());
+            nvgLineTo(ctx, bottomRight.x(), bottomRight.y());
+            nvgLineTo(ctx, bottomLeft.x(), bottomLeft.y());
+            nvgStrokeWidth(ctx, strokeWidth);
+            nvgStrokeColor(ctx, color);
+            nvgStroke(ctx);
+        }
+
+        if (flags & Label) {
+            color.a() = textAlpha;
+
+            nvgBeginPath(ctx);
+            nvgFillColor(ctx, color);
+
+            float cornerRadius = fontSize / 3;
+            float topLeftCornerRadius = top && right ? cornerRadius : 0;
+            float topRightCornerRadius = top && !right ? cornerRadius : 0;
+            float bottomLeftCornerRadius = !top && right ? cornerRadius : 0;
+            float bottomRightCornerRadius = !top && !right ? cornerRadius : 0;
+
+            nvgRoundedRectVarying(
+                ctx, right ? (topRight.x() - textWidth - 4*strokeWidth) : topLeft.x() - strokeWidth/2, topLeft.y() - (top ? fontSize : 0), textWidth + 4*strokeWidth, fontSize,
+                topLeftCornerRadius, topRightCornerRadius, bottomRightCornerRadius, bottomLeftCornerRadius
+            );
+            nvgFill(ctx);
+
+            nvgFillColor(ctx, textColor);
+            nvgText(ctx, right ? (topRight.x() - 2*strokeWidth) : (topLeft.x() + 2*strokeWidth) - strokeWidth/2, topLeft.y(), name.c_str(), NULL);
+        }
+
         nvgRestore(ctx);
+    };
+
+    Color imageColor = Color(0.35f, 0.35f, 0.8f, 1.0f);
+    Color referenceColor = Color(0.7f, 0.4f, 0.4f, 1.0f);
+
+    auto draw = [&](DrawFlags flags) {
+        if (mReference) {
+            if (mReference->dataWindow() != mImage->dataWindow()) {
+                drawWindow(mReference->dataWindow(), referenceColor, mReference->displayWindow().min.y() > mReference->dataWindow().min.y(), true, "Reference data window", flags);
+            }
+
+            if (mReference->displayWindow() != mImage->displayWindow()) {
+                drawWindow(mReference->displayWindow(), referenceColor, mReference->displayWindow().min.y() <= mReference->dataWindow().min.y(), true, "Reference display window", flags);
+            }
+        }
+
+        drawWindow(mImage->dataWindow(),    imageColor,        mImage->displayWindow().min.y() > mImage->dataWindow().min.y(), false, "Data window", flags);
+        drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(),  false, "Display window", flags);
+    };
+
+    // Draw all labels after the regions to ensure no occlusion
+    draw(Region);
+    draw(Label);
+}
+
+void ImageCanvas::drawEdgeShadows(NVGcontext* ctx) {
+    int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
+    NVGpaint shadowPaint = nvgBoxGradient(
+        ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y(), cr * 2, ds * 2,
+        m_theme->m_transparent, m_theme->m_drop_shadow
+    );
+
+    nvgSave(ctx);
+    nvgResetScissor(ctx);
+    nvgBeginPath(ctx);
+    nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
+    nvgRoundedRect(ctx, m_pos.x() + ds, m_pos.y() + ds, m_size.x() - 2 * ds, m_size.y() - 2 * ds, cr);
+    nvgPathWinding(ctx, NVG_HOLE);
+    nvgFillPaint(ctx, shadowPaint);
+    nvgFill(ctx);
+    nvgRestore(ctx);
+}
+
+void ImageCanvas::draw(NVGcontext* ctx) {
+    Canvas::draw(ctx);
+
+    if (mImage) {
+        drawPixelValuesAsText(ctx);
+
+        // If the coordinate system is in any sort of way non-trivial, draw it!
+        if (mImage->dataWindow() != mImage->displayWindow() || mImage->displayWindow().min != Vector2i{0} ||
+            (mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow()))) {
+            drawCoordinateSystem(ctx);
+        }
+    }
+
+    // If we're not in fullscreen mode draw an inner drop shadow. (adapted from Window)
+    if (m_pos.x() != 0) {
+        drawEdgeShadows(ctx);
     }
 }
 
 void ImageCanvas::translate(const Vector2f& amount) {
-    mTransform = Translation2f(amount) * mTransform;
+    mTransform = Matrix3f::translate(amount) * mTransform;
 }
 
 void ImageCanvas::scale(float amount, const Vector2f& origin) {
     float scaleFactor = pow(1.1f, amount);
 
     // Use the current cursor position as the origin to scale around.
-    Vector2f offset = -(origin - Eigen::Vector2f(position().x(), position().y())) + 0.5f * Eigen::Vector2f(m_size.x(), m_size.y());
+    Vector2f offset = -(origin - Vector2f{position()}) + 0.5f * Vector2f{m_size};
     auto scaleTransform =
-        Translation2f(-offset) *
-        Scaling(scaleFactor) *
-        Translation2f(offset);
+        Matrix3f::translate(-offset) *
+        Matrix3f::scale(Vector2f{scaleFactor}) *
+        Matrix3f::translate(offset);
 
     mTransform = scaleTransform * mTransform;
 }
@@ -220,8 +333,8 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i mousePos) {
-    Vector2f imagePos = textureToNanogui(&image).inverse() * mousePos.cast<float>();
+Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i nanoPos) {
+    Vector2f imagePos = inverse(textureToNanogui(&image)) * Vector2f{nanoPos};
     return {
         static_cast<int>(floor(imagePos.x())),
         static_cast<int>(floor(imagePos.y())),
@@ -234,7 +347,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
         return;
     }
 
-    Vector2i imageCoords = getImageCoords(*mImage, nanoPos);
+    auto imageCoords = getImageCoords(*mImage, nanoPos);
     for (const auto& channel : channels) {
         const Channel* c = mImage->channel(channel);
         TEV_ASSERT(c, "Requested channel must exist.");
@@ -243,7 +356,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
 
     // Subtract reference if it exists.
     if (mReference) {
-        Vector2i referenceCoords = getImageCoords(*mReference, nanoPos);
+        auto referenceCoords = getImageCoords(*mReference, nanoPos);
         auto referenceChannels = mReference->channelsInGroup(mRequestedChannelGroup);
         for (size_t i = 0; i < result.size(); ++i) {
             float reference = i < referenceChannels.size() ?
@@ -276,19 +389,19 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, float gamma, ETonemap 
                     return Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
                 };
 
-                result = falseColor(log2(value.mean() + 0.03125f) / 10 + 0.5f);
+                result = falseColor(log2(mean(value) + 0.03125f) / 10 + 0.5f);
                 break;
             }
         case ETonemap::PositiveNegative:
             {
-                result = {-2.0f * value.cwiseMin(Vector3f::Zero()).mean(), 2.0f * value.cwiseMax(Vector3f::Zero()).mean(), 0.0f};
+                result = {-2.0f * mean(min(value, Vector3f{0.0f})), 2.0f * mean(max(value, Vector3f{0.0f})), 0.0f};
                 break;
             }
         default:
             throw runtime_error{"Invalid tonemap selected."};
     }
 
-    return result.cwiseMax(Vector3f::Zero()).cwiseMin(Vector3f::Ones());
+    return min(max(result, Vector3f{0.0f}), Vector3f{1.0f});
 }
 
 float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
@@ -305,23 +418,23 @@ float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
 }
 
 void ImageCanvas::fitImageToScreen(const Image& image) {
-    Vector2f nanoguiImageSize = image.size().cast<float>() / mPixelRatio;
-    mTransform = Scaling(Vector2f{m_size.x(), m_size.y()}.cwiseQuotient(nanoguiImageSize).minCoeff());
+    Vector2f nanoguiImageSize = Vector2f{image.displayWindow().size()} / mPixelRatio;
+    mTransform = Matrix3f::scale(Vector2f{min(m_size.x() / nanoguiImageSize.x(), m_size.y() / nanoguiImageSize.y())});
 }
 
 void ImageCanvas::resetTransform() {
-    mTransform = Affine2f::Identity();
+    mTransform = Matrix3f::scale(Vector2f{1.0f});
 }
 
-std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
+std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
     std::vector<float> result;
 
     if (!mImage) {
         return result;
     }
 
-    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric);
-    auto numPixels = mImage->count();
+    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
+    auto numPixels = mImage->numPixels();
 
     if (channels.empty()) {
         return result;
@@ -334,14 +447,14 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
 
     gThreadPool->parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
         const auto& channelData = channels[i].data();
-        for (DenseIndex j = 0; j < channelData.size(); ++j) {
-            result[j * 4 + i] = channelData(j);
+        for (size_t j = 0; j < channelData.size(); ++j) {
+            result[j * 4 + i] = channelData[j];
         }
-    });
+    }, priority);
 
     // Manually set alpha channel to 1 if the image does not have one.
     if (nChannelsToSave < 4) {
-        for (DenseIndex i = 0; i < numPixels; ++i) {
+        for (size_t i = 0; i < numPixels; ++i) {
             result[i * 4 + 3] = 1;
         }
     }
@@ -349,7 +462,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
         gThreadPool->parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
-            for (DenseIndex j = 0; j < numPixels; ++j) {
+            for (size_t j = 0; j < numPixels; ++j) {
                 float alpha = result[j * 4 + 3];
                 if (alpha == 0) {
                     result[j * 4 + i] = 0;
@@ -357,26 +470,26 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha) const {
                     result[j * 4 + i] /= alpha;
                 }
             }
-        });
+        }, priority);
     }
 
     return result;
 }
 
-std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
+std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
     std::vector<char> result;
 
     if (!mImage) {
         return result;
     }
 
-    auto numPixels = mImage->count();
-    auto floatData = getHdrImageData(divideAlpha);
+    auto numPixels = mImage->numPixels();
+    auto floatData = getHdrImageData(divideAlpha, priority);
 
     // Store as LDR image.
     result.resize(floatData.size());
 
-    gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+    gThreadPool->parallelFor<size_t>(0, numPixels, [&](size_t i) {
         size_t start = 4 * i;
         Vector3f value = applyTonemap({
             applyExposureAndOffset(floatData[start]),
@@ -389,7 +502,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha) const {
         for (int j = 0; j < 4; ++j) {
             result[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
         }
-    });
+    }, priority);
 
     return result;
 }
@@ -420,9 +533,17 @@ void ImageCanvas::saveImage(const path& path) const {
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha()), imageSize, 4);
+            hdrSaver->save(
+                f, path,
+                getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()),
+                imageSize, 4
+            );
         } else if (ldrSaver) {
-            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha()), imageSize, 4);
+            ldrSaver->save(
+                f, path,
+                getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()),
+                imageSize, 4
+            );
         }
 
         auto end = chrono::system_clock::now();
@@ -445,28 +566,55 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         tfm::format("%d-%s-%d-%d", mImage->id(), channels, mReference->id(), mMetric) :
         tfm::format("%d-%s", mImage->id(), channels);
 
-    auto iter = mMeanValues.find(key);
-    if (iter != end(mMeanValues)) {
+    auto iter = mCanvasStatistics.find(key);
+    if (iter != end(mCanvasStatistics)) {
         return iter->second;
     }
+
+    static std::atomic<int> sId{0};
+    // Later requests must have higher priority than previous ones.
+    int priority = ++sId;
 
     auto image = mImage, reference = mReference;
     auto requestedChannelGroup = mRequestedChannelGroup;
     auto metric = mMetric;
-    mMeanValues.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>([image, reference, requestedChannelGroup, metric]() {
-        return computeCanvasStatistics(image, reference, requestedChannelGroup, metric);
-    }, &mMeanValueThreadPool)));
 
-    auto val = mMeanValues.at(key);
-    val->computeAsync();
-    return val;
+    promise<shared_ptr<CanvasStatistics>> promise;
+    mCanvasStatistics.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(promise.get_future())));
+
+    // Remember the keys associateed with the participating images. Such that their
+    // canvas statistics can be retrieved and deleted when either of the images
+    // is closed or mutated.
+    mImageIdToCanvasStatisticsKey[mImage->id()].emplace_back(key);
+    mImage->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
+
+    if (mReference) {
+        mImageIdToCanvasStatisticsKey[mReference->id()].emplace_back(key);
+        mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
+    }
+
+    invokeTaskDetached([image, reference, requestedChannelGroup, metric, priority, p=std::move(promise)]() mutable -> Task<void> {
+        co_await gThreadPool->enqueueCoroutine(priority);
+        p.set_value(co_await computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority));
+    });
+
+    return mCanvasStatistics.at(key);
+}
+
+void ImageCanvas::purgeCanvasStatistics(int imageId) {
+    for (const auto& key : mImageIdToCanvasStatisticsKey[imageId]) {
+        mCanvasStatistics.erase(key);
+    }
+
+    mImageIdToCanvasStatisticsKey.erase(imageId);
 }
 
 vector<Channel> ImageCanvas::channelsFromImages(
     shared_ptr<Image> image,
     shared_ptr<Image> reference,
     const string& requestedChannelGroup,
-    EMetric metric
+    EMetric metric,
+    int priority
 ) {
     if (!image) {
         return {};
@@ -483,13 +631,13 @@ vector<Channel> ImageCanvas::channelsFromImages(
     if (!reference) {
         gThreadPool->parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
-            for (DenseIndex j = 0; j < chan->count(); ++j) {
+            for (size_t j = 0; j < chan->numPixels(); ++j) {
                 result[i].at(j) = chan->eval(j);
             }
-        });
+        }, priority);
     } else {
-        Vector2i size = image->size();
-        Vector2i offset = (reference->size() - size) / 2;
+        Vector2i size = Vector2i{image->size().x(), image->size().y()};
+        Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
         auto referenceChannels = reference->channelsInGroup(requestedChannelGroup);
 
         gThreadPool->parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
@@ -533,19 +681,20 @@ vector<Channel> ImageCanvas::channelsFromImages(
                     }
                 }
             }
-        });
+        }, priority);
     }
 
     return result;
 }
 
-shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
+Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::shared_ptr<Image> image,
     std::shared_ptr<Image> reference,
     const string& requestedChannelGroup,
-    EMetric metric
+    EMetric metric,
+    int priority
 ) {
-    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric);
+    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
     float mean = 0;
     float maximum = -numeric_limits<float>::infinity();
@@ -566,16 +715,17 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    int nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
+    auto result = make_shared<CanvasStatistics>();
+
+    int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        mean += channel.data().mean();
-        maximum = max(maximum, channel.data().maxCoeff());
-        minimum = min(minimum, channel.data().minCoeff());
+        auto [cmin, cmax, cmean] = channel.minMaxMean();
+        mean += cmean;
+        maximum = max(maximum, cmax);
+        minimum = min(minimum, cmin);
     }
-
-    auto result = make_shared<CanvasStatistics>();
 
     result->mean = nChannels > 0 ? (mean / nChannels) : 0;
     result->maximum = maximum;
@@ -583,7 +733,7 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
 
     // Now that we know the maximum and minimum value we can define our histogram bin size.
     static const int NUM_BINS = 400;
-    result->histogram = MatrixXf::Zero(NUM_BINS, nChannels);
+    result->histogram.resize(NUM_BINS*nChannels);
 
     // We're going to draw our histogram in log space.
     static const float addition = 0.001f;
@@ -610,39 +760,52 @@ shared_ptr<CanvasStatistics> ImageCanvas::computeCanvasStatistics(
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
     if (nChannels == 0) {
-        return result;
+        co_return result;
     }
 
-    auto numElements = image->count();
-    Eigen::MatrixXi indices(numElements, nChannels);
+    auto numPixels = image->numPixels();
+    std::vector<int> indices(numPixels * nChannels);
 
-    vector<future<void>> futures;
+    vector<Task<void>> tasks;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        gThreadPool->parallelForAsync<DenseIndex>(0, numElements, [&, i](DenseIndex j) {
-            indices(j, i) = valToBin(channel.eval(j));
-        }, futures);
+        tasks.emplace_back(
+            gThreadPool->parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
+                indices[j + i * numPixels] = valToBin(channel.eval(j));
+            }, priority)
+        );
     }
-    waitAll(futures);
 
-    gThreadPool->parallelFor(0, nChannels, [&](int i) {
-        for (DenseIndex j = 0; j < numElements; ++j) {
-            result->histogram(indices(j, i), i) += alphaChannel ? alphaChannel->eval(j) : 1;
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    co_await gThreadPool->parallelForAsync(0, nChannels, [&](int i) {
+        for (size_t j = 0; j < numPixels; ++j) {
+            result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
         }
-    });
+    }, priority);
 
-    for (int i = 0; i < NUM_BINS; ++i) {
-        result->histogram.row(i) /= binToVal(i + 1) - binToVal(i);
+    for (int i = 0; i < nChannels; ++i) {
+        for (int j = 0; j < NUM_BINS; ++j) {
+            result->histogram[j + i * NUM_BINS] /= binToVal(j + 1) - binToVal(j);
+        }
     }
 
     // Normalize the histogram according to the 10th-largest
     // element to avoid a couple spikes ruining the entire graph.
-    MatrixXf temp = result->histogram;
-    DenseIndex idx = temp.size() - 10;
-    nth_element(temp.data(), temp.data() + idx, temp.data() + temp.size());
-    result->histogram /= max(temp(idx), 0.1f) * 1.3f;
+    auto tmp = result->histogram;
+    size_t idx = tmp.size() - 10;
+    nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
-    return result;
+    float norm = 1.0f / (max(tmp[idx], 0.1f) * 1.3f);
+    for (int i = 0; i < nChannels; ++i) {
+        for (int j = 0; j < NUM_BINS; ++j) {
+            result->histogram[j + i * NUM_BINS] *= norm;
+        }
+    }
+
+    co_return result;
 }
 
 Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
@@ -651,39 +814,54 @@ Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
     // axes are implicitly shifted by half a pixel due to the centering operation.
     // Additionally, add 0.1111111 such that our final position is almost never 0
     // modulo our pixel ratio, which again avoids aligned pixel boundaries with texels.
-    return Vector2f{
-        size.x() % 2 == 0 ?  0.5f : 0.0f,
-        size.y() % 2 == 0 ? -0.5f : 0.0f,
-    } + Vector2f::Constant(0.1111111f);
+    // return Vector2f{
+    //     size.x() % 2 == 0 ?  0.5f : 0.0f,
+    //     size.y() % 2 == 0 ? -0.5f : 0.0f,
+    // } + Vector2f{0.1111111f};
+    return Vector2f{0.1111111f};
 }
 
-Transform<float, 2, 2> ImageCanvas::transform(const Image* image) {
+Matrix3f ImageCanvas::transform(const Image* image) {
     if (!image) {
-        return Transform<float, 2, 0>::Identity();
+        return Matrix3f::scale(Vector2f{1.0f});
     }
+
+    TEV_ASSERT(mImage, "Coordinates are relative to the currently selected image's display window. So must have an image selected.");
 
     // Center image, scale to pixel space, translate to desired position,
     // then rescale to the [-1, 1] square for drawing.
     return
-        Scaling(2.0f / m_size.x(), -2.0f / m_size.y()) *
+        Matrix3f::scale(Vector2f{2.0f / m_size.x(), -2.0f / m_size.y()}) *
         mTransform *
-        Scaling(1.0f / mPixelRatio) *
-        Translation2f(pixelOffset(image->size())) *
-        Scaling(image->size().cast<float>()) *
-        Translation2f(Vector2f::Constant(-0.5f));
+        Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
+        Matrix3f::translate(image->centerDisplayOffset(mImage->displayWindow()) + pixelOffset(image->size())) *
+        Matrix3f::scale(Vector2f{image->size()}) *
+        Matrix3f::translate(Vector2f{-0.5f});
 }
 
-Transform<float, 2, 2> ImageCanvas::textureToNanogui(const Image* image) {
+Matrix3f ImageCanvas::textureToNanogui(const Image* image) {
     if (!image) {
-        return Transform<float, 2, 0>::Identity();
+        return Matrix3f::scale(Vector2f{1.0f});
     }
+
+    TEV_ASSERT(mImage, "Coordinates are relative to the currently selected image's display window. So must have an image selected.");
 
     // Move origin to centre of image, scale pixels, apply our transform, move origin back to top-left.
     return
-        Translation2f(0.5f * Vector2f{m_size.x(), m_size.y()}) *
+        Matrix3f::translate(0.5f * Vector2f{m_size}) *
         mTransform *
-        Scaling(1.0f / mPixelRatio) *
-        Translation2f(-0.5f * image->size().cast<float>() + pixelOffset(image->size()));
+        Matrix3f::scale(Vector2f{1.0f / mPixelRatio}) *
+        Matrix3f::translate(-0.5f * Vector2f{image->size()} + image->centerDisplayOffset(mImage->displayWindow()) + pixelOffset(image->size()));
+}
+
+Matrix3f ImageCanvas::displayWindowToNanogui(const Image* image) {
+    if (!image) {
+        return Matrix3f::scale(Vector2f{1.0f});
+    }
+
+    // Shift texture coordinates by the data coordinate offset.
+    // It's that simple.
+    return textureToNanogui(image) * Matrix3f::translate(-image->dataWindow().min);
 }
 
 TEV_NAMESPACE_END

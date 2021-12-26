@@ -23,7 +23,6 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace Eigen;
 using namespace filesystem;
 using namespace nanogui;
 using namespace std;
@@ -164,14 +163,14 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "Background Color"};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->background_color()};
+            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
             colorwheel->set_color(popupBtn->background_color());
 
             new Label{popup, "Background Alpha"};
             auto bgAlphaSlider = new Slider{popup};
             bgAlphaSlider->set_range({0.0f, 1.0f});
             bgAlphaSlider->set_callback([this](float value) {
-                auto col = mImageCanvas->background_color();
+                auto col = mImageCanvas->backgroundColor();
                 mImageCanvas->setBackgroundColor(Color{
                     col.r(),
                     col.g(),
@@ -521,8 +520,9 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
     }
 
     // Only need high refresh rate responsiveness if tev is actually in focus.
-    if (focused())
+    if (focused()) {
         redraw();
+    }
 
     if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
         mSidebarLayout->set_cursor(Cursor::HResize);
@@ -536,7 +536,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         mSidebar->set_fixed_width(clamp(p.x(), 210, m_size.x() - 10));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
-        Eigen::Vector2f relativeMovement = {rel.x(), rel.y()};
+        nanogui::Vector2f relativeMovement = {rel};
         auto* glfwWindow = screen()->glfw_window();
         // There is no explicit access to the currently pressed modifier keys here, so we
         // need to directly ask GLFW.
@@ -723,7 +723,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 imageMetadata.blue_shift  = 16;
                 imageMetadata.alpha_shift = 24;
 
-                auto imageData = mImageCanvas->getLdrImageData(true);
+                auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
                 clip::image image(imageData.data(), imageMetadata);
 
                 if (clip::set_image(image)) {
@@ -759,11 +759,13 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                         << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height)
                         ;
 
-                    auto image = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "");
-                    if (image) {
-                        addImage(image, true);
-                    } else {
+                    auto images = tryLoadImage(tfm::format("clipboard (%d)", ++mClipboardIndex), imageStream, "").get();
+                    if (images.empty()) {
                         tlog::error() << "Failed to load image from clipboard data.";
+                    } else {
+                        for (auto& image : images) {
+                            addImage(image, true);
+                        }
                     }
                 }
             }
@@ -884,13 +886,11 @@ void ImageViewer::draw_contents() {
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
     bool newFocus = false;
-    try {
-        while (true) {
-            auto addition = mImagesLoader->tryPop();
-            newFocus |= addition.shallSelect;
-            addImage(addition.image, addition.shallSelect);
+    while (auto addition = mImagesLoader->tryPop()) {
+        newFocus |= addition->shallSelect;
+        for (auto& image : addition->images) {
+            addImage(image, addition->shallSelect);
         }
-    } catch (const runtime_error&) {
     }
 
     if (newFocus) {
@@ -899,11 +899,8 @@ void ImageViewer::draw_contents() {
 
     // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling
     // callbacks from background threads
-    try {
-        while (true) {
-            mTaskQueue.tryPop()();
-        }
-    } catch (const runtime_error&) {
+    while (auto task = mTaskQueue.tryPop()) {
+        (*task)();
     }
 
     for (auto it = begin(mToBump); it != end(mToBump); ) {
@@ -911,7 +908,7 @@ void ImageViewer::draw_contents() {
         bool isShown = image == mCurrentImage || image == mCurrentReference;
 
         // If the image is no longer shown, bump ID immediately. Otherwise, wait until canvas statistics were ready for over 200 ms.
-        if (!isShown || (std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt()) > std::chrono::milliseconds{200}) {
+        if (!isShown || std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt() > 200ms) {
             image->bumpId();
             auto localIt = it;
             ++it;
@@ -949,6 +946,7 @@ void ImageViewer::draw_contents() {
     if (lazyCanvasStatistics) {
         if (lazyCanvasStatistics->isReady()) {
             auto statistics = lazyCanvasStatistics->get();
+            mHistogram->setNChannels(statistics->nChannels);
             mHistogram->setValues(statistics->histogram);
             mHistogram->setMinimum(statistics->minimum);
             mHistogram->setMean(statistics->mean);
@@ -966,7 +964,8 @@ void ImageViewer::draw_contents() {
             );
         }
     } else {
-        mHistogram->setValues(MatrixXf::Zero(1, 1));
+        mHistogram->setNChannels(1);
+        mHistogram->setValues({0.0f});
         mHistogram->setMinimum(0);
         mHistogram->setMean(0);
         mHistogram->setMaximum(0);
@@ -1141,10 +1140,13 @@ void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImage = tryLoadImage(image->path(), image->channelSelector());
-    if (newImage) {
+    auto newImages = tryLoadImage(image->path(), image->channelSelector()).get();
+    if (!newImages.empty()) {
         removeImage(image);
-        insertImage(newImage, id, shallSelect);
+        insertImage(newImages.front(), id, shallSelect);
+        if (newImages.size() > 1) {
+            tlog::warning() << "Ambiguous image reload.";
+        }
     }
 
     if (referenceId != -1) {
@@ -1403,11 +1405,9 @@ void ImageViewer::normalizeExposureAndOffset() {
     float maximum = numeric_limits<float>::min();
     for (const auto& channelName : channels) {
         const auto& channel = mCurrentImage->channel(channelName);
-        for (DenseIndex i = 0; i < channel->count(); ++i) {
-            float val = channel->eval(i);
-            maximum = max(maximum, val);
-            minimum = min(minimum, val);
-        }
+        auto [cmin, cmax, cmean] = channel->minMaxMean();
+        maximum = max(maximum, cmax);
+        minimum = min(minimum, cmin);
     }
 
     float factor = 1.0f / (maximum - minimum);
@@ -1560,6 +1560,7 @@ void ImageViewer::openImageDialog() {
         {"pnm",  "Portable AnyMap image"},
         {"ppm",  "Portable PixMap image"},
         {"psd",  "PSD image"},
+        {"qoi",  "Quite OK Image format"},
         {"tga",  "Truevision TGA image"},
     }, false, true);
 
@@ -1586,6 +1587,7 @@ void ImageViewer::saveImageDialog() {
         {"jpg",  "JPEG image"},
         {"jpeg", "JPEG image"},
         {"png",  "Portable Network Graphics image"},
+        {"qoi",  "Quite OK Image format"},
         {"tga",  "Truevision TGA image"},
     }, true));
 
@@ -1775,11 +1777,11 @@ void ImageViewer::updateTitle() {
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
         caption = mCurrentImage->shortName();
-        caption += string{" – "} + mCurrentGroup;
+        caption += " – "s + mCurrentGroup;
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
-        Eigen::Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
+        nanogui::Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
         TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
         string valuesString;

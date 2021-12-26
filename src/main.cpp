@@ -46,6 +46,12 @@ void scheduleToMainThread(const std::function<void()>& fun) {
     }
 }
 
+void redrawWindow() {
+    if (sImageViewer) {
+        sImageViewer->redraw();
+    }
+}
+
 void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
     switch (packet.type()) {
         case IpcPacket::OpenImage:
@@ -114,9 +120,10 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto image = tryLoadImage(imageString, imageStream, "");
-                if (image) {
-                    sImageViewer->addImage(image, info.grabFocus);
+                auto images = tryLoadImage(imageString, imageStream, "").get();
+                if (!images.empty()) {
+                    sImageViewer->addImage(images.front(), info.grabFocus);
+                    TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
                 }
             });
 
@@ -283,9 +290,14 @@ int mainFunc(const vector<string>& arguments) {
     const string hostname = hostnameFlag ? get(hostnameFlag) : "127.0.0.1:14158";
     auto ipc = make_shared<Ipc>(hostname);
 
+    // If we don't have any images to load, create new windows regardless of flag.
+    // (In this case, the user likely wants to open a new instance of tev rather
+    // than focusing the existing one.)
+    bool newWindow = newWindowFlag || !imageFiles;
+
     // If we're not the primary instance and did not request to open a new window,
     // simply send the to-be-opened images to the primary instance.
-    if (!ipc->isPrimaryInstance() && !newWindowFlag) {
+    if (!ipc->isPrimaryInstance() && !newWindow) {
         string channelSelector;
         for (auto imageFile : get(imageFiles)) {
             if (!imageFile.empty() && imageFile[0] == ':') {
@@ -306,8 +318,6 @@ int mainFunc(const vector<string>& arguments) {
     }
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
-
-    tlog::info() << "Loading window...";
 
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
 
@@ -334,7 +344,7 @@ int mainFunc(const vector<string>& arguments) {
                 imagesLoader->enqueue(imageFile, channelSelector, false);
             }
 
-            this_thread::sleep_for(chrono::milliseconds{100});
+            this_thread::sleep_for(100ms);
         }
     }};
 
@@ -348,10 +358,17 @@ int mainFunc(const vector<string>& arguments) {
     // a user starts another instance of tev while one is already running. Note, that this
     // behavior can be overridden by the -n flag, so not _all_ secondary instances send their
     // paths to the primary instance.
-    thread ipcThread;
-    if (ipc->isPrimaryInstance()) {
-        ipcThread = thread{[&]() {
+    thread ipcThread = thread{[&]() {
+        try {
             while (!shallShutdown) {
+                // Attempt to become primary instance in case the primary instance
+                // got closed at some point. Attempt this with a reasonably low frequency
+                // to not hog CPU/OS resources.
+                if (!ipc->isPrimaryInstance() && !ipc->attemptToBecomePrimaryInstance()) {
+                    this_thread::sleep_for(100ms);
+                    continue;
+                }
+
                 ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
                     try {
                         handleIpcPacket(packet, imagesLoader);
@@ -360,10 +377,26 @@ int mainFunc(const vector<string>& arguments) {
                     }
                 });
 
-                this_thread::sleep_for(chrono::milliseconds{10});
+                this_thread::sleep_for(10ms);
             }
-        }};
-    }
+        } catch (const runtime_error& e) {
+            tlog::warning() << "Uncaught exception in IPC thread: " << e.what();
+        }
+    }};
+
+    ScopeGuard backgroundThreadShutdownGuard{[&]() {
+        shallShutdown = true;
+
+        if (ipcThread.joinable()) {
+            ipcThread.join();
+        }
+
+        // stdinThread should not be joinable, since it has been
+        // detached earlier. But better to be safe than sorry.
+        if (stdinThread.joinable()) {
+            stdinThread.join();
+        }
+    }};
 
     // Load images passed via command line in the background prior to
     // creating our main application such that they are not stalled
@@ -380,6 +413,15 @@ int mainFunc(const vector<string>& arguments) {
 
     // Init nanogui application
     nanogui::init();
+
+    ScopeGuard nanoguiShutdownGuard{[&]() {
+        // On some linux distributions glfwTerminate() (which is called by
+        // nanogui::shutdown()) causes segfaults. Since we are done with our
+        // program here anyways, let's let the OS clean up after us.
+#if defined(__APPLE__) or defined(_WIN32)
+        nanogui::shutdown();
+#endif
+    }};
 
 #ifdef __APPLE__
     if (!imageFiles) {
@@ -426,21 +468,6 @@ int mainFunc(const vector<string>& arguments) {
     // Refresh only every 250ms if there are no user interactions.
     // This makes an idling tev surprisingly energy-efficient. :)
     nanogui::mainloop(250);
-
-    shallShutdown = true;
-
-    // On some linux distributions glfwTerminate() (which is called by
-    // nanogui::shutdown()) causes segfaults. Since we are done with our
-    // program here anyways, let's let the OS clean up after us.
-    //nanogui::shutdown();
-
-    if (ipcThread.joinable()) {
-        ipcThread.join();
-    }
-
-    if (stdinThread.joinable()) {
-        stdinThread.join();
-    }
 
     return 0;
 }

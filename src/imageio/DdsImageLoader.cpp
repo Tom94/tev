@@ -6,8 +6,8 @@
 
 #include <DirectXTex.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -153,14 +153,16 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-ImageData DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
+Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};
     }
     ScopeGuard comScopeGuard{ []() { CoUninitialize(); } };
 
-    ImageData result;
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
+
     iStream.seekg(0, iStream.end);
     size_t dataSize = iStream.tellg();
     iStream.seekg(0, iStream.beg);
@@ -208,9 +210,9 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
         std::swap(scratchImage, convertedImage);
     }
 
-    vector<Channel> channels = makeNChannels(numChannels, { metadata.width, metadata.height });
+    resultData.channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
 
-    auto numPixels = (DenseIndex)metadata.width * metadata.height;
+    auto numPixels = (size_t)metadata.width * metadata.height;
     if (numPixels == 0) {
         throw invalid_argument{"DDS image has zero pixels."};
     }
@@ -221,53 +223,33 @@ ImageData DdsImageLoader::load(istream& iStream, const path&, const string& chan
         assert(!DirectX::IsSRGB(metadata.format));
         // Assume that the image data is already in linear space.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                channels[c].at(i) = typedData[baseIdx + c];
+                resultData.channels[c].at(i) = typedData[baseIdx + c];
             }
-        });
+        }, priority);
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in
         // sRGB space, and only they need to converted to linear. However,
         // RGB(A) DDS images tend to be in sRGB space, even those not
         // explicitly stored in an *_SRGB format.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
-            int baseIdx = i * numChannels;
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {
-                    channels[c].at(i) = typedData[baseIdx + c];
+                    resultData.channels[c].at(i) = typedData[baseIdx + c];
                 } else {
-                    channels[c].at(i) = toLinear(typedData[baseIdx + c]);
+                    resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c]);
                 }
             }
-        });
+        }, priority);
     }
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
-    }
-
-    // DDS can not contain layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
-
-    return result;
+    co_return result;
 }
 
 TEV_NAMESPACE_END

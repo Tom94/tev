@@ -13,7 +13,7 @@ TEV_NAMESPACE_BEGIN
 class ClipboardImageLoader : public ImageLoader {
 public:
     bool canLoadFile(std::istream& iStream) const override;
-    ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, bool& hasPremultipliedAlpha) const override;
+    Task<std::vector<ImageData>> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const override;
 
     std::string name() const override {
         return "clipboard";

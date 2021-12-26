@@ -6,8 +6,8 @@
 
 #include <clip.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -23,8 +23,9 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
-    ImageData result;
+Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     char magic[4];
     clip::image_spec spec;
@@ -41,9 +42,9 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
         throw invalid_argument{tfm::format("Not sufficient bytes to read image spec (%d vs %d)", iStream.gcount(), sizeof(clip::image_spec))};
     }
 
-    Vector2i size{spec.width, spec.height};
+    Vector2i size{(int)spec.width, (int)spec.height};
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
@@ -55,10 +56,10 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
 
 
     auto numBytesPerRow = numChannels * size.x();
-    auto numBytes = (DenseIndex)numBytesPerRow * size.y();
+    auto numBytes = (size_t)numBytesPerRow * size.y();
     int alphaChannelIndex = 3;
 
-    vector<Channel> channels = makeNChannels(numChannels, size);
+    resultData.channels = makeNChannels(numChannels, size);
 
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
@@ -83,45 +84,25 @@ ImageData ClipboardImageLoader::load(istream& iStream, const path&, const string
     //       clip doesn't properly handle this... so copy&pasting transparent images
     //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
     bool premultipliedAlpha = false && numChannels >= 4;
-    gThreadPool->parallelFor<DenseIndex>(0, size.y(), [&](DenseIndex y) {
+    co_await gThreadPool->parallelForAsync(0, size.y(), [&](int y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = y * numBytesPerRow + x * numChannels;
             for (int c = numChannels-1; c >= 0; --c) {
                 unsigned char val = data[baseIdx + shifts[c]];
                 if (c == alphaChannelIndex) {
-                    channels[c].at({x, y}) = val / 255.0f;
+                    resultData.channels[c].at({x, y}) = val / 255.0f;
                 } else {
-                    float alpha = premultipliedAlpha ? channels[alphaChannelIndex].at({x, y}) : 1.0f;
+                    float alpha = premultipliedAlpha ? resultData.channels[alphaChannelIndex].at({x, y}) : 1.0f;
                     float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
-                    channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+                    resultData.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
                 }
             }
         }
-    });
+    }, priority);
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    resultData.hasPremultipliedAlpha = false;
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
-    }
-
-    // The clipboard can not contain layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    hasPremultipliedAlpha = false;
-
-    return result;
+    co_return result;
 }
 
 TEV_NAMESPACE_END

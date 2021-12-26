@@ -5,8 +5,8 @@
 
 #include <istream>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -22,8 +22,9 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&, bool& hasPremultipliedAlpha) const {
-    ImageData result;
+Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& data = result.front();
 
     string magic;
     Vector2i size;
@@ -34,12 +35,11 @@ ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&, b
         throw invalid_argument{tfm::format("Invalid magic empty string %s", magic)};
     }
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
 
-    set<string> layerNames;
     for (int i = 0; i < nChannels; ++i) {
         // The following lines decode strings by prefix length.
         // The reason for using sthis encoding is to allow arbitrary characters,
@@ -52,18 +52,13 @@ ImageData EmptyImageLoader::load(istream& iStream, const path&, const string&, b
 
         string channelName = channelNameData.data();
 
-        result.channels.emplace_back(Channel{channelName, size});
-        result.channels.back().setZero();
-        layerNames.insert(Channel::head(channelName));
+        data.channels.emplace_back(Channel{channelName, size});
+        data.channels.back().setZero();
     }
 
-    for (const string& layer : layerNames) {
-        result.layers.emplace_back(layer);
-    }
+    data.hasPremultipliedAlpha = true;
 
-    hasPremultipliedAlpha = true;
-
-    return result;
+    co_return result;
 }
 
 TEV_NAMESPACE_END

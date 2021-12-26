@@ -4,10 +4,9 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/Task.h>
 
 #include <nanogui/vector.h>
-
-#include <Eigen/Dense>
 
 #include <future>
 #include <string>
@@ -17,62 +16,77 @@ TEV_NAMESPACE_BEGIN
 
 class Channel {
 public:
-    using RowMatrixXf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-
-    Channel(const std::string& name, Eigen::Vector2i size);
+    Channel(const std::string& name, const nanogui::Vector2i& size);
 
     const std::string& name() const {
         return mName;
     }
 
-    const RowMatrixXf& data() const {
+    const std::vector<float>& data() const {
         return mData;
     }
 
-    float eval(Eigen::DenseIndex index) const {
+    float eval(size_t index) const {
         if (index >= mData.size()) {
             return 0;
         }
-        return mData(index);
+        return mData[index];
     }
 
-    float eval(Eigen::Vector2i index) const {
-        if (index.x() < 0 || index.x() >= mData.cols() ||
-            index.y() < 0 || index.y() >= mData.rows()) {
+    float eval(nanogui::Vector2i index) const {
+        if (index.x() < 0 || index.x() >= mSize.x() ||
+            index.y() < 0 || index.y() >= mSize.y()) {
             return 0;
         }
 
-        return mData(index.x() + index.y() * mData.cols());
+        return mData[index.x() + index.y() * mSize.x()];
     }
 
-    float& at(Eigen::DenseIndex index) {
-        return mData(index);
+    float& at(size_t index) {
+        return mData[index];
     }
 
-    float at(Eigen::DenseIndex index) const {
-        return mData(index);
+    float at(size_t index) const {
+        return mData[index];
     }
 
-    float& at(Eigen::Vector2i index) {
-        return at(index.x() + index.y() * mData.cols());
+    float& at(nanogui::Vector2i index) {
+        return at(index.x() + index.y() * mSize.x());
     }
 
-    float at(Eigen::Vector2i index) const {
-        return at(index.x() + index.y() * mData.cols());
+    float at(nanogui::Vector2i index) const {
+        return at(index.x() + index.y() * mSize.x());
     }
 
-    Eigen::DenseIndex count() const {
+    size_t numPixels() const {
         return mData.size();
     }
 
-    Eigen::Vector2i size() const {
-        return {mData.cols(), mData.rows()};
+    const nanogui::Vector2i& size() const {
+        return mSize;
     }
 
-    void divideByAsync(const Channel& other, std::vector<std::future<void>>& futures);
-    void multiplyWithAsync(const Channel& other, std::vector<std::future<void>>& futures);
+    std::tuple<float, float, float> minMaxMean() const {
+        float min = std::numeric_limits<float>::infinity();
+        float max = -std::numeric_limits<float>::infinity();
+        float mean = 0;
+        for (float f : mData) {
+            mean += f;
+            if (f < min) {
+                min = f;
+            }
+            if (f > max) {
+                max = f;
+            }
+        }
+        return {min, max, mean/numPixels()};
+    }
 
-    void setZero() { mData.setZero(); }
+    Task<void> divideByAsync(const Channel& other, int priority);
+
+    Task<void> multiplyWithAsync(const Channel& other, int priority);
+
+    void setZero() { std::memset(mData.data(), 0, mData.size()*sizeof(float)); }
 
     void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
 
@@ -87,7 +101,8 @@ public:
 
 private:
     std::string mName;
-    RowMatrixXf mData;
+    nanogui::Vector2i mSize;
+    std::vector<float> mData;
 };
 
 TEV_NAMESPACE_END

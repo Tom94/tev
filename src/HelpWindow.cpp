@@ -89,13 +89,13 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
         addRow(imageSelection, "E / Shift+E", "Increase / Decrease Exposure by 0.5");
         addRow(imageSelection, "O / Shift+O", "Increase / Decrease Offset by 0.1");
 
-        addRow(imageSelection, ALT + " (hold)", "Display raw bytes on pixels when zoomed-in");
+        addRow(imageSelection, "Shift+Ctrl (hold)", "Display raw bytes on pixels when zoomed-in");
 
         new Label{shortcuts, "Reference Options", "sans-bold", 18};
         auto referenceSelection = new Widget{shortcuts};
         referenceSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-        addRow(referenceSelection, "Shift (hold)",                                "View currently selected Reference");
+        addRow(referenceSelection, ALT + " (hold)",                               "View currently selected Reference");
         addRow(referenceSelection, "Shift+Left Click or Right Click",             "Select Hovered Image as Reference");
         addRow(referenceSelection, "Shift+1…9",                                   "Select N-th Image as Reference");
         addRow(referenceSelection, "Shift+Down or Shift+S / Shift+Up or Shift+W", "Select Next / Previous Image as Reference");
@@ -164,13 +164,13 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
 
         addLibrary(about, "args",              "", "Single-Header Argument Parsing Library");
         addLibrary(about, "clip",              "", "Cross-Platform Clipboard Library");
-        addLibrary(about, "Eigen",             "", "C++ Template Library for Linear Algebra");
         addLibrary(about, "filesystem",        "", "Lightweight Path Manipulation Library");
         addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
         addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library");
-        addLibrary(about, "NanoGUI",           "", "Small Widget Library for OpenGL");
+        addLibrary(about, "NanoGUI",           "", "Small GUI Library");
         addLibrary(about, "NanoVG",            "", "Small Vector Graphics Library");
         addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format");
+        addLibrary(about, "qoi",               "", "File Format for Fast, Lossless Image Compression");
         addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
         addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement");
         addLibrary(about, "tinylogger",        "", "Minimal Pretty-Logging Library");

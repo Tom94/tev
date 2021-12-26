@@ -6,12 +6,13 @@
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
+#include <tev/imageio/QoiImageLoader.h>
 #include <tev/imageio/StbiImageLoader.h>
 #ifdef _WIN32
 #   include <tev/imageio/DdsImageLoader.h>
 #endif
 
-using namespace Eigen;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -26,15 +27,16 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #ifdef _WIN32
         imageLoaders.emplace_back(new DdsImageLoader());
 #endif
+        imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());
         return imageLoaders;
     };
 
-    static const vector<unique_ptr<ImageLoader>> imageLoaders = makeLoaders();
+    static const vector imageLoaders = makeLoaders();
     return imageLoaders;
 }
 
-vector<Channel> ImageLoader::makeNChannels(int numChannels, Vector2i size) {
+vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size) {
     vector<Channel> channels;
     if (numChannels > 1) {
         const vector<string> channelNames = {"R", "G", "B", "A"};

@@ -13,62 +13,206 @@
 #include <fstream>
 #include <istream>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-atomic<int> Image::sId(0);
+vector<string> ImageData::channelsInLayer(string layerName) const {
+    vector<string> result;
 
-Image::Image(const class path& path, istream& iStream, const string& channelSelector)
-: mPath{path}, mChannelSelector{channelSelector}, mId{sId++} {
-    mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
-
-    auto start = chrono::system_clock::now();
-
-    if (!iStream) {
-        throw invalid_argument{tfm::format("Image %s could not be opened.", mName)};
-    }
-
-    std::string loadMethod;
-    for (const auto& imageLoader : ImageLoader::getLoaders()) {
-        // If we arrived at the last loader, then we want to at least try loading the image,
-        // even if it is likely to fail.
-        bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(iStream);
-
-        // Reset file cursor in case file load check changed it.
-        iStream.clear();
-        iStream.seekg(0);
-
-        if (useLoader) {
-            loadMethod = imageLoader->name();
-            bool hasPremultipliedAlpha = false;
-            mData = imageLoader->load(iStream, mPath, mChannelSelector, hasPremultipliedAlpha);
-            ensureValid();
-
-            // We assume an internal pre-multiplied-alpha representation
-            if (!hasPremultipliedAlpha) {
-                multiplyAlpha();
+    if (layerName.empty()) {
+        for (const auto& c : channels) {
+            if (c.name().find(".") == string::npos) {
+                result.emplace_back(c.name());
             }
-            break;
+        }
+    } else {
+        for (const auto& c : channels) {
+            // If the layer name starts at the beginning, and
+            // if no other dot is found after the end of the layer name,
+            // then we have found a channel of this layer.
+            if (c.name().starts_with(layerName) && c.name().length() > layerName.length()) {
+                const auto& channelWithoutLayer = c.name().substr(layerName.length() + 1);
+                if (channelWithoutLayer.find(".") == string::npos) {
+                    result.emplace_back(c.name());
+                }
+            }
         }
     }
 
-    for (const auto& layer : mData.layers) {
-        auto groups = getGroupedChannels(layer);
-        mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
+    return result;
+}
+
+Task<void> ImageData::convertToRec709(int priority) {
+    // No need to do anything for identity transforms
+    if (toRec709 == Matrix4f{1.0f}) {
+        co_return;
     }
 
-    // Convert chromaticities to sRGB / Rec 709 if they aren't already.
-    toRec709();
+    vector<Task<void>> tasks;
 
-    auto end = chrono::system_clock::now();
-    chrono::duration<double> elapsedSeconds = end - start;
+    for (const auto& layer : layers) {
+        string layerPrefix = layer.empty() ? "" : (layer + ".");
 
-    ensureValid();
+        Channel* r = nullptr;
+        Channel* g = nullptr;
+        Channel* b = nullptr;
 
-    tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", mName, loadMethod, elapsedSeconds.count());
+        if (!(
+            ((r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B"))) ||
+            ((r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b")))
+        )) {
+            // No RGB-triplet found
+            continue;
+        }
+
+        TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
+
+        tasks.emplace_back(
+            gThreadPool->parallelForAsync<size_t>(0, r->numPixels(), [r, g, b, this](size_t i) {
+                auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
+                r->at(i) = rgb.x();
+                g->at(i) = rgb.y();
+                b->at(i) = rgb.z();
+            }, priority)
+        );
+    }
+
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    // Since the image data is now in Rec709 space,
+    // converting to Rec709 is the identity transform.
+    toRec709 = Matrix4f{1.0f};
+}
+
+void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
+    for (const auto& layer : layers) {
+        string layerPrefix = layer.empty() ? "" : (layer + ".");
+        string alphaChannelName = layerPrefix + "A";
+
+        if (!hasChannel(alphaChannelName)) {
+            continue;
+        }
+
+        const Channel* alphaChannel = channel(alphaChannelName);
+        for (auto& channelName : channelsInLayer(layer)) {
+            if (channelName != alphaChannelName) {
+                func(*mutableChannel(channelName), *alphaChannel);
+            }
+        }
+    }
+}
+
+Task<void> ImageData::multiplyAlpha(int priority) {
+    if (hasPremultipliedAlpha) {
+        throw runtime_error{"Can't multiply with alpha twice."};
+    }
+
+    vector<Task<void>> tasks;
+    alphaOperation([&] (Channel& target, const Channel& alpha) {
+        tasks.emplace_back(target.multiplyWithAsync(alpha, priority));
+    });
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    hasPremultipliedAlpha = true;
+}
+
+Task<void> ImageData::unmultiplyAlpha(int priority) {
+    if (!hasPremultipliedAlpha) {
+        throw runtime_error{"Can't divide by alpha twice."};
+    }
+
+    vector<Task<void>> tasks;
+    alphaOperation([&] (Channel& target, const Channel& alpha) {
+        tasks.emplace_back(target.divideByAsync(alpha, priority));
+    });
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    hasPremultipliedAlpha = false;
+}
+
+Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriority) {
+    if (channels.empty()) {
+        throw runtime_error{"Images must have at least one channel."};
+    }
+
+    // No data window? Default to the channel size
+    if (!dataWindow.isValid()) {
+        dataWindow = channels.front().size();
+    }
+
+    if (!displayWindow.isValid()) {
+        displayWindow = channels.front().size();
+    }
+
+    for (const auto& c : channels) {
+        if (c.size() != size()) {
+            throw runtime_error{tfm::format(
+                "All channels must have the same size as the data window. (%s:%dx%d != %dx%d)",
+                c.name(), c.size().x(), c.size().y(), size().x(), size().y()
+            )};
+        }
+    }
+
+    if (!channelSelector.empty()) {
+        vector<pair<size_t, size_t>> matches;
+        for (size_t i = 0; i < channels.size(); ++i) {
+            size_t matchId;
+            if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
+                matches.emplace_back(matchId, i);
+            }
+        }
+
+        sort(begin(matches), end(matches));
+
+        // Prune and sort channels by the channel selector
+        vector<Channel> tmp = move(channels);
+        channels.clear();
+
+        for (const auto& match : matches) {
+            channels.emplace_back(move(tmp[match.second]));
+        }
+    }
+
+    if (layers.empty()) {
+        set<string> layerNames;
+        for (auto& c : channels) {
+            layerNames.insert(Channel::head(c.name()));
+        }
+
+        for (const string& l : layerNames) {
+            layers.emplace_back(l);
+        }
+    }
+
+    if (!hasPremultipliedAlpha) {
+        co_await multiplyAlpha(taskPriority);
+    }
+
+    co_await convertToRec709(taskPriority);
+
+    TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
+    TEV_ASSERT(toRec709 == Matrix4f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
+}
+
+atomic<int> Image::sId(0);
+
+Image::Image(const class path& path, ImageData&& data, const string& channelSelector)
+: mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
+    mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
+
+    for (const auto& l : mData.layers) {
+        auto groups = getGroupedChannels(l);
+        mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
+    }
 }
 
 Image::~Image() {
@@ -76,6 +220,10 @@ Image::~Image() {
     // hits zero there. This is required, because OpenGL calls must always happen
     // on the main thread.
     scheduleToMainThread([textures = std::move(mTextures)] {});
+
+    if (mStaleIdCallback) {
+        mStaleIdCallback(mId);
+    }
 }
 
 string Image::shortName() const {
@@ -94,11 +242,11 @@ string Image::shortName() const {
     return result;
 }
 
-nanogui::Texture* Image::texture(const string& channelGroupName) {
+Texture* Image::texture(const string& channelGroupName) {
     return texture(channelsInGroup(channelGroupName));
 }
 
-nanogui::Texture* Image::texture(const vector<string>& channelNames) {
+Texture* Image::texture(const vector<string>& channelNames) {
     string lookup = join(channelNames, ",");
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
@@ -111,14 +259,14 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     }
 
     mTextures.emplace(lookup, ImageTexture{
-        new nanogui::Texture{
-            nanogui::Texture::PixelFormat::RGBA,
-            nanogui::Texture::ComponentFormat::Float32,
+        new Texture{
+            Texture::PixelFormat::RGBA,
+            Texture::ComponentFormat::Float32,
             {size().x(), size().y()},
-            nanogui::Texture::InterpolationMode::Trilinear,
-            nanogui::Texture::InterpolationMode::Nearest,
-            nanogui::Texture::WrapMode::ClampToEdge,
-            1, nanogui::Texture::TextureFlags::ShaderRead,
+            Texture::InterpolationMode::Trilinear,
+            Texture::InterpolationMode::Nearest,
+            Texture::WrapMode::ClampToEdge,
+            1, Texture::TextureFlags::ShaderRead,
             true,
         },
         channelNames,
@@ -126,10 +274,10 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
     });
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
-    auto numPixels = count();
+    auto numPixels = this->numPixels();
     vector<float> data(numPixels * 4);
 
-    vector<future<void>> futures;
+    vector<Task<void>> tasks;
     for (size_t i = 0; i < 4; ++i) {
         if (i < channelNames.size()) {
             const auto& channelName = channelNames[i];
@@ -139,47 +287,25 @@ nanogui::Texture* Image::texture(const vector<string>& channelNames) {
             }
 
             const auto& channelData = chan->data();
-            gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&channelData, &data, i](DenseIndex j) {
-                data[j * 4 + i] = channelData(j);
-            }, futures);
+            tasks.emplace_back(
+                gThreadPool->parallelForAsync<size_t>(0, numPixels, [&channelData, &data, i](size_t j) {
+                    data[j * 4 + i] = channelData[j];
+                }, std::numeric_limits<int>::max())
+            );
         } else {
             float val = i == 3 ? 1 : 0;
-            gThreadPool->parallelForAsync<DenseIndex>(0, numPixels, [&data, val, i](DenseIndex j) {
-                data[j * 4 + i] = val;
-            }, futures);
+            tasks.emplace_back(
+                gThreadPool->parallelForAsync<size_t>(0, numPixels, [&data, val, i](size_t j) {
+                    data[j * 4 + i] = val;
+                }, std::numeric_limits<int>::max())
+            );
         }
     }
-    waitAll(futures);
+    waitAll(tasks);
 
     texture->upload((uint8_t*)data.data());
     texture->generate_mipmap();
     return texture.get();
-}
-
-vector<string> Image::channelsInLayer(string layerName) const {
-    vector<string> result;
-
-    if (layerName.empty()) {
-        for (const auto& c : mData.channels) {
-            if (c.name().find(".") == string::npos) {
-                result.emplace_back(c.name());
-            }
-        }
-    } else {
-        for (const auto& c : mData.channels) {
-            // If the layer name starts at the beginning, and
-            // if no other dot is found after the end of the layer name,
-            // then we have found a channel of this layer.
-            if (c.name().find(layerName) == 0 && c.name().length() > layerName.length()) {
-                const auto& channelWithoutLayer = c.name().substr(layerName.length() + 1);
-                if (channelWithoutLayer.find(".") == string::npos) {
-                    result.emplace_back(c.name());
-                }
-            }
-        }
-    }
-
-    return result;
 }
 
 vector<string> Image::channelsInGroup(const string& groupName) const {
@@ -228,7 +354,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
     string layerPrefix = layerName.empty() ? "" : (layerName + ".");
     string alphaChannelName = layerPrefix + "A";
 
-    vector<string> allChannels = channelsInLayer(layerName);
+    vector<string> allChannels = mData.channelsInLayer(layerName);
 
     auto alphaIt = find(begin(allChannels), end(allChannels), alphaChannelName);
     bool hasAlpha = alphaIt != end(allChannels);
@@ -325,7 +451,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
             continue;
         }
 
-        auto numPixels = width * height;
+        auto numPixels = (size_t)width * height;
         vector<float> textureData(numPixels * 4);
 
         // Populate data for sub-region of the texture to be updated
@@ -343,7 +469,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
                 }
             } else {
                 float val = i == 3 ? 1 : 0;
-                for (DenseIndex j = 0; j < numPixels; ++j) {
+                for (size_t j = 0; j < numPixels; ++j) {
                     textureData[j * 4 + i] = val;
                 }
             }
@@ -355,11 +481,19 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
 }
 
 string Image::toString() const {
-    string result = tfm::format("Path: %s\n\nResolution: (%d, %d)\n\nChannels:\n", mName, size().x(), size().y());
+    stringstream sstream;
+    sstream << "Path: " << mName << "\n\n";
+    sstream << "Resolution: (" << size().x() << ", " << size().y() << ")\n";
+    if (displayWindow() != dataWindow() || displayWindow().min != Vector2i{0}) {
+        sstream << "Display window: (" << displayWindow().min.x() << ", " << displayWindow().min.y() << ")(" << displayWindow().max.x() << ", " << displayWindow().max.y() << ")\n";
+        sstream << "Data window: (" << dataWindow().min.x() << ", " << dataWindow().min.y() << ")(" << dataWindow().max.x() << ", " << dataWindow().max.y() << ")\n";
+    }
+
+    sstream << "\nChannels:\n";
 
     auto localLayers = mData.layers;
     transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
-        auto channels = channelsInLayer(layer);
+        auto channels = mData.channelsInLayer(layer);
         transform(begin(channels), end(channels), begin(channels), [](string channel) {
             return Channel::tail(channel);
         });
@@ -369,99 +503,11 @@ string Image::toString() const {
         return layer + ": " + join(channels, ",");
     });
 
-    return result + join(localLayers, "\n");
+    sstream << join(localLayers, "\n");
+    return sstream.str();
 }
 
-void Image::toRec709() {
-    // No need to do anything for identity transforms
-    if (mData.toRec709 == nanogui::Matrix4f{1.0f}) {
-        return;
-    }
-
-    vector<future<void>> futures;
-
-    for (const auto& layer : mData.layers) {
-        string layerPrefix = layer.empty() ? "" : (layer + ".");
-
-        Channel* r = nullptr;
-        Channel* g = nullptr;
-        Channel* b = nullptr;
-
-        if (!(
-            (r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B")) ||
-            (r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b"))
-        )) {
-            // No RGB-triplet found
-            continue;
-        }
-
-        TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
-
-        gThreadPool->parallelForAsync<DenseIndex>(0, r->count(), [r, g, b, this](DenseIndex i) {
-            auto rgb = mData.toRec709 * nanogui::Vector3f{r->at(i), g->at(i), b->at(i)};
-            r->at(i) = rgb.x();
-            g->at(i) = rgb.y();
-            b->at(i) = rgb.z();
-        }, futures);
-    }
-
-    waitAll(futures);
-}
-
-void Image::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
-    for (const auto& layer : mData.layers) {
-        string layerPrefix = layer.empty() ? "" : (layer + ".");
-        string alphaChannelName = layerPrefix + "A";
-
-        if (!hasChannel(alphaChannelName)) {
-            continue;
-        }
-
-        const Channel* alphaChannel = channel(alphaChannelName);
-        for (auto& channelName : channelsInLayer(layer)) {
-            if (channelName != alphaChannelName) {
-                func(*mutableChannel(channelName), *alphaChannel);
-            }
-        }
-    }
-}
-
-void Image::multiplyAlpha() {
-    vector<future<void>> futures;
-    alphaOperation([&] (Channel& target, const Channel& alpha) {
-        target.multiplyWithAsync(alpha, futures);
-    });
-    waitAll(futures);
-}
-
-void Image::unmultiplyAlpha() {
-    vector<future<void>> futures;
-    alphaOperation([&] (Channel& target, const Channel& alpha) {
-        target.divideByAsync(alpha, futures);
-    });
-    waitAll(futures);
-}
-
-void Image::ensureValid() {
-    if (mData.layers.empty()) {
-        throw runtime_error{"Images must have at least one layer."};
-    }
-
-    if (mData.channels.empty()) {
-        throw runtime_error{"Images must have at least one channel."};
-    }
-
-    for (const auto& c : mData.channels) {
-        if (c.size() != size()) {
-            throw runtime_error{tfm::format(
-                "All channels must have the same size as their image. (%s:%dx%d != %dx%d)",
-                c.name(), c.size().x(), c.size().y(), size().x(), size().y()
-            )};
-        }
-    }
-}
-
-shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
@@ -471,39 +517,123 @@ shared_ptr<Image> tryLoadImage(path path, istream& iStream, string channelSelect
     };
 
     try {
-        return make_shared<Image>(path, iStream, channelSelector);
+        auto start = chrono::system_clock::now();
+
+        if (!iStream) {
+            throw invalid_argument{tfm::format("Image %s could not be opened.", path)};
+        }
+
+        std::string loadMethod;
+        for (const auto& imageLoader : ImageLoader::getLoaders()) {
+            // If we arrived at the last loader, then we want to at least try loading the image,
+            // even if it is likely to fail.
+            bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(iStream);
+
+            // Reset file cursor in case file load check changed it.
+            iStream.clear();
+            iStream.seekg(0);
+
+            if (useLoader) {
+                // Earlier images should be prioritized when loading.
+                loadMethod = imageLoader->name();
+                auto imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
+
+                vector<shared_ptr<Image>> images;
+                for (auto& i : imageData) {
+                    co_await i.ensureValid(channelSelector, taskPriority);
+
+                    // If multiple image "parts" were loaded and they have names,
+                    // ensure that these names are present in the channel selector.
+                    string localChannelSelector = channelSelector;
+                    if (!i.partName.empty()) {
+                        auto selectorParts = split(channelSelector, ",");
+                        if (channelSelector.empty()) {
+                            localChannelSelector = i.partName;
+                        } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
+                            localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
+                        }
+                    }
+
+                    images.emplace_back(make_shared<Image>(path, std::move(i), localChannelSelector));
+                }
+
+                auto end = chrono::system_clock::now();
+                chrono::duration<double> elapsedSeconds = end - start;
+
+                tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", path, loadMethod, elapsedSeconds.count());
+
+                co_return images;
+            }
+        }
+
+        throw runtime_error{"No suitable image loader found."};
     } catch (const invalid_argument& e) {
         handleException(e);
     } catch (const runtime_error& e) {
         handleException(e);
     } catch (const Iex::BaseExc& e) {
         handleException(e);
+    } catch (const future_error& e) {
+        handleException(e);
     }
 
-    return nullptr;
+    co_return {};
 }
 
-shared_ptr<Image> tryLoadImage(path path, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(path path, istream& iStream, string channelSelector) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector);
+}
+
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, string channelSelector) {
     try {
         path = path.make_absolute();
-    } catch (const runtime_error& e) {
+    } catch (const runtime_error&) {
         // If for some strange reason we can not obtain an absolute path, let's still
         // try to open the image at the given path just to make sure.
     }
 
     ifstream fileStream{nativeString(path), ios_base::binary};
-    return tryLoadImage(path, fileStream, channelSelector);
+    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector);
+}
+
+Task<vector<shared_ptr<Image>>> tryLoadImage(path path, string channelSelector) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector);
 }
 
 void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
-    mWorkers.enqueueTask([path, channelSelector, shallSelect, this] {
-        auto image = tryLoadImage(path, channelSelector);
-        if (image) {
-            mLoadedImages.push({ shallSelect, image });
+    int loadId = mUnsortedLoadCounter++;
+    invokeTaskDetached([loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+        int taskPriority = -Image::drawId();
+
+        co_await gThreadPool->enqueueCoroutine(taskPriority);
+        auto images = co_await tryLoadImage(taskPriority, path, channelSelector);
+
+        {
+            std::lock_guard lock{mPendingLoadedImagesMutex};
+            mPendingLoadedImages.push({ loadId, shallSelect, images });
         }
 
-        glfwPostEmptyEvent();
+        if (publishSortedLoads()) {
+            redrawWindow();
+        }
     });
+}
+
+bool BackgroundImagesLoader::publishSortedLoads() {
+    std::lock_guard lock{mPendingLoadedImagesMutex};
+    bool pushed = false;
+    while (!mPendingLoadedImages.empty() && mPendingLoadedImages.top().loadId == mLoadCounter) {
+        ++mLoadCounter;
+
+        // null image pointers indicate failed loads. These shouldn't be pushed.
+        if (!mPendingLoadedImages.top().images.empty()) {
+            mLoadedImages.push(std::move(mPendingLoadedImages.top()));
+        }
+
+        mPendingLoadedImages.pop();
+        pushed = true;
+    }
+    return pushed;
 }
 
 TEV_NAMESPACE_END

@@ -9,6 +9,7 @@ __New__: __tev__ can display true HDR on Apple extended dynamic range (EDR) and 
 While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
+- __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
     - Supports BC1-BC7 compressed formats. 
     - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
@@ -97,7 +98,7 @@ brew install --cask tev
 
 ## Building tev
 
-All that is required for building __tev__ is a C++17-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
+All that is required for building __tev__ is a C++20-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
 ```
@@ -131,7 +132,7 @@ $ make install
 
 ### Windows
 
-On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2017 or higher!
+On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2019 or higher!
 
 ## License
 

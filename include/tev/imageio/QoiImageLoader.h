@@ -1,4 +1,4 @@
-// This file was developed by Thomas Müller <thomas94@gmx.net>.
+// This file was developed by Tiago Chaves & Thomas Müller <thomas94@gmx.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #pragma once
@@ -10,13 +10,13 @@
 
 TEV_NAMESPACE_BEGIN
 
-class PfmImageLoader : public ImageLoader {
+class QoiImageLoader : public ImageLoader {
 public:
     bool canLoadFile(std::istream& iStream) const override;
     Task<std::vector<ImageData>> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const override;
 
     std::string name() const override {
-        return "PFM";
+        return "QOI";
     }
 };
 

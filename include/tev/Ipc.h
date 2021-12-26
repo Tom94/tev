@@ -147,6 +147,14 @@ private:
             mIdx += sizeof(T);
             return *this;
         }
+
+        size_t remainingBytes() const {
+            return mData.size() - mIdx;
+        }
+
+        const char* get() const {
+            return &mData[mIdx];
+        }
     private:
         const std::vector<char>& mData;
         size_t mIdx = 0;
@@ -223,6 +231,8 @@ public:
         return mIsPrimaryInstance;
     }
 
+    bool attemptToBecomePrimaryInstance();
+
     void sendToPrimaryInstance(const IpcPacket& message);
     void receiveFromSecondaryInstance(std::function<void(const IpcPacket&)> callback);
 
@@ -259,6 +269,10 @@ private:
     };
 
     std::list<SocketConnection> mSocketConnections;
+
+    std::string mIp;
+    std::string mPort;
+    std::string mLockName;
 };
 
 TEV_NAMESPACE_END

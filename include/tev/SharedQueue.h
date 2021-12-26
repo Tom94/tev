@@ -5,9 +5,10 @@
 
 #include <tev/Common.h>
 
+#include <condition_variable>
 #include <deque>
 #include <mutex>
-#include <condition_variable>
+#include <optional>
 
 TEV_NAMESPACE_BEGIN
 
@@ -15,23 +16,23 @@ template <typename T>
 class SharedQueue {
 public:
     bool empty() const {
-        std::lock_guard<std::mutex> lock{mMutex};
+        std::lock_guard lock{mMutex};
         return mRawQueue.empty();
     }
 
     size_t size() const {
-        std::lock_guard<std::mutex> lock{mMutex};
+        std::lock_guard lock{mMutex};
         return mRawQueue.size();
     }
 
     void push(T newElem) {
-        std::lock_guard<std::mutex> lock{mMutex};
+        std::lock_guard lock{mMutex};
         mRawQueue.push_back(newElem);
         mDataCondition.notify_one();
     }
 
     T waitAndPop() {
-        std::unique_lock<std::mutex> lock{mMutex};
+        std::unique_lock lock{mMutex};
 
         while (mRawQueue.empty()) {
             mDataCondition.wait(lock);
@@ -43,11 +44,11 @@ public:
         return result;
     }
 
-    T tryPop() {
-        std::unique_lock<std::mutex> lock{mMutex};
+    std::optional<T> tryPop() {
+        std::unique_lock lock{mMutex};
 
         if (mRawQueue.empty()) {
-            throw std::runtime_error{"Could not pop."};
+            return {};
         }
 
         T result = std::move(mRawQueue.front());

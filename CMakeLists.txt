@@ -8,7 +8,7 @@ project(
     DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
     LANGUAGES C CXX
 )
-set(TEV_VERSION "1.18")
+set(TEV_VERSION "1.20")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
@@ -35,19 +35,15 @@ if (APPLE)
     set(CMAKE_MACOSX_RPATH ON)
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (MSVC)
     # Disable annoying secure CRT warnings
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
 
     # Parallel build
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-
-    # 32 bit windows
-    if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DEIGEN_DONT_ALIGN")
-    endif()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP24")
 
     # Static build
     set(CompilerFlags
@@ -117,6 +113,10 @@ if (MSVC)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
     endif()
 
+    # Disable warnings that are present in dependencies and irrelevant to us
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4100") # unused arguments
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd5054") # deprecated enum & operator
+
     # To allow for wildcards in command-line path arguments on windows,
     # we need to link to wsetargv.obj
     # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
@@ -124,11 +124,16 @@ if (MSVC)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register -Wno-deprecated-anon-enum-enum-conversion")
     endif()
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-misleading-indentation -Wno-deprecated-declarations")
     endif()
+endif()
+
+# Coroutines need to be explicitly enabled on g++
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
 
 set(TEV_LIBS clip IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
@@ -144,10 +149,13 @@ set(TEV_SOURCES
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
+    include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp
+    include/tev/imageio/QoiImageSaver.h src/imageio/QoiImageSaver.cpp
     include/tev/imageio/StbiHdrImageSaver.h src/imageio/StbiHdrImageSaver.cpp
     include/tev/imageio/StbiImageLoader.h src/imageio/StbiImageLoader.cpp
     include/tev/imageio/StbiLdrImageSaver.h src/imageio/StbiLdrImageSaver.cpp
 
+    include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
@@ -160,6 +168,7 @@ set(TEV_SOURCES
     include/tev/Lazy.h src/Lazy.cpp
     include/tev/MultiGraph.h src/MultiGraph.cpp
     include/tev/SharedQueue.h src/SharedQueue.cpp
+    include/tev/Task.h src/Task.cpp
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp
 
@@ -194,12 +203,12 @@ include_directories(
     ${ARGS_INCLUDE}
     ${CLIP_INCLUDE}
     ${DIRECTXTEX_INCLUDE}
-    ${EIGEN_INCLUDE}
     ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}
     ${NANOGUI_EXTRA_INCS}
     ${NANOGUI_INCLUDE}
     ${OPENEXR_INCLUDE_DIRS}
+    ${QOI_INCLUDE}
     ${STB_INCLUDE}
     ${TINYFORMAT_INCLUDE}
     ${TINYLOGGER_INCLUDE}

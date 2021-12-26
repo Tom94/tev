@@ -16,8 +16,8 @@
 
 #include <errno.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -91,17 +91,16 @@ bool ExrImageLoader::canLoadFile(istream& iStream) const {
 // Helper class for dealing with the raw channels loaded from an exr file.
 class RawChannel {
 public:
-    RawChannel(string name, Imf::Channel imfChannel)
-    : mName(name), mImfChannel(imfChannel) {
-    }
+    RawChannel(size_t partId, string name, string imfName, Imf::Channel imfChannel, const Vector2i& size)
+    : mPartId{partId}, mName{name}, mImfName{imfName}, mImfChannel{imfChannel}, mSize{size} {}
 
-    void resize(size_t size) {
-        mData.resize(size * bytesPerPixel());
+    void resize() {
+        mData.resize((size_t)mSize.x() * mSize.y() * bytesPerPixel());
     }
 
     void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
         int width = dw.max.x - dw.min.x + 1;
-        frameBuffer.insert(mName.c_str(), Imf::Slice(
+        frameBuffer.insert(mImfName.c_str(), Imf::Slice(
             mImfChannel.type,
             mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
             bytesPerPixel(), bytesPerPixel() * (width/mImfChannel.xSampling),
@@ -110,33 +109,41 @@ public:
     }
 
     template <typename T>
-    void copyToTyped(Channel& channel, vector<future<void>>& futures) const {
+    Task<void> copyToTyped(Channel& channel, int priority) const {
         int width = channel.size().x();
         int widthSubsampled = width/mImfChannel.ySampling;
 
         auto data = reinterpret_cast<const T*>(mData.data());
-        gThreadPool->parallelForAsync<int>(0, channel.size().y(), [this, &channel, width, widthSubsampled, data](int y) {
+        co_await gThreadPool->parallelForAsync<int>(0, channel.size().y(), [&, data](int y) {
             for (int x = 0; x < width; ++x) {
                 channel.at({x, y}) = data[x/mImfChannel.xSampling + (y/mImfChannel.ySampling) * widthSubsampled];
             }
-        }, futures);
+        }, priority);
     }
 
-    void copyTo(Channel& channel, vector<future<void>>& futures) const {
+    Task<void> copyTo(Channel& channel, int priority) const {
         switch (mImfChannel.type) {
             case Imf::HALF:
-                copyToTyped<::half>(channel, futures); break;
+                co_await copyToTyped<::half>(channel, priority); break;
             case Imf::FLOAT:
-                copyToTyped<float>(channel, futures); break;
+                co_await copyToTyped<float>(channel, priority); break;
             case Imf::UINT:
-                copyToTyped<uint32_t>(channel, futures); break;
+                co_await copyToTyped<uint32_t>(channel, priority); break;
             default:
                 throw runtime_error("Invalid pixel type encountered.");
         }
     }
 
+    size_t partId() const {
+        return mPartId;
+    }
+
     const string& name() const {
         return mName;
+    }
+
+    const Vector2i& size() const {
+        return mSize;
     }
 
 private:
@@ -150,13 +157,16 @@ private:
         }
     }
 
+    size_t mPartId;
     string mName;
+    string mImfName;
     Imf::Channel mImfChannel;
+    Vector2i mSize;
     vector<char> mData;
 };
 
-ImageData ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, bool& hasPremultipliedAlpha) const {
-    ImageData result;
+Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, int priority) const {
+    vector<ImageData> result;
 
     StdIStream stdIStream{iStream, path.str().c_str()};
     Imf::MultiPartInputFile multiPartFile{stdIStream};
@@ -166,113 +176,145 @@ ImageData ExrImageLoader::load(istream& iStream, const path& path, const string&
         throw invalid_argument{"EXR image does not contain any parts."};
     }
 
-    // Find the first part containing a channel that matches the given channelSubstr.
-    int partIdx = 0;
-    for (int i = 0; i < numParts; ++i) {
-        Imf::InputPart part{multiPartFile, i};
+    vector<Imf::InputPart> parts;
+    vector<Imf::FrameBuffer> frameBuffers;
+
+    vector<RawChannel> rawChannels;
+
+    // Load all parts that match the channel selector
+    for (int partIdx = 0; partIdx < numParts; ++partIdx) {
+        Imf::InputPart part{multiPartFile, partIdx};
 
         const Imf::ChannelList& imfChannels = part.header().channels();
 
+        auto channelName = [&](Imf::ChannelList::ConstIterator c) {
+            string name = c.name();
+            if (part.header().hasName()) {
+                name = part.header().name() + "."s + name;
+            }
+            return name;
+        };
+
+        Imath::Box2i dataWindow = part.header().dataWindow();
+        Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1 , dataWindow.max.y - dataWindow.min.y + 1};
+
+        if (size.x() == 0 || size.y() == 0) {
+            tlog::warning() << "EXR part '" << part.header().name() << "' has zero pixels.";
+            continue;
+        }
+
+        bool matched = false;
         for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            if (matchesFuzzy(c.name(), channelSelector)) {
-                partIdx = i;
-                goto l_foundPart;
+            string name = channelName(c);
+            if (matchesFuzzy(name, channelSelector)) {
+                rawChannels.emplace_back(parts.size(), name, c.name(), c.channel(), size);
+                matched = true;
             }
         }
-    }
-l_foundPart:
 
-    Imf::InputPart file{multiPartFile, partIdx};
-    Imath::Box2i dw = file.header().dataWindow();
-    Vector2i size = {dw.max.x - dw.min.x + 1 , dw.max.y - dw.min.y + 1};
-
-    if (size.x() == 0 || size.y() == 0) {
-        throw invalid_argument{"EXR image has zero pixels."};
-    }
-
-    vector<RawChannel> rawChannels;
-    Imf::FrameBuffer frameBuffer;
-
-    const Imf::ChannelList& imfChannels = file.header().channels();
-    set<string> layerNames;
-
-    using match_t = pair<size_t, Imf::ChannelList::ConstIterator>;
-    vector<match_t> matches;
-    for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-        size_t matchId;
-        if (matchesFuzzy(c.name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, c);
-            layerNames.insert(Channel::head(c.name()));
+        if (!matched) {
+            continue;
         }
-    }
 
-    // Sort matched channels by matched component of the selector, if one exists.
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches), [](const match_t& m1, const match_t& m2) { return m1.first < m2.first; });
-    }
-
-    for (const auto& match : matches) {
-        const auto& c = match.second;
-        rawChannels.emplace_back(c.name(), c.channel());
+        parts.emplace_back(part);
+        frameBuffers.emplace_back();
     }
 
     if (rawChannels.empty()) {
         throw invalid_argument{tfm::format("No channels match '%s'.", channelSelector)};
     }
 
-    for (const string& layer : layerNames) {
-        result.layers.emplace_back(layer);
+    co_await gThreadPool->parallelForAsync(0, (int)rawChannels.size(), [&](int i) {
+        rawChannels.at(i).resize();
+    }, priority);
+
+    for (auto& rawChannel : rawChannels) {
+        size_t partId = rawChannel.partId();
+        rawChannel.registerWith(frameBuffers.at(partId), parts.at(partId).header().dataWindow());
     }
 
-    gThreadPool->parallelFor(0, (int)rawChannels.size(), [&](int i) {
-        rawChannels[i].resize((DenseIndex)size.x() * size.y());
-    });
+    // No need for a parallel for loop, because OpenEXR parallelizes internally
+    for (size_t partIdx = 0; partIdx < parts.size(); ++partIdx) {
+        auto& part = parts.at(partIdx);
 
-    for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].registerWith(frameBuffer, dw);
-    }
+        result.emplace_back();
+        ImageData& data = result.back();
 
-    file.setFrameBuffer(frameBuffer);
-    file.readPixels(dw.min.y, dw.max.y);
+        Imath::Box2i dataWindow = part.header().dataWindow();
+        Imath::Box2i displayWindow = part.header().displayWindow();
 
-    for (const auto& rawChannel : rawChannels) {
-        result.channels.emplace_back(Channel{rawChannel.name(), size});
-    }
+        // EXR's display- and data windows have inclusive upper ends while tev's upper ends are exclusive.
+        // This allows easy conversion from window to size. Hence the +1.
+        data.dataWindow =    {{dataWindow.min.x,    dataWindow.min.y   }, {dataWindow.max.x+1,    dataWindow.max.y+1   }};
+        data.displayWindow = {{displayWindow.min.x, displayWindow.min.y}, {displayWindow.max.x+1, displayWindow.max.y+1}};
 
-    vector<future<void>> futures;
-    for (size_t i = 0; i < rawChannels.size(); ++i) {
-        rawChannels[i].copyTo(result.channels[i], futures);
-    }
-    waitAll(futures);
+        if (!data.dataWindow.isValid()) {
+            throw invalid_argument{tfm::format(
+                "EXR image has invalid data window: [%d,%d] - [%d,%d]",
+                data.dataWindow.min.x(), data.dataWindow.min.y(), data.dataWindow.max.x(), data.dataWindow.max.y()
+            )};
+        }
 
-    hasPremultipliedAlpha = true;
+        if (!data.displayWindow.isValid()) {
+            throw invalid_argument{tfm::format(
+                "EXR image has invalid display window: [%d,%d] - [%d,%d]",
+                data.displayWindow.min.x(), data.displayWindow.min.y(), data.displayWindow.max.x(), data.displayWindow.max.y()
+            )};
+        }
 
-    // equality comparison for Imf::Chromaticities instances
-    auto chromaEq = [](const Imf::Chromaticities& a, const Imf::Chromaticities& b) {
-        return
-            (a.red  - b.red).length2() + (a.green - b.green).length2() +
-            (a.blue - b.blue).length2() + (a.white - b.white).length2() < 1e-6f;
-    };
+        part.setFrameBuffer(frameBuffers.at(partIdx));
+        part.readPixels(dataWindow.min.y, dataWindow.max.y);
 
-    Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
+        data.hasPremultipliedAlpha = true;
+        if (part.header().hasName()) {
+            data.partName = part.header().name();
+        }
 
-    // Check if there is a chromaticity header entry and if so,
-    // expose it to the image data for later conversion to sRGB/Rec709.
-    Imf::Chromaticities chroma;
-    if (Imf::hasChromaticities(file.header())) {
-        chroma = Imf::chromaticities(file.header());
-    }
+        // equality comparison for Imf::Chromaticities instances
+        auto chromaEq = [](const Imf::Chromaticities& a, const Imf::Chromaticities& b) {
+            return
+                (a.red  - b.red).length2() + (a.green - b.green).length2() +
+                (a.blue - b.blue).length2() + (a.white - b.white).length2() < 1e-6f;
+        };
 
-    if (!chromaEq(chroma, rec709)) {
-        Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
-        for (int m = 0; m < 4; ++m) {
-            for (int n = 0; n < 4; ++n) {
-                result.toRec709.m[m][n] = M.x[m][n];
+        Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
+
+        // Check if there is a chromaticity header entry and if so,
+        // expose it to the image data for later conversion to sRGB/Rec709.
+        Imf::Chromaticities chroma;
+        if (Imf::hasChromaticities(part.header())) {
+            chroma = Imf::chromaticities(part.header());
+        }
+
+        if (!chromaEq(chroma, rec709)) {
+            Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
+            for (int m = 0; m < 4; ++m) {
+                for (int n = 0; n < 4; ++n) {
+                    data.toRec709.m[m][n] = M.x[m][n];
+                }
             }
         }
     }
 
-    return result;
+    vector<size_t> channelMapping;
+    for (size_t i = 0; i < rawChannels.size(); ++i) {
+        auto& rawChannel = rawChannels.at(i);
+        auto& data = result.at(rawChannel.partId());
+        channelMapping.emplace_back(data.channels.size());
+        data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size()});
+    }
+
+    vector<Task<void>> tasks;
+    for (size_t i = 0; i < rawChannels.size(); ++i) {
+        auto& rawChannel = rawChannels.at(i);
+        tasks.emplace_back(rawChannel.copyTo(result.at(rawChannel.partId()).channels.at(channelMapping.at(i)), priority));
+    }
+
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    co_return result;
 }
 
 TEV_NAMESPACE_END

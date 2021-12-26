@@ -6,15 +6,43 @@
 
 #include <numeric>
 
-using namespace Eigen;
 using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-Channel::Channel(const std::string& name, Eigen::Vector2i size)
-: mName{name} {
-    mData.resize(size.y(), size.x());
+Channel::Channel(const std::string& name, const nanogui::Vector2i& size)
+: mName{name}, mSize{size} {
+    mData.resize((size_t)mSize.x() * mSize.y());
+}
+
+Task<void> Channel::divideByAsync(const Channel& other, int priority) {
+    co_await gThreadPool->parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
+        if (other.at(i) != 0) {
+            at(i) /= other.at(i);
+        } else {
+            at(i) = 0;
+        }
+    }, priority);
+}
+
+Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
+    co_await gThreadPool->parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
+        at(i) *= other.at(i);
+    }, priority);
+}
+
+void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {
+    if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
+        tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height << "] could not be updated because it does not fit into the channel's size " << size();
+        return;
+    }
+
+    for (int posY = 0; posY < height; ++posY) {
+        for (int posX = 0; posX < width; ++posX) {
+            at({x + posX, y + posY}) = newData[posX + posY * width];
+        }
+    }
 }
 
 pair<string, string> Channel::split(const string& channel) {
@@ -50,35 +78,6 @@ Color Channel::color(string channel) {
     }
 
     return Color(1.0f, 1.0f);
-}
-
-void Channel::divideByAsync(const Channel& other, vector<future<void>>& futures) {
-    gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
-        if (other.at(i) != 0) {
-            at(i) /= other.at(i);
-        } else {
-            at(i) = 0;
-        }
-    }, futures);
-}
-
-void Channel::multiplyWithAsync(const Channel& other, vector<future<void>>& futures) {
-    gThreadPool->parallelForAsync<DenseIndex>(0, other.count(), [&](DenseIndex i) {
-        at(i) *= other.at(i);
-    }, futures);
-}
-
-void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {
-    if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
-        tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height << "] could not be updated because it does not fit into the channel's size " << size();
-        return;
-    }
-
-    for (int posY = 0; posY < height; ++posY) {
-        for (int posX = 0; posX < width; ++posX) {
-            at({x + posX, y + posY}) = newData[posX + posY * width];
-        }
-    }
 }
 
 TEV_NAMESPACE_END

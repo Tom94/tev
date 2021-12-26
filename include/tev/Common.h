@@ -128,8 +128,8 @@ namespace nanogui {
 
     template <typename Value, size_t Size>
     bool operator==(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
-        for (int m = 0; m < Size; ++m) {
-            for (int n = 0; n < Size; ++n) {
+        for (size_t m = 0; m < Size; ++m) {
+            for (size_t n = 0; n < Size; ++n) {
                 if (a.m[m][n] != b.m[m][n]) {
                     return false;
                 }
@@ -170,11 +170,6 @@ inline float swapBytes(float value) {
     return result;
 }
 
-inline bool isSystemLittleEndian() {
-    uint16_t beef = 0xbeef;
-    return *reinterpret_cast<const uint8_t*>(&beef) == 0xef;
-}
-
 inline int codePointLength(char first) {
     if ((first & 0xf8) == 0xf0) {
         return 4;
@@ -201,19 +196,27 @@ inline std::string nativeString(const filesystem::path& path) {
 }
 #endif
 
+template <typename T>
 class ScopeGuard {
 public:
-    ScopeGuard(const std::function<void(void)>& callback) : mCallback{callback} {}
+    ScopeGuard(const T& callback) : mCallback{callback} {}
+    ScopeGuard(T&& callback) : mCallback{std::move(callback)} {}
+    ScopeGuard(const ScopeGuard<T>& other) = delete;
+    ScopeGuard(ScopeGuard<T>&& other) { mCallback = std::move(other.mCallback); other.mCallback = {}; }
     ~ScopeGuard() { mCallback(); }
 private:
-    std::function<void(void)> mCallback;
+    T mCallback;
 };
 
 template <typename T>
-T clamp(T value, T min, T max) {
-    TEV_ASSERT(max >= min, "Minimum (%f) may not be larger than maximum (%f).", min, max);
-    return std::max(std::min(value, max), min);
-}
+class SharedScopeGuard {
+public:
+    SharedScopeGuard(const T& callback) : mSharedPtr{std::make_shared<ScopeGuard<T>>(callback)} {}
+    SharedScopeGuard(T&& callback) : mSharedPtr{std::make_shared<ScopeGuard<T>>(std::move(callback))} {}
+private:
+    // Causes `callback` to be fired upon last destruction
+    std::shared_ptr<ScopeGuard<T>> mSharedPtr;
+};
 
 template <typename T>
 T round(T value, T decimals) {
@@ -275,6 +278,7 @@ void toggleConsole();
 
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
+void redrawWindow();
 
 enum ETonemap : int {
     SRGB = 0,

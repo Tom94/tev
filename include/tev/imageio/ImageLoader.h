@@ -5,10 +5,12 @@
 
 #include <tev/Channel.h>
 #include <tev/Image.h>
+#include <tev/ThreadPool.h>
 
-#include <Eigen/Dense>
+#include <nanogui/vector.h>
 
 #include <istream>
+#include <tuple>
 #include <string>
 
 TEV_NAMESPACE_BEGIN
@@ -18,14 +20,16 @@ public:
     virtual ~ImageLoader() {}
 
     virtual bool canLoadFile(std::istream& iStream) const = 0;
-    virtual ImageData load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, bool& hasPremultipliedAlpha) const = 0;
+
+    // Return loaded image data as well as whether that data has the alpha channel pre-multiplied or not.
+    virtual Task<std::vector<ImageData>> load(std::istream& iStream, const filesystem::path& path, const std::string& channelSelector, int priority) const = 0;
 
     virtual std::string name() const = 0;
 
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
 
 protected:
-    static std::vector<Channel> makeNChannels(int numChannels, Eigen::Vector2i size);
+    static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size);
 };
 
 TEV_NAMESPACE_END

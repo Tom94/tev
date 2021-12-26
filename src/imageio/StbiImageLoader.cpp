@@ -6,8 +6,8 @@
 
 #include <stb_image.h>
 
-using namespace Eigen;
 using namespace filesystem;
+using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -18,8 +18,9 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-ImageData StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, bool& hasPremultipliedAlpha) const {
-    ImageData result;
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     static const stbi_io_callbacks callbacks = {
         // Read
@@ -61,55 +62,35 @@ ImageData StbiImageLoader::load(istream& iStream, const path&, const string& cha
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
-    vector<Channel> channels = makeNChannels(numChannels, size);
+    resultData.channels = makeNChannels(numChannels, size);
     int alphaChannelIndex = 3;
 
-    auto numPixels = (DenseIndex)size.x() * size.y();
+    auto numPixels = (size_t)size.x() * size.y();
     if (isHdr) {
-        auto typedData = reinterpret_cast<float*>(data);
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
-            int baseIdx = i * numChannels;
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            auto typedData = reinterpret_cast<float*>(data);
+            size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
-                channels[c].at(i) = typedData[baseIdx + c];
+                resultData.channels[c].at(i) = typedData[baseIdx + c];
             }
-        });
+        }, priority);
     } else {
-        auto typedData = reinterpret_cast<unsigned char*>(data);
-        gThreadPool->parallelFor<DenseIndex>(0, numPixels, [&](DenseIndex i) {
-            int baseIdx = i * numChannels;
+        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+            auto typedData = reinterpret_cast<unsigned char*>(data);
+            size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == alphaChannelIndex) {
-                    channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
+                    resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
                 } else {
-                    channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                    resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
                 }
             }
-        });
+        }, priority);
     }
 
-    vector<pair<size_t, size_t>> matches;
-    for (size_t i = 0; i < channels.size(); ++i) {
-        size_t matchId;
-        if (matchesFuzzy(channels[i].name(), channelSelector, &matchId)) {
-            matches.emplace_back(matchId, i);
-        }
-    }
+    resultData.hasPremultipliedAlpha = false;
 
-    if (!channelSelector.empty()) {
-        sort(begin(matches), end(matches));
-    }
-
-    for (const auto& match : matches) {
-        result.channels.emplace_back(move(channels[match.second]));
-    }
-
-    // STBI can not load layers, so all channels simply reside
-    // within a topmost root layer.
-    result.layers.emplace_back("");
-
-    hasPremultipliedAlpha = false;
-
-    return result;
+    co_return result;
 }
 
 TEV_NAMESPACE_END
