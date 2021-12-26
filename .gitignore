@@ -8,6 +8,9 @@
 # Python cache
 __pycache__
 
+# macOS
+.DS_Store
+
 # Development project files
 *.sublime-project
 
