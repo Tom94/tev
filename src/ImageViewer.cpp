@@ -362,7 +362,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                 while (mShallRunPlaybackThread) {
                     auto fps = clamp(mFpsTextBox->value(), 1, 1000);
                     auto microseconds = 1000000.0f / fps;
-                    this_thread::sleep_for(chrono::microseconds{std::max((size_t)microseconds, 1ull)});
+                    this_thread::sleep_for(chrono::microseconds{std::max((size_t)microseconds, (size_t)1)});
 
                     if (mPlayButton->pushed() && mTaskQueue.empty()) {
                         mTaskQueue.push([&]() {
