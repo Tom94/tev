@@ -8,7 +8,6 @@
 #define QOI_IMPLEMENTATION
 #include <qoi.h>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -25,7 +24,7 @@ bool QoiImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 

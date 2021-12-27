@@ -16,7 +16,6 @@
 #include <numeric>
 #include <set>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -507,7 +506,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
     return result;
 }
 
-void ImageCanvas::saveImage(const path& path) const {
+void ImageCanvas::saveImage(const fs::path& path) const {
     if (!mImage) {
         return;
     }
@@ -517,7 +516,7 @@ void ImageCanvas::saveImage(const path& path) const {
     tlog::info() << "Saving currently displayed image as '" << path << "'.";
     auto start = chrono::system_clock::now();
 
-    ofstream f{nativeString(path), ios_base::binary};
+    ofstream f{path, ios_base::binary};
     if (!f) {
         throw invalid_argument{tfm::format("Could not open file %s", path)};
     }

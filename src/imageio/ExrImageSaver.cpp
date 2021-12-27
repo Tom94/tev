@@ -13,7 +13,6 @@
 #include <string>
 #include <vector>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -59,7 +58,7 @@ private:
     ostream& mStream;
 };
 
-void ExrImageSaver::save(ostream& oStream, const path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
+void ExrImageSaver::save(ostream& oStream, const fs::path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
     vector<string> channelNames = {
         "R", "G", "B", "A",
     };
@@ -81,7 +80,7 @@ void ExrImageSaver::save(ostream& oStream, const path& path, const vector<float>
         ));
     }
 
-    StdOStream imfOStream{oStream, path.str().c_str()};
+    StdOStream imfOStream{oStream, path.string().c_str()};
     Imf::OutputFile file{imfOStream, header};
     file.setFrameBuffer(frameBuffer);
     file.writePixels(imageSize.y());

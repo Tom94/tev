@@ -23,7 +23,7 @@ public:
     virtual bool hasPremultipliedAlpha() const = 0;
 
     virtual bool canSaveFile(const std::string& extension) const = 0;
-    bool canSaveFile(const filesystem::path& path) const {
+    bool canSaveFile(const fs::path& path) const {
         return canSaveFile(toLower(path.extension()));
     }
 
@@ -33,7 +33,7 @@ public:
 template <typename T>
 class TypedImageSaver : public ImageSaver {
 public:
-    virtual void save(std::ostream& oStream, const ::filesystem::path& path, const std::vector<T>& data, const nanogui::Vector2i& imageSize, int nChannels) const = 0;
+    virtual void save(std::ostream& oStream, const fs::path& path, const std::vector<T>& data, const nanogui::Vector2i& imageSize, int nChannels) const = 0;
 };
 
 TEV_NAMESPACE_END

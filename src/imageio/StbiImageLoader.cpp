@@ -6,7 +6,6 @@
 
 #include <stb_image.h>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -18,7 +17,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 

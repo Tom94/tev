@@ -22,7 +22,6 @@
 #include <thread>
 
 using namespace args;
-using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -57,7 +56,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
             auto info = packet.interpretAsOpenImage();
-            imagesLoader->enqueue(ensureUtf8(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
+            imagesLoader->enqueue(ensureUtf8(info.imagePath), info.channelSelector, info.grabFocus);
             break;
         }
 
@@ -65,7 +64,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsReloadImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
+                string imageString = fs::path{ensureUtf8(info.imageName)}.string();
                 sImageViewer->reloadImage(imageString, info.grabFocus);
             });
 
@@ -77,7 +76,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsCloseImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
+                string imageString = fs::path{ensureUtf8(info.imageName)}.string();
                 sImageViewer->removeImage(imageString);
             });
 
@@ -91,7 +90,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsUpdateImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
+                string imageString = fs::path{ensureUtf8(info.imageName)}.string();
                 for (int i = 0; i < info.nChannels; ++i) {
                     sImageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
                 }
@@ -105,7 +104,6 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsCreateImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
                 stringstream imageStream;
                 imageStream
                     << "empty" << " "
@@ -120,7 +118,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto images = tryLoadImage(imageString, imageStream, "").get();
+                auto images = tryLoadImage(ensureUtf8(info.imageName), imageStream, "").get();
                 if (!images.empty()) {
                     sImageViewer->addImage(images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
@@ -307,7 +305,7 @@ int mainFunc(const vector<string>& arguments) {
 
             try {
                 IpcPacket packet;
-                packet.setOpenImage(path{imageFile}.make_absolute().str(), channelSelector, true);
+                packet.setOpenImage(fromUtf8(fs::absolute(imageFile).u8string()), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
             } catch (const runtime_error& e) {
                 tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
@@ -327,21 +325,21 @@ int mainFunc(const vector<string>& arguments) {
     // To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
     thread stdinThread{[&]() {
-        string channelSelector;
+        u8string channelSelector;
         while (!shallShutdown) {
             for (string line; getline(cin, line);) {
-                string imageFile = tev::ensureUtf8(line);
+                u8string imageFile = tev::ensureUtf8(line);
 
                 if (imageFile.empty()) {
                     continue;
                 }
 
-                if (imageFile[0] == ':') {
+                if (imageFile[0] == u8':') {
                     channelSelector = imageFile.substr(1);
                     continue;
                 }
 
-                imagesLoader->enqueue(imageFile, channelSelector, false);
+                imagesLoader->enqueue(imageFile, fromUtf8(channelSelector), false);
             }
 
             this_thread::sleep_for(100ms);
@@ -483,14 +481,14 @@ int main(int argc, char* argv[]) {
         vector<string> arguments;
         for (int i = 0; i < argc; ++i) {
 #ifdef _WIN32
-            arguments.emplace_back(tev::utf16to8(argv[i]));
+            arguments.emplace_back(tev::fromUtf8(tev::utf16to8(argv[i])));
 #else
             string arg = argv[i];
             // OSX sometimes (seemingly sporadically) passes the
             // process serial number via a command line parameter.
             // We would like to ignore this.
             if (arg.find("-psn") != 0) {
-                arguments.emplace_back(tev::ensureUtf8(argv[i]));
+                arguments.emplace_back(tev::fromUtf8(tev::ensureUtf8(argv[i])));
             }
 #endif
         }

@@ -8,13 +8,12 @@
 #include <ostream>
 #include <vector>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-void StbiHdrImageSaver::save(ostream& oStream, const path&, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
+void StbiHdrImageSaver::save(ostream& oStream, const fs::path&, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
     static const auto stbiOStreamWrite = [](void* context, void* data, int size) {
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(data), size);
     };

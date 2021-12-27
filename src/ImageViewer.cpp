@@ -5,8 +5,6 @@
 
 #include <clip.h>
 
-#include <filesystem/path.h>
-
 #include <nanogui/button.h>
 #include <nanogui/colorwheel.h>
 #include <nanogui/icons.h>
@@ -23,7 +21,6 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -738,7 +735,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             //     if (!clip::get_text(path)) {
             //         tlog::error() << "Failed to paste text from clipboard.";
             //     } else {
-            //         auto image = tryLoadImage(path, "");
+            //         auto image = tryLoadImage(ensureUtf8(path), "");
             //         if (image) {
             //             addImage(image, true);
             //         } else {
@@ -1565,7 +1562,7 @@ void ImageViewer::openImageDialog() {
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
-        path imageFile = ensureUtf8(paths[i]);
+        fs::path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
         mImagesLoader->enqueue(imageFile, "", shallSelect);
     }
@@ -1579,7 +1576,7 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    path path = ensureUtf8(file_dialog(
+    fs::path path = ensureUtf8(file_dialog(
     {
         {"exr",  "OpenEXR image"},
         {"hdr",  "HDR image"},

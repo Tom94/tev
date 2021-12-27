@@ -16,7 +16,6 @@
 
 #include <errno.h>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -165,10 +164,10 @@ private:
     vector<char> mData;
 };
 
-Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const path& path, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority) const {
     vector<ImageData> result;
 
-    StdIStream stdIStream{iStream, path.str().c_str()};
+    StdIStream stdIStream{iStream, path.string().c_str()};
     Imf::MultiPartInputFile multiPartFile{stdIStream};
     int numParts = multiPartFile.parts();
 

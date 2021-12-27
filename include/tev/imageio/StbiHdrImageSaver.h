@@ -11,7 +11,7 @@ TEV_NAMESPACE_BEGIN
 
 class StbiHdrImageSaver : public TypedImageSaver<float> {
 public:
-    void save(std::ostream& oStream, const filesystem::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
+    void save(std::ostream& oStream, const fs::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
 
     bool hasPremultipliedAlpha() const override {
         return false;
