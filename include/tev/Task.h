@@ -217,7 +217,11 @@ struct Task {
 private:
     void clear() noexcept {
         if (handle) {
-            handle.destroy();
+            // The state is automatically destroyed/freed when the coroutine
+            // finishes via co_return or an exception. No need to do it
+            // manually here. (Further: manual destruction appears to lead
+            // wo mysterious crashed on Windows. Warrants investigation.)
+            // handle.destroy();
             handle = nullptr;
         }
     }
