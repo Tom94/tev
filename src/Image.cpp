@@ -206,7 +206,7 @@ atomic<int> Image::sId(0);
 
 Image::Image(const class fs::path& path, ImageData&& data, const string& channelSelector)
 : mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? path.string() : tfm::format("%s:%s", path.string(), channelSelector);
+    mName = channelSelector.empty() ? tev::toString(path) : tfm::format("%s:%s", tev::toString(path), channelSelector);
 
     for (const auto& l : mData.layers) {
         auto groups = getGroupedChannels(l);

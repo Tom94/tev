@@ -80,7 +80,7 @@ void ExrImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
         ));
     }
 
-    StdOStream imfOStream{oStream, path.string().c_str()};
+    StdOStream imfOStream{oStream, toString(path).c_str()};
     Imf::OutputFile file{imfOStream, header};
     file.setFrameBuffer(frameBuffer);
     file.writePixels(imageSize.y());

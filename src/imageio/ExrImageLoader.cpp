@@ -167,7 +167,7 @@ private:
 Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority) const {
     vector<ImageData> result;
 
-    StdIStream stdIStream{iStream, path.string().c_str()};
+    StdIStream stdIStream{iStream, toString(path).c_str()};
     Imf::MultiPartInputFile multiPartFile{stdIStream};
     int numParts = multiPartFile.parts();
 
