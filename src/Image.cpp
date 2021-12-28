@@ -509,9 +509,9 @@ string Image::toString() const {
 Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
+            tlog::error() << tfm::format("Could not load %s. %s", path, e.what());
         } else {
-            tlog::error() << tfm::format("Could not load '%s:%s'. %s", path, channelSelector, e.what());
+            tlog::error() << tfm::format("Could not load \"%s:%s\". %s", path.string(), channelSelector, e.what());
         }
     };
 
