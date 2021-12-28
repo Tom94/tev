@@ -584,7 +584,7 @@ bool ImageViewer::drop_event(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        mImagesLoader->enqueue(ensureUtf8(filenames[i]), "", i == filenames.size() - 1);
+        mImagesLoader->enqueue(toU8string(filenames[i]), "", i == filenames.size() - 1);
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -735,7 +735,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             //     if (!clip::get_text(path)) {
             //         tlog::error() << "Failed to paste text from clipboard.";
             //     } else {
-            //         auto image = tryLoadImage(ensureUtf8(path), "");
+            //         auto image = tryLoadImage(toU8string(path), "");
             //         if (image) {
             //             addImage(image, true);
             //         } else {
@@ -1562,9 +1562,8 @@ void ImageViewer::openImageDialog() {
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
-        fs::path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
-        mImagesLoader->enqueue(imageFile, "", shallSelect);
+        mImagesLoader->enqueue(toU8string(paths[i]), "", shallSelect);
     }
 
     // Make sure we gain focus after seleting a file to be loaded.
@@ -1576,17 +1575,21 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    fs::path path = ensureUtf8(file_dialog(
-    {
-        {"exr",  "OpenEXR image"},
-        {"hdr",  "HDR image"},
-        {"bmp",  "Bitmap Image File"},
-        {"jpg",  "JPEG image"},
-        {"jpeg", "JPEG image"},
-        {"png",  "Portable Network Graphics image"},
-        {"qoi",  "Quite OK Image format"},
-        {"tga",  "Truevision TGA image"},
-    }, true));
+    fs::path path = toU8string(
+        file_dialog(
+            {
+                {"exr",  "OpenEXR image"},
+                {"hdr",  "HDR image"},
+                {"bmp",  "Bitmap Image File"},
+                {"jpg",  "JPEG image"},
+                {"jpeg", "JPEG image"},
+                {"png",  "Portable Network Graphics image"},
+                {"qoi",  "Quite OK Image format"},
+                {"tga",  "Truevision TGA image"},
+            },
+            true
+        )
+    );
 
     if (path.empty()) {
         return;

@@ -56,7 +56,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
             auto info = packet.interpretAsOpenImage();
-            imagesLoader->enqueue(ensureUtf8(info.imagePath), info.channelSelector, info.grabFocus);
+            imagesLoader->enqueue(toU8string(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
             break;
         }
 
@@ -64,8 +64,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsReloadImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = fs::path{ensureUtf8(info.imageName)}.string();
-                sImageViewer->reloadImage(imageString, info.grabFocus);
+                sImageViewer->reloadImage(ensureUtf8(info.imageName), info.grabFocus);
             });
 
             sImageViewer->redraw();
@@ -76,8 +75,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsCloseImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = fs::path{ensureUtf8(info.imageName)}.string();
-                sImageViewer->removeImage(imageString);
+                sImageViewer->removeImage(ensureUtf8(info.imageName));
             });
 
             sImageViewer->redraw();
@@ -90,7 +88,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsUpdateImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = fs::path{ensureUtf8(info.imageName)}.string();
+                string imageString = ensureUtf8(info.imageName);
                 for (int i = 0; i < info.nChannels; ++i) {
                     sImageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
                 }
@@ -118,7 +116,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto images = tryLoadImage(ensureUtf8(info.imageName), imageStream, "").get();
+                auto images = tryLoadImage(toU8string(info.imageName), imageStream, "").get();
                 if (!images.empty()) {
                     sImageViewer->addImage(images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
@@ -303,12 +301,18 @@ int mainFunc(const vector<string>& arguments) {
                 continue;
             }
 
+            fs::path imagePath = toU8string(imageFile);
+            if (!fs::exists(imagePath)) {
+                tlog::error() << tfm::format("Image %s does not exist.", imagePath);
+                continue;
+            }
+
             try {
                 IpcPacket packet;
-                packet.setOpenImage(fromUtf8(fs::absolute(imageFile).u8string()), channelSelector, true);
+                packet.setOpenImage(fromU8string(fs::canonical(imagePath).u8string()), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
             } catch (const runtime_error& e) {
-                tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
+                tlog::error() << tfm::format("Unexpected error %s: %s", imagePath, e.what());
             }
         }
 
@@ -325,21 +329,21 @@ int mainFunc(const vector<string>& arguments) {
     // To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
     thread stdinThread{[&]() {
-        u8string channelSelector;
+        string channelSelector;
         while (!shallShutdown) {
             for (string line; getline(cin, line);) {
-                u8string imageFile = tev::ensureUtf8(line);
+                string imageFile = tev::ensureUtf8(line);
 
                 if (imageFile.empty()) {
                     continue;
                 }
 
-                if (imageFile[0] == u8':') {
+                if (imageFile[0] == ':') {
                     channelSelector = imageFile.substr(1);
                     continue;
                 }
 
-                imagesLoader->enqueue(imageFile, fromUtf8(channelSelector), false);
+                imagesLoader->enqueue(tev::toU8string(imageFile), channelSelector, false);
             }
 
             this_thread::sleep_for(100ms);
@@ -406,7 +410,7 @@ int mainFunc(const vector<string>& arguments) {
             continue;
         }
 
-        imagesLoader->enqueue(imageFile, channelSelector, false);
+        imagesLoader->enqueue(toU8string(imageFile), channelSelector, false);
     }
 
     // Init nanogui application
@@ -428,7 +432,7 @@ int mainFunc(const vector<string>& arguments) {
         const char* const* openedFiles = glfwGetOpenedFilenames();
         if (openedFiles) {
             for (auto p = openedFiles; *p; ++p) {
-                imagesLoader->enqueue(*p, "", false);
+                imagesLoader->enqueue(toU8string(*p), "", false);
             }
         }
     }
@@ -481,14 +485,14 @@ int main(int argc, char* argv[]) {
         vector<string> arguments;
         for (int i = 0; i < argc; ++i) {
 #ifdef _WIN32
-            arguments.emplace_back(tev::fromUtf8(tev::utf16to8(argv[i])));
+            arguments.emplace_back(tev::utf16to8(argv[i]));
 #else
             string arg = argv[i];
             // OSX sometimes (seemingly sporadically) passes the
             // process serial number via a command line parameter.
             // We would like to ignore this.
             if (arg.find("-psn") != 0) {
-                arguments.emplace_back(tev::fromUtf8(tev::ensureUtf8(argv[i])));
+                arguments.emplace_back(tev::ensureUtf8(argv[i]));
             }
 #endif
         }

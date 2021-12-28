@@ -182,10 +182,10 @@ inline int codePointLength(char first) {
     }
 }
 
-std::u8string ensureUtf8(const std::string& str);
-std::string fromUtf8(const std::u8string& str);
-std::wstring utf8to16(const std::u8string& utf8);
-std::u8string utf16to8(const std::wstring& utf16);
+std::u8string toU8string(const std::string& str);
+std::string fromU8string(const std::u8string& str);
+std::string ensureUtf8(const std::string& str);
+std::string utf16to8(const std::wstring& utf16);
 
 template <typename T>
 class ScopeGuard {

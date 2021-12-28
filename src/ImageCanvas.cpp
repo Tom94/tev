@@ -513,7 +513,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
 
     Vector2i imageSize = mImage->size();
 
-    tlog::info() << "Saving currently displayed image as '" << path << "'.";
+    tlog::info() << "Saving currently displayed image as " << path << ".";
     auto start = chrono::system_clock::now();
 
     ofstream f{path, ios_base::binary};
@@ -548,11 +548,11 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         auto end = chrono::system_clock::now();
         chrono::duration<double> elapsedSeconds = end - start;
 
-        tlog::success() << tfm::format("Saved '%s' after %.3f seconds.", path, elapsedSeconds.count());
+        tlog::success() << tfm::format("Saved %s after %.3f seconds.", path, elapsedSeconds.count());
         return;
     }
 
-    throw invalid_argument{tfm::format("No save routine for image type '%s' found.", path.extension())};
+    throw invalid_argument{tfm::format("No save routine for image type %s found.", path.extension())};
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {

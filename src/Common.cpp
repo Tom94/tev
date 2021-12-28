@@ -25,26 +25,26 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-u8string ensureUtf8(const string& str) {
+u8string toU8string(const string& str) {
     u8string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
 }
 
-string fromUtf8(const u8string& str) {
+string fromU8string(const u8string& str) {
     string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
 }
 
-wstring utf8to16(const u8string& utf8) {
-    wstring utf16;
-    utf8::utf8to16(begin(utf8), end(utf8), back_inserter(utf16));
-    return utf16;
+string ensureUtf8(const string& str) {
+    string temp;
+    utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
+    return temp;
 }
 
-u8string utf16to8(const wstring& utf16) {
-    u8string utf8;
+string utf16to8(const wstring& utf16) {
+    string utf8;
     utf8::utf16to8(begin(utf16), end(utf16), back_inserter(utf8));
     return utf8;
 }
