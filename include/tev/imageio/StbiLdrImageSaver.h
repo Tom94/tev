@@ -19,11 +19,11 @@ public:
 
     virtual bool canSaveFile(const std::string& extension) const override {
         std::string lowerExtension = toLower(extension);
-        return lowerExtension == "jpg"
-            || lowerExtension == "jpeg"
-            || lowerExtension == "png"
-            || lowerExtension == "bmp"
-            || lowerExtension == "tga"
+        return lowerExtension == ".jpg"
+            || lowerExtension == ".jpeg"
+            || lowerExtension == ".png"
+            || lowerExtension == ".bmp"
+            || lowerExtension == ".tga"
             ;
     }
 };

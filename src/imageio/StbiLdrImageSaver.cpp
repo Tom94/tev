@@ -21,13 +21,13 @@ void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, const vecto
 
     auto extension = toLower(path.extension().string());
 
-    if (extension == "jpg" || extension == "jpeg") {
+    if (extension == ".jpg" || extension == ".jpeg") {
         stbi_write_jpg_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data(), 100);
-    } else if (extension == "png") {
+    } else if (extension == ".png") {
         stbi_write_png_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data(), 0);
-    } else if (extension == "bmp") {
+    } else if (extension == ".bmp") {
         stbi_write_bmp_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
-    } else if (extension == "tga") {
+    } else if (extension == ".tga") {
         stbi_write_tga_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
     } else {
         throw invalid_argument{tfm::format("Image '%s' has unknown format.", path)};

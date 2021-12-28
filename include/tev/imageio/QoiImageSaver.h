@@ -18,8 +18,7 @@ public:
     }
 
     virtual bool canSaveFile(const std::string& extension) const override {
-        std::string lowerExtension = toLower(extension);
-        return lowerExtension == "qoi";
+        return toLower(extension) == ".qoi";
     }
 };
 
