@@ -426,6 +426,12 @@ int mainFunc(const vector<string>& arguments) {
     }};
 
 #ifdef __APPLE__
+    // On macOS, the mechanism for opening an application passes filenames
+    // through the NS api rather than CLI arguments, which means we need
+    // special handling of these through GLFW.
+    // There are two components to this special handling:
+
+    // 1. The filenames that were passed to this application when it was opened.
     if (!imageFiles) {
         // If we didn't get any command line arguments for files to open,
         // then, on macOS, they might have been supplied through the NS api.
@@ -436,6 +442,12 @@ int mainFunc(const vector<string>& arguments) {
             }
         }
     }
+
+    // 2. a callback for when the same application is opened additional
+    //    times with more files.
+    glfwSetOpenedFilenamesCallback([](const char* imageFile) {
+        sImageViewer->imagesLoader().enqueue(toPath(imageFile), "", false);
+    });
 #endif
 
     auto [capability10bit, capabilityEdr] = nanogui::test_10bit_edr_support();
