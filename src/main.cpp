@@ -56,7 +56,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
             auto info = packet.interpretAsOpenImage();
-            imagesLoader->enqueue(toU8string(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
+            imagesLoader->enqueue(toPath(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
             break;
         }
 
@@ -116,7 +116,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto images = tryLoadImage(toU8string(info.imageName), imageStream, "").get();
+                auto images = tryLoadImage(toPath(info.imageName), imageStream, "").get();
                 if (!images.empty()) {
                     sImageViewer->addImage(images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
@@ -301,7 +301,7 @@ int mainFunc(const vector<string>& arguments) {
                 continue;
             }
 
-            fs::path imagePath = toU8string(imageFile);
+            fs::path imagePath = toPath(imageFile);
             if (!fs::exists(imagePath)) {
                 tlog::error() << tfm::format("Image %s does not exist.", imagePath);
                 continue;
@@ -309,7 +309,7 @@ int mainFunc(const vector<string>& arguments) {
 
             try {
                 IpcPacket packet;
-                packet.setOpenImage(fromU8string(fs::canonical(imagePath).u8string()), channelSelector, true);
+                packet.setOpenImage(toString(fs::canonical(imagePath)), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
             } catch (const runtime_error& e) {
                 tlog::error() << tfm::format("Unexpected error %s: %s", imagePath, e.what());
@@ -343,7 +343,7 @@ int mainFunc(const vector<string>& arguments) {
                     continue;
                 }
 
-                imagesLoader->enqueue(tev::toU8string(imageFile), channelSelector, false);
+                imagesLoader->enqueue(tev::toPath(imageFile), channelSelector, false);
             }
 
             this_thread::sleep_for(100ms);
@@ -410,7 +410,7 @@ int mainFunc(const vector<string>& arguments) {
             continue;
         }
 
-        imagesLoader->enqueue(toU8string(imageFile), channelSelector, false);
+        imagesLoader->enqueue(toPath(imageFile), channelSelector, false);
     }
 
     // Init nanogui application
@@ -432,7 +432,7 @@ int mainFunc(const vector<string>& arguments) {
         const char* const* openedFiles = glfwGetOpenedFilenames();
         if (openedFiles) {
             for (auto p = openedFiles; *p; ++p) {
-                imagesLoader->enqueue(toU8string(*p), "", false);
+                imagesLoader->enqueue(toPath(*p), "", false);
             }
         }
     }

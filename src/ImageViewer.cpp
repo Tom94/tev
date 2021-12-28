@@ -584,7 +584,7 @@ bool ImageViewer::drop_event(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        mImagesLoader->enqueue(toU8string(filenames[i]), "", i == filenames.size() - 1);
+        mImagesLoader->enqueue(toPath(filenames[i]), "", i == filenames.size() - 1);
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -735,7 +735,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             //     if (!clip::get_text(path)) {
             //         tlog::error() << "Failed to paste text from clipboard.";
             //     } else {
-            //         auto image = tryLoadImage(toU8string(path), "");
+            //         auto image = tryLoadImage(toPath(path), "");
             //         if (image) {
             //             addImage(image, true);
             //         } else {
@@ -1563,7 +1563,7 @@ void ImageViewer::openImageDialog() {
 
     for (size_t i = 0; i < paths.size(); ++i) {
         bool shallSelect = i == paths.size() - 1;
-        mImagesLoader->enqueue(toU8string(paths[i]), "", shallSelect);
+        mImagesLoader->enqueue(toPath(paths[i]), "", shallSelect);
     }
 
     // Make sure we gain focus after seleting a file to be loaded.
@@ -1575,7 +1575,7 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    fs::path path = toU8string(
+    fs::path path = toPath(
         file_dialog(
             {
                 {"exr",  "OpenEXR image"},
