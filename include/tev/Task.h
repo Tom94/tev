@@ -61,6 +61,35 @@ void waitAll(std::vector<T>& futures) {
     }
 }
 
+struct DetachedTask {
+    struct promise_type {
+        DetachedTask get_return_object() noexcept {
+            return {COROUTINE_NAMESPACE::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+
+        COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
+        COROUTINE_NAMESPACE::suspend_never final_suspend() const noexcept { return {}; }
+
+        void return_void() {}
+        void unhandled_exception() {
+            try {
+                std::rethrow_exception(std::current_exception());
+            } catch (const std::exception& e) {
+                tlog::error() << "Unhandled exception in DetachedTask: " << e.what();
+                std::terminate();
+            }
+        }
+    };
+
+    COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
+};
+
+template <typename F, typename ...Args>
+DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
+    auto exec = std::move(executor);
+    co_await exec(args...);
+}
+
 // The task implementation is inspired by a sketch from the following blog post:
 // https://www.jeremyong.com/cpp/2021/01/04/cpp20-coroutines-a-minimal-async-framework/
 template <typename data_t>
@@ -148,8 +177,7 @@ struct Task {
     ~Task() {
         // Make sure the coroutine finished and is cleaned up
         if (handle) {
-            tlog::warning() << "~Task<T> was waiting for completion. This was likely not intended.";
-            wait();
+            tlog::warning() << "~Task<T> was invoked before completion.";
             clear();
         }
     }
@@ -195,21 +223,25 @@ struct Task {
         return !handle.promise().latch.countDown();
     }
 
-    bool wait() const {
-        if (!handle) {
-            throw std::runtime_error{"Cannot wait for a detached Task<T>."};
-        }
-
-        if (!handle.promise().latch.countDown()) {
-            handle.promise().latch.wait();
-            return true;
-        }
-        return false;
-    }
-
     T get() {
-        wait();
-        return await_resume();
+        Latch waitLatch{1};
+        if constexpr (std::is_void_v<T>) {
+            auto waiter = [&]() -> DetachedTask {
+                co_await *this;
+                waitLatch.countDown();
+            };
+            waiter();
+            waitLatch.wait();
+        } else {
+            T result;
+            auto waiter = [&]() -> DetachedTask {
+                result = co_await *this;
+                waitLatch.countDown();
+            };
+            waiter();
+            waitLatch.wait();
+            return result;
+        }
     }
 
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> detach() noexcept {
@@ -224,41 +256,10 @@ private:
             // Destruction of the coroutine handle leads to mysterious crashes on Windows,
             // which appear to be connected to a race condition. For now, we take the
             // hit of a small memory leak. Warrants further investigation, though.
-#ifndef _WIN32
             handle.destroy();
-#endif
             handle = nullptr;
         }
     }
 };
-
-struct DetachedTask {
-    struct promise_type {
-        DetachedTask get_return_object() noexcept {
-            return {COROUTINE_NAMESPACE::coroutine_handle<promise_type>::from_promise(*this)};
-        }
-
-        COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
-        COROUTINE_NAMESPACE::suspend_never final_suspend() const noexcept { return {}; }
-
-        void return_void() {}
-        void unhandled_exception() {
-            try {
-                std::rethrow_exception(std::current_exception());
-            } catch(const std::exception& e) {
-                tlog::error() << "Unhandled exception in DetachedTask: " << e.what();
-                std::terminate();
-            }
-        }
-    };
-
-    COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
-};
-
-template <typename F, typename ...Args>
-DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
-    auto exec = std::move(executor);
-    co_await exec(args...);
-}
 
 TEV_NAMESPACE_END
