@@ -11,14 +11,17 @@ TEV_NAMESPACE_BEGIN
 
 UberShader::UberShader(RenderPass* renderPass) {
     try {
-        mShader = new Shader{
-            renderPass,
-            "ubershader",
-
-#if defined(NANOGUI_USE_OPENGL)
-            // Vertex shader
-            R"(#version 330
-
+#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
+#   if defined(NANOGUI_USE_OPENGL)
+    std::string preamble =
+        R"(#version 110)";
+#   elif defined(NANOGUI_USE_GLES)
+    std::string preamble =
+        R"(#version 100
+        precision highp float;)";
+#   endif
+        auto vertexShader = preamble +
+            R"(
             uniform vec2 pixelSize;
             uniform vec2 checkerSize;
 
@@ -28,11 +31,11 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform vec2 referenceScale;
             uniform vec2 referenceOffset;
 
-            in vec2 position;
+            attribute vec2 position;
 
-            out vec2 checkerUv;
-            out vec2 imageUv;
-            out vec2 referenceUv;
+            varying vec2 checkerUv;
+            varying vec2 imageUv;
+            varying vec2 referenceUv;
 
             void main() {
                 checkerUv = position / (pixelSize * checkerSize);
@@ -40,11 +43,10 @@ UberShader::UberShader(RenderPass* renderPass) {
                 referenceUv = position * referenceScale + referenceOffset;
 
                 gl_Position = vec4(position, 1.0, 1.0);
-            })",
+            })";
 
-            // Fragment shader
-            R"(#version 330
-
+        auto fragmentShader = preamble +
+            R"(
             #define SRGB        0
             #define GAMMA       1
             #define FALSE_COLOR 2
@@ -73,11 +75,9 @@ UberShader::UberShader(RenderPass* renderPass) {
 
             uniform vec4 bgColor;
 
-            in vec2 checkerUv;
-            in vec2 imageUv;
-            in vec2 referenceUv;
-
-            out vec4 color;
+            varying vec2 checkerUv;
+            varying vec2 imageUv;
+            varying vec2 referenceUv;
 
             float average(vec3 col) {
                 return (col.r + col.g + col.b) / 3.0;
@@ -89,7 +89,7 @@ UberShader::UberShader(RenderPass* renderPass) {
 
             vec3 falseColor(float v) {
                 v = clamp(v, 0.0, 1.0);
-                return texture(colormap, vec2(v, 0.5)).rgb;
+                return texture2D(colormap, vec2(v, 0.5)).rgb;
             }
 
             float linear(float sRGB) {
@@ -107,7 +107,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 float outSign = sign(linear);
                 linear = abs(linear);
 
-                if (linear < 0.0031308f) {
+                if (linear < 0.0031308) {
                     return outSign * 12.92 * linear;
                 } else {
                     return outSign * 1.055 * pow(linear, 0.41666) - 0.055;
@@ -115,36 +115,38 @@ UberShader::UberShader(RenderPass* renderPass) {
             }
 
             vec3 applyTonemap(vec3 col, vec4 background) {
-                switch (tonemap) {
-                    case SRGB:
-                        col = col +
-                            (vec3(linear(background.r), linear(background.g), linear(background.b)) - offset) * background.a;
-                        return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
-                    case GAMMA:
-                        col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
-                        return sign(col) * pow(abs(col), vec3(1.0 / gamma));
-                    // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
-                    case FALSE_COLOR:
-                        return falseColor(log2(average(col)+0.03125) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
-                    case POS_NEG:
-                        return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0) + background.rgb * background.a;
+                if (tonemap == SRGB) {
+                    col = col +
+                        (vec3(linear(background.r), linear(background.g), linear(background.b)) - offset) * background.a;
+                    return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
+                } else if (tonemap == GAMMA) {
+                    col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
+                    return sign(col) * pow(abs(col), vec3(1.0 / gamma));
+                } else if (tonemap == FALSE_COLOR) {
+                    return falseColor(log2(average(col)+0.03125) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
+                } else if (tonemap == POS_NEG) {
+                    return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0) + background.rgb * background.a;
                 }
                 return vec3(0.0);
             }
 
             vec3 applyMetric(vec3 col, vec3 reference) {
-                switch (metric) {
-                    case ERROR:                   return col;
-                    case ABSOLUTE_ERROR:          return abs(col);
-                    case SQUARED_ERROR:           return col * col;
-                    case RELATIVE_ABSOLUTE_ERROR: return abs(col) / (reference + vec3(0.01));
-                    case RELATIVE_SQUARED_ERROR:  return col * col / (reference * reference + vec3(0.01));
+                if (metric == ERROR) {
+                    return col;
+                } else if (metric == ABSOLUTE_ERROR) {
+                    return abs(col);
+                } else if (metric == SQUARED_ERROR) {
+                    return col * col;
+                } else if (metric == RELATIVE_ABSOLUTE_ERROR) {
+                    return abs(col) / (reference + vec3(0.01));
+                } else if (metric == RELATIVE_SQUARED_ERROR) {
+                    return col * col / (reference * reference + vec3(0.01));
                 }
                 return vec3(0.0);
             }
 
             vec4 sample(sampler2D sampler, vec2 uv) {
-                vec4 color = texture(sampler, uv);
+                vec4 color = texture2D(sampler, uv);
                 if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
                     color = vec4(0.0);
                 }
@@ -155,22 +157,22 @@ UberShader::UberShader(RenderPass* renderPass) {
                 vec3 darkGray = vec3(0.5, 0.5, 0.5);
                 vec3 lightGray = vec3(0.55, 0.55, 0.55);
 
-                vec3 checker = mod(int(floor(checkerUv.x) + floor(checkerUv.y)), 2) == 0 ? darkGray : lightGray;
+                vec3 checker = abs(mod(floor(checkerUv.x) + floor(checkerUv.y), 2.0)) < 0.5 ? darkGray : lightGray;
                 checker = bgColor.rgb * bgColor.a + checker * (1.0 - bgColor.a);
                 if (!hasImage) {
-                    color = vec4(checker, 1.0);
+                    gl_FragColor = vec4(checker, 1.0);
                     return;
                 }
 
                 vec4 imageVal = sample(image, imageUv);
                 if (!hasReference) {
-                    color = vec4(
+                    gl_FragColor = vec4(
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                         1.0
                     );
 
                     if (clipToLdr) {
-                        color.rgb = clamp(color.rgb, 0.0, 1.0);
+                        gl_FragColor.rgb = clamp(gl_FragColor.rgb, 0.0, 1.0);
                     }
 
                     return;
@@ -180,19 +182,17 @@ UberShader::UberShader(RenderPass* renderPass) {
 
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5;
-                color = vec4(
+                gl_FragColor = vec4(
                     applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
                     1.0
                 );
 
                 if (clipToLdr) {
-                    color.rgb = clamp(color.rgb, 0.0, 1.0);
+                    gl_FragColor.rgb = clamp(gl_FragColor.rgb, 0.0, 1.0);
                 }
-            })"
-#elif defined(NANOGUI_USE_GLES)
-            "", "" // TODO: write
+            })";
 #elif defined(NANOGUI_USE_METAL)
-            // Vertex shader
+        auto vertexShader =
             R"(using namespace metal;
 
             struct VertexOut {
@@ -219,9 +219,9 @@ UberShader::UberShader(RenderPass* renderPass) {
                 vert.imageUv = position[id] * imageScale + imageOffset;
                 vert.referenceUv = position[id] * referenceScale + referenceOffset;
                 return vert;
-            })",
+            })";
 
-            // Fragment shader
+        auto fragmentShader =
             R"(using namespace metal;
 
             #define SRGB        0
@@ -381,9 +381,10 @@ UberShader::UberShader(RenderPass* renderPass) {
                     color.rgb = clamp(color.rgb, 0.0f, 1.0f);
                 }
                 return color;
-            })"
+            })";
 #endif
-        };
+
+        mShader = new Shader{renderPass, "ubershader", vertexShader, fragmentShader};
     } catch (const runtime_error& e) {
         tlog::error() << tfm::format("Unable to compile shader: %s", e.what());
     }
