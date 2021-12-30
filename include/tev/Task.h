@@ -68,8 +68,12 @@ struct TaskPromiseBase {
     data_t data;
 
     // When the coroutine co_returns a value, this method is used to publish the result
-    void return_value(data_t value) noexcept {
+    void return_value(data_t&& value) noexcept {
         data = std::move(value);
+    }
+
+    void return_value(const data_t& value) noexcept {
+        data = value;
     }
 };
 
@@ -132,13 +136,13 @@ struct Task {
     Task(const Task& other) = delete;
     Task& operator=(const Task& other) = delete;
 
-    Task(Task&& other) {
+    Task& operator=(Task&& other) {
         handle = other.handle;
         other.detach();
+        return *this;
     }
-    Task& operator=(const Task&& other) {
-        handle = other.handle;
-        other.detach();
+    Task(Task&& other) {
+        *this = std::move(other);
     }
 
     ~Task() {
@@ -152,7 +156,7 @@ struct Task {
 
     bool await_ready() const noexcept {
         // No need to suspend if this task has no outstanding work
-        return handle.done();
+        return false;
     }
 
     T await_resume() {
@@ -217,7 +221,12 @@ struct Task {
 private:
     void clear() noexcept {
         if (handle) {
+            // Destruction of the coroutine handle leads to mysterious crashes on Windows,
+            // which appear to be connected to a race condition. For now, we take the
+            // hit of a small memory leak. Warrants further investigation, though.
+#ifndef _WIN32
             handle.destroy();
+#endif
             handle = nullptr;
         }
     }

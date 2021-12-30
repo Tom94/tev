@@ -13,7 +13,6 @@
 #include <fstream>
 #include <istream>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -205,9 +204,9 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
 atomic<int> Image::sId(0);
 
-Image::Image(const class path& path, ImageData&& data, const string& channelSelector)
+Image::Image(const class fs::path& path, ImageData&& data, const string& channelSelector)
 : mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? path.str() : tfm::format("%s:%s", path, channelSelector);
+    mName = channelSelector.empty() ? tev::toString(path) : tfm::format("%s:%s", tev::toString(path), channelSelector);
 
     for (const auto& l : mData.layers) {
         auto groups = getGroupedChannels(l);
@@ -507,12 +506,12 @@ string Image::toString() const {
     return sstream.str();
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istream& iStream, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << tfm::format("Could not load '%s'. %s", path, e.what());
+            tlog::error() << tfm::format("Could not load %s. %s", path, e.what());
         } else {
-            tlog::error() << tfm::format("Could not load '%s:%s'. %s", path, channelSelector, e.what());
+            tlog::error() << tfm::format("Could not load \"%s:%s\". %s", path.string(), channelSelector, e.what());
         }
     };
 
@@ -560,7 +559,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istrea
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
-                tlog::success() << tfm::format("Loaded '%s' via %s after %.3f seconds.", path, loadMethod, elapsedSeconds.count());
+                tlog::success() << tfm::format("Loaded %s via %s after %.3f seconds.", path, loadMethod, elapsedSeconds.count());
 
                 co_return images;
             }
@@ -580,27 +579,27 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, istrea
     co_return {};
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(path path, istream& iStream, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, istream& iStream, string channelSelector) {
     co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, path path, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, string channelSelector) {
     try {
-        path = path.make_absolute();
+        path = fs::absolute(path);
     } catch (const runtime_error&) {
         // If for some strange reason we can not obtain an absolute path, let's still
         // try to open the image at the given path just to make sure.
     }
 
-    ifstream fileStream{nativeString(path), ios_base::binary};
+    ifstream fileStream{path, ios_base::binary};
     co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(path path, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelector) {
     co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector);
 }
 
-void BackgroundImagesLoader::enqueue(const path& path, const string& channelSelector, bool shallSelect) {
+void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect) {
     int loadId = mUnsortedLoadCounter++;
     invokeTaskDetached([loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
         int taskPriority = -Image::drawId();

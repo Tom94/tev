@@ -22,7 +22,6 @@
 #include <thread>
 
 using namespace args;
-using namespace filesystem;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
@@ -57,7 +56,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
             auto info = packet.interpretAsOpenImage();
-            imagesLoader->enqueue(ensureUtf8(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
+            imagesLoader->enqueue(toPath(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
             break;
         }
 
@@ -65,8 +64,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsReloadImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
-                sImageViewer->reloadImage(imageString, info.grabFocus);
+                sImageViewer->reloadImage(ensureUtf8(info.imageName), info.grabFocus);
             });
 
             sImageViewer->redraw();
@@ -77,8 +75,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsCloseImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
-                sImageViewer->removeImage(imageString);
+                sImageViewer->removeImage(ensureUtf8(info.imageName));
             });
 
             sImageViewer->redraw();
@@ -105,7 +102,6 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsCreateImage();
             sImageViewer->scheduleToUiThread([&,info] {
-                string imageString = ensureUtf8(info.imageName);
                 stringstream imageStream;
                 imageStream
                     << "empty" << " "
@@ -120,7 +116,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto images = tryLoadImage(imageString, imageStream, "").get();
+                auto images = tryLoadImage(toPath(info.imageName), imageStream, "").get();
                 if (!images.empty()) {
                     sImageViewer->addImage(images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
@@ -305,12 +301,18 @@ int mainFunc(const vector<string>& arguments) {
                 continue;
             }
 
+            fs::path imagePath = toPath(imageFile);
+            if (!fs::exists(imagePath)) {
+                tlog::error() << tfm::format("Image %s does not exist.", imagePath);
+                continue;
+            }
+
             try {
                 IpcPacket packet;
-                packet.setOpenImage(path{imageFile}.make_absolute().str(), channelSelector, true);
+                packet.setOpenImage(toString(fs::canonical(imagePath)), channelSelector, true);
                 ipc->sendToPrimaryInstance(packet);
             } catch (const runtime_error& e) {
-                tlog::error() << tfm::format("Invalid file '%s': %s", imageFile, e.what());
+                tlog::error() << tfm::format("Unexpected error %s: %s", imagePath, e.what());
             }
         }
 
@@ -341,7 +343,7 @@ int mainFunc(const vector<string>& arguments) {
                     continue;
                 }
 
-                imagesLoader->enqueue(imageFile, channelSelector, false);
+                imagesLoader->enqueue(tev::toPath(imageFile), channelSelector, false);
             }
 
             this_thread::sleep_for(100ms);
@@ -408,7 +410,7 @@ int mainFunc(const vector<string>& arguments) {
             continue;
         }
 
-        imagesLoader->enqueue(imageFile, channelSelector, false);
+        imagesLoader->enqueue(toPath(imageFile), channelSelector, false);
     }
 
     // Init nanogui application
@@ -424,16 +426,28 @@ int mainFunc(const vector<string>& arguments) {
     }};
 
 #ifdef __APPLE__
+    // On macOS, the mechanism for opening an application passes filenames
+    // through the NS api rather than CLI arguments, which means we need
+    // special handling of these through GLFW.
+    // There are two components to this special handling:
+
+    // 1. The filenames that were passed to this application when it was opened.
     if (!imageFiles) {
         // If we didn't get any command line arguments for files to open,
         // then, on macOS, they might have been supplied through the NS api.
         const char* const* openedFiles = glfwGetOpenedFilenames();
         if (openedFiles) {
             for (auto p = openedFiles; *p; ++p) {
-                imagesLoader->enqueue(*p, "", false);
+                imagesLoader->enqueue(toPath(*p), "", false);
             }
         }
     }
+
+    // 2. a callback for when the same application is opened additional
+    //    times with more files.
+    glfwSetOpenedFilenamesCallback([](const char* imageFile) {
+        sImageViewer->imagesLoader().enqueue(toPath(imageFile), "", false);
+    });
 #endif
 
     auto [capability10bit, capabilityEdr] = nanogui::test_10bit_edr_support();

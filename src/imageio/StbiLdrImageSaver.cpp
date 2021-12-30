@@ -9,26 +9,25 @@
 #include <ostream>
 #include <vector>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-void StbiLdrImageSaver::save(ostream& oStream, const path& path, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
+void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
     static const auto stbiOStreamWrite = [](void* context, void* data, int size) {
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(data), size);
     };
 
-    auto extension = toLower(path.extension());
+    auto extension = toLower(toString(path.extension()));
 
-    if (extension == "jpg" || extension == "jpeg") {
+    if (extension == ".jpg" || extension == ".jpeg") {
         stbi_write_jpg_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data(), 100);
-    } else if (extension == "png") {
+    } else if (extension == ".png") {
         stbi_write_png_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data(), 0);
-    } else if (extension == "bmp") {
+    } else if (extension == ".bmp") {
         stbi_write_bmp_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
-    } else if (extension == "tga") {
+    } else if (extension == ".tga") {
         stbi_write_tga_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
     } else {
         throw invalid_argument{tfm::format("Image '%s' has unknown format.", path)};

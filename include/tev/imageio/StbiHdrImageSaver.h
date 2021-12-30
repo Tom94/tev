@@ -11,15 +11,14 @@ TEV_NAMESPACE_BEGIN
 
 class StbiHdrImageSaver : public TypedImageSaver<float> {
 public:
-    void save(std::ostream& oStream, const filesystem::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
+    void save(std::ostream& oStream, const fs::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
 
     bool hasPremultipliedAlpha() const override {
         return false;
     }
 
     virtual bool canSaveFile(const std::string& extension) const override {
-        std::string lowerExtension = toLower(extension);
-        return lowerExtension == "hdr";
+        return toLower(extension) == ".hdr";
     }
 };
 

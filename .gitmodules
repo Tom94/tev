@@ -10,9 +10,6 @@
 [submodule "dependencies/tinyformat"]
 	path = dependencies/tinyformat
 	url = https://github.com/c42f/tinyformat
-[submodule "dependencies/filesystem"]
-	path = dependencies/filesystem
-	url = https://github.com/Tom94/filesystem
 [submodule "dependencies/utfcpp"]
 	path = dependencies/utfcpp
 	url = https://github.com/Tom94/utfcpp

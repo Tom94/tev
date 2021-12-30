@@ -5,8 +5,6 @@
 
 #include <tev/Common.h>
 
-#include <filesystem/path.h>
-
 #include <list>
 #include <vector>
 
@@ -244,7 +242,7 @@ private:
     HANDLE mInstanceMutex;
 #else
     int mLockFileDescriptor;
-    filesystem::path mLockFile;
+    fs::path mLockFile;
 #endif
 
     class SocketConnection {

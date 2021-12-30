@@ -20,11 +20,22 @@
 #   include <unistd.h>
 #endif
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
+
+u8string toU8string(const string& str) {
+    u8string temp;
+    utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
+    return temp;
+}
+
+string fromU8string(const u8string& str) {
+    string temp;
+    utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
+    return temp;
+}
 
 string ensureUtf8(const string& str) {
     string temp;
@@ -42,6 +53,26 @@ string utf16to8(const wstring& utf16) {
     string utf8;
     utf8::utf16to8(begin(utf16), end(utf16), back_inserter(utf8));
     return utf8;
+}
+
+fs::path toPath(const string& utf8) {
+#ifdef _WIN32
+    // To be on the safe side, use Windows' native
+    // wide char encoding to construct the path object.
+    return utf8to16(utf8);
+#else
+    return toU8string(utf8);
+#endif
+}
+
+string toString(const fs::path& path) {
+#ifdef _WIN32
+    // To be on the safe side, use Windows' native
+    // wide char encoding and convert to UTF8 manually.
+    return utf16to8(path.wstring());
+#else
+    return fromU8string(path.u8string());
+#endif
 }
 
 vector<string> split(string text, const string& delim) {
@@ -195,7 +226,7 @@ string errorString(int errorId) {
 #endif
 }
 
-path homeDirectory() {
+fs::path homeDirectory() {
 #ifdef _WIN32
     char path[MAX_PATH];
     if (SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, 0, path) != S_OK) {

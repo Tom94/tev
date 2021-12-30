@@ -5,7 +5,6 @@
 
 #include <istream>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -22,7 +21,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const path&, const string&, int priority) const {
+Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
     vector<ImageData> result(1);
     ImageData& data = result.front();
 

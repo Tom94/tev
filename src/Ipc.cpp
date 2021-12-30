@@ -114,7 +114,7 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
     payload << stridedImageData;
 }
 
-void IpcPacket::setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames) {
+void IpcPacket::setCreateImage(const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames) {
     if ((int32_t)channelNames.size() != nChannels) {
         throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
     }
@@ -154,7 +154,6 @@ IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
         // windows path of the form X:/* or X:\*
         (colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/'))
     ) {
-        std::cout << imageString << std::endl;
         result.imagePath = imageString;
         result.channelSelector = "";
     } else {
@@ -385,7 +384,7 @@ Ipc::~Ipc() {
         }
 
         // Delete the lock file if it exists.
-        unlink(mLockFile.str().c_str());
+        unlink(mLockFile.string().c_str());
     }
 #endif
 
@@ -420,7 +419,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
 #else
     mLockFile = homeDirectory() / mLockName;
 
-    mLockFileDescriptor = open(mLockFile.str().c_str(), O_RDWR | O_CREAT, 0666);
+    mLockFileDescriptor = open(mLockFile.string().c_str(), O_RDWR | O_CREAT, 0666);
     if (mLockFileDescriptor == -1) {
         throw runtime_error{tfm::format("Could not create lock file: %s", errorString(lastError()))};
     }

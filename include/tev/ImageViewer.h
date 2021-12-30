@@ -135,6 +135,10 @@ public:
         mTaskQueue.push(fun);
     }
 
+    BackgroundImagesLoader& imagesLoader() const {
+        return *mImagesLoader;
+    }
+
 private:
     void updateFilter();
     void updateLayout();

@@ -5,8 +5,6 @@
 
 #include <clip.h>
 
-#include <filesystem/path.h>
-
 #include <nanogui/button.h>
 #include <nanogui/colorwheel.h>
 #include <nanogui/icons.h>
@@ -23,7 +21,6 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -587,7 +584,7 @@ bool ImageViewer::drop_event(const vector<string>& filenames) {
     }
 
     for (size_t i = 0; i < filenames.size(); ++i) {
-        mImagesLoader->enqueue(ensureUtf8(filenames[i]), "", i == filenames.size() - 1);
+        mImagesLoader->enqueue(toPath(filenames[i]), "", i == filenames.size() - 1);
     }
 
     // Make sure we gain focus after dragging files into here.
@@ -738,7 +735,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             //     if (!clip::get_text(path)) {
             //         tlog::error() << "Failed to paste text from clipboard.";
             //     } else {
-            //         auto image = tryLoadImage(path, "");
+            //         auto image = tryLoadImage(toPath(path), "");
             //         if (image) {
             //             addImage(image, true);
             //         } else {
@@ -1565,9 +1562,8 @@ void ImageViewer::openImageDialog() {
     }, false, true);
 
     for (size_t i = 0; i < paths.size(); ++i) {
-        path imageFile = ensureUtf8(paths[i]);
         bool shallSelect = i == paths.size() - 1;
-        mImagesLoader->enqueue(imageFile, "", shallSelect);
+        mImagesLoader->enqueue(toPath(paths[i]), "", shallSelect);
     }
 
     // Make sure we gain focus after seleting a file to be loaded.
@@ -1579,17 +1575,21 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    path path = ensureUtf8(file_dialog(
-    {
-        {"exr",  "OpenEXR image"},
-        {"hdr",  "HDR image"},
-        {"bmp",  "Bitmap Image File"},
-        {"jpg",  "JPEG image"},
-        {"jpeg", "JPEG image"},
-        {"png",  "Portable Network Graphics image"},
-        {"qoi",  "Quite OK Image format"},
-        {"tga",  "Truevision TGA image"},
-    }, true));
+    fs::path path = toPath(
+        file_dialog(
+            {
+                {"exr",  "OpenEXR image"},
+                {"hdr",  "HDR image"},
+                {"bmp",  "Bitmap Image File"},
+                {"jpg",  "JPEG image"},
+                {"jpeg", "JPEG image"},
+                {"png",  "Portable Network Graphics image"},
+                {"qoi",  "Quite OK Image format"},
+                {"tga",  "Truevision TGA image"},
+            },
+            true
+        )
+    );
 
     if (path.empty()) {
         return;

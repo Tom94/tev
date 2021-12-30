@@ -16,7 +16,6 @@
 #include <numeric>
 #include <set>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -507,17 +506,17 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
     return result;
 }
 
-void ImageCanvas::saveImage(const path& path) const {
+void ImageCanvas::saveImage(const fs::path& path) const {
     if (!mImage) {
         return;
     }
 
     Vector2i imageSize = mImage->size();
 
-    tlog::info() << "Saving currently displayed image as '" << path << "'.";
+    tlog::info() << "Saving currently displayed image as " << path << ".";
     auto start = chrono::system_clock::now();
 
-    ofstream f{nativeString(path), ios_base::binary};
+    ofstream f{path, ios_base::binary};
     if (!f) {
         throw invalid_argument{tfm::format("Could not open file %s", path)};
     }
@@ -549,11 +548,11 @@ void ImageCanvas::saveImage(const path& path) const {
         auto end = chrono::system_clock::now();
         chrono::duration<double> elapsedSeconds = end - start;
 
-        tlog::success() << tfm::format("Saved '%s' after %.3f seconds.", path, elapsedSeconds.count());
+        tlog::success() << tfm::format("Saved %s after %.3f seconds.", path, elapsedSeconds.count());
         return;
     }
 
-    throw invalid_argument{tfm::format("No save routine for image type '%s' found.", path.extension())};
+    throw invalid_argument{tfm::format("No save routine for image type %s found.", path.extension())};
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {

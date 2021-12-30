@@ -9,13 +9,12 @@
 #include <ostream>
 #include <vector>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
-void QoiImageSaver::save(ostream& oStream, const path&, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
+void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
     // The QOI image format expects nChannels to be either 3 for RGB data or 4 for RGBA.
     if (nChannels != 4 && nChannels != 3) {
         throw invalid_argument{tfm::format("Invalid number of channels %d.", nChannels)};

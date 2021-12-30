@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <sstream>
@@ -31,9 +32,6 @@
 #define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_CONTROL
 #define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
 #endif
-
-// Needs to be included _after_ Windows.h to ensure NOMINMAX has an effect
-#include <filesystem/path.h>
 
 // A macro is used such that external tools won't end up indenting entire files,
 // resulting in wasted horizontal space.
@@ -146,6 +144,8 @@ namespace nanogui {
 
 TEV_NAMESPACE_BEGIN
 
+namespace fs = std::filesystem;
+
 class ThreadPool;
 extern ThreadPool* gThreadPool;
 
@@ -183,18 +183,10 @@ inline int codePointLength(char first) {
 }
 
 std::string ensureUtf8(const std::string& str);
-std::wstring utf8to16(const std::string& utf8);
+std::wstring utf8to16(const std::string& utf16);
 std::string utf16to8(const std::wstring& utf16);
-
-#ifdef _WIN32
-inline std::wstring nativeString(const filesystem::path& path) {
-    return path.wstr();
-}
-#else
-inline std::string nativeString(const filesystem::path& path) {
-    return path.str();
-}
-#endif
+fs::path toPath(const std::string& utf8);
+std::string toString(const fs::path& path);
 
 template <typename T>
 class ScopeGuard {
@@ -272,7 +264,7 @@ int lastError();
 int lastSocketError();
 std::string errorString(int errorId);
 
-filesystem::path homeDirectory();
+fs::path homeDirectory();
 
 void toggleConsole();
 

@@ -6,7 +6,6 @@
 
 #include <clip.h>
 
-using namespace filesystem;
 using namespace nanogui;
 using namespace std;
 
@@ -23,7 +22,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 

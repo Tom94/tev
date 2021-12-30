@@ -176,6 +176,7 @@ set(TEV_SOURCES
 )
 if (MSVC)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
+    set(TEV_SOURCES ${TEV_SOURCES} resources/tev.manifest)
     set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/DdsImageLoader.h src/imageio/DdsImageLoader.cpp)
 elseif (APPLE)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/mac-run-tev.sh)
@@ -203,7 +204,6 @@ include_directories(
     ${ARGS_INCLUDE}
     ${CLIP_INCLUDE}
     ${DIRECTXTEX_INCLUDE}
-    ${FILESYSTEM_INCLUDE}
     ${GLFW_INCLUDE}
     ${NANOGUI_EXTRA_INCS}
     ${NANOGUI_INCLUDE}

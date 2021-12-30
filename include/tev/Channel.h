@@ -86,7 +86,7 @@ public:
 
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
-    void setZero() { std::memset(mData.data(), 0, mData.size()*sizeof(float)); }
+    void setZero() { memset(mData.data(), 0, mData.size()*sizeof(float)); }
 
     void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
 

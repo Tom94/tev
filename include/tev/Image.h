@@ -106,10 +106,10 @@ struct ImageTexture {
 
 class Image {
 public:
-    Image(const filesystem::path& path, ImageData&& data, const std::string& channelSelector);
+    Image(const fs::path& path, ImageData&& data, const std::string& channelSelector);
     virtual ~Image();
 
-    const filesystem::path& path() const {
+    const fs::path& path() const {
         return mPath;
     }
 
@@ -195,7 +195,7 @@ private:
 
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
 
-    filesystem::path mPath;
+    fs::path mPath;
     std::string mChannelSelector;
 
     std::string mName;
@@ -211,10 +211,10 @@ private:
     int mId;
 };
 
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, filesystem::path path, std::istream& iStream, std::string channelSelector);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(filesystem::path path, std::istream& iStream, std::string channelSelector);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, filesystem::path path, std::string channelSelector);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(filesystem::path path, std::string channelSelector);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string channelSelector);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string channelSelector);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string channelSelector);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string channelSelector);
 
 struct ImageAddition {
     int loadId;
@@ -230,7 +230,7 @@ struct ImageAddition {
 
 class BackgroundImagesLoader {
 public:
-    void enqueue(const filesystem::path& path, const std::string& channelSelector, bool shallSelect);
+    void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect);
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
 
     bool publishSortedLoads();

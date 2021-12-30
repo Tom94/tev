@@ -122,7 +122,7 @@ public:
     std::vector<float> getHdrImageData(bool divideAlpha, int priority) const;
     std::vector<char> getLdrImageData(bool divideAlpha, int priority) const;
 
-    void saveImage(const filesystem::path& filename) const;
+    void saveImage(const fs::path& filename) const;
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
