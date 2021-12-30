@@ -12,9 +12,16 @@ TEV_NAMESPACE_BEGIN
 UberShader::UberShader(RenderPass* renderPass) {
     try {
 #if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
-        auto vertexShader =
-            R"(#version 100
-
+#   if defined(NANOGUI_USE_OPENGL)
+    std::string preamble =
+        R"(#version 110)";
+#   elif defined(NANOGUI_USE_GLES)
+    std::string preamble =
+        R"(#version 100
+        precision highp float;)";
+#   endif
+        auto vertexShader = preamble +
+            R"(
             uniform vec2 pixelSize;
             uniform vec2 checkerSize;
 
@@ -38,12 +45,8 @@ UberShader::UberShader(RenderPass* renderPass) {
                 gl_Position = vec4(position, 1.0, 1.0);
             })";
 
-        auto fragmentShader =
-            R"(#version 100
-            #ifdef GL_ES
-            precision highp float;
-            #endif
-
+        auto fragmentShader = preamble +
+            R"(
             #define SRGB        0
             #define GAMMA       1
             #define FALSE_COLOR 2
