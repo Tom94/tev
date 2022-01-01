@@ -32,6 +32,10 @@ public:
         return val <= 0;
     }
 
+    int value() const {
+        return mCounter;
+    }
+
 private:
     std::atomic<int> mCounter;
 };
@@ -97,13 +101,17 @@ struct TaskPromiseBase<void> {
     }
 };
 
+struct TaskSharedState {
+    COROUTINE_NAMESPACE::coroutine_handle<> continuation = nullptr;
+    Latch latch{2};
+};
+
 template <typename future_t, typename data_t>
 struct TaskPromise : public TaskPromiseBase<data_t> {
-    COROUTINE_NAMESPACE::coroutine_handle<> precursor;
-    Latch latch{2};
+    std::shared_ptr<TaskSharedState> state = std::make_shared<TaskSharedState>();
 
     future_t get_return_object() noexcept {
-        return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this), this->promise.get_future()};
+        return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this), this->promise.get_future(), state};
     }
 
     COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
@@ -114,28 +122,22 @@ struct TaskPromise : public TaskPromiseBase<data_t> {
 
     // The coroutine is about to complete (via co_return, reaching the end of the coroutine body,
     // or an uncaught exception). The awaiter returned here defines what happens next
-    auto final_suspend() const noexcept {
+    auto final_suspend() noexcept {
         struct Awaiter {
-            bool await_ready() const noexcept { return false; }
-            void await_resume() const noexcept {}
+            COROUTINE_NAMESPACE::coroutine_handle<> continuation;
 
-            // Returning the parent coroutine has the effect of continuing execution where the parent co_await'ed us.
-            COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
-                bool isLast = h.promise().latch.countDown();
-                auto precursor = h.promise().precursor;
+            bool await_ready() noexcept { return !continuation; }
+            void await_resume() noexcept {}
 
-                if (isLast) {
-                    h.destroy();
-                    if (precursor) {
-                        return precursor;
-                    }
-                }
-
-                return COROUTINE_NAMESPACE::noop_coroutine();
+            // Returning the continuation has the effect of continuing execution where the parent co_await'ed us.
+            // It's the parent's job to call destroy on this coroutine's handle.
+            COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>) noexcept {
+                return continuation;
             }
         };
 
-        return Awaiter{};
+        bool isLast = state->latch.countDown();
+        return Awaiter{isLast ? state->continuation : nullptr};
     }
 };
 
@@ -146,8 +148,11 @@ struct Task {
     // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
     std::future<T> future;
+    std::shared_ptr<TaskSharedState> state;
+    bool wasSuspended = false;
 
-    Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle, std::future<T>&& future) : handle{handle}, future{std::move(future)} {}
+    Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle, std::future<T>&& future, const std::shared_ptr<TaskSharedState>& state)
+    : handle{handle}, future{std::move(future)}, state{state} {}
 
     // No copying allowed!
     Task(const Task& other) = delete;
@@ -155,8 +160,10 @@ struct Task {
 
     Task& operator=(Task&& other) {
         handle = other.handle;
+        other.handle = nullptr;
         future = std::move(other.future);
-        other.detach();
+        state = std::move(other.state);
+        wasSuspended = other.wasSuspended;
         return *this;
     }
     Task(Task&& other) {
@@ -171,24 +178,38 @@ struct Task {
     }
 
     bool await_ready() const noexcept {
+        // If the latch has already been passed by final_suspend()
+        // above, the task has already completed and we can skip
+        // suspension of the coroutine.
+        if (state->latch.value() <= 1) {
+            state->latch.countDown();
+            return true;
+        }
+
         return false;
     }
 
     T await_resume() {
         TEV_ASSERT(handle, "Cannot resume a detached Task<T>.");
 
-        // `handle` has already (or will be) destroyed by either
-        // - TaskPromise::final_suspend::Awaiter::await_suspend, or
-        // - Task::get,
-        // one of which will have been called prior to await_resume.
+        // If (and only if) a previously suspended coroutine is resumed here,
+        // this task's own coroutine handle has not been cleaned up (for
+        // implementation reasons) and needs to be destroyed here.
+        // (See the behavior of final_suspend() above.)
+        if (wasSuspended) {
+            handle.destroy();
+        }
+
+        // This task's coroutine has definitely been destoyed by now.
+        // Mark this by setting its handle to null.
         handle = nullptr;
+
+        // Note: if there occurred an uncaught exception while executing
+        // this task, it'll get rethrown in the following call.
         return future.get();
     }
 
     T get() {
-        if (handle.promise().latch.countDown()) {
-            handle.destroy();
-        }
         return await_resume();
     }
 
@@ -198,21 +219,14 @@ struct Task {
             std::terminate();
         }
 
-        // The coroutine itself is being suspended (async work can beget other async work)
-        // Record the argument as the continuation point when this is resumed later. See
-        // the final_suspend awaiter on the promise_type above for where this gets used
-        handle.promise().precursor = coroutine;
-        bool isLast = handle.promise().latch.countDown();
-        if (isLast) {
-            handle.destroy();
-        }
-        return !isLast;
-    }
-
-    COROUTINE_NAMESPACE::coroutine_handle<promise_type> detach() noexcept {
-        auto tmp = handle;
-        handle = nullptr;
-        return tmp;
+        // If the task is still running (checked by arriving at the latch),
+        // mark this coroutine as the task's continuation and suspend it until then.
+        // The member variable `wasSuspended` indicates this suspension and implies
+        // that the state state of this task needs to be manually cleaned up on
+        // resumption of this coroutine (see await_resume()).
+        state->continuation = coroutine;
+        wasSuspended = !state->latch.countDown();
+        return wasSuspended;
     }
 };
 
