@@ -257,11 +257,9 @@ int mainFunc(const vector<string>& arguments) {
         return 0;
     } catch (const ParseError& e) {
         cerr << e.what() << endl;
-        cerr << parser;
         return -1;
     } catch (const ValidationError& e) {
         cerr << e.what() << endl;
-        cerr << parser;
         return -2;
     }
 
