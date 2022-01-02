@@ -22,6 +22,7 @@ ThreadPool::ThreadPool(size_t maxNumThreads, bool force) {
 }
 
 ThreadPool::~ThreadPool() {
+    waitUntilFinished();
     shutdownThreads(mThreads.size());
 }
 
@@ -65,8 +66,6 @@ void ThreadPool::startThreads(size_t num) {
 }
 
 void ThreadPool::shutdownThreads(size_t num) {
-    waitUntilFinished();
-
     auto numToClose = min(num, mNumThreads);
 
     {
