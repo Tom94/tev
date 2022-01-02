@@ -292,6 +292,7 @@ int mainFunc(const vector<string>& arguments) {
     // simply send the to-be-opened images to the primary instance.
     if (!ipc->isPrimaryInstance() && !newWindow) {
         string channelSelector;
+        bool first = true;
         for (auto imageFile : get(imageFiles)) {
             if (!imageFile.empty() && imageFile[0] == ':') {
                 channelSelector = imageFile.substr(1);
@@ -306,7 +307,13 @@ int mainFunc(const vector<string>& arguments) {
 
             try {
                 IpcPacket packet;
-                packet.setOpenImage(toString(fs::canonical(imagePath)), channelSelector, true);
+                packet.setOpenImage(
+                    toString(fs::canonical(imagePath)),
+                    channelSelector,
+                    first // select the first image among those that are loaded
+                );
+                first = false;
+
                 ipc->sendToPrimaryInstance(packet);
             } catch (const runtime_error& e) {
                 tlog::error() << tfm::format("Unexpected error %s: %s", imagePath, e.what());
