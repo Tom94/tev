@@ -202,12 +202,8 @@ int mainFunc(const vector<string>& arguments) {
         {'m', "metric"},
     };
 
-    Flag newWindowFlag{
-        parser,
-        "NEW WINDOW",
-        "Open a new window of tev, even if one exists already.",
-        {'n', "new"},
-    };
+    Flag newWindowFlagOn{parser, "NEW WINDOW", "Open a new window of tev, even if one exists already. (Default if no images are supplied.)", {'n', "new"}};
+    Flag newWindowFlagOff{parser, "NO NEW WINDOW", "Do not open a new window if one already exists. (Default if images are supplied.)", {"no-new"}};
 
     ValueFlag<float> offsetFlag{
         parser,
@@ -280,7 +276,14 @@ int mainFunc(const vector<string>& arguments) {
     // If we don't have any images to load, create new windows regardless of flag.
     // (In this case, the user likely wants to open a new instance of tev rather
     // than focusing the existing one.)
-    bool newWindow = newWindowFlag || !imageFiles;
+    bool newWindow = !imageFiles;
+    if (newWindowFlagOn) { newWindow = true; }
+    if (newWindowFlagOff) { newWindow = false; }
+
+    if (newWindowFlagOn && newWindowFlagOff) {
+        tlog::error() << "Ambiguous 'new window' arguments.";
+        return -3;
+    }
 
     // If we're not the primary instance and did not request to open a new window,
     // simply send the to-be-opened images to the primary instance.
