@@ -185,14 +185,8 @@ int mainFunc(const vector<string>& arguments) {
         {"ldr"},
     };
 
-    ValueFlag<bool> maximizeFlag{
-        parser,
-        "MAXIMIZE",
-        "Maximize the window on startup. "
-        "If no images were supplied via the command line, then the default is FALSE. "
-        "Otherwise, the default is TRUE.",
-        {"max", "maximize"},
-    };
+    Flag maximizeFlagOn{parser, "MAXIMIZE", "Maximize the window on startup. (Default if images are supplied.)", {"max", "maximize"}};
+    Flag maximizeFlagOff{parser, "NO MAXIMIZE", "Do not maximize the window on startup. (Default if no images are supplied.)", {"no-max", "no-maximize"}};
 
     ValueFlag<string> metricFlag{
         parser,
@@ -462,7 +456,14 @@ int mainFunc(const vector<string>& arguments) {
 
     // Do what the maximize flag tells us---if it exists---and
     // maximize if we have images otherwise.
-    bool maximize = maximizeFlag ? get(maximizeFlag) : imageFiles;
+    bool maximize = imageFiles;
+    if (maximizeFlagOn) { maximize = true; }
+    if (maximizeFlagOff) { maximize = false; }
+
+    if (maximizeFlagOn && maximizeFlagOff) {
+        tlog::error() << "Ambiguous 'maximize' arguments.";
+        return -3;
+    }
 
     // sImageViewer is a raw pointer to make sure it will never
     // get deleted. nanogui crashes upon cleanup, so we better
