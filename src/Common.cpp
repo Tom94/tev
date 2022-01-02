@@ -8,6 +8,7 @@
 #include <utf8.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <map>
 #include <regex>
@@ -160,40 +161,6 @@ void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float sh
     nvgText(ctx, x, y, text.c_str(), NULL);
 }
 
-ETonemap toTonemap(string name) {
-    // Perform matching on uppercase strings
-    name = toUpper(name);
-    if (name == "SRGB") {
-        return SRGB;
-    } else if (name == "GAMMA") {
-        return Gamma;
-    } else if (name == "FALSECOLOR" || name == "FC") {
-        return FalseColor;
-    } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" ||name == "+-") {
-        return PositiveNegative;
-    } else {
-        return SRGB;
-    }
-}
-
-EMetric toMetric(string name) {
-    // Perform matching on uppercase strings
-    name = toUpper(name);
-    if (name == "E") {
-        return Error;
-    } else if (name == "AE") {
-        return AbsoluteError;
-    } else if (name == "SE") {
-        return SquaredError;
-    } else if (name == "RAE") {
-        return RelativeAbsoluteError;
-    } else if (name == "RSE") {
-        return RelativeSquaredError;
-    } else {
-        return Error;
-    }
-}
-
 int lastError() {
 #ifdef _WIN32
     return GetLastError();
@@ -252,6 +219,50 @@ void toggleConsole() {
         ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
     }
 #endif
+}
+
+static std::atomic<bool> sShuttingDown{false};
+
+bool shuttingDown() {
+    return sShuttingDown;
+}
+
+void setShuttingDown() {
+    sShuttingDown = true;
+}
+
+ETonemap toTonemap(string name) {
+    // Perform matching on uppercase strings
+    name = toUpper(name);
+    if (name == "SRGB") {
+        return SRGB;
+    } else if (name == "GAMMA") {
+        return Gamma;
+    } else if (name == "FALSECOLOR" || name == "FC") {
+        return FalseColor;
+    } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" ||name == "+-") {
+        return PositiveNegative;
+    } else {
+        return SRGB;
+    }
+}
+
+EMetric toMetric(string name) {
+    // Perform matching on uppercase strings
+    name = toUpper(name);
+    if (name == "E") {
+        return Error;
+    } else if (name == "AE") {
+        return AbsoluteError;
+    } else if (name == "SE") {
+        return SquaredError;
+    } else if (name == "RAE") {
+        return RelativeAbsoluteError;
+    } else if (name == "RSE") {
+        return RelativeSquaredError;
+    } else {
+        return Error;
+    }
 }
 
 TEV_NAMESPACE_END

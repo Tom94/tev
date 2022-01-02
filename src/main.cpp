@@ -16,7 +16,6 @@
 #include <GLFW/glfw3native.h>
 #endif
 
-#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -25,8 +24,6 @@ using namespace args;
 using namespace std;
 
 TEV_NAMESPACE_BEGIN
-
-ThreadPool* gThreadPool = new ThreadPool{};
 
 // Image viewer is a static variable to allow other
 // parts of the program to easily schedule operations
@@ -323,14 +320,12 @@ int mainFunc(const vector<string>& arguments) {
 
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
 
-    atomic<bool> shallShutdown{false};
-
     // Spawn a background thread that opens images passed via stdin.
     // To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
     thread stdinThread{[&]() {
         string channelSelector;
-        while (!shallShutdown) {
+        while (!shuttingDown()) {
             for (string line; getline(cin, line);) {
                 string imageFile = tev::ensureUtf8(line);
 
@@ -362,7 +357,7 @@ int mainFunc(const vector<string>& arguments) {
     // paths to the primary instance.
     thread ipcThread = thread{[&]() {
         try {
-            while (!shallShutdown) {
+            while (!shuttingDown()) {
                 // Attempt to become primary instance in case the primary instance
                 // got closed at some point. Attempt this with a reasonably low frequency
                 // to not hog CPU/OS resources.
@@ -387,7 +382,7 @@ int mainFunc(const vector<string>& arguments) {
     }};
 
     ScopeGuard backgroundThreadShutdownGuard{[&]() {
-        shallShutdown = true;
+        setShuttingDown();
 
         if (ipcThread.joinable()) {
             ipcThread.join();

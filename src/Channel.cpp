@@ -17,7 +17,7 @@ Channel::Channel(const std::string& name, const nanogui::Vector2i& size)
 }
 
 Task<void> Channel::divideByAsync(const Channel& other, int priority) {
-    co_await gThreadPool->parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
+    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
         if (other.at(i) != 0) {
             at(i) /= other.at(i);
         } else {
@@ -27,7 +27,7 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
-    co_await gThreadPool->parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
+    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
         at(i) *= other.at(i);
     }, priority);
 }

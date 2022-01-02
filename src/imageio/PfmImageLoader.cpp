@@ -74,7 +74,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     // Reverse bytes of every float if endianness does not match up with system
     const bool shallSwapBytes = (std::endian::native == std::endian::little) != isPfmLittleEndian;
 
-    co_await gThreadPool->parallelForAsync(0, size.y(), [&](int y) {
+    co_await ThreadPool::global().parallelForAsync(0, size.y(), [&](int y) {
         for (int x = 0; x < size.x(); ++x) {
             int baseIdx = (y * size.x() + x) * numChannels;
             for (int c = 0; c < numChannels; ++c) {

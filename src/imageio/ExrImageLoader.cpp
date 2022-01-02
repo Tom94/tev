@@ -113,7 +113,7 @@ public:
         int widthSubsampled = width/mImfChannel.ySampling;
 
         auto data = reinterpret_cast<const T*>(mData.data());
-        co_await gThreadPool->parallelForAsync<int>(0, channel.size().y(), [&, data](int y) {
+        co_await ThreadPool::global().parallelForAsync<int>(0, channel.size().y(), [&, data](int y) {
             for (int x = 0; x < width; ++x) {
                 channel.at({x, y}) = data[x/mImfChannel.xSampling + (y/mImfChannel.ySampling) * widthSubsampled];
             }
@@ -223,7 +223,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         throw invalid_argument{tfm::format("No channels match '%s'.", channelSelector)};
     }
 
-    co_await gThreadPool->parallelForAsync(0, (int)rawChannels.size(), [&](int i) {
+    co_await ThreadPool::global().parallelForAsync(0, (int)rawChannels.size(), [&](int i) {
         rawChannels.at(i).resize();
     }, priority);
 

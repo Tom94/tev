@@ -22,6 +22,11 @@ public:
     ThreadPool(size_t maxNumThreads, bool force = false);
     virtual ~ThreadPool();
 
+    static ThreadPool& global() {
+        static ThreadPool pool;
+        return pool;
+    }
+
     template<class F>
     auto enqueueTask(F&& f, int priority) {
         using return_type = std::invoke_result_t<decltype(f)>;

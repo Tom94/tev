@@ -222,7 +222,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         assert(!DirectX::IsSRGB(metadata.format));
         // Assume that the image data is already in linear space.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 resultData.channels[c].at(i) = typedData[baseIdx + c];
@@ -234,7 +234,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         // RGB(A) DDS images tend to be in sRGB space, even those not
         // explicitly stored in an *_SRGB format.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
                 if (c == 3) {

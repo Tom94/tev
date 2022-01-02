@@ -65,6 +65,8 @@ void ThreadPool::startThreads(size_t num) {
 }
 
 void ThreadPool::shutdownThreads(size_t num) {
+    waitUntilFinished();
+
     auto numToClose = min(num, mNumThreads);
 
     {
