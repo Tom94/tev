@@ -885,8 +885,13 @@ void ImageViewer::draw_contents() {
     bool newFocus = false;
     while (auto addition = mImagesLoader->tryPop()) {
         newFocus |= addition->shallSelect;
+
+        bool first = true;
         for (auto& image : addition->images) {
-            addImage(image, addition->shallSelect);
+            // If the loaded file consists of multiple images (such as multi-part EXRs),
+            // select the first part if selection is desired.
+            addImage(image, first ? addition->shallSelect : false);
+            first = false;
         }
     }
 

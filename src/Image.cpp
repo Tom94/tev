@@ -70,7 +70,7 @@ Task<void> ImageData::convertToRec709(int priority) {
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
         tasks.emplace_back(
-            gThreadPool->parallelForAsync<size_t>(0, r->numPixels(), [r, g, b, this](size_t i) {
+            ThreadPool::global().parallelForAsync<size_t>(0, r->numPixels(), [r, g, b, this](size_t i) {
                 auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
                 r->at(i) = rgb.x();
                 g->at(i) = rgb.y();
@@ -287,14 +287,14 @@ Texture* Image::texture(const vector<string>& channelNames) {
 
             const auto& channelData = chan->data();
             tasks.emplace_back(
-                gThreadPool->parallelForAsync<size_t>(0, numPixels, [&channelData, &data, i](size_t j) {
+                ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&channelData, &data, i](size_t j) {
                     data[j * 4 + i] = channelData[j];
                 }, std::numeric_limits<int>::max())
             );
         } else {
             float val = i == 3 ? 1 : 0;
             tasks.emplace_back(
-                gThreadPool->parallelForAsync<size_t>(0, numPixels, [&data, val, i](size_t j) {
+                ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&data, val, i](size_t j) {
                     data[j * 4 + i] = val;
                 }, std::numeric_limits<int>::max())
             );
@@ -515,6 +515,11 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         }
     };
 
+    // No need to keep loading images if tev is already shutting down again.
+    if (shuttingDown()) {
+        co_return {};
+    }
+
     try {
         auto start = chrono::system_clock::now();
 
@@ -604,7 +609,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
     invokeTaskDetached([loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
         int taskPriority = -Image::drawId();
 
-        co_await gThreadPool->enqueueCoroutine(taskPriority);
+        co_await ThreadPool::global().enqueueCoroutine(taskPriority);
         auto images = co_await tryLoadImage(taskPriority, path, channelSelector);
 
         {

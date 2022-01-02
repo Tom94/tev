@@ -234,6 +234,9 @@ public:
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
 
     bool publishSortedLoads();
+    bool hasPendingLoads() const {
+        return mLoadCounter != mUnsortedLoadCounter;
+    }
 
 private:
     SharedQueue<ImageAddition> mLoadedImages;

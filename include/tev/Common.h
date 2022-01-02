@@ -146,9 +146,6 @@ TEV_NAMESPACE_BEGIN
 
 namespace fs = std::filesystem;
 
-class ThreadPool;
-extern ThreadPool* gThreadPool;
-
 inline uint32_t swapBytes(uint32_t value) {
 #ifdef _WIN32
     return _byteswap_ulong(value);
@@ -198,16 +195,6 @@ public:
     ~ScopeGuard() { mCallback(); }
 private:
     T mCallback;
-};
-
-template <typename T>
-class SharedScopeGuard {
-public:
-    SharedScopeGuard(const T& callback) : mSharedPtr{std::make_shared<ScopeGuard<T>>(callback)} {}
-    SharedScopeGuard(T&& callback) : mSharedPtr{std::make_shared<ScopeGuard<T>>(std::move(callback))} {}
-private:
-    // Causes `callback` to be fired upon last destruction
-    std::shared_ptr<ScopeGuard<T>> mSharedPtr;
 };
 
 template <typename T>
@@ -268,9 +255,8 @@ fs::path homeDirectory();
 
 void toggleConsole();
 
-// Implemented in main.cpp
-void scheduleToMainThread(const std::function<void()>& fun);
-void redrawWindow();
+bool shuttingDown();
+void setShuttingDown();
 
 enum ETonemap : int {
     SRGB = 0,
@@ -303,5 +289,9 @@ enum EDirection {
     Forward,
     Backward,
 };
+
+// Implemented in main.cpp
+void scheduleToMainThread(const std::function<void()>& fun);
+void redrawWindow();
 
 TEV_NAMESPACE_END

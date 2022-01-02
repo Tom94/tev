@@ -67,7 +67,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     resultData.hasPremultipliedAlpha = false;
 
     if (desc.colorspace == QOI_LINEAR) {
-        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             auto typedData = reinterpret_cast<unsigned char*>(decodedData);
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
@@ -75,7 +75,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
             }
         }, priority);
     } else {
-        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             auto typedData = reinterpret_cast<unsigned char*>(decodedData);
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {

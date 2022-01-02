@@ -444,7 +444,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
     // Flatten image into vector
     result.resize(4 * numPixels, 0);
 
-    gThreadPool->parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
+    ThreadPool::global().parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
         const auto& channelData = channels[i].data();
         for (size_t j = 0; j < channelData.size(); ++j) {
             result[j * 4 + i] = channelData[j];
@@ -460,7 +460,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
-        gThreadPool->parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
+        ThreadPool::global().parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
             for (size_t j = 0; j < numPixels; ++j) {
                 float alpha = result[j * 4 + 3];
                 if (alpha == 0) {
@@ -488,7 +488,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
     // Store as LDR image.
     result.resize(floatData.size());
 
-    gThreadPool->parallelFor<size_t>(0, numPixels, [&](size_t i) {
+    ThreadPool::global().parallelFor<size_t>(0, numPixels, [&](size_t i) {
         size_t start = 4 * i;
         Vector3f value = applyTonemap({
             applyExposureAndOffset(floatData[start]),
@@ -593,7 +593,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     }
 
     invokeTaskDetached([image, reference, requestedChannelGroup, metric, priority, p=std::move(promise)]() mutable -> Task<void> {
-        co_await gThreadPool->enqueueCoroutine(priority);
+        co_await ThreadPool::global().enqueueCoroutine(priority);
         p.set_value(co_await computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority));
     });
 
@@ -628,7 +628,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     bool onlyAlpha = all_of(begin(result), end(result), [](const Channel& c) { return c.name() == "A"; });
 
     if (!reference) {
-        gThreadPool->parallelFor(0, (int)channelNames.size(), [&](int i) {
+        ThreadPool::global().parallelFor(0, (int)channelNames.size(), [&](int i) {
             const auto* chan = image->channel(channelNames[i]);
             for (size_t j = 0; j < chan->numPixels(); ++j) {
                 result[i].at(j) = chan->eval(j);
@@ -639,7 +639,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
         auto referenceChannels = reference->channelsInGroup(requestedChannelGroup);
 
-        gThreadPool->parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
+        ThreadPool::global().parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
             const auto* chan = image->channel(channelNames[i]);
             bool isAlpha = !onlyAlpha && result[i].name() == "A";
 
@@ -769,7 +769,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
-            gThreadPool->parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
+            ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
                 indices[j + i * numPixels] = valToBin(channel.eval(j));
             }, priority)
         );
@@ -779,7 +779,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_await task;
     }
 
-    co_await gThreadPool->parallelForAsync(0, nChannels, [&](int i) {
+    co_await ThreadPool::global().parallelForAsync(0, nChannels, [&](int i) {
         for (size_t j = 0; j < numPixels; ++j) {
             result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
         }

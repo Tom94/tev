@@ -14,6 +14,7 @@
 #endif
 
 #include <condition_variable>
+#include <future>
 #include <mutex>
 #include <semaphore>
 
@@ -23,35 +24,20 @@ class Latch {
 public:
     Latch(int val) : mCounter{val} {}
     bool countDown() noexcept {
-        std::unique_lock lock{mMutex};
         int val = --mCounter;
-        if (val <= 0) {
-            mCv.notify_all();
-            return true;
-        }
-
         if (val < 0) {
             tlog::warning() << "Latch should never count below zero.";
         }
 
-        return false;
+        return val <= 0;
     }
 
-    void wait() {
-        if (mCounter <= 0) {
-            return;
-        }
-
-        std::unique_lock lock{mMutex};
-        if (mCounter > 0) {
-            mCv.wait(lock);
-        }
+    int value() const {
+        return mCounter;
     }
 
 private:
     std::atomic<int> mCounter;
-    std::mutex mMutex;
-    std::condition_variable mCv;
 };
 
 template <typename T>
@@ -64,7 +50,7 @@ void waitAll(std::vector<T>& futures) {
 struct DetachedTask {
     struct promise_type {
         DetachedTask get_return_object() noexcept {
-            return {COROUTINE_NAMESPACE::coroutine_handle<promise_type>::from_promise(*this)};
+            return {};
         }
 
         COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
@@ -80,8 +66,6 @@ struct DetachedTask {
             }
         }
     };
-
-    COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
 };
 
 template <typename F, typename ...Args>
@@ -90,84 +74,88 @@ DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
     co_await exec(args...);
 }
 
-// The task implementation is inspired by a sketch from the following blog post:
-// https://www.jeremyong.com/cpp/2021/01/04/cpp20-coroutines-a-minimal-async-framework/
 template <typename data_t>
-struct TaskPromiseBase {
-    data_t data;
+class TaskPromiseBase {
+public:
+    void return_value(data_t&& value) noexcept { mPromise.set_value(std::move(value)); }
+    void return_value(const data_t& value) noexcept { mPromise.set_value(value); }
 
-    // When the coroutine co_returns a value, this method is used to publish the result
-    void return_value(data_t&& value) noexcept {
-        data = std::move(value);
-    }
-
-    void return_value(const data_t& value) noexcept {
-        data = value;
-    }
+protected:
+    std::promise<data_t> mPromise;
 };
 
 template <>
-struct TaskPromiseBase<void> {
-    void return_void() noexcept {}
+class TaskPromiseBase<void> {
+public:
+    void return_void() noexcept { mPromise.set_value(); }
+
+protected:
+    std::promise<void> mPromise;
+};
+
+struct TaskSharedState {
+    COROUTINE_NAMESPACE::coroutine_handle<> continuation = nullptr;
+    Latch latch{2};
 };
 
 template <typename future_t, typename data_t>
-struct TaskPromise : public TaskPromiseBase<data_t> {
-    COROUTINE_NAMESPACE::coroutine_handle<> precursor;
-    Latch latch{2};
-    std::atomic<bool> done = false; // TODO: use a std::binary_semaphore once that's available on macOS
-    std::exception_ptr eptr;
-
+class TaskPromise : public TaskPromiseBase<data_t> {
+public:
     future_t get_return_object() noexcept {
-        return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this)};
+        return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this), this->mPromise.get_future(), mState};
     }
 
     COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
 
     void unhandled_exception() {
-        eptr = std::current_exception();
+        this->mPromise.set_exception(std::current_exception());
     }
 
     // The coroutine is about to complete (via co_return, reaching the end of the coroutine body,
     // or an uncaught exception). The awaiter returned here defines what happens next
-    auto final_suspend() const noexcept {
-        struct Awaiter {
-            bool await_ready() const noexcept { return false; }
-            void await_resume() const noexcept {}
+    auto final_suspend() noexcept {
+        class Awaiter {
+        public:
+            Awaiter(COROUTINE_NAMESPACE::coroutine_handle<> continuation) : mContinuation{continuation} {}
 
-            // Returning the parent coroutine has the effect of continuing execution where the parent co_await'ed us.
-            COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>> h) const noexcept {
-                bool isLast = h.promise().latch.countDown();
-                auto precursor = h.promise().precursor;
-                h.promise().done = true; // Allow destroying this coroutine's handle
-                if (isLast && precursor) {
-                    return precursor;
-                }
+            bool await_ready() noexcept { return !mContinuation; }
+            void await_resume() noexcept {}
 
-                return COROUTINE_NAMESPACE::noop_coroutine();
+            // Returning the continuation has the effect of continuing execution where the parent co_await'ed us.
+            // It's the parent's job to call destroy on this coroutine's handle.
+            COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>) noexcept {
+                return mContinuation;
             }
+
+        private:
+            COROUTINE_NAMESPACE::coroutine_handle<> mContinuation;
         };
 
-        return Awaiter{};
+        bool isLast = mState->latch.countDown();
+        return Awaiter{isLast ? mState->continuation : nullptr};
     }
+
+private:
+    std::shared_ptr<TaskSharedState> mState = std::make_shared<TaskSharedState>();
 };
 
 template <typename T>
-struct Task {
+class Task {
+public:
     using promise_type = TaskPromise<Task<T>, T>;
 
-    // This handle is assigned to when the coroutine itself is suspended (see await_suspend above)
-    COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
-
-    Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle) : handle{handle} {}
+    Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle, std::future<T>&& future, const std::shared_ptr<TaskSharedState>& state)
+    : mHandle{handle}, mFuture{std::move(future)}, mState{state} {}
 
     // No copying allowed!
     Task(const Task& other) = delete;
     Task& operator=(const Task& other) = delete;
 
     Task& operator=(Task&& other) {
-        handle = other.handle;
-        other.detach();
+        mHandle = other.mHandle;
+        other.mHandle = nullptr;
+        mFuture = std::move(other.mFuture);
+        mState = std::move(other.mState);
         return *this;
     }
     Task(Task&& other) {
@@ -176,90 +164,70 @@ struct Task {
 
     ~Task() {
         // Make sure the coroutine finished and is cleaned up
-        if (handle) {
+        if (mHandle) {
             tlog::warning() << "~Task<T> was invoked before completion.";
-            clear();
         }
     }
 
-    bool await_ready() const noexcept {
-        // No need to suspend if this task has no outstanding work
+    bool await_ready() noexcept {
+        // If the latch has already been passed by final_suspend()
+        // above, the task has already completed and we can skip
+        // suspension of the coroutine.
+        if (mState->latch.value() <= 1) {
+            mState->latch.countDown();
+            mHandle = nullptr;
+            return true;
+        }
+
         return false;
     }
 
     T await_resume() {
-        TEV_ASSERT(handle, "Should not have been able to co_await a detached Task<T>.");
-
-        ScopeGuard guard{[this] {
-            // Spinlock is fine since this will always
-            // be set in the next couple of instructions
-            // of the task's executing thread.
-            while (!handle.promise().done) {}
-            clear();
-        }};
-
-        auto eptr = handle.promise().eptr;
-        if (eptr) {
-            std::rethrow_exception(eptr);
+        // If (and only if) a previously suspended coroutine is resumed here,
+        // this task's own coroutine handle has not been cleaned up (for
+        // implementation reasons) and needs to be destroyed here.
+        // (See the behavior of final_suspend() above.)
+        if (mHandle) {
+            mHandle.destroy();
+            mHandle = nullptr;
         }
 
-        if constexpr (!std::is_void_v<T>) {
-            // The returned value here is what `co_await our_task` evaluates to
-            T tmp = std::move(handle.promise().data);
-            return tmp;
-        }
-    }
-
-    bool await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) const noexcept {
-        if (!handle) {
-            tlog::error() << "Cannot co_await a detached Task<T>.";
-            std::terminate();
-        }
-
-        // The coroutine itself is being suspended (async work can beget other async work)
-        // Record the argument as the continuation point when this is resumed later. See
-        // the final_suspend awaiter on the promise_type above for where this gets used
-        handle.promise().precursor = coroutine;
-        return !handle.promise().latch.countDown();
+        // Note: if there occurred an uncaught exception while executing
+        // this task, it'll get rethrown in the following call.
+        return mFuture.get();
     }
 
     T get() {
-        Latch waitLatch{1};
-        if constexpr (std::is_void_v<T>) {
-            auto waiter = [&]() -> DetachedTask {
-                co_await *this;
-                waitLatch.countDown();
-            };
-            waiter();
-            waitLatch.wait();
-        } else {
-            T result;
-            auto waiter = [&]() -> DetachedTask {
-                result = co_await *this;
-                waitLatch.countDown();
-            };
-            waiter();
-            waitLatch.wait();
-            return result;
+        if (!mHandle) {
+            tlog::error() << "Cannot get()/co_await a task multiple times.";
         }
+
+        mHandle = nullptr;
+        return await_resume();
     }
 
-    COROUTINE_NAMESPACE::coroutine_handle<promise_type> detach() noexcept {
-        auto tmp = handle;
-        handle = nullptr;
-        return tmp;
+    bool await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
+        if (!mHandle) {
+            tlog::error() << "Cannot co_await/get() a task multiple times.";
+            std::terminate();
+        }
+
+        // If the task is still running (checked by arriving at the latch),
+        // mark this coroutine as the task's continuation and suspend it until then.
+        // The task's coroutine `mHandle` remains valid if suspended, implying that it
+        // needs to be manually cleaned up on resumption of this coroutine (see await_resume()).
+        mState->continuation = coroutine;
+        bool shallSuspend = !mState->latch.countDown();
+        if (!shallSuspend) {
+            mHandle = nullptr;
+        }
+        return shallSuspend;
     }
 
 private:
-    void clear() noexcept {
-        if (handle) {
-            // Destruction of the coroutine handle leads to mysterious crashes on Windows,
-            // which appear to be connected to a race condition. For now, we take the
-            // hit of a small memory leak. Warrants further investigation, though.
-            handle.destroy();
-            handle = nullptr;
-        }
-    }
+    COROUTINE_NAMESPACE::coroutine_handle<promise_type> mHandle;
+    std::future<T> mFuture;
+    std::shared_ptr<TaskSharedState> mState;
 };
 
 TEV_NAMESPACE_END

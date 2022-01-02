@@ -66,7 +66,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
     auto numPixels = (size_t)size.x() * size.y();
     if (isHdr) {
-        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             auto typedData = reinterpret_cast<float*>(data);
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
@@ -74,7 +74,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             }
         }, priority);
     } else {
-        co_await gThreadPool->parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
             auto typedData = reinterpret_cast<unsigned char*>(data);
             size_t baseIdx = i * numChannels;
             for (int c = 0; c < numChannels; ++c) {
