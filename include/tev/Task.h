@@ -149,7 +149,6 @@ struct Task {
     COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle;
     std::future<T> future;
     std::shared_ptr<TaskSharedState> state;
-    bool wasSuspended = false;
 
     Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle, std::future<T>&& future, const std::shared_ptr<TaskSharedState>& state)
     : handle{handle}, future{std::move(future)}, state{state} {}
@@ -163,7 +162,6 @@ struct Task {
         other.handle = nullptr;
         future = std::move(other.future);
         state = std::move(other.state);
-        wasSuspended = other.wasSuspended;
         return *this;
     }
     Task(Task&& other) {
@@ -177,12 +175,13 @@ struct Task {
         }
     }
 
-    bool await_ready() const noexcept {
+    bool await_ready() noexcept {
         // If the latch has already been passed by final_suspend()
         // above, the task has already completed and we can skip
         // suspension of the coroutine.
         if (state->latch.value() <= 1) {
             state->latch.countDown();
+            handle = nullptr;
             return true;
         }
 
@@ -190,19 +189,14 @@ struct Task {
     }
 
     T await_resume() {
-        TEV_ASSERT(handle, "Cannot resume a detached Task<T>.");
-
         // If (and only if) a previously suspended coroutine is resumed here,
         // this task's own coroutine handle has not been cleaned up (for
         // implementation reasons) and needs to be destroyed here.
         // (See the behavior of final_suspend() above.)
-        if (wasSuspended) {
+        if (handle) {
             handle.destroy();
+            handle = nullptr;
         }
-
-        // This task's coroutine has definitely been destoyed by now.
-        // Mark this by setting its handle to null.
-        handle = nullptr;
 
         // Note: if there occurred an uncaught exception while executing
         // this task, it'll get rethrown in the following call.
@@ -210,23 +204,30 @@ struct Task {
     }
 
     T get() {
+        if (!handle) {
+            tlog::error() << "Cannot get()/co_await a task multiple times.";
+        }
+
+        handle = nullptr;
         return await_resume();
     }
 
     bool await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
         if (!handle) {
-            tlog::error() << "Cannot co_await a detached Task<T>.";
+            tlog::error() << "Cannot co_await/get() a task multiple times.";
             std::terminate();
         }
 
         // If the task is still running (checked by arriving at the latch),
         // mark this coroutine as the task's continuation and suspend it until then.
-        // The member variable `wasSuspended` indicates this suspension and implies
-        // that the state state of this task needs to be manually cleaned up on
-        // resumption of this coroutine (see await_resume()).
+        // The task's coroutine `handle` remains valid if suspended, implying that it
+        // needs to be manually cleaned up on resumption of this coroutine (see await_resume()).
         state->continuation = coroutine;
-        wasSuspended = !state->latch.countDown();
-        return wasSuspended;
+        bool shallSuspend = !state->latch.countDown();
+        if (!shallSuspend) {
+            handle = nullptr;
+        }
+        return shallSuspend;
     }
 };
 
