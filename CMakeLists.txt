@@ -4,11 +4,11 @@ cmake_minimum_required(VERSION 3.13)
 
 project(
     tev
-    VERSION 1.18
+    VERSION 1.21
     DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
     LANGUAGES C CXX
 )
-set(TEV_VERSION "1.20")
+set(TEV_VERSION "${CMAKE_PROJECT_VERSION}")
 
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
