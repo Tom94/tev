@@ -357,7 +357,7 @@ Ipc::Ipc(const string& hostname) : mSocketFd{INVALID_SOCKET} {
                 continue;
             }
 
-            tlog::success() << "Connected to primary instance at " << mIp << ":" << mPort;
+            tlog::success() << "Connected to primary instance " << mIp << ":" << mPort;
             break; // success
         }
 
@@ -365,7 +365,7 @@ Ipc::Ipc(const string& hostname) : mSocketFd{INVALID_SOCKET} {
             throw runtime_error{"Unable to connect to primary instance."};
         }
     } catch (const runtime_error& e) {
-        tlog::warning() << "Could not initialize IPC; assuming primary instance. " << e.what();
+        tlog::warning() << "Could not initialize IPC. Assuming primary instance. " << e.what();
         mIsPrimaryInstance = true;
     }
 }
@@ -509,8 +509,9 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     } else {
         uint32_t ip = ntohl(client.sin_addr.s_addr);
         uint16_t port = ntohs(client.sin_port);
-        tlog::info() << tfm::format("Accepted IPC client connection into socket fd %d (host: %d.%d.%d.%d:%d)", fd, ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
-        mSocketConnections.push_back(SocketConnection(fd));
+        auto name = tfm::format("%d.%d.%d.%d:%d", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
+        tlog::info() << tfm::format("Client %s (#%d) connected", name, fd);
+        mSocketConnections.push_back(SocketConnection{fd, name});
     }
 
     // Service existing connections.
@@ -525,7 +526,9 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     }
 }
 
-Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd) : mSocketFd(fd) {
+Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, const string& name)
+: mSocketFd{fd}, mName{name}
+{
     TEV_ASSERT(mSocketFd != INVALID_SOCKET, "SocketConnection must receive a valid socket.");
 
     makeSocketNonBlocking(mSocketFd);
@@ -562,7 +565,7 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         // Since we aren't getting annoying SIGPIPE signals when a client
         // disconnects, a zero-byte read here is how we know when that happens.
         if (bytesReceived == 0) {
-            tlog::info() << "Client disconnected from socket fd " << mSocketFd;
+            tlog::info() << "Client " << mName << " (#" << mSocketFd << ") disconnected";
             close();
             return;
         }

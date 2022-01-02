@@ -247,7 +247,7 @@ private:
 
     class SocketConnection {
     public:
-        SocketConnection(Ipc::socket_t fd);
+        SocketConnection(Ipc::socket_t fd, const std::string& name);
 
         void service(std::function<void(const IpcPacket&)> callback);
 
@@ -257,6 +257,7 @@ private:
 
     private:
         Ipc::socket_t mSocketFd;
+        std::string mName;
 
         // Because TCP socket recv() calls return as much data as is available
         // (which may have the partial contents of a client-side send() call,
