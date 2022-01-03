@@ -354,14 +354,12 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             mFpsTextBox->set_alignment(TextBox::Alignment::Right);
             mFpsTextBox->set_min_max_values(1, 1000);
             mFpsTextBox->set_spinnable(true);
-            //TODO: restore
-            // mFpsTextBox->set_fixed_text_width(42);
 
             mPlaybackThread = thread{[&]() {
                 while (mShallRunPlaybackThread) {
                     auto fps = clamp(mFpsTextBox->value(), 1, 1000);
-                    auto sleepDuration = chrono::duration<float>{1.0f / fps};
-                    this_thread::sleep_for(sleepDuration);
+                    auto microseconds = 1000000.0f / fps;
+                    this_thread::sleep_for(chrono::microseconds{std::max((size_t)microseconds, (size_t)1)});
 
                     if (mPlayButton->pushed() && mTaskQueue.empty()) {
                         mTaskQueue.push([&]() {
