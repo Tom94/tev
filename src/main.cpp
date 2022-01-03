@@ -185,14 +185,8 @@ int mainFunc(const vector<string>& arguments) {
         {"ldr"},
     };
 
-    ValueFlag<bool> maximizeFlag{
-        parser,
-        "MAXIMIZE",
-        "Maximize the window on startup. "
-        "If no images were supplied via the command line, then the default is FALSE. "
-        "Otherwise, the default is TRUE.",
-        {"max", "maximize"},
-    };
+    Flag maximizeFlagOn{parser, "MAXIMIZE", "Maximize the window on startup. (Default if images are supplied.)", {"max", "maximize"}};
+    Flag maximizeFlagOff{parser, "NO MAXIMIZE", "Do not maximize the window on startup. (Default if no images are supplied.)", {"no-max", "no-maximize"}};
 
     ValueFlag<string> metricFlag{
         parser,
@@ -208,12 +202,8 @@ int mainFunc(const vector<string>& arguments) {
         {'m', "metric"},
     };
 
-    Flag newWindowFlag{
-        parser,
-        "NEW WINDOW",
-        "Open a new window of tev, even if one exists already.",
-        {'n', "new"},
-    };
+    Flag newWindowFlagOn{parser, "NEW WINDOW", "Open a new window of tev, even if one exists already. (Default if no images are supplied.)", {'n', "new"}};
+    Flag newWindowFlagOff{parser, "NO NEW WINDOW", "Do not open a new window if one already exists. (Default if images are supplied.)", {"no-new"}};
 
     ValueFlag<float> offsetFlag{
         parser,
@@ -267,11 +257,9 @@ int mainFunc(const vector<string>& arguments) {
         return 0;
     } catch (const ParseError& e) {
         cerr << e.what() << endl;
-        cerr << parser;
         return -1;
     } catch (const ValidationError& e) {
         cerr << e.what() << endl;
-        cerr << parser;
         return -2;
     }
 
@@ -286,7 +274,14 @@ int mainFunc(const vector<string>& arguments) {
     // If we don't have any images to load, create new windows regardless of flag.
     // (In this case, the user likely wants to open a new instance of tev rather
     // than focusing the existing one.)
-    bool newWindow = newWindowFlag || !imageFiles;
+    bool newWindow = !imageFiles;
+    if (newWindowFlagOn) { newWindow = true; }
+    if (newWindowFlagOff) { newWindow = false; }
+
+    if (newWindowFlagOn && newWindowFlagOff) {
+        tlog::error() << "Ambiguous 'new window' arguments.";
+        return -3;
+    }
 
     // If we're not the primary instance and did not request to open a new window,
     // simply send the to-be-opened images to the primary instance.
@@ -462,7 +457,14 @@ int mainFunc(const vector<string>& arguments) {
 
     // Do what the maximize flag tells us---if it exists---and
     // maximize if we have images otherwise.
-    bool maximize = maximizeFlag ? get(maximizeFlag) : imageFiles;
+    bool maximize = imageFiles;
+    if (maximizeFlagOn) { maximize = true; }
+    if (maximizeFlagOff) { maximize = false; }
+
+    if (maximizeFlagOn && maximizeFlagOff) {
+        tlog::error() << "Ambiguous 'maximize' arguments.";
+        return -3;
+    }
 
     // sImageViewer is a raw pointer to make sure it will never
     // get deleted. nanogui crashes upon cleanup, so we better
