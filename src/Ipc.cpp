@@ -498,7 +498,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     // Check for new connections.
     struct sockaddr_in client;
     socklen_t addrlen = sizeof(client);
-    int fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
+    socket_t fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
     if (fd == INVALID_SOCKET) {
         int errorId = lastSocketError();
         if (errorId == SocketError::WouldBlock) {
