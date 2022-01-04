@@ -78,7 +78,7 @@ If using these implementations is not an option, it's easy to write your own one
 ```
 where integers are encoded in little endian.
 
-There are helper functions in [Ipc.cpp](src/ipc.cpp) (`IpcPacket::set*`) that show exactly how each packet has to be assembled. These functions do not rely on external dependencies, so it is recommended to copy and paste them into your project for interfacing with __tev__.
+There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that show exactly how each packet has to be assembled. These functions do not rely on external dependencies, so it is recommended to copy and paste them into your project for interfacing with __tev__.
 
 
 ## Obtaining tev
