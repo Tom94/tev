@@ -113,6 +113,14 @@ public:
         return mPath;
     }
 
+    fs::file_time_type fileLastModified() const {
+        return mFileLastModified;
+    }
+
+    void setFileLastModified(fs::file_time_type value) {
+        mFileLastModified = value;
+    }
+
     const std::string& channelSelector() const {
         return mChannelSelector;
     }

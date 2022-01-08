@@ -232,6 +232,13 @@ int mainFunc(const vector<string>& arguments) {
         {'v', "version"},
     };
 
+    Flag watchFlag{
+        parser,
+        "WATCH",
+        "Watch image files for changes and automatically reload them.",
+        {'w', "watch"},
+    };
+
     PositionalList<string> imageFiles{
         parser,
         "images",
@@ -482,6 +489,7 @@ int mainFunc(const vector<string>& arguments) {
     if (metricFlag)   { sImageViewer->setMetric(toMetric(get(metricFlag))); }
     if (offsetFlag)   { sImageViewer->setOffset(get(offsetFlag)); }
     if (tonemapFlag)  { sImageViewer->setTonemap(toTonemap(get(tonemapFlag))); }
+    if (watchFlag)    { sImageViewer->setWatchFilesForChanges(true); }
 
     // Refresh only every 250ms if there are no user interactions.
     // This makes an idling tev surprisingly energy-efficient. :)

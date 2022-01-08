@@ -16,6 +16,7 @@
 #include <nanogui/slider.h>
 #include <nanogui/textbox.h>
 
+#include <chrono>
 #include <memory>
 #include <set>
 #include <vector>
@@ -58,6 +59,7 @@ public:
         reloadImage(imageByName(imageName), shallSelect);
     }
     void reloadAllImages();
+    void reloadImagesWhoseFileChanged();
 
     void updateImage(
         const std::string& imageName,
@@ -74,19 +76,19 @@ public:
 
     void selectReference(const std::shared_ptr<Image>& image);
 
-    float exposure() {
+    float exposure() const {
         return mExposureSlider->value();
     }
 
     void setExposure(float value);
 
-    float offset() {
+    float offset() const {
         return mOffsetSlider->value();
     }
 
     void setOffset(float value);
 
-    float gamma() {
+    float gamma() const {
         return mGammaSlider->value();
     }
 
@@ -95,13 +97,13 @@ public:
     void normalizeExposureAndOffset();
     void resetImage();
 
-    ETonemap tonemap() {
+    ETonemap tonemap() const {
         return mImageCanvas->tonemap();
     }
 
     void setTonemap(ETonemap tonemap);
 
-    EMetric metric() {
+    EMetric metric() const {
         return mImageCanvas->metric();
     }
 
@@ -139,6 +141,14 @@ public:
 
     BackgroundImagesLoader& imagesLoader() const {
         return *mImagesLoader;
+    }
+
+    bool watchFilesForChanges() const {
+        return mWatchFilesForChanges;
+    }
+
+    void setWatchFilesForChanges(bool value) {
+        mWatchFilesForChanges = value;
     }
 
 private:
@@ -243,6 +253,9 @@ private:
     nanogui::Button* mClipToLdrButton;
 
     int mDidFitToImage = 0;
+
+    bool mWatchFilesForChanges = false;
+    std::chrono::steady_clock::time_point mLastFileChangesCheck = {};
 };
 
 TEV_NAMESPACE_END

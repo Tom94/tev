@@ -877,6 +877,15 @@ void ImageViewer::draw_contents() {
 
     clear();
 
+    // If watching files for changes, do so every 100ms
+    if (mWatchFilesForChanges) {
+        auto now = chrono::steady_clock::now();
+        if (now - mLastFileChangesCheck > 100ms) {
+            reloadImagesWhoseFileChanged();
+            mLastFileChangesCheck = now;
+        }
+    }
+
     // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
@@ -1169,6 +1178,33 @@ void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
 void ImageViewer::reloadAllImages() {
     for (size_t i = 0; i < mImages.size(); ++i) {
         reloadImage(mImages[i]);
+    }
+}
+
+void ImageViewer::reloadImagesWhoseFileChanged() {
+    for (size_t i = 0; i < mImages.size(); ++i) {
+        auto& image = mImages[i];
+        if (!fs::exists(image->path())) {
+            continue;
+        }
+
+        fs::file_time_type fileLastModified;
+
+        // Unlikely, but the file could have been deleted, moved, or something
+        // else could have happened to it that makes obtaining its last modified
+        // time impossible. Ignore such errors.
+        try {
+            fileLastModified = fs::last_write_time(image->path());
+        } catch (...) {
+            continue;
+        }
+
+        if (fileLastModified != image->fileLastModified()) {
+            // Updating the last-modified date prevents double-scheduled
+            // reloads if the load take a lot of time or fails.
+            image->setFileLastModified(fileLastModified);
+            reloadImage(image);
+        }
     }
 }
 

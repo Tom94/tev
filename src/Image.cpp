@@ -533,9 +533,14 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
             throw invalid_argument{tfm::format("Image %s could not be opened.", path)};
         }
 
-        fs::file_time_type fileLastModified = {};
+        fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
         if (fs::exists(path)) {
-            fileLastModified = fs::last_write_time(path);
+            // Unlikely, but the file could have been deleted, moved, or something
+            // else might have happened to it that makes obtaining its last modified
+            // time impossible. Ignore such errors.
+            try {
+                fileLastModified = fs::last_write_time(path);
+            } catch (...) {}
         }
 
         std::string loadMethod;
