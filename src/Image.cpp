@@ -515,9 +515,9 @@ string Image::toString() const {
 Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << tfm::format("Could not load %s. %s", path, e.what());
+            tlog::error() << tfm::format("Could not load %s. %s", toString(path), e.what());
         } else {
-            tlog::error() << tfm::format("Could not load \"%s:%s\". %s", path.string(), channelSelector, e.what());
+            tlog::error() << tfm::format("Could not load %s:%s. %s", toString(path), channelSelector, e.what());
         }
     };
 
@@ -580,7 +580,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
-                tlog::success() << tfm::format("Loaded %s via %s after %.3f seconds.", path, loadMethod, elapsedSeconds.count());
+                tlog::success() << tfm::format("Loaded %s via %s after %.3f seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
                 co_return images;
             }

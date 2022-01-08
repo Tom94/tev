@@ -44,12 +44,6 @@ string ensureUtf8(const string& str) {
     return temp;
 }
 
-wstring utf8to16(const string& utf8) {
-    wstring utf16;
-    utf8::utf8to16(begin(utf8), end(utf8), back_inserter(utf16));
-    return utf16;
-}
-
 string utf16to8(const wstring& utf16) {
     string utf8;
     utf8::utf16to8(begin(utf16), end(utf16), back_inserter(utf8));
@@ -57,23 +51,19 @@ string utf16to8(const wstring& utf16) {
 }
 
 fs::path toPath(const string& utf8) {
-#ifdef _WIN32
-    // To be on the safe side, use Windows' native
-    // wide char encoding to construct the path object.
-    return utf8to16(utf8);
-#else
+    // tev's strings are always utf8 encoded, however fs::path does
+    // not know this. Therefore: convert the string to a std::u8string
+    // and pass _that_ string to the fs::path constructor, which will
+    // then take care of converting the utf8 string to the native
+    // file name encoding.
     return toU8string(utf8);
-#endif
 }
 
 string toString(const fs::path& path) {
-#ifdef _WIN32
-    // To be on the safe side, use Windows' native
-    // wide char encoding and convert to UTF8 manually.
-    return utf16to8(path.wstring());
-#else
+    // Conversely to `toPath`, ensure that the returned string is
+    // utf8 encoded by requesting a std::u8string from the path
+    // object and then convert _that_ string to a regular char string.
     return fromU8string(path.u8string());
-#endif
 }
 
 vector<string> split(string text, const string& delim) {
