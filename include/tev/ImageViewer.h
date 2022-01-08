@@ -113,8 +113,11 @@ public:
     nanogui::Vector2i sizeToFitAllImages();
     bool setFilter(const std::string& filter);
 
-    bool useRegex();
+    bool useRegex() const;
     void setUseRegex(bool value);
+
+    bool watchFilesForChanges() const;
+    void setWatchFilesForChanges(bool value);
 
     void maximize();
     bool isMaximized();
@@ -141,14 +144,6 @@ public:
 
     BackgroundImagesLoader& imagesLoader() const {
         return *mImagesLoader;
-    }
-
-    bool watchFilesForChanges() const {
-        return mWatchFilesForChanges;
-    }
-
-    void setWatchFilesForChanges(bool value) {
-        mWatchFilesForChanges = value;
     }
 
 private:
@@ -218,6 +213,9 @@ private:
     nanogui::TextBox* mFilter;
     nanogui::Button* mRegexButton;
 
+    nanogui::Button* mWatchFilesForChangesButton;
+    std::chrono::steady_clock::time_point mLastFileChangesCheck = {};
+
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
 
@@ -253,9 +251,6 @@ private:
     nanogui::Button* mClipToLdrButton;
 
     int mDidFitToImage = 0;
-
-    bool mWatchFilesForChanges = false;
-    std::chrono::steady_clock::time_point mLastFileChangesCheck = {};
 };
 
 TEV_NAMESPACE_END

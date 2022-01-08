@@ -374,7 +374,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Save, refresh, load, close
         {
             auto tools = new Widget{mSidebarLayout};
-            tools->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
+            tools->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 1});
 
             auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{tools, name, icon};
@@ -399,7 +399,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
             mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
                 reloadAllImages();
-            }, FA_RECYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, 0, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+
+            mWatchFilesForChangesButton = makeImageButton("W", true, [this] {}, 0, "Watch for file changes and reload automatically");
+            mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
+            mWatchFilesForChangesButton->set_change_callback([this](bool value) {
+                setWatchFilesForChanges(value);
+            });
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
                 auto* glfwWindow = screen()->glfw_window();
@@ -878,7 +884,7 @@ void ImageViewer::draw_contents() {
     clear();
 
     // If watching files for changes, do so every 100ms
-    if (mWatchFilesForChanges) {
+    if (watchFilesForChanges()) {
         auto now = chrono::steady_clock::now();
         if (now - mLastFileChangesCheck > 100ms) {
             reloadImagesWhoseFileChanged();
@@ -1525,13 +1531,21 @@ bool ImageViewer::setFilter(const string& filter) {
     return true;
 }
 
-bool ImageViewer::useRegex() {
+bool ImageViewer::useRegex() const {
     return mRegexButton->pushed();
 }
 
 void ImageViewer::setUseRegex(bool value) {
     mRegexButton->set_pushed(value);
     mRequiresFilterUpdate = true;
+}
+
+bool ImageViewer::watchFilesForChanges() const {
+    return mWatchFilesForChangesButton->pushed();
+}
+
+void ImageViewer::setWatchFilesForChanges(bool value) {
+    mWatchFilesForChangesButton->set_pushed(value);
 }
 
 void ImageViewer::maximize() {
