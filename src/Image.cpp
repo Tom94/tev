@@ -479,18 +479,12 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     }
 }
 
-template <typename T>
-time_t to_time_t(T time_point) {
-    using namespace chrono;
-    return system_clock::to_time_t(time_point_cast<system_clock::duration>(time_point - T::clock::now() + system_clock::now()));
-}
-
 string Image::toString() const {
     stringstream sstream;
     sstream << mName << "\n\n";
 
     {
-        time_t cftime = to_time_t(mFileLastModified);
+        time_t cftime = chrono::system_clock::to_time_t(clock_cast<chrono::system_clock>(mFileLastModified));
         sstream << "Last modified:\n" << asctime(localtime(&cftime)) << "\n";
     }
 
