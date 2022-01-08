@@ -481,11 +481,14 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
 
 template <typename T>
 time_t to_time_t(T timePoint) {
+    // TODO: clean up this mess once all compilers support clock_cast.
 #ifdef _WIN32
     return chrono::system_clock::to_time_t(chrono::clock_cast<chrono::system_clock>(timePoint));
-#else
+#elif __APPLE__
     using namespace chrono;
     return system_clock::to_time_t(time_point_cast<system_clock::duration>(timePoint - T::clock::now() + system_clock::now()));
+#else
+    return chrono::system_clock::to_time_t(T::clock::to_sys(timePoint));
 #endif
 }
 
