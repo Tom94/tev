@@ -204,8 +204,8 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
 atomic<int> Image::sId(0);
 
-Image::Image(const fs::path& path, ImageData&& data, const string& channelSelector)
-: mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
+Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const string& channelSelector)
+: mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
     mName = channelSelector.empty() ? tev::toString(path) : tfm::format("%s:%s", tev::toString(path), channelSelector);
 
     for (const auto& l : mData.layers) {
@@ -479,9 +479,21 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     }
 }
 
+template <typename T>
+time_t to_time_t(T time_point) {
+    using namespace chrono;
+    return system_clock::to_time_t(time_point_cast<system_clock::duration>(time_point - T::clock::now() + system_clock::now()));
+}
+
 string Image::toString() const {
     stringstream sstream;
-    sstream << "Path: " << mName << "\n\n";
+    sstream << mName << "\n\n";
+
+    {
+        time_t cftime = to_time_t(mFileLastModified);
+        sstream << "Last modified:\n" << asctime(localtime(&cftime)) << "\n";
+    }
+
     sstream << "Resolution: (" << size().x() << ", " << size().y() << ")\n";
     if (displayWindow() != dataWindow() || displayWindow().min != Vector2i{0}) {
         sstream << "Display window: (" << displayWindow().min.x() << ", " << displayWindow().min.y() << ")(" << displayWindow().max.x() << ", " << displayWindow().max.y() << ")\n";
@@ -527,6 +539,11 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
             throw invalid_argument{tfm::format("Image %s could not be opened.", path)};
         }
 
+        fs::file_time_type fileLastModified = {};
+        if (fs::exists(path)) {
+            fileLastModified = fs::last_write_time(path);
+        }
+
         std::string loadMethod;
         for (const auto& imageLoader : ImageLoader::getLoaders()) {
             // If we arrived at the last loader, then we want to at least try loading the image,
@@ -558,7 +575,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                         }
                     }
 
-                    images.emplace_back(make_shared<Image>(path, std::move(i), localChannelSelector));
+                    images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
                 }
 
                 auto end = chrono::system_clock::now();

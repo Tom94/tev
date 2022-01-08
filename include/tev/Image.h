@@ -106,7 +106,7 @@ struct ImageTexture {
 
 class Image {
 public:
-    Image(const fs::path& path, ImageData&& data, const std::string& channelSelector);
+    Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const std::string& channelSelector);
     virtual ~Image();
 
     const fs::path& path() const {
@@ -196,6 +196,8 @@ private:
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
 
     fs::path mPath;
+    fs::file_time_type mFileLastModified;
+
     std::string mChannelSelector;
 
     std::string mName;
