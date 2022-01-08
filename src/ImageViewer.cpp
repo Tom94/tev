@@ -888,7 +888,12 @@ void ImageViewer::draw_contents() {
         for (auto& image : addition->images) {
             // If the loaded file consists of multiple images (such as multi-part EXRs),
             // select the first part if selection is desired.
-            addImage(image, first ? addition->shallSelect : false);
+            bool shallSelect = first ? addition->shallSelect : false;
+            if (addition->toReplace) {
+                replaceImage(addition->toReplace, image, shallSelect);
+            } else {
+                addImage(image, shallSelect);
+            }
             first = false;
         }
     }
@@ -1127,7 +1132,11 @@ void ImageViewer::removeAllImages() {
     }
 }
 
-void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
+void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replacement, bool shallSelect) {
+    if (replacement == nullptr) {
+        throw std::runtime_error{"Must not replace image with nullptr."};
+    }
+
     int currentId = imageId(mCurrentImage);
     int id = imageId(image);
     if (id == -1) {
@@ -1140,28 +1149,27 @@ void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImages = tryLoadImage(image->path(), image->channelSelector()).get();
-    if (!newImages.empty()) {
-        removeImage(image);
-        insertImage(newImages.front(), id, shallSelect);
-        if (newImages.size() > 1) {
-            tlog::warning() << "Ambiguous image reload.";
-        }
-    }
+    removeImage(image);
+    insertImage(replacement, id, shallSelect);
 
     if (referenceId != -1) {
         selectReference(mImages[referenceId]);
     }
 }
 
-void ImageViewer::reloadAllImages() {
-    int id = imageId(mCurrentImage);
-    for (size_t i = 0; i < mImages.size(); ++i) {
-        reloadImage(mImages[i]);
+void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
+    int currentId = imageId(mCurrentImage);
+    int id = imageId(image);
+    if (id == -1) {
+        return;
     }
 
-    if (id != -1) {
-        selectImage(mImages[id]);
+    mImagesLoader->enqueue(image->path(), image->channelSelector(), shallSelect, image);
+}
+
+void ImageViewer::reloadAllImages() {
+    for (size_t i = 0; i < mImages.size(); ++i) {
+        reloadImage(mImages[i]);
     }
 }
 

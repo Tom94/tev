@@ -220,6 +220,7 @@ struct ImageAddition {
     int loadId;
     bool shallSelect;
     std::vector<std::shared_ptr<Image>> images;
+    std::shared_ptr<Image> toReplace;
 
     struct Comparator {
         bool operator()(const ImageAddition& a, const ImageAddition& b) {
@@ -230,7 +231,7 @@ struct ImageAddition {
 
 class BackgroundImagesLoader {
 public:
-    void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect);
+    void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
 
     bool publishSortedLoads();

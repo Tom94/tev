@@ -204,7 +204,7 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
 atomic<int> Image::sId(0);
 
-Image::Image(const class fs::path& path, ImageData&& data, const string& channelSelector)
+Image::Image(const fs::path& path, ImageData&& data, const string& channelSelector)
 : mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
     mName = channelSelector.empty() ? tev::toString(path) : tfm::format("%s:%s", tev::toString(path), channelSelector);
 
@@ -604,9 +604,9 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelect
     co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector);
 }
 
-void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect) {
+void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
     int loadId = mUnsortedLoadCounter++;
-    invokeTaskDetached([loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+    invokeTaskDetached([loadId, path, channelSelector, shallSelect, toReplace, this]() -> Task<void> {
         int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
@@ -614,7 +614,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
 
         {
             std::lock_guard lock{mPendingLoadedImagesMutex};
-            mPendingLoadedImages.push({ loadId, shallSelect, images });
+            mPendingLoadedImages.push({ loadId, shallSelect, images, toReplace });
         }
 
         if (publishSortedLoads()) {
