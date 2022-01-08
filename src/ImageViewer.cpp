@@ -401,7 +401,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                 reloadAllImages();
             }, 0, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
-            mWatchFilesForChangesButton = makeImageButton("W", true, [this] {}, 0, "Watch for file changes and reload automatically");
+            mWatchFilesForChangesButton = makeImageButton("W", true, {}, 0, "Watch image files for changes and reload them automatically.");
             mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
             mWatchFilesForChangesButton->set_change_callback([this](bool value) {
                 setWatchFilesForChanges(value);
