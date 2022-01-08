@@ -1158,7 +1158,6 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
 }
 
 void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
-    int currentId = imageId(mCurrentImage);
     int id = imageId(image);
     if (id == -1) {
         return;
