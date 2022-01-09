@@ -239,9 +239,20 @@ struct ImageAddition {
     };
 };
 
+struct PathAndChannelSelector {
+    fs::path path;
+    std::string channelSelector;
+
+    bool operator<(const PathAndChannelSelector& other) const {
+        return path == other.path ? (channelSelector < other.channelSelector) : (path < other.path);
+    }
+};
+
 class BackgroundImagesLoader {
 public:
     void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
+    void checkDirectoriesForNewFilesAndLoadThose();
+
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
 
     bool publishSortedLoads();
@@ -271,7 +282,8 @@ private:
     std::atomic<int> mUnsortedLoadCounter{0};
 
     bool mRecursiveDirectories = false;
-    std::set<fs::path> mDirectories;
+    std::map<fs::path, std::set<std::string>> mDirectories;
+    std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 };
 
 TEV_NAMESPACE_END

@@ -639,11 +639,12 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         tlog::info() << "Loading images " << (mRecursiveDirectories ? "recursively " : "") << "from directory " << toString(path);
 
         fs::path canonicalPath = fs::canonical(path);
-        mDirectories.emplace(canonicalPath);
+        mDirectories[canonicalPath].emplace(channelSelector);
 
         bool first = true;
         forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](auto const& entry) {
             if (!entry.is_directory()) {
+                mFilesFoundInDirectories.emplace(entry, channelSelector);
                 enqueue(entry, channelSelector, first ? shallSelect : false);
                 first = false;
             }
@@ -667,6 +668,22 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
             redrawWindow();
         }
     });
+}
+
+void BackgroundImagesLoader::checkDirectoriesForNewFilesAndLoadThose() {
+    for (const auto& dir : mDirectories) {
+        forEachFileInDir(mRecursiveDirectories, dir.first, [&](auto const& entry) {
+            if (!entry.is_directory()) {
+                for (const auto& channelSelector : dir.second) {
+                    PathAndChannelSelector p = {entry, channelSelector};
+                    if (!mFilesFoundInDirectories.contains(p)) {
+                        mFilesFoundInDirectories.emplace(p);
+                        enqueue(entry, channelSelector, false);
+                    }
+                }
+            }
+        });
+    }
 }
 
 bool BackgroundImagesLoader::publishSortedLoads() {
