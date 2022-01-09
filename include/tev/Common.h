@@ -186,12 +186,15 @@ std::string toString(const fs::path& path);
 
 template <typename F>
 void forEachFileInDir(bool recursive, const fs::path& path, F&& callback) {
+    // Ignore errors in case a directory no longer exists.
+    // Simply don't invoke the loop body in that case.
+    std::error_code ec;
     if (recursive) {
-        for (auto const& entry : fs::recursive_directory_iterator{path}) {
+        for (auto const& entry : fs::recursive_directory_iterator{path, ec}) {
             callback(entry);
         }
     } else {
-        for (auto const& entry : fs::directory_iterator{path}) {
+        for (auto const& entry : fs::directory_iterator{path, ec}) {
             callback(entry);
         }
     }
