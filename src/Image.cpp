@@ -644,7 +644,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         bool first = true;
         forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](auto const& entry) {
             if (!entry.is_directory()) {
-                mFilesFoundInDirectories.emplace(entry, channelSelector);
+                mFilesFoundInDirectories.emplace(PathAndChannelSelector{entry, channelSelector});
                 enqueue(entry, channelSelector, first ? shallSelect : false);
                 first = false;
             }
