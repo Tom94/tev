@@ -225,6 +225,13 @@ int mainFunc(const vector<string>& arguments) {
         {'t', "tonemap"},
     };
 
+    Flag recursiveFlag{
+        parser,
+        "RECURSIVE",
+        "Recursively traverse directories when loading images from them.",
+        {'r', "recursive"},
+    };
+
     Flag versionFlag{
         parser,
         "VERSION",
@@ -328,6 +335,9 @@ int mainFunc(const vector<string>& arguments) {
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
+    if (recursiveFlag) {
+        imagesLoader->setRecursiveDirectories(true);
+    }
 
     // Spawn a background thread that opens images passed via stdin.
     // To allow whitespace characters in filenames, we use the convention that

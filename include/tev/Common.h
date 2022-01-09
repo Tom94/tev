@@ -184,6 +184,19 @@ std::string utf16to8(const std::wstring& utf16);
 fs::path toPath(const std::string& utf8);
 std::string toString(const fs::path& path);
 
+template <typename F>
+void forEachFileInDir(bool recursive, const fs::path& path, F&& callback) {
+    if (recursive) {
+        for (auto const& entry : fs::recursive_directory_iterator{path}) {
+            callback(entry);
+        }
+    } else {
+        for (auto const& entry : fs::directory_iterator{path}) {
+            callback(entry);
+        }
+    }
+}
+
 template <typename T>
 class ScopeGuard {
 public:

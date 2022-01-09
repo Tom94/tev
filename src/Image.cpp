@@ -634,6 +634,23 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelect
 }
 
 void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
+    // If we're trying to open a directory, try loading all the images inside of that directory
+    if (fs::exists(path) && fs::is_directory(path)) {
+        tlog::info() << "Loading images " << (mRecursiveDirectories ? "recursively " : "") << "from directory " << toString(path);
+
+        fs::path canonicalPath = fs::canonical(path);
+        mDirectories.emplace(canonicalPath);
+
+        bool first = true;
+        forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](auto const& entry) {
+            if (!entry.is_directory()) {
+                enqueue(entry, channelSelector, first ? shallSelect : false);
+                first = false;
+            }
+        });
+        return;
+    }
+
     int loadId = mUnsortedLoadCounter++;
     invokeTaskDetached([loadId, path, channelSelector, shallSelect, toReplace, this]() -> Task<void> {
         int taskPriority = -Image::drawId();

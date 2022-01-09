@@ -249,6 +249,14 @@ public:
         return mLoadCounter != mUnsortedLoadCounter;
     }
 
+    bool recursiveDirectories() const {
+        return mRecursiveDirectories;
+    }
+
+    void setRecursiveDirectories(bool value) {
+        mRecursiveDirectories = value;
+    }
+
 private:
     SharedQueue<ImageAddition> mLoadedImages;
 
@@ -261,6 +269,9 @@ private:
 
     std::atomic<int> mLoadCounter{0};
     std::atomic<int> mUnsortedLoadCounter{0};
+
+    bool mRecursiveDirectories = false;
+    std::set<fs::path> mDirectories;
 };
 
 TEV_NAMESPACE_END
