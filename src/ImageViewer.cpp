@@ -374,7 +374,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         // Save, refresh, load, close
         {
             auto tools = new Widget{mSidebarLayout};
-            tools->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 1});
+            tools->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 1});
 
             auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{tools, name, icon};
@@ -399,7 +399,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
             mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
                 reloadAllImages();
-            }, FA_RECYCLE, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, 0, tfm::format("Reload All (%s+Shift+R or %s+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+
+            mWatchFilesForChangesButton = makeImageButton("W", true, {}, 0, "Watch image files and directories for changes and reload them automatically.");
+            mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
+            mWatchFilesForChangesButton->set_change_callback([this](bool value) {
+                setWatchFilesForChanges(value);
+            });
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
                 auto* glfwWindow = screen()->glfw_window();
@@ -877,6 +883,16 @@ void ImageViewer::draw_contents() {
 
     clear();
 
+    // If watching files for changes, do so every 100ms
+    if (watchFilesForChanges()) {
+        auto now = chrono::steady_clock::now();
+        if (now - mLastFileChangesCheck > 100ms) {
+            reloadImagesWhoseFileChanged();
+            mImagesLoader->checkDirectoriesForNewFilesAndLoadThose();
+            mLastFileChangesCheck = now;
+        }
+    }
+
     // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the
     // place where we actually add them to the GUI. Focus the application in case one of the
     // new images is meant to override the current selection.
@@ -888,7 +904,12 @@ void ImageViewer::draw_contents() {
         for (auto& image : addition->images) {
             // If the loaded file consists of multiple images (such as multi-part EXRs),
             // select the first part if selection is desired.
-            addImage(image, first ? addition->shallSelect : false);
+            bool shallSelect = first ? addition->shallSelect : false;
+            if (addition->toReplace) {
+                replaceImage(addition->toReplace, image, shallSelect);
+            } else {
+                addImage(image, shallSelect);
+            }
             first = false;
         }
     }
@@ -1127,7 +1148,11 @@ void ImageViewer::removeAllImages() {
     }
 }
 
-void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
+void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replacement, bool shallSelect) {
+    if (replacement == nullptr) {
+        throw std::runtime_error{"Must not replace image with nullptr."};
+    }
+
     int currentId = imageId(mCurrentImage);
     int id = imageId(image);
     if (id == -1) {
@@ -1140,28 +1165,53 @@ void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
 
     int referenceId = imageId(mCurrentReference);
 
-    auto newImages = tryLoadImage(image->path(), image->channelSelector()).get();
-    if (!newImages.empty()) {
-        removeImage(image);
-        insertImage(newImages.front(), id, shallSelect);
-        if (newImages.size() > 1) {
-            tlog::warning() << "Ambiguous image reload.";
-        }
-    }
+    removeImage(image);
+    insertImage(replacement, id, shallSelect);
 
     if (referenceId != -1) {
         selectReference(mImages[referenceId]);
     }
 }
 
+void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
+    int id = imageId(image);
+    if (id == -1) {
+        return;
+    }
+
+    mImagesLoader->enqueue(image->path(), image->channelSelector(), shallSelect, image);
+}
+
 void ImageViewer::reloadAllImages() {
-    int id = imageId(mCurrentImage);
     for (size_t i = 0; i < mImages.size(); ++i) {
         reloadImage(mImages[i]);
     }
+}
 
-    if (id != -1) {
-        selectImage(mImages[id]);
+void ImageViewer::reloadImagesWhoseFileChanged() {
+    for (size_t i = 0; i < mImages.size(); ++i) {
+        auto& image = mImages[i];
+        if (!fs::exists(image->path())) {
+            continue;
+        }
+
+        fs::file_time_type fileLastModified;
+
+        // Unlikely, but the file could have been deleted, moved, or something
+        // else could have happened to it that makes obtaining its last modified
+        // time impossible. Ignore such errors.
+        try {
+            fileLastModified = fs::last_write_time(image->path());
+        } catch (...) {
+            continue;
+        }
+
+        if (fileLastModified != image->fileLastModified()) {
+            // Updating the last-modified date prevents double-scheduled
+            // reloads if the load take a lot of time or fails.
+            image->setFileLastModified(fileLastModified);
+            reloadImage(image);
+        }
     }
 }
 
@@ -1482,13 +1532,21 @@ bool ImageViewer::setFilter(const string& filter) {
     return true;
 }
 
-bool ImageViewer::useRegex() {
+bool ImageViewer::useRegex() const {
     return mRegexButton->pushed();
 }
 
 void ImageViewer::setUseRegex(bool value) {
     mRegexButton->set_pushed(value);
     mRequiresFilterUpdate = true;
+}
+
+bool ImageViewer::watchFilesForChanges() const {
+    return mWatchFilesForChangesButton->pushed();
+}
+
+void ImageViewer::setWatchFilesForChanges(bool value) {
+    mWatchFilesForChangesButton->set_pushed(value);
 }
 
 void ImageViewer::maximize() {

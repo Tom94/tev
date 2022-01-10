@@ -106,11 +106,19 @@ struct ImageTexture {
 
 class Image {
 public:
-    Image(const fs::path& path, ImageData&& data, const std::string& channelSelector);
+    Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const std::string& channelSelector);
     virtual ~Image();
 
     const fs::path& path() const {
         return mPath;
+    }
+
+    fs::file_time_type fileLastModified() const {
+        return mFileLastModified;
+    }
+
+    void setFileLastModified(fs::file_time_type value) {
+        mFileLastModified = value;
     }
 
     const std::string& channelSelector() const {
@@ -196,6 +204,8 @@ private:
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
 
     fs::path mPath;
+    fs::file_time_type mFileLastModified;
+
     std::string mChannelSelector;
 
     std::string mName;
@@ -220,6 +230,7 @@ struct ImageAddition {
     int loadId;
     bool shallSelect;
     std::vector<std::shared_ptr<Image>> images;
+    std::shared_ptr<Image> toReplace;
 
     struct Comparator {
         bool operator()(const ImageAddition& a, const ImageAddition& b) {
@@ -228,14 +239,33 @@ struct ImageAddition {
     };
 };
 
+struct PathAndChannelSelector {
+    fs::path path;
+    std::string channelSelector;
+
+    bool operator<(const PathAndChannelSelector& other) const {
+        return path == other.path ? (channelSelector < other.channelSelector) : (path < other.path);
+    }
+};
+
 class BackgroundImagesLoader {
 public:
-    void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect);
+    void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
+    void checkDirectoriesForNewFilesAndLoadThose();
+
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
 
     bool publishSortedLoads();
     bool hasPendingLoads() const {
         return mLoadCounter != mUnsortedLoadCounter;
+    }
+
+    bool recursiveDirectories() const {
+        return mRecursiveDirectories;
+    }
+
+    void setRecursiveDirectories(bool value) {
+        mRecursiveDirectories = value;
     }
 
 private:
@@ -250,6 +280,10 @@ private:
 
     std::atomic<int> mLoadCounter{0};
     std::atomic<int> mUnsortedLoadCounter{0};
+
+    bool mRecursiveDirectories = false;
+    std::map<fs::path, std::set<std::string>> mDirectories;
+    std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 };
 
 TEV_NAMESPACE_END

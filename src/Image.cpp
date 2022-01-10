@@ -204,8 +204,8 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
 atomic<int> Image::sId(0);
 
-Image::Image(const class fs::path& path, ImageData&& data, const string& channelSelector)
-: mPath{path}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
+Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const string& channelSelector)
+: mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
     mName = channelSelector.empty() ? tev::toString(path) : tfm::format("%s:%s", tev::toString(path), channelSelector);
 
     for (const auto& l : mData.layers) {
@@ -479,9 +479,28 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     }
 }
 
+template <typename T>
+time_t to_time_t(T timePoint) {
+    // TODO: clean up this mess once all compilers support clock_cast.
+#ifdef _WIN32
+    return chrono::system_clock::to_time_t(chrono::clock_cast<chrono::system_clock>(timePoint));
+#elif __APPLE__
+    using namespace chrono;
+    return system_clock::to_time_t(time_point_cast<system_clock::duration>(timePoint - T::clock::now() + system_clock::now()));
+#else
+    return chrono::system_clock::to_time_t(T::clock::to_sys(timePoint));
+#endif
+}
+
 string Image::toString() const {
     stringstream sstream;
-    sstream << "Path: " << mName << "\n\n";
+    sstream << mName << "\n\n";
+
+    {
+        time_t cftime = to_time_t(mFileLastModified);
+        sstream << "Last modified:\n" << asctime(localtime(&cftime)) << "\n";
+    }
+
     sstream << "Resolution: (" << size().x() << ", " << size().y() << ")\n";
     if (displayWindow() != dataWindow() || displayWindow().min != Vector2i{0}) {
         sstream << "Display window: (" << displayWindow().min.x() << ", " << displayWindow().min.y() << ")(" << displayWindow().max.x() << ", " << displayWindow().max.y() << ")\n";
@@ -509,9 +528,9 @@ string Image::toString() const {
 Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << tfm::format("Could not load %s. %s", path, e.what());
+            tlog::error() << tfm::format("Could not load %s. %s", toString(path), e.what());
         } else {
-            tlog::error() << tfm::format("Could not load \"%s:%s\". %s", path.string(), channelSelector, e.what());
+            tlog::error() << tfm::format("Could not load %s:%s. %s", toString(path), channelSelector, e.what());
         }
     };
 
@@ -525,6 +544,16 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
 
         if (!iStream) {
             throw invalid_argument{tfm::format("Image %s could not be opened.", path)};
+        }
+
+        fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
+        if (fs::exists(path)) {
+            // Unlikely, but the file could have been deleted, moved, or something
+            // else might have happened to it that makes obtaining its last modified
+            // time impossible. Ignore such errors.
+            try {
+                fileLastModified = fs::last_write_time(path);
+            } catch (...) {}
         }
 
         std::string loadMethod;
@@ -558,13 +587,13 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                         }
                     }
 
-                    images.emplace_back(make_shared<Image>(path, std::move(i), localChannelSelector));
+                    images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
                 }
 
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
-                tlog::success() << tfm::format("Loaded %s via %s after %.3f seconds.", path, loadMethod, elapsedSeconds.count());
+                tlog::success() << tfm::format("Loaded %s via %s after %.3f seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
                 co_return images;
             }
@@ -604,9 +633,27 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelect
     co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector);
 }
 
-void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect) {
+void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
+    // If we're trying to open a directory, try loading all the images inside of that directory
+    if (fs::exists(path) && fs::is_directory(path)) {
+        tlog::info() << "Loading images " << (mRecursiveDirectories ? "recursively " : "") << "from directory " << toString(path);
+
+        fs::path canonicalPath = fs::canonical(path);
+        mDirectories[canonicalPath].emplace(channelSelector);
+
+        bool first = true;
+        forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](auto const& entry) {
+            if (!entry.is_directory()) {
+                mFilesFoundInDirectories.emplace(PathAndChannelSelector{entry, channelSelector});
+                enqueue(entry, channelSelector, first ? shallSelect : false);
+                first = false;
+            }
+        });
+        return;
+    }
+
     int loadId = mUnsortedLoadCounter++;
-    invokeTaskDetached([loadId, path, channelSelector, shallSelect, this]() -> Task<void> {
+    invokeTaskDetached([loadId, path, channelSelector, shallSelect, toReplace, this]() -> Task<void> {
         int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
@@ -614,13 +661,29 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
 
         {
             std::lock_guard lock{mPendingLoadedImagesMutex};
-            mPendingLoadedImages.push({ loadId, shallSelect, images });
+            mPendingLoadedImages.push({ loadId, shallSelect, images, toReplace });
         }
 
         if (publishSortedLoads()) {
             redrawWindow();
         }
     });
+}
+
+void BackgroundImagesLoader::checkDirectoriesForNewFilesAndLoadThose() {
+    for (const auto& dir : mDirectories) {
+        forEachFileInDir(mRecursiveDirectories, dir.first, [&](auto const& entry) {
+            if (!entry.is_directory()) {
+                for (const auto& channelSelector : dir.second) {
+                    PathAndChannelSelector p = {entry, channelSelector};
+                    if (!mFilesFoundInDirectories.contains(p)) {
+                        mFilesFoundInDirectories.emplace(p);
+                        enqueue(entry, channelSelector, false);
+                    }
+                }
+            }
+        });
+    }
 }
 
 bool BackgroundImagesLoader::publishSortedLoads() {

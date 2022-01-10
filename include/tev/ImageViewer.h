@@ -16,6 +16,7 @@
 #include <nanogui/slider.h>
 #include <nanogui/textbox.h>
 
+#include <chrono>
 #include <memory>
 #include <set>
 #include <vector>
@@ -51,11 +52,14 @@ public:
     }
     void removeAllImages();
 
+    void replaceImage(std::shared_ptr<Image> image, std::shared_ptr<Image> replacement, bool shallSelect);
+
     void reloadImage(std::shared_ptr<Image> image, bool shallSelect = false);
     void reloadImage(const std::string& imageName, bool shallSelect = false) {
         reloadImage(imageByName(imageName), shallSelect);
     }
     void reloadAllImages();
+    void reloadImagesWhoseFileChanged();
 
     void updateImage(
         const std::string& imageName,
@@ -72,19 +76,19 @@ public:
 
     void selectReference(const std::shared_ptr<Image>& image);
 
-    float exposure() {
+    float exposure() const {
         return mExposureSlider->value();
     }
 
     void setExposure(float value);
 
-    float offset() {
+    float offset() const {
         return mOffsetSlider->value();
     }
 
     void setOffset(float value);
 
-    float gamma() {
+    float gamma() const {
         return mGammaSlider->value();
     }
 
@@ -93,13 +97,13 @@ public:
     void normalizeExposureAndOffset();
     void resetImage();
 
-    ETonemap tonemap() {
+    ETonemap tonemap() const {
         return mImageCanvas->tonemap();
     }
 
     void setTonemap(ETonemap tonemap);
 
-    EMetric metric() {
+    EMetric metric() const {
         return mImageCanvas->metric();
     }
 
@@ -109,8 +113,11 @@ public:
     nanogui::Vector2i sizeToFitAllImages();
     bool setFilter(const std::string& filter);
 
-    bool useRegex();
+    bool useRegex() const;
     void setUseRegex(bool value);
+
+    bool watchFilesForChanges() const;
+    void setWatchFilesForChanges(bool value);
 
     void maximize();
     bool isMaximized();
@@ -205,6 +212,9 @@ private:
 
     nanogui::TextBox* mFilter;
     nanogui::Button* mRegexButton;
+
+    nanogui::Button* mWatchFilesForChangesButton;
+    std::chrono::steady_clock::time_point mLastFileChangesCheck = {};
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;

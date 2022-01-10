@@ -180,10 +180,25 @@ inline int codePointLength(char first) {
 }
 
 std::string ensureUtf8(const std::string& str);
-std::wstring utf8to16(const std::string& utf16);
 std::string utf16to8(const std::wstring& utf16);
 fs::path toPath(const std::string& utf8);
 std::string toString(const fs::path& path);
+
+template <typename F>
+void forEachFileInDir(bool recursive, const fs::path& path, F&& callback) {
+    // Ignore errors in case a directory no longer exists.
+    // Simply don't invoke the loop body in that case.
+    std::error_code ec;
+    if (recursive) {
+        for (auto const& entry : fs::recursive_directory_iterator{path, ec}) {
+            callback(entry);
+        }
+    } else {
+        for (auto const& entry : fs::directory_iterator{path, ec}) {
+            callback(entry);
+        }
+    }
+}
 
 template <typename T>
 class ScopeGuard {

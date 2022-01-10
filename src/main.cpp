@@ -225,11 +225,25 @@ int mainFunc(const vector<string>& arguments) {
         {'t', "tonemap"},
     };
 
+    Flag recursiveFlag{
+        parser,
+        "RECURSIVE",
+        "Recursively traverse directories when loading images from them.",
+        {'r', "recursive"},
+    };
+
     Flag versionFlag{
         parser,
         "VERSION",
         "Display the version of tev.",
         {'v', "version"},
+    };
+
+    Flag watchFlag{
+        parser,
+        "WATCH",
+        "Watch image files for changes and automatically reload them.",
+        {'w', "watch"},
     };
 
     PositionalList<string> imageFiles{
@@ -321,6 +335,9 @@ int mainFunc(const vector<string>& arguments) {
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
+    if (recursiveFlag) {
+        imagesLoader->setRecursiveDirectories(true);
+    }
 
     // Spawn a background thread that opens images passed via stdin.
     // To allow whitespace characters in filenames, we use the convention that
@@ -482,6 +499,7 @@ int mainFunc(const vector<string>& arguments) {
     if (metricFlag)   { sImageViewer->setMetric(toMetric(get(metricFlag))); }
     if (offsetFlag)   { sImageViewer->setOffset(get(offsetFlag)); }
     if (tonemapFlag)  { sImageViewer->setTonemap(toTonemap(get(tonemapFlag))); }
+    if (watchFlag)    { sImageViewer->setWatchFilesForChanges(true); }
 
     // Refresh only every 250ms if there are no user interactions.
     // This makes an idling tev surprisingly energy-efficient. :)
@@ -494,6 +512,7 @@ TEV_NAMESPACE_END
 
 #ifdef _WIN32
 int wmain(int argc, wchar_t* argv[]) {
+    SetConsoleOutputCP(CP_UTF8);
 #else
 int main(int argc, char* argv[]) {
 #endif
