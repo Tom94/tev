@@ -242,7 +242,7 @@ int mainFunc(const vector<string>& arguments) {
     Flag watchFlag{
         parser,
         "WATCH",
-        "Watch image files for changes and automatically reload them.",
+        "Watch image files and directories for changes and automatically reload them.",
         {'w', "watch"},
     };
 
