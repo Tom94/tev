@@ -170,11 +170,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                         1.0
                     );
-
-                    if (clipToLdr) {
-                        gl_FragColor.rgb = clamp(gl_FragColor.rgb, 0.0, 1.0);
-                    }
-
+                    gl_FragColor.rgb = clamp(gl_FragColor.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
                     return;
                 }
 
@@ -187,9 +183,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                     1.0
                 );
 
-                if (clipToLdr) {
-                    gl_FragColor.rgb = clamp(gl_FragColor.rgb, 0.0, 1.0);
-                }
+                gl_FragColor.rgb = clamp(gl_FragColor.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
             })";
 #elif defined(NANOGUI_USE_METAL)
         auto vertexShader =
@@ -355,9 +349,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                         ),
                         1.0f
                     );
-                    if (clipToLdr) {
-                        color.rgb = clamp(color.rgb, 0.0f, 1.0f);
-                    }
+                    color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
                     return color;
                 }
 
@@ -377,9 +369,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                     ),
                     1.0f
                 );
-                if (clipToLdr) {
-                    color.rgb = clamp(color.rgb, 0.0f, 1.0f);
-                }
+                color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
                 return color;
             })";
 #endif
