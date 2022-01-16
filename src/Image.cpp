@@ -21,22 +21,14 @@ TEV_NAMESPACE_BEGIN
 vector<string> ImageData::channelsInLayer(string layerName) const {
     vector<string> result;
 
-    if (layerName.empty()) {
-        for (const auto& c : channels) {
-            if (c.name().find(".") == string::npos) {
+    for (const auto& c : channels) {
+        // If the layer name starts at the beginning, and
+        // if no other dot is found after the end of the layer name,
+        // then we have found a channel of this layer.
+        if (c.name().starts_with(layerName)) {
+            const auto& channelWithoutLayer = c.name().substr(layerName.length());
+            if (channelWithoutLayer.find(".") == string::npos) {
                 result.emplace_back(c.name());
-            }
-        }
-    } else {
-        for (const auto& c : channels) {
-            // If the layer name starts at the beginning, and
-            // if no other dot is found after the end of the layer name,
-            // then we have found a channel of this layer.
-            if (c.name().starts_with(layerName) && c.name().length() > layerName.length()) {
-                const auto& channelWithoutLayer = c.name().substr(layerName.length() + 1);
-                if (channelWithoutLayer.find(".") == string::npos) {
-                    result.emplace_back(c.name());
-                }
             }
         }
     }
@@ -53,15 +45,13 @@ Task<void> ImageData::convertToRec709(int priority) {
     vector<Task<void>> tasks;
 
     for (const auto& layer : layers) {
-        string layerPrefix = layer.empty() ? "" : (layer + ".");
-
         Channel* r = nullptr;
         Channel* g = nullptr;
         Channel* b = nullptr;
 
         if (!(
-            ((r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B"))) ||
-            ((r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b")))
+            ((r = mutableChannel(layer + "R")) && (g = mutableChannel(layer + "G")) && (b = mutableChannel(layer + "B"))) ||
+            ((r = mutableChannel(layer + "r")) && (g = mutableChannel(layer + "g")) && (b = mutableChannel(layer + "b")))
         )) {
             // No RGB-triplet found
             continue;
@@ -90,8 +80,7 @@ Task<void> ImageData::convertToRec709(int priority) {
 
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
     for (const auto& layer : layers) {
-        string layerPrefix = layer.empty() ? "" : (layer + ".");
-        string alphaChannelName = layerPrefix + "A";
+        string alphaChannelName = layer + "A";
 
         if (!hasChannel(alphaChannelName)) {
             continue;
@@ -342,16 +331,15 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
         if (layer.empty()) {
             name = channelsString;
         } else if (channelTails.size() == 1) {
-            name = layer + "." + channelsString;
+            name = layer + channelsString;
         } else {
-            name = layer + ".(" + channelsString + ")";
+            name = layer + "(" + channelsString + ")";
         }
 
         return ChannelGroup{name, move(channels)};
     };
 
-    string layerPrefix = layerName.empty() ? "" : (layerName + ".");
-    string alphaChannelName = layerPrefix + "A";
+    string alphaChannelName = layerName + "A";
 
     vector<string> allChannels = mData.channelsInLayer(layerName);
 
@@ -366,7 +354,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
     for (const auto& group : groups) {
         vector<string> groupChannels;
         for (const string& channel : group) {
-            string name = layerPrefix + channel;
+            string name = layerName + channel;
             auto it = find(begin(allChannels), end(allChannels), name);
             if (it != end(allChannels)) {
                 groupChannels.emplace_back(name);
@@ -412,8 +400,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
 }
 
 vector<string> Image::getSortedChannels(const string& layerName) const {
-    string layerPrefix = layerName.empty() ? "" : (layerName + ".");
-    string alphaChannelName = layerPrefix + "A";
+    string alphaChannelName = layerName + "A";
 
     bool includesAlphaChannel = false;
 
@@ -516,9 +503,12 @@ string Image::toString() const {
             return Channel::tail(channel);
         });
         if (layer.empty()) {
-            layer = "<root>";
+            return join(channels, ",");
+        } else if (channels.size() == 1) {
+            return layer + channels.front();
+        } else {
+            return layer + "("s + join(channels, ",") + ")"s;
         }
-        return layer + ": " + join(channels, ",");
     });
 
     sstream << join(localLayers, "\n");

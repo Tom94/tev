@@ -48,7 +48,7 @@ void Channel::updateTile(int x, int y, int width, int height, const vector<float
 pair<string, string> Channel::split(const string& channel) {
     size_t dotPosition = channel.rfind(".");
     if (dotPosition != string::npos) {
-        return {channel.substr(0, dotPosition), channel.substr(dotPosition + 1)};
+        return {channel.substr(0, dotPosition + 1), channel.substr(dotPosition + 1)};
     }
 
     return {"", channel};
