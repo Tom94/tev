@@ -656,15 +656,15 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 resetImage();
             }
             return true;
-        } else if (key == GLFW_KEY_B && modifiers & SYSTEM_COMMAND_MOD) {
+        } else if (key == GLFW_KEY_B && (modifiers & SYSTEM_COMMAND_MOD)) {
             setUiVisible(!isUiVisible());
-        } else if (key == GLFW_KEY_O && modifiers & SYSTEM_COMMAND_MOD) {
+        } else if (key == GLFW_KEY_O && (modifiers & SYSTEM_COMMAND_MOD)) {
             openImageDialog();
             return true;
-        } else if (key == GLFW_KEY_S && modifiers & SYSTEM_COMMAND_MOD) {
+        } else if (key == GLFW_KEY_S && (modifiers & SYSTEM_COMMAND_MOD)) {
             saveImageDialog();
             return true;
-        } else if (key == GLFW_KEY_P && modifiers & SYSTEM_COMMAND_MOD) {
+        } else if (key == GLFW_KEY_P && (modifiers & SYSTEM_COMMAND_MOD)) {
             mFilter->request_focus();
             return true;
         } else if (key == GLFW_KEY_F) {
@@ -696,7 +696,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             mClipToLdrButton->set_pushed(!mClipToLdrButton->pushed());
             mImageCanvas->setClipToLdr(mClipToLdrButton->pushed());
             return true;
-        } else if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
+        } else if (key == GLFW_KEY_Q && (modifiers & SYSTEM_COMMAND_MOD)) {
             set_visible(false);
             return true;
         } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
