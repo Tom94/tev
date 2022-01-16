@@ -45,15 +45,13 @@ Task<void> ImageData::convertToRec709(int priority) {
     vector<Task<void>> tasks;
 
     for (const auto& layer : layers) {
-        string layerPrefix = layer.empty() ? "" : (layer + ".");
-
         Channel* r = nullptr;
         Channel* g = nullptr;
         Channel* b = nullptr;
 
         if (!(
-            ((r = mutableChannel(layerPrefix + "R")) && (g = mutableChannel(layerPrefix + "G")) && (b = mutableChannel(layerPrefix + "B"))) ||
-            ((r = mutableChannel(layerPrefix + "r")) && (g = mutableChannel(layerPrefix + "g")) && (b = mutableChannel(layerPrefix + "b")))
+            ((r = mutableChannel(layer + "R")) && (g = mutableChannel(layer + "G")) && (b = mutableChannel(layer + "B"))) ||
+            ((r = mutableChannel(layer + "r")) && (g = mutableChannel(layer + "g")) && (b = mutableChannel(layer + "b")))
         )) {
             // No RGB-triplet found
             continue;
