@@ -50,7 +50,7 @@ jobs:
 
   build_windows:
     name: Build on Windows
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       build_dir: "build"
       config: "Release"
