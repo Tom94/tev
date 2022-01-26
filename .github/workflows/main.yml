@@ -15,7 +15,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-20.04]
-
+    env:
+      build_dir: "build"
+      config: "Release"
+      CC: gcc-10
+      CXX: g++-10
     steps:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install cmake gcc-10 g++-10 libglu1-mesa-dev xorg-dev zenity zlib1g-dev
@@ -23,45 +27,39 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake .
-        shell: bash
-        env:
-          CC: gcc-10
-          CXX: g++-10
+        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }}
       - name: Build
-        run: make -j
+        working-directory: ${{ env.build_dir }}
+        run: cmake --build . --target all --verbose -j
 
   build_macos:
     name: Build on macOS
     runs-on: macos-11
-
+    env:
+      build_dir: "build"
+      config: "Release"
     steps:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
       - name: CMake
-        run: cmake .
+        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }}
       - name: Build
-        run: make -j
+        working-directory: ${{ env.build_dir }}
+        run: cmake --build . --target all --verbose -j
 
   build_windows:
     name: Build on Windows
-    runs-on: windows-latest
-
+    runs-on: windows-2022
+    env:
+      build_dir: "build"
+      config: "Release"
     steps:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-
-      - name: Fetch newer Windows SDK
-        uses: fbactions/setup-winsdk@v1
-        with:
-          winsdk-build-version: 19041
-
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.0.2
-
       - name: CMake
-        run: cmake -DCMAKE_SYSTEM_VERSION=10.0.19041.0 .
+        run: cmake . -B ${{ env.build_dir }}
       - name: Build
-        run: msbuild /v:m /p:Configuration=Release tev.sln
+        working-directory: ${{ env.build_dir }}
+        run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
