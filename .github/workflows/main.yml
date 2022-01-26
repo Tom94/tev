@@ -47,21 +47,15 @@ jobs:
   build_windows:
     name: Build on Windows
     runs-on: windows-latest
-
+    env:
+      build_dir: "build"
+      config: "Release"
     steps:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-
-      - name: Fetch newer Windows SDK
-        uses: fbactions/setup-winsdk@v1
-        with:
-          winsdk-build-version: 19041
-
-      - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.0.2
-
       - name: CMake
-        run: cmake -DCMAKE_SYSTEM_VERSION=10.0.19041.0 .
+        run: cmake . -B ${{ env.build_dir }}
       - name: Build
-        run: msbuild /v:m /p:Configuration=Release tev.sln
+        working-directory: ${{ env.build_dir }}
+        run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
