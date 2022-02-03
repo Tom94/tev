@@ -5,7 +5,7 @@
 
 #include <tev/Common.h>
 
-#ifdef __APPLE__
+#ifdef __clang__
 #include <experimental/coroutine>
 #define COROUTINE_NAMESPACE std::experimental
 #else
