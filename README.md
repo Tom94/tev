@@ -2,20 +2,17 @@
 
 ![](https://github.com/tom94/tev/workflows/CI/badge.svg)
 
-A high dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. Often, it is important to find exact differences between pairs of images. For this purpose, __tev__ allows rapidly switching between opened images and visualizing various error metrics (L1, L2, and relative versions thereof). To avoid clutter, opened images and their layers can be filtered by keywords.
+High dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. To compare images, <strong>tev</strong> can rapidly flip between them and visualize various error metrics.
 
-__New__: __tev__ can display true HDR on Apple extended dynamic range (EDR) and 10-bit displays.
+__tev__ can display true HDR on Apple extended dynamic range (EDR) and 10-bit displays.
 
-While the predominantly supported file format is OpenEXR certain other types of images can also be loaded. The following file formats are currently supported:
+The following file formats are supported:
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
+- __HDR__, __PNG__, __JPEG__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
 - __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
-    - Supports BC1-BC7 compressed formats. 
-    - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
-- __HDR__, BMP, GIF, JPEG, PIC, PNG, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
-    - stb_image only supports [subsets](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h#L23) of each of the aforementioned file formats.
-    - Low-dynamic-range (LDR) images are "promoted" to HDR through the reverse sRGB transformation.
+    - Supports BC1-BC7 compressed formats.
 
 ## Screenshot
 
@@ -60,7 +57,7 @@ The `--host` argument specifies the IP and port __tev__ is listening to. By defa
 The following operations exist:
 
 | Operation | Function
-| :--- | :---------- 
+| :--- | :----------
 | `OpenImage` | Opens an image from a specified path on the machine __tev__ is running on.
 | `CreateImage` | Creates a blank image with a specified name, size, and set of channels.
 | `UpdateImage` | Updates the pixels in a rectangular region.
@@ -101,11 +98,6 @@ brew install --cask tev
 All that is required for building __tev__ is a C++20-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
-```
-
-If you accidentally omitted the `--recursive` flag when cloning this repository you can initialize the submodules like so:
-```sh
-$ git submodule update --init --recursive
 ```
 
 __tev__ uses [CMake](https://cmake.org/) as its build system. The following sections detail how it should be used on various operating systems.
