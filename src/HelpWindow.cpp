@@ -89,7 +89,7 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
         addRow(imageSelection, "E / Shift+E", "Increase / Decrease Exposure by 0.5");
         addRow(imageSelection, "O / Shift+O", "Increase / Decrease Offset by 0.1");
 
-        addRow(imageSelection, "Shift+Ctrl (hold)", "Display raw bytes on pixels when zoomed-in");
+        addRow(imageSelection, "Shift+" + COMMAND + " (hold)", "Display raw bytes on pixels when zoomed-in");
 
         new Label{shortcuts, "Reference Options", "sans-bold", 18};
         auto referenceSelection = new Widget{shortcuts};
@@ -100,15 +100,15 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
         addRow(referenceSelection, "Shift+1…9",                                   "Select N-th Image as Reference");
         addRow(referenceSelection, "Shift+Down or Shift+S / Shift+Up or Shift+W", "Select Next / Previous Image as Reference");
 
-        addRow(referenceSelection, "Ctrl (hold)",                                "View selected Image if Reference is selected");
-        addRow(referenceSelection, "Ctrl+Right or Ctrl+D / Ctrl+Left or Ctrl+A", "Select Next / Previous Error Metric");
+        addRow(referenceSelection, COMMAND + " (hold)",                                "View selected Image if Reference is selected");
+        addRow(referenceSelection, COMMAND + "+Right or " + COMMAND + "+D / " + COMMAND + "+Left or " + COMMAND + "+A", "Select Next / Previous Error Metric");
 
         new Label{shortcuts, "Channel Group Options", "sans-bold", 18};
         auto groupSelection = new Widget{shortcuts};
         groupSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
         addRow(groupSelection, "Left Click",             "Select Hovered Channel Group");
-        addRow(groupSelection, "Ctrl+1…9",               "Select N-th Channel Group");
+        addRow(groupSelection, COMMAND + "+1…9",               "Select N-th Channel Group");
         addRow(groupSelection, "Right or D / Left or A", "Select Next / Previous Channel Group");
 
         new Label{shortcuts, "Interface", "sans-bold", 18};
