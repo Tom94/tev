@@ -1,6 +1,4 @@
-# tev — The EXR Viewer
-
-![](https://github.com/tom94/tev/workflows/CI/badge.svg)
+# tev — The EXR Viewer &nbsp;&nbsp; ![](https://github.com/tom94/tev/workflows/CI/badge.svg)
 
 High dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. To compare images, <strong>tev</strong> can rapidly flip between them and visualize various error metrics.
 
