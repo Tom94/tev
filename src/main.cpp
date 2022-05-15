@@ -115,9 +115,10 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
 
                 auto images = tryLoadImage(toPath(info.imageName), imageStream, "").get();
                 if (!images.empty()) {
-                    if (!sImageViewer->hasImageWithName(images.front()->name())) {
-                        sImageViewer->addImage(images.front(), info.grabFocus);
+                    if (sImageViewer->hasImageWithName(ensureUtf8(info.imageName))) {
+                        sImageViewer->removeImage(ensureUtf8(info.imageName));
                     }
+                    sImageViewer->addImage(images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
                 }
             });
