@@ -57,6 +57,14 @@ public:
     void removeAllImages();
 
     void replaceImage(std::shared_ptr<Image> image, std::shared_ptr<Image> replacement, bool shallSelect);
+    void replaceImage(const std::string& imageName, std::shared_ptr<Image> replacement, bool shallSelect) {
+        const auto& existingImage = imageByName(imageName);
+        if (existingImage) {
+            replaceImage(existingImage, replacement, shallSelect);
+        } else {
+            addImage(replacement, shallSelect);
+        }
+    }
 
     void reloadImage(std::shared_ptr<Image> image, bool shallSelect = false);
     void reloadImage(const std::string& imageName, bool shallSelect = false) {
