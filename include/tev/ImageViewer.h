@@ -42,6 +42,10 @@ public:
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
 
+    bool hasImageWithName(const std::string& imageName) {
+        return !!imageByName(imageName);
+    }
+
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false) {
         insertImage(image, mImages.size(), shallSelect);
     }
@@ -53,6 +57,9 @@ public:
     void removeAllImages();
 
     void replaceImage(std::shared_ptr<Image> image, std::shared_ptr<Image> replacement, bool shallSelect);
+    void replaceImage(const std::string& imageName, std::shared_ptr<Image> replacement, bool shallSelect) {
+        replaceImage(imageByName(imageName), replacement, shallSelect);
+    }
 
     void reloadImage(std::shared_ptr<Image> image, bool shallSelect = false);
     void reloadImage(const std::string& imageName, bool shallSelect = false) {
