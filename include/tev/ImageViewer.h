@@ -42,14 +42,8 @@ public:
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
 
-    // Returns true if the ImageViewer contains an image with the given name
-    bool hasImageWithName(const std::string& name) {
-        for (const auto& i: mImages) {
-            if (i->name() == name) {
-                return true;
-            }
-        }
-        return false;
+    bool hasImageWithName(const std::string& imageName) {
+        return !!imageByName(imageName);
     }
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false) {
