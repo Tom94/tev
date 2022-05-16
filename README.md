@@ -57,7 +57,7 @@ The following operations exist:
 | Operation | Function
 | :--- | :----------
 | `OpenImage` | Opens an image from a specified path on the machine __tev__ is running on.
-| `CreateImage` | Creates a blank image with a specified name, size, and set of channels.
+| `CreateImage` | Creates a blank image with a specified name, size, and set of channels. If an image with the specified name already exists, it is overwritten.
 | `UpdateImage` | Updates the pixels in a rectangular region.
 | `CloseImage` | Closes a specified image.
 | `ReloadImage` | Reloads an image from a specified path on the machine __tev__ is running on.
