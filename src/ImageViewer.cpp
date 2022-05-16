@@ -1156,6 +1156,7 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
     int currentId = imageId(mCurrentImage);
     int id = imageId(image);
     if (id == -1) {
+        addImage(replacement, shallSelect);
         return;
     }
 
