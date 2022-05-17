@@ -2,7 +2,7 @@
 # PBRT-v3 can be found here: https://github.com/mmp/pbrt-v3
 cmake_minimum_required(VERSION 3.13)
 
-if (NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nanogui")
+if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nanogui/CMakeLists.txt")
     message(FATAL_ERROR
         "Some tev dependencies are missing. "
         "If you forgot the '--recursive' flag when cloning this project, "
