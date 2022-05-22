@@ -24,7 +24,7 @@ class TevIpc:
         self._socket.__enter__()
         self._socket.connect((self._hostname, self._port))
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._socket is None:
             raise Exception("Communication was not started")
@@ -109,7 +109,7 @@ class TevIpc:
     """
         Updates the pixel values of a specified image region and a specified set of channels.
         The `image` parameter must be laid out in row-major format, i.e. from most to least
-        significant: [col][row][channel], where the channel axis is optional.
+        significant: [row][col][channel], where the channel axis is optional.
     """
     def update_image(self, name: str, image, channel_names = ["R", "G", "B", "A"], x = 0, y = 0, grab_focus = False, perform_tiling = True):
         if self._socket is None:
@@ -129,8 +129,8 @@ class TevIpc:
         for i in range(0, image.shape[0], tile_size[0]):
             for j in range(0, image.shape[1], tile_size[1]):
                 tile = image[
-                    i:(min(i+tile_size[0], image.shape[0])),
-                    j:(min(j+tile_size[1], image.shape[1])),
+                    i:(min(i + tile_size[0], image.shape[0])),
+                    j:(min(j + tile_size[1], image.shape[1])),
                     ...
                 ]
 
@@ -148,7 +148,7 @@ class TevIpc:
                 for channel_name in channel_names[0:n_channels]:
                     data_bytes.extend(bytes(channel_name, "UTF-8")) # channel name
                     data_bytes.extend(struct.pack("<b", 0)) # string terminator
-                
+
                 data_bytes.extend(struct.pack("<i", x+j)) # x
                 data_bytes.extend(struct.pack("<i", y+i)) # y
                 data_bytes.extend(struct.pack("<i", tile_dense.shape[1])) # width
