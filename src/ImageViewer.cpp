@@ -26,6 +26,8 @@ using namespace std;
 
 TEV_NAMESPACE_BEGIN
 
+static const int SIDEBAR_MIN_WIDTH = 230;
+
 ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool floatBuffer, bool /*supportsHdr*/)
 : nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
     if (floatBuffer && !m_float_buffer) {
