@@ -154,6 +154,8 @@ public:
     }
 
 private:
+    static const int SIDEBAR_MIN_WIDTH = 230;
+
     void updateFilter();
     void updateLayout();
     void updateTitle();

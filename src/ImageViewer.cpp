@@ -44,20 +44,21 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     auto horizontalScreenSplit = new Widget(mVerticalScreenSplit);
     horizontalScreenSplit->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill});
 
-    mSidebar = new Widget{horizontalScreenSplit};
-    mSidebar->set_fixed_width(210);
+    mSidebar = new VScrollPanel{horizontalScreenSplit};
+    mSidebar->set_fixed_width(SIDEBAR_MIN_WIDTH);
 
-    mHelpButton = new Button{mSidebar, "", FA_QUESTION};
+    auto tmp = new Widget{mSidebar};
+    mHelpButton = new Button{tmp, "", FA_QUESTION};
     mHelpButton->set_callback([this]() { toggleHelpWindow(); });
     mHelpButton->set_font_size(15);
     mHelpButton->set_tooltip("Information about using tev.");
 
-    mSidebarLayout = new Widget{mSidebar};
+    mSidebarLayout = new Widget{tmp};
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixel_ratio()};
 
-    // Tonemapping section
+    // Tonemapping sectionim
     {
         auto panel = new Widget{mSidebarLayout};
         panel->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
@@ -456,6 +457,8 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
         this->set_size(nanogui::Vector2i(1024, 800));
         mDidFitToImage = 3;
     }
+
+    updateLayout();
 }
 
 ImageViewer::~ImageViewer() {
@@ -471,7 +474,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
     // This has to occur before Screen::mouse_button_event as the button would absorb the event.
     if (down) {
-        if (mImageScrollContainer->contains(p)) {
+        if (mImageScrollContainer->contains(p - mSidebarLayout->parent()->position())) {
             auto& buttons = mImageButtonContainer->children();
 
             nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
@@ -534,7 +537,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
     }
 
     if (mIsDraggingSidebar) {
-        mSidebar->set_fixed_width(clamp(p.x(), 210, m_size.x() - 10));
+        mSidebar->set_fixed_width(clamp(p.x(), SIDEBAR_MIN_WIDTH, m_size.x() - 10));
         requestLayoutUpdate();
     } else if (mIsDraggingImage) {
         nanogui::Vector2f relativeMovement = {rel};
@@ -1809,15 +1812,22 @@ void ImageViewer::updateLayout() {
     mImageCanvas->set_fixed_size(m_size - nanogui::Vector2i{sidebarWidth - 1, footerHeight - 1});
     mSidebar->set_fixed_height(m_size.y() - footerHeight);
 
-    mHelpButton->set_position(nanogui::Vector2i{mSidebar->fixed_width() - 38, 5});
-    mFilter->set_fixed_width(mSidebar->fixed_width() - 50);
-    mSidebarLayout->set_fixed_width(mSidebar->fixed_width());
-
     mVerticalScreenSplit->set_fixed_size(m_size);
     mImageScrollContainer->set_fixed_height(
         m_size.y() - mImageScrollContainer->position().y() - footerHeight
     );
 
+    if (mImageScrollContainer->fixed_height() < 100) {
+        // Stop scrolling the image button container and instead scroll the entire sidebar
+        mImageScrollContainer->set_fixed_height(0);
+    }
+
+    mSidebarLayout->parent()->set_height(mSidebarLayout->preferred_size(m_nvg_context).y());
+    perform_layout();
+
+    mSidebarLayout->set_fixed_width(mSidebarLayout->parent()->width());
+    mHelpButton->set_position(nanogui::Vector2i{mSidebarLayout->fixed_width() - 38, 5});
+    mFilter->set_fixed_width(mSidebarLayout->fixed_width() - 50);
     perform_layout();
 
     // With a changed layout the relative position of the mouse
