@@ -174,12 +174,12 @@ string errorString(int errorId) {
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, errorId, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
 
-    string result = tfm::format("%s (%d)", s, errorId);
+    string result = fmt::format("{} ({})", s, errorId);
     LocalFree(s);
 
     return result;
 #else
-    return tfm::format("%s (%d)", strerror(errorId), errno);
+    return fmt::format("{} ({})", strerror(errorId), errno);
 #endif
 }
 

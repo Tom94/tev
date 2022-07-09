@@ -164,6 +164,7 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
 
         addLibrary(about, "args",              "", "Single-Header Argument Parsing Library");
         addLibrary(about, "clip",              "", "Cross-Platform Clipboard Library");
+        addLibrary(about, "{fmt}",             "", "Fast & Safe Formatting Library");
         addLibrary(about, "Glad",              "", "Multi-Language GL Loader-Generator");
         addLibrary(about, "GLFW",              "", "OpenGL Desktop Development Library");
         addLibrary(about, "NanoGUI",           "", "Small GUI Library");
@@ -171,7 +172,6 @@ HelpWindow::HelpWindow(Widget *parent, bool supportsHdr, function<void()> closeC
         addLibrary(about, "OpenEXR",           "", "High Dynamic-Range (HDR) Image File Format");
         addLibrary(about, "qoi",               "", "File Format for Fast, Lossless Image Compression");
         addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
-        addLibrary(about, "tinyformat",        "", "Minimal Type-Safe printf() Replacement");
         addLibrary(about, "tinylogger",        "", "Minimal Pretty-Logging Library");
         addLibrary(about, "UTF8-CPP",          "", "Lightweight UTF-8 String Manipulation Library");
     }

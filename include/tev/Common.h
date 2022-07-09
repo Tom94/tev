@@ -3,10 +3,12 @@
 
 #pragma once
 
-#include <tinyformat.h>
-#include <tinylogger/tinylogger.h>
+#define FMT_HEADER_ONLY 1
+#include <fmt/core.h>
 
 #include <nanogui/vector.h>
+
+#include <tinylogger/tinylogger.h>
 
 #include <algorithm>
 #include <cmath>
@@ -48,11 +50,20 @@
 
 #define TEV_ASSERT(cond, description, ...) \
     if (UNLIKELY(!(cond))) \
-        throw std::runtime_error{tfm::format(description, ##__VA_ARGS__)};
+        throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)};
 
 #ifndef TEV_VERSION
 #   define TEV_VERSION "undefined"
 #endif
+
+// Make std::filesystem::path formattable.
+template <>
+struct fmt::formatter<std::filesystem::path>: formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const std::filesystem::path& path, FormatContext& ctx) {
+        return formatter<std::string_view>::format(path.string(), ctx);
+    }
+};
 
 struct NVGcontext;
 

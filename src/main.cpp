@@ -125,7 +125,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         }
 
         default: {
-            throw runtime_error{tfm::format("Invalid IPC packet type %d", (int)packet.type())};
+            throw runtime_error{fmt::format("Invalid IPC packet type {}", (int)packet.type())};
         }
     }
 }
@@ -310,7 +310,7 @@ int mainFunc(const vector<string>& arguments) {
 
             fs::path imagePath = toPath(imageFile);
             if (!fs::exists(imagePath)) {
-                tlog::error() << tfm::format("Image %s does not exist.", imagePath);
+                tlog::error() << fmt::format("Image {} does not exist.", imagePath);
                 continue;
             }
 
@@ -325,7 +325,7 @@ int mainFunc(const vector<string>& arguments) {
 
                 ipc->sendToPrimaryInstance(packet);
             } catch (const runtime_error& e) {
-                tlog::error() << tfm::format("Unexpected error %s: %s", imagePath, e.what());
+                tlog::error() << fmt::format("Unexpected error {}: {}", imagePath, e.what());
             }
         }
 
@@ -534,7 +534,7 @@ int main(int argc, char* argv[]) {
 
         tev::mainFunc(arguments);
     } catch (const exception& e) {
-        tlog::error() << tfm::format("Uncaught exception: %s", e.what());
+        tlog::error() << fmt::format("Uncaught exception: {}", e.what());
         return 1;
     }
 }
