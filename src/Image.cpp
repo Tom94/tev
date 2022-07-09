@@ -143,8 +143,8 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
     for (const auto& c : channels) {
         if (c.size() != size()) {
-            throw runtime_error{tfm::format(
-                "All channels must have the same size as the data window. (%s:%dx%d != %dx%d)",
+            throw runtime_error{fmt::format(
+                "All channels must have the same size as the data window. ({}:{}x{} != {}x{})",
                 c.name(), c.size().x(), c.size().y(), size().x(), size().y()
             )};
         }
@@ -195,7 +195,7 @@ atomic<int> Image::sId(0);
 
 Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const string& channelSelector)
 : mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? tev::toString(path) : tfm::format("%s:%s", tev::toString(path), channelSelector);
+    mName = channelSelector.empty() ? tev::toString(path) : fmt::format("{}:{}", tev::toString(path), channelSelector);
 
     for (const auto& l : mData.layers) {
         auto groups = getGroupedChannels(l);
@@ -271,7 +271,7 @@ Texture* Image::texture(const vector<string>& channelNames) {
             const auto& channelName = channelNames[i];
             const auto* chan = channel(channelName);
             if (!chan) {
-                throw invalid_argument{tfm::format("Cannot obtain texture of %s:%s, because the channel does not exist.", path(), channelName)};
+                throw invalid_argument{fmt::format("Cannot obtain texture of {}:{}, because the channel does not exist.", path(), channelName)};
             }
 
             const auto& channelData = chan->data();
@@ -514,9 +514,9 @@ string Image::toString() const {
 Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << tfm::format("Could not load %s. %s", toString(path), e.what());
+            tlog::error() << fmt::format("Could not load {}. {}", toString(path), e.what());
         } else {
-            tlog::error() << tfm::format("Could not load %s:%s. %s", toString(path), channelSelector, e.what());
+            tlog::error() << fmt::format("Could not load {}:{}. {}", toString(path), channelSelector, e.what());
         }
     };
 
@@ -529,7 +529,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         auto start = chrono::system_clock::now();
 
         if (!iStream) {
-            throw invalid_argument{tfm::format("Image %s could not be opened.", path)};
+            throw invalid_argument{fmt::format("Image {} could not be opened.", path)};
         }
 
         fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
@@ -579,7 +579,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
-                tlog::success() << tfm::format("Loaded %s via %s after %.3f seconds.", toString(path), loadMethod, elapsedSeconds.count());
+                tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
                 co_return images;
             }

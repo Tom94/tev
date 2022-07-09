@@ -52,7 +52,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     }
 
     if (!data) {
-        throw invalid_argument{tfm::format("%s", stbi_failure_reason())};
+        throw invalid_argument{std::string{stbi_failure_reason()}};
     }
 
     if (size.x() == 0 || size.y() == 0) {
