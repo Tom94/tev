@@ -144,7 +144,7 @@ void ImageButton::draw(NVGcontext *ctx) {
     }
 
     if (mCutoff > 0 && mCutoff < mCaption.size()) {
-        pieces.back() = "…"s + pieces.back();
+        pieces.back() = "..."s + pieces.back();
     }
 
     Vector2f center = Vector2f{m_pos} + Vector2f{m_size} * 0.5f;
