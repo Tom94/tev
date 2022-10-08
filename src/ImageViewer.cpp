@@ -1851,7 +1851,7 @@ void ImageViewer::updateTitle() {
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
         caption = mCurrentImage->shortName();
-        caption += " – "s + mCurrentGroup;
+        caption += " - "s + mCurrentGroup;
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
@@ -1870,8 +1870,8 @@ void ImageViewer::updateTitle() {
             valuesString += fmt::format("{:02X}", discretizedValue);
         }
 
-        caption += fmt::format(" – @({},{}){}", imageCoords.x(), imageCoords.y(), valuesString);
-        caption += fmt::format(" – {}%%", (int)std::round(mImageCanvas->extractScale() * 100));
+        caption += fmt::format(" - @({},{}){}", imageCoords.x(), imageCoords.y(), valuesString);
+        caption += fmt::format(" - {}%%", (int)std::round(mImageCanvas->extractScale() * 100));
     }
 
     set_caption(caption);
