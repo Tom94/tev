@@ -137,9 +137,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
         nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 
         auto* glfwWindow = screen()->glfw_window();
-        bool shiftAndControlHeld =
-            (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) &&
-            (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL));
+        bool tabHeld = glfwGetKey(glfwWindow, GLFW_KEY_TAB);
 
         Vector2i cur;
         vector<float> values;
@@ -154,7 +152,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                     string str;
                     Vector2f pos;
 
-                    if (shiftAndControlHeld) {
+                    if (tabHeld) {
                         float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
                         unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
                         str = fmt::format("{:02X}", discretizedValue);
