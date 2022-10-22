@@ -1871,7 +1871,7 @@ void ImageViewer::updateTitle() {
         }
 
         caption += fmt::format(" – @({},{}){}", imageCoords.x(), imageCoords.y(), valuesString);
-        caption += fmt::format(" – {}%%", (int)std::round(mImageCanvas->extractScale() * 100));
+        caption += fmt::format(" – {}%", (int)std::round(mImageCanvas->extractScale() * 100));
     }
 
     set_caption(caption);
