@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: tev --- The EXR Viewer
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Thomas
+    email: thomas94@gmx.net
+    family-names: Müller
+repository-code: 'https://github.com/Tom94/tev'
+abstract: >-
+  High dynamic range (HDR) image comparison tool for graphics people.
+  tev allows viewing images through various tonemapping operators and
+  inspecting the values of individual pixels. To compare images, tev
+  can rapidly flip between them and visualize various error metrics.
+keywords:
+  - 'image, rendering, hdr, ldr, exr, openexr, comparison, screenshot'
+license: BSD-3-Clause
+license-url: https://github.com/Tom94/tev/blob/master/LICENSE
+version: 1.23
+date-released: '2017-08-26'
