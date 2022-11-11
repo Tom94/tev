@@ -67,7 +67,12 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }}
+        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
+      - name: Upload .dmg
+        uses: actions/upload-artifact@v3
+        with:
+          name: Windows binary
+          path: ${{ env.build_dir }}/${{ env.config }}/tev.exe
