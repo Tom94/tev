@@ -44,18 +44,17 @@ jobs:
   build_macos:
     name: Build on macOS
     runs-on: macos-11
-    env:
-      build_dir: "build"
-      config: "Release"
     steps:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-      - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }}
       - name: Build
-        working-directory: ${{ env.build_dir }}
-        run: cmake --build . --target all --verbose -j
+        run: create-dmg.sh
+      - name: Upload .dmg
+        uses: actions/upload-artifact@v3
+        with:
+          name: macOS binary
+          path: *.dmg
 
   build_windows:
     name: Build on Windows

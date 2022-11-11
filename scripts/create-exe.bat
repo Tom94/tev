@@ -12,7 +12,7 @@ call %DevCmd%
 echo Building 64-bit tev...
 mkdir %BuildDir64%
 cd %BuildDir64%
-cmake -DTEV_DEPLOY=1 -G "Visual Studio 16 2019" ..\..
+cmake -DTEV_DEPLOY=1 -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 16 2019" ..\..
 msbuild %MSBuildOptions% tev.sln
 move "Release\tev.exe" "..\..\tev.exe"
 cd ..
