@@ -54,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: macOS binary
-          path: *.dmg
+          path: tev.dmg
 
   build_windows:
     name: Build on Windows
