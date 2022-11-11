@@ -15,9 +15,9 @@ if (NOT TEV_DEPLOY)
 endif()
 
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TEV_VERSION "${TEV_VERSION} (64 bit)")
+    set(TEV_VERSION_ARCH "${TEV_VERSION} (64 bit)")
 elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
-    set(TEV_VERSION "${TEV_VERSION} (32 bit)")
+    set(TEV_VERSION_ARCH "${TEV_VERSION} (32 bit)")
 endif()
 
 # Set ourselves as the startup project in visual studio.
@@ -197,9 +197,9 @@ if (APPLE)
     set_target_properties(tev PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
-        MACOSX_BUNDLE_BUNDLE_VERSION ${TEV_VERSION}
+        MACOSX_BUNDLE_BUNDLE_VERSION ${TEV_VERSION_ARCH}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${TEV_VERSION}
-        MACOSX_BUNDLE_LONG_VERSION_STRING ${TEV_VERSION}
+        MACOSX_BUNDLE_LONG_VERSION_STRING ${TEV_VERSION_ARCH}
         RESOURCE "${RESOURCE_FILES}"
     )
 endif()
@@ -220,7 +220,7 @@ include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION}")
+set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
 if (APPLE)
     # Starting with macOS Mojave OpenGL is deprecated. tev will switch
     # away from OpenGL once the underlying nanogui does, so there is no
@@ -241,14 +241,56 @@ else()
     install(TARGETS tev)
 
     configure_file(resources/tev.desktop resources/tev.desktop)
-    install(FILES ${CMAKE_BINARY_DIR}/resources/tev.desktop DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/applications")
-    install(FILES resources/icon-512.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/512x512/apps" RENAME tev.png)
-    install(FILES resources/icon-256.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/256x256/apps" RENAME tev.png)
-    install(FILES resources/icon-128.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/128x128/apps" RENAME tev.png)
-    install(FILES resources/icon-96.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/96x96/apps" RENAME tev.png)
-    install(FILES resources/icon-64.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/64x64/apps" RENAME tev.png)
-    install(FILES resources/icon-48.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/48x48/apps" RENAME tev.png)
-    install(FILES resources/icon-32.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/32x32/apps" RENAME tev.png)
-    install(FILES resources/icon-24.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/24x24/apps" RENAME tev.png)
-    install(FILES resources/icon-16.png DESTINATION "${CMAKE_INSTALL_FULL_DATAROOTDIR}/icons/hicolor/16x16/apps" RENAME tev.png)
+    install(FILES ${CMAKE_BINARY_DIR}/resources/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+
+    set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
+    foreach(RES IN LISTS ICON_RESOLUTIONS)
+        install(FILES resources/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME tev.png)
+    endforeach()
+
+    file(GENERATE
+        OUTPUT "${PROJECT_BINARY_DIR}/appimage-generate.cmake"
+        CONTENT [[
+include(CMakePrintHelpers)
+cmake_print_variables(CPACK_TEMPORARY_DIRECTORY)
+cmake_print_variables(CPACK_TOPLEVEL_DIRECTORY)
+cmake_print_variables(CPACK_PACKAGE_DIRECTORY)
+cmake_print_variables(CPACK_PACKAGE_FILE_NAME)
+
+find_program(LINUXDEPLOY_EXECUTABLE
+    NAMES linuxdeploy linuxdeploy-x86_64.AppImage
+    PATHS ${CPACK_PACKAGE_DIRECTORY}/linuxdeploy
+)
+
+if (NOT LINUXDEPLOY_EXECUTABLE)
+    message(STATUS "Downloading linuxdeploy")
+    set(LINUXDEPLOY_EXECUTABLE ${CPACK_PACKAGE_DIRECTORY}/linuxdeploy/linuxdeploy)
+    file(DOWNLOAD
+        https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        ${LINUXDEPLOY_EXECUTABLE}
+        INACTIVITY_TIMEOUT 10
+        LOG ${CPACK_PACKAGE_DIRECTORY}/linuxdeploy/download.log
+        STATUS LINUXDEPLOY_DOWNLOAD
+    )
+    execute_process(COMMAND chmod +x ${LINUXDEPLOY_EXECUTABLE} COMMAND_ECHO STDOUT)
+endif()
+
+execute_process(COMMAND
+    ${CMAKE_COMMAND} -E env
+    OUTPUT=${CPACK_PACKAGE_FILE_NAME}.appimage
+    VERSION=$<IF:$<BOOL:${CPACK_PACKAGE_VERSION}>,${CPACK_PACKAGE_VERSION},0.1.0>
+    ${LINUXDEPLOY_EXECUTABLE}
+    --appdir=${CPACK_TEMPORARY_DIRECTORY}
+    --output=appimage
+    # --verbosity=2
+)
+    ]])
+
+    list(APPEND CPACK_GENERATOR External)
+
+    set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${PROJECT_BINARY_DIR}/appimage-generate.cmake")
+    set(CPACK_EXTERNAL_ENABLE_STAGING YES)
+    set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME}-${TEV_VERSION})
+    set(CPACK_PACKAGING_INSTALL_PREFIX /usr) # requirement by AppDir specification
+    include(CPack)
 endif()

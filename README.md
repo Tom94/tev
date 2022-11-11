@@ -120,6 +120,11 @@ $ make -j
 $ make install
 ```
 
+On Linux you can package a portable [AppImage](https://appimage.org/) with
+```sh
+$ make package
+```
+
 ### Windows
 
 On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2019 or higher!
