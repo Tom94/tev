@@ -38,7 +38,7 @@ jobs:
       - name: Upload AppImage
         uses: actions/upload-artifact@v3
         with:
-          name: AppImage
+          name: Linux binary
           path: ${{ env.build_dir }}/*.appimage
 
   build_macos:
