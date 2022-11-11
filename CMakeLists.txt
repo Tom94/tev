@@ -290,7 +290,7 @@ execute_process(COMMAND
 
     set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${PROJECT_BINARY_DIR}/appimage-generate.cmake")
     set(CPACK_EXTERNAL_ENABLE_STAGING YES)
-    set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME}-${TEV_VERSION})
+    set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME})
     set(CPACK_PACKAGING_INSTALL_PREFIX /usr) # requirement by AppDir specification
     include(CPack)
 endif()
