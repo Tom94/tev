@@ -217,7 +217,9 @@ public:
     ScopeGuard(const T& callback) : mCallback{callback} {}
     ScopeGuard(T&& callback) : mCallback{std::move(callback)} {}
     ScopeGuard(const ScopeGuard<T>& other) = delete;
-    ScopeGuard(ScopeGuard<T>&& other) { mCallback = std::move(other.mCallback); other.mCallback = {}; }
+    ScopeGuard& operator=(const ScopeGuard<T>& other) = delete;
+    ScopeGuard(ScopeGuard<T>&& other) { *this = std::move(other); }
+    ScopeGuard& operator=(ScopeGuard<T>&& other) { mCallback = std::move(other.mCallback); other.mCallback = {}; }
     ~ScopeGuard() { mCallback(); }
 private:
     T mCallback;
