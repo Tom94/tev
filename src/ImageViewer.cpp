@@ -793,7 +793,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 scaleAmount = -scaleAmount;
             }
 
-            nanogui::Vector2f origin = nanogui::Vector2f{mImageCanvas->position()} + nanogui::Vector2f{mImageCanvas->size()};
+            nanogui::Vector2f origin = nanogui::Vector2f{mImageCanvas->position()} + nanogui::Vector2f{mImageCanvas->size()} * 0.5f;
 
             mImageCanvas->scale(
                 scaleAmount,
