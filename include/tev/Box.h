@@ -36,6 +36,14 @@ struct Box {
         return result;
     }
 
+    bool contains(const Vector& pos) const {
+        bool result = true;
+        for (uint32_t i = 0; i < N_DIMS; ++i) {
+            result &= pos[i] >= min[i] && pos[i] < max[i];
+        }
+        return result;
+    }
+
     bool operator==(const Box& other) const {
         return min == other.min && max == other.max;
     }

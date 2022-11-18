@@ -267,24 +267,27 @@ Texture* Image::texture(const vector<string>& channelNames) {
 
     vector<Task<void>> tasks;
     for (size_t i = 0; i < 4; ++i) {
+        float defaultVal = i == 3 ? 1 : 0;
         if (i < channelNames.size()) {
-            const auto& channelName = channelNames[i];
-            const auto* chan = channel(channelName);
+            const auto* chan = channel(channelNames[i]);
             if (!chan) {
-                throw invalid_argument{fmt::format("Cannot obtain texture of {}:{}, because the channel does not exist.", path(), channelName)};
+                tasks.emplace_back(
+                    ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&data, defaultVal, i](size_t j) {
+                        data[j * 4 + i] = defaultVal;
+                    }, std::numeric_limits<int>::max())
+                );
+            } else {
+                const auto& channelData = chan->data();
+                tasks.emplace_back(
+                    ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&channelData, &data, i](size_t j) {
+                        data[j * 4 + i] = channelData[j];
+                    }, std::numeric_limits<int>::max())
+                );
             }
-
-            const auto& channelData = chan->data();
-            tasks.emplace_back(
-                ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&channelData, &data, i](size_t j) {
-                    data[j * 4 + i] = channelData[j];
-                }, std::numeric_limits<int>::max())
-            );
         } else {
-            float val = i == 3 ? 1 : 0;
             tasks.emplace_back(
-                ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&data, val, i](size_t j) {
-                    data[j * 4 + i] = val;
+                ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&data, defaultVal, i](size_t j) {
+                    data[j * 4 + i] = defaultVal;
                 }, std::numeric_limits<int>::max())
             );
         }
@@ -418,6 +421,16 @@ vector<string> Image::getSortedChannels(const string& layerName) const {
         }
     }
 
+    return result;
+}
+
+vector<string> Image::getExistingChannels(const vector<string>& requestedChannels) const {
+    vector<string> result;
+    std::copy_if(std::begin(requestedChannels), std::end(requestedChannels), std::back_inserter(result),
+        [&](const string& c) {
+            return hasChannel(c);
+        }
+    );
     return result;
 }
 
