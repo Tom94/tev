@@ -97,6 +97,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(imageSelection, "E / Shift+E", "Increase / decrease exposure by 0.5");
     addRow(imageSelection, "O / Shift+O", "Increase / decrease offset by 0.1");
 
+    addRow(imageSelection, "B (hold)",          "Draw a border around the image");
     addRow(imageSelection, "Shift+Ctrl (hold)", "Display raw bytes on pixels when zoomed-in");
 
     new Label{shortcuts, "Reference options", "sans-bold", 18};

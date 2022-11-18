@@ -228,7 +228,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
             nvgStroke(ctx);
         }
 
-        if (flags & Label) {
+        if (!name.empty() && (flags & Label)) {
             color.a() = textAlpha;
 
             nvgBeginPath(ctx);
@@ -267,8 +267,13 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
             }
         }
 
-        drawWindow(mImage->dataWindow(),    imageColor,        mImage->displayWindow().min.y() > mImage->dataWindow().min.y(), false, "Data window", flags);
-        drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(),  false, "Display window", flags);
+        if (mImage->dataWindow() != mImage->displayWindow()) {
+            drawWindow(mImage->dataWindow(), imageColor, mImage->displayWindow().min.y() > mImage->dataWindow().min.y(), false, "Data window", flags);
+            drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(), false, "Display window", flags);
+        } else {
+            drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(), false, "", flags);
+        }
+
     };
 
     // Draw all labels after the regions to ensure no occlusion
@@ -300,9 +305,13 @@ void ImageCanvas::draw(NVGcontext* ctx) {
     if (mImage) {
         drawPixelValuesAsText(ctx);
 
-        // If the coordinate system is in any sort of way non-trivial, draw it!
-        if (mImage->dataWindow() != mImage->displayWindow() || mImage->displayWindow().min != Vector2i{0} ||
-            (mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow()))) {
+        // If the coordinate system is in any sort of way non-trivial, or if a hotkey is held, draw it!
+        if (
+            glfwGetKey(screen()->glfw_window(), GLFW_KEY_B) ||
+            mImage->dataWindow() != mImage->displayWindow() ||
+            mImage->displayWindow().min != Vector2i{0} ||
+            (mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow()))
+        ) {
             drawCoordinateSystem(ctx);
         }
     }
