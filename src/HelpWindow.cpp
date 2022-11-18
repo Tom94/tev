@@ -84,7 +84,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(imageSelection, "Click & Drag (+Shift/" + COMMAND + ")", "Translate image");
     addRow(imageSelection, "+ / - / Scroll (+Shift/" + COMMAND + ")", "Zoom in / out of image");
 
-    addRow(imageSelection, "F", "Fit image to screen");
+    addRow(imageSelection, COMMAND + "+0", "Zoom to actual size");
+    addRow(imageSelection, COMMAND + "+9 / F", "Zoom to fit");
     addRow(imageSelection, "N", "Normalize image to [0, 1]");
     addRow(imageSelection, "R", "Reset image parameters");
     if (supportsHdr) {
