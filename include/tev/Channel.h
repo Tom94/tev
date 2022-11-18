@@ -16,6 +16,16 @@ TEV_NAMESPACE_BEGIN
 
 class Channel {
 public:
+    static std::pair<std::string, std::string> split(const std::string& fullChannel);
+
+    static std::string tail(const std::string& fullChannel);
+    static std::string head(const std::string& fullChannel);
+
+    static bool isTopmost(const std::string& fullChannel);
+    static bool isAlpha(const std::string& fullChannel);
+
+    static nanogui::Color color(std::string fullChannel);
+
     Channel(const std::string& name, const nanogui::Vector2i& size);
 
     const std::string& name() const {
@@ -89,15 +99,6 @@ public:
     void setZero() { memset(mData.data(), 0, mData.size()*sizeof(float)); }
 
     void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
-
-    static std::pair<std::string, std::string> split(const std::string& fullChannel);
-
-    static std::string tail(const std::string& fullChannel);
-    static std::string head(const std::string& fullChannel);
-
-    static bool isTopmost(const std::string& fullChannel);
-
-    static nanogui::Color color(std::string fullChannel);
 
 private:
     std::string mName;

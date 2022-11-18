@@ -84,7 +84,9 @@ void ImageCanvas::draw_contents() {
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
         // image transform to obtain texture coordinates in [0, 1]-space.
         inverse(transform(mImage.get())),
-        mReference->texture(mRequestedChannelGroup),
+        // We're passing the channels found in `mImage` such that, if some channels don't
+        // exist in `mReference`, they're filled with default values (0 for colors, 1 for alpha).
+        mReference->texture(mImage->channelsInGroup(mRequestedChannelGroup)),
         inverse(transform(mReference.get())),
         mExposure,
         mOffset,
@@ -356,13 +358,14 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
     // Subtract reference if it exists.
     if (mReference) {
         auto referenceCoords = getImageCoords(*mReference, nanoPos);
-        auto referenceChannels = mReference->channelsInGroup(mRequestedChannelGroup);
         for (size_t i = 0; i < result.size(); ++i) {
-            float reference = i < referenceChannels.size() ?
-                mReference->channel(referenceChannels[i])->eval(referenceCoords) :
-                0.0f;
+            bool isAlpha = Channel::isAlpha(channels[i]);
+            float defaultVal = isAlpha && mReference->contains(referenceCoords) ? 1.0f : 0.0f;
 
-            result[i] = applyMetric(result[i], reference);
+            const Channel* c = mReference->channel(channels[i]);
+            float reference = c ? c->eval(referenceCoords) : defaultVal;
+
+            result[i] = isAlpha ? 0.5f * (result[i] + reference) : applyMetric(result[i], reference);
         }
     }
 }
@@ -625,58 +628,38 @@ vector<Channel> ImageCanvas::channelsFromImages(
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
     }
 
-    bool onlyAlpha = all_of(begin(result), end(result), [](const Channel& c) { return c.name() == "A"; });
-
     if (!reference) {
         ThreadPool::global().parallelFor(0, (int)channelNames.size(), [&](int i) {
-            const auto* chan = image->channel(channelNames[i]);
-            for (size_t j = 0; j < chan->numPixels(); ++j) {
-                result[i].at(j) = chan->eval(j);
+            const auto* channel = image->channel(channelNames[i]);
+            for (size_t j = 0; j < channel->numPixels(); ++j) {
+                result[i].at(j) = channel->eval(j);
             }
         }, priority);
     } else {
         Vector2i size = Vector2i{image->size().x(), image->size().y()};
         Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
-        auto referenceChannels = reference->channelsInGroup(requestedChannelGroup);
 
         ThreadPool::global().parallelFor<size_t>(0, channelNames.size(), [&](size_t i) {
-            const auto* chan = image->channel(channelNames[i]);
-            bool isAlpha = !onlyAlpha && result[i].name() == "A";
+            const auto* channel = image->channel(channelNames[i]);
 
-            if (i < referenceChannels.size()) {
-                const Channel* referenceChan = reference->channel(referenceChannels[i]);
-                if (isAlpha) {
-                    for (int y = 0; y < size.y(); ++y) {
-                        for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = 0.5f * (
-                                chan->eval({x, y}) +
-                                referenceChan->eval({x + offset.x(), y + offset.y()})
-                            );
-                        }
-                    }
-                } else {
-                    for (int y = 0; y < size.y(); ++y) {
-                        for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = ImageCanvas::applyMetric(
-                                chan->eval({x, y}),
-                                referenceChan->eval({x + offset.x(), y + offset.y()}),
-                                metric
-                            );
-                        }
+            const Channel* referenceChannel = reference->channel(channelNames[i]);
+            if (Channel::isAlpha(result[i].name())) {
+                for (int y = 0; y < size.y(); ++y) {
+                    for (int x = 0; x < size.x(); ++x) {
+                        result[i].at({x, y}) = 0.5f * (
+                            channel->eval({x, y}) +
+                            (referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 1.0f)
+                        );
                     }
                 }
             } else {
-                if (isAlpha) {
-                    for (int y = 0; y < size.y(); ++y) {
-                        for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = chan->eval({x, y});
-                        }
-                    }
-                } else {
-                    for (int y = 0; y < size.y(); ++y) {
-                        for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = ImageCanvas::applyMetric(chan->eval({x, y}), 0, metric);
-                        }
+                for (int y = 0; y < size.y(); ++y) {
+                    for (int x = 0; x < size.x(); ++x) {
+                        result[i].at({x, y}) = ImageCanvas::applyMetric(
+                            channel->eval({x, y}),
+                            referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 0.0f,
+                            metric
+                        );
                     }
                 }
             }

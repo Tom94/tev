@@ -144,9 +144,14 @@ public:
 
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
+    std::vector<std::string> getExistingChannels(const std::vector<std::string>& requestedChannels) const;
 
     nanogui::Vector2i size() const {
         return mData.size();
+    }
+
+    bool contains(const nanogui::Vector2i& pos) const {
+        return pos.x() >= 0 && pos.y() >= 0 && pos.x() < mData.size().x() && pos.y() < mData.size().y();
     }
 
     const Box2i& dataWindow() const {
