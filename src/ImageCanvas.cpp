@@ -197,10 +197,10 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         float fontSize = 20;
         float strokeWidth = 3.0f;
 
-        Vector2f topLeft     = Vector2f{m_pos} + displayWindowToNano * Vector2f{window.min.x(), window.min.y()};
-        Vector2f topRight    = Vector2f{m_pos} + displayWindowToNano * Vector2f{window.max.x(), window.min.y()};
-        Vector2f bottomLeft  = Vector2f{m_pos} + displayWindowToNano * Vector2f{window.min.x(), window.max.y()};
-        Vector2f bottomRight = Vector2f{m_pos} + displayWindowToNano * Vector2f{window.max.x(), window.max.y()};
+        Vector2i topLeft     = m_pos + Vector2i{displayWindowToNano * Vector2f{window.min.x(), window.min.y()}};
+        Vector2i topRight    = m_pos + Vector2i{displayWindowToNano * Vector2f{window.max.x(), window.min.y()}};
+        Vector2i bottomLeft  = m_pos + Vector2i{displayWindowToNano * Vector2f{window.min.x(), window.max.y()}};
+        Vector2i bottomRight = m_pos + Vector2i{displayWindowToNano * Vector2f{window.max.x(), window.max.y()}};
 
         nvgSave(ctx);
 
@@ -305,7 +305,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         auto displayWindowToNano = displayWindowToNanogui(mImage.get());
 
         auto vgToNano = [&](const VgCommand::Pos& p) {
-            return Vector2f{m_pos} + displayWindowToNano * Vector2f{p.x, p.y};
+            return m_pos + Vector2i{displayWindowToNano * Vector2f{p.x, p.y}};
         };
 
         auto applyVgCommand = [&](const VgCommand& command) {
@@ -313,11 +313,11 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                 case VgCommand::EType::Save: nvgSave(ctx); return;
                 case VgCommand::EType::Restore: nvgRestore(ctx); return;
                 case VgCommand::EType::MoveTo: {
-                    Vector2f p = vgToNano(*reinterpret_cast<const VgCommand::Pos*>(command.data.data()));
+                    Vector2i p = vgToNano(*reinterpret_cast<const VgCommand::Pos*>(command.data.data()));
                     nvgMoveTo(ctx, p.x(), p.y());
                 } return;
                 case VgCommand::EType::LineTo: {
-                    Vector2f p = vgToNano(*reinterpret_cast<const VgCommand::Pos*>(command.data.data()));
+                    Vector2i p = vgToNano(*reinterpret_cast<const VgCommand::Pos*>(command.data.data()));
                     nvgLineTo(ctx, p.x(), p.y());
                 } return;
                 case VgCommand::EType::FillColor: {
