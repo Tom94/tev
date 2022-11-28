@@ -1255,7 +1255,7 @@ void ImageViewer::updateImage(
     }
 }
 
-void ImageViewer::updateImageVectorGraphics(const string& imageName, bool append, const vector<VgCommand>& commands) {
+void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallSelect, bool append, const vector<VgCommand>& commands) {
     auto image = imageByName(imageName);
     if (!image) {
         tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
@@ -1263,6 +1263,9 @@ void ImageViewer::updateImageVectorGraphics(const string& imageName, bool append
     }
 
     image->updateVectorGraphics(append, commands);
+    if (shallSelect) {
+        selectImage(image);
+    }
 }
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {

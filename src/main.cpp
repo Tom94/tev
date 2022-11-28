@@ -128,7 +128,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!sImageViewer) { }
             auto info = packet.interpretAsVectorGraphics();
             sImageViewer->scheduleToUiThread([&, info] {
-                sImageViewer->updateImageVectorGraphics(ensureUtf8(info.imageName), info.append, info.commands);
+                sImageViewer->updateImageVectorGraphics(ensureUtf8(info.imageName), info.grabFocus, info.append, info.commands);
             });
 
             sImageViewer->redraw();

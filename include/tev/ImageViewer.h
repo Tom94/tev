@@ -78,7 +78,7 @@ public:
         const std::vector<float>& imageData
     );
 
-    void updateImageVectorGraphics(const std::string& imageName, bool append, const std::vector<VgCommand>& commands);
+    void updateImageVectorGraphics(const std::string& imageName, bool shallSelect, bool append, const std::vector<VgCommand>& commands);
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 

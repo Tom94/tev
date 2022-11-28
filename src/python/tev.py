@@ -222,13 +222,14 @@ class Ipc:
         Updates vector graphics
         TODO: flesh out details
     """
-    def update_vector_graphics(self, name: str, commands, append = False):
+    def update_vector_graphics(self, name: str, commands, append = False, grab_focus = False):
         if self._socket is None:
             raise Exception("Communication was not started")
 
         data_bytes = bytearray()
         data_bytes.extend(struct.pack("<I", 0)) # reserved for length
         data_bytes.extend(struct.pack("<b", IpcPacketType.VectorGraphics.value))
+        data_bytes.extend(struct.pack("<b", grab_focus))
         data_bytes.extend(bytes(name, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
         data_bytes.extend(struct.pack("<b", append))

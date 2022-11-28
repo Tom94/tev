@@ -128,9 +128,10 @@ void IpcPacket::setCreateImage(const string& imageName, bool grabFocus, int32_t 
     payload << channelNames;
 }
 
-void IpcPacket::setVectorGraphics(const string& imageName, bool append, const vector<VgCommand>& commands) {
+void IpcPacket::setVectorGraphics(const string& imageName, bool grabFocus, bool append, const vector<VgCommand>& commands) {
     OStream payload{mPayload};
     payload << EType::VectorGraphics;
+    payload << grabFocus;
     payload << imageName;
     payload << append;
     payload << (int32_t)commands.size();
@@ -299,6 +300,7 @@ IpcPacketVectorGraphics IpcPacket::interpretAsVectorGraphics() const {
         throw runtime_error{"Cannot interpret IPC packet as VectorGraphics."};
     }
 
+    payload >> result.grabFocus;
     payload >> result.imageName;
     payload >> result.append;
     payload >> result.nCommands;

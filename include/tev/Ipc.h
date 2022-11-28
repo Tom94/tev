@@ -47,6 +47,7 @@ struct IpcPacketCreateImage {
 
 struct IpcPacketVectorGraphics {
     std::string imageName;
+    bool grabFocus;
     bool append; // If true, appends new vector instructions to existing ones rather than overwriting them
     int32_t nCommands;
     std::vector<VgCommand> commands;
@@ -93,7 +94,7 @@ public:
     void setCloseImage(const std::string& imageName);
     void setUpdateImage(const std::string& imageName, bool grabFocus, const std::vector<ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const std::vector<float>& stridedImageData);
     void setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames);
-    void setVectorGraphics(const std::string& imageName, bool append, const std::vector<VgCommand>& commands);
+    void setVectorGraphics(const std::string& imageName, bool grabFocus, bool append, const std::vector<VgCommand>& commands);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
