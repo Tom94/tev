@@ -16,6 +16,8 @@ struct VgCommand {
         FillColor = 4,
         StrokeColor = 5,
         Fill = 6,
+        Stroke = 7,
+        BeginPath = 8,
     };
 
     struct Pos { float x, y; };
@@ -30,6 +32,8 @@ struct VgCommand {
             case EType::FillColor: return sizeof(Color);
             case EType::StrokeColor: return sizeof(Color);
             case EType::Fill: return 0;
+            case EType::Stroke: return 0;
+            case EType::BeginPath: return 0;
             default: throw std::runtime_error{"Invalid VgCommand type."};
         }
     }
@@ -66,6 +70,8 @@ struct VgCommand {
     }
 
     static VgCommand fill() { return {EType::Fill, {}}; }
+    static VgCommand stroke() { return {EType::Stroke, {}}; }
+    static VgCommand beginPath() { return {EType::BeginPath, {}}; }
 
     EType type;
     std::vector<char> data;

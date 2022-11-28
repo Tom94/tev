@@ -21,7 +21,7 @@ class IpcPacketType(Enum):
     UpdateImage = 6 # v3
     VectorGraphics = 8
 
-class VectorGraphicsCommand:
+class VgCommand:
     class Type(Enum):
         # This stays in sync with `VgCommand::EType` from VectorGraphics.h
         Save = 0
@@ -31,31 +31,39 @@ class VectorGraphicsCommand:
         FillColor = 4
         StrokeColor = 5
         Fill = 6
+        Stroke = 7
+        BeginPath = 8
 
     def __init__(self, type, data = None):
         self.type = type
         self.data = data
 
 def vg_save():
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.Save)
+    return VgCommand(VgCommand.Type.Save)
 
 def vg_restore():
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.Restore)
+    return VgCommand(VgCommand.Type.Restore)
 
 def vg_move_to(x, y):
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.MoveTo, (x, y))
+    return VgCommand(VgCommand.Type.MoveTo, (x, y))
 
 def vg_line_to(x, y):
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.LineTo, (x, y))
+    return VgCommand(VgCommand.Type.LineTo, (x, y))
 
 def vg_fill_color(r, g, b, a):
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.FillColor, (r, g, b, a))
+    return VgCommand(VgCommand.Type.FillColor, (r, g, b, a))
 
 def vg_stroke_color(r, g, b, a):
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.StrokeColor, (r, g, b, a))
+    return VgCommand(VgCommand.Type.StrokeColor, (r, g, b, a))
 
 def vg_fill():
-    return VectorGraphicsCommand(VectorGraphicsCommand.Type.Fill)
+    return VgCommand(VgCommand.Type.Fill)
+
+def vg_stroke():
+    return VgCommand(VgCommand.Type.Stroke)
+
+def vg_begin_path():
+    return VgCommand(VgCommand.Type.BeginPath)
 
 class Ipc:
     def __init__(self, hostname = "localhost", port = 14158):
@@ -211,7 +219,8 @@ class Ipc:
                 self._socket.sendall(data_bytes)
 
     """
-        Updates vector graphics bla bla
+        Updates vector graphics
+        TODO: flesh out details
     """
     def update_vector_graphics(self, name: str, commands, append = False):
         if self._socket is None:
@@ -223,6 +232,7 @@ class Ipc:
         data_bytes.extend(bytes(name, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
         data_bytes.extend(struct.pack("<b", append))
+        data_bytes.extend(struct.pack("<I", len(commands)))
         for command in commands:
             data_bytes.extend(struct.pack("<b", command.type.value))
             if command.data is not None:
@@ -232,4 +242,5 @@ class Ipc:
         self._socket.sendall(data_bytes)
         pass
 
+# `Ipc` used to be called `TevIpc`, so we keep the alias for backwards compatibility.
 TevIpc = Ipc

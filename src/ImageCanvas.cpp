@@ -329,6 +329,8 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                     nvgStrokeColor(ctx, {{{c.r, c.g, c.b, c.a}}});
                 } return;
                 case VgCommand::EType::Fill: nvgFill(ctx); return;
+                case VgCommand::EType::Stroke: nvgStroke(ctx); return;
+                case VgCommand::EType::BeginPath: nvgBeginPath(ctx); return;
                 default: throw runtime_error{"Invalid VgCommand type."};
             }
         };
