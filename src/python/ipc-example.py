@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
         # Create another image that will be populated over time
         RESOLUTION = 512
-        TILE_SIZE = 32
+        TILE_SIZE = 64
         N_TILES = (RESOLUTION // TILE_SIZE) ** 2
 
         tev_ipc.create_image("Test image 2", width=RESOLUTION, height=RESOLUTION, channel_names=["R", "G", "B"])
@@ -38,5 +38,16 @@ if __name__ == "__main__":
             for x in range(0, RESOLUTION, TILE_SIZE):
                 tile = np.full((TILE_SIZE, TILE_SIZE, 3), idx / N_TILES)
                 tev_ipc.update_image("Test image 2", tile, ["R", "G", "B"], x, y)
+
+                tev_ipc.update_vector_graphics("Test image 2", [
+                    tev.vg_begin_path(),
+                    tev.vg_move_to(x, y),
+                    tev.vg_line_to(x, y+TILE_SIZE),
+                    tev.vg_line_to(x+TILE_SIZE, y+TILE_SIZE),
+                    tev.vg_line_to(x+TILE_SIZE, y),
+                    tev.vg_line_to(x, y),
+                    tev.vg_stroke(),
+                ])
+
                 idx += 1
-                time.sleep(0.025)
+                time.sleep(0.1)
