@@ -253,22 +253,19 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         nvgRestore(ctx);
     };
 
-    Color imageColor = Color(0.35f, 0.35f, 0.8f, 1.0f);
-    Color referenceColor = Color(0.7f, 0.4f, 0.4f, 1.0f);
-
     auto draw = [&](DrawFlags flags) {
         if (mReference) {
             if (mReference->dataWindow() != mImage->dataWindow()) {
-                drawWindow(mReference->dataWindow(), referenceColor, mReference->displayWindow().min.y() > mReference->dataWindow().min.y(), true, "Reference data window", flags);
+                drawWindow(mReference->dataWindow(), REFERENCE_COLOR, mReference->displayWindow().min.y() > mReference->dataWindow().min.y(), true, "Reference data window", flags);
             }
 
             if (mReference->displayWindow() != mImage->displayWindow()) {
-                drawWindow(mReference->displayWindow(), referenceColor, mReference->displayWindow().min.y() <= mReference->dataWindow().min.y(), true, "Reference display window", flags);
+                drawWindow(mReference->displayWindow(), REFERENCE_COLOR, mReference->displayWindow().min.y() <= mReference->dataWindow().min.y(), true, "Reference display window", flags);
             }
         }
 
         if (mImage->dataWindow() != mImage->displayWindow()) {
-            drawWindow(mImage->dataWindow(), imageColor, mImage->displayWindow().min.y() > mImage->dataWindow().min.y(), false, "Data window", flags);
+            drawWindow(mImage->dataWindow(), IMAGE_COLOR, mImage->displayWindow().min.y() > mImage->dataWindow().min.y(), false, "Data window", flags);
             drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(), false, "Display window", flags);
         } else {
             drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(), false, "", flags);
@@ -304,6 +301,48 @@ void ImageCanvas::draw(NVGcontext* ctx) {
 
     if (mImage) {
         drawPixelValuesAsText(ctx);
+
+        // Draw image-specific vector graphics overlay for both the currently selected image as well as the reference.
+        auto applyVgCommandsSandboxed = [&](const Color& defaultColor, const vector<VgCommand>& commands) {
+            nvgSave(ctx);
+
+            nvgFillColor(ctx, defaultColor);
+            nvgStrokeColor(ctx, defaultColor);
+            nvgStrokeWidth(ctx, 3.0f);
+
+            size_t saveCounter = 0;
+            for (const auto& command : mImage->vgCommands()) {
+                if (command.type == VgCommand::EType::Save) {
+                    ++saveCounter;
+                } else if (command.type == VgCommand::EType::Restore) {
+                    if (saveCounter == 0) {
+                        tlog::warning() << "Malformed vector graphics commands: restore before save";
+                        continue;
+                    }
+
+                    --saveCounter;
+                }
+
+                command.apply(ctx);
+            }
+
+            if (saveCounter > 0) {
+                tlog::warning() << "Malformed vector graphics commands: missing restore after save";
+                for (size_t i = 0; i < saveCounter; ++i) {
+                    nvgRestore(ctx);
+                }
+            }
+
+            nvgRestore(ctx);
+        };
+
+        if (mReference && !mReference->vgCommands().empty()) {
+            applyVgCommandsSandboxed(REFERENCE_COLOR, mReference->vgCommands());
+        }
+
+        if (!mImage->vgCommands().empty()) {
+            applyVgCommandsSandboxed(IMAGE_COLOR, mImage->vgCommands());
+        }
 
         // If the coordinate system is in any sort of way non-trivial, or if a hotkey is held, draw it!
         if (

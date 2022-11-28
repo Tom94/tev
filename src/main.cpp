@@ -60,7 +60,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::ReloadImage: {
             while (!sImageViewer) { }
             auto info = packet.interpretAsReloadImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 sImageViewer->reloadImage(ensureUtf8(info.imageName), info.grabFocus);
             });
 
@@ -71,7 +71,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::CloseImage: {
             while (!sImageViewer) { }
             auto info = packet.interpretAsCloseImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 sImageViewer->removeImage(ensureUtf8(info.imageName));
             });
 
@@ -84,7 +84,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::UpdateImageV3: {
             while (!sImageViewer) { }
             auto info = packet.interpretAsUpdateImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 string imageString = ensureUtf8(info.imageName);
                 for (int i = 0; i < info.nChannels; ++i) {
                     sImageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
@@ -98,7 +98,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::CreateImage: {
             while (!sImageViewer) { }
             auto info = packet.interpretAsCreateImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 stringstream imageStream;
                 imageStream
                     << "empty" << " "
@@ -118,6 +118,17 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     sImageViewer->replaceImage(ensureUtf8(info.imageName), images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
                 }
+            });
+
+            sImageViewer->redraw();
+            break;
+        }
+
+        case IpcPacket::VectorGraphics: {
+            while (!sImageViewer) { }
+            auto info = packet.interpretAsVectorGraphics();
+            sImageViewer->scheduleToUiThread([&, info] {
+                sImageViewer->updateImageVectorGraphics(ensureUtf8(info.imageName), info.append, info.commands);
             });
 
             sImageViewer->redraw();

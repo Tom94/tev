@@ -1255,6 +1255,16 @@ void ImageViewer::updateImage(
     }
 }
 
+void ImageViewer::updateImageVectorGraphics(const string& imageName, bool append, const vector<VgCommand>& commands) {
+    auto image = imageByName(imageName);
+    if (!image) {
+        tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
+        return;
+    }
+
+    image->updateVectorGraphics(append, commands);
+}
+
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
     if (stopPlayback) {
         mPlayButton->set_pushed(false);

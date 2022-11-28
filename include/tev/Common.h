@@ -322,4 +322,7 @@ enum EDirection {
 void scheduleToMainThread(const std::function<void()>& fun);
 void redrawWindow();
 
+static const nanogui::Color IMAGE_COLOR = {0.35f, 0.35f, 0.8f, 1.0f};
+static const nanogui::Color REFERENCE_COLOR = {0.7f, 0.4f, 0.4f, 1.0f};
+
 TEV_NAMESPACE_END
