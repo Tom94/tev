@@ -5,12 +5,10 @@
 
 #include <tev/Common.h>
 
-struct NVGcontext;
-
 TEV_NAMESPACE_BEGIN
 
 struct VgCommand {
-    enum class EType : int32_t {
+    enum class EType : int8_t {
         Save = 0,
         Restore = 1,
         MoveTo = 2,
@@ -23,8 +21,51 @@ struct VgCommand {
     struct Pos { float x, y; };
     struct Color { float r, g, b, a; };
 
-    size_t size() const;
-    void apply(NVGcontext* ctx) const;
+    size_t size() const {
+        switch (type) {
+            case EType::Save: return 0;
+            case EType::Restore: return 0;
+            case EType::MoveTo: return sizeof(Pos);
+            case EType::LineTo: return sizeof(Pos);
+            case EType::FillColor: return sizeof(Color);
+            case EType::StrokeColor: return sizeof(Color);
+            case EType::Fill: return 0;
+            default: throw std::runtime_error{"Invalid VgCommand type."};
+        }
+    }
+
+    static VgCommand save() { return {EType::Save, {}}; }
+    static VgCommand restore() { return {EType::Restore, {}}; }
+
+    static VgCommand moveTo(const Pos& p) {
+        VgCommand result{EType::MoveTo, {}};
+        result.data.resize(result.size());
+        *(Pos*)result.data.data() = p;
+        return result;
+    }
+
+    static VgCommand lineTo(const Pos& p) {
+        VgCommand result{EType::LineTo, {}};
+        result.data.resize(result.size());
+        *(Pos*)result.data.data() = p;
+        return result;
+    }
+
+    static VgCommand fillColor(const Color& c) {
+        VgCommand result{EType::FillColor, {}};
+        result.data.resize(result.size());
+        *(Color*)result.data.data() = c;
+        return result;
+    }
+
+    static VgCommand strokeColor(const Color& c) {
+        VgCommand result{EType::StrokeColor, {}};
+        result.data.resize(result.size());
+        *(Color*)result.data.data() = c;
+        return result;
+    }
+
+    static VgCommand fill() { return {EType::Fill, {}}; }
 
     EType type;
     std::vector<char> data;

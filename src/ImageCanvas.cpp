@@ -302,6 +302,31 @@ void ImageCanvas::draw(NVGcontext* ctx) {
     if (mImage) {
         drawPixelValuesAsText(ctx);
 
+        auto applyVgCommand = [&](const VgCommand& command) {
+            switch (command.type) {
+                case VgCommand::EType::Save: nvgSave(ctx); return;
+                case VgCommand::EType::Restore: nvgRestore(ctx); return;
+                case VgCommand::EType::MoveTo: {
+                    const VgCommand::Pos& p = *reinterpret_cast<const VgCommand::Pos*>(command.data.data());
+                    nvgMoveTo(ctx, p.x, p.y);
+                } return;
+                case VgCommand::EType::LineTo: {
+                    const VgCommand::Pos& p = *reinterpret_cast<const VgCommand::Pos*>(command.data.data());
+                    nvgLineTo(ctx, p.x, p.y);
+                } return;
+                case VgCommand::EType::FillColor: {
+                    const VgCommand::Color& c = *reinterpret_cast<const VgCommand::Color*>(command.data.data());
+                    nvgFillColor(ctx, {{{c.r, c.g, c.b, c.a}}});
+                } return;
+                case VgCommand::EType::StrokeColor: {
+                    const VgCommand::Color& c = *reinterpret_cast<const VgCommand::Color*>(command.data.data());
+                    nvgStrokeColor(ctx, {{{c.r, c.g, c.b, c.a}}});
+                } return;
+                case VgCommand::EType::Fill: nvgFill(ctx); return;
+                default: throw runtime_error{"Invalid VgCommand type."};
+            }
+        };
+
         // Draw image-specific vector graphics overlay for both the currently selected image as well as the reference.
         auto applyVgCommandsSandboxed = [&](const Color& defaultColor, const vector<VgCommand>& commands) {
             nvgSave(ctx);
@@ -323,7 +348,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                     --saveCounter;
                 }
 
-                command.apply(ctx);
+                applyVgCommand(command);
             }
 
             if (saveCounter > 0) {
