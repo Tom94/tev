@@ -219,8 +219,8 @@ class Ipc:
                 self._socket.sendall(data_bytes)
 
     """
-        Updates vector graphics
-        TODO: flesh out details
+        Draws vector graphics over the specified image. The vector graphics are
+        drawn using an ordered list of commands; see `ipc-example.py` for an example.
     """
     def update_vector_graphics(self, name: str, commands, append = False, grab_focus = False):
         if self._socket is None:
