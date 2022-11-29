@@ -34,9 +34,8 @@ public:
 
     void translate(const nanogui::Vector2f& amount);
     void scale(float amount, const nanogui::Vector2f& origin);
-    float extractScale() const {
-        float det = mTransform.m[0][0] * mTransform.m[1][1] - mTransform.m[0][1] * mTransform.m[1][0];
-        return std::sqrt(det);
+    float scale() const {
+        return nanogui::extractScale(mTransform);
     }
 
     void setExposure(float exposure) {

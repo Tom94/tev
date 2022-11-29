@@ -7,32 +7,39 @@
 Interfaces with tev's IPC protocol to remote control tev with Python.
 """
 
-from enum import Enum
+from enum import IntEnum
 import socket
 import struct
 import numpy as np
 
-class IpcPacketType(Enum):
-    # This stays in sync with `IpcPacket::EType` from Ipc.h
-    OpenImage = 7 # v2
-    ReloadImage = 1
-    CloseImage = 2
-    CreateImage = 4
-    UpdateImage = 6 # v3
-    VectorGraphics = 8
+class Winding(IntEnum):
+    CounterClockwise = 1
+    Clockwise = 2
 
 class VgCommand:
-    class Type(Enum):
+    class Type(IntEnum):
         # This stays in sync with `VgCommand::EType` from VectorGraphics.h
         Save = 0
         Restore = 1
-        MoveTo = 2
-        LineTo = 3
-        FillColor = 4
-        StrokeColor = 5
-        Fill = 6
-        Stroke = 7
-        BeginPath = 8
+        FillColor = 2
+        Fill = 3
+        StrokeColor = 4
+        Stroke = 5
+        BeginPath = 6
+        ClosePath = 7
+        PathWinding = 8
+        DebugDumpPathCache = 9
+        MoveTo = 10
+        LineTo = 11
+        ArcTo = 12
+        Arc = 13
+        BezierTo = 14
+        Circle = 15
+        Ellipse = 16
+        QuadTo = 17
+        Rect = 18
+        RoundedRect = 19
+        RoundedRectVarying = 20
 
     def __init__(self, type, data = None):
         self.type = type
@@ -44,26 +51,71 @@ def vg_save():
 def vg_restore():
     return VgCommand(VgCommand.Type.Restore)
 
-def vg_move_to(x, y):
-    return VgCommand(VgCommand.Type.MoveTo, (x, y))
-
-def vg_line_to(x, y):
-    return VgCommand(VgCommand.Type.LineTo, (x, y))
-
-def vg_fill_color(r, g, b, a):
+def vg_fill_color(r: float, g: float, b: float, a: float):
     return VgCommand(VgCommand.Type.FillColor, (r, g, b, a))
-
-def vg_stroke_color(r, g, b, a):
-    return VgCommand(VgCommand.Type.StrokeColor, (r, g, b, a))
 
 def vg_fill():
     return VgCommand(VgCommand.Type.Fill)
+
+def vg_stroke_color(r: float, g: float, b: float, a: float):
+    return VgCommand(VgCommand.Type.StrokeColor, (r, g, b, a))
 
 def vg_stroke():
     return VgCommand(VgCommand.Type.Stroke)
 
 def vg_begin_path():
     return VgCommand(VgCommand.Type.BeginPath)
+
+def vg_close_path():
+    return VgCommand(VgCommand.Type.ClosePath)
+
+def vg_path_winding(num: int):
+    return VgCommand(VgCommand.Type.PathWinding, (float(num)))
+
+def vg_debug_dump_path_cache():
+    return VgCommand(VgCommand.Type.DebugDumpPathCache)
+
+def vg_move_to(x: float, y: float):
+    return VgCommand(VgCommand.Type.MoveTo, (x, y))
+
+def vg_line_to(x: float, y: float):
+    return VgCommand(VgCommand.Type.LineTo, (x, y))
+
+def vg_arc_to(x1: float, y1: float, x2: float, y2: float, radius: float):
+    return VgCommand(VgCommand.Type.ArcTo, (x1, y1, x2, y2, radius))
+
+def vg_arc(center_x: float, center_y: float, radius: float, angle_begin: float, angle_end: float, dir: Winding):
+    return VgCommand(VgCommand.Type.Arc, (center_x, center_y, radius, angle_begin, angle_end, float(int(dir))))
+
+def vg_bezier_to(c1x: float, c1y: float, c2x: float, c2y: float, x: float, y: float):
+    return VgCommand(VgCommand.Type.BezierTo, (c1x, c1y, c2x, c2y, x, y))
+
+def vg_circle(cx: float, cy: float, radius: float):
+    return VgCommand(VgCommand.Type.Circle, (cx, cy, radius))
+
+def vg_ellipse(cx: float, cy: float, radius_x: float, radius_y: float):
+    return VgCommand(VgCommand.Type.Ellipse, (cx, cy, radius_x, radius_y))
+
+def vg_quad_to(cx: float, cy: float, x: float, y: float):
+    return VgCommand(VgCommand.Type.QuadTo, (cx, cy, x, y))
+
+def vg_rect(x: float, y: float, width: float, height: float):
+    return VgCommand(VgCommand.Type.Rect, (x, y, width, height))
+
+def vg_rounded_rect(x: float, y: float, width: float, height: float, radius: float):
+    return VgCommand(VgCommand.Type.RoundedRect, (x, y, width, height, radius))
+
+def vg_rounded_rect_varying(x: float, y: float, width: float, height: float, radius_top_left: float, radius_top_right: float, radius_bottom_right: float, radius_bottom_left: float):
+    return VgCommand(VgCommand.Type.RoundedRectVarying, (x, y, width, height, radius_top_left, radius_top_right, radius_bottom_right, radius_bottom_left))
+
+class IpcPacketType(IntEnum):
+    # This stays in sync with `IpcPacket::EType` from Ipc.h
+    OpenImage = 7 # v2
+    ReloadImage = 1
+    CloseImage = 2
+    CreateImage = 4
+    UpdateImage = 6 # v3
+    VectorGraphics = 8
 
 class Ipc:
     def __init__(self, hostname = "localhost", port = 14158):
@@ -93,7 +145,7 @@ class Ipc:
 
         data_bytes = bytearray()
         data_bytes.extend(struct.pack("<I", 0)) # reserved for length
-        data_bytes.extend(struct.pack("<b", IpcPacketType.OpenImage.value))
+        data_bytes.extend(struct.pack("<b", IpcPacketType.OpenImage))
         data_bytes.extend(struct.pack("<b", grab_focus))
         data_bytes.extend(bytes(path, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
@@ -112,7 +164,7 @@ class Ipc:
 
         data_bytes = bytearray()
         data_bytes.extend(struct.pack("<I", 0)) # reserved for length
-        data_bytes.extend(struct.pack("<b", IpcPacketType.ReloadImage.value))
+        data_bytes.extend(struct.pack("<b", IpcPacketType.ReloadImage))
         data_bytes.extend(struct.pack("<b", grab_focus))
         data_bytes.extend(bytes(name, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
@@ -129,7 +181,7 @@ class Ipc:
 
         data_bytes = bytearray()
         data_bytes.extend(struct.pack("<I", 0)) # reserved for length
-        data_bytes.extend(struct.pack("<b", IpcPacketType.CloseImage.value))
+        data_bytes.extend(struct.pack("<b", IpcPacketType.CloseImage))
         data_bytes.extend(bytes(name, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
 
@@ -146,7 +198,7 @@ class Ipc:
 
         data_bytes = bytearray()
         data_bytes.extend(struct.pack("<I", 0)) # reserved for length
-        data_bytes.extend(struct.pack("<b", IpcPacketType.CreateImage.value))
+        data_bytes.extend(struct.pack("<b", IpcPacketType.CreateImage))
         data_bytes.extend(struct.pack("<b", grab_focus))
         data_bytes.extend(bytes(name, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
@@ -193,7 +245,7 @@ class Ipc:
 
                 data_bytes = bytearray()
                 data_bytes.extend(struct.pack("<I", 0)) # reserved for length
-                data_bytes.extend(struct.pack("<b", IpcPacketType.UpdateImage.value))
+                data_bytes.extend(struct.pack("<b", IpcPacketType.UpdateImage))
                 data_bytes.extend(struct.pack("<b", grab_focus))
                 data_bytes.extend(bytes(name, "UTF-8"))
                 data_bytes.extend(struct.pack("<b", 0)) # string terminator
@@ -228,14 +280,14 @@ class Ipc:
 
         data_bytes = bytearray()
         data_bytes.extend(struct.pack("<I", 0)) # reserved for length
-        data_bytes.extend(struct.pack("<b", IpcPacketType.VectorGraphics.value))
+        data_bytes.extend(struct.pack("<b", IpcPacketType.VectorGraphics))
         data_bytes.extend(struct.pack("<b", grab_focus))
         data_bytes.extend(bytes(name, "UTF-8"))
         data_bytes.extend(struct.pack("<b", 0)) # string terminator
         data_bytes.extend(struct.pack("<b", append))
         data_bytes.extend(struct.pack("<I", len(commands)))
         for command in commands:
-            data_bytes.extend(struct.pack("<b", command.type.value))
+            data_bytes.extend(struct.pack("<b", command.type))
             if command.data is not None:
                 data_bytes.extend(np.array(command.data, dtype="<f").tobytes())
 

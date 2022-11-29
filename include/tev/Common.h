@@ -117,6 +117,33 @@ namespace nanogui {
         return mat;
     }
 
+    inline Matrix2f extract2x2(const Matrix3f& mat) {
+        Matrix2f result;
+        result.m[0][0] = mat.m[0][0];
+        result.m[0][1] = mat.m[0][1];
+        result.m[1][0] = mat.m[1][0];
+        result.m[1][1] = mat.m[1][1];
+        return result;
+    }
+
+    inline float extractScale(const Matrix3f& mat) {
+        float det = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
+        return std::sqrt(det);
+    }
+
+    template <typename Value, size_t Size>
+    Array<Value, Size> operator*(const Matrix<Value, Size>& m, const Array<Value, Size>& v) {
+        Array<Value, Size> result;
+        for (size_t i = 0; i < Size; ++i) {
+            Value accum = 0;
+            for (size_t k = 0; k < Size; ++k)
+                accum += m.m[k][i] * v.v[k];
+
+            result.v[i] = accum;
+        }
+        return result;
+    }
+
     template <typename Value, size_t Size>
     Array<Value, Size-1> operator*(const Matrix<Value, Size>& m, const Array<Value, Size-1>& v) {
         Array<Value, Size-1> result;
@@ -194,6 +221,39 @@ std::string ensureUtf8(const std::string& str);
 std::string utf16to8(const std::wstring& utf16);
 fs::path toPath(const std::string& utf8);
 std::string toString(const fs::path& path);
+
+// Taken from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
+template<typename T>
+typename T::size_type levenshteinDistance(const T& source, const T& target) {
+    if (source.size() > target.size()) {
+        return levenshteinDistance(target, source);
+    }
+
+    using TSizeType = typename T::size_type;
+    const TSizeType minSize = source.size(), max_size = target.size();
+    std::vector<TSizeType> levDist(minSize + 1);
+
+    for (TSizeType i = 0; i <= minSize; ++i) {
+        levDist[i] = i;
+    }
+
+    for (TSizeType j = 1; j <= max_size; ++j) {
+        TSizeType previousDiagonal = levDist[0], previousDiagonalSave;
+        ++levDist[0];
+
+        for (TSizeType i = 1; i <= minSize; ++i) {
+            previousDiagonalSave = levDist[i];
+            if (source[i - 1] == target[j - 1]) {
+                levDist[i] = previousDiagonal;
+            } else {
+                levDist[i] = std::min(std::min(levDist[i - 1], levDist[i]), previousDiagonal) + 1;
+            }
+            previousDiagonal = previousDiagonalSave;
+        }
+    }
+
+    return levDist[minSize];
+}
 
 template <typename F>
 void forEachFileInDir(bool recursive, const fs::path& path, F&& callback) {

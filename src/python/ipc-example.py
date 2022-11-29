@@ -27,7 +27,7 @@ if __name__ == "__main__":
         tev_ipc.update_image("Test image 1", bonus_data, ["Bonus"])
 
         # Create another image that will be populated over time
-        RESOLUTION = 512
+        RESOLUTION = 256
         TILE_SIZE = 64
         N_TILES = (RESOLUTION // TILE_SIZE) ** 2
 
@@ -41,11 +41,13 @@ if __name__ == "__main__":
 
                 tev_ipc.update_vector_graphics("Test image 2", [
                     tev.vg_begin_path(),
-                    tev.vg_move_to(x, y),
-                    tev.vg_line_to(x, y+TILE_SIZE),
-                    tev.vg_line_to(x+TILE_SIZE, y+TILE_SIZE),
-                    tev.vg_line_to(x+TILE_SIZE, y),
-                    tev.vg_line_to(x, y),
+                    tev.vg_rect(x, y, TILE_SIZE, TILE_SIZE),
+                    #Alternatively: draw rectangle manually
+                    # tev.vg_move_to(x, y),
+                    # tev.vg_line_to(x, y + TILE_SIZE),
+                    # tev.vg_line_to(x + TILE_SIZE, y + TILE_SIZE),
+                    # tev.vg_line_to(x + TILE_SIZE, y),
+                    # tev.vg_close_path(),
                     tev.vg_stroke(),
                 ])
 
