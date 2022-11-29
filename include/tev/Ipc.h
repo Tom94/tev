@@ -234,7 +234,7 @@ public:
     using socket_t = int;
 #endif
 
-    Ipc(const std::string& hostname);
+    Ipc(const std::string& hostname = "127.0.0.1:14158");
     virtual ~Ipc();
 
     bool isPrimaryInstance() {

@@ -293,8 +293,7 @@ int mainFunc(const vector<string>& arguments) {
         return 0;
     }
 
-    const string hostname = hostnameFlag ? get(hostnameFlag) : "127.0.0.1:14158";
-    auto ipc = make_shared<Ipc>(hostname);
+    auto ipc = hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>();
 
     // If we don't have any images to load, create new windows regardless of flag.
     // (In this case, the user likely wants to open a new instance of tev rather
