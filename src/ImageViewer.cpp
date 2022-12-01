@@ -1255,6 +1255,19 @@ void ImageViewer::updateImage(
     }
 }
 
+void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallSelect, bool append, const vector<VgCommand>& commands) {
+    auto image = imageByName(imageName);
+    if (!image) {
+        tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
+        return;
+    }
+
+    image->updateVectorGraphics(append, commands);
+    if (shallSelect) {
+        selectImage(image);
+    }
+}
+
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
     if (stopPlayback) {
         mPlayButton->set_pushed(false);
@@ -1874,7 +1887,7 @@ void ImageViewer::updateTitle() {
         }
 
         caption += fmt::format(" – @{},{} / {}x{}: {}", imageCoords.x(), imageCoords.y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString);
-        caption += fmt::format(" – {}%", (int)std::round(mImageCanvas->extractScale() * 100));
+        caption += fmt::format(" – {}%", (int)std::round(mImageCanvas->scale() * 100));
     }
 
     set_caption(caption);

@@ -7,6 +7,7 @@
 #include <tev/Channel.h>
 #include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
+#include <tev/VectorGraphics.h>
 
 #include <nanogui/texture.h>
 
@@ -193,6 +194,12 @@ public:
 
     void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
 
+    void updateVectorGraphics(bool append, const std::vector<VgCommand>& commands);
+
+    const std::vector<VgCommand>& vgCommands() const {
+        return mVgCommands;
+    }
+
     void setStaleIdCallback(const std::function<void(int)>& callback) {
         mStaleIdCallback = callback;
     }
@@ -220,6 +227,8 @@ private:
     ImageData mData;
 
     std::vector<ChannelGroup> mChannelGroups;
+
+    std::vector<VgCommand> mVgCommands;
 
     std::function<void(int)> mStaleIdCallback;
 

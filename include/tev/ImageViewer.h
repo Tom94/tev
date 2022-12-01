@@ -10,6 +10,7 @@
 #include <tev/Lazy.h>
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
+#include <tev/VectorGraphics.h>
 
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
@@ -76,6 +77,8 @@ public:
         int width, int height,
         const std::vector<float>& imageData
     );
+
+    void updateImageVectorGraphics(const std::string& imageName, bool shallSelect, bool append, const std::vector<VgCommand>& commands);
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 

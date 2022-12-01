@@ -35,15 +35,16 @@ TEV_NAMESPACE_BEGIN
 // OpenGL textures, which _must_ happen on the thread
 // on which the GL context is "current".
 static ImageViewer* sImageViewer = nullptr;
+static atomic<bool> imageViewerIsReady = false;
 
 void scheduleToMainThread(const std::function<void()>& fun) {
-    if (sImageViewer) {
+    if (imageViewerIsReady) {
         sImageViewer->scheduleToUiThread(fun);
     }
 }
 
 void redrawWindow() {
-    if (sImageViewer) {
+    if (imageViewerIsReady) {
         sImageViewer->redraw();
     }
 }
@@ -58,9 +59,9 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         }
 
         case IpcPacket::ReloadImage: {
-            while (!sImageViewer) { }
+            while (!imageViewerIsReady) { }
             auto info = packet.interpretAsReloadImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 sImageViewer->reloadImage(ensureUtf8(info.imageName), info.grabFocus);
             });
 
@@ -69,9 +70,9 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         }
 
         case IpcPacket::CloseImage: {
-            while (!sImageViewer) { }
+            while (!imageViewerIsReady) { }
             auto info = packet.interpretAsCloseImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 sImageViewer->removeImage(ensureUtf8(info.imageName));
             });
 
@@ -82,9 +83,9 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         case IpcPacket::UpdateImage:
         case IpcPacket::UpdateImageV2:
         case IpcPacket::UpdateImageV3: {
-            while (!sImageViewer) { }
+            while (!imageViewerIsReady) { }
             auto info = packet.interpretAsUpdateImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 string imageString = ensureUtf8(info.imageName);
                 for (int i = 0; i < info.nChannels; ++i) {
                     sImageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
@@ -96,9 +97,9 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
         }
 
         case IpcPacket::CreateImage: {
-            while (!sImageViewer) { }
+            while (!imageViewerIsReady) { }
             auto info = packet.interpretAsCreateImage();
-            sImageViewer->scheduleToUiThread([&,info] {
+            sImageViewer->scheduleToUiThread([&, info] {
                 stringstream imageStream;
                 imageStream
                     << "empty" << " "
@@ -118,6 +119,17 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
                     sImageViewer->replaceImage(ensureUtf8(info.imageName), images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
                 }
+            });
+
+            sImageViewer->redraw();
+            break;
+        }
+
+        case IpcPacket::VectorGraphics: {
+            while (!imageViewerIsReady) { }
+            auto info = packet.interpretAsVectorGraphics();
+            sImageViewer->scheduleToUiThread([&, info] {
+                sImageViewer->updateImageVectorGraphics(ensureUtf8(info.imageName), info.grabFocus, info.append, info.commands);
             });
 
             sImageViewer->redraw();
@@ -282,8 +294,7 @@ int mainFunc(const vector<string>& arguments) {
         return 0;
     }
 
-    const string hostname = hostnameFlag ? get(hostnameFlag) : "127.0.0.1:14158";
-    auto ipc = make_shared<Ipc>(hostname);
+    auto ipc = hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>();
 
     // If we don't have any images to load, create new windows regardless of flag.
     // (In this case, the user likely wants to open a new instance of tev rather
@@ -487,6 +498,7 @@ int mainFunc(const vector<string>& arguments) {
     // get deleted. nanogui crashes upon cleanup, so we better
     // not try.
     sImageViewer = new ImageViewer{imagesLoader, maximize, capability10bit || capabilityEdr, capabilityEdr};
+    imageViewerIsReady = true;
 
     sImageViewer->draw_all();
     sImageViewer->set_visible(true);

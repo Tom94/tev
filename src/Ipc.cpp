@@ -55,7 +55,7 @@ IpcPacket::IpcPacket(const char* data, size_t length) {
 
 void IpcPacket::setOpenImage(const string& imagePath, const string& channelSelector, bool grabFocus) {
     OStream payload{mPayload};
-    payload << Type::OpenImageV2;
+    payload << EType::OpenImageV2;
     payload << grabFocus;
     payload << imagePath;
     payload << channelSelector;
@@ -63,24 +63,24 @@ void IpcPacket::setOpenImage(const string& imagePath, const string& channelSelec
 
 void IpcPacket::setReloadImage(const string& imageName, bool grabFocus) {
     OStream payload{mPayload};
-    payload << Type::ReloadImage;
+    payload << EType::ReloadImage;
     payload << grabFocus;
     payload << imageName;
 }
 
 void IpcPacket::setCloseImage(const string& imageName) {
     OStream payload{mPayload};
-    payload << Type::CloseImage;
+    payload << EType::CloseImage;
     payload << imageName;
 }
 
-void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const std::vector<IpcPacket::ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const vector<float>& stridedImageData) {
+void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const vector<IpcPacket::ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const vector<float>& stridedImageData) {
     if (channelDescs.empty()) {
         throw runtime_error{"UpdateImage IPC packet must have a non-zero channel count."};
     }
 
     int32_t nChannels = (int32_t)channelDescs.size();
-    vector<std::string> channelNames(nChannels);
+    vector<string> channelNames(nChannels);
     vector<int64_t> channelOffsets(nChannels);
     vector<int64_t> channelStrides(nChannels);
 
@@ -91,7 +91,7 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
     }
 
     OStream payload{mPayload};
-    payload << Type::UpdateImageV3;
+    payload << EType::UpdateImageV3;
     payload << grabFocus;
     payload << imageName;
     payload << nChannels;
@@ -104,7 +104,7 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
 
     size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < nChannels; ++c) {
-        stridedImageDataSize = std::max(stridedImageDataSize, (size_t)(channelOffsets[c] + (nPixels-1) * channelStrides[c] + 1));
+        stridedImageDataSize = max(stridedImageDataSize, (size_t)(channelOffsets[c] + (nPixels-1) * channelStrides[c] + 1));
     }
 
     if (stridedImageData.size() != stridedImageDataSize) {
@@ -114,13 +114,13 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const st
     payload << stridedImageData;
 }
 
-void IpcPacket::setCreateImage(const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames) {
+void IpcPacket::setCreateImage(const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const vector<string>& channelNames) {
     if ((int32_t)channelNames.size() != nChannels) {
         throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
     }
 
     OStream payload{mPayload};
-    payload << Type::CreateImage;
+    payload << EType::CreateImage;
     payload << grabFocus;
     payload << imageName;
     payload << width << height;
@@ -128,13 +128,26 @@ void IpcPacket::setCreateImage(const string& imageName, bool grabFocus, int32_t 
     payload << channelNames;
 }
 
+void IpcPacket::setVectorGraphics(const string& imageName, bool grabFocus, bool append, const vector<VgCommand>& commands) {
+    OStream payload{mPayload};
+    payload << EType::VectorGraphics;
+    payload << grabFocus;
+    payload << imageName;
+    payload << append;
+    payload << (int32_t)commands.size();
+    for (const auto& command : commands) {
+        payload << command.type;
+        payload << command.data;
+    }
+}
+
 IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
     IpcPacketOpenImage result;
     IStream payload{mPayload};
 
-    Type type;
+    EType type;
     payload >> type;
-    if (type != Type::OpenImage && type != Type::OpenImageV2) {
+    if (type != EType::OpenImage && type != EType::OpenImageV2) {
         throw runtime_error{"Cannot interpret IPC packet as OpenImage."};
     }
 
@@ -143,14 +156,14 @@ IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
     string imageString;
     payload >> imageString;
 
-    if (type >= Type::OpenImageV2) {
+    if (type >= EType::OpenImageV2) {
         result.imagePath = imageString;
         payload >> result.channelSelector;
         return result;
     }
 
     size_t colonPos = imageString.find_last_of(":");
-    if (colonPos == std::string::npos ||
+    if (colonPos == string::npos ||
         // windows path of the form X:/* or X:\*
         (colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/'))
     ) {
@@ -168,9 +181,9 @@ IpcPacketReloadImage IpcPacket::interpretAsReloadImage() const {
     IpcPacketReloadImage result;
     IStream payload{mPayload};
 
-    Type type;
+    EType type;
     payload >> type;
-    if (type != Type::ReloadImage) {
+    if (type != EType::ReloadImage) {
         throw runtime_error{"Cannot interpret IPC packet as ReloadImage."};
     }
 
@@ -183,9 +196,9 @@ IpcPacketCloseImage IpcPacket::interpretAsCloseImage() const {
     IpcPacketCloseImage result;
     IStream payload{mPayload};
 
-    Type type;
+    EType type;
     payload >> type;
-    if (type != Type::CloseImage) {
+    if (type != EType::CloseImage) {
         throw runtime_error{"Cannot interpret IPC packet as CloseImage."};
     }
 
@@ -197,16 +210,16 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     IpcPacketUpdateImage result;
     IStream payload{mPayload};
 
-    Type type;
+    EType type;
     payload >> type;
-    if (type != Type::UpdateImage && type != Type::UpdateImageV2 && type != Type::UpdateImageV3) {
+    if (type != EType::UpdateImage && type != EType::UpdateImageV2 && type != EType::UpdateImageV3) {
         throw runtime_error{"Cannot interpret IPC packet as UpdateImage."};
     }
 
     payload >> result.grabFocus;
     payload >> result.imageName;
 
-    if (type >= Type::UpdateImageV2) {
+    if (type >= EType::UpdateImageV2) {
         // multi-channel support
         payload >> result.nChannels;
     } else {
@@ -222,7 +235,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     payload >> result.x >> result.y >> result.width >> result.height;
     size_t nPixels = (size_t)result.width * result.height;
 
-    if (type >= Type::UpdateImageV3) {
+    if (type >= EType::UpdateImageV3) {
         // custom offset/stride support
         payload >> result.channelOffsets;
         payload >> result.channelStrides;
@@ -239,11 +252,11 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 
     size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < result.nChannels; ++c) {
-        stridedImageDataSize = std::max(stridedImageDataSize, (size_t)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
+        stridedImageDataSize = max(stridedImageDataSize, (size_t)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
     }
 
     if (payload.remainingBytes() < stridedImageDataSize * sizeof(float)) {
-        throw std::runtime_error{"UpdateImage: insufficient image data."};
+        throw runtime_error{"UpdateImage: insufficient image data."};
     }
 
     const float* stridedImageData = (const float*)payload.get();
@@ -251,7 +264,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
         for (int32_t c = 0; c < result.nChannels; ++c) {
             result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
         }
-    }, std::numeric_limits<int>::max());
+    }, numeric_limits<int>::max());
 
     return result;
 }
@@ -260,9 +273,9 @@ IpcPacketCreateImage IpcPacket::interpretAsCreateImage() const {
     IpcPacketCreateImage result;
     IStream payload{mPayload};
 
-    Type type;
+    EType type;
     payload >> type;
-    if (type != Type::CreateImage) {
+    if (type != EType::CreateImage) {
         throw runtime_error{"Cannot interpret IPC packet as CreateImage."};
     }
 
@@ -277,6 +290,31 @@ IpcPacketCreateImage IpcPacket::interpretAsCreateImage() const {
     return result;
 }
 
+IpcPacketVectorGraphics IpcPacket::interpretAsVectorGraphics() const {
+    IpcPacketVectorGraphics result;
+    IStream payload{mPayload};
+
+    EType type;
+    payload >> type;
+    if (type != EType::VectorGraphics) {
+        throw runtime_error{"Cannot interpret IPC packet as VectorGraphics."};
+    }
+
+    payload >> result.grabFocus;
+    payload >> result.imageName;
+    payload >> result.append;
+    payload >> result.nCommands;
+
+    result.commands.resize(result.nCommands);
+    for (int32_t i = 0; i < result.nCommands; ++i) {
+        auto& command = result.commands[i];
+        payload >> command.type;
+        command.data.resize(command.size());
+        payload >> command.data;
+    }
+
+    return result;
+}
 
 static void makeSocketNonBlocking(Ipc::socket_t socketFd) {
 #ifdef _WIN32

@@ -479,6 +479,14 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     }
 }
 
+void Image::updateVectorGraphics(bool append, const vector<VgCommand>& commands) {
+    if (!append) {
+        mVgCommands.clear();
+    }
+
+    std::copy(std::begin(commands), std::end(commands), std::back_inserter(mVgCommands));
+}
+
 template <typename T>
 time_t to_time_t(T timePoint) {
     // `clock_cast` appears to throw errors on some systems, so we're using this slightly hacky

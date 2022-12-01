@@ -85,7 +85,7 @@ void ImageButton::draw(NVGcontext *ctx) {
     if (mIsReference) {
         nvgBeginPath(ctx);
         nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
-        nvgFillColor(ctx, Color(0.7f, 0.4f, 0.4f, 1.0f));
+        nvgFillColor(ctx, REFERENCE_COLOR);
         nvgFill(ctx);
     }
 
@@ -99,7 +99,7 @@ void ImageButton::draw(NVGcontext *ctx) {
             nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
         }
 
-        nvgFillColor(ctx, mIsSelected ? Color(0.35f, 0.35f, 0.8f, 1.0f) : Color(1.0f, 0.1f));
+        nvgFillColor(ctx, mIsSelected ? IMAGE_COLOR : Color(1.0f, 0.1f));
         nvgFill(ctx);
     }
 

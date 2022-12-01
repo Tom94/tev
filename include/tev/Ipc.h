@@ -4,6 +4,7 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/VectorGraphics.h>
 
 #include <list>
 #include <vector>
@@ -44,9 +45,17 @@ struct IpcPacketCreateImage {
     std::vector<std::string> channelNames;
 };
 
+struct IpcPacketVectorGraphics {
+    std::string imageName;
+    bool grabFocus;
+    bool append; // If true, appends new vector instructions to existing ones rather than overwriting them
+    int32_t nCommands;
+    std::vector<VgCommand> commands;
+};
+
 class IpcPacket {
 public:
-    enum Type : char {
+    enum EType : char {
         OpenImage = 0,
         ReloadImage = 1,
         CloseImage = 2,
@@ -55,6 +64,7 @@ public:
         UpdateImageV2 = 5, // Adds multi-channel support
         UpdateImageV3 = 6, // Adds custom striding/offset support
         OpenImageV2 = 7, // Explicit separation of image name and channel selector
+        VectorGraphics = 8,
     };
 
     IpcPacket() = default;
@@ -68,9 +78,9 @@ public:
         return mPayload.size();
     }
 
-    Type type() const {
+    EType type() const {
         // The first 4 bytes encode the message size.
-        return (Type)mPayload[4];
+        return (EType)mPayload[4];
     }
 
     struct ChannelDesc {
@@ -84,12 +94,14 @@ public:
     void setCloseImage(const std::string& imageName);
     void setUpdateImage(const std::string& imageName, bool grabFocus, const std::vector<ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const std::vector<float>& stridedImageData);
     void setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames);
+    void setVectorGraphics(const std::string& imageName, bool grabFocus, bool append, const std::vector<VgCommand>& commands);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
     IpcPacketCloseImage interpretAsCloseImage() const;
     IpcPacketUpdateImage interpretAsUpdateImage() const;
     IpcPacketCreateImage interpretAsCreateImage() const;
+    IpcPacketVectorGraphics interpretAsVectorGraphics() const;
 
 private:
     std::vector<char> mPayload;
@@ -222,7 +234,7 @@ public:
     using socket_t = int;
 #endif
 
-    Ipc(const std::string& hostname);
+    Ipc(const std::string& hostname = "127.0.0.1:14158");
     virtual ~Ipc();
 
     bool isPrimaryInstance() {

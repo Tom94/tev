@@ -175,6 +175,7 @@ set(TEV_SOURCES
     include/tev/Task.h src/Task.cpp
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp
+    include/tev/VectorGraphics.h src/VectorGraphics.cpp
 
     src/main.cpp
 )
