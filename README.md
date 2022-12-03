@@ -63,7 +63,7 @@ The following operations exist:
 | `ReloadImage` | Reloads an image from a specified path on the machine __tev__ is running on.
 
 __tev__'s network protocol is already implemented in the following languages:
-- [Python](src/python/ipc.py) by Tomáš Iser
+- [Python](src/python/tev.py) by Tomáš Iser
 - [Rust](https://crates.io/crates/tev_client) by Karel Peeters
 
 
