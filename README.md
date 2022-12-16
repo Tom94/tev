@@ -61,6 +61,7 @@ The following operations exist:
 | `UpdateImage` | Updates the pixels in a rectangular region.
 | `CloseImage` | Closes a specified image.
 | `ReloadImage` | Reloads an image from a specified path on the machine __tev__ is running on.
+| `VectorGraphics` | Draws vector graphics over a specified image.
 
 __tev__'s network protocol is already implemented in the following languages:
 - [Python](src/python/tev.py) by Tomáš Iser
