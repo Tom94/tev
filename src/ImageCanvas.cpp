@@ -166,7 +166,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                             (float)m_pos.y() + nano.y(),
                         };
                     } else {
-                        str = fmt::format("{:.4f}", values[i]);
+                        str = fmt::format(std::abs(values[i]) > 100000 ? "{:6g}" : "{:.5f}", values[i]);
 
                         pos = Vector2f{
                             (float)m_pos.x() + nano.x(),
