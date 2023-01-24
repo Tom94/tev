@@ -544,7 +544,7 @@ int main(int argc, char* argv[]) {
 #endif
         }
 
-        tev::mainFunc(arguments);
+        return tev::mainFunc(arguments);
     } catch (const exception& e) {
         tlog::error() << fmt::format("Uncaught exception: {}", e.what());
         return 1;
