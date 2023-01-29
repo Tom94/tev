@@ -1151,10 +1151,12 @@ void ImageViewer::removeAllImages() {
     // TODO: Remove once a fix exists.
     request_focus();
 
-    for (size_t i = mImages.size(); i > 0; --i) {
-        mImageButtonContainer->remove_child_at((int)(i - 1));
+    for (int i = (int)mImages.size() - 1; i >= 0; --i) {
+        if (mImageButtonContainer->child_at(i)->visible()) {
+            mImages.erase(begin(mImages) + i);
+            mImageButtonContainer->remove_child_at(i);
+        }
     }
-    mImages.clear();
 
     // No images left to select
     selectImage(nullptr);
