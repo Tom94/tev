@@ -1113,6 +1113,13 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
         nextCandidate = nextImage(image, Backward);
     }
 
+    // If `nextImage` produced the same image again, this means
+    // that `image` is the only (visible) image and hence, after
+    // removal, should be replaced by no selection at all.
+    if (nextCandidate == image) {
+        nextCandidate = nullptr;
+    }
+
     // Reset all focus as a workaround a crash caused by nanogui.
     // TODO: Remove once a fix exists.
     request_focus();
