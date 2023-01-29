@@ -128,6 +128,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(ui, COMMAND + "+B", "Toggle GUI");
     addRow(ui, "H",            "Show help (this window)");
     addRow(ui, COMMAND + "+P", "Find image or channel group");
+    addRow(ui, "Escape",       "Reset find string");
     addRow(ui, COMMAND + "+Q", "Quit");
 
     // About tab

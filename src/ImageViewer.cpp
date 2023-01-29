@@ -705,6 +705,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             mClipToLdrButton->set_pushed(!mClipToLdrButton->pushed());
             mImageCanvas->setClipToLdr(mClipToLdrButton->pushed());
             return true;
+        } else if (key == GLFW_KEY_ESCAPE) {
+            setFilter("");
+            return true;
         } else if (key == GLFW_KEY_Q && (modifiers & SYSTEM_COMMAND_MOD)) {
             set_visible(false);
             return true;
