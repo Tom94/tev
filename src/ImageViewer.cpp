@@ -953,6 +953,14 @@ void ImageViewer::draw_contents() {
         mRequiresFilterUpdate = false;
     }
 
+    bool anyImageVisible = mCurrentImage || mCurrentReference || std::any_of(
+        begin(mImageButtonContainer->children()), end(mImageButtonContainer->children()), [](const auto& c) { return c->visible(); }
+    );
+
+    for (auto button : mAnyImageButtons) {
+        button->set_enabled(anyImageVisible);
+    }
+
     if (mRequiresLayoutUpdate) {
         nanogui::Vector2i oldDraggedImageButtonPos{0, 0};
         auto& buttons = mImageButtonContainer->children();
@@ -1013,10 +1021,6 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
 
     if (mIsDraggingImageButton && index <= mDraggedImageButtonId) {
         ++mDraggedImageButtonId;
-    }
-
-    for (auto button : mAnyImageButtons) {
-        button->set_enabled(true);
     }
 
     auto button = new ImageButton{nullptr, image->name(), true};
@@ -1119,11 +1123,6 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
     if (mImages.empty()) {
         selectImage(nullptr);
         selectReference(nullptr);
-
-        for (auto button : mAnyImageButtons) {
-            button->set_enabled(false);
-        }
-
         return;
     }
 
@@ -1137,8 +1136,9 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
 }
 
 void ImageViewer::removeAllImages() {
-    if (mImages.empty())
+    if (mImages.empty()) {
         return;
+    }
 
     // Reset all focus as a workaround a crash caused by nanogui.
     // TODO: Remove once a fix exists.
@@ -1152,9 +1152,6 @@ void ImageViewer::removeAllImages() {
     // No images left to select
     selectImage(nullptr);
     selectReference(nullptr);
-    for (auto button : mAnyImageButtons) {
-        button->set_enabled(false);
-    }
 }
 
 void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replacement, bool shallSelect) {
