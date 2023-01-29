@@ -17,6 +17,25 @@ The following file formats are supported:
 ![Screenshot](https://raw.githubusercontent.com/Tom94/tev/master/resources/screenshot.png)
 _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
 
+## Installation
+
+### Windows
+
+Download the __tev__ executable (.exe) from the [releases page](https://github.com/Tom94/tev/releases).
+
+### macOS
+
+Download the __tev__ application (.dmg) from the [releases page](https://github.com/Tom94/tev/releases) or install it via homebrew.
+```bash
+brew install --cask tev
+```
+
+### Linux
+
+Download the __tev__ application (.appimage) from the [releases page](https://github.com/Tom94/tev/releases). See [how to run AppImages](https://appimage.org/).
+
+On Arch Linux you can also install __tev__ from the [Arch User Repository](https://aur.archlinux.org/packages/tev/).
+
 ## Usage
 
 ### Graphical User Interface
@@ -76,22 +95,6 @@ where integers are encoded in little endian.
 
 There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that show exactly how each packet has to be assembled. These functions do not rely on external dependencies, so it is recommended to copy and paste them into your project for interfacing with __tev__.
 
-
-## Obtaining tev
-
-### macOS / Windows
-
-Pre-built binaries for Windows (32-bit and 64-bit) and macOS (64-bit, arm) are available on the [releases page](https://github.com/Tom94/tev/releases).
-
-On macOS, __tev__ can also be installed via homebrew:
-```bash
-brew install --cask tev
-```
-
-### Linux
-
-- Pre-built portable Linux binaries (64-bit) are available on the [releases page](https://github.com/Tom94/tev/releases). See [how to run AppImages](https://appimage.org/).
-- Archlinux: available on the [Arch User Repository](https://aur.archlinux.org/packages/tev/)
 
 ## Building tev
 
