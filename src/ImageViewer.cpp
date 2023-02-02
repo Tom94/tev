@@ -712,7 +712,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             set_visible(false);
             return true;
         } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
-            if (mImageScrollContainer->focused()) {
+            if (modifiers & GLFW_MOD_SHIFT) {
                 if (clip::set_text(mCurrentImage->name())) {
                     tlog::success() << "Image path copied to clipboard.";
                 } else {

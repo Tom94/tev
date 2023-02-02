@@ -68,7 +68,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(imageLoading, COMMAND + "+Shift+R or " + COMMAND + "+F5", "Reload all images");
     addRow(imageLoading, COMMAND + "+W",                             "Close image");
     addRow(imageLoading, COMMAND + "+Shift+W",                       "Close all images");
-    addRow(imageLoading, COMMAND + "+C",                             "Copy image or path to clipboard");
+    addRow(imageLoading, COMMAND + "+C",                             "Copy image to clipboard");
+    addRow(imageLoading, COMMAND + "+Shift+C",                       "Copy image's path to clipboard");
     addRow(imageLoading, COMMAND + "+V",                             "Paste image from clipboard");
 
     new Label{shortcuts, "Image options", "sans-bold", 18};
