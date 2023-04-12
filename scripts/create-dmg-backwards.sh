@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -x -e
+
 cd "$(dirname ${BASH_SOURCE[0]})"
 
 echo "Building backwards-compatible tev..."
