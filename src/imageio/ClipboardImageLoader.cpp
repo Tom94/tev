@@ -33,12 +33,12 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     string magicString(magic, 4);
 
     if (magicString != "clip") {
-        throw invalid_argument{fmt::format("Invalid magic clipboard string {}", magicString)};
+        throw invalid_argument{format("Invalid magic clipboard string {}", magicString)};
     }
 
     iStream.read(reinterpret_cast<char*>(&spec), sizeof(clip::image_spec));
     if (iStream.gcount() < (streamsize)sizeof(clip::image_spec)) {
-        throw invalid_argument{fmt::format("Not sufficient bytes to read image spec ({} vs {})", iStream.gcount(), sizeof(clip::image_spec))};
+        throw invalid_argument{format("Not sufficient bytes to read image spec ({} vs {})", iStream.gcount(), sizeof(clip::image_spec))};
     }
 
     Vector2i size{(int)spec.width, (int)spec.height};
@@ -63,7 +63,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
     if (iStream.gcount() < (streamsize)numBytes) {
-        throw invalid_argument{fmt::format("Not sufficient bytes to read image data ({} vs {})", iStream.gcount(), numBytes)};
+        throw invalid_argument{format("Not sufficient bytes to read image data ({} vs {})", iStream.gcount(), numBytes)};
     }
 
     int shifts[4] = {

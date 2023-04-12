@@ -143,7 +143,7 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
     for (const auto& c : channels) {
         if (c.size() != size()) {
-            throw runtime_error{fmt::format(
+            throw runtime_error{format(
                 "All channels must have the same size as the data window. ({}:{}x{} != {}x{})",
                 c.name(), c.size().x(), c.size().y(), size().x(), size().y()
             )};
@@ -195,7 +195,7 @@ atomic<int> Image::sId(0);
 
 Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const string& channelSelector)
 : mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? tev::toString(path) : fmt::format("{}:{}", tev::toString(path), channelSelector);
+    mName = channelSelector.empty() ? tev::toString(path) : format("{}:{}", tev::toString(path), channelSelector);
 
     for (const auto& l : mData.layers) {
         auto groups = getGroupedChannels(l);
@@ -535,9 +535,9 @@ string Image::toString() const {
 Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << fmt::format("Could not load {}. {}", toString(path), e.what());
+            tlog::error() << format("Could not load {}. {}", toString(path), e.what());
         } else {
-            tlog::error() << fmt::format("Could not load {}:{}. {}", toString(path), channelSelector, e.what());
+            tlog::error() << format("Could not load {}:{}. {}", toString(path), channelSelector, e.what());
         }
     };
 
@@ -550,7 +550,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         auto start = chrono::system_clock::now();
 
         if (!iStream) {
-            throw invalid_argument{fmt::format("Image {} could not be opened.", path)};
+            throw invalid_argument{format("Image {} could not be opened.", path)};
         }
 
         fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
@@ -600,7 +600,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                 auto end = chrono::system_clock::now();
                 chrono::duration<double> elapsedSeconds = end - start;
 
-                tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
+                tlog::success() << format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
                 co_return images;
             }

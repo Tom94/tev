@@ -376,7 +376,7 @@ UberShader::UberShader(RenderPass* renderPass) {
 
         mShader = new Shader{renderPass, "ubershader", vertexShader, fragmentShader};
     } catch (const runtime_error& e) {
-        tlog::error() << fmt::format("Unable to compile shader: {}", e.what());
+        tlog::error() << format("Unable to compile shader: {}", e.what());
     }
 
     // 2 Triangles

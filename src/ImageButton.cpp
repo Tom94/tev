@@ -182,7 +182,7 @@ void ImageButton::draw(NVGcontext *ctx) {
 void ImageButton::setHighlightRange(size_t begin, size_t end) {
     size_t beginIndex = begin;
     if (end > mCaption.size()) {
-        throw std::invalid_argument{fmt::format(
+        throw std::invalid_argument{format(
             "end ({}) must not be larger than mCaption.size() ({})",
             end, mCaption.size()
         )};

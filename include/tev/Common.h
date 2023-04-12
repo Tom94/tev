@@ -3,9 +3,6 @@
 
 #pragma once
 
-#define FMT_HEADER_ONLY 1
-#include <fmt/core.h>
-
 #include <nanogui/vector.h>
 
 #include <tinylogger/tinylogger.h>
@@ -13,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <format>
 #include <functional>
 #include <string>
 #include <sstream>
@@ -50,7 +48,7 @@
 
 #define TEV_ASSERT(cond, description, ...) \
     if (UNLIKELY(!(cond))) \
-        throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)};
+        throw std::runtime_error{std::format(description, ##__VA_ARGS__)};
 
 #ifndef TEV_VERSION
 #   define TEV_VERSION "undefined"
@@ -58,10 +56,9 @@
 
 // Make std::filesystem::path formattable.
 template <>
-struct fmt::formatter<std::filesystem::path>: formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const std::filesystem::path& path, FormatContext& ctx) {
-        return formatter<std::string_view>::format(path.string(), ctx);
+struct std::formatter<std::filesystem::path> : std::formatter<std::string_view> {
+    auto format(const std::filesystem::path& path, std::format_context& ctx) {
+        return std::format_to(ctx.out(), "{}", path.string());
     }
 };
 

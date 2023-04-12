@@ -25,6 +25,3 @@
 [submodule "dependencies/qoi"]
 	path = dependencies/qoi
 	url = https://github.com/phoboslab/qoi.git
-[submodule "dependencies/fmt"]
-	path = dependencies/fmt
-	url = https://github.com/fmtlib/fmt

@@ -31,7 +31,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     iStream >> magic >> size.x() >> size.y() >> nChannels;
 
     if (magic != "empty") {
-        throw invalid_argument{fmt::format("Invalid magic empty string {}", magic)};
+        throw invalid_argument{format("Invalid magic empty string {}", magic)};
     }
 
     auto numPixels = (size_t)size.x() * size.y();

@@ -307,7 +307,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             });
 
             mFilter->set_placeholder("Find");
-            mFilter->set_tooltip(fmt::format(
+            mFilter->set_tooltip(format(
                 "Filters visible images and channel groups according to a supplied string. "
                 "The string must have the format 'image:group'. "
                 "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
@@ -390,19 +390,19 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
             makeImageButton("", true, [this] {
                 openImageDialog();
-            }, FA_FOLDER, fmt::format("Open ({}+O)", HelpWindow::COMMAND));
+            }, FA_FOLDER, format("Open ({}+O)", HelpWindow::COMMAND));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
                 saveImageDialog();
-            }, FA_SAVE, fmt::format("Save ({}+S)", HelpWindow::COMMAND)));
+            }, FA_SAVE, format("Save ({}+S)", HelpWindow::COMMAND)));
 
             mCurrentImageButtons.push_back(makeImageButton("", false, [this] {
                 reloadImage(mCurrentImage);
-            }, FA_RECYCLE, fmt::format("Reload ({}+R or F5)", HelpWindow::COMMAND)));
+            }, FA_RECYCLE, format("Reload ({}+R or F5)", HelpWindow::COMMAND)));
 
             mAnyImageButtons.push_back(makeImageButton("A", false, [this] {
                 reloadAllImages();
-            }, 0, fmt::format("Reload All ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, 0, format("Reload All ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             mWatchFilesForChangesButton = makeImageButton("W", true, {}, 0, "Watch image files and directories for changes and reload them automatically.");
             mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
@@ -420,7 +420,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
                 } else {
                     removeImage(mCurrentImage);
                 }
-            }, FA_TIMES, fmt::format("Close ({}+W); Close All ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
+            }, FA_TIMES, format("Close ({}+W); Close All ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
             spacer = new Widget{mSidebarLayout};
             spacer->set_height(3);
@@ -755,7 +755,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             //         if (image) {
             //             addImage(image, true);
             //         } else {
-            //             tlog::error() << fmt::format("Failed to load image from clipboard path: {}", path);
+            //             tlog::error() << format("Failed to load image from clipboard path: {}", path);
             //         }
             //     }
             // } else
@@ -772,7 +772,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                         << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height)
                         ;
 
-                    auto images = tryLoadImage(fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "").get();
+                    auto images = tryLoadImage(format("clipboard ({})", ++mClipboardIndex), imageStream, "").get();
                     if (images.empty()) {
                         tlog::error() << "Failed to load image from clipboard data.";
                     } else {
@@ -993,7 +993,7 @@ void ImageViewer::draw_contents() {
             mHistogram->setMean(statistics->mean);
             mHistogram->setMaximum(statistics->maximum);
             mHistogram->setZero(statistics->histogramZero);
-            mHistogram->set_tooltip(fmt::format(
+            mHistogram->set_tooltip(format(
                 "{}\n\n"
                 "Minimum: {:.3f}\n"
                 "Mean: {:.3f}\n"
@@ -1012,7 +1012,7 @@ void ImageViewer::draw_contents() {
         mHistogram->setMaximum(0);
         mHistogram->setZero(0);
         mHistogram->set_tooltip(
-            fmt::format("{}", histogramTooltipBase)
+            format("{}", histogramTooltipBase)
         );
     }
 }
@@ -1455,7 +1455,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
     mExposureSlider->set_value(value);
-    mExposureLabel->set_caption(fmt::format("Exposure: {:+.1f}", value));
+    mExposureLabel->set_caption(format("Exposure: {:+.1f}", value));
 
     mImageCanvas->setExposure(value);
 }
@@ -1463,7 +1463,7 @@ void ImageViewer::setExposure(float value) {
 void ImageViewer::setOffset(float value) {
     value = round(value, 2.0f);
     mOffsetSlider->set_value(value);
-    mOffsetLabel->set_caption(fmt::format("Offset: {:+.2f}", value));
+    mOffsetLabel->set_caption(format("Offset: {:+.2f}", value));
 
     mImageCanvas->setOffset(value);
 }
@@ -1471,7 +1471,7 @@ void ImageViewer::setOffset(float value) {
 void ImageViewer::setGamma(float value) {
     value = round(value, 2.0f);
     mGammaSlider->set_value(value);
-    mGammaLabel->set_caption(fmt::format("Gamma: {:+.2f}", value));
+    mGammaLabel->set_caption(format("Gamma: {:+.2f}", value));
 
     mImageCanvas->setGamma(value);
 }
@@ -1695,7 +1695,7 @@ void ImageViewer::saveImageDialog() {
             this,
             MessageDialog::Type::Warning,
             "Error",
-            fmt::format("Failed to save image: {}", e.what())
+            format("Failed to save image: {}", e.what())
         );
     }
 
@@ -1876,7 +1876,7 @@ void ImageViewer::updateTitle() {
         auto channelTails = channels;
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
-        caption = fmt::format("{} – {}", mCurrentImage->shortName(), mCurrentGroup);
+        caption = format("{} – {}", mCurrentImage->shortName(), mCurrentGroup);
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
@@ -1885,18 +1885,18 @@ void ImageViewer::updateTitle() {
 
         string valuesString;
         for (size_t i = 0; i < channelTails.size(); ++i) {
-            valuesString += fmt::format("{:.2f},", values[i]);
+            valuesString += format("{:.2f},", values[i]);
         }
         valuesString.pop_back();
         valuesString += " / 0x";
         for (size_t i = 0; i < channelTails.size(); ++i) {
             float tonemappedValue = channelTails[i] == "A" ? values[i] : toSRGB(values[i]);
             unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
-            valuesString += fmt::format("{:02X}", discretizedValue);
+            valuesString += format("{:02X}", discretizedValue);
         }
 
-        caption += fmt::format(" – @{},{} / {}x{}: {}", imageCoords.x(), imageCoords.y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString);
-        caption += fmt::format(" – {}%", (int)std::round(mImageCanvas->scale() * 100));
+        caption += format(" – @{},{} / {}x{}: {}", imageCoords.x(), imageCoords.y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString);
+        caption += format(" – {}%", (int)std::round(mImageCanvas->scale() * 100));
     }
 
     set_caption(caption);

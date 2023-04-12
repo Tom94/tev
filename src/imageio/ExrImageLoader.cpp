@@ -220,7 +220,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
     }
 
     if (rawChannels.empty()) {
-        throw invalid_argument{fmt::format("No channels match '{}'.", channelSelector)};
+        throw invalid_argument{format("No channels match '{}'.", channelSelector)};
     }
 
     co_await ThreadPool::global().parallelForAsync(0, (int)rawChannels.size(), [&](int i) {
@@ -248,14 +248,14 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         data.displayWindow = {{displayWindow.min.x, displayWindow.min.y}, {displayWindow.max.x+1, displayWindow.max.y+1}};
 
         if (!data.dataWindow.isValid()) {
-            throw invalid_argument{fmt::format(
+            throw invalid_argument{format(
                 "EXR image has invalid data window: [{},{}] - [{},{}]",
                 data.dataWindow.min.x(), data.dataWindow.min.y(), data.dataWindow.max.x(), data.dataWindow.max.y()
             )};
         }
 
         if (!data.displayWindow.isValid()) {
-            throw invalid_argument{fmt::format(
+            throw invalid_argument{format(
                 "EXR image has invalid display window: [{},{}] - [{},{}]",
                 data.displayWindow.min.x(), data.displayWindow.min.y(), data.displayWindow.max.x(), data.displayWindow.max.y()
             )};

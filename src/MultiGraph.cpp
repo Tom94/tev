@@ -89,17 +89,17 @@ void MultiGraph::draw(NVGcontext *ctx) {
         nvgFontSize(ctx, 15.0f);
         nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        drawTextWithShadow(ctx, m_pos.x() + 3, m_pos.y() + 1, fmt::format("{:.3f}", mMinimum));
+        drawTextWithShadow(ctx, m_pos.x() + 3, m_pos.y() + 1, format("{:.3f}", mMinimum));
 
         nvgTextAlign(ctx, NVG_ALIGN_MIDDLE | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        string meanString = fmt::format("{:.3f}", mMean);
+        string meanString = format("{:.3f}", mMean);
         float textWidth = nvgTextBounds(ctx, 0, 0, meanString.c_str(), nullptr, nullptr);
         drawTextWithShadow(ctx, m_pos.x() + m_size.x() / 2 - textWidth / 2, m_pos.y() + 1, meanString);
 
         nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        drawTextWithShadow(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, fmt::format("{:.3f}", mMaximum));
+        drawTextWithShadow(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, format("{:.3f}", mMaximum));
 
         if (!mCaption.empty()) {
             nvgFontSize(ctx, 14.0f);
