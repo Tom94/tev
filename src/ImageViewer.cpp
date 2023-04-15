@@ -320,9 +320,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             mRegexButton->set_pushed(false);
             mRegexButton->set_flags(Button::ToggleButton);
             mRegexButton->set_font_size(15);
-            mRegexButton->set_change_callback([this](bool value) {
-                setUseRegex(value);
-            });
+            mRegexButton->set_change_callback([this](bool value) { setUseRegex(value); });
         }
 
         // Playback controls
@@ -341,6 +339,7 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
             mPlayButton = makePlaybackButton("", true, []{}, FA_PLAY, "Play (Space)");
             mPlayButton->set_flags(Button::ToggleButton);
+            mPlayButton->set_change_callback([this](bool value) { setPlayingBack(value); });
 
             mAnyImageButtons.push_back(makePlaybackButton("", false, [this] {
                 selectImage(nthVisibleImage(0));
@@ -357,21 +356,6 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             mFpsTextBox->set_alignment(TextBox::Alignment::Right);
             mFpsTextBox->set_min_max_values(1, 1000);
             mFpsTextBox->set_spinnable(true);
-
-            mPlaybackThread = thread{[&]() {
-                while (mShallRunPlaybackThread) {
-                    auto fps = clamp(mFpsTextBox->value(), 1, 1000);
-                    auto microseconds = 1000000.0f / fps;
-                    this_thread::sleep_for(chrono::microseconds{std::max((size_t)microseconds, (size_t)1)});
-
-                    if (mPlayButton->pushed() && mTaskQueue.empty()) {
-                        mTaskQueue.push([&]() {
-                            selectImage(nextImage(mCurrentImage, Forward), false);
-                        });
-                        redraw();
-                    }
-                }
-            }};
         }
 
         // Save, refresh, load, close
@@ -461,13 +445,6 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     }
 
     updateLayout();
-}
-
-ImageViewer::~ImageViewer() {
-    mShallRunPlaybackThread = false;
-    if (mPlaybackThread.joinable()) {
-        mPlaybackThread.join();
-    }
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
@@ -699,7 +676,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             toggleConsole();
             return true;
         } else if (key == GLFW_KEY_SPACE) {
-            mPlayButton->set_pushed(!mPlayButton->pushed());
+            setPlayingBack(!playingBack());
             return true;
         } else if (key == GLFW_KEY_L && mSupportsHdr) {
             mClipToLdrButton->set_pushed(!mClipToLdrButton->pushed());
@@ -895,13 +872,35 @@ void ImageViewer::draw_contents() {
 
     clear();
 
+    // If playing back, ensure correct frame pacing
+    if (playingBack() && mTaskQueue.empty()) {
+        auto fps = clamp(mFpsTextBox->value(), 1, 1000);
+        auto seconds_per_frame = chrono::duration<float>{1.0f / fps};
+        auto now = chrono::steady_clock::now();
+
+        if (now - mLastPlaybackFrameTime > 500s) {
+            // If lagging behind too far, drop the frames, but otherwise...
+            mLastPlaybackFrameTime = now;
+            selectImage(nextImage(mCurrentImage, Forward), false);
+        } else {
+            // ...advance by as many frames as the user-specified FPS would
+            // demand, given the elapsed time since the last render.
+            while (now - mLastPlaybackFrameTime >= seconds_per_frame) {
+                mLastPlaybackFrameTime += chrono::duration_cast<chrono::steady_clock::duration>(seconds_per_frame);
+                selectImage(nextImage(mCurrentImage, Forward), false);
+            }
+        }
+
+        redraw();
+    }
+
     // If watching files for changes, do so every 100ms
     if (watchFilesForChanges()) {
         auto now = chrono::steady_clock::now();
-        if (now - mLastFileChangesCheck > 100ms) {
+        if (now - mLastFileChangesCheckTime >= 100ms) {
             reloadImagesWhoseFileChanged();
             mImagesLoader->checkDirectoriesForNewFilesAndLoadThose();
-            mLastFileChangesCheck = now;
+            mLastFileChangesCheckTime = now;
         }
     }
 
@@ -1558,6 +1557,16 @@ nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
     return result;
 }
 
+bool ImageViewer::playingBack() const {
+    return mPlayButton->pushed();
+}
+
+void ImageViewer::setPlayingBack(bool value) {
+    mPlayButton->set_pushed(value);
+    mLastPlaybackFrameTime = chrono::steady_clock::now();
+    redraw();
+}
+
 bool ImageViewer::setFilter(const string& filter) {
     mFilter->set_value(filter);
     mRequiresFilterUpdate = true;
@@ -1876,7 +1885,7 @@ void ImageViewer::updateTitle() {
         auto channelTails = channels;
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
-        caption = fmt::format("{} – {}", mCurrentImage->shortName(), mCurrentGroup);
+        caption = fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
@@ -1896,7 +1905,6 @@ void ImageViewer::updateTitle() {
         }
 
         caption += fmt::format(" – @{},{} / {}x{}: {}", imageCoords.x(), imageCoords.y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString);
-        caption += fmt::format(" – {}%", (int)std::round(mImageCanvas->scale() * 100));
     }
 
     set_caption(caption);
