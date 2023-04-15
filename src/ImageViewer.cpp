@@ -878,13 +878,17 @@ void ImageViewer::draw_contents() {
         auto seconds_per_frame = chrono::duration<float>{1.0f / fps};
         auto now = chrono::steady_clock::now();
 
-        if (now - mLastPlaybackFrameTime > 1s) {
+        if (now - mLastPlaybackFrameTime > 500s) {
+            // If lagging behind too far, drop the frames, but otherwise...
             mLastPlaybackFrameTime = now;
-        }
-
-        while (now - mLastPlaybackFrameTime >= seconds_per_frame) {
-            mLastPlaybackFrameTime += chrono::duration_cast<chrono::steady_clock::duration>(seconds_per_frame);
             selectImage(nextImage(mCurrentImage, Forward), false);
+        } else {
+            // ...advance by as many frames as the user-specified FPS would
+            // demand, given the elapsed time since the last render.
+            while (now - mLastPlaybackFrameTime >= seconds_per_frame) {
+                mLastPlaybackFrameTime += chrono::duration_cast<chrono::steady_clock::duration>(seconds_per_frame);
+                selectImage(nextImage(mCurrentImage, Forward), false);
+            }
         }
 
         redraw();
