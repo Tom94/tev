@@ -27,7 +27,6 @@ TEV_NAMESPACE_BEGIN
 class ImageViewer : public nanogui::Screen {
 public:
     ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool supportsHdr);
-    virtual ~ImageViewer();
 
     bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
     bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;
@@ -121,6 +120,10 @@ public:
 
     nanogui::Vector2i sizeToFitImage(const std::shared_ptr<Image>& image);
     nanogui::Vector2i sizeToFitAllImages();
+
+    bool playingBack() const;
+    void setPlayingBack(bool value);
+
     bool setFilter(const std::string& filter);
 
     bool useRegex() const;
@@ -224,7 +227,7 @@ private:
     nanogui::Button* mRegexButton;
 
     nanogui::Button* mWatchFilesForChangesButton;
-    std::chrono::steady_clock::time_point mLastFileChangesCheck = {};
+    std::chrono::steady_clock::time_point mLastFileChangesCheckTime = {};
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
@@ -234,8 +237,7 @@ private:
 
     nanogui::Button* mPlayButton;
     nanogui::IntBox<int>* mFpsTextBox;
-    std::thread mPlaybackThread;
-    bool mShallRunPlaybackThread = true;
+    std::chrono::steady_clock::time_point mLastPlaybackFrameTime = {};
 
     nanogui::Widget* mImageButtonContainer;
     nanogui::Widget* mScrollContent;
