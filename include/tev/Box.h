@@ -6,7 +6,7 @@
 #include <tev/Common.h>
 
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 template <typename T, uint32_t N_DIMS>
 struct Box {
@@ -62,4 +62,4 @@ using Box2i = Box<int32_t, 2>;
 using Box3i = Box<int32_t, 3>;
 using Box4i = Box<int32_t, 4>;
 
-TEV_NAMESPACE_END
+}

@@ -13,7 +13,7 @@
 #include <tuple>
 #include <string>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ImageLoader {
 public:
@@ -32,4 +32,4 @@ protected:
     static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size);
 };
 
-TEV_NAMESPACE_END
+}

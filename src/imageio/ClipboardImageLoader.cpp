@@ -9,7 +9,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     char b[4];
@@ -104,4 +104,4 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     co_return result;
 }
 
-TEV_NAMESPACE_END
+}

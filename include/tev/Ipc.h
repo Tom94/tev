@@ -9,7 +9,7 @@
 #include <list>
 #include <vector>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 struct IpcPacketOpenImage {
     std::string imagePath;
@@ -286,4 +286,4 @@ private:
     std::string mLockName;
 };
 
-TEV_NAMESPACE_END
+}

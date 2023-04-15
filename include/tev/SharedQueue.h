@@ -10,7 +10,7 @@
 #include <mutex>
 #include <optional>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 template <typename T>
 class SharedQueue {
@@ -63,4 +63,4 @@ private:
     std::condition_variable mDataCondition;
 };
 
-TEV_NAMESPACE_END
+}

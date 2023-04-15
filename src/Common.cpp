@@ -24,7 +24,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 u8string toU8string(const string& str) {
     u8string temp;
@@ -255,4 +255,4 @@ EMetric toMetric(string name) {
     }
 }
 
-TEV_NAMESPACE_END
+}

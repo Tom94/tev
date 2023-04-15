@@ -12,7 +12,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
     static const auto stbiOStreamWrite = [](void* context, void* data, int size) {
@@ -34,4 +34,4 @@ void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, const vecto
     }
 }
 
-TEV_NAMESPACE_END
+}

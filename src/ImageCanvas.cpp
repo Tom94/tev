@@ -19,7 +19,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 ImageCanvas::ImageCanvas(Widget* parent, float pixelRatio)
 : Canvas{parent, 1, false, false, false}, mPixelRatio{pixelRatio} {
@@ -979,4 +979,4 @@ Matrix3f ImageCanvas::displayWindowToNanogui(const Image* image) {
     return textureToNanogui(image) * Matrix3f::translate(-image->dataWindow().min);
 }
 
-TEV_NAMESPACE_END
+}

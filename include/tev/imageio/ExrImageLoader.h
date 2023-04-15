@@ -8,7 +8,7 @@
 
 #include <istream>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ExrImageLoader : public ImageLoader {
 public:
@@ -20,4 +20,4 @@ public:
     }
 };
 
-TEV_NAMESPACE_END
+}

@@ -22,7 +22,7 @@
 #include <set>
 #include <vector>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ImageViewer : public nanogui::Screen {
 public:
@@ -265,4 +265,4 @@ private:
     int mDidFitToImage = 0;
 };
 
-TEV_NAMESPACE_END
+}

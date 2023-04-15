@@ -16,7 +16,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class StdOStream: public Imf::OStream
 {
@@ -86,4 +86,4 @@ void ExrImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
     file.writePixels(imageSize.y());
 }
 
-TEV_NAMESPACE_END
+}

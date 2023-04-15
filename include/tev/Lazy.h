@@ -10,7 +10,7 @@
 #include <functional>
 #include <future>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 // Encapsulates a lazy, potentially asynchronous computation
 // of some value. The public interface of this object is not
@@ -105,4 +105,4 @@ private:
     std::chrono::steady_clock::time_point mBecameReadyAt;
 };
 
-TEV_NAMESPACE_END
+}

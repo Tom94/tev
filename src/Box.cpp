@@ -3,6 +3,6 @@
 
 #include <tev/Box.h>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
-TEV_NAMESPACE_END
+}

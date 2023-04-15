@@ -9,7 +9,7 @@
 
 #include <nanogui/widget.h>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class MultiGraph : public nanogui::Widget {
 public:
@@ -67,4 +67,4 @@ protected:
     int mZeroBin = 0;
 };
 
-TEV_NAMESPACE_END
+}

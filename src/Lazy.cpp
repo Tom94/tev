@@ -3,6 +3,6 @@
 
 #include <tev/Lazy.h>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
-TEV_NAMESPACE_END
+}

@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 template <typename T>
 class TypedImageSaver;
@@ -36,4 +36,4 @@ public:
     virtual void save(std::ostream& oStream, const fs::path& path, const std::vector<T>& data, const nanogui::Vector2i& imageSize, int nChannels) const = 0;
 };
 
-TEV_NAMESPACE_END
+}

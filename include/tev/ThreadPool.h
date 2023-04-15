@@ -14,7 +14,7 @@
 #include <vector>
 
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ThreadPool {
 public:
@@ -133,4 +133,4 @@ private:
     std::condition_variable mSystemBusyCondition;
 };
 
-TEV_NAMESPACE_END
+}

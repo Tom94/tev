@@ -36,11 +36,6 @@
 #define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
 #endif
 
-// A macro is used such that external tools won't end up indenting entire files,
-// resulting in wasted horizontal space.
-#define TEV_NAMESPACE_BEGIN namespace tev {
-#define TEV_NAMESPACE_END }
-
 #ifdef __GNUC__
 #   define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
 #   define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
@@ -181,7 +176,7 @@ namespace nanogui {
     }
 }
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 namespace fs = std::filesystem;
 
@@ -402,4 +397,4 @@ void redrawWindow();
 static const nanogui::Color IMAGE_COLOR = {0.35f, 0.35f, 0.8f, 1.0f};
 static const nanogui::Color REFERENCE_COLOR = {0.7f, 0.4f, 0.4f, 1.0f};
 
-TEV_NAMESPACE_END
+}

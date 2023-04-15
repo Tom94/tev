@@ -5,7 +5,7 @@
 
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 namespace colormap {
     const vector<float>& turbo() {
@@ -537,4 +537,4 @@ namespace colormap {
     }
 }
 
-TEV_NAMESPACE_END
+}

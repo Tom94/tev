@@ -7,7 +7,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 UberShader::UberShader(RenderPass* renderPass) {
     try {
@@ -511,4 +511,4 @@ void UberShader::bindReferenceData(
     mShader->set_uniform("metric", static_cast<int>(metric));
 }
 
-TEV_NAMESPACE_END
+}

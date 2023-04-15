@@ -9,7 +9,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 bool StbiImageLoader::canLoadFile(istream&) const {
     // Pretend you can load any file and throw exception on failure.
@@ -92,4 +92,4 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     co_return result;
 }
 
-TEV_NAMESPACE_END
+}

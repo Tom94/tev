@@ -32,7 +32,7 @@ using socklen_t = int;
 
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 enum SocketError : int {
 #ifdef _WIN32
@@ -654,4 +654,4 @@ bool Ipc::SocketConnection::isClosed() const {
     return mSocketFd == INVALID_SOCKET;
 }
 
-TEV_NAMESPACE_END
+}

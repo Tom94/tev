@@ -9,11 +9,11 @@
 #include <mutex>
 #include <condition_variable>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 namespace colormap {
     const std::vector<float>& turbo();
     const std::vector<float>& viridis();
 }
 
-TEV_NAMESPACE_END
+}

@@ -5,7 +5,7 @@
 
 #include <tev/Common.h>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 struct VgCommand {
     enum class EType : int8_t {
@@ -118,4 +118,4 @@ struct VgCommand {
     std::vector<float> data;
 };
 
-TEV_NAMESPACE_END
+}

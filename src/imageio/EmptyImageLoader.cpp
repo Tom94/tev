@@ -8,7 +8,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     char b[5];
@@ -60,4 +60,4 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     co_return result;
 }
 
-TEV_NAMESPACE_END
+}

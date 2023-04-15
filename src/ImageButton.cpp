@@ -10,7 +10,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
 : Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
@@ -209,4 +209,4 @@ void ImageButton::setHighlightRange(size_t begin, size_t end) {
     }
 }
 
-TEV_NAMESPACE_END
+}

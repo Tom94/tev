@@ -11,7 +11,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 bool QoiImageLoader::canLoadFile(istream& iStream) const {
     char b[4];
@@ -91,4 +91,4 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     co_return result;
 }
 
-TEV_NAMESPACE_END
+}

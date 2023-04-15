@@ -7,7 +7,7 @@
 
 #include <ostream>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ExrImageSaver : public TypedImageSaver<float> {
 public:
@@ -22,4 +22,4 @@ public:
     }
 };
 
-TEV_NAMESPACE_END
+}

@@ -9,7 +9,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 bool PfmImageLoader::canLoadFile(istream& iStream) const {
     char b[2];
@@ -97,4 +97,4 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     co_return result;
 }
 
-TEV_NAMESPACE_END
+}

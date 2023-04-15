@@ -18,7 +18,7 @@
 #include <mutex>
 #include <semaphore>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class Latch {
 public:
@@ -230,4 +230,4 @@ private:
     std::shared_ptr<TaskSharedState> mState;
 };
 
-TEV_NAMESPACE_END
+}

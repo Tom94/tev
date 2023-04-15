@@ -12,7 +12,7 @@
 
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
     auto makeSavers = [] {
@@ -28,4 +28,4 @@ const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
     return imageSavers;
 }
 
-TEV_NAMESPACE_END
+}

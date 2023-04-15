@@ -7,7 +7,7 @@
 
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 ThreadPool::ThreadPool()
 : ThreadPool{thread::hardware_concurrency()} {
@@ -110,4 +110,4 @@ void ThreadPool::flushQueue() {
     }
 }
 
-TEV_NAMESPACE_END
+}

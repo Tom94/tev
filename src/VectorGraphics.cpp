@@ -5,6 +5,6 @@
 
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
-TEV_NAMESPACE_END
+}

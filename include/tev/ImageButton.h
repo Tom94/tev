@@ -9,7 +9,7 @@
 
 #include <string>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ImageButton : public nanogui::Widget {
 public:
@@ -73,4 +73,4 @@ private:
     size_t mHighlightEnd = 0;
 };
 
-TEV_NAMESPACE_END
+}

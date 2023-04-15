@@ -9,7 +9,7 @@
 
 #include <string>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class HelpWindow : public nanogui::Window {
 public:
@@ -24,4 +24,4 @@ private:
     std::function<void()> mCloseCallback;
 };
 
-TEV_NAMESPACE_END
+}

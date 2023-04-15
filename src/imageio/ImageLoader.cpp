@@ -15,7 +15,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
     auto makeLoaders = [] {
@@ -51,4 +51,4 @@ vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size
     return channels;
 }
 
-TEV_NAMESPACE_END
+}

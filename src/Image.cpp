@@ -16,7 +16,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 vector<string> ImageData::channelsInLayer(string layerName) const {
     vector<string> result;
@@ -734,4 +734,4 @@ bool BackgroundImagesLoader::publishSortedLoads() {
     return pushed;
 }
 
-TEV_NAMESPACE_END
+}

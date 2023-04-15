@@ -24,7 +24,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 static const int SIDEBAR_MIN_WIDTH = 230;
 
@@ -2019,4 +2019,4 @@ shared_ptr<Image> ImageViewer::imageByName(const string& imageName) {
     }
 }
 
-TEV_NAMESPACE_END
+}

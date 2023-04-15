@@ -13,7 +13,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 MultiGraph::MultiGraph(Widget *parent, const std::string &caption)
 : Widget(parent), mCaption(caption) {
@@ -137,4 +137,4 @@ void MultiGraph::draw(NVGcontext *ctx) {
     nvgStroke(ctx);
 }
 
-TEV_NAMESPACE_END
+}

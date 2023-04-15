@@ -12,7 +12,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
     // The QOI image format expects nChannels to be either 3 for RGB data or 4 for RGBA.
@@ -38,4 +38,4 @@ void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& 
     oStream.write(reinterpret_cast<char*>(encodedData), sizeInBytes);
 }
 
-TEV_NAMESPACE_END
+}

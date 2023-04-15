@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class Channel {
 public:
@@ -106,4 +106,4 @@ private:
     std::vector<float> mData;
 };
 
-TEV_NAMESPACE_END
+}

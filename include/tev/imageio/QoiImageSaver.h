@@ -7,7 +7,7 @@
 
 #include <ostream>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class QoiImageSaver : public TypedImageSaver<char> {
 public:
@@ -22,4 +22,4 @@ public:
     }
 };
 
-TEV_NAMESPACE_END
+}

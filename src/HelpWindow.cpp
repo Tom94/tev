@@ -16,7 +16,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 #ifdef __APPLE__
 string HelpWindow::COMMAND = "Cmd";
@@ -207,4 +207,4 @@ bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers
     return false;
 }
 
-TEV_NAMESPACE_END
+}

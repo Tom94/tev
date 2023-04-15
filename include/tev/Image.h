@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 class ImageLoader;
 
@@ -306,7 +306,7 @@ private:
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 };
 
-TEV_NAMESPACE_END
+}
 
 namespace std {
 template <> struct hash<tev::ChannelGroup> {

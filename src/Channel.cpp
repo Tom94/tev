@@ -9,7 +9,7 @@
 using namespace nanogui;
 using namespace std;
 
-TEV_NAMESPACE_BEGIN
+namespace tev {
 
 pair<string, string> Channel::split(const string& channel) {
     size_t dotPosition = channel.rfind(".");
@@ -84,4 +84,4 @@ void Channel::updateTile(int x, int y, int width, int height, const vector<float
     }
 }
 
-TEV_NAMESPACE_END
+}
