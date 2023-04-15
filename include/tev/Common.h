@@ -16,6 +16,7 @@
 #include <functional>
 #include <string>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 #ifdef _WIN32
@@ -221,6 +222,22 @@ std::string ensureUtf8(const std::string& str);
 std::string utf16to8(const std::wstring& utf16);
 fs::path toPath(const std::string& utf8);
 std::string toString(const fs::path& path);
+
+template <typename T>
+void removeDuplicates(std::vector<T>& vec) {
+    std::unordered_set<T> tmp;
+    size_t idx = 0;
+    for (const auto& v : vec) {
+        if (tmp.contains(v)) {
+            continue;
+        }
+
+        tmp.insert(v);
+        vec[idx++] = v;
+    }
+
+    vec.resize(idx);
+}
 
 // Taken from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
 template<typename T>

@@ -309,6 +309,30 @@ vector<string> Image::channelsInGroup(const string& groupName) const {
     return {};
 }
 
+void Image::decomposeChannelGroup(const string& groupName) {
+    // Takes all channels of a given group and turns them into individual groups.
+
+    auto group = find_if(mChannelGroups.begin(), mChannelGroups.end(), [&](const auto& g) { return g.name == groupName; });
+    if (group == mChannelGroups.end()) {
+        return;
+    }
+
+    const auto& channels = group->channels;
+    if (channels.empty()) {
+        return;
+    }
+
+    auto groupPos = distance(mChannelGroups.begin(), group);
+    for (const auto& channel : channels) {
+        mChannelGroups.insert(mChannelGroups.begin() + (++groupPos), ChannelGroup{channel, {channel, channel, channel}});
+    }
+
+    // Duplicates may have appeared here. (E.g. when trying to decompose a single channel
+    // or when single-color channels appear multiple times in their group to render as
+    // RGB rather than pure red.) Don't insert those.
+    removeDuplicates(mChannelGroups);
+}
+
 vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
     vector<vector<string>> groups = {
         { "R", "G", "B" },
