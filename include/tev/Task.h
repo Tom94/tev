@@ -5,15 +5,8 @@
 
 #include <tev/Common.h>
 
-#ifdef __clang__
-#include <experimental/coroutine>
-#define COROUTINE_NAMESPACE std::experimental
-#else
-#include <coroutine>
-#define COROUTINE_NAMESPACE std
-#endif
-
 #include <condition_variable>
+#include <coroutine>
 #include <future>
 #include <mutex>
 #include <semaphore>
@@ -53,8 +46,8 @@ struct DetachedTask {
             return {};
         }
 
-        COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
-        COROUTINE_NAMESPACE::suspend_never final_suspend() const noexcept { return {}; }
+        std::suspend_never initial_suspend() const noexcept { return {}; }
+        std::suspend_never final_suspend() const noexcept { return {}; }
 
         void return_void() {}
         void unhandled_exception() {
@@ -94,7 +87,7 @@ protected:
 };
 
 struct TaskSharedState {
-    COROUTINE_NAMESPACE::coroutine_handle<> continuation = nullptr;
+    std::coroutine_handle<> continuation = nullptr;
     Latch latch{2};
 };
 
@@ -102,10 +95,10 @@ template <typename future_t, typename data_t>
 class TaskPromise : public TaskPromiseBase<data_t> {
 public:
     future_t get_return_object() noexcept {
-        return {COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this), this->mPromise.get_future(), mState};
+        return {std::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this), this->mPromise.get_future(), mState};
     }
 
-    COROUTINE_NAMESPACE::suspend_never initial_suspend() const noexcept { return {}; }
+    std::suspend_never initial_suspend() const noexcept { return {}; }
 
     void unhandled_exception() {
         this->mPromise.set_exception(std::current_exception());
@@ -116,19 +109,19 @@ public:
     auto final_suspend() noexcept {
         class Awaiter {
         public:
-            Awaiter(COROUTINE_NAMESPACE::coroutine_handle<> continuation) : mContinuation{continuation} {}
+            Awaiter(std::coroutine_handle<> continuation) : mContinuation{continuation} {}
 
             bool await_ready() noexcept { return !mContinuation; }
             void await_resume() noexcept {}
 
             // Returning the continuation has the effect of continuing execution where the parent co_await'ed us.
             // It's the parent's job to call destroy on this coroutine's handle.
-            COROUTINE_NAMESPACE::coroutine_handle<> await_suspend(COROUTINE_NAMESPACE::coroutine_handle<TaskPromise<future_t, data_t>>) noexcept {
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<TaskPromise<future_t, data_t>>) noexcept {
                 return mContinuation;
             }
 
         private:
-            COROUTINE_NAMESPACE::coroutine_handle<> mContinuation;
+            std::coroutine_handle<> mContinuation;
         };
 
         bool isLast = mState->latch.countDown();
@@ -144,7 +137,7 @@ class Task {
 public:
     using promise_type = TaskPromise<Task<T>, T>;
 
-    Task(COROUTINE_NAMESPACE::coroutine_handle<promise_type> handle, std::future<T>&& future, const std::shared_ptr<TaskSharedState>& state)
+    Task(std::coroutine_handle<promise_type> handle, std::future<T>&& future, const std::shared_ptr<TaskSharedState>& state)
     : mHandle{handle}, mFuture{std::move(future)}, mState{state} {}
 
     // No copying allowed!
@@ -206,7 +199,7 @@ public:
         return await_resume();
     }
 
-    bool await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
+    bool await_suspend(std::coroutine_handle<> coroutine) noexcept {
         if (!mHandle) {
             tlog::error() << "Cannot co_await/get() a task multiple times.";
             std::terminate();
@@ -225,7 +218,7 @@ public:
     }
 
 private:
-    COROUTINE_NAMESPACE::coroutine_handle<promise_type> mHandle;
+    std::coroutine_handle<promise_type> mHandle;
     std::future<T> mFuture;
     std::shared_ptr<TaskSharedState> mState;
 };

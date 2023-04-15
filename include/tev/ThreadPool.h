@@ -55,7 +55,7 @@ public:
             bool await_ready() const noexcept { return false; }
 
             // Suspend and enqueue coroutine continuation onto the threadpool
-            void await_suspend(COROUTINE_NAMESPACE::coroutine_handle<> coroutine) noexcept {
+            void await_suspend(std::coroutine_handle<> coroutine) noexcept {
                 mPool->enqueueTask(coroutine, mPriority);
             }
 
