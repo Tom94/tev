@@ -450,6 +450,20 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
     redraw();
 
+    // Hide caption textbox when the user performed mousedown on any other component
+    if (down) {
+        nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
+        auto& buttons = mImageButtonContainer->children();
+        for (size_t i = 0; i < buttons.size(); ++i) {
+            ImageButton* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
+            if (!imgButton->contains(relMousePos)) {
+                imgButton->hideTextBox();
+            } else if (imgButton->textBoxVisible()) {
+                return true;
+            }
+        }
+    }
+
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
     // This has to occur before Screen::mouse_button_event as the button would absorb the event.
     if (down) {
@@ -622,6 +636,17 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 }
             } else {
                 selectImage(image);
+            }
+            return true;
+#ifdef __APPLE__
+        } else if (key == GLFW_KEY_ENTER) {
+#else
+        } else if (key == GLFW_KEY_F2) {
+#endif
+            if (mCurrentImage) {
+                int id = imageId(mCurrentImage);
+                dynamic_cast<ImageButton*>(mImageButtonContainer->child_at(id))->showTextBox();
+                requestLayoutUpdate();
             }
             return true;
         } else if (key == GLFW_KEY_N) {
@@ -1177,6 +1202,10 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
         return;
     }
 
+    // Preserve image button caption when replacing an image
+    ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[id]);
+    std::string caption = ib->caption();
+
     // If we already have the image selected, we must re-select it
     // regardless of the `shallSelect` parameter.
     shallSelect |= currentId == id;
@@ -1185,6 +1214,9 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
 
     removeImage(image);
     insertImage(replacement, id, shallSelect);
+
+    ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[id]);
+    ib->setCaption(caption);
 
     if (referenceId != -1) {
         selectReference(mImages[referenceId]);
@@ -1708,7 +1740,7 @@ void ImageViewer::saveImageDialog() {
         );
     }
 
-    // Make sure we gain focus after seleting a file to be loaded.
+    // Make sure we gain focus after selecting a file to be loaded.
     focusWindow();
 }
 
@@ -1754,7 +1786,7 @@ void ImageViewer::updateFilter() {
             ib->set_visible(doesImageMatch(mImages[i]));
             if (ib->visible()) {
                 ib->setId(id++);
-                activeImageNames.emplace_back(mImages[i]->name());
+                activeImageNames.emplace_back(ib->caption());
             }
         }
 

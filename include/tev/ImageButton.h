@@ -6,6 +6,7 @@
 #include <tev/Common.h>
 
 #include <nanogui/widget.h>
+#include <nanogui/textbox.h>
 
 #include <string>
 
@@ -23,6 +24,14 @@ public:
 
     const std::string& caption() const {
         return mCaption;
+    }
+
+    void setCaption(const std::string& caption) {
+        mCaption = caption;
+        // Reset drawing state
+        mSizeForWhichCutoffWasComputed = {0};
+        mHighlightBegin = 0;
+        mHighlightEnd = 0;
     }
 
     void setReferenceCallback(const std::function<void(bool)> &callback) {
@@ -55,8 +64,15 @@ public:
 
     void setHighlightRange(size_t begin, size_t end);
 
+    void showTextBox();
+    void hideTextBox();
+    bool textBoxVisible() { return mCaptionTextBox->visible(); }
+
 private:
     std::string mCaption;
+    nanogui::TextBox* mCaptionTextBox;
+
+
     bool mCanBeReference;
 
     bool mIsReference = false;
