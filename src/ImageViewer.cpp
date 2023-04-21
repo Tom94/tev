@@ -450,20 +450,6 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
     redraw();
 
-    // Hide caption textbox when the user performed mousedown on any other component
-    if (down) {
-        nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
-        auto& buttons = mImageButtonContainer->children();
-        for (size_t i = 0; i < buttons.size(); ++i) {
-            ImageButton* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
-            if (!imgButton->contains(relMousePos)) {
-                imgButton->hideTextBox();
-            } else if (imgButton->textBoxVisible()) {
-                return true;
-            }
-        }
-    }
-
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
     // This has to occur before Screen::mouse_button_event as the button would absorb the event.
     if (down) {
@@ -474,7 +460,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
 
             for (size_t i = 0; i < buttons.size(); ++i) {
                 const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
-                if (imgButton->contains(relMousePos)) {
+                if (imgButton->contains(relMousePos) && !imgButton->textBoxVisible()) {
                     mDraggedImageButtonId = i;
                     mIsDraggingImageButton = true;
                     mDraggingStartPosition = nanogui::Vector2f(relMousePos - imgButton->position());
@@ -486,6 +472,13 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
 
     if (Screen::mouse_button_event(p, button, down, modifiers)) {
         return true;
+    }
+
+    // Hide caption textbox when the user performed mousedown on any other component
+    if (down) {
+        for (auto& b : mImageButtonContainer->children()) {
+            dynamic_cast<ImageButton*>(b)->hideTextBox();
+        }
     }
 
     if (down && !mIsDraggingImageButton) {

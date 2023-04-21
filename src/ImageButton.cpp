@@ -17,13 +17,12 @@ namespace tev {
 ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
 : Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
     this->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
-    mCaptionTextBox = new TextBox{this, ""};
+    mCaptionTextBox = new TextBox{this, caption};
     mCaptionTextBox->set_visible(false);
     mCaptionTextBox->set_editable(true);
     mCaptionTextBox->set_alignment(TextBox::Alignment::Right);
-    mCaptionTextBox->set_placeholder("Enter caption");
+    mCaptionTextBox->set_placeholder(caption);
     mCaptionTextBox->set_callback([this](const string& name) {
-        this->setCaption(name);
         this->hideTextBox();
         return true;
     });
@@ -42,6 +41,7 @@ Vector2i ImageButton::preferred_size(NVGcontext *ctx) const {
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
+
     return Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
 }
 
@@ -231,11 +231,16 @@ void ImageButton::setHighlightRange(size_t begin, size_t end) {
 void ImageButton::showTextBox() {
     mCaptionTextBox->set_visible(true);
     mCaptionTextBox->request_focus();
+    mCaptionTextBox->select_all();
 }
 
 void ImageButton::hideTextBox() {
-    mCaptionTextBox->set_value("");
+    if (!textBoxVisible()) {
+        return;
+    }
+
     mCaptionTextBox->set_focused(false);
+    this->setCaption(mCaptionTextBox->value());
     mCaptionTextBox->set_visible(false);
 }
 
