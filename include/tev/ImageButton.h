@@ -66,12 +66,14 @@ public:
 
     void showTextBox();
     void hideTextBox();
-    bool textBoxVisible() { return mCaptionTextBox->visible(); }
+
+    bool textBoxVisible() const {
+        return mCaptionTextBox->visible();
+    }
 
 private:
     std::string mCaption;
     nanogui::TextBox* mCaptionTextBox;
-
 
     bool mCanBeReference;
 
