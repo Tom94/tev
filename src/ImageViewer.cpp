@@ -1757,11 +1757,11 @@ void ImageViewer::updateFilter() {
         // Checks whether an image matches the filter.
         // This is the case if the image name matches the image part
         // and at least one of the image's groups matches the group part.
-        auto doesImageMatch = [&](const shared_ptr<Image>& image) {
-            bool doesMatch = matchesFuzzyOrRegex(image->name(), imagePart, useRegex());
+        auto doesImageMatch = [&](const auto& name, const auto& channelGroups) {
+            bool doesMatch = matchesFuzzyOrRegex(name, imagePart, useRegex());
             if (doesMatch) {
                 bool anyGroupsMatch = false;
-                for (const auto& group : image->channelGroups()) {
+                for (const auto& group : channelGroups) {
                     if (matchesFuzzyOrRegex(group.name, groupPart, useRegex())) {
                         anyGroupsMatch = true;
                         break;
@@ -1780,7 +1780,7 @@ void ImageViewer::updateFilter() {
         size_t id = 1;
         for (size_t i = 0; i < mImages.size(); ++i) {
             ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
-            ib->set_visible(doesImageMatch(mImages[i]));
+            ib->set_visible(doesImageMatch(ib->caption(), mImages[i]->channelGroups()));
             if (ib->visible()) {
                 ib->setId(id++);
                 activeImageNames.emplace_back(ib->caption());
@@ -1836,14 +1836,16 @@ void ImageViewer::updateFilter() {
             }
         }
 
+        bool currentImageMatchesFilter = false;
         for (size_t i = 0; i < mImages.size(); ++i) {
             ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[i]);
             if (ib->visible()) {
+                currentImageMatchesFilter |= mImages[i] == mCurrentImage;
                 ib->setHighlightRange(beginOffset, endOffset);
             }
         }
 
-        if (mCurrentImage && !doesImageMatch(mCurrentImage)) {
+        if (!currentImageMatchesFilter) {
             selectImage(nthVisibleImage(0));
         }
 
