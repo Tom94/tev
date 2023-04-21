@@ -26,11 +26,14 @@ ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeRefere
         this->hideTextBox();
         return true;
     });
+    mCaptionTextBox->set_corner_radius(0.0f);
+    mCaptionTextBox->set_solid_color(IMAGE_COLOR);
 }
 
 Vector2i ImageButton::preferred_size(NVGcontext *ctx) const {
     nanogui::Theme* theme = new nanogui::Theme(ctx);
-    theme->m_text_box_font_size = m_font_size + 2;
+    theme->m_text_box_font_size = m_font_size;
+    theme->m_text_color = Color(255, 255);
     mCaptionTextBox->set_theme(theme);
 
     nvgFontSize(ctx, m_font_size);
