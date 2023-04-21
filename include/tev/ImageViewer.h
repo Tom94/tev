@@ -104,6 +104,7 @@ public:
     void setGamma(float value);
 
     void normalizeExposureAndOffset();
+
     void resetImage();
 
     ETonemap tonemap() const {

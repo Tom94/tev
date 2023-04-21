@@ -100,6 +100,11 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addRow(imageSelection, "B (hold)",          "Draw a border around the image");
     addRow(imageSelection, "Shift+Ctrl (hold)", "Display raw bytes on pixels when zoomed-in");
+#ifdef __APPLE__
+    addRow(imageSelection, "Enter", "Rename the image");
+#else
+    addRow(imageSelection, "F2", "Rename the image");
+#endif
 
     new Label{shortcuts, "Reference options", "sans-bold", 18};
     auto referenceSelection = new Widget{shortcuts};

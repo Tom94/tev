@@ -4,6 +4,8 @@
 #include <tev/ImageButton.h>
 
 #include <nanogui/opengl.h>
+#include <nanogui/layout.h>
+#include <nanogui/theme.h>
 
 #include <cctype>
 
@@ -14,9 +16,26 @@ namespace tev {
 
 ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
 : Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
+    this->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
+    mCaptionTextBox = new TextBox{this, caption};
+    mCaptionTextBox->set_visible(false);
+    mCaptionTextBox->set_editable(true);
+    mCaptionTextBox->set_alignment(TextBox::Alignment::Right);
+    mCaptionTextBox->set_placeholder(caption);
+    mCaptionTextBox->set_callback([this](const string& name) {
+        this->hideTextBox();
+        return true;
+    });
+    mCaptionTextBox->set_corner_radius(0.0f);
+    mCaptionTextBox->set_solid_color(IMAGE_COLOR);
 }
 
 Vector2i ImageButton::preferred_size(NVGcontext *ctx) const {
+    nanogui::Theme* theme = new nanogui::Theme(ctx);
+    theme->m_text_box_font_size = m_font_size;
+    theme->m_text_color = Color(255, 255);
+    mCaptionTextBox->set_theme(theme);
+
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans-bold");
     string idString = to_string(mId);
@@ -25,6 +44,7 @@ Vector2i ImageButton::preferred_size(NVGcontext *ctx) const {
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
+
     return Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
 }
 
@@ -82,6 +102,9 @@ bool ImageButton::mouse_button_event(const Vector2i &p, int button, bool down, i
 void ImageButton::draw(NVGcontext *ctx) {
     Widget::draw(ctx);
 
+    if (mCaptionTextBox->visible())
+        return;
+
     if (mIsReference) {
         nvgBeginPath(ctx);
         nvgRect(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y());
@@ -102,7 +125,6 @@ void ImageButton::draw(NVGcontext *ctx) {
         nvgFillColor(ctx, mIsSelected ? IMAGE_COLOR : Color(1.0f, 0.1f));
         nvgFill(ctx);
     }
-
 
     string idString = to_string(mId);
 
@@ -207,6 +229,22 @@ void ImageButton::setHighlightRange(size_t begin, size_t end) {
             ++mHighlightEnd;
         }
     }
+}
+
+void ImageButton::showTextBox() {
+    mCaptionTextBox->set_visible(true);
+    mCaptionTextBox->request_focus();
+    mCaptionTextBox->select_all();
+}
+
+void ImageButton::hideTextBox() {
+    if (!textBoxVisible()) {
+        return;
+    }
+
+    mCaptionTextBox->set_focused(false);
+    this->setCaption(mCaptionTextBox->value());
+    mCaptionTextBox->set_visible(false);
 }
 
 }

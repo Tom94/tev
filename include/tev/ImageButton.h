@@ -6,6 +6,7 @@
 #include <tev/Common.h>
 
 #include <nanogui/widget.h>
+#include <nanogui/textbox.h>
 
 #include <string>
 
@@ -25,6 +26,18 @@ public:
         return mCaption;
     }
 
+    void setCaption(const std::string& caption) {
+        mCaption = caption;
+        // Reset drawing state
+        mSizeForWhichCutoffWasComputed = {0};
+        mHighlightBegin = 0;
+        mHighlightEnd = 0;
+
+        if (mCaptionChangeCallback) {
+            mCaptionChangeCallback();
+        }
+    }
+
     void setReferenceCallback(const std::function<void(bool)> &callback) {
         mReferenceCallback = callback;
     }
@@ -41,6 +54,10 @@ public:
         mSelectedCallback = callback;
     }
 
+    void setCaptionChangeCallback(const std::function<void()> &callback) {
+        mCaptionChangeCallback = callback;
+    }
+
     void setIsSelected(bool isSelected) {
         mIsSelected = isSelected;
     }
@@ -55,8 +72,17 @@ public:
 
     void setHighlightRange(size_t begin, size_t end);
 
+    void showTextBox();
+    void hideTextBox();
+
+    bool textBoxVisible() const {
+        return mCaptionTextBox->visible();
+    }
+
 private:
     std::string mCaption;
+    nanogui::TextBox* mCaptionTextBox;
+
     bool mCanBeReference;
 
     bool mIsReference = false;
@@ -64,6 +90,8 @@ private:
 
     bool mIsSelected = false;
     std::function<void()> mSelectedCallback;
+
+    std::function<void()> mCaptionChangeCallback;
 
     size_t mId = 0;
     size_t mCutoff = 0;
