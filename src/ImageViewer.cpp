@@ -1060,6 +1060,10 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
         }
     });
 
+    button->setCaptionChangeCallback([this]() {
+        mRequiresFilterUpdate = true;
+    });
+
     mImageButtonContainer->add_child((int)index, button);
     mImages.insert(begin(mImages) + index, image);
 

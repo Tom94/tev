@@ -32,6 +32,10 @@ public:
         mSizeForWhichCutoffWasComputed = {0};
         mHighlightBegin = 0;
         mHighlightEnd = 0;
+
+        if (mCaptionChangeCallback) {
+            mCaptionChangeCallback();
+        }
     }
 
     void setReferenceCallback(const std::function<void(bool)> &callback) {
@@ -48,6 +52,10 @@ public:
 
     void setSelectedCallback(const std::function<void()> &callback) {
         mSelectedCallback = callback;
+    }
+
+    void setCaptionChangeCallback(const std::function<void()> &callback) {
+        mCaptionChangeCallback = callback;
     }
 
     void setIsSelected(bool isSelected) {
@@ -82,6 +90,8 @@ private:
 
     bool mIsSelected = false;
     std::function<void()> mSelectedCallback;
+
+    std::function<void()> mCaptionChangeCallback;
 
     size_t mId = 0;
     size_t mCutoff = 0;
