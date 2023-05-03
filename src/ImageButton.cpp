@@ -30,12 +30,7 @@ ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeRefere
     mCaptionTextBox->set_solid_color(IMAGE_COLOR);
 }
 
-Vector2i ImageButton::preferred_size(NVGcontext *ctx) const {
-    nanogui::Theme* theme = new nanogui::Theme(ctx);
-    theme->m_text_box_font_size = m_font_size;
-    theme->m_text_color = Color(255, 255);
-    mCaptionTextBox->set_theme(theme);
-
+Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans-bold");
     string idString = to_string(mId);

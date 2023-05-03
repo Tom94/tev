@@ -22,6 +22,15 @@ public:
 
     void draw(NVGcontext *ctx) override;
 
+    void set_theme(nanogui::Theme* theme) override {
+        nanogui::Widget::set_theme(theme);
+
+        nanogui::Theme* captionTextBoxTheme = new nanogui::Theme(*theme);
+        captionTextBoxTheme->m_text_box_font_size = m_font_size;
+        captionTextBoxTheme->m_text_color = nanogui::Color(255, 255);
+        mCaptionTextBox->set_theme(captionTextBoxTheme);
+    }
+
     const std::string& caption() const {
         return mCaption;
     }
