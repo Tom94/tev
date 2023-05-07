@@ -1,4 +1,4 @@
-BSD 3-Clause License
+﻿BSD 3-Clause License
 
 Copyright (c) 2017-2023, Thomas Müller <thomas94@gmx.net>
 All rights reserved.
