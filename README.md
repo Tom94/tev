@@ -1,18 +1,11 @@
 # tev — The EXR Viewer &nbsp;&nbsp; ![](https://github.com/tom94/tev/workflows/CI/badge.svg)
 
-High dynamic range (HDR) image comparison tool for graphics people. __tev__ allows viewing images through various tonemapping operators and inspecting the values of individual pixels. To compare images, <strong>tev</strong> can rapidly flip between them and visualize various error metrics.
+Image viewer and comparison tool for graphics people.
 
-__tev__ can display true HDR on Apple extended dynamic range (EDR) and 10-bit displays.
+- __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
+- __Versatile:__ supports many [file formats](#file-formats), tonemapping operators, error metrics, color histograms, and pixel peeping.
+- __HDR:__ displays true HDR on Apple EDR displays.
 
-The following file formats are supported:
-- __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
-- __HDR__, __PNG__, __JPEG__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
-- __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
-- __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
-- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
-    - Supports BC1-BC7 compressed formats.
-
-## Screenshot
 
 ![Screenshot](https://raw.githubusercontent.com/Tom94/tev/master/resources/screenshot.png)
 _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
@@ -98,42 +91,42 @@ There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that sh
 
 ## Building tev
 
-All that is required for building __tev__ is a C++20-compatible compiler. Begin by cloning this repository and all its submodules using the following command:
-```sh
-$ git clone --recursive https://github.com/Tom94/tev
-```
+All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++20-compatible compiler. On Windows, that's Visual Studio 2019 and newer. On Linux and macOS, your system's GCC or Clang compiler is likely sufficient.
 
-__tev__ uses [CMake](https://cmake.org/) as its build system. The following sections detail how it should be used on various operating systems.
-
-### macOS / Linux
-
-On macOS and most Linux distributions [CMake](https://cmake.org/) can be obtained via a package manager ([Homebrew](https://brew.sh/) on macOS, apt on Ubuntu/Debian, etc.). Most Linux distributions additionally require _xorg_, _gl_, and _zlib_ development packages and _zenity_. On Ubuntu/Debian simply call
+Most Linux distributions additionally require _xorg_, _gl_, _zlib_, and _zenity_. On Ubuntu/Debian simply call
 ```sh
 $ apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
 ```
 
-Once all dependencies are installed, create a new directory to contain build artifacts, enter it, and then invoke [CMake](https://cmake.org/) with the root __tev__ folder as argument as shown in the following example:
+Once all dependencies are installed, begin by cloning this repository and all its submodules using the following command:
 ```sh
-$ mkdir build
-$ cd build
-$ cmake ..
+$ git clone --recursive https://github.com/Tom94/tev
 ```
 
-Afterwards, __tev__ can be built and installed via
+Then, use [CMake](https://cmake.org/) as follows:
 ```sh
-$ make -j
-$ make install
+$ cmake . -B build
+$ cmake --build build --config Release -j
 ```
 
-On Linux you can package a portable [AppImage](https://appimage.org/) with
+Afterwards, __tev__ can be installed via
 ```sh
-$ make package
+$ cmake --install build
+```
+or you can create a standalone installer (Windows, macOS) / [AppImage](https://appimage.org/) (Linux) with
+```sh
+$ cpack --config build/CPackConfig.cmake
 ```
 
-### Windows
+## File Formats
 
-On Windows, install [CMake](https://cmake.org/download/), open the included GUI application, and point it to the root directory of __tev__. CMake will then generate [Visual Studio](https://www.visualstudio.com/) project files for compiling __tev__. Make sure you select at least Visual Studio 2019 or higher!
+- __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
+- __HDR__, __PNG__, __JPEG__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
+- __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
+- __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
+- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
+    - Supports BC1-BC7 compressed formats.
 
 ## License
 
-__tev__ is available under the BSD 3-clause license, which you can find in the `LICENSE.md` file. [TL;DR](https://tldrlegal.com/license/bsd-3-clause-license-(revised)) you can do almost whatever you want as long as you include the original copyright and license notice in any copy of the software and the source code.
+__tev__ is available under the BSD 3-clause license, which you can find in the `LICENSE.txt` file. [TL;DR](https://tldrlegal.com/license/bsd-3-clause-license-(revised)).
