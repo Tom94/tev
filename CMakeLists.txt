@@ -247,6 +247,8 @@ if (APPLE)
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
     set(CPACK_GENERATOR "WIX")
+
+    configure_file(resources/tev.yaml resources/tev.yaml)
 else()
     install(TARGETS tev)
 

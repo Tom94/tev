@@ -18,7 +18,7 @@
 	url = https://github.com/Tom94/clip
 [submodule "dependencies/DirectXTex"]
 	path = dependencies/DirectXTex
-	url = https://github.com/microsoft/DirectXTex.git
+	url = https://github.com/Tom94/DirectXTex
 [submodule "dependencies/nanogui"]
 	path = dependencies/nanogui
 	url = https://github.com/Tom94/nanogui-1
