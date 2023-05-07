@@ -233,11 +233,20 @@ add_definitions(${TEV_DEFINITIONS} ${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev ${TEV_LIBS})
 
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Image viewer and comparison tool for graphics people.")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://tom94.net")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${PROJECT_NAME})
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+set(CPACK_SOURCE_STRIP_FILES TRUE)
+
 if (APPLE)
     install(TARGETS tev BUNDLE DESTINATION "/Applications")
     install(SCRIPT scripts/mac-post-install.cmake)
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
+    set(CPACK_GENERATOR "WIX")
+    include(CPack)
 else()
     install(TARGETS tev)
 

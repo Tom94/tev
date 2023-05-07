@@ -1,6 +1,7 @@
 # Build artifacts
 /build
 /x64
+_CPack_Packages
 
 # Automatically generated files by .vscode
 /.vscode
