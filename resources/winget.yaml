@@ -1,0 +1,17 @@
+PackageIdentifier: Tom94.tev
+PackageVersion: @TEV_VERSION@
+PackageLocale: en-US
+Publisher: Tom94 (Thomas Müller)
+PackageName: tev
+License: BSD-3
+ShortDescription: @CPACK_PACKAGE_DESCRIPTION_SUMMARY@
+Installers:
+- Architecture: x64
+  InstallerType: wix
+  InstallerUrl: https://github.com/Tom94/tev/releases/download/v@TEV_VERSION@/tev-@TEV_VERSION@-win64.msi
+  InstallerSha256: @TEV_INSTALLER_SHA256@
+#   InstallerSwitches:
+#     Silent: /q
+#     SilentWithProgress: /q
+ManifestType: singleton
+ManifestVersion: 1.0.0
