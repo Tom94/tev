@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Version=@TEV_VERSION@
+Version=1.0
 Name=tev
 GenericName=Image Viewer
 Comment=High dynamic range (HDR) image comparison tool.
