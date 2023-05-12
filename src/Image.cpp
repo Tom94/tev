@@ -129,7 +129,7 @@ Task<void> ImageData::unmultiplyAlpha(int priority) {
 
 Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriority) {
     if (channels.empty()) {
-        throw runtime_error{"Images must have at least one channel."};
+        throw runtime_error{"Image must have at least one channel."};
     }
 
     // No data window? Default to the channel size
@@ -167,6 +167,10 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
         for (const auto& match : matches) {
             channels.emplace_back(move(tmp[match.second]));
+        }
+
+        if (channels.empty()) {
+            throw runtime_error{fmt::format("Channel selector :{} discards all channels.", channelSelector)};
         }
     }
 
@@ -597,37 +601,39 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
             iStream.clear();
             iStream.seekg(0);
 
-            if (useLoader) {
-                // Earlier images should be prioritized when loading.
-                loadMethod = imageLoader->name();
-                auto imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
+            if (!useLoader) {
+                continue;
+            }
 
-                vector<shared_ptr<Image>> images;
-                for (auto& i : imageData) {
-                    co_await i.ensureValid(channelSelector, taskPriority);
+            // Earlier images should be prioritized when loading.
+            loadMethod = imageLoader->name();
+            auto imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
 
-                    // If multiple image "parts" were loaded and they have names,
-                    // ensure that these names are present in the channel selector.
-                    string localChannelSelector = channelSelector;
-                    if (!i.partName.empty()) {
-                        auto selectorParts = split(channelSelector, ",");
-                        if (channelSelector.empty()) {
-                            localChannelSelector = i.partName;
-                        } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
-                            localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
-                        }
+            vector<shared_ptr<Image>> images;
+            for (auto& i : imageData) {
+                co_await i.ensureValid(channelSelector, taskPriority);
+
+                // If multiple image "parts" were loaded and they have names,
+                // ensure that these names are present in the channel selector.
+                string localChannelSelector = channelSelector;
+                if (!i.partName.empty()) {
+                    auto selectorParts = split(channelSelector, ",");
+                    if (channelSelector.empty()) {
+                        localChannelSelector = i.partName;
+                    } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
+                        localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
                     }
-
-                    images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
                 }
 
-                auto end = chrono::system_clock::now();
-                chrono::duration<double> elapsedSeconds = end - start;
-
-                tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
-
-                co_return images;
+                images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
             }
+
+            auto end = chrono::system_clock::now();
+            chrono::duration<double> elapsedSeconds = end - start;
+
+            tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
+
+            co_return images;
         }
 
         throw runtime_error{"No suitable image loader found."};
@@ -689,6 +695,10 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
         auto images = co_await tryLoadImage(taskPriority, path, channelSelector);
+
+        if (images.empty()) {
+            co_return;
+        }
 
         {
             std::lock_guard lock{mPendingLoadedImagesMutex};
