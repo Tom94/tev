@@ -247,7 +247,7 @@ if (APPLE)
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
     set(CPACK_GENERATOR "WIX")
-    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${TEV_VERSION}-installer")
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-installer")
 
     set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png")
     set(CPACK_PACKAGE_EXECUTABLES "tev" "tev")
