@@ -233,11 +233,33 @@ add_definitions(${TEV_DEFINITIONS} ${NANOGUI_EXTRA_DEFS})
 
 target_link_libraries(tev ${TEV_LIBS})
 
+set(CPACK_PACKAGE_VENDOR "Tom94 (Thomas Müller)")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Image viewer and comparison tool for graphics people.")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://tom94.net")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
 if (APPLE)
     install(TARGETS tev BUNDLE DESTINATION "/Applications")
     install(SCRIPT scripts/mac-post-install.cmake)
+    set(CPACK_GENERATOR "DragNDrop")
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
+    set(CPACK_GENERATOR "WIX")
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-installer")
+
+    set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png")
+    set(CPACK_PACKAGE_EXECUTABLES "tev" "tev")
+
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/patch.wxs")
+    set(CPACK_WIX_UPGRADE_GUID "F3EC0D95-B2DC-4451-975C-CF591871E162")
+    set(CPACK_WIX_PRODUCT_GUID "F7478E0D-33A4-4F00-829B-45CE27B1D0E2")
+    set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
+
+    configure_file(scripts/configure-winget.cmake scripts/configure-winget.cmake @ONLY)
+    configure_file(resources/winget.yaml resources/winget.yaml COPYONLY)
+    set(CPACK_POST_BUILD_SCRIPTS "${CMAKE_BINARY_DIR}/scripts/configure-winget.cmake")
 else()
     install(TARGETS tev)
 
@@ -250,9 +272,10 @@ else()
     endforeach()
 
     list(APPEND CPACK_GENERATOR External)
-    set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${PROJECT_SOURCE_DIR}/scripts/create-appimage.cmake")
+    set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/scripts/create-appimage.cmake")
     set(CPACK_EXTERNAL_ENABLE_STAGING YES)
     set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME})
     set(CPACK_PACKAGING_INSTALL_PREFIX /usr) # requirement by AppDir specification
-    include(CPack)
 endif()
+
+include(CPack)

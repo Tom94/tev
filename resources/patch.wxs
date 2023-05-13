@@ -1,0 +1,14 @@
+<CPackWiXPatch>
+    <CPackWiXFragment Id="#PRODUCTFEATURE">
+        <Feature Id='Environment' Title='PATH Environment Variable' Description='Add the install location of the [ProductName] executable to the PATH system environment variable. This allows the [ProductName] executable to be called from any location.' Level='1' Absent='allow'>
+            <ComponentRef Id='Path' />
+        </Feature>
+    </CPackWiXFragment>
+    <CPackWiXFragment Id="#PRODUCT">
+        <DirectoryRef Id="CM_DP_bin">
+            <Component Id='Path' Guid='28f0d0ad-50ce-4d31-a07a-0726063d3d80' KeyPath='yes'>
+                <Environment Id='PATH' Name='PATH' Value='[CM_DP_bin]' Permanent='no' Part='last' Action='set' System='yes' />
+            </Component>
+        </DirectoryRef>
+    </CPackWiXFragment>
+</CPackWiXPatch>
