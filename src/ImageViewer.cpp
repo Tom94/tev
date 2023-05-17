@@ -676,7 +676,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
             return true;
-        } else if (key == GLFW_KEY_H) {
+        } else if (key == GLFW_KEY_H || /* question mark on US layout */ (key == GLFW_KEY_SLASH && (modifiers & GLFW_MOD_SHIFT))) {
             toggleHelpWindow();
             return true;
         } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
@@ -829,27 +829,27 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             }
         }
 
-        if (key == GLFW_KEY_W && modifiers & SYSTEM_COMMAND_MOD) {
+        if (key == GLFW_KEY_W && (modifiers & SYSTEM_COMMAND_MOD)) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 removeAllImages();
             } else {
                 removeImage(mCurrentImage);
             }
-        } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP) {
-            if (modifiers & GLFW_MOD_SHIFT) {
+        } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP || (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT))) {
+            if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
                 selectReference(nextImage(mCurrentReference, Backward));
             } else {
                 selectImage(nextImage(mCurrentImage, Backward));
             }
-        } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN) {
-            if (modifiers & GLFW_MOD_SHIFT) {
+        } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN || (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT))) {
+            if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
                 selectReference(nextImage(mCurrentReference, Forward));
             } else {
                 selectImage(nextImage(mCurrentImage, Forward));
             }
         }
 
-        if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D) {
+        if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D || key == GLFW_KEY_RIGHT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() + 1) % NumTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
@@ -859,7 +859,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 selectGroup(nextGroup(mCurrentGroup, Forward));
             }
-        } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A) {
+        } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() - 1 + NumTonemaps) % NumTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {

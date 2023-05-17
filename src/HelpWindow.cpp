@@ -37,7 +37,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     closeButton->set_callback(mCloseCallback);
 
     set_layout(new GroupLayout{});
-    set_fixed_width(600);
+    set_fixed_width(640);
 
     TabWidget* tabWidget = new TabWidget{this};
 
@@ -76,11 +76,11 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     auto imageSelection = new Widget{shortcuts};
     imageSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(imageSelection, "Left Click",          "Select hovered image");
-    addRow(imageSelection, "1…9",                 "Select N-th image");
-    addRow(imageSelection, "Down or S / Up or W", "Select next / previous image");
-    addRow(imageSelection, "Home / End",          "Select first / last image");
-    addRow(imageSelection, "Space",               "Toggle playback of images as video");
+    addRow(imageSelection, "Left Click",                                        "Select hovered image");
+    addRow(imageSelection, "1…9",                                               "Select N-th image");
+    addRow(imageSelection, "Down or S or Ctrl+Tab / Up or W or Ctrl+Shift+Tab", "Select next / previous image");
+    addRow(imageSelection, "Home / End",                                        "Select first / last image");
+    addRow(imageSelection, "Space",                                             "Toggle playback of images as video");
 
     addRow(imageSelection, "Click & Drag (+Shift/" + COMMAND + ")", "Translate image");
     addRow(imageSelection, "+ / - / Scroll (+Shift/" + COMMAND + ")", "Zoom in / out of image");
@@ -122,9 +122,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     auto groupSelection = new Widget{shortcuts};
     groupSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(groupSelection, "Left Click",             "Select hovered channel group");
-    addRow(groupSelection, "Ctrl+1…9",               "Select N-th channel group");
-    addRow(groupSelection, "Right or D / Left or A", "Select next / previous channel group");
+    addRow(groupSelection, "Left Click",                       "Select hovered channel group");
+    addRow(groupSelection, "Ctrl+1…9",                         "Select N-th channel group");
+    addRow(groupSelection, "Right or D or ] / Left or A or [", "Select next / previous channel group");
 
     new Label{shortcuts, "Interface", "sans-bold", 18};
     auto ui = new Widget{shortcuts};
@@ -132,7 +132,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addRow(ui, ALT + "+Enter", "Maximize");
     addRow(ui, COMMAND + "+B", "Toggle GUI");
-    addRow(ui, "H",            "Show help (this window)");
+    addRow(ui, "H or ?",        "Show help (this window)");
     addRow(ui, COMMAND + "+P", "Find image or channel group");
     addRow(ui, "Escape",       "Reset find string");
     addRow(ui, COMMAND + "+Q", "Quit");
