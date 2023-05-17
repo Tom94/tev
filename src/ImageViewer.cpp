@@ -51,9 +51,10 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
 
     auto tmp = new Widget{mSidebar};
     mHelpButton = new Button{tmp, "", FA_QUESTION};
-    mHelpButton->set_callback([this]() { toggleHelpWindow(); });
+    mHelpButton->set_change_callback([this](bool) { toggleHelpWindow(); });
     mHelpButton->set_font_size(15);
     mHelpButton->set_tooltip("Information about using tev.");
+    mHelpButton->set_flags(Button::ToggleButton);
 
     mSidebarLayout = new Widget{tmp};
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
@@ -1661,10 +1662,12 @@ void ImageViewer::toggleHelpWindow() {
     if (mHelpWindow) {
         mHelpWindow->dispose();
         mHelpWindow = nullptr;
+        mHelpButton->set_pushed(false);
     } else {
         mHelpWindow = new HelpWindow{this, mSupportsHdr, [this] { toggleHelpWindow(); }};
         mHelpWindow->center();
         mHelpWindow->request_focus();
+        mHelpButton->set_pushed(true);
     }
 
     requestLayoutUpdate();
