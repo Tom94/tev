@@ -657,6 +657,19 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 resetImage();
             }
             return true;
+        } else if (key == GLFW_KEY_X) {
+            // X for "eXplode channels
+            if (mCurrentImage) {
+                mCurrentImage->decomposeChannelGroup(mCurrentGroup);
+
+                // Resets channel group buttons to include the now exploded channels
+                selectImage(mCurrentImage);
+            }
+
+            if (mCurrentReference) {
+                mCurrentReference->decomposeChannelGroup(mCurrentGroup);
+                selectReference(mCurrentReference);
+            }
         } else if (key == GLFW_KEY_0 && (modifiers & SYSTEM_COMMAND_MOD)) {
             mImageCanvas->resetTransform();
             return true;
