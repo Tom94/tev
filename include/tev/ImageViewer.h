@@ -201,6 +201,7 @@ private:
     nanogui::Widget* mSidebarLayout;
 
     nanogui::Widget* mFooter;
+    bool mShouldFooterBeVisible = false;
 
     nanogui::Label* mExposureLabel;
     nanogui::Slider* mExposureSlider;

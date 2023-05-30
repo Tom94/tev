@@ -1081,8 +1081,9 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     mImageButtonContainer->add_child((int)index, button);
     mImages.insert(begin(mImages) + index, image);
 
-    // The following call will show thefooter if there is not an image
-    // with more than 1 group.
+    mShouldFooterBeVisible |= image->channelGroups().size() > 1;
+    // The following call will make sure the footer becomes visible
+    // if the previous line enabled it.
     setUiVisible(isUiVisible());
 
     // Ensure the new image button will have the correct visibility state.
@@ -1378,6 +1379,11 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         });
     }
 
+    mShouldFooterBeVisible |= image->channelGroups().size() > 1;
+    // The following call will make sure the footer becomes visible
+    // if the previous line enabled it.
+    setUiVisible(isUiVisible());
+
     // Setting the filter again makes sure, that groups are correctly filtered.
     setFilter(mFilter->value());
     updateLayout();
@@ -1655,18 +1661,7 @@ void ImageViewer::setUiVisible(bool shouldBeVisible) {
     }
 
     mSidebar->set_visible(shouldBeVisible);
-
-    bool shouldFooterBeVisible = false;
-    for (const auto& image : mImages) {
-        // There is no point showing the footer as long as no image
-        // has more than the root group.
-        if (image->channelGroups().size() > 1) {
-            shouldFooterBeVisible = true;
-            break;
-        }
-    }
-
-    mFooter->set_visible(shouldFooterBeVisible && shouldBeVisible);
+    mFooter->set_visible(mShouldFooterBeVisible && shouldBeVisible);
 
     requestLayoutUpdate();
 }
