@@ -3,7 +3,7 @@
 Image viewer and comparison tool for graphics people.
 
 - __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
-- __Versatile:__ supports many [file formats](#file-formats), tonemapping operators, error metrics, color histograms, and pixel peeping.
+- __Versatile:__ supports many [file formats](#file-formats), tonemapping operators, error metrics, histograms, and pixel peeping.
 - __HDR:__ displays true HDR on Apple EDR displays.
 
 
