@@ -28,11 +28,26 @@ namespace tev {
 
 static const int SIDEBAR_MIN_WIDTH = 230;
 
-ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool floatBuffer, bool /*supportsHdr*/)
-: nanogui::Screen{nanogui::Vector2i{1024, 799}, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader} {
+ImageViewer::ImageViewer(
+    const shared_ptr<BackgroundImagesLoader>& imagesLoader,
+    bool maximize,
+    bool floatBuffer,
+    bool /*supportsHdr*/
+)
+: nanogui::Screen{
+    nanogui::Vector2i{1024, 799},
+    "tev",
+    true,
+    maximize,
+    false,
+    true,
+    true,
+    floatBuffer
+}, mImagesLoader{imagesLoader} {
     if (floatBuffer && !m_float_buffer) {
         tlog::warning() << "Failed to create floating point frame buffer.";
     }
+
     mSupportsHdr = m_float_buffer;
 
     // At this point we no longer need the standalone console (if it exists).
@@ -125,7 +140,9 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     // Exposure/offset buttons
     {
         auto buttonContainer = new Widget{mSidebarLayout};
-        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, mSupportsHdr ? 4 : 3, Alignment::Fill, 5, 2});
+        buttonContainer->set_layout(
+            new GridLayout{Orientation::Horizontal, mSupportsHdr ? 4 : 3, Alignment::Fill, 5, 2}
+        );
 
         auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
@@ -329,7 +346,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             auto playback = new Widget{mSidebarLayout};
             playback->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
-            auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+            auto makePlaybackButton = [&](
+                const string& name,
+                bool enabled,
+                function<void()> callback,
+                int icon = 0,
+                string tooltip = ""
+            ) {
                 auto button = new Button{playback, name, icon};
                 button->set_callback(callback);
                 button->set_tooltip(tooltip);
@@ -364,7 +387,13 @@ ImageViewer::ImageViewer(const shared_ptr<BackgroundImagesLoader>& imagesLoader,
             auto tools = new Widget{mSidebarLayout};
             tools->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 1});
 
-            auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
+            auto makeImageButton = [&](
+                const string& name,
+                bool enabled,
+                function<void()> callback,
+                int icon = 0,
+                string tooltip = ""
+            ) {
                 auto button = new Button{tools, name, icon};
                 button->set_callback(callback);
                 button->set_tooltip(tooltip);
@@ -505,7 +534,12 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
     return false;
 }
 
-bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) {
+bool ImageViewer::mouse_motion_event(
+    const nanogui::Vector2i& p,
+    const nanogui::Vector2i& rel,
+    int button,
+    int modifiers
+) {
     if (Screen::mouse_motion_event(p, rel, button, modifiers)) {
         return true;
     }
@@ -566,7 +600,9 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
             }
         }
 
-        dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(relMousePos - nanogui::Vector2i(mDraggingStartPosition));
+        dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(
+            relMousePos - nanogui::Vector2i(mDraggingStartPosition)
+        );
     }
 
     return false;
@@ -690,7 +726,11 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
             }
             return true;
-        } else if (key == GLFW_KEY_H || /* question mark on US layout */ (key == GLFW_KEY_SLASH && (modifiers & GLFW_MOD_SHIFT))) {
+        } else if (
+            key == GLFW_KEY_H || /* question mark on US layout */ (
+                key == GLFW_KEY_SLASH && (modifiers & GLFW_MOD_SHIFT)
+            )
+        ) {
             toggleHelpWindow();
             return true;
         } else if (key == GLFW_KEY_ENTER && modifiers & GLFW_MOD_ALT) {
@@ -781,7 +821,11 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                         << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height)
                         ;
 
-                    auto images = tryLoadImage(fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "").get();
+                    auto images = tryLoadImage(
+                        fmt::format("clipboard ({})", ++mClipboardIndex),
+                        imageStream,
+                        ""
+                    ).get();
                     if (images.empty()) {
                         tlog::error() << "Failed to load image from clipboard data.";
                     } else {
@@ -809,7 +853,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 scaleAmount = -scaleAmount;
             }
 
-            nanogui::Vector2f origin = nanogui::Vector2f{mImageCanvas->position()} + nanogui::Vector2f{mImageCanvas->size()} * 0.5f;
+            nanogui::Vector2f origin =
+                nanogui::Vector2f{mImageCanvas->position()} +
+                nanogui::Vector2f{mImageCanvas->size()} * 0.5f;
 
             mImageCanvas->scale(
                 scaleAmount,
@@ -849,13 +895,21 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 removeImage(mCurrentImage);
             }
-        } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP || (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT))) {
+        } else if (
+            key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP || (
+                key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT)
+            )
+        ) {
             if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
                 selectReference(nextImage(mCurrentReference, Backward));
             } else {
                 selectImage(nextImage(mCurrentImage, Backward));
             }
-        } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN || (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT))) {
+        } else if (
+            key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN || (
+                key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT)
+            )
+        ) {
             if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
                 selectReference(nextImage(mCurrentReference, Forward));
             } else {
@@ -972,7 +1026,9 @@ void ImageViewer::draw_contents() {
         bool isShown = image == mCurrentImage || image == mCurrentReference;
 
         // If the image is no longer shown, bump ID immediately. Otherwise, wait until canvas statistics were ready for over 200 ms.
-        if (!isShown || std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt() > 200ms) {
+        if (
+            !isShown || std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt() > 200ms
+        ) {
             image->bumpId();
             auto localIt = it;
             ++it;
@@ -988,7 +1044,9 @@ void ImageViewer::draw_contents() {
     }
 
     bool anyImageVisible = mCurrentImage || mCurrentReference || std::any_of(
-        begin(mImageButtonContainer->children()), end(mImageButtonContainer->children()), [](const auto& c) { return c->visible(); }
+        begin(mImageButtonContainer->children()),
+        end(mImageButtonContainer->children()),
+        [](const auto& c) { return c->visible(); }
     );
 
     for (auto button : mAnyImageButtons) {
@@ -1307,7 +1365,12 @@ void ImageViewer::updateImage(
     }
 }
 
-void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallSelect, bool append, const vector<VgCommand>& commands) {
+void ImageViewer::updateImageVectorGraphics(
+    const string& imageName,
+    bool shallSelect,
+    bool append,
+    const vector<VgCommand>& commands
+) {
     auto image = imageByName(imageName);
     if (!image) {
         tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
@@ -1927,7 +1990,12 @@ void ImageViewer::updateTitle() {
         auto channelTails = channels;
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
-        caption = fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
+        caption = fmt::format(
+            "{} – {} – {}%",
+            mCurrentImage->shortName(),
+            mCurrentGroup,
+            (int)std::round(mImageCanvas->scale() * 100)
+        );
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
@@ -1946,7 +2014,14 @@ void ImageViewer::updateTitle() {
             valuesString += fmt::format("{:02X}", discretizedValue);
         }
 
-        caption += fmt::format(" – @{},{} / {}x{}: {}", imageCoords.x(), imageCoords.y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString);
+        caption += fmt::format(
+            " – @{},{} / {}x{}: {}",
+            imageCoords.x(),
+            imageCoords.y(),
+            mCurrentImage->size().x(),
+            mCurrentImage->size().y(),
+            valuesString
+        );
     }
 
     set_caption(caption);
@@ -1982,9 +2057,14 @@ int ImageViewer::imageId(const shared_ptr<Image>& image) const {
 }
 
 int ImageViewer::imageId(const string& imageName) const {
-    auto pos = static_cast<size_t>(distance(begin(mImages), find_if(begin(mImages), end(mImages), [&](const shared_ptr<Image>& image) {
-        return image->name() == imageName;
-    })));
+    auto pos = static_cast<size_t>(distance(
+        begin(mImages),
+        find_if(
+            begin(mImages),
+            end(mImages),
+            [&](const shared_ptr<Image>& image) { return image->name() == imageName; }
+        )
+    ));
     return pos >= mImages.size() ? -1 : (int)pos;
 }
 
