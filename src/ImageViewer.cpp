@@ -295,18 +295,20 @@ ImageViewer::ImageViewer(
         auto spacer = new Widget{mSidebarLayout};
         spacer->set_height(10);
 
-        auto panel = new Widget{mSidebarLayout};
-        panel->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
-        auto label = new Label{panel, "Images", "sans-bold", 25};
-        label->set_tooltip(
-            "Select images either by left-clicking on them or by pressing arrow/number keys on your keyboard.\n"
-            "Right-clicking an image marks it as the 'reference' image. "
-            "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
-        );
+        {
+            auto panel = new Widget{mSidebarLayout};
+            panel->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
+            auto label = new Label{panel, "Images", "sans-bold", 25};
+            label->set_tooltip(
+                "Select images either by left-clicking on them or by pressing arrow/number keys on your keyboard.\n"
+                "Right-clicking an image marks it as the 'reference' image. "
+                "While a reference image is set, the currently selected image is not simply displayed, but compared to the reference image."
+            );
+        }
 
         // Histogram of selected image
         {
-            panel = new Widget{mSidebarLayout};
+            auto panel = new Widget{mSidebarLayout};
             panel->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 5});
 
             mHistogram = new MultiGraph{panel, ""};
@@ -314,7 +316,7 @@ ImageViewer::ImageViewer(
 
         // Fuzzy filter of open images
         {
-            panel = new Widget{mSidebarLayout};
+            auto panel = new Widget{mSidebarLayout};
             panel->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
             mFilter = new TextBox{panel, ""};
