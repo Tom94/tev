@@ -49,7 +49,10 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: scripts/create-dmg.sh
+        run: |
+          export CC=$(brew --prefix llvm@15)/bin/clang
+          export CXX=$(brew --prefix llvm@15)/bin/clang++
+          scripts/create-dmg.sh
       - name: Upload .dmg
         uses: actions/upload-artifact@v3
         with:
