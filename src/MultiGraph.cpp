@@ -15,6 +15,11 @@ using namespace std;
 
 namespace tev {
 
+string formatNumber(float v) {
+    bool needsScientificNotation = v != 0 && (abs(v) < 0.01f || abs(v) >= 1000);
+    return fmt::format(needsScientificNotation ? "{:.2e}" : "{:.3f}", v);
+}
+
 MultiGraph::MultiGraph(Widget *parent, const std::string &caption)
 : Widget(parent), mCaption(caption) {
     mBackgroundColor = Color(20, 128);
@@ -89,17 +94,17 @@ void MultiGraph::draw(NVGcontext *ctx) {
         nvgFontSize(ctx, 15.0f);
         nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        drawTextWithShadow(ctx, m_pos.x() + 3, m_pos.y() + 1, fmt::format("{:.2e}", mMinimum));
+        drawTextWithShadow(ctx, m_pos.x() + 3, m_pos.y() + 1, formatNumber(mMinimum));
 
         nvgTextAlign(ctx, NVG_ALIGN_MIDDLE | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        string meanString = fmt::format("{:.2e}", mMean);
+        string meanString = formatNumber(mMean);
         float textWidth = nvgTextBounds(ctx, 0, 0, meanString.c_str(), nullptr, nullptr);
         drawTextWithShadow(ctx, m_pos.x() + m_size.x() / 2 - textWidth / 2, m_pos.y() + 1, meanString);
 
         nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
-        drawTextWithShadow(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, fmt::format("{:.2e}", mMaximum));
+        drawTextWithShadow(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, formatNumber(mMaximum));
 
         if (!mCaption.empty()) {
             nvgFontSize(ctx, 14.0f);
