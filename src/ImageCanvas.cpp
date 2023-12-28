@@ -877,21 +877,20 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
-    if (!isCropped) {
+    if (isCropped) {
+        cropMin = {
+            clamp(cropMin.x(), 0, image->size().x()),
+            clamp(cropMin.y(), 0, image->size().y())
+        };
+        cropMax = {
+            clamp(cropMax.x(), 0, image->size().x()),
+            clamp(cropMax.y(), 0, image->size().y())
+        };
+    } else {
         cropMin = Vector2i(0, 0);
         cropMax = image->size();
     }
 
-    cropMin = {
-        clamp(cropMin.x(), 0, image->size().x()),
-        clamp(cropMin.y(), 0, image->size().y())
-    };
-    cropMax = {
-        clamp(cropMax.x(), 0, image->size().x()),
-        clamp(cropMax.y(), 0, image->size().y())
-    };
-
-    int stride = image->size().x();
     int pixelCount = 0;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
@@ -945,7 +944,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     auto cropSize = cropMax - cropMin;
-    auto numPixels = cropSize.x() * cropSize.y();
+    auto numPixels = size_t(cropSize.x()) * size_t(cropSize.y());
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;

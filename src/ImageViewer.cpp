@@ -521,7 +521,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
         } else if (mImageCanvas->contains(p)) {
             if ((modifiers & 4) != 0) {
                 if (button == 0) {
-                    // control + left click, start crop
+                    // alt/option + left click, start crop
                     auto rel = mouse_pos() - mImageCanvas->position();
                     auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
                     
@@ -530,7 +530,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
                     mImageCanvas->setCropMax(imageCoords);
                     mImageCanvas->enableCrop();
                 } else {
-                    // control + right click, disable crop
+                    // alt/option + right click, disable crop
                     mIsCroppingImage = false;
                     mImageCanvas->disableCrop();
                 }
