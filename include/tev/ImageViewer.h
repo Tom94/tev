@@ -255,6 +255,7 @@ private:
     bool mIsDraggingSidebar = false;
     bool mIsDraggingImage = false;
     bool mIsDraggingImageButton = false;
+    bool mIsCroppingImage = false;
     size_t mDraggedImageButtonId;
 
     nanogui::Vector2f mDraggingStartPosition;

@@ -519,8 +519,26 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
             mDraggingStartPosition = nanogui::Vector2f(p);
             return true;
         } else if (mImageCanvas->contains(p)) {
-            mIsDraggingImage = true;
-            mDraggingStartPosition = nanogui::Vector2f(p);
+            if ((modifiers & 4) != 0) {
+                if (button == 0) {
+                    // control + left click, start crop
+                    auto rel = mouse_pos() - mImageCanvas->position();
+                    auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
+                    
+                    mIsCroppingImage = true;
+                    mImageCanvas->setCropMin(imageCoords);
+                    mImageCanvas->setCropMax(imageCoords);
+                    mImageCanvas->enableCrop();
+                } else {
+                    // control + right click, disable crop
+                    mIsCroppingImage = false;
+                    mImageCanvas->disableCrop();
+                }
+            } else {
+                mIsDraggingImage = true;
+                mDraggingStartPosition = nanogui::Vector2f(p);
+                mIsCroppingImage = false;
+            }
             return true;
         }
     } else {
@@ -531,6 +549,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
         mIsDraggingSidebar = false;
         mIsDraggingImage = false;
         mIsDraggingImageButton = false;
+        mIsCroppingImage = false;
     }
 
     return false;
@@ -605,6 +624,10 @@ bool ImageViewer::mouse_motion_event(
         dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(
             relMousePos - nanogui::Vector2i(mDraggingStartPosition)
         );
+    } else if (mIsCroppingImage) {
+        auto relMousePos = mouse_pos() - mImageCanvas->position();
+        auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {relMousePos.x(), relMousePos.y()});
+        mImageCanvas->setCropMax(imageCoords);
     }
 
     return false;

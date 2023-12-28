@@ -94,6 +94,34 @@ public:
         mMetric = metric;
     }
 
+    bool isCropped() const {
+        return mIsCropped;
+    }
+
+    void enableCrop() {
+        mIsCropped = true;
+    }
+
+    void disableCrop() {
+        mIsCropped = false;
+    }
+
+    nanogui::Vector2i cropMin() const {
+        return mCropMin;
+    }
+
+    void setCropMin(const nanogui::Vector2i &cropMin) {
+        mCropMin = cropMin;
+    }
+
+    nanogui::Vector2i cropMax() const {
+        return mCropMin;
+    }
+
+    void setCropMax(const nanogui::Vector2i &cropMax) {
+        mCropMax = cropMax;
+    }
+
     static float applyMetric(float value, float reference, EMetric metric);
     float applyMetric(float value, float reference) const {
         return applyMetric(value, reference, mMetric);
@@ -141,6 +169,9 @@ private:
         std::shared_ptr<Image> reference,
         const std::string& requestedChannelGroup,
         EMetric metric,
+        bool isCropped,
+        nanogui::Vector2i cropMin,
+        nanogui::Vector2i cropMax,
         int priority
     );
 
@@ -174,6 +205,9 @@ private:
 
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
+    bool mIsCropped = false;
+    nanogui::Vector2i mCropMin;
+    nanogui::Vector2i mCropMax;
 
     std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
     std::map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;

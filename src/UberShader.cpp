@@ -73,6 +73,10 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform int tonemap;
             uniform int metric;
 
+            uniform bool isCropped;
+            uniform vec2 cropMin;
+            uniform vec2 cropMax;
+
             uniform vec4 bgColor;
 
             varying vec2 checkerUv;
@@ -164,7 +168,17 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return;
                 }
 
+                float cropAlpha = 1.f;
+                if (isCropped) {
+                    if (imageUv.x < cropMin.x
+                    || imageUv.x > cropMax.x
+                    || imageUv.y < cropMin.y
+                    || imageUv.y > cropMax.y)
+                        cropAlpha = 0.3f;
+                }
+
                 vec4 imageVal = sample(image, imageUv);
+                imageVal.a = imageVal.a * cropAlpha;
                 if (!hasReference) {
                     gl_FragColor = vec4(
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
@@ -175,6 +189,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
 
                 vec4 referenceVal = sample(reference, referenceUv);
+                referenceVal.a = referenceVal.a * cropAlpha;
 
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5;
@@ -324,6 +339,9 @@ UberShader::UberShader(RenderPass* renderPass) {
                 const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
+                const constant bool& isCropped,
+                const constant float2& cropMin,
+                const constant float2& cropMax,
                 const constant float4& bgColor
             ) {
                 float3 darkGray = float3(0.5f, 0.5f, 0.5f);
@@ -335,7 +353,17 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return float4(checker, 1.0f);
                 }
 
+                float cropAlpha = 1.f;
+                if (isCropped) {
+                    if (vert.imageUv.x < cropMin.x
+                    || vert.imageUv.x > cropMax.x
+                    || vert.imageUv.y < cropMin.y
+                    || vert.imageUv.y > cropMax.y)
+                        cropAlpha = 0.3f;
+                }
+
                 float4 imageVal = sample(image, image_sampler, vert.imageUv);
+                imageVal.a = imageVal.a * cropAlpha;
                 if (!hasReference) {
                     float4 color = float4(
                         applyTonemap(
@@ -354,6 +382,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
 
                 float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv);
+                referenceVal.a = referenceVal.a * cropAlpha;
 
                 float3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5f;
@@ -411,7 +440,8 @@ void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
         pixelSize, checkerSize,
         nullptr, Matrix3f{0.0f},
         0.0f, 0.0f, 0.0f, false,
-        ETonemap::SRGB
+        ETonemap::SRGB,
+        false, Vector2f{0.f}, Vector2f{0.f}
     );
 }
 
@@ -424,14 +454,18 @@ void UberShader::draw(
     float offset,
     float gamma,
     bool clipToLdr,
-    ETonemap tonemap
+    ETonemap tonemap,
+    bool isCropped,
+    const Vector2f& cropMin,
+    const Vector2f& cropMax
 ) {
     draw(
         pixelSize, checkerSize,
         textureImage, transformImage,
         nullptr, Matrix3f{0.0f},
         exposure, offset, gamma, clipToLdr,
-        tonemap, EMetric::Error
+        tonemap, EMetric::Error,
+        isCropped, cropMin, cropMax
     );
 }
 
@@ -447,7 +481,10 @@ void UberShader::draw(
     float gamma,
     bool clipToLdr,
     ETonemap tonemap,
-    EMetric metric
+    EMetric metric,
+    bool isCropped,
+    const nanogui::Vector2f& cropMin,
+    const nanogui::Vector2f& cropMax
 ) {
     bool hasImage = textureImage;
     if (!hasImage) {
@@ -467,6 +504,9 @@ void UberShader::draw(
     mShader->set_uniform("hasImage", hasImage);
     mShader->set_uniform("hasReference", hasReference);
     mShader->set_uniform("clipToLdr", clipToLdr);
+    mShader->set_uniform("isCropped", isCropped);
+    mShader->set_uniform("cropMin", cropMin);
+    mShader->set_uniform("cropMax", cropMax);
 
     mShader->begin();
     mShader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, true);

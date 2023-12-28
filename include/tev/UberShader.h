@@ -27,7 +27,10 @@ public:
         float offset,
         float gamma,
         bool clipToLdr,
-        ETonemap tonemap
+        ETonemap tonemap,
+        bool isCropped,
+        const nanogui::Vector2f& cropMin,
+        const nanogui::Vector2f& cropMax
     );
 
     // Draws a difference between a reference and an image.
@@ -43,7 +46,10 @@ public:
         float gamma,
         bool clipToLdr,
         ETonemap tonemap,
-        EMetric metric
+        EMetric metric,
+        bool isCropped,
+        const nanogui::Vector2f& cropMin,
+        const nanogui::Vector2f& cropMax
     );
 
     const nanogui::Color& backgroundColor() {
