@@ -43,7 +43,7 @@ void ThreadPool::startThreads(size_t num) {
                     break;
                 }
 
-                function<void()> task{move(mTaskQueue.top().fun)};
+                function<void()> task{std::move(mTaskQueue.top().fun)};
                 mTaskQueue.pop();
 
                 // Unlock the lock, so we can process the task without blocking other threads

@@ -43,7 +43,7 @@ jobs:
 
   build_macos:
     name: Build on macOS
-    runs-on: macos-11
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v1
         with:

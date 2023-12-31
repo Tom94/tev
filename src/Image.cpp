@@ -162,11 +162,11 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
         sort(begin(matches), end(matches));
 
         // Prune and sort channels by the channel selector
-        vector<Channel> tmp = move(channels);
+        vector<Channel> tmp = std::move(channels);
         channels.clear();
 
         for (const auto& match : matches) {
-            channels.emplace_back(move(tmp[match.second]));
+            channels.emplace_back(std::move(tmp[match.second]));
         }
 
         if (channels.empty()) {
@@ -367,7 +367,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
             name = layer + "(" + channelsString + ")";
         }
 
-        return ChannelGroup{name, move(channels)};
+        return ChannelGroup{name, std::move(channels)};
     };
 
     string alphaChannelName = layerName + "A";
@@ -403,7 +403,7 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
                 groupChannels.emplace_back(alphaChannelName);
             }
 
-            result.emplace_back(createChannelGroup(layerName, move(groupChannels)));
+            result.emplace_back(createChannelGroup(layerName, std::move(groupChannels)));
         }
     }
 
