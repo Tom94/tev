@@ -922,7 +922,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         tasks.emplace_back(
             ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
                 int x = (j % regionSize.x()) + region.min.x();
-                int y = (j / regionSize.y()) + region.min.y();
+                int y = (j / regionSize.x()) + region.min.y();
                 indices[j + i * numPixels] = valToBin(channel.at(Vector2i{x, y}));
             }, priority)
         );
