@@ -17,7 +17,7 @@ namespace tev {
 
 string formatNumber(float v) {
     bool needsScientificNotation = v != 0 && (abs(v) < 0.01f || abs(v) >= 1000);
-    return fmt::format(needsScientificNotation ? "{:.2e}" : "{:.3f}", v);
+    return needsScientificNotation ? fmt::format("{:.2e}", v) : fmt::format("{:.3f}", v);
 }
 
 MultiGraph::MultiGraph(Widget *parent, const std::string &caption)
