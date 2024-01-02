@@ -837,7 +837,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 ) {
     auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
-    float mean = 0;
+    double mean = 0;
     float maximum = -numeric_limits<float>::infinity();
     float minimum = numeric_limits<float>::infinity();
 
@@ -876,7 +876,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    result->mean = pixelCount > 0 ? (mean / pixelCount) : 0;
+    result->mean = pixelCount > 0 ? float(mean / pixelCount) : 0;
     result->maximum = maximum;
     result->minimum = minimum;
 
