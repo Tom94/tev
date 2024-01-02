@@ -8,6 +8,7 @@
 #include <nanogui/vector.h>
 
 #include <tev/Box.h>
+#include <optional>
 
 namespace tev {
 

@@ -168,13 +168,13 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return;
                 }
 
-                float cropAlpha = 1.f;
+                float cropAlpha = 1.0;
                 if (isCropped) {
                     if (imageUv.x < cropMin.x
                     || imageUv.x > cropMax.x
                     || imageUv.y < cropMin.y
                     || imageUv.y > cropMax.y)
-                        cropAlpha = 0.3f;
+                        cropAlpha = 0.3;
                 }
 
                 vec4 imageVal = sample(image, imageUv);
