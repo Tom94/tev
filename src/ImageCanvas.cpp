@@ -60,17 +60,6 @@ void ImageCanvas::draw_contents() {
         return;
     }
 
-    nanogui::Vector2f cropMin = mCropMin;
-    nanogui::Vector2f cropMax = mCropMax;
-
-    if (cropMin.x() > cropMax.x()) std::swap(cropMin.x(), cropMax.x());
-    if (cropMin.y() > cropMax.y()) std::swap(cropMin.y(), cropMax.y());
-
-    cropMin.x() /= mImage->size().x();
-    cropMin.y() /= mImage->size().y();
-    cropMax.x() /= mImage->size().x();
-    cropMax.y() /= mImage->size().y();
-
     if (!mReference || ctrlHeld || image == mReference.get()) {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
@@ -84,9 +73,7 @@ void ImageCanvas::draw_contents() {
             mGamma,
             mClipToLdr,
             mTonemap,
-            mIsCropped,
-            cropMin,
-            cropMax
+            mCrop
         );
         return;
     }
@@ -108,9 +95,7 @@ void ImageCanvas::draw_contents() {
         mClipToLdr,
         mTonemap,
         mMetric,
-        mIsCropped,
-        cropMin,
-        cropMax
+        mCrop
     );
 }
 
@@ -717,19 +702,13 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     string key = mReference ?
         fmt::format("{}-{}-{}-{}", mImage->id(), channels, mReference->id(), (int)mMetric) :
         fmt::format("{}-{}", mImage->id(), channels);
-    
-    auto isCropped = mIsCropped;
-    auto cropMin = mCropMin;
-    auto cropMax = mCropMax;
-    if (cropMin.x() > cropMax.x()) std::swap(cropMin.x(), cropMax.x());
-    if (cropMin.y() > cropMax.y()) std::swap(cropMin.y(), cropMax.y());
 
-    if (isCropped) {
+    if (mCrop.has_value()) {
         key += std::string("-crop")
-            + "-" + std::to_string(mCropMin.x())
-            + "-" + std::to_string(mCropMin.y())
-            + "-" + std::to_string(mCropMax.x())
-            + "-" + std::to_string(mCropMax.y())
+            + "-" + std::to_string(mCrop->min.x())
+            + "-" + std::to_string(mCrop->min.y())
+            + "-" + std::to_string(mCrop->max.x())
+            + "-" + std::to_string(mCrop->max.y())
         ;
     }
 
@@ -760,16 +739,22 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
     }
 
+    Box2i region;
+    if (mCrop.has_value()) {
+        region = mCrop.value();
+    } else {
+        region.min = Vector2i{0};
+        region.max = image->size();
+    }
+
     invokeTaskDetached([
         image, reference, requestedChannelGroup, metric,
-        isCropped, cropMin, cropMax,
-        priority, p=std::move(promise)
+        region, priority, p=std::move(promise)
     ]() mutable -> Task<void> {
         co_await ThreadPool::global().enqueueCoroutine(priority);
         p.set_value(co_await computeCanvasStatistics(
             image, reference, requestedChannelGroup, metric,
-            isCropped, cropMin, cropMax,
-            priority
+            region, priority
         ));
     });
 
@@ -847,9 +832,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::shared_ptr<Image> reference,
     const string& requestedChannelGroup,
     EMetric metric,
-    bool isCropped,
-    Vector2i cropMin,
-    Vector2i cropMax,
+    const Box2i& region,
     int priority
 ) {
     auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
@@ -877,25 +860,11 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
-    if (isCropped) {
-        cropMin = {
-            clamp(cropMin.x(), 0, image->size().x()),
-            clamp(cropMin.y(), 0, image->size().y())
-        };
-        cropMax = {
-            clamp(cropMax.x(), 0, image->size().x()),
-            clamp(cropMax.y(), 0, image->size().y())
-        };
-    } else {
-        cropMin = Vector2i(0, 0);
-        cropMax = image->size();
-    }
-
     int pixelCount = 0;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        for (int y = cropMin.y(); y < cropMax.y(); ++y) {
-            for (int x = cropMin.x(); x < cropMax.x(); ++x) {
+        for (int y = region.min.y(); y < region.max.y(); ++y) {
+            for (int x = region.min.x(); x < region.max.x(); ++x) {
                 auto v = channel.at(Vector2i{x, y});
                 if (!isnan(v)) {
                     mean += v;
@@ -943,8 +912,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_return result;
     }
 
-    auto cropSize = cropMax - cropMin;
-    auto numPixels = size_t(cropSize.x()) * size_t(cropSize.y());
+    auto regionSize = region.size();
+    auto numPixels = size_t(regionSize.x()) * size_t(regionSize.y());
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
@@ -952,8 +921,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         const auto& channel = flattened[i];
         tasks.emplace_back(
             ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
-                int x = (j % cropSize.x()) + cropMin.x();
-                int y = (j / cropSize.y()) + cropMin.y();
+                int x = (j % regionSize.x()) + region.min.x();
+                int y = (j / regionSize.y()) + region.min.y();
                 indices[j + i * numPixels] = valToBin(channel.at(Vector2i{x, y}));
             }, priority)
         );

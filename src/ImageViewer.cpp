@@ -521,18 +521,13 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
         } else if (mImageCanvas->contains(p)) {
             if ((modifiers & 4) != 0) {
                 if (button == 0) {
-                    // alt/option + left click, start crop
+                    // alt/option + left drag to crop
                     auto rel = mouse_pos() - mImageCanvas->position();
                     auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
                     
                     mIsCroppingImage = true;
-                    mImageCanvas->setCropMin(imageCoords);
-                    mImageCanvas->setCropMax(imageCoords);
-                    mImageCanvas->enableCrop();
-                } else {
-                    // alt/option + right click, disable crop
-                    mIsCroppingImage = false;
-                    mImageCanvas->disableCrop();
+                    mCroppingStartCoordinates = imageCoords;
+                    mImageCanvas->setCrop(std::nullopt); // single click disables crop
                 }
             } else {
                 mIsDraggingImage = true;
@@ -627,7 +622,9 @@ bool ImageViewer::mouse_motion_event(
     } else if (mIsCroppingImage) {
         auto relMousePos = mouse_pos() - mImageCanvas->position();
         auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {relMousePos.x(), relMousePos.y()});
-        mImageCanvas->setCropMax(imageCoords);
+        
+        // we do not need to worry about min/max ordering here, as setCrop sanitizes the input for us
+        mImageCanvas->setCrop(Box2i{mCroppingStartCoordinates, imageCoords});
     }
 
     return false;

@@ -258,6 +258,7 @@ private:
     bool mIsCroppingImage = false;
     size_t mDraggedImageButtonId;
 
+    nanogui::Vector2i mCroppingStartCoordinates;
     nanogui::Vector2f mDraggingStartPosition;
 
     size_t mClipboardIndex = 0;

@@ -7,6 +7,8 @@
 #include <nanogui/texture.h>
 #include <nanogui/vector.h>
 
+#include <tev/Box.h>
+
 namespace tev {
 
 class UberShader {
@@ -28,9 +30,7 @@ public:
         float gamma,
         bool clipToLdr,
         ETonemap tonemap,
-        bool isCropped,
-        const nanogui::Vector2f& cropMin,
-        const nanogui::Vector2f& cropMax
+        const std::optional<Box2i>& crop
     );
 
     // Draws a difference between a reference and an image.
@@ -47,9 +47,7 @@ public:
         bool clipToLdr,
         ETonemap tonemap,
         EMetric metric,
-        bool isCropped,
-        const nanogui::Vector2f& cropMin,
-        const nanogui::Vector2f& cropMax
+        const std::optional<Box2i>& crop
     );
 
     const nanogui::Color& backgroundColor() {

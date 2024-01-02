@@ -441,7 +441,7 @@ void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
         nullptr, Matrix3f{0.0f},
         0.0f, 0.0f, 0.0f, false,
         ETonemap::SRGB,
-        false, Vector2f{0.f}, Vector2f{0.f}
+        std::nullopt
     );
 }
 
@@ -455,9 +455,7 @@ void UberShader::draw(
     float gamma,
     bool clipToLdr,
     ETonemap tonemap,
-    bool isCropped,
-    const Vector2f& cropMin,
-    const Vector2f& cropMax
+    const std::optional<Box2i>& crop
 ) {
     draw(
         pixelSize, checkerSize,
@@ -465,7 +463,7 @@ void UberShader::draw(
         nullptr, Matrix3f{0.0f},
         exposure, offset, gamma, clipToLdr,
         tonemap, EMetric::Error,
-        isCropped, cropMin, cropMax
+        crop
     );
 }
 
@@ -482,9 +480,7 @@ void UberShader::draw(
     bool clipToLdr,
     ETonemap tonemap,
     EMetric metric,
-    bool isCropped,
-    const nanogui::Vector2f& cropMin,
-    const nanogui::Vector2f& cropMax
+    const std::optional<Box2i>& crop
 ) {
     bool hasImage = textureImage;
     if (!hasImage) {
@@ -504,9 +500,14 @@ void UberShader::draw(
     mShader->set_uniform("hasImage", hasImage);
     mShader->set_uniform("hasReference", hasReference);
     mShader->set_uniform("clipToLdr", clipToLdr);
-    mShader->set_uniform("isCropped", isCropped);
-    mShader->set_uniform("cropMin", cropMin);
-    mShader->set_uniform("cropMax", cropMax);
+    mShader->set_uniform("isCropped", crop.has_value());
+    if (crop.has_value()) {
+        mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
+        mShader->set_uniform("cropMax", Vector2f{crop->max} / Vector2f{textureImage->size()});
+    } else {
+        mShader->set_uniform("cropMin", Vector2f{0});
+        mShader->set_uniform("cropMax", Vector2f{1});
+    }
 
     mShader->begin();
     mShader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, true);

@@ -6,10 +6,12 @@
 #include <tev/UberShader.h>
 #include <tev/Image.h>
 #include <tev/Lazy.h>
+#include <tev/Box.h>
 
 #include <nanogui/canvas.h>
 
 #include <memory>
+#include <optional>
 
 namespace tev {
 
@@ -53,6 +55,11 @@ public:
     float applyExposureAndOffset(float value) const;
 
     void setImage(std::shared_ptr<Image> image) {
+        if (!mImage || !image || mImage->size() != image->size()) {
+            // only keep crop active if image resolution has stayed the same
+            setCrop(std::nullopt);
+        }
+
         mImage = image;
     }
 
@@ -94,32 +101,29 @@ public:
         mMetric = metric;
     }
 
-    bool isCropped() const {
-        return mIsCropped;
+    void setCrop(const std::optional<Box2i>& crop) {
+        if (!crop.has_value()) {
+            mCrop = std::nullopt;
+            return;
+        }
+        
+        // sanitize the input crop
+        Box2i clean;
+        for (size_t dim = 0; dim < clean.min.Size; dim++) {
+            // order input crop, add one to maximum to make box inclusive
+            clean.min[dim] = std::min(crop->min[dim], crop->max[dim]);
+            clean.max[dim] = std::max(crop->min[dim], crop->max[dim]) + 1;
+            
+            // clamp to image extents
+            clean.min[dim] = std::max(0, std::min(mImage->size()[dim], clean.min[dim]));
+            clean.max[dim] = std::max(0, std::min(mImage->size()[dim], clean.max[dim]));
+        }
+        
+        mCrop = clean;
     }
 
-    void enableCrop() {
-        mIsCropped = true;
-    }
-
-    void disableCrop() {
-        mIsCropped = false;
-    }
-
-    nanogui::Vector2i cropMin() const {
-        return mCropMin;
-    }
-
-    void setCropMin(const nanogui::Vector2i &cropMin) {
-        mCropMin = cropMin;
-    }
-
-    nanogui::Vector2i cropMax() const {
-        return mCropMin;
-    }
-
-    void setCropMax(const nanogui::Vector2i &cropMax) {
-        mCropMax = cropMax;
+    std::optional<Box2i> getCrop() {
+        return mCrop;
     }
 
     static float applyMetric(float value, float reference, EMetric metric);
@@ -169,9 +173,7 @@ private:
         std::shared_ptr<Image> reference,
         const std::string& requestedChannelGroup,
         EMetric metric,
-        bool isCropped,
-        nanogui::Vector2i cropMin,
-        nanogui::Vector2i cropMax,
+        const Box2i& region,
         int priority
     );
 
@@ -205,9 +207,7 @@ private:
 
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
-    bool mIsCropped = false;
-    nanogui::Vector2i mCropMin;
-    nanogui::Vector2i mCropMax;
+    std::optional<Box2i> mCrop;
 
     std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
     std::map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;
