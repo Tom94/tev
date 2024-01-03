@@ -82,7 +82,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(imageSelection, "Home / End",                                        "Select first / last image");
     addRow(imageSelection, "Space",                                             "Toggle playback of images as video");
 
-    addRow(imageSelection, "Click & Drag (+Shift/" + COMMAND + ")", "Translate image");
+    addRow(imageSelection, "Click & Drag (+Shift/" + COMMAND + ")",   "Translate image");
+    addRow(imageSelection, "Click & Drag+" + ALT,                     "Select region of histogram");
     addRow(imageSelection, "+ / - / Scroll (+Shift/" + COMMAND + ")", "Zoom in / out of image");
 
     addRow(imageSelection, COMMAND + "+0", "Zoom to actual size");
