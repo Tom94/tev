@@ -73,7 +73,6 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform int tonemap;
             uniform int metric;
 
-            uniform bool isCropped;
             uniform vec2 cropMin;
             uniform vec2 cropMax;
 
@@ -168,17 +167,11 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return;
                 }
 
-                float cropAlpha = 1.0;
-                if (isCropped) {
-                    if (imageUv.x < cropMin.x
-                    || imageUv.x > cropMax.x
-                    || imageUv.y < cropMin.y
-                    || imageUv.y > cropMax.y)
-                        cropAlpha = 0.3;
-                }
+                float cropAlpha =
+                    imageUv.x < cropMin.x || imageUv.x > cropMax.x || imageUv.y < cropMin.y || imageUv.y > cropMax.y ? 0.3 : 1.0;
 
                 vec4 imageVal = sample(image, imageUv);
-                imageVal.a = imageVal.a * cropAlpha;
+                imageVal.a *= cropAlpha;
                 if (!hasReference) {
                     gl_FragColor = vec4(
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
@@ -189,7 +182,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
 
                 vec4 referenceVal = sample(reference, referenceUv);
-                referenceVal.a = referenceVal.a * cropAlpha;
+                referenceVal.a *= cropAlpha;
 
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5;
@@ -339,7 +332,6 @@ UberShader::UberShader(RenderPass* renderPass) {
                 const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
-                const constant bool& isCropped,
                 const constant float2& cropMin,
                 const constant float2& cropMax,
                 const constant float4& bgColor
@@ -353,17 +345,10 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return float4(checker, 1.0f);
                 }
 
-                float cropAlpha = 1.0f;
-                if (isCropped) {
-                    if (vert.imageUv.x < cropMin.x
-                    || vert.imageUv.x > cropMax.x
-                    || vert.imageUv.y < cropMin.y
-                    || vert.imageUv.y > cropMax.y)
-                        cropAlpha = 0.3f;
-                }
+                float cropAlpha = vert.imageUv.x < cropMin.x || vert.imageUv.x > cropMax.x || vert.imageUv.y < cropMin.y || vert.imageUv.y > cropMax.y ? 0.3f : 1.0f;
 
                 float4 imageVal = sample(image, image_sampler, vert.imageUv);
-                imageVal.a = imageVal.a * cropAlpha;
+                imageVal.a *= cropAlpha;
                 if (!hasReference) {
                     float4 color = float4(
                         applyTonemap(
@@ -382,7 +367,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
 
                 float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv);
-                referenceVal.a = referenceVal.a * cropAlpha;
+                referenceVal.a *= cropAlpha;
 
                 float3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5f;
@@ -500,13 +485,12 @@ void UberShader::draw(
     mShader->set_uniform("hasImage", hasImage);
     mShader->set_uniform("hasReference", hasReference);
     mShader->set_uniform("clipToLdr", clipToLdr);
-    mShader->set_uniform("isCropped", crop.has_value());
     if (crop.has_value()) {
         mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
         mShader->set_uniform("cropMax", Vector2f{crop->max} / Vector2f{textureImage->size()});
     } else {
-        mShader->set_uniform("cropMin", Vector2f{0});
-        mShader->set_uniform("cropMax", Vector2f{1});
+        mShader->set_uniform("cropMin", Vector2f{-std::numeric_limits<float>::infinity()});
+        mShader->set_uniform("cropMax", Vector2f{std::numeric_limits<float>::infinity()});
     }
 
     mShader->begin();
