@@ -69,7 +69,7 @@ void ImageCanvas::draw_contents() {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
-            image->texture(mRequestedChannelGroup),
+            image->texture(mImage->channelsInGroup(mRequestedChannelGroup)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             inverse(transform(image)),
