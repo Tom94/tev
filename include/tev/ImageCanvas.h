@@ -55,11 +55,6 @@ public:
     float applyExposureAndOffset(float value) const;
 
     void setImage(std::shared_ptr<Image> image) {
-        if (!mImage || !image || mImage->size() != image->size()) {
-            // only keep crop active if image resolution has stayed the same
-            setCrop(std::nullopt);
-        }
-
         mImage = image;
     }
 
@@ -106,19 +101,19 @@ public:
             mCrop = std::nullopt;
             return;
         }
-        
+
         // sanitize the input crop
         Box2i clean;
         for (size_t dim = 0; dim < clean.min.Size; dim++) {
             // order input crop, add one to maximum to make box inclusive
             clean.min[dim] = std::min(crop->min[dim], crop->max[dim]);
             clean.max[dim] = std::max(crop->min[dim], crop->max[dim]) + 1;
-            
+
             // clamp to image extents
             clean.min[dim] = std::max(0, std::min(mImage->size()[dim], clean.min[dim]));
             clean.max[dim] = std::max(0, std::min(mImage->size()[dim], clean.max[dim]));
         }
-        
+
         mCrop = clean;
     }
 
