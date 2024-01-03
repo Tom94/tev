@@ -615,6 +615,14 @@ bool ImageViewer::mouse_motion_event(
         Vector2i relStartMousePos = (absolute_position() + mDraggingStartPosition) - mImageCanvas->absolute_position();
         Vector2i relMousePos = (absolute_position() + p) - mImageCanvas->absolute_position();
 
+        // Require a minimum movement of 3 (nanogui space) pixels to start cropping.
+        // Since this is measured in nanogui / screen space and not image space, this
+        // does not prevent the cropping of smaller image regions. Just zoom in before
+        // cropping smaller regions than 3 image pixels.
+        if (norm(relStartMousePos - relMousePos) < 3) {
+            return false;
+        }
+
         auto startImageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relStartMousePos);
         auto imageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relMousePos);
 
