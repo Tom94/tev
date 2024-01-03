@@ -259,7 +259,7 @@ private:
     size_t mDraggedImageButtonId;
 
     nanogui::Vector2i mCroppingStartCoordinates;
-    nanogui::Vector2f mDraggingStartPosition;
+    nanogui::Vector2i mDraggingStartPosition;
 
     size_t mClipboardIndex = 0;
 

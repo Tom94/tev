@@ -60,6 +60,11 @@ void ImageCanvas::draw_contents() {
         return;
     }
 
+    optional<Box2i> imageSpaceCrop = nullopt;
+    if (mCrop.has_value()) {
+        imageSpaceCrop = mCrop.value().translate(image->displayWindow().min - image->dataWindow().min);
+    }
+
     if (!mReference || ctrlHeld || image == mReference.get()) {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
@@ -73,7 +78,7 @@ void ImageCanvas::draw_contents() {
             mGamma,
             mClipToLdr,
             mTonemap,
-            mCrop
+            imageSpaceCrop
         );
         return;
     }
@@ -95,7 +100,7 @@ void ImageCanvas::draw_contents() {
         mClipToLdr,
         mTonemap,
         mMetric,
-        mCrop
+        imageSpaceCrop
     );
 }
 
@@ -477,6 +482,11 @@ Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i nanoPos) {
     };
 }
 
+Vector2i ImageCanvas::getDisplayWindowCoords(const Image& image, Vector2i nanoPos) {
+    Vector2f imageCoords = getImageCoords(image, nanoPos);
+    return imageCoords + Vector2f(image.dataWindow().min - image.displayWindow().min);
+}
+
 void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, const vector<string>& channels) {
     result.clear();
     if (!mImage) {
@@ -739,10 +749,15 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
     }
 
-    Box2i region = {image->size()};
+    // The user specifies a crop region in display window coordinates.
+    // First, intersect this crop window with the image's extent, then translate
+    // the crop window to the image's data window for canvas statistics computation.
+    Box2i region = image->dataWindow();
     if (mCrop.has_value()) {
         region = region.intersect(mCrop.value());
     }
+
+    region = region.translate(image->displayWindow().min - image->dataWindow().min);
 
     invokeTaskDetached([
         image, reference, requestedChannelGroup, metric,

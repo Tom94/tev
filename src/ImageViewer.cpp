@@ -479,7 +479,7 @@ ImageViewer::ImageViewer(
     updateLayout();
 }
 
-bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
+bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
     redraw();
 
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
@@ -495,7 +495,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
                 if (imgButton->contains(relMousePos) && !imgButton->textBoxVisible()) {
                     mDraggedImageButtonId = i;
                     mIsDraggingImageButton = true;
-                    mDraggingStartPosition = nanogui::Vector2f(relMousePos - imgButton->position());
+                    mDraggingStartPosition = relMousePos - imgButton->position();
                     break;
                 }
             }
@@ -516,24 +516,16 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
     if (down && !mIsDraggingImageButton) {
         if (canDragSidebarFrom(p)) {
             mIsDraggingSidebar = true;
-            mDraggingStartPosition = nanogui::Vector2f(p);
+            mDraggingStartPosition = p;
             return true;
         } else if (mImageCanvas->contains(p)) {
-            if ((modifiers & 4) != 0) {
-                if (button == 0) {
-                    // alt/option + left drag to crop
-                    auto rel = mouse_pos() - mImageCanvas->position();
-                    auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
-
-                    mIsCroppingImage = true;
-                    mCroppingStartCoordinates = imageCoords;
-                    mImageCanvas->setCrop(std::nullopt); // single click disables crop
-                }
-            } else {
-                mIsDraggingImage = true;
-                mDraggingStartPosition = nanogui::Vector2f(p);
-                mIsCroppingImage = false;
+            mIsCroppingImage = modifiers & 4;
+            if (mIsCroppingImage) {
+                mImageCanvas->setCrop(std::nullopt); // single click disables crop
             }
+
+            mIsDraggingImage = !mIsCroppingImage;
+            mDraggingStartPosition = p;
             return true;
         }
     } else {
@@ -594,7 +586,7 @@ bool ImageViewer::mouse_motion_event(
 
         // If middle mouse button is held, zoom in-out with up-down mouse movement
         if ((button & 4) != 0) {
-            mImageCanvas->scale(relativeMovement.y() / 10.0f, {mDraggingStartPosition.x(), mDraggingStartPosition.y()});
+            mImageCanvas->scale(relativeMovement.y() / 10.0f, Vector2f{mDraggingStartPosition});
         }
     } else if (mIsDraggingImageButton) {
         auto& buttons = mImageButtonContainer->children();
@@ -617,14 +609,17 @@ bool ImageViewer::mouse_motion_event(
         }
 
         dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(
-            relMousePos - nanogui::Vector2i(mDraggingStartPosition)
+            relMousePos - mDraggingStartPosition
         );
     } else if (mIsCroppingImage) {
-        auto relMousePos = mouse_pos() - mImageCanvas->position();
-        auto imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {relMousePos.x(), relMousePos.y()});
+        Vector2i relStartMousePos = (absolute_position() + mDraggingStartPosition) - mImageCanvas->absolute_position();
+        Vector2i relMousePos = (absolute_position() + p) - mImageCanvas->absolute_position();
+
+        auto startImageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relStartMousePos);
+        auto imageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relMousePos);
 
         // sanitize the input crop
-        Box2i crop = {{mCroppingStartCoordinates, imageCoords}};
+        Box2i crop = {{startImageCoords, imageCoords}};
         crop.max += Vector2i{1};
 
         // we do not need to worry about min/max ordering here, as setCrop sanitizes the input for us

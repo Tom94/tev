@@ -54,6 +54,10 @@ struct Box {
         return {nanogui::max(min, other.min), nanogui::min(max, other.max)};
     }
 
+    Box translate(const Vector& offset) const {
+        return {min + offset, max + offset};
+    }
+
     bool operator==(const Box& other) const {
         return min == other.min && max == other.max;
     }

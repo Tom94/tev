@@ -353,7 +353,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return float4(checker, 1.0f);
                 }
 
-                float cropAlpha = 1.f;
+                float cropAlpha = 1.0f;
                 if (isCropped) {
                     if (vert.imageUv.x < cropMin.x
                     || vert.imageUv.x > cropMax.x
