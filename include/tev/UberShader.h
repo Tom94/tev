@@ -3,11 +3,12 @@
 
 #pragma once
 
+#include <tev/Box.h>
+
 #include <nanogui/shader.h>
 #include <nanogui/texture.h>
 #include <nanogui/vector.h>
 
-#include <tev/Box.h>
 #include <optional>
 
 namespace tev {

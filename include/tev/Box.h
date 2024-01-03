@@ -50,6 +50,18 @@ struct Box {
         return result;
     }
 
+    bool contains_inclusive(const Vector& pos) const {
+        bool result = true;
+        for (uint32_t i = 0; i < N_DIMS; ++i) {
+            result &= pos[i] >= min[i] && pos[i] <= max[i];
+        }
+        return result;
+    }
+
+    bool contains(const Box& other) const {
+        return contains_inclusive(other.min) && contains_inclusive(other.max);
+    }
+
     Box intersect(const Box& other) const {
         return {nanogui::max(min, other.min), nanogui::min(max, other.max)};
     }

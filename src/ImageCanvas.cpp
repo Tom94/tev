@@ -851,6 +851,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const Box2i& region,
     int priority
 ) {
+    TEV_ASSERT(Box2i{image->size()}.contains(region), "Region must be contained in image.");
+
     auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
     double mean = 0;
@@ -892,7 +894,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    result->mean = pixelCount > 0 ? float(mean / pixelCount) : 0;
+    result->mean = pixelCount > 0 ? (float)(mean / pixelCount) : 0;
     result->maximum = maximum;
     result->minimum = minimum;
 
@@ -929,7 +931,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     auto regionSize = region.size();
-    auto numPixels = size_t(regionSize.x()) * size_t(regionSize.y());
+    auto numPixels = (size_t)regionSize.x() * regionSize.y();
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
