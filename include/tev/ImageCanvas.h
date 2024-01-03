@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <tev/UberShader.h>
+#include <tev/Box.h>
 #include <tev/Image.h>
 #include <tev/Lazy.h>
-#include <tev/Box.h>
+#include <tev/UberShader.h>
 
 #include <nanogui/canvas.h>
 
