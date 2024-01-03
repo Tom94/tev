@@ -215,8 +215,8 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         nvgFontSize(ctx, fontSize);
         nvgTextAlign(ctx, (right ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT) | (top ? NVG_ALIGN_BOTTOM : NVG_ALIGN_TOP));
         float textWidth = nvgTextBounds(ctx, 0, 0, name.c_str(), nullptr, nullptr);
-        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 2.0f)), 0.0f);
-        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 1.5f) * 2), 0.0f);
+        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
+        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
 
         Color textColor = Color(190, 255);
         textColor.a() = textAlpha;
@@ -278,6 +278,9 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
             drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(), false, "", flags);
         }
 
+        if (mCrop.has_value()) {
+            drawWindow(mCrop.value(), CROP_COLOR, false, false, "Stats crop", flags);
+        }
     };
 
     // Draw all labels after the regions to ensure no occlusion
@@ -439,6 +442,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         // If the coordinate system is in any sort of way non-trivial, or if a hotkey is held, draw it!
         if (
             glfwGetKey(screen()->glfw_window(), GLFW_KEY_B) ||
+            mCrop.has_value() ||
             mImage->dataWindow() != mImage->displayWindow() ||
             mImage->displayWindow().min != Vector2i{0} ||
             (mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow()))
