@@ -739,12 +739,9 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
     }
 
-    Box2i region;
+    Box2i region = {image->size()};
     if (mCrop.has_value()) {
-        region = mCrop.value();
-    } else {
-        region.min = Vector2i{0};
-        region.max = image->size();
+        region = region.intersect(mCrop.value());
     }
 
     invokeTaskDetached([

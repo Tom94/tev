@@ -5,7 +5,6 @@
 
 #include <tev/Common.h>
 
-
 namespace tev {
 
 template <typename T, uint32_t N_DIMS>
@@ -20,8 +19,15 @@ struct Box {
     template <typename U>
     Box(const Box<U, N_DIMS>& other) : min{other.min}, max{other.max} {}
 
+    Box(const std::vector<Vector>& points) : Box() {
+        for (const auto& point : points) {
+            min = nanogui::min(min, point);
+            max = nanogui::max(max, point);
+        }
+    }
+
     Vector size() const {
-        return max - min;
+        return nanogui::max(max - min, Vector{(T)0});
     }
 
     Vector middle() const {
@@ -42,6 +48,10 @@ struct Box {
             result &= pos[i] >= min[i] && pos[i] < max[i];
         }
         return result;
+    }
+
+    Box intersect(const Box& other) const {
+        return {nanogui::max(min, other.min), nanogui::min(max, other.max)};
     }
 
     bool operator==(const Box& other) const {
