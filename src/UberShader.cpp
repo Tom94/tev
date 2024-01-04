@@ -21,7 +21,7 @@ UberShader::UberShader(RenderPass* renderPass) {
         precision highp float;)";
 #   endif
         auto vertexShader = preamble +
-            R"(
+            R"glsl(
             uniform vec2 pixelSize;
             uniform vec2 checkerSize;
 
@@ -43,10 +43,10 @@ UberShader::UberShader(RenderPass* renderPass) {
                 referenceUv = position * referenceScale + referenceOffset;
 
                 gl_Position = vec4(position, 1.0, 1.0);
-            })";
+            })glsl";
 
         auto fragmentShader = preamble +
-            R"(
+            R"glsl(
             #define SRGB        0
             #define GAMMA       1
             #define FALSE_COLOR 2
@@ -192,7 +192,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 );
 
                 gl_FragColor.rgb = clamp(gl_FragColor.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
-            })";
+            })glsl";
 #elif defined(NANOGUI_USE_METAL)
         auto vertexShader =
             R"(using namespace metal;
