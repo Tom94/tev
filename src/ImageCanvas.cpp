@@ -758,10 +758,10 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     // the crop window to the image's data window for canvas statistics computation.
     Box2i region = image->dataWindow();
     if (mCrop.has_value()) {
-        region = region.intersect(mCrop.value());
+        region = region.intersect(mCrop.value().translate(image->displayWindow().min));
     }
 
-    region = region.translate(image->displayWindow().min - image->dataWindow().min);
+    region = region.translate(-image->dataWindow().min);
 
     invokeTaskDetached([
         image, reference, requestedChannelGroup, metric,
@@ -769,8 +769,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     ]() mutable -> Task<void> {
         co_await ThreadPool::global().enqueueCoroutine(priority);
         p.set_value(co_await computeCanvasStatistics(
-            image, reference, requestedChannelGroup, metric,
-            region, priority
+            image, reference, requestedChannelGroup, metric, region, priority
         ));
     });
 
