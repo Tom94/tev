@@ -81,6 +81,12 @@ struct Box {
     Vector min, max;
 };
 
+template <typename Stream, typename T, uint32_t N_DIMS, std::enable_if_t<std::is_base_of_v<std::ostream, Stream>, int> = 0>
+Stream& operator<<(Stream& os, const Box<T, N_DIMS>& v) {
+    os << '[' << v.min << ", " << v.max << ']';
+    return os;
+}
+
 using Box2f = Box<float, 2>;
 using Box3f = Box<float, 3>;
 using Box4f = Box<float, 4>;
