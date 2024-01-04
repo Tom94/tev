@@ -27,6 +27,7 @@ using namespace std;
 namespace tev {
 
 static const int SIDEBAR_MIN_WIDTH = 230;
+static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
     const shared_ptr<BackgroundImagesLoader>& imagesLoader,
@@ -516,22 +517,26 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
     auto* glfwWindow = screen()->glfw_window();
 
     bool isDraggingImageButton = mDragType == EMouseDragType::ImageButtonDrag;
-    if (down && !isDraggingImageButton) {
-        mDraggingStartPosition = p;
-        if (canDragSidebarFrom(p)) {
-            mDragType = EMouseDragType::SidebarDrag;
-            return true;
-        } else if (mImageCanvas->contains(p)) {
-            mDragType = glfwGetKey(glfwWindow, GLFW_KEY_C) ? EMouseDragType::ImageCrop : EMouseDragType::ImageDrag;
-            if (mDragType == EMouseDragType::ImageCrop) {
-                mImageCanvas->setCrop(std::nullopt); // alt + single click disables crop
+    if (down) {
+        if (mDragType != EMouseDragType::ImageButtonDrag) {
+            mDraggingStartPosition = p;
+            if (canDragSidebarFrom(p)) {
+                mDragType = EMouseDragType::SidebarDrag;
+                return true;
+            } else if (mImageCanvas->contains(p)) {
+                mDragType = glfwGetKey(glfwWindow, GLFW_KEY_C) ? EMouseDragType::ImageCrop : EMouseDragType::ImageDrag;
+                return true;
             }
-
-            return true;
         }
     } else {
-        if (isDraggingImageButton) {
+        if (mDragType == EMouseDragType::ImageButtonDrag) {
             requestLayoutUpdate();
+        } else if (mDragType == EMouseDragType::ImageCrop) {
+            if (norm(mDraggingStartPosition - p) < CROP_MIN_SIZE) {
+                // If the user did not drag the mouse far enough, we assume that they
+                // wanted to reset the crop rather than create a new one.
+                mImageCanvas->setCrop(std::nullopt);
+            }
         }
 
         mDragType = EMouseDragType::None;
@@ -597,11 +602,10 @@ bool ImageViewer::mouse_motion_event(
             Vector2i relStartMousePos = (absolute_position() + mDraggingStartPosition) - mImageCanvas->absolute_position();
             Vector2i relMousePos = (absolute_position() + p) - mImageCanvas->absolute_position();
 
-            // Require a minimum movement of 3 (nanogui space) pixels to start cropping.
-            // Since this is measured in nanogui / screen space and not image space, this
-            // does not prevent the cropping of smaller image regions. Just zoom in before
-            // cropping smaller regions than 3 image pixels.
-            if (norm(relStartMousePos - relMousePos) < 3) {
+            // Require a minimum movement to start cropping. Since this is measured in nanogui / screen space and not
+            // image space, this does not prevent the cropping of smaller image regions. Just zoom in before cropping
+            // smaller regions.
+            if (norm(relStartMousePos - relMousePos) < CROP_MIN_SIZE) {
                 return false;
             }
 
