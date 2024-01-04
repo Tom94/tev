@@ -513,6 +513,8 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
         }
     }
 
+    auto* glfwWindow = screen()->glfw_window();
+
     bool isDraggingImageButton = mDragType == EMouseDragType::ImageButtonDrag;
     if (down && !isDraggingImageButton) {
         mDraggingStartPosition = p;
@@ -520,7 +522,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
             mDragType = EMouseDragType::SidebarDrag;
             return true;
         } else if (mImageCanvas->contains(p)) {
-            mDragType = (modifiers & 4) ? EMouseDragType::ImageCrop : EMouseDragType::ImageDrag;
+            mDragType = glfwGetKey(glfwWindow, GLFW_KEY_C) ? EMouseDragType::ImageCrop : EMouseDragType::ImageDrag;
             if (mDragType == EMouseDragType::ImageCrop) {
                 mImageCanvas->setCrop(std::nullopt); // alt + single click disables crop
             }

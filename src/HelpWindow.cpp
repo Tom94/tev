@@ -83,7 +83,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(imageSelection, "Space",                                             "Toggle playback of images as video");
 
     addRow(imageSelection, "Click & Drag (+Shift/" + COMMAND + ")",   "Translate image");
-    addRow(imageSelection, "Click & Drag+" + ALT,                     "Select region of histogram");
+    addRow(imageSelection, "Click & Drag+C (hold)",                   "Select region of histogram");
     addRow(imageSelection, "+ / - / Scroll (+Shift/" + COMMAND + ")", "Zoom in / out of image");
 
     addRow(imageSelection, COMMAND + "+0", "Zoom to actual size");
@@ -111,7 +111,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     auto referenceSelection = new Widget{shortcuts};
     referenceSelection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(referenceSelection, ALT + " (hold)",                               "View currently selected reference");
+    addRow(referenceSelection, "Shift (hold)",                                "View currently selected reference");
     addRow(referenceSelection, "Shift+Left Click or Right Click",             "Select hovered image as reference");
     addRow(referenceSelection, "Shift+1…9",                                   "Select N-th image as reference");
     addRow(referenceSelection, "Shift+Down or Shift+S / Shift+Up or Shift+W", "Select next / previous image as reference");

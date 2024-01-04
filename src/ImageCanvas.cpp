@@ -48,9 +48,15 @@ bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
 
 void ImageCanvas::draw_contents() {
     auto* glfwWindow = screen()->glfw_window();
-    bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
-    bool ctrlHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL);
-    Image* image = (mReference && altHeld) ? mReference.get() : mImage.get();
+    bool viewReferenceOnly = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT);
+    bool viewImageOnly = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL);
+    if (viewReferenceOnly && viewImageOnly) {
+        // If both modifiers are pressed at the same time, we want entirely different behavior from
+        // modifying which image is shown. Do nothing here.
+        viewReferenceOnly = viewImageOnly = false;
+    }
+
+    Image* image = (mReference && viewReferenceOnly) ? mReference.get() : mImage.get();
 
     if (!image) {
         mShader->draw(
@@ -65,7 +71,7 @@ void ImageCanvas::draw_contents() {
         imageSpaceCrop = mCrop.value().translate(image->displayWindow().min - image->dataWindow().min);
     }
 
-    if (!mReference || ctrlHeld || image == mReference.get()) {
+    if (!mReference || viewImageOnly || image == mReference.get()) {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
