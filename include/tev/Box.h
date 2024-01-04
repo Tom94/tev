@@ -5,7 +5,6 @@
 
 #include <tev/Common.h>
 
-
 namespace tev {
 
 template <typename T, uint32_t N_DIMS>
@@ -20,8 +19,15 @@ struct Box {
     template <typename U>
     Box(const Box<U, N_DIMS>& other) : min{other.min}, max{other.max} {}
 
+    Box(const std::vector<Vector>& points) : Box() {
+        for (const auto& point : points) {
+            min = nanogui::min(min, point);
+            max = nanogui::max(max, point);
+        }
+    }
+
     Vector size() const {
-        return max - min;
+        return nanogui::max(max - min, Vector{(T)0});
     }
 
     Vector middle() const {
@@ -44,6 +50,26 @@ struct Box {
         return result;
     }
 
+    bool contains_inclusive(const Vector& pos) const {
+        bool result = true;
+        for (uint32_t i = 0; i < N_DIMS; ++i) {
+            result &= pos[i] >= min[i] && pos[i] <= max[i];
+        }
+        return result;
+    }
+
+    bool contains(const Box& other) const {
+        return contains_inclusive(other.min) && contains_inclusive(other.max);
+    }
+
+    Box intersect(const Box& other) const {
+        return {nanogui::max(min, other.min), nanogui::min(max, other.max)};
+    }
+
+    Box translate(const Vector& offset) const {
+        return {min + offset, max + offset};
+    }
+
     bool operator==(const Box& other) const {
         return min == other.min && max == other.max;
     }
@@ -54,6 +80,12 @@ struct Box {
 
     Vector min, max;
 };
+
+template <typename Stream, typename T, uint32_t N_DIMS, std::enable_if_t<std::is_base_of_v<std::ostream, Stream>, int> = 0>
+Stream& operator<<(Stream& os, const Box<T, N_DIMS>& v) {
+    os << '[' << v.min << ", " << v.max << ']';
+    return os;
+}
 
 using Box2f = Box<float, 2>;
 using Box3f = Box<float, 3>;

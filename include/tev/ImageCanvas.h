@@ -3,13 +3,15 @@
 
 #pragma once
 
-#include <tev/UberShader.h>
+#include <tev/Box.h>
 #include <tev/Image.h>
 #include <tev/Lazy.h>
+#include <tev/UberShader.h>
 
 #include <nanogui/canvas.h>
 
 #include <memory>
+#include <optional>
 
 namespace tev {
 
@@ -65,6 +67,7 @@ public:
     }
 
     nanogui::Vector2i getImageCoords(const Image& image, nanogui::Vector2i mousePos);
+    nanogui::Vector2i getDisplayWindowCoords(const Image& image, nanogui::Vector2i mousePos);
 
     void getValuesAtNanoPos(nanogui::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);
     std::vector<float> getValuesAtNanoPos(nanogui::Vector2i nanoPos, const std::vector<std::string>& channels) {
@@ -92,6 +95,14 @@ public:
 
     void setMetric(EMetric metric) {
         mMetric = metric;
+    }
+
+    void setCrop(const std::optional<Box2i>& crop) {
+        mCrop = crop;
+    }
+
+    std::optional<Box2i> getCrop() {
+        return mCrop;
     }
 
     static float applyMetric(float value, float reference, EMetric metric);
@@ -141,6 +152,7 @@ private:
         std::shared_ptr<Image> reference,
         const std::string& requestedChannelGroup,
         EMetric metric,
+        const Box2i& region,
         int priority
     );
 
@@ -174,6 +186,7 @@ private:
 
     ETonemap mTonemap = SRGB;
     EMetric mMetric = Error;
+    std::optional<Box2i> mCrop;
 
     std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
     std::map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;

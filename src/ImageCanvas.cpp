@@ -48,9 +48,15 @@ bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
 
 void ImageCanvas::draw_contents() {
     auto* glfwWindow = screen()->glfw_window();
-    bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
-    bool ctrlHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL);
-    Image* image = (mReference && altHeld) ? mReference.get() : mImage.get();
+    bool viewReferenceOnly = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT);
+    bool viewImageOnly = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL);
+    if (viewReferenceOnly && viewImageOnly) {
+        // If both modifiers are pressed at the same time, we want entirely different behavior from
+        // modifying which image is shown. Do nothing here.
+        viewReferenceOnly = viewImageOnly = false;
+    }
+
+    Image* image = (mReference && viewReferenceOnly) ? mReference.get() : mImage.get();
 
     if (!image) {
         mShader->draw(
@@ -60,11 +66,16 @@ void ImageCanvas::draw_contents() {
         return;
     }
 
-    if (!mReference || ctrlHeld || image == mReference.get()) {
+    optional<Box2i> imageSpaceCrop = nullopt;
+    if (mCrop.has_value()) {
+        imageSpaceCrop = mCrop.value().translate(image->displayWindow().min - image->dataWindow().min);
+    }
+
+    if (!mReference || viewImageOnly || image == mReference.get()) {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
-            image->texture(mRequestedChannelGroup),
+            image->texture(mImage->channelsInGroup(mRequestedChannelGroup)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_
             // image transform to obtain texture coordinates in [0, 1]-space.
             inverse(transform(image)),
@@ -72,7 +83,8 @@ void ImageCanvas::draw_contents() {
             mOffset,
             mGamma,
             mClipToLdr,
-            mTonemap
+            mTonemap,
+            imageSpaceCrop
         );
         return;
     }
@@ -93,7 +105,8 @@ void ImageCanvas::draw_contents() {
         mGamma,
         mClipToLdr,
         mTonemap,
-        mMetric
+        mMetric,
+        imageSpaceCrop
     );
 }
 
@@ -208,8 +221,8 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         nvgFontSize(ctx, fontSize);
         nvgTextAlign(ctx, (right ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT) | (top ? NVG_ALIGN_BOTTOM : NVG_ALIGN_TOP));
         float textWidth = nvgTextBounds(ctx, 0, 0, name.c_str(), nullptr, nullptr);
-        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 2.0f)), 0.0f);
-        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x()) / textWidth) - 1.5f) * 2), 0.0f);
+        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
+        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
 
         Color textColor = Color(190, 255);
         textColor.a() = textAlpha;
@@ -271,6 +284,9 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
             drawWindow(mImage->displayWindow(), Color(0.3f, 1.0f), mImage->displayWindow().min.y() <= mImage->dataWindow().min.y(), false, "", flags);
         }
 
+        if (mCrop.has_value()) {
+            drawWindow(mCrop.value(), CROP_COLOR, false, false, "Stats crop", flags);
+        }
     };
 
     // Draw all labels after the regions to ensure no occlusion
@@ -432,6 +448,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         // If the coordinate system is in any sort of way non-trivial, or if a hotkey is held, draw it!
         if (
             glfwGetKey(screen()->glfw_window(), GLFW_KEY_B) ||
+            mCrop.has_value() ||
             mImage->dataWindow() != mImage->displayWindow() ||
             mImage->displayWindow().min != Vector2i{0} ||
             (mReference && (mReference->dataWindow() != mImage->dataWindow() || mReference->displayWindow() != mImage->displayWindow()))
@@ -473,6 +490,11 @@ Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i nanoPos) {
         static_cast<int>(floor(imagePos.x())),
         static_cast<int>(floor(imagePos.y())),
     };
+}
+
+Vector2i ImageCanvas::getDisplayWindowCoords(const Image& image, Vector2i nanoPos) {
+    Vector2f imageCoords = getImageCoords(image, nanoPos);
+    return imageCoords + Vector2f(image.dataWindow().min - image.displayWindow().min);
 }
 
 void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, const vector<string>& channels) {
@@ -701,6 +723,15 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         fmt::format("{}-{}-{}-{}", mImage->id(), channels, mReference->id(), (int)mMetric) :
         fmt::format("{}-{}", mImage->id(), channels);
 
+    if (mCrop.has_value()) {
+        key += std::string("-crop")
+            + "-" + std::to_string(mCrop->min.x())
+            + "-" + std::to_string(mCrop->min.y())
+            + "-" + std::to_string(mCrop->max.x())
+            + "-" + std::to_string(mCrop->max.y())
+        ;
+    }
+
     auto iter = mCanvasStatistics.find(key);
     if (iter != end(mCanvasStatistics)) {
         return iter->second;
@@ -728,9 +759,24 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
     }
 
-    invokeTaskDetached([image, reference, requestedChannelGroup, metric, priority, p=std::move(promise)]() mutable -> Task<void> {
+    // The user specifies a crop region in display window coordinates.
+    // First, intersect this crop window with the image's extent, then translate
+    // the crop window to the image's data window for canvas statistics computation.
+    Box2i region = image->dataWindow();
+    if (mCrop.has_value()) {
+        region = region.intersect(mCrop.value().translate(image->displayWindow().min));
+    }
+
+    region = region.translate(-image->dataWindow().min);
+
+    invokeTaskDetached([
+        image, reference, requestedChannelGroup, metric,
+        region, priority, p=std::move(promise)
+    ]() mutable -> Task<void> {
         co_await ThreadPool::global().enqueueCoroutine(priority);
-        p.set_value(co_await computeCanvasStatistics(image, reference, requestedChannelGroup, metric, priority));
+        p.set_value(co_await computeCanvasStatistics(
+            image, reference, requestedChannelGroup, metric, region, priority
+        ));
     });
 
     return mCanvasStatistics.at(key);
@@ -807,11 +853,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::shared_ptr<Image> reference,
     const string& requestedChannelGroup,
     EMetric metric,
+    const Box2i& region,
     int priority
 ) {
+    TEV_ASSERT(Box2i{image->size()}.contains(region), "Region must be contained in image.");
+
     auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
-    float mean = 0;
+    double mean = 0;
     float maximum = -numeric_limits<float>::infinity();
     float minimum = numeric_limits<float>::infinity();
 
@@ -834,15 +883,23 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
+    int pixelCount = 0;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
-        auto [cmin, cmax, cmean] = channel.minMaxMean();
-        mean += cmean;
-        maximum = max(maximum, cmax);
-        minimum = min(minimum, cmin);
+        for (int y = region.min.y(); y < region.max.y(); ++y) {
+            for (int x = region.min.x(); x < region.max.x(); ++x) {
+                auto v = channel.at(Vector2i{x, y});
+                if (!isnan(v)) {
+                    mean += v;
+                    maximum = max(maximum, v);
+                    minimum = min(minimum, v);
+                    pixelCount++;
+                }
+            }
+        }
     }
 
-    result->mean = nChannels > 0 ? (mean / nChannels) : 0;
+    result->mean = pixelCount > 0 ? (float)(mean / pixelCount) : 0;
     result->maximum = maximum;
     result->minimum = minimum;
 
@@ -878,7 +935,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_return result;
     }
 
-    auto numPixels = image->numPixels();
+    auto regionSize = region.size();
+    auto numPixels = (size_t)regionSize.x() * regionSize.y();
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
@@ -886,7 +944,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         const auto& channel = flattened[i];
         tasks.emplace_back(
             ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
-                indices[j + i * numPixels] = valToBin(channel.eval(j));
+                int x = (j % regionSize.x()) + region.min.x();
+                int y = (j / regionSize.x()) + region.min.y();
+                indices[j + i * numPixels] = valToBin(channel.at(Vector2i{x, y}));
             }, priority)
         );
     }

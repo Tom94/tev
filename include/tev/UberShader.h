@@ -3,9 +3,13 @@
 
 #pragma once
 
+#include <tev/Box.h>
+
 #include <nanogui/shader.h>
 #include <nanogui/texture.h>
 #include <nanogui/vector.h>
+
+#include <optional>
 
 namespace tev {
 
@@ -27,7 +31,8 @@ public:
         float offset,
         float gamma,
         bool clipToLdr,
-        ETonemap tonemap
+        ETonemap tonemap,
+        const std::optional<Box2i>& crop
     );
 
     // Draws a difference between a reference and an image.
@@ -43,7 +48,8 @@ public:
         float gamma,
         bool clipToLdr,
         ETonemap tonemap,
-        EMetric metric
+        EMetric metric,
+        const std::optional<Box2i>& crop
     );
 
     const nanogui::Color& backgroundColor() {

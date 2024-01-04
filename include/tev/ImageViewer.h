@@ -252,12 +252,17 @@ private:
 
     HelpWindow* mHelpWindow = nullptr;
 
-    bool mIsDraggingSidebar = false;
-    bool mIsDraggingImage = false;
-    bool mIsDraggingImageButton = false;
-    size_t mDraggedImageButtonId;
+    enum class EMouseDragType {
+        None,
+        ImageDrag,
+        ImageCrop,
+        ImageButtonDrag,
+        SidebarDrag,
+    };
 
-    nanogui::Vector2f mDraggingStartPosition;
+    nanogui::Vector2i mDraggingStartPosition;
+    EMouseDragType mDragType = EMouseDragType::None;
+    size_t mDraggedImageButtonId;
 
     size_t mClipboardIndex = 0;
 

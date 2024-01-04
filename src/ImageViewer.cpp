@@ -27,6 +27,7 @@ using namespace std;
 namespace tev {
 
 static const int SIDEBAR_MIN_WIDTH = 230;
+static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
     const shared_ptr<BackgroundImagesLoader>& imagesLoader,
@@ -479,7 +480,7 @@ ImageViewer::ImageViewer(
     updateLayout();
 }
 
-bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) {
+bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
     redraw();
 
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged.
@@ -493,9 +494,9 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
             for (size_t i = 0; i < buttons.size(); ++i) {
                 const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
                 if (imgButton->contains(relMousePos) && !imgButton->textBoxVisible()) {
+                    mDraggingStartPosition = relMousePos - imgButton->position();
+                    mDragType = EMouseDragType::ImageButtonDrag;
                     mDraggedImageButtonId = i;
-                    mIsDraggingImageButton = true;
-                    mDraggingStartPosition = nanogui::Vector2f(relMousePos - imgButton->position());
                     break;
                 }
             }
@@ -513,24 +514,32 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i &p, int button, boo
         }
     }
 
-    if (down && !mIsDraggingImageButton) {
-        if (canDragSidebarFrom(p)) {
-            mIsDraggingSidebar = true;
-            mDraggingStartPosition = nanogui::Vector2f(p);
-            return true;
-        } else if (mImageCanvas->contains(p)) {
-            mIsDraggingImage = true;
-            mDraggingStartPosition = nanogui::Vector2f(p);
-            return true;
+    auto* glfwWindow = screen()->glfw_window();
+
+    bool isDraggingImageButton = mDragType == EMouseDragType::ImageButtonDrag;
+    if (down) {
+        if (mDragType != EMouseDragType::ImageButtonDrag) {
+            mDraggingStartPosition = p;
+            if (canDragSidebarFrom(p)) {
+                mDragType = EMouseDragType::SidebarDrag;
+                return true;
+            } else if (mImageCanvas->contains(p)) {
+                mDragType = glfwGetKey(glfwWindow, GLFW_KEY_C) ? EMouseDragType::ImageCrop : EMouseDragType::ImageDrag;
+                return true;
+            }
         }
     } else {
-        if (mIsDraggingImageButton) {
+        if (mDragType == EMouseDragType::ImageButtonDrag) {
             requestLayoutUpdate();
+        } else if (mDragType == EMouseDragType::ImageCrop) {
+            if (norm(mDraggingStartPosition - p) < CROP_MIN_SIZE) {
+                // If the user did not drag the mouse far enough, we assume that they
+                // wanted to reset the crop rather than create a new one.
+                mImageCanvas->setCrop(std::nullopt);
+            }
         }
 
-        mIsDraggingSidebar = false;
-        mIsDraggingImage = false;
-        mIsDraggingImageButton = false;
+        mDragType = EMouseDragType::None;
     }
 
     return false;
@@ -551,7 +560,7 @@ bool ImageViewer::mouse_motion_event(
         redraw();
     }
 
-    if (mIsDraggingSidebar || canDragSidebarFrom(p)) {
+    if (mDragType == EMouseDragType::SidebarDrag || canDragSidebarFrom(p)) {
         mSidebarLayout->set_cursor(Cursor::HResize);
         mImageCanvas->set_cursor(Cursor::HResize);
     } else {
@@ -559,52 +568,89 @@ bool ImageViewer::mouse_motion_event(
         mImageCanvas->set_cursor(Cursor::Arrow);
     }
 
-    if (mIsDraggingSidebar) {
-        mSidebar->set_fixed_width(clamp(p.x(), SIDEBAR_MIN_WIDTH, m_size.x() - 10));
-        requestLayoutUpdate();
-    } else if (mIsDraggingImage) {
-        nanogui::Vector2f relativeMovement = {rel};
-        auto* glfwWindow = screen()->glfw_window();
-        // There is no explicit access to the currently pressed modifier keys here, so we
-        // need to directly ask GLFW.
-        if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
-            relativeMovement /= 10;
-        } else if (glfwGetKey(glfwWindow, SYSTEM_COMMAND_LEFT) || glfwGetKey(glfwWindow, SYSTEM_COMMAND_RIGHT)) {
-            relativeMovement /= std::log2(1.1f);
-        }
+    switch (mDragType) {
+        case EMouseDragType::SidebarDrag:
+            mSidebar->set_fixed_width(clamp(p.x(), SIDEBAR_MIN_WIDTH, m_size.x() - 10));
+            requestLayoutUpdate();
+            break;
 
-        // If left mouse button is held, move the image with mouse movement
-        if ((button & 1) != 0) {
-            mImageCanvas->translate(relativeMovement);
-        }
-
-        // If middle mouse button is held, zoom in-out with up-down mouse movement
-        if ((button & 4) != 0) {
-            mImageCanvas->scale(relativeMovement.y() / 10.0f, {mDraggingStartPosition.x(), mDraggingStartPosition.y()});
-        }
-    } else if (mIsDraggingImageButton) {
-        auto& buttons = mImageButtonContainer->children();
-        nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
-        for (size_t i = 0; i < buttons.size(); ++i) {
-            if (i == mDraggedImageButtonId) {
-                continue;
+        case EMouseDragType::ImageDrag: {
+            nanogui::Vector2f relativeMovement = {rel};
+            auto* glfwWindow = screen()->glfw_window();
+            // There is no explicit access to the currently pressed modifier keys here, so we
+            // need to directly ask GLFW.
+            if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
+                relativeMovement /= 10;
+            } else if (glfwGetKey(glfwWindow, SYSTEM_COMMAND_LEFT) || glfwGetKey(glfwWindow, SYSTEM_COMMAND_RIGHT)) {
+                relativeMovement /= std::log2(1.1f);
             }
-            auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
-            if (imgButton->contains(relMousePos)) {
-                nanogui::Vector2i pos = imgButton->position();
-                pos.y() += ((int)mDraggedImageButtonId - (int)i) * imgButton->size().y();
-                imgButton->set_position(pos);
-                imgButton->mouse_enter_event(relMousePos, false);
 
-                moveImageInList(mDraggedImageButtonId, i);
-                mDraggedImageButtonId = i;
-                break;
+            // If left mouse button is held, move the image with mouse movement
+            if ((button & 1) != 0) {
+                mImageCanvas->translate(relativeMovement);
             }
+
+            // If middle mouse button is held, zoom in-out with up-down mouse movement
+            if ((button & 4) != 0) {
+                mImageCanvas->scale(relativeMovement.y() / 10.0f, Vector2f{mDraggingStartPosition});
+            }
+
+            break;
         }
 
-        dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(
-            relMousePos - nanogui::Vector2i(mDraggingStartPosition)
-        );
+        case EMouseDragType::ImageCrop: {
+            Vector2i relStartMousePos = (absolute_position() + mDraggingStartPosition) - mImageCanvas->absolute_position();
+            Vector2i relMousePos = (absolute_position() + p) - mImageCanvas->absolute_position();
+
+            // Require a minimum movement to start cropping. Since this is measured in nanogui / screen space and not
+            // image space, this does not prevent the cropping of smaller image regions. Just zoom in before cropping
+            // smaller regions.
+            if (norm(relStartMousePos - relMousePos) < CROP_MIN_SIZE) {
+                return false;
+            }
+
+            auto startImageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relStartMousePos);
+            auto imageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relMousePos);
+
+            // sanitize the input crop
+            Box2i crop = {{startImageCoords, imageCoords}};
+            crop.max += Vector2i{1};
+
+            // we do not need to worry about min/max ordering here, as setCrop sanitizes the input for us
+            mImageCanvas->setCrop(crop);
+
+            break;
+        }
+
+        case EMouseDragType::ImageButtonDrag: {
+            auto& buttons = mImageButtonContainer->children();
+            nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
+            for (size_t i = 0; i < buttons.size(); ++i) {
+                if (i == mDraggedImageButtonId) {
+                    continue;
+                }
+                auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
+                if (imgButton->contains(relMousePos)) {
+                    nanogui::Vector2i pos = imgButton->position();
+                    pos.y() += ((int)mDraggedImageButtonId - (int)i) * imgButton->size().y();
+                    imgButton->set_position(pos);
+                    imgButton->mouse_enter_event(relMousePos, false);
+
+                    moveImageInList(mDraggedImageButtonId, i);
+                    mDraggedImageButtonId = i;
+                    break;
+                }
+            }
+
+            dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(
+                relMousePos - mDraggingStartPosition
+            );
+
+            break;
+        }
+
+        case EMouseDragType::None:
+            break;
     }
 
     return false;
@@ -1058,14 +1104,14 @@ void ImageViewer::draw_contents() {
     if (mRequiresLayoutUpdate) {
         nanogui::Vector2i oldDraggedImageButtonPos{0, 0};
         auto& buttons = mImageButtonContainer->children();
-        if (mIsDraggingImageButton) {
+        if (mDragType == EMouseDragType::ImageButtonDrag) {
             oldDraggedImageButtonPos = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->position();
         }
 
         updateLayout();
         mRequiresLayoutUpdate = false;
 
-        if (mIsDraggingImageButton) {
+        if (mDragType == EMouseDragType::ImageButtonDrag) {
             dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->set_position(oldDraggedImageButtonPos);
         }
     }
@@ -1113,7 +1159,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
         throw invalid_argument{"Image may not be null."};
     }
 
-    if (mIsDraggingImageButton && index <= mDraggedImageButtonId) {
+    if (mDragType == EMouseDragType::ImageButtonDrag && index <= mDraggedImageButtonId) {
         ++mDraggedImageButtonId;
     }
 
@@ -1194,11 +1240,11 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
         return;
     }
 
-    if (mIsDraggingImageButton) {
+    if (mDragType == EMouseDragType::ImageButtonDrag) {
         // If we're currently dragging the to-be-removed image, stop.
         if ((size_t)id == mDraggedImageButtonId) {
             requestLayoutUpdate();
-            mIsDraggingImageButton = false;
+            mDragType = EMouseDragType::None;
         } else if ((size_t)id < mDraggedImageButtonId) {
             --mDraggedImageButtonId;
         }
@@ -1721,8 +1767,8 @@ void ImageViewer::toggleMaximized() {
 }
 
 void ImageViewer::setUiVisible(bool shouldBeVisible) {
-    if (!shouldBeVisible) {
-        mIsDraggingSidebar = false;
+    if (!shouldBeVisible && mDragType == EMouseDragType::SidebarDrag) {
+        mDragType = EMouseDragType::None;
     }
 
     mSidebar->set_visible(shouldBeVisible);

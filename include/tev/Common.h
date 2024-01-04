@@ -396,5 +396,6 @@ void redrawWindow();
 
 static const nanogui::Color IMAGE_COLOR = {0.35f, 0.35f, 0.8f, 1.0f};
 static const nanogui::Color REFERENCE_COLOR = {0.7f, 0.4f, 0.4f, 1.0f};
+static const nanogui::Color CROP_COLOR = {0.2f, 0.5f, 0.2f, 1.0f};
 
 }

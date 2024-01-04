@@ -21,7 +21,7 @@ UberShader::UberShader(RenderPass* renderPass) {
         precision highp float;)";
 #   endif
         auto vertexShader = preamble +
-            R"(
+            R"glsl(
             uniform vec2 pixelSize;
             uniform vec2 checkerSize;
 
@@ -43,10 +43,10 @@ UberShader::UberShader(RenderPass* renderPass) {
                 referenceUv = position * referenceScale + referenceOffset;
 
                 gl_Position = vec4(position, 1.0, 1.0);
-            })";
+            })glsl";
 
         auto fragmentShader = preamble +
-            R"(
+            R"glsl(
             #define SRGB        0
             #define GAMMA       1
             #define FALSE_COLOR 2
@@ -72,6 +72,9 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform bool clipToLdr;
             uniform int tonemap;
             uniform int metric;
+
+            uniform vec2 cropMin;
+            uniform vec2 cropMax;
 
             uniform vec4 bgColor;
 
@@ -164,7 +167,11 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return;
                 }
 
+                float cropAlpha =
+                    imageUv.x < cropMin.x || imageUv.x > cropMax.x || imageUv.y < cropMin.y || imageUv.y > cropMax.y ? 0.3 : 1.0;
+
                 vec4 imageVal = sample(image, imageUv);
+                imageVal.a *= cropAlpha;
                 if (!hasReference) {
                     gl_FragColor = vec4(
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
@@ -175,6 +182,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
 
                 vec4 referenceVal = sample(reference, referenceUv);
+                referenceVal.a *= cropAlpha;
 
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5;
@@ -184,7 +192,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 );
 
                 gl_FragColor.rgb = clamp(gl_FragColor.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
-            })";
+            })glsl";
 #elif defined(NANOGUI_USE_METAL)
         auto vertexShader =
             R"(using namespace metal;
@@ -324,6 +332,8 @@ UberShader::UberShader(RenderPass* renderPass) {
                 const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
+                const constant float2& cropMin,
+                const constant float2& cropMax,
                 const constant float4& bgColor
             ) {
                 float3 darkGray = float3(0.5f, 0.5f, 0.5f);
@@ -335,7 +345,10 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return float4(checker, 1.0f);
                 }
 
+                float cropAlpha = vert.imageUv.x < cropMin.x || vert.imageUv.x > cropMax.x || vert.imageUv.y < cropMin.y || vert.imageUv.y > cropMax.y ? 0.3f : 1.0f;
+
                 float4 imageVal = sample(image, image_sampler, vert.imageUv);
+                imageVal.a *= cropAlpha;
                 if (!hasReference) {
                     float4 color = float4(
                         applyTonemap(
@@ -354,6 +367,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
 
                 float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv);
+                referenceVal.a *= cropAlpha;
 
                 float3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5f;
@@ -411,7 +425,8 @@ void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
         pixelSize, checkerSize,
         nullptr, Matrix3f{0.0f},
         0.0f, 0.0f, 0.0f, false,
-        ETonemap::SRGB
+        ETonemap::SRGB,
+        std::nullopt
     );
 }
 
@@ -424,14 +439,16 @@ void UberShader::draw(
     float offset,
     float gamma,
     bool clipToLdr,
-    ETonemap tonemap
+    ETonemap tonemap,
+    const std::optional<Box2i>& crop
 ) {
     draw(
         pixelSize, checkerSize,
         textureImage, transformImage,
         nullptr, Matrix3f{0.0f},
         exposure, offset, gamma, clipToLdr,
-        tonemap, EMetric::Error
+        tonemap, EMetric::Error,
+        crop
     );
 }
 
@@ -447,7 +464,8 @@ void UberShader::draw(
     float gamma,
     bool clipToLdr,
     ETonemap tonemap,
-    EMetric metric
+    EMetric metric,
+    const std::optional<Box2i>& crop
 ) {
     bool hasImage = textureImage;
     if (!hasImage) {
@@ -467,6 +485,13 @@ void UberShader::draw(
     mShader->set_uniform("hasImage", hasImage);
     mShader->set_uniform("hasReference", hasReference);
     mShader->set_uniform("clipToLdr", clipToLdr);
+    if (crop.has_value()) {
+        mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
+        mShader->set_uniform("cropMax", Vector2f{crop->max} / Vector2f{textureImage->size()});
+    } else {
+        mShader->set_uniform("cropMin", Vector2f{-std::numeric_limits<float>::infinity()});
+        mShader->set_uniform("cropMax", Vector2f{std::numeric_limits<float>::infinity()});
+    }
 
     mShader->begin();
     mShader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, true);
