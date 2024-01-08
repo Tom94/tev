@@ -515,8 +515,6 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
     }
 
     auto* glfwWindow = screen()->glfw_window();
-
-    bool isDraggingImageButton = mDragType == EMouseDragType::ImageButtonDrag;
     if (down) {
         if (mDragType != EMouseDragType::ImageButtonDrag) {
             mDraggingStartPosition = p;
