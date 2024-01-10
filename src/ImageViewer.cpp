@@ -493,7 +493,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
 
             for (size_t i = 0; i < buttons.size(); ++i) {
                 const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
-                if (imgButton->contains(relMousePos) && !imgButton->textBoxVisible()) {
+                if (imgButton->visible() && imgButton->contains(relMousePos) && !imgButton->textBoxVisible()) {
                     mDraggingStartPosition = relMousePos - imgButton->position();
                     mDragType = EMouseDragType::ImageButtonDrag;
                     mDraggedImageButtonId = i;
@@ -623,14 +623,18 @@ bool ImageViewer::mouse_motion_event(
         case EMouseDragType::ImageButtonDrag: {
             auto& buttons = mImageButtonContainer->children();
             nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
+
+            TEV_ASSERT(mDraggedImageButtonId < buttons.size(), "Dragged image button id is out of bounds.");
+            auto* draggedImgButton = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId]);
             for (size_t i = 0; i < buttons.size(); ++i) {
                 if (i == mDraggedImageButtonId) {
                     continue;
                 }
+
                 auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
-                if (imgButton->contains(relMousePos)) {
+                if (imgButton->visible() && imgButton->contains(relMousePos)) {
                     nanogui::Vector2i pos = imgButton->position();
-                    pos.y() += ((int)mDraggedImageButtonId - (int)i) * imgButton->size().y();
+                    pos.y() += ((int)draggedImgButton->id() - (int)imgButton->id()) * imgButton->size().y();
                     imgButton->set_position(pos);
                     imgButton->mouse_enter_event(relMousePos, false);
 
@@ -1212,17 +1216,21 @@ void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
     TEV_ASSERT(oldIndex < mImages.size(), "oldIndex must be smaller than the number of images.");
     TEV_ASSERT(newIndex < mImages.size(), "newIndex must be smaller than the number of images.");
 
-    auto* button = mImageButtonContainer->child_at((int)oldIndex);
+    auto* button = dynamic_cast<ImageButton*>(mImageButtonContainer->child_at((int)oldIndex));
+    TEV_ASSERT(button, "Image button must exist.");
+
     button->inc_ref();
     mImageButtonContainer->remove_child_at((int)oldIndex);
     mImageButtonContainer->add_child((int)newIndex, button);
     button->dec_ref();
 
-    auto startI = std::min(oldIndex, newIndex);
-    auto endI = std::max(oldIndex, newIndex);
-    for (size_t i = startI; i <= endI; ++i) {
+    int change = newIndex > oldIndex ? 1 : -1;
+    for (size_t i = oldIndex; i != newIndex; i += change) {
         auto* curButton = dynamic_cast<ImageButton*>(mImageButtonContainer->child_at((int)i));
-        curButton->setId(i+1);
+        if (curButton->visible()) {
+            curButton->setId(curButton->id() - change);
+            button->setId(button->id() + change);
+        }
     }
 
     auto img = mImages[oldIndex];

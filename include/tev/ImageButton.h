@@ -79,6 +79,10 @@ public:
         mId = id;
     }
 
+    size_t id() const {
+        return mId;
+    }
+
     void setHighlightRange(size_t begin, size_t end);
 
     void showTextBox();
