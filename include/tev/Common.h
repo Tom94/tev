@@ -61,6 +61,16 @@ struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> 
     }
 };
 
+template <typename T, uint32_t N_DIMS>
+struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) {
+        std::ostringstream s;
+        s << v;
+        return formatter<std::string_view>::format(s.str(), ctx);
+    }
+};
+
 struct NVGcontext;
 
 namespace nanogui {

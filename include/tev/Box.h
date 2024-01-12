@@ -30,6 +30,16 @@ struct Box {
         return nanogui::max(max - min, Vector{(T)0});
     }
 
+    T area() const {
+        auto size = this->size();
+        T result = (T)1;
+        for (uint32_t i = 0; i < N_DIMS; ++i) {
+            result *= size[i];
+        }
+
+        return result;
+    }
+
     Vector middle() const {
         return (min + max) / (T)2;
     }
@@ -39,6 +49,7 @@ struct Box {
         for (uint32_t i = 0; i < N_DIMS; ++i) {
             result &= max[i] >= min[i];
         }
+
         return result;
     }
 
@@ -47,6 +58,7 @@ struct Box {
         for (uint32_t i = 0; i < N_DIMS; ++i) {
             result &= pos[i] >= min[i] && pos[i] < max[i];
         }
+
         return result;
     }
 
@@ -55,6 +67,7 @@ struct Box {
         for (uint32_t i = 0; i < N_DIMS; ++i) {
             result &= pos[i] >= min[i] && pos[i] <= max[i];
         }
+
         return result;
     }
 
@@ -81,12 +94,6 @@ struct Box {
     Vector min, max;
 };
 
-template <typename Stream, typename T, uint32_t N_DIMS, std::enable_if_t<std::is_base_of_v<std::ostream, Stream>, int> = 0>
-Stream& operator<<(Stream& os, const Box<T, N_DIMS>& v) {
-    os << '[' << v.min << ", " << v.max << ']';
-    return os;
-}
-
 using Box2f = Box<float, 2>;
 using Box3f = Box<float, 3>;
 using Box4f = Box<float, 4>;
@@ -95,3 +102,18 @@ using Box3i = Box<int32_t, 3>;
 using Box4i = Box<int32_t, 4>;
 
 }
+
+template <typename T, uint32_t N_DIMS>
+struct fmt::formatter<tev::Box<T, N_DIMS>> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const tev::Box<T, N_DIMS>& box, FormatContext& ctx) {
+        return formatter<std::string_view>::format(fmt::format("[{}, {}]", box.min, box.max), ctx);
+    }
+};
+
+template <typename Stream, typename T, uint32_t N_DIMS, std::enable_if_t<std::is_base_of_v<std::ostream, Stream>, int> = 0>
+Stream& operator<<(Stream& os, const tev::Box<T, N_DIMS>& v) {
+    os << '[' << v.min << ", " << v.max << ']';
+    return os;
+}
+

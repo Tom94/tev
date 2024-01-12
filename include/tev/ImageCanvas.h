@@ -36,38 +36,20 @@ public:
 
     void translate(const nanogui::Vector2f& amount);
     void scale(float amount, const nanogui::Vector2f& origin);
-    float scale() const {
-        return nanogui::extractScale(mTransform);
-    }
+    float scale() const { return nanogui::extractScale(mTransform); }
 
-    void setExposure(float exposure) {
-        mExposure = exposure;
-    }
-
-    void setOffset(float offset) {
-        mOffset = offset;
-    }
-
-    void setGamma(float gamma) {
-        mGamma = gamma;
-    }
+    void setExposure(float exposure) { mExposure = exposure; }
+    void setOffset(float offset) { mOffset = offset; }
+    void setGamma(float gamma) { mGamma = gamma; }
 
     float applyExposureAndOffset(float value) const;
 
-    void setImage(std::shared_ptr<Image> image) {
-        mImage = image;
-    }
+    void setImage(std::shared_ptr<Image> image) { mImage = image; }
+    void setReference(std::shared_ptr<Image> reference) { mReference = reference; }
+    void setRequestedChannelGroup(const std::string& groupName) { mRequestedChannelGroup = groupName; }
 
-    void setReference(std::shared_ptr<Image> reference) {
-        mReference = reference;
-    }
-
-    void setRequestedChannelGroup(const std::string& groupName) {
-        mRequestedChannelGroup = groupName;
-    }
-
-    nanogui::Vector2i getImageCoords(const Image& image, nanogui::Vector2i mousePos);
-    nanogui::Vector2i getDisplayWindowCoords(const Image& image, nanogui::Vector2i mousePos);
+    nanogui::Vector2i getImageCoords(const Image* image, nanogui::Vector2i mousePos);
+    nanogui::Vector2i getDisplayWindowCoords(const Image* image, nanogui::Vector2i mousePos);
 
     void getValuesAtNanoPos(nanogui::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);
     std::vector<float> getValuesAtNanoPos(nanogui::Vector2i nanoPos, const std::vector<std::string>& channels) {
@@ -76,59 +58,39 @@ public:
         return result;
     }
 
-    ETonemap tonemap() const {
-        return mTonemap;
-    }
-
-    void setTonemap(ETonemap tonemap) {
-        mTonemap = tonemap;
-    }
+    ETonemap tonemap() const { return mTonemap; }
+    void setTonemap(ETonemap tonemap) { mTonemap = tonemap; }
 
     static nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap);
     nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value) const {
         return applyTonemap(value, mGamma, mTonemap);
     }
 
-    EMetric metric() const {
-        return mMetric;
-    }
-
-    void setMetric(EMetric metric) {
-        mMetric = metric;
-    }
-
-    void setCrop(const std::optional<Box2i>& crop) {
-        mCrop = crop;
-    }
-
-    std::optional<Box2i> getCrop() {
-        return mCrop;
-    }
+    EMetric metric() const { return mMetric; }
+    void setMetric(EMetric metric) { mMetric = metric; }
 
     static float applyMetric(float value, float reference, EMetric metric);
     float applyMetric(float value, float reference) const {
         return applyMetric(value, reference, mMetric);
     }
 
-    auto backgroundColor() {
-        return mShader->backgroundColor();
-    }
+    std::optional<Box2i> crop() { return mCrop; }
+    void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
+    Box2i cropInImageCoords() const;
 
-    void setBackgroundColor(const nanogui::Color& color) {
-        mShader->setBackgroundColor(color);
-    }
+    auto backgroundColor() { return mShader->backgroundColor(); }
+    void setBackgroundColor(const nanogui::Color& color) { mShader->setBackgroundColor(color); }
 
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
-    void setClipToLdr(bool value) {
-        mClipToLdr = value;
-    }
+    bool clipToLdr() const { return mClipToLdr; }
+    void setClipToLdr(bool value) { mClipToLdr = value; }
 
-    bool clipToLdr() const {
-        return mClipToLdr;
-    }
-
+    // The following functions return four values per pixel in RGBA order. The number of pixels is given by
+    // `imageDataSize()`. If the canvas does not currently hold an image, or no channels are displayed, then zero pixels
+    // are returned.
+    nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
     std::vector<float> getHdrImageData(bool divideAlpha, int priority) const;
     std::vector<char> getLdrImageData(bool divideAlpha, int priority) const;
 
