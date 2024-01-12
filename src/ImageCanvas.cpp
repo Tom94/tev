@@ -285,7 +285,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         }
 
         if (mCrop.has_value()) {
-            drawWindow(mCrop.value(), CROP_COLOR, false, false, "Stats crop", flags);
+            drawWindow(mCrop.value(), CROP_COLOR, false, false, "Crop", flags);
         }
     };
 
@@ -484,17 +484,21 @@ float ImageCanvas::applyExposureAndOffset(float value) const {
     return pow(2.0f, mExposure) * value + mOffset;
 }
 
-Vector2i ImageCanvas::getImageCoords(const Image& image, Vector2i nanoPos) {
-    Vector2f imagePos = inverse(textureToNanogui(&image)) * Vector2f{nanoPos};
+Vector2i ImageCanvas::getImageCoords(const Image* image, Vector2i nanoPos) {
+    Vector2f imagePos = inverse(textureToNanogui(image)) * Vector2f{nanoPos};
     return {
         static_cast<int>(floor(imagePos.x())),
         static_cast<int>(floor(imagePos.y())),
     };
 }
 
-Vector2i ImageCanvas::getDisplayWindowCoords(const Image& image, Vector2i nanoPos) {
+Vector2i ImageCanvas::getDisplayWindowCoords(const Image* image, Vector2i nanoPos) {
     Vector2f imageCoords = getImageCoords(image, nanoPos);
-    return imageCoords + Vector2f(image.dataWindow().min - image.displayWindow().min);
+    if (image) {
+        imageCoords += Vector2f(image->dataWindow().min - image->displayWindow().min);
+    }
+
+    return imageCoords;
 }
 
 void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, const vector<string>& channels) {
@@ -503,7 +507,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
         return;
     }
 
-    auto imageCoords = getImageCoords(*mImage, nanoPos);
+    auto imageCoords = getImageCoords(mImage.get(), nanoPos);
     for (const auto& channel : channels) {
         const Channel* c = mImage->channel(channel);
         TEV_ASSERT(c, "Requested channel must exist.");
@@ -512,7 +516,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, co
 
     // Subtract reference if it exists.
     if (mReference) {
-        auto referenceCoords = getImageCoords(*mReference, nanoPos);
+        auto referenceCoords = getImageCoords(mReference.get(), nanoPos);
         for (size_t i = 0; i < result.size(); ++i) {
             bool isAlpha = Channel::isAlpha(channels[i]);
             float defaultVal = isAlpha && mReference->contains(referenceCoords) ? 1.0f : 0.0f;
@@ -574,6 +578,28 @@ float ImageCanvas::applyMetric(float image, float reference, EMetric metric) {
     }
 }
 
+Box2i ImageCanvas::cropInImageCoords() const {
+    if (!mImage) {
+        return Box2i{0};
+    }
+
+    // The user specifies a crop region in display window coordinates. First, intersect this crop window with the
+    // image's extent, then translate the crop window to the image's data window for canvas statistics computation.
+    Box2i region = mImage->dataWindow();
+    if (mCrop.has_value()) {
+        region = region.intersect(mCrop.value().translate(mImage->displayWindow().min));
+
+        // If there is no intersection between the crop and the image, return the empty region about the image origin.
+        if (!region.isValid()) {
+            return Box2i{0};
+        }
+    }
+
+    region = region.translate(-mImage->dataWindow().min);
+    TEV_ASSERT(region.isValid(), "Crop region must be valid.");
+    return region;
+}
+
 void ImageCanvas::fitImageToScreen(const Image& image) {
     Vector2f nanoguiImageSize = Vector2f{image.displayWindow().size()} / mPixelRatio;
     mTransform = Matrix3f::scale(Vector2f{min(m_size.x() / nanoguiImageSize.x(), m_size.y() / nanoguiImageSize.y())});
@@ -584,28 +610,30 @@ void ImageCanvas::resetTransform() {
 }
 
 std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
-    std::vector<float> result;
-
     if (!mImage) {
-        return result;
+        return {};
     }
 
     const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
-    auto numPixels = mImage->numPixels();
-
     if (channels.empty()) {
-        return result;
+        return {};
     }
 
+    auto imageRegion = cropInImageCoords();
+    size_t numPixels = (size_t)imageRegion.area();
     int nChannelsToSave = std::min((int)channels.size(), 4);
 
     // Flatten image into vector
-    result.resize(4 * numPixels, 0);
+    std::vector<float> result(4 * numPixels, 0);
 
-    ThreadPool::global().parallelFor(0, nChannelsToSave, [&channels, &result](int i) {
-        const auto& channelData = channels[i].data();
-        for (size_t j = 0; j < channelData.size(); ++j) {
-            result[j * 4 + i] = channelData[j];
+    ThreadPool::global().parallelFor(0, nChannelsToSave, [&channels, &result, &imageRegion](int i) {
+        const auto& channel = channels[i];
+        for (int y = imageRegion.min.y(); y < imageRegion.max.y(); ++y) {
+            int yresult = y - imageRegion.min.y();
+            for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
+                int xresult = x - imageRegion.min.x();
+                result[(yresult * imageRegion.size().x() + xresult) * 4 + i] = channel.at({x, y});
+            }
         }
     }, priority);
 
@@ -618,7 +646,7 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
-        ThreadPool::global().parallelFor(0, min(nChannelsToSave, 3), [&result,numPixels](int i) {
+        ThreadPool::global().parallelFor(0, min(nChannelsToSave, 3), [&result, numPixels](int i) {
             for (size_t j = 0; j < numPixels; ++j) {
                 float alpha = result[j * 4 + 3];
                 if (alpha == 0) {
@@ -634,19 +662,11 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
 }
 
 std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
-    std::vector<char> result;
-
-    if (!mImage) {
-        return result;
-    }
-
-    auto numPixels = mImage->numPixels();
+    // getHdrImageData always returns four floats per pixel (RGBA).
     auto floatData = getHdrImageData(divideAlpha, priority);
+    std::vector<char> result(floatData.size());
 
-    // Store as LDR image.
-    result.resize(floatData.size());
-
-    ThreadPool::global().parallelFor<size_t>(0, numPixels, [&](size_t i) {
+    ThreadPool::global().parallelFor<size_t>(0, floatData.size() / 4, [&](size_t i) {
         size_t start = 4 * i;
         Vector3f value = applyTonemap({
             applyExposureAndOffset(floatData[start]),
@@ -665,11 +685,10 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
 }
 
 void ImageCanvas::saveImage(const fs::path& path) const {
-    if (!mImage) {
-        return;
+    Vector2i imageSize = imageDataSize();
+    if (imageSize.x() == 0 || imageSize.y() == 0) {
+        throw runtime_error{"Can not save image with zero pixels."};
     }
-
-    Vector2i imageSize = mImage->size();
 
     tlog::info() << "Saving currently displayed image as " << path << ".";
     auto start = chrono::system_clock::now();
@@ -737,20 +756,11 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         return iter->second;
     }
 
-    static std::atomic<int> sId{0};
-    // Later requests must have higher priority than previous ones.
-    int priority = ++sId;
-
-    auto image = mImage, reference = mReference;
-    auto requestedChannelGroup = mRequestedChannelGroup;
-    auto metric = mMetric;
-
     promise<shared_ptr<CanvasStatistics>> promise;
     mCanvasStatistics.insert(make_pair(key, make_shared<Lazy<shared_ptr<CanvasStatistics>>>(promise.get_future())));
 
-    // Remember the keys associateed with the participating images. Such that their
-    // canvas statistics can be retrieved and deleted when either of the images
-    // is closed or mutated.
+    // Remember the keys associateed with the participating images. Such that their canvas statistics can be retrieved
+    // and deleted when either of the images is closed or mutated.
     mImageIdToCanvasStatisticsKey[mImage->id()].emplace_back(key);
     mImage->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
 
@@ -759,19 +769,16 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         mReference->setStaleIdCallback([this](int id) { purgeCanvasStatistics(id); });
     }
 
-    // The user specifies a crop region in display window coordinates.
-    // First, intersect this crop window with the image's extent, then translate
-    // the crop window to the image's data window for canvas statistics computation.
-    Box2i region = image->dataWindow();
-    if (mCrop.has_value()) {
-        region = region.intersect(mCrop.value().translate(image->displayWindow().min));
-    }
-
-    region = region.translate(-image->dataWindow().min);
-
+    // Later requests must have higher priority than previous ones.
+    static std::atomic<int> sId{0};
     invokeTaskDetached([
-        image, reference, requestedChannelGroup, metric,
-        region, priority, p=std::move(promise)
+        image=mImage,
+        reference=mReference,
+        requestedChannelGroup=mRequestedChannelGroup,
+        metric=mMetric,
+        region=cropInImageCoords(),
+        priority=++sId,
+        p=std::move(promise)
     ]() mutable -> Task<void> {
         co_await ThreadPool::global().enqueueCoroutine(priority);
         p.set_value(co_await computeCanvasStatistics(
@@ -856,6 +863,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const Box2i& region,
     int priority
 ) {
+    TEV_ASSERT(region.isValid(), "Region must be valid.");
     TEV_ASSERT(Box2i{image->size()}.contains(region), "Region must be contained in image.");
 
     auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
@@ -936,14 +944,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     auto regionSize = region.size();
-    auto numPixels = (size_t)regionSize.x() * regionSize.y();
+    auto numPixels = region.area();
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
-            ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&, i](size_t j) {
+            ThreadPool::global().parallelForAsync(0, numPixels, [&, i](int j) {
                 int x = (j % regionSize.x()) + region.min.x();
                 int y = (j / regionSize.x()) + region.min.y();
                 indices[j + i * numPixels] = valToBin(channel.at(Vector2i{x, y}));
@@ -956,7 +964,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     co_await ThreadPool::global().parallelForAsync(0, nChannels, [&](int i) {
-        for (size_t j = 0; j < numPixels; ++j) {
+        for (int j = 0; j < numPixels; ++j) {
             result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
         }
     }, priority);

@@ -521,7 +521,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
             if (canDragSidebarFrom(p)) {
                 mDragType = EMouseDragType::SidebarDrag;
                 return true;
-            } else if (mImageCanvas->contains(p)) {
+            } else if (mImageCanvas->contains(p) && mCurrentImage) {
                 mDragType = glfwGetKey(glfwWindow, GLFW_KEY_C) ? EMouseDragType::ImageCrop : EMouseDragType::ImageDrag;
                 return true;
             }
@@ -607,8 +607,8 @@ bool ImageViewer::mouse_motion_event(
                 return false;
             }
 
-            auto startImageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relStartMousePos);
-            auto imageCoords = mImageCanvas->getDisplayWindowCoords(*mCurrentImage, relMousePos);
+            auto startImageCoords = mImageCanvas->getDisplayWindowCoords(mCurrentImage.get(), relStartMousePos);
+            auto imageCoords = mImageCanvas->getDisplayWindowCoords(mCurrentImage.get(), relMousePos);
 
             // sanitize the input crop
             Box2i crop = {{startImageCoords, imageCoords}};
@@ -817,9 +817,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 } else {
                     tlog::error() << "Failed to copy image path to clipboard.";
                 }
-            } else {
-                auto imageSize = mCurrentImage->size();
-
+            } else if (auto imageSize = mImageCanvas->imageDataSize(); imageSize.x() > 0 && imageSize.y() > 0) {
                 clip::image_spec imageMetadata;
                 imageMetadata.width = imageSize.x();
                 imageMetadata.height = imageSize.y();
@@ -2053,7 +2051,7 @@ void ImageViewer::updateTitle() {
 
         auto rel = mouse_pos() - mImageCanvas->position();
         vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
-        nanogui::Vector2i imageCoords = mImageCanvas->getImageCoords(*mCurrentImage, {rel.x(), rel.y()});
+        nanogui::Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
         TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
         string valuesString;
