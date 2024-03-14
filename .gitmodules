@@ -1,9 +1,12 @@
 [submodule "dependencies/args"]
 	path = dependencies/args
 	url = https://github.com/Taywee/args
+[submodule "dependencies/Imath"]
+	path = dependencies/Imath
+	url = https://github.com/AcademySoftwareFoundation/Imath
 [submodule "dependencies/openexr"]
 	path = dependencies/openexr
-	url = https://github.com/mitsuba-renderer/openexr
+	url = https://github.com/AcademySoftwareFoundation/openexr
 [submodule "dependencies/zlib"]
 	path = dependencies/zlib
 	url = https://github.com/Tom94/zlib

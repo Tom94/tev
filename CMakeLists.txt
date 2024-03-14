@@ -140,7 +140,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
 
-set(TEV_LIBS clip IlmImf nanogui ${NANOGUI_EXTRA_LIBS})
+set(TEV_LIBS clip OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()

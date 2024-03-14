@@ -4,9 +4,11 @@
 #include <tev/imageio/ExrImageSaver.h>
 
 #include <ImfChannelList.h>
+#include <ImfHeader.h>
+#include <ImfFrameBuffer.h>
 #include <ImfOutputFile.h>
 #include <ImfInputPart.h>
-#include <ImfMultiPartInputFile.h>
+#include <ImfIO.h>
 #include <Iex.h>
 
 #include <ostream>
@@ -30,11 +32,11 @@ public:
         checkError(mStream);
     }
 
-    Imf::Int64 tellp() {
+    uint64_t tellp() {
         return std::streamoff(mStream.tellp());
     }
 
-    void seekp(Imf::Int64 pos) {
+    void seekp(uint64_t pos) {
         mStream.seekp(pos);
         checkError(mStream);
     }

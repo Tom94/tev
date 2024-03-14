@@ -6,6 +6,7 @@
 
 #include <ImfChannelList.h>
 #include <ImfChromaticities.h>
+#include <ImfFrameBuffer.h>
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
 #include <ImfMultiPartInputFile.h>
@@ -36,11 +37,11 @@ public:
         return checkError(mStream, n);
     }
 
-    Imf::Int64 tellg() override {
+    uint64_t tellg() override {
         return streamoff(mStream.tellg());
     }
 
-    void seekg(Imf::Int64 pos) override {
+    void seekg(uint64_t pos) override {
         mStream.seekg(pos);
         checkError(mStream);
     }
@@ -110,12 +111,12 @@ public:
     template <typename T>
     Task<void> copyToTyped(Channel& channel, int priority) const {
         int width = channel.size().x();
-        int widthSubsampled = width/mImfChannel.ySampling;
+        int widthSubsampled = width / mImfChannel.ySampling;
 
         auto data = reinterpret_cast<const T*>(mData.data());
         co_await ThreadPool::global().parallelForAsync<int>(0, channel.size().y(), [&, data](int y) {
             for (int x = 0; x < width; ++x) {
-                channel.at({x, y}) = data[x/mImfChannel.xSampling + (y/mImfChannel.ySampling) * widthSubsampled];
+                channel.at({x, y}) = data[x / mImfChannel.xSampling + (y / mImfChannel.ySampling) * widthSubsampled];
             }
         }, priority);
     }
