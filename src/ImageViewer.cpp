@@ -18,7 +18,6 @@
 #include <nanogui/vscrollpanel.h>
 
 #include <chrono>
-#include <iostream>
 #include <stdexcept>
 
 using namespace nanogui;
