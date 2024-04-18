@@ -696,10 +696,6 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
         auto images = co_await tryLoadImage(taskPriority, path, channelSelector);
 
-        if (images.empty()) {
-            co_return;
-        }
-
         {
             std::lock_guard lock{mPendingLoadedImagesMutex};
             mPendingLoadedImages.push({ loadId, shallSelect, images, toReplace });
