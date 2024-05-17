@@ -356,7 +356,7 @@ int mainFunc(const vector<string>& arguments) {
     thread stdinThread{[&]() {
         string channelSelector;
         while (!shuttingDown()) {
-            for (string line; getline(cin, line);) {
+            for (string line; getline(cin, line) && !shuttingDown();) {
                 string imageFile = tev::ensureUtf8(line);
 
                 if (imageFile.empty()) {
@@ -371,7 +371,7 @@ int mainFunc(const vector<string>& arguments) {
                 imagesLoader->enqueue(tev::toPath(imageFile), channelSelector, false);
             }
 
-            this_thread::sleep_for(100ms);
+            this_thread::sleep_for(10ms);
         }
     }};
 
