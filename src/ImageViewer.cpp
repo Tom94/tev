@@ -683,7 +683,17 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
 
     // Keybindings which should _not_ respond to repeats
     if (action == GLFW_PRESS) {
-        if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9 && !(modifiers & SYSTEM_COMMAND_MOD)) {
+        // The checks for mod + GLFW_KEY_0 and GLFW_KEY_9 need to happen prior to checking for generic number
+        // keys as they should take priority over group switching on Windows/Linux. No conflics on macOS.
+        if (key == GLFW_KEY_0 && (modifiers & SYSTEM_COMMAND_MOD)) {
+            mImageCanvas->resetTransform();
+            return true;
+        } else if (key == GLFW_KEY_F || (key == GLFW_KEY_9 && (modifiers & SYSTEM_COMMAND_MOD))) {
+            if (mCurrentImage) {
+                mImageCanvas->fitImageToScreen(*mCurrentImage);
+            }
+            return true;
+        } else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
             int idx = (key - GLFW_KEY_1 + 10) % 10;
             if (modifiers & GLFW_MOD_SHIFT) {
                 const auto& image = nthVisibleImage(idx);
@@ -755,9 +765,6 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 mCurrentReference->decomposeChannelGroup(mCurrentGroup);
                 selectReference(mCurrentReference);
             }
-        } else if (key == GLFW_KEY_0 && (modifiers & SYSTEM_COMMAND_MOD)) {
-            mImageCanvas->resetTransform();
-            return true;
         } else if (key == GLFW_KEY_B && (modifiers & SYSTEM_COMMAND_MOD)) {
             setUiVisible(!isUiVisible());
             return true;
@@ -769,11 +776,6 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_P && (modifiers & SYSTEM_COMMAND_MOD)) {
             mFilter->request_focus();
-            return true;
-        } else if (key == GLFW_KEY_F || (key == GLFW_KEY_9 && (modifiers & SYSTEM_COMMAND_MOD))) {
-            if (mCurrentImage) {
-                mImageCanvas->fitImageToScreen(*mCurrentImage);
-            }
             return true;
         } else if (
             key == GLFW_KEY_H || /* question mark on US layout */ (
