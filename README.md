@@ -37,7 +37,7 @@ Images can be opened via a file dialog or by dragging them into __tev__.
 They can be reloaded, closed, or filtered at any time, so don't worry about opening more images than exactly needed.
 
 Select an image by left-clicking it, and optionally select a reference image to compare the current selection to by right-clicking.
-For convenience, the current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts click the little "?" icon at the top (or press "h").
+For convenience, the current selection can be moved with the Up/Down or the 1-9 keys. For a comprehensive list of keyboard shortcuts click the little "?" icon at the top (or press "h") or view [this online visualization](https://keycombiner.com/collecting/collections/shared/f050cc02-f23a-425c-b032-b4c3659c7ef4).
 
 If the interface seems overwhelming, you can hover any controls to view an explanatory tooltip.
 
