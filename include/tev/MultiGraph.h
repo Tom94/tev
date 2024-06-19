@@ -1,6 +1,6 @@
 // This file was adapted from the nanogui::Graph class, which was developed
 // by Wenzel Jakob <wenzel.jakob@epfl.ch> and based on the NanoVG demo application
-// by Mikko Mononen. Modifications were developed by Thomas Müller <thomas94@gmx.net>.
+// by Mikko Mononen. Modifications were developed by Thomas Müller <contact@tom94.net>.
 // This file is published under the BSD 3-Clause License within the LICENSE file.
 
 #pragma once

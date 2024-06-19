@@ -1,4 +1,4 @@
-// This file was developed by Thomas Müller <thomas94@gmx.net>.
+// This file was developed by Thomas Müller <contact@tom94.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/Image.h>
@@ -147,7 +147,7 @@ int mainFunc(const vector<string>& arguments) {
         "tev — The EXR Viewer\n"
         "version " TEV_VERSION "\n"
         "Inspection tool for images with high dynamic range",
-        "tev was developed by Thomas Müller <thomas94@gmx.net>. "
+        "tev was developed by Thomas Müller <contact@tom94.net>. "
         "Its source code is available under the BSD 3-Clause License at https://tom94.net",
     };
 
