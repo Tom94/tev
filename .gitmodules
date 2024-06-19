@@ -34,3 +34,6 @@
 [submodule "scripts/create-dmg"]
 	path = scripts/create-dmg
 	url = https://github.com/create-dmg/create-dmg
+[submodule "dependencies/libdeflate"]
+	path = dependencies/libdeflate
+	url = https://github.com/ebiggers/libdeflate
