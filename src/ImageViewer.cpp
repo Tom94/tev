@@ -25,7 +25,7 @@ using namespace std;
 
 namespace tev {
 
-static const int SIDEBAR_MIN_WIDTH = 230;
+static const int SIDEBAR_MIN_WIDTH = 245;
 static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
@@ -214,7 +214,7 @@ ImageViewer::ImageViewer(
     // Tonemap options
     {
         mTonemapButtonContainer = new Widget{mSidebarLayout};
-        mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+        mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeTonemapButton = [&](const string& name, function<void()> callback) {
             auto button = new Button{mTonemapButtonContainer, name};
@@ -228,6 +228,7 @@ ImageViewer::ImageViewer(
         makeTonemapButton("Gamma", [this]() { setTonemap(ETonemap::Gamma); });
         makeTonemapButton("FC",    [this]() { setTonemap(ETonemap::FalseColor); });
         makeTonemapButton("+/-",   [this]() { setTonemap(ETonemap::PositiveNegative); });
+        makeTonemapButton("Hash",  [this]() { setTonemap(ETonemap::Hash); });
 
         setTonemap(ETonemap::SRGB);
 
@@ -244,7 +245,10 @@ ImageViewer::ImageViewer(
             "False-color visualization\n\n"
 
             "+/-\n"
-            "Positive=Green, Negative=Red"
+            "Positive=Green, Negative=Red\n\n"
+
+            "Hash\n"
+            "Hash values to random colors"
         );
     }
 

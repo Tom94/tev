@@ -558,6 +558,17 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, float gamma, ETonemap 
                 result = {-2.0f * mean(min(value, Vector3f{0.0f})), 2.0f * mean(max(value, Vector3f{0.0f})), 0.0f};
                 break;
             }
+        case ETonemap::Hash:
+            {
+                static const auto fract = [](float x){ return x - floor(x); };
+                result = value;
+                result *= {abs(result.x()) < 1024.0f ? 1.0f : 1.0f / 1024.0f, abs(result.y()) < 1024.0f ? 1.0f : 1.0f / 1024.0f, abs(result.z()) < 1024.0f ? 1.0f : 1.0f / 1024.0f};
+                result *= {abs(result.x()) < 1024.0f ? 1.0f : 1.0f / 1024.0f, abs(result.y()) < 1024.0f ? 1.0f : 1.0f / 1024.0f, abs(result.z()) < 1024.0f ? 1.0f : 1.0f / 1024.0f};
+                result *= {abs(result.x()) < 1024.0f ? 1.0f : 1.0f / 1024.0f, abs(result.y()) < 1024.0f ? 1.0f : 1.0f / 1024.0f, abs(result.z()) < 1024.0f ? 1.0f : 1.0f / 1024.0f};
+                result = abs(fract(dot(result, Vector3f{115.191742f, 64.0546951f, 124.512291f})) - 0.5f) * Vector3f{1368.46143f, 1523.2019f, 1034.50476f};
+                result = {2.0f * abs(fract(result.x()) - 0.5f), 2.0f * abs(fract(result.y()) - 0.5f), 2.0f * abs(fract(result.z()) - 0.5f)};
+                break;
+            }
         default:
             throw runtime_error{"Invalid tonemap selected."};
     }
