@@ -891,18 +891,19 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
 
-    int pixelCount = 0;
+    size_t pixelCount = region.area();
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         for (int y = region.min.y(); y < region.max.y(); ++y) {
             for (int x = region.min.x(); x < region.max.x(); ++x) {
-                auto v = channel.at(Vector2i{x, y});
-                if (!isnan(v)) {
-                    mean += v;
-                    maximum = max(maximum, v);
-                    minimum = min(minimum, v);
-                    pixelCount++;
+                auto v = channel.at({x, y});
+                if (!isfinite(v)) {
+                    continue;
                 }
+
+                mean += v;
+                maximum = max(maximum, v);
+                minimum = min(minimum, v);
             }
         }
     }
@@ -944,17 +945,17 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     auto regionSize = region.size();
-    auto numPixels = region.area();
+    size_t numPixels = region.area();
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
     for (int i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
-            ThreadPool::global().parallelForAsync(0, numPixels, [&, i](int j) {
+            ThreadPool::global().parallelForAsync((size_t)0, numPixels, [&, i](size_t j) {
                 int x = (j % regionSize.x()) + region.min.x();
                 int y = (j / regionSize.x()) + region.min.y();
-                indices[j + i * numPixels] = valToBin(channel.at(Vector2i{x, y}));
+                indices[j + i * numPixels] = valToBin(channel.at({x, y}));
             }, priority)
         );
     }

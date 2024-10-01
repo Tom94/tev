@@ -79,7 +79,7 @@ void Channel::updateTile(int x, int y, int width, int height, const vector<float
 
     for (int posY = 0; posY < height; ++posY) {
         for (int posX = 0; posX < width; ++posX) {
-            at({x + posX, y + posY}) = newData[posX + posY * width];
+            at({x + posX, y + posY}) = newData[posX + posY * (size_t)width];
         }
     }
 }

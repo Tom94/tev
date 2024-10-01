@@ -490,7 +490,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
 
                 for (int posY = 0; posY < height; ++posY) {
                     for (int posX = 0; posX < width; ++posX) {
-                        int tileIdx = posX + posY * width;
+                        size_t tileIdx = posX + posY * (size_t)width;
                         textureData[tileIdx * 4 + i] = localChan->at({x + posX, y + posY});
                     }
                 }

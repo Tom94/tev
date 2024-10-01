@@ -30,11 +30,12 @@ struct Box {
         return nanogui::max(max - min, Vector{(T)0});
     }
 
-    T area() const {
+    using area_t = std::conditional_t<std::is_integral_v<T>, size_t, T>;
+    area_t area() const {
         auto size = this->size();
-        T result = (T)1;
+        area_t result = (T)1;
         for (uint32_t i = 0; i < N_DIMS; ++i) {
-            result *= size[i];
+            result *= (area_t)size[i];
         }
 
         return result;

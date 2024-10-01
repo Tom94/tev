@@ -116,7 +116,7 @@ public:
         auto data = reinterpret_cast<const T*>(mData.data());
         co_await ThreadPool::global().parallelForAsync<int>(0, channel.size().y(), [&, data](int y) {
             for (int x = 0; x < width; ++x) {
-                channel.at({x, y}) = data[x / mImfChannel.xSampling + (y / mImfChannel.ySampling) * widthSubsampled];
+                channel.at({x, y}) = data[x / mImfChannel.xSampling + (y / mImfChannel.ySampling) * (size_t)widthSubsampled];
             }
         }, priority);
     }

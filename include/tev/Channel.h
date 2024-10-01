@@ -49,7 +49,7 @@ public:
             return 0;
         }
 
-        return mData[index.x() + index.y() * mSize.x()];
+        return mData[index.x() + index.y() * (size_t)mSize.x()];
     }
 
     float& at(size_t index) {
@@ -61,11 +61,11 @@ public:
     }
 
     float& at(nanogui::Vector2i index) {
-        return at(index.x() + index.y() * mSize.x());
+        return at(index.x() + index.y() * (size_t)mSize.x());
     }
 
     float at(nanogui::Vector2i index) const {
-        return at(index.x() + index.y() * mSize.x());
+        return at(index.x() + index.y() * (size_t)mSize.x());
     }
 
     size_t numPixels() const {
