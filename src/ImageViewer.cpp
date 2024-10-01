@@ -1001,7 +1001,7 @@ void ImageViewer::draw_contents() {
     //                 the old window size is restored _several times_, necessitating
     //                 a repeated resize to the actually desired window size.
     if (mDidFitToImage < 3 && !isMaximized()) {
-        set_size(sizeToFitAllImages());
+        resizeToFit(sizeToFitAllImages());
         ++mDidFitToImage;
     }
 
@@ -1202,7 +1202,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     if ((index == 0 && mImages.size() == 1) || shallSelect) {
         selectImage(image);
         if (!isMaximized()) {
-            set_size(sizeToFitImage(image));
+            resizeToFit(sizeToFitImage(image));
         }
     }
 }
@@ -1710,8 +1710,7 @@ nanogui::Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
         requiredSize.y() += mFooter->fixed_height();
     }
 
-    // Only increase our current size if we are larger than the current size of the window.
-    return max(m_size, requiredSize);
+    return requiredSize;
 }
 
 nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
@@ -1720,6 +1719,19 @@ nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
         result = max(result, sizeToFitImage(image));
     }
     return result;
+}
+
+void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
+    // Only increase our current size if we are larger than the current size of the window.
+    targetSize = max(m_size, targetSize);
+    if (targetSize == m_size) {
+        return;
+    }
+
+    // For sanity, don't make us larger than 8192x8192 to ensure that we
+    // don't break any texture size limitations of the user's GPU.
+    targetSize = min(targetSize, nanogui::Vector2i{8192, 8192});
+    set_size(targetSize);
 }
 
 bool ImageViewer::playingBack() const {

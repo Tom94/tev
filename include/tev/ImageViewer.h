@@ -121,6 +121,7 @@ public:
 
     nanogui::Vector2i sizeToFitImage(const std::shared_ptr<Image>& image);
     nanogui::Vector2i sizeToFitAllImages();
+    void resizeToFit(nanogui::Vector2i size);
 
     bool playingBack() const;
     void setPlayingBack(bool value);
