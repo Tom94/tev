@@ -271,6 +271,8 @@ private:
     nanogui::Button* mClipToLdrButton;
 
     int mDidFitToImage = 0;
+
+    nanogui::Vector2i mMaxSize = {8192, 8192};
 };
 
 }

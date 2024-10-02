@@ -53,6 +53,27 @@ ImageViewer::ImageViewer(
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
+    // Get monitor configuration to figure out how large the tev window may
+    // maximally become.
+    {
+        int monitorCount;
+        auto** monitors = glfwGetMonitors(&monitorCount);
+        if (monitors && monitorCount > 0) {
+            nanogui::Vector2i
+                monitorMin{numeric_limits<int>::max(), numeric_limits<int>::max()},
+                monitorMax{numeric_limits<int>::min(), numeric_limits<int>::min()};
+
+            for (int i = 0; i < monitorCount; ++i) {
+                nanogui::Vector2i pos, size;
+                glfwGetMonitorWorkarea(monitors[i], &pos.x(), &pos.y(), &size.x(), &size.y());
+                monitorMin = min(monitorMin, pos);
+                monitorMax = max(monitorMax, pos + size);
+            }
+
+            mMaxSize = min(mMaxSize, max(monitorMax - monitorMin, nanogui::Vector2i{1024, 800}));
+        }
+    }
+
     m_background = Color{0.23f, 1.0f};
 
     mVerticalScreenSplit = new Widget{this};
@@ -1730,7 +1751,7 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
 
     // For sanity, don't make us larger than 8192x8192 to ensure that we
     // don't break any texture size limitations of the user's GPU.
-    targetSize = min(targetSize, nanogui::Vector2i{8192, 8192});
+    targetSize = min(targetSize, mMaxSize);
     set_size(targetSize);
 }
 
