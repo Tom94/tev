@@ -36,7 +36,7 @@ jobs:
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target package --verbose
       - name: Upload AppImage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Linux executable
           path: ${{ env.build_dir }}/tev.appimage
@@ -51,7 +51,7 @@ jobs:
       - name: Build
         run: scripts/create-dmg.sh
       - name: Upload .dmg
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macOS installer
           path: tev.dmg
@@ -75,12 +75,12 @@ jobs:
         working-directory: ${{ env.build_dir }}
         run: cpack
       - name: Upload executable
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Windows executable
           path: ${{ env.build_dir }}/${{ env.config }}/tev.exe
       - name: Upload installer
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Windows installer
           path: ${{ env.build_dir }}/tev-installer.msi
