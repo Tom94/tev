@@ -232,6 +232,8 @@ ETonemap toTonemap(string name) {
         return FalseColor;
     } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" ||name == "+-") {
         return PositiveNegative;
+    } else if (name == "HASH") {
+        return Hash;
     } else {
         return SRGB;
     }
