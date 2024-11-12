@@ -889,10 +889,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     auto result = make_shared<CanvasStatistics>();
 
-    int nChannels = result->nChannels = alphaChannel ? (int)flattened.size() - 1 : (int)flattened.size();
+    size_t nChannels = result->nChannels = alphaChannel ? flattened.size() - 1 : flattened.size();
 
-    size_t pixelCount = region.area();
-    for (int i = 0; i < nChannels; ++i) {
+    for (size_t i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         for (int y = region.min.y(); y < region.max.y(); ++y) {
             for (int x = region.min.x(); x < region.max.x(); ++x) {
@@ -908,13 +907,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    result->mean = pixelCount > 0 ? (float)(mean / pixelCount) : 0;
+    size_t totalNumPixels = nChannels * region.area();
+    result->mean = totalNumPixels > 0 ? (float)(mean / totalNumPixels) : 0;
     result->maximum = maximum;
     result->minimum = minimum;
 
     // Now that we know the maximum and minimum value we can define our histogram bin size.
-    static const int NUM_BINS = 400;
-    result->histogram.resize(NUM_BINS*nChannels);
+    static const size_t NUM_BINS = 400;
+    result->histogram.resize(NUM_BINS * nChannels);
 
     // We're going to draw our histogram in log space.
     static const float addition = 0.001f;
@@ -930,7 +930,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     float diffLog = symmetricLog(maximum) - minLog;
 
     auto valToBin = [&](float val) {
-        return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, NUM_BINS - 1);
+        return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, (int)NUM_BINS - 1);
     };
 
     result->histogramZero = valToBin(0);
@@ -949,7 +949,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
-    for (int i = 0; i < nChannels; ++i) {
+    for (size_t i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
         tasks.emplace_back(
             ThreadPool::global().parallelForAsync((size_t)0, numPixels, [&, i](size_t j) {
@@ -964,14 +964,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_await task;
     }
 
-    co_await ThreadPool::global().parallelForAsync(0, nChannels, [&](int i) {
-        for (int j = 0; j < numPixels; ++j) {
+    co_await ThreadPool::global().parallelForAsync((size_t)0, nChannels, [&](size_t i) {
+        for (size_t j = 0; j < numPixels; ++j) {
             result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
         }
     }, priority);
 
-    for (int i = 0; i < nChannels; ++i) {
-        for (int j = 0; j < NUM_BINS; ++j) {
+    for (size_t i = 0; i < nChannels; ++i) {
+        for (size_t j = 0; j < NUM_BINS; ++j) {
             result->histogram[j + i * NUM_BINS] /= binToVal(j + 1) - binToVal(j);
         }
     }
@@ -983,8 +983,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
     float norm = 1.0f / (max(tmp[idx], 0.1f) * 1.3f);
-    for (int i = 0; i < nChannels; ++i) {
-        for (int j = 0; j < NUM_BINS; ++j) {
+    for (size_t i = 0; i < nChannels; ++i) {
+        for (size_t j = 0; j < NUM_BINS; ++j) {
             result->histogram[j + i * NUM_BINS] *= norm;
         }
     }
