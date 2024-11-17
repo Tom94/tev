@@ -459,6 +459,13 @@ ImageViewer::ImageViewer(
                 }
             }, FA_TIMES, fmt::format("Close ({}+W); Close All ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)));
 
+
+            mImageInfoButton = new Button{tools, "", FA_INFO};
+            mImageInfoButton->set_change_callback([this](bool) { toggleImageInfoWindow(); });
+            mImageInfoButton->set_font_size(15);
+            mImageInfoButton->set_tooltip("Show metadata");
+            mImageInfoButton->set_flags(Button::ToggleButton);
+
             spacer = new Widget{mSidebarLayout};
             spacer->set_height(3);
         }
@@ -1825,6 +1832,23 @@ void ImageViewer::toggleHelpWindow() {
         mHelpWindow->center();
         mHelpWindow->request_focus();
         mHelpButton->set_pushed(true);
+    }
+
+    requestLayoutUpdate();
+}
+
+void ImageViewer::toggleImageInfoWindow() {
+    if (mImageInfoWindow) {
+        mImageInfoWindow->dispose();
+        mImageInfoWindow = nullptr;
+        mImageInfoButton->set_pushed(false);
+    } else {
+        if (mCurrentImage){
+            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
+            mImageInfoWindow->center();
+            mImageInfoWindow->request_focus();
+            mImageInfoButton->set_pushed(true);
+        }
     }
 
     requestLayoutUpdate();

@@ -11,6 +11,7 @@
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
 #include <tev/VectorGraphics.h>
+#include <tev/ImageInfoWindow.h>
 
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
@@ -144,6 +145,7 @@ public:
     void setUiVisible(bool shouldBeVisible);
 
     void toggleHelpWindow();
+    void toggleImageInfoWindow();
 
     void openImageDialog();
     void saveImageDialog();
@@ -234,6 +236,8 @@ private:
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
+    nanogui::Button* mImageInfoButton;
+    ImageInfoWindow* mImageInfoWindow = nullptr;
 
     // Buttons which require at least one image to be meaningful
     std::vector<nanogui::Button*> mAnyImageButtons;

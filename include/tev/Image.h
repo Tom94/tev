@@ -32,6 +32,7 @@ struct ImageData {
     std::vector<std::string> layers;
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
     bool hasPremultipliedAlpha;
+    std::map<std::string, std::string> attributes;
 
     Box2i dataWindow;
     Box2i displayWindow;
@@ -211,6 +212,10 @@ public:
     }
 
     std::string toString() const;
+
+    const std::map<std::string,std::string> attributes() const {
+        return mData.attributes;
+    }
 
 private:
     static std::atomic<int> sId;
