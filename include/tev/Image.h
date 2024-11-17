@@ -40,6 +40,13 @@ namespace tev {
 
 class ImageLoader;
 
+struct AttributeNode {
+    std::string name;
+    std::string value;
+    std::string type;
+    std::vector<AttributeNode> children;
+};
+
 struct ImageData {
     ImageData() = default;
     ImageData(const ImageData&) = delete;
@@ -52,6 +59,7 @@ struct ImageData {
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
     bool hasPremultipliedAlpha = false;
     EOrientation orientation = EOrientation::TopLeft;
+    AttributeNode attributes;
 
     Box2i dataWindow;
     Box2i displayWindow;
@@ -196,6 +204,8 @@ public:
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
     std::string toString() const;
+
+    const AttributeNode& attributes() const { return mData.attributes; }
 
 private:
     static std::atomic<int> sId;
