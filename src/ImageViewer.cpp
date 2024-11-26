@@ -709,6 +709,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         if (key == GLFW_KEY_0 && (modifiers & SYSTEM_COMMAND_MOD)) {
             mImageCanvas->resetTransform();
             return true;
+        } else if (key == GLFW_KEY_F && (modifiers & SYSTEM_COMMAND_MOD)) {
+            mFilter->request_focus();
+            return true;
         } else if (key == GLFW_KEY_F || (key == GLFW_KEY_9 && (modifiers & SYSTEM_COMMAND_MOD))) {
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
@@ -794,9 +797,6 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_S && (modifiers & SYSTEM_COMMAND_MOD)) {
             saveImageDialog();
-            return true;
-        } else if (key == GLFW_KEY_P && (modifiers & SYSTEM_COMMAND_MOD)) {
-            mFilter->request_focus();
             return true;
         } else if (
             key == GLFW_KEY_H || /* question mark on US layout */ (

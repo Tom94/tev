@@ -135,7 +135,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(ui, ALT + "+Enter", "Maximize");
     addRow(ui, COMMAND + "+B", "Toggle GUI");
     addRow(ui, "H or ?",        "Show help (this window)");
-    addRow(ui, COMMAND + "+P", "Find image or channel group");
+    addRow(ui, COMMAND + "+F", "Find image or channel group");
     addRow(ui, "Escape",       "Reset find string");
     addRow(ui, COMMAND + "+Q", "Quit");
 
