@@ -18,6 +18,8 @@
             gdb
             cmake
             pkg-config
+            binutils
+            zlib
 
             xorg.libX11.dev
             xorg.libXi.dev
