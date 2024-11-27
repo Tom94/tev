@@ -24,6 +24,11 @@ endif()
 # Not available until cmake 3.6, but doesn't break older versions.
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT tev)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL " ")
+if (CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()
+
 # Set a default configuration if none was specified
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "No release type specified. Setting to 'Release'.")
