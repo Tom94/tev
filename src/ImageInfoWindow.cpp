@@ -2,6 +2,7 @@
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
 #include <tev/ImageInfoWindow.h>
+#include <sstream>
 
 #include <nanogui/button.h>
 #include <nanogui/icons.h>
@@ -30,6 +31,28 @@ string ImageInfoWindow::ALT = "Opt";
 string ImageInfoWindow::ALT = "Alt";
 #endif
 
+void addRow(Widget* current, const string& name, const string& type, const string& value, int indentation) {
+    auto row = new Widget{current};
+    row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Maximum, 0, 0});
+    std::ostringstream oss;
+    for (int i=0; i<indentation; ++i) {
+        oss << "-";
+    }
+    if (indentation > 0){
+        oss << "> ";
+    }
+    oss << name;
+    auto nameWidget = new Label{row, oss.str(), "sans-bold"};
+    nameWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
+    nameWidget->set_fixed_width(150);
+    auto valueWidget = new Label{row, value, "sans"};
+    valueWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
+    valueWidget->set_fixed_width(150);
+    auto typeWidget = new Label{row, type, "sans"};
+    typeWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
+    typeWidget->set_fixed_width(150);
+};
+
 ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& image, bool supportsHdr, function<void()> closeCallback)
     : Window{parent, "Info"}, mCloseCallback{closeCallback} {
 
@@ -37,7 +60,7 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     closeButton->set_callback(mCloseCallback);
 
     set_layout(new GroupLayout{});
-    set_fixed_width(400);
+    set_fixed_width(550);
 
     TabWidget* tabWidget = new TabWidget{this};
 
@@ -50,21 +73,18 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     Widget* shortcuts = new Widget(scrollPanel);
     shortcuts->set_layout(new GroupLayout{});
 
-    auto addRow = [](Widget* current, string keys, string desc) {
-        auto row = new Widget{current};
-        row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Maximum, 0, 10});
-        auto fieldsWidget = new Label{row, keys, "sans-bold"};
-        auto descWidget = new Label{row, desc, "sans"};
-        descWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
-        descWidget->set_fixed_width(250);
-    };
-
     new Label{shortcuts, "Attributes", "sans-bold", 18};
     auto imageLoading = new Widget{shortcuts};
     imageLoading->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    for (const auto& it:image->attributes()) {
-        addRow(imageLoading, it.first, it.second);
+    addRow(imageLoading, "name", "type", "value", 0);
+    for (const auto& it:(image->attributes().children)) {
+        addRow(imageLoading, it.name, it.type, it.value, 0);
+        if (it.children.size() > 0 ){
+            for (const auto& itChild:(it.children)) {
+                addRow(imageLoading, itChild.name, itChild.type, itChild.value, 1);
+            }
+        }
     }
 
     // Make the keybindings page as big as is needed to fit the about tab

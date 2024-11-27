@@ -23,6 +23,13 @@ namespace tev {
 
 class ImageLoader;
 
+struct AttributeNode { 
+    std::string name;
+    std::string value;
+    std::string type;
+    std::vector<AttributeNode> children;
+};
+
 struct ImageData {
     ImageData() = default;
     ImageData(const ImageData&) = delete;
@@ -32,7 +39,7 @@ struct ImageData {
     std::vector<std::string> layers;
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
     bool hasPremultipliedAlpha;
-    std::map<std::string, std::string> attributes;
+    AttributeNode attributes;
 
     Box2i dataWindow;
     Box2i displayWindow;
@@ -213,7 +220,7 @@ public:
 
     std::string toString() const;
 
-    const std::map<std::string,std::string> attributes() const {
+    const AttributeNode& attributes() const {
         return mData.attributes;
     }
 

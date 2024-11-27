@@ -93,14 +93,37 @@ bool ExrImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
+AttributeNode createColorNode(const std::string& name, const Imath::V2f& value) {
+    AttributeNode node; 
+    node.name = name;
+    node.type = "vec2f";
+    std::ostringstream oss;
+    oss << "(" << value[0] << ", " << value[1] << ")";
+    node.value = oss.str();
+    return node;
+}
+AttributeNode createColorNode(const std::string& name, const Imath::V2i& value) {
+    AttributeNode node; 
+    node.name = name;
+    node.type = "vec2i";
+    std::ostringstream oss;
+    oss << "(" << value[0] << ", " << value[1] << ")";
+    node.value = oss.str();
+    return node;
+}
 
-std::map<std::string, std::string> getHeaderAttributes(const Imf::Header &header) {
-    std::map<std::string, std::string> attributes;
-    for (auto attributeItr = header.begin(); attributeItr != header.end(); attributeItr++)
-    {
-        std::string name(attributeItr.name());
+AttributeNode getHeaderAttributes(const Imf::Header &header) {
+    AttributeNode attributes;
+    static std::map<Imf::PixelType, std::string> pixelTypeToStringMap{
+        {Imf::PixelType::UINT,"UINT"},
+        {Imf::PixelType::HALF,"HALF"},
+        {Imf::PixelType::FLOAT,"FLOAT"}
+    };
+    for (auto attributeItr = header.begin(); attributeItr != header.end(); attributeItr++) {
         const Imf::Attribute *attr = &(attributeItr.attribute());
-
+        AttributeNode node;
+        node.name = std::string(attributeItr.name());
+        node.type = std::string(attr->typeName());
         std::ostringstream oss;
         if (const Imf::StringAttribute *strAttr = dynamic_cast<const Imf::StringAttribute *>(attr)) {
             oss << strAttr->value();
@@ -140,11 +163,17 @@ std::map<std::string, std::string> getHeaderAttributes(const Imf::Header &header
         }
         else if (const Imf::Box2iAttribute *box2iAttr = dynamic_cast<const Imf::Box2iAttribute *>(attr)) {
             auto value = box2iAttr->value();
-            oss << "(" << value.min[0] << ", " << value.min[1] << ", " << value.max[0] << ", " << value.max[1] << ")";
+            AttributeNode minNode = createColorNode("min", value.min); 
+            node.children.push_back(minNode);
+            AttributeNode maxNode = createColorNode("max", value.max); 
+            node.children.push_back(maxNode);
         }
         else if (const Imf::Box2fAttribute *box2fAttr = dynamic_cast<const Imf::Box2fAttribute *>(attr)) {
             auto value = box2fAttr->value();
-            oss << "(" << value.min[0] << ", " << value.min[1] << ", " << value.max[0] << ", " << value.max[1] << ")";
+            AttributeNode minNode = createColorNode("min", value.min); 
+            node.children.push_back(minNode);
+            AttributeNode maxNode = createColorNode("max", value.max); 
+            node.children.push_back(maxNode);
         }
         else if (const Imf::M33fAttribute *m33fAttr = dynamic_cast<const Imf::M33fAttribute *>(attr)) {
             auto value = m33fAttr->value();
@@ -200,24 +229,28 @@ std::map<std::string, std::string> getHeaderAttributes(const Imf::Header &header
         }
         else if (const Imf::ChromaticitiesAttribute *chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute *>(attr)) {
             auto value = chromaticitiesAttr->value();
-            oss << "(" << value.red[0] << ", " << value.red[1] << "), "
-                << "(" << value.green[0] << ", " << value.green[1] << "), "
-                << "(" << value.blue[0] << ", " << value.blue[1] << "), "
-                << "(" << value.white[0] << ", " << value.white[1] << ")";
+
+            AttributeNode redNode = createColorNode("red", value.red); 
+            node.children.push_back(redNode);
+            AttributeNode greenNode = createColorNode("green", value.green); 
+            node.children.push_back(greenNode);
+            AttributeNode blueNode = createColorNode("blue", value.blue); 
+            node.children.push_back(blueNode);
+            AttributeNode whiteNode = createColorNode("white", value.white); 
+            node.children.push_back(whiteNode);
         }
         else if (const Imf::ChannelListAttribute *chlistAttr = dynamic_cast<const Imf::ChannelListAttribute *>(attr)) {
             auto chlist = chlistAttr->value();
-            static std::map<Imf::PixelType, std::string> pixelTypeToStringMap{
-                {Imf::PixelType::UINT,"UINT"},
-                {Imf::PixelType::HALF,"HALF"},
-                {Imf::PixelType::FLOAT,"FLOAT"}
-            };
-            oss << "Channels: ";
+            size_t cnt=0;
             for (auto myItr = chlist.begin(); myItr != chlist.end(); myItr++){
-                std::string channelName(myItr.name());
                 Imf::Channel& channel = myItr.channel();
-                oss << channelName <<  " (" << pixelTypeToStringMap[channel.type] << "), ";
+                AttributeNode chNode;
+                chNode.name = myItr.name();
+                chNode.type = pixelTypeToStringMap[channel.type];
+                node.children.push_back(chNode);
+                cnt+=1;
             }
+            node.value = std::to_string(cnt);
         }
         else {
             oss << "unrecognized attribute : " << attributeItr.attribute().typeName();
@@ -227,8 +260,8 @@ std::map<std::string, std::string> getHeaderAttributes(const Imf::Header &header
         // Imf::TimeCodeAttribute;
         // Imf::IDManifestAttribute;
         // Imf::DeepImageStateAttribute;
-        attributes[name] = oss.str();
-        cout << name << ": " << attributeItr.attribute().typeName() << " : " << attributes[name] << endl;
+        node.value = oss.str();
+        attributes.children.push_back(node);
     }
     // {
     //     std::ostringstream oss;
