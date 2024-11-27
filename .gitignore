@@ -3,7 +3,8 @@
 /x64
 _CPack_Packages
 
-# Automatically generated files by IDE
+# Automatically generated files by IDE or env
+/.direnv
 /.vscode
 /.cache
 
