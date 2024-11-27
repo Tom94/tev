@@ -709,6 +709,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         if (key == GLFW_KEY_0 && (modifiers & SYSTEM_COMMAND_MOD)) {
             mImageCanvas->resetTransform();
             return true;
+        } else if (key == GLFW_KEY_F && (modifiers & SYSTEM_COMMAND_MOD)) {
+            mFilter->request_focus();
+            return true;
         } else if (key == GLFW_KEY_F || (key == GLFW_KEY_9 && (modifiers & SYSTEM_COMMAND_MOD))) {
             if (mCurrentImage) {
                 mImageCanvas->fitImageToScreen(*mCurrentImage);
@@ -795,13 +798,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         } else if (key == GLFW_KEY_S && (modifiers & SYSTEM_COMMAND_MOD)) {
             saveImageDialog();
             return true;
-        } else if (key == GLFW_KEY_P && (modifiers & SYSTEM_COMMAND_MOD)) {
-            mFilter->request_focus();
-            return true;
         } else if (
-            key == GLFW_KEY_H || /* question mark on US layout */ (
-                key == GLFW_KEY_SLASH && (modifiers & GLFW_MOD_SHIFT)
-            )
+            // question mark on US layout
+            key == GLFW_KEY_SLASH && (modifiers & GLFW_MOD_SHIFT)
         ) {
             toggleHelpWindow();
             return true;
@@ -821,10 +820,6 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_SPACE) {
             setPlayingBack(!playingBack());
-            return true;
-        } else if (key == GLFW_KEY_L && mSupportsHdr) {
-            mClipToLdrButton->set_pushed(!mClipToLdrButton->pushed());
-            mImageCanvas->setClipToLdr(mClipToLdrButton->pushed());
             return true;
         } else if (key == GLFW_KEY_ESCAPE) {
             setFilter("");
@@ -966,7 +961,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 removeImage(mCurrentImage);
             }
         } else if (
-            key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP || (
+            key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_K || key == GLFW_KEY_PAGE_UP || (
                 key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT)
             )
         ) {
@@ -976,7 +971,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 selectImage(nextImage(mCurrentImage, Backward));
             }
         } else if (
-            key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN || (
+            key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_J || key == GLFW_KEY_PAGE_DOWN || (
                 key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT)
             )
         ) {
@@ -987,7 +982,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             }
         }
 
-        if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D || key == GLFW_KEY_RIGHT_BRACKET) {
+        if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D || key == GLFW_KEY_L || key == GLFW_KEY_RIGHT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() + 1) % NumTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
@@ -997,7 +992,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 selectGroup(nextGroup(mCurrentGroup, Forward));
             }
-        } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_BRACKET) {
+        } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A || key == GLFW_KEY_H || key == GLFW_KEY_LEFT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() - 1 + NumTonemaps) % NumTonemaps));
             } else if (modifiers & GLFW_MOD_CONTROL) {
