@@ -1555,6 +1555,10 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
             ));
         }
     }
+    if (mImageInfoButton->pushed()){
+        toggleImageInfoWindow();
+        toggleImageInfoWindow();
+    }
 }
 
 void ImageViewer::selectGroup(string group) {
