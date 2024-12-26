@@ -16,7 +16,6 @@
 #include <GLFW/glfw3native.h>
 #endif
 
-#include <chrono>
 #include <iostream>
 #include <thread>
 

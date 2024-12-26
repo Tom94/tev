@@ -578,13 +578,11 @@ bool ImageViewer::mouse_motion_event(
         redraw();
     }
 
-    if (mDragType == EMouseDragType::SidebarDrag || canDragSidebarFrom(p)) {
-        mSidebarLayout->set_cursor(Cursor::HResize);
-        mImageCanvas->set_cursor(Cursor::HResize);
-    } else {
-        mSidebarLayout->set_cursor(Cursor::Arrow);
-        mImageCanvas->set_cursor(Cursor::Arrow);
-    }
+    bool shouldShowResizeCursor = mDragType == EMouseDragType::SidebarDrag || canDragSidebarFrom(p);
+    Cursor cursorType = shouldShowResizeCursor ? Cursor::HResize : Cursor::Arrow;
+
+    mSidebarLayout->set_cursor(cursorType);
+    mImageCanvas->set_cursor(cursorType);
 
     switch (mDragType) {
         case EMouseDragType::SidebarDrag:
