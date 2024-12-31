@@ -25,9 +25,29 @@ brew install --cask tev
 
 ### Linux
 
-Download the __tev__ application (.appimage) from the [releases page](https://github.com/Tom94/tev/releases). See [how to run AppImages](https://appimage.org/).
+Download the __tev__ application (.appimage) from the [releases page](https://github.com/Tom94/tev/releases).
+See [how to run AppImages](https://appimage.org/).
+Or use one of the alternative methods below:
 
-On Arch Linux you can also install __tev__ from the [Arch User Repository](https://aur.archlinux.org/packages/tev/).
+Arch Linux (Arch User Repisotory):
+```bash
+yay -S tev
+```
+
+NixOS:
+```nix
+# In your inputs
+inputs = {
+  ...
+  tev = { url = "https://github.com/tom94/tev"; type = "git"; submodules = true; };
+};
+
+# In your configuration
+environment.systemPackages = with pkgs; [
+  ...
+  inputs.tev.packages.${system}.default
+];
+```
 
 ## Usage
 
