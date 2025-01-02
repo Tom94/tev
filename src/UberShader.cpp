@@ -18,7 +18,8 @@ UberShader::UberShader(RenderPass* renderPass) {
 #   elif defined(NANOGUI_USE_GLES)
     std::string preamble =
         R"(#version 100
-        precision highp float;)";
+        precision highp float;
+        precision highp sampler2D;)";
 #   endif
         auto vertexShader = preamble +
             R"glsl(
@@ -51,6 +52,7 @@ UberShader::UberShader(RenderPass* renderPass) {
             #define GAMMA       1
             #define FALSE_COLOR 2
             #define POS_NEG     3
+            #define HASH        4
 
             #define ERROR                   0
             #define ABSOLUTE_ERROR          1
@@ -117,6 +119,13 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
             }
 
+            vec3 hash(vec3 co){
+                co *= mix(vec3(1.0), vec3(1.0 / 1024.0), step(1024.0, abs(co)));
+                co *= mix(vec3(1.0), vec3(1.0 / 1024.0), step(1024.0, abs(co)));
+                co *= mix(vec3(1.0), vec3(1.0 / 1024.0), step(1024.0, abs(co)));
+                return 2.0 * abs(fract(abs(fract(dot(co, vec3(115.191742, 64.0546951, 124.512291))) - 0.5) * vec3(1368.46143, 1523.2019, 1034.50476)) - 0.5);
+            }
+
             vec3 applyTonemap(vec3 col, vec4 background) {
                 if (tonemap == SRGB) {
                     col = col +
@@ -129,6 +138,8 @@ UberShader::UberShader(RenderPass* renderPass) {
                     return falseColor(log2(average(col)+0.03125) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
                 } else if (tonemap == POS_NEG) {
                     return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0) + background.rgb * background.a;
+                } else if (tonemap == HASH) {
+                    return hash(col) + (background.rgb - hash(vec3(offset))) * background.a;
                 }
                 return vec3(0.0);
             }
@@ -230,6 +241,7 @@ UberShader::UberShader(RenderPass* renderPass) {
             #define GAMMA       1
             #define FALSE_COLOR 2
             #define POS_NEG     3
+            #define HASH        4
 
             #define ERROR                   0
             #define ABSOLUTE_ERROR          1
@@ -272,6 +284,13 @@ UberShader::UberShader(RenderPass* renderPass) {
                 }
             }
 
+            float3 hash(float3 co){
+                co *= mix(float3(1.0f), float3(1.0f / 1024.0f), step(1024.0f, abs(co)));
+                co *= mix(float3(1.0f), float3(1.0f / 1024.0f), step(1024.0f, abs(co)));
+                co *= mix(float3(1.0f), float3(1.0f / 1024.0f), step(1024.0f, abs(co)));
+                return 2.0f * abs(fract(abs(fract(dot(co.xyz, float3(115.191742f, 64.0546951f, 124.512291f))) - 0.5f) * float3(1368.46143f, 1523.2019f, 1034.50476f)) - 0.5f);
+            }
+
             float3 applyTonemap(float3 col, float4 background, int tonemap, float offset, float gamma, texture2d<float, access::sample> colormap, sampler colormapSampler) {
                 switch (tonemap) {
                     case SRGB:
@@ -286,6 +305,8 @@ UberShader::UberShader(RenderPass* renderPass) {
                         return falseColor(log2(average(col)+0.03125f) / 10.0f + 0.5f, colormap, colormapSampler) + (background.rgb - falseColor(0.0f, colormap, colormapSampler)) * background.a;
                     case POS_NEG:
                         return float3(-average(min(col, float3(0.0f))) * 2.0f, average(max(col, float3(0.0f))) * 2.0f, 0.0f) + background.rgb * background.a;
+                    case HASH:
+                        return hash(col) + (background.rgb - hash(float3(offset))) * background.a;
                 }
                 return float3(0.0f);
             }
