@@ -24,15 +24,10 @@ using namespace std;
 
 namespace tev {
 
-// Image viewer is a static variable to allow other
-// parts of the program to easily schedule operations
-// onto the main nanogui thread loop.
-// In a truly modular program, this would never be required,
-// but OpenGL's state-machine nature throws a wrench into
-// modularity.
-// Currently, the only use case is the destruction of
-// OpenGL textures, which _must_ happen on the thread
-// on which the GL context is "current".
+// Image viewer is a static variable to allow other parts of the program to easily schedule operations onto the main
+// nanogui thread loop. In a truly modular program, this would never be required, but OpenGL's state-machine nature
+// throws a wrench into modularity. Currently, the only use case is the destruction of OpenGL textures, which _must_
+// happen on the thread on which the GL context is "current".
 static ImageViewer* sImageViewer = nullptr;
 static atomic<bool> imageViewerIsReady = false;
 
@@ -87,7 +82,16 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             sImageViewer->scheduleToUiThread([&, info] {
                 string imageString = ensureUtf8(info.imageName);
                 for (int i = 0; i < info.nChannels; ++i) {
-                    sImageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]);
+                    sImageViewer->updateImage(
+                        imageString,
+                        info.grabFocus,
+                        info.channelNames[i],
+                        info.x,
+                        info.y,
+                        info.width,
+                        info.height,
+                        info.imageData[i]
+                    );
                 }
             });
 
@@ -128,7 +132,12 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
             while (!imageViewerIsReady) { }
             auto info = packet.interpretAsVectorGraphics();
             sImageViewer->scheduleToUiThread([&, info] {
-                sImageViewer->updateImageVectorGraphics(ensureUtf8(info.imageName), info.grabFocus, info.append, info.commands);
+                sImageViewer->updateImageVectorGraphics(
+                    ensureUtf8(info.imageName),
+                    info.grabFocus,
+                    info.append,
+                    info.commands
+                );
             });
 
             sImageViewer->redraw();
@@ -196,8 +205,18 @@ int mainFunc(const vector<string>& arguments) {
         {"ldr"},
     };
 
-    Flag maximizeFlagOn{parser, "MAXIMIZE", "Maximize the window on startup. (Default if images are supplied.)", {"max", "maximize"}};
-    Flag maximizeFlagOff{parser, "NO MAXIMIZE", "Do not maximize the window on startup. (Default if no images are supplied.)", {"no-max", "no-maximize"}};
+    Flag maximizeFlagOn{
+        parser,
+        "MAXIMIZE",
+        "Maximize the window on startup. (Default if images are supplied.)",
+        {"max", "maximize"},
+    };
+    Flag maximizeFlagOff{
+        parser,
+        "NO MAXIMIZE",
+        "Do not maximize the window on startup. (Default if no images are supplied.)",
+        {"no-max", "no-maximize"},
+    };
 
     ValueFlag<string> metricFlag{
         parser,
@@ -213,8 +232,18 @@ int mainFunc(const vector<string>& arguments) {
         {'m', "metric"},
     };
 
-    Flag newWindowFlagOn{parser, "NEW WINDOW", "Open a new window of tev, even if one exists already. (Default if no images are supplied.)", {'n', "new"}};
-    Flag newWindowFlagOff{parser, "NO NEW WINDOW", "Do not open a new window if one already exists. (Default if images are supplied.)", {"no-new"}};
+    Flag newWindowFlagOn{
+        parser,
+        "NEW WINDOW",
+        "Open a new window of tev, even if one exists already. (Default if no images are supplied.)",
+        {'n', "new"},
+    };
+    Flag newWindowFlagOff{
+        parser,
+        "NO NEW WINDOW",
+        "Do not open a new window if one already exists. (Default if images are supplied.)",
+        {"no-new"},
+    };
 
     ValueFlag<float> offsetFlag{
         parser,
@@ -270,8 +299,7 @@ int mainFunc(const vector<string>& arguments) {
         "part of a multi-part EXR file.",
     };
 
-    // Parse command line arguments and react to parsing
-    // errors using exceptions.
+    // Parse command line arguments and react to parsing errors using exceptions.
     try {
         TEV_ASSERT(arguments.size() > 0, "Number of arguments must be bigger than 0.");
 
@@ -295,9 +323,8 @@ int mainFunc(const vector<string>& arguments) {
 
     auto ipc = hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>();
 
-    // If we don't have any images to load, create new windows regardless of flag.
-    // (In this case, the user likely wants to open a new instance of tev rather
-    // than focusing the existing one.)
+    // If we don't have any images to load, create new windows regardless of flag. (In this case, the user likely wants
+    // to open a new instance of tev rather than focusing the existing one.)
     bool newWindow = !imageFiles;
     if (newWindowFlagOn) { newWindow = true; }
     if (newWindowFlagOff) { newWindow = false; }
@@ -307,8 +334,8 @@ int mainFunc(const vector<string>& arguments) {
         return -3;
     }
 
-    // If we're not the primary instance and did not request to open a new window,
-    // simply send the to-be-opened images to the primary instance.
+    // If we're not the primary instance and did not request to open a new window, simply send the to-be-opened images
+    // to the primary instance.
     if (!ipc->isPrimaryInstance() && !newWindow) {
         string channelSelector;
         bool first = true;
@@ -349,9 +376,8 @@ int mainFunc(const vector<string>& arguments) {
         imagesLoader->setRecursiveDirectories(true);
     }
 
-    // Spawn a background thread that opens images passed via stdin.
-    // To allow whitespace characters in filenames, we use the convention that
-    // paths in stdin must be separated by newlines.
+    // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use
+    // the convention that paths in stdin must be separated by newlines.
     thread stdinThread{[&]() {
         string channelSelector;
         while (!shuttingDown()) {
@@ -374,22 +400,19 @@ int mainFunc(const vector<string>& arguments) {
         }
     }};
 
-    // It is unfortunately not easily possible to poll/timeout on cin in a portable manner,
-    // so instead we resort to simply detaching this thread, causing it to be forcefully
-    // terminated as the main thread terminates.
+    // HACK: It is unfortunately not easily possible to poll/timeout on cin in a portable manner, so instead we resort
+    // to simply detaching this thread, causing it to be forcefully terminated as the main thread terminates. Also, on
+    // some Linux systems, this will still not terminate, so we schedule std::exit(0) to be called as well.
     stdinThread.detach();
 
-    // Spawn another background thread, this one dealing with images passed to us
-    // via inter-process communication (IPC). This happens when
-    // a user starts another instance of tev while one is already running. Note, that this
-    // behavior can be overridden by the -n flag, so not _all_ secondary instances send their
-    // paths to the primary instance.
+    // Spawn another background thread, this one dealing with images passed to us via inter-process communication (IPC).
+    // This happens when a user starts another instance of tev while one is already running. Note, that this behavior
+    // can be overridden by the -n flag, so not _all_ secondary instances send their paths to the primary instance.
     thread ipcThread = thread{[&]() {
         try {
             while (!shuttingDown()) {
-                // Attempt to become primary instance in case the primary instance
-                // got closed at some point. Attempt this with a reasonably low frequency
-                // to not hog CPU/OS resources.
+                // Attempt to become primary instance in case the primary instance got closed at some point. Attempt
+                // this with a reasonably low frequency to not hog CPU/OS resources.
                 if (!ipc->isPrimaryInstance() && !ipc->attemptToBecomePrimaryInstance()) {
                     this_thread::sleep_for(100ms);
                     continue;
@@ -417,16 +440,14 @@ int mainFunc(const vector<string>& arguments) {
             ipcThread.join();
         }
 
-        // stdinThread should not be joinable, since it has been
-        // detached earlier. But better to be safe than sorry.
+        // stdinThread should not be joinable, since it has been detached earlier. But better to be safe than sorry.
         if (stdinThread.joinable()) {
             stdinThread.join();
         }
     }};
 
-    // Load images passed via command line in the background prior to
-    // creating our main application such that they are not stalled
-    // by the potentially slow initialization of opengl / glfw.
+    // Load images passed via command line in the background prior to creating our main application such that they are
+    // not stalled by the potentially slow initialization of opengl / glfw.
     string channelSelector;
     for (auto imageFile : get(imageFiles)) {
         if (!imageFile.empty() && imageFile[0] == ':') {
@@ -441,9 +462,8 @@ int mainFunc(const vector<string>& arguments) {
     nanogui::init();
 
     ScopeGuard nanoguiShutdownGuard{[&]() {
-        // On some linux distributions glfwTerminate() (which is called by
-        // nanogui::shutdown()) causes segfaults. Since we are done with our
-        // program here anyways, let's let the OS clean up after us.
+        // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since
+        // we are done with our program here anyways, let's let the OS clean up after us.
 #if defined(__APPLE__) or defined(_WIN32)
         nanogui::shutdown();
 #endif
@@ -480,10 +500,14 @@ int mainFunc(const vector<string>& arguments) {
         capabilityEdr = false;
     }
 
-    tlog::info() << "Launching with " << (capability10bit ? 10 : 8) << " bits of color and " << (capabilityEdr ? "HDR" : "LDR") << " display support.";
+    tlog::info()
+        << "Launching with "
+        << (capability10bit ? 10 : 8)
+        << " bits of color and "
+        << (capabilityEdr ? "HDR" : "LDR")
+        << " display support.";
 
-    // Do what the maximize flag tells us---if it exists---and
-    // maximize if we have images otherwise.
+    // Do what the maximize flag tells us---if it exists---and maximize if we have images otherwise.
     bool maximize = imageFiles;
     if (maximizeFlagOn) { maximize = true; }
     if (maximizeFlagOff) { maximize = false; }
@@ -493,8 +517,7 @@ int mainFunc(const vector<string>& arguments) {
         return -3;
     }
 
-    // sImageViewer is a raw pointer to make sure it will never
-    // get deleted. nanogui crashes upon cleanup, so we better
+    // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better
     // not try.
     sImageViewer = new ImageViewer{imagesLoader, maximize, capability10bit || capabilityEdr, capabilityEdr};
     imageViewerIsReady = true;
@@ -512,8 +535,8 @@ int mainFunc(const vector<string>& arguments) {
     if (tonemapFlag)  { sImageViewer->setTonemap(toTonemap(get(tonemapFlag))); }
     if (watchFlag)    { sImageViewer->setWatchFilesForChanges(true); }
 
-    // Refresh only every 250ms if there are no user interactions.
-    // This makes an idling tev surprisingly energy-efficient. :)
+    // Refresh only every 250ms if there are no user interactions. This makes an idling tev surprisingly
+        // energy-efficient. :)
     nanogui::mainloop(250);
 
     return 0;
@@ -528,15 +551,18 @@ int wmain(int argc, wchar_t* argv[]) {
 int main(int argc, char* argv[]) {
 #endif
     try {
+        // This accelerates I/O significantly by allowing C++ to perform its own buffering. Furthermore, this prevents a
+        // failure to forcefully close the stdin thread in case of a shutdown on certain Linux systems.
+        ios::sync_with_stdio(false);
+
         vector<string> arguments;
         for (int i = 0; i < argc; ++i) {
 #ifdef _WIN32
             arguments.emplace_back(tev::utf16to8(argv[i]));
 #else
             string arg = argv[i];
-            // OSX sometimes (seemingly sporadically) passes the
-            // process serial number via a command line parameter.
-            // We would like to ignore this.
+            // OSX sometimes (seemingly sporadically) passes the process serial number via a command line parameter. We
+            // would like to ignore this.
             if (arg.find("-psn") != 0) {
                 arguments.emplace_back(tev::ensureUtf8(argv[i]));
             }
