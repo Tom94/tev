@@ -551,6 +551,10 @@ int wmain(int argc, wchar_t* argv[]) {
 int main(int argc, char* argv[]) {
 #endif
     try {
+        // This accelerates I/O significantly by allowing C++ to perform its own buffering. Furthermore, this prevents a
+        // failure to forcefully close the stdin thread in case of a shutdown on certain Linux systems.
+        ios::sync_with_stdio(false);
+
         vector<string> arguments;
         for (int i = 0; i < argc; ++i) {
 #ifdef _WIN32
