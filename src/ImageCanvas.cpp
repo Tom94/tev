@@ -1002,7 +1002,7 @@ Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
     //     size.x() % 2 == 0 ?  0.5f : 0.0f,
     //     size.y() % 2 == 0 ? -0.5f : 0.0f,
     // } + Vector2f{0.1111111f};
-    return Vector2f{0.1111111f};
+    return Vector2f{-0.1111111f};
 }
 
 Matrix3f ImageCanvas::transform(const Image* image) {
