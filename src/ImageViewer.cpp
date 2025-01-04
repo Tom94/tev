@@ -2030,7 +2030,7 @@ void ImageViewer::updateFilter() {
 void ImageViewer::updateLayout() {
     int sidebarWidth = visibleSidebarWidth();
     int footerHeight = visibleFooterHeight();
-    mImageCanvas->set_fixed_size(m_size - nanogui::Vector2i{sidebarWidth - 1, footerHeight - 1});
+    mImageCanvas->set_fixed_size(m_size - nanogui::Vector2i{sidebarWidth, footerHeight});
     mSidebar->set_fixed_height(m_size.y() - footerHeight);
 
     mVerticalScreenSplit->set_fixed_size(m_size);
