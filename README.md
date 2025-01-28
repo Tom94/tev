@@ -7,7 +7,7 @@ Image viewer and comparison tool for graphics people.
 - __HDR:__ displays true HDR on Apple EDR displays.
 
 
-![Screenshot](https://raw.githubusercontent.com/Tom94/tev/master/resources/screenshot.png)
+![Screenshot](resources/screenshot.png)
 _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
 
 ## Installation
