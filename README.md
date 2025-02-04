@@ -29,7 +29,7 @@ Download the __tev__ application (.appimage) from the [releases page](https://gi
 See [how to run AppImages](https://appimage.org/).
 Or use one of the alternative methods below:
 
-Arch Linux (Arch User Repisotory):
+Arch Linux (Arch User Repository):
 ```bash
 yay -S tev
 ```
