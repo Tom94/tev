@@ -189,6 +189,13 @@ int mainFunc(const vector<string>& arguments) {
         {'h', "help"},
     };
 
+    Flag hideUiFlag{
+        parser,
+        "HIDE UI",
+        "Hide the UI on startup.",
+        {"hide-ui"},
+    };
+
     ValueFlag<string> hostnameFlag{
         parser,
         "HOSTNAME",
@@ -520,6 +527,10 @@ int mainFunc(const vector<string>& arguments) {
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better
     // not try.
     sImageViewer = new ImageViewer{imagesLoader, maximize, capability10bit || capabilityEdr, capabilityEdr};
+    if (hideUiFlag) {
+        sImageViewer->setUiVisible(false);
+    }
+
     imageViewerIsReady = true;
 
     sImageViewer->draw_all();
