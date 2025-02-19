@@ -26,7 +26,7 @@ namespace tev {
 
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool fullscreen, bool floatBuffer, bool supportsHdr);
+    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool showUi, bool floatBuffer, bool supportsHdr);
 
     bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
     bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;

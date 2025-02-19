@@ -32,6 +32,7 @@ static const float CROP_MIN_SIZE = 3;
 ImageViewer::ImageViewer(
     const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     bool maximize,
+    bool showUi,
     bool floatBuffer,
     bool /*supportsHdr*/
 )
@@ -85,6 +86,7 @@ ImageViewer::ImageViewer(
 
     mSidebar = new VScrollPanel{horizontalScreenSplit};
     mSidebar->set_fixed_width(SIDEBAR_MIN_WIDTH);
+    mSidebar->set_visible(showUi);
 
     auto tmp = new Widget{mSidebar};
     mHelpButton = new Button{tmp, "", FA_QUESTION};
