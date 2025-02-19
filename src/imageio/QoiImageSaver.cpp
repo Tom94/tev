@@ -27,7 +27,7 @@ void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& 
         .colorspace = QOI_SRGB,
     };
     int sizeInBytes = 0;
-    void *encodedData = qoi_encode(data.data(), &desc, &sizeInBytes);
+    void* encodedData = qoi_encode(data.data(), &desc, &sizeInBytes);
 
     ScopeGuard encodedDataGuard{[encodedData] { free(encodedData); }};
 
@@ -38,4 +38,4 @@ void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& 
     oStream.write(reinterpret_cast<char*>(encodedData), sizeInBytes);
 }
 
-}
+} // namespace tev

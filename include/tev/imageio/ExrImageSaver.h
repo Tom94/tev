@@ -11,15 +11,12 @@ namespace tev {
 
 class ExrImageSaver : public TypedImageSaver<float> {
 public:
-    void save(std::ostream& oStream, const fs::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
+    void save(std::ostream& oStream, const fs::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels)
+        const override;
 
-    bool hasPremultipliedAlpha() const override {
-        return true;
-    }
+    bool hasPremultipliedAlpha() const override { return true; }
 
-    virtual bool canSaveFile(const std::string& extension) const override {
-        return toLower(extension) == ".exr";
-    }
+    virtual bool canSaveFile(const std::string& extension) const override { return toLower(extension) == ".exr"; }
 };
 
-}
+} // namespace tev

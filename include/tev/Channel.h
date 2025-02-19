@@ -8,7 +8,6 @@
 
 #include <nanogui/vector.h>
 
-#include <future>
 #include <string>
 #include <vector>
 
@@ -28,53 +27,37 @@ public:
 
     Channel(const std::string& name, const nanogui::Vector2i& size);
 
-    const std::string& name() const {
-        return mName;
-    }
+    const std::string& name() const { return mName; }
 
-    const std::vector<float>& data() const {
-        return mData;
-    }
+    const std::vector<float>& data() const { return mData; }
 
     float eval(size_t index) const {
         if (index >= mData.size()) {
             return 0;
         }
+
         return mData[index];
     }
 
     float eval(nanogui::Vector2i index) const {
-        if (index.x() < 0 || index.x() >= mSize.x() ||
-            index.y() < 0 || index.y() >= mSize.y()) {
+        if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {
             return 0;
         }
 
         return mData[index.x() + index.y() * (size_t)mSize.x()];
     }
 
-    float& at(size_t index) {
-        return mData[index];
-    }
+    float& at(size_t index) { return mData[index]; }
 
-    float at(size_t index) const {
-        return mData[index];
-    }
+    float at(size_t index) const { return mData[index]; }
 
-    float& at(nanogui::Vector2i index) {
-        return at(index.x() + index.y() * (size_t)mSize.x());
-    }
+    float& at(nanogui::Vector2i index) { return at(index.x() + index.y() * (size_t)mSize.x()); }
 
-    float at(nanogui::Vector2i index) const {
-        return at(index.x() + index.y() * (size_t)mSize.x());
-    }
+    float at(nanogui::Vector2i index) const { return at(index.x() + index.y() * (size_t)mSize.x()); }
 
-    size_t numPixels() const {
-        return mData.size();
-    }
+    size_t numPixels() const { return mData.size(); }
 
-    const nanogui::Vector2i& size() const {
-        return mSize;
-    }
+    const nanogui::Vector2i& size() const { return mSize; }
 
     std::tuple<float, float, float> minMaxMean() const {
         float min = std::numeric_limits<float>::infinity();
@@ -85,18 +68,20 @@ public:
             if (f < min) {
                 min = f;
             }
+
             if (f > max) {
                 max = f;
             }
         }
-        return {min, max, mean/numPixels()};
+
+        return {min, max, mean / numPixels()};
     }
 
     Task<void> divideByAsync(const Channel& other, int priority);
 
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
-    void setZero() { memset(mData.data(), 0, mData.size()*sizeof(float)); }
+    void setZero() { memset(mData.data(), 0, mData.size() * sizeof(float)); }
 
     void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
 
@@ -106,4 +91,4 @@ private:
     std::vector<float> mData;
 };
 
-}
+} // namespace tev

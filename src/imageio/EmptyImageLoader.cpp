@@ -40,13 +40,12 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     }
 
     for (int i = 0; i < nChannels; ++i) {
-        // The following lines decode strings by prefix length.
-        // The reason for using sthis encoding is to allow arbitrary characters,
+        // The following lines decode strings by prefix length. The reason for using sthis encoding is to allow arbitrary characters,
         // including whitespaces, in the channel names.
         std::vector<char> channelNameData;
         int length;
         iStream >> length;
-        channelNameData.resize(length+1, 0);
+        channelNameData.resize(length + 1, 0);
         iStream.read(channelNameData.data(), length);
 
         string channelName = channelNameData.data();
@@ -60,4 +59,4 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     co_return result;
 }
 
-}
+} // namespace tev

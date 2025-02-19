@@ -13,50 +13,42 @@ namespace tev {
 
 class MultiGraph : public nanogui::Widget {
 public:
-    MultiGraph(nanogui::Widget *parent, const std::string &caption = "Untitled");
+    MultiGraph(nanogui::Widget* parent, const std::string& caption = "Untitled");
 
-    const std::string &caption() const { return mCaption; }
-    void setCaption(const std::string &caption) { mCaption = caption; }
+    const std::string& caption() const { return mCaption; }
+    void setCaption(const std::string& caption) { mCaption = caption; }
 
-    const std::string &header() const { return mHeader; }
-    void setHeader(const std::string &header) { mHeader = header; }
+    const std::string& header() const { return mHeader; }
+    void setHeader(const std::string& header) { mHeader = header; }
 
-    const std::string &footer() const { return mFooter; }
-    void setFooter(const std::string &footer) { mFooter = footer; }
+    const std::string& footer() const { return mFooter; }
+    void setFooter(const std::string& footer) { mFooter = footer; }
 
-    const nanogui::Color &backgroundColor() const { return mBackgroundColor; }
-    void setBackgroundColor(const nanogui::Color &backgroundColor) { mBackgroundColor = backgroundColor; }
+    const nanogui::Color& backgroundColor() const { return mBackgroundColor; }
+    void setBackgroundColor(const nanogui::Color& backgroundColor) { mBackgroundColor = backgroundColor; }
 
-    const nanogui::Color &foregroundColor() const { return mForegroundColor; }
-    void setForegroundColor(const nanogui::Color &foregroundColor) { mForegroundColor = foregroundColor; }
+    const nanogui::Color& foregroundColor() const { return mForegroundColor; }
+    void setForegroundColor(const nanogui::Color& foregroundColor) { mForegroundColor = foregroundColor; }
 
-    const nanogui::Color &textColor() const { return mTextColor; }
-    void setTextColor(const nanogui::Color &textColor) { mTextColor = textColor; }
+    const nanogui::Color& textColor() const { return mTextColor; }
+    void setTextColor(const nanogui::Color& textColor) { mTextColor = textColor; }
 
-    const std::vector<float> &values() const { return mValues; }
-    std::vector<float> &values() { return mValues; }
-    void setValues(const std::vector<float> &values) { mValues = values; }
+    const std::vector<float>& values() const { return mValues; }
+    std::vector<float>& values() { return mValues; }
+    void setValues(const std::vector<float>& values) { mValues = values; }
 
     void setNChannels(int nChannels) { mNChannels = nChannels; }
 
-    virtual nanogui::Vector2i preferred_size(NVGcontext *ctx) const override;
-    virtual void draw(NVGcontext *ctx) override;
+    virtual nanogui::Vector2i preferred_size(NVGcontext* ctx) const override;
+    virtual void draw(NVGcontext* ctx) override;
 
-    void setMinimum(float minimum) {
-        mMinimum = minimum;
-    }
+    void setMinimum(float minimum) { mMinimum = minimum; }
 
-    void setMean(float mean) {
-        mMean = mean;
-    }
+    void setMean(float mean) { mMean = mean; }
 
-    void setMaximum(float maximum) {
-        mMaximum = maximum;
-    }
+    void setMaximum(float maximum) { mMaximum = maximum; }
 
-    void setZero(int zeroBin) {
-        mZeroBin = zeroBin;
-    }
+    void setZero(int zeroBin) { mZeroBin = zeroBin; }
 
 protected:
     std::string mCaption, mHeader, mFooter;
@@ -67,4 +59,4 @@ protected:
     int mZeroBin = 0;
 };
 
-}
+} // namespace tev

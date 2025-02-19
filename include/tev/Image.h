@@ -38,17 +38,11 @@ struct ImageData {
 
     std::string partName;
 
-    nanogui::Vector2i size() const {
-        return dataWindow.size();
-    }
+    nanogui::Vector2i size() const { return dataWindow.size(); }
 
-    nanogui::Vector2i displaySize() const {
-        return displayWindow.size();
-    }
+    nanogui::Vector2i displaySize() const { return displayWindow.size(); }
 
-    size_t numPixels() const {
-        return channels.front().numPixels();
-    }
+    size_t numPixels() const { return channels.front().numPixels(); }
 
     std::vector<std::string> channelsInLayer(std::string layerName) const;
 
@@ -61,16 +55,10 @@ struct ImageData {
 
     Task<void> ensureValid(const std::string& channelSelector, int taskPriority);
 
-    bool hasChannel(const std::string& channelName) const {
-        return channel(channelName) != nullptr;
-    }
+    bool hasChannel(const std::string& channelName) const { return channel(channelName) != nullptr; }
 
     const Channel* channel(const std::string& channelName) const {
-        auto it = std::find_if(
-            std::begin(channels),
-            std::end(channels),
-            [&channelName](const Channel& c) { return c.name() == channelName; }
-        );
+        auto it = std::find_if(std::begin(channels), std::end(channels), [&channelName](const Channel& c) { return c.name() == channelName; });
 
         if (it != std::end(channels)) {
             return &(*it);
@@ -80,11 +68,7 @@ struct ImageData {
     }
 
     Channel* mutableChannel(const std::string& channelName) {
-        auto it = std::find_if(
-            std::begin(channels),
-            std::end(channels),
-            [&channelName](const Channel& c) { return c.name() == channelName; }
-        );
+        auto it = std::find_if(std::begin(channels), std::end(channels), [&channelName](const Channel& c) { return c.name() == channelName; });
 
         if (it != std::end(channels)) {
             return &(*it);
@@ -98,9 +82,7 @@ struct ChannelGroup {
     std::string name;
     std::vector<std::string> channels;
 
-    bool operator==(const ChannelGroup& other) const {
-        return name == other.name;
-    }
+    bool operator==(const ChannelGroup& other) const { return name == other.name; }
 };
 
 struct ImageTexture {
@@ -114,35 +96,21 @@ public:
     Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const std::string& channelSelector);
     virtual ~Image();
 
-    const fs::path& path() const {
-        return mPath;
-    }
+    const fs::path& path() const { return mPath; }
 
-    fs::file_time_type fileLastModified() const {
-        return mFileLastModified;
-    }
+    fs::file_time_type fileLastModified() const { return mFileLastModified; }
 
-    void setFileLastModified(fs::file_time_type value) {
-        mFileLastModified = value;
-    }
+    void setFileLastModified(fs::file_time_type value) { mFileLastModified = value; }
 
-    const std::string& channelSelector() const {
-        return mChannelSelector;
-    }
+    const std::string& channelSelector() const { return mChannelSelector; }
 
-    const std::string& name() const {
-        return mName;
-    }
+    const std::string& name() const { return mName; }
 
     std::string shortName() const;
 
-    bool hasChannel(const std::string& channelName) const {
-        return mData.hasChannel(channelName);
-    }
+    bool hasChannel(const std::string& channelName) const { return mData.hasChannel(channelName); }
 
-    const Channel* channel(const std::string& channelName) const {
-        return mData.channel(channelName);
-    }
+    const Channel* channel(const std::string& channelName) const { return mData.channel(channelName); }
 
     nanogui::Texture* texture(const std::string& channelGroupName);
     nanogui::Texture* texture(const std::vector<std::string>& channelNames);
@@ -153,37 +121,25 @@ public:
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
     std::vector<std::string> getExistingChannels(const std::vector<std::string>& requestedChannels) const;
 
-    nanogui::Vector2i size() const {
-        return mData.size();
-    }
+    nanogui::Vector2i size() const { return mData.size(); }
 
     bool contains(const nanogui::Vector2i& pos) const {
         return pos.x() >= 0 && pos.y() >= 0 && pos.x() < mData.size().x() && pos.y() < mData.size().y();
     }
 
-    const Box2i& dataWindow() const {
-        return mData.dataWindow;
-    }
+    const Box2i& dataWindow() const { return mData.dataWindow; }
 
-    const Box2i& displayWindow() const {
-        return mData.displayWindow;
-    }
+    const Box2i& displayWindow() const { return mData.displayWindow; }
 
     nanogui::Vector2f centerDisplayOffset(const Box2i& displayWindow) const {
         return Box2f{dataWindow()}.middle() - Box2f{displayWindow}.middle();
     }
 
-    size_t numPixels() const {
-        return mData.numPixels();
-    }
+    size_t numPixels() const { return mData.numPixels(); }
 
-    const std::vector<ChannelGroup>& channelGroups() const {
-        return mChannelGroups;
-    }
+    const std::vector<ChannelGroup>& channelGroups() const { return mChannelGroups; }
 
-    int id() const {
-        return mId;
-    }
+    int id() const { return mId; }
 
     void bumpId() {
         int oldId = mId;
@@ -194,30 +150,22 @@ public:
         }
     }
 
-    static int drawId() {
-        return sId++;
-    }
+    static int drawId() { return sId++; }
 
     void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
 
     void updateVectorGraphics(bool append, const std::vector<VgCommand>& commands);
 
-    const std::vector<VgCommand>& vgCommands() const {
-        return mVgCommands;
-    }
+    const std::vector<VgCommand>& vgCommands() const { return mVgCommands; }
 
-    void setStaleIdCallback(const std::function<void(int)>& callback) {
-        mStaleIdCallback = callback;
-    }
+    void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
     std::string toString() const;
 
 private:
     static std::atomic<int> sId;
 
-    Channel* mutableChannel(const std::string& channelName) {
-        return mData.mutableChannel(channelName);
-    }
+    Channel* mutableChannel(const std::string& channelName) { return mData.mutableChannel(channelName); }
 
     std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
 
@@ -253,9 +201,7 @@ struct ImageAddition {
     std::shared_ptr<Image> toReplace;
 
     struct Comparator {
-        bool operator()(const ImageAddition& a, const ImageAddition& b) {
-            return a.loadId > b.loadId;
-        }
+        bool operator()(const ImageAddition& a, const ImageAddition& b) { return a.loadId > b.loadId; }
     };
 };
 
@@ -276,26 +222,16 @@ public:
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
 
     bool publishSortedLoads();
-    bool hasPendingLoads() const {
-        return mLoadCounter != mUnsortedLoadCounter;
-    }
+    bool hasPendingLoads() const { return mLoadCounter != mUnsortedLoadCounter; }
 
-    bool recursiveDirectories() const {
-        return mRecursiveDirectories;
-    }
+    bool recursiveDirectories() const { return mRecursiveDirectories; }
 
-    void setRecursiveDirectories(bool value) {
-        mRecursiveDirectories = value;
-    }
+    void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
 
 private:
     SharedQueue<ImageAddition> mLoadedImages;
 
-    std::priority_queue<
-        ImageAddition,
-        std::vector<ImageAddition>,
-        ImageAddition::Comparator
-    > mPendingLoadedImages;
+    std::priority_queue<ImageAddition, std::vector<ImageAddition>, ImageAddition::Comparator> mPendingLoadedImages;
     std::mutex mPendingLoadedImagesMutex;
 
     std::atomic<int> mLoadCounter{0};
@@ -306,12 +242,12 @@ private:
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 };
 
-}
+} // namespace tev
 
 namespace std {
+
 template <> struct hash<tev::ChannelGroup> {
-    size_t operator()(const tev::ChannelGroup& g) const {
-        return hash<string>()(g.name);
-    }
+    size_t operator()(const tev::ChannelGroup& g) const { return hash<string>()(g.name); }
 };
-}
+
+} // namespace std

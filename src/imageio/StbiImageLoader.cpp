@@ -1,8 +1,8 @@
 // This file was developed by Thomas Müller <contact@tom94.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include <tev/imageio/StbiImageLoader.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/StbiImageLoader.h>
 
 #include <stb_image.h>
 
@@ -12,8 +12,7 @@ using namespace std;
 namespace tev {
 
 bool StbiImageLoader::canLoadFile(istream&) const {
-    // Pretend you can load any file and throw exception on failure.
-    // TODO: Add proper check.
+    // Pretend you can load any file and throw exception on failure. TODO: Add proper check.
     return true;
 }
 
@@ -29,13 +28,9 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             return (int)stream->gcount();
         },
         // Seek
-        [](void* context, int size) {
-            reinterpret_cast<istream*>(context)->seekg(size, ios_base::cur);
-        },
+        [](void* context, int size) { reinterpret_cast<istream*>(context)->seekg(size, ios_base::cur); },
         // EOF
-        [](void* context) {
-            return (int)!!(*reinterpret_cast<istream*>(context));
-        },
+        [](void* context) { return (int)!!(*reinterpret_cast<istream*>(context)); },
     };
 
     void* data;
@@ -66,25 +61,35 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
     auto numPixels = (size_t)size.x() * size.y();
     if (isHdr) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
-            auto typedData = reinterpret_cast<float*>(data);
-            size_t baseIdx = i * numChannels;
-            for (int c = 0; c < numChannels; ++c) {
-                resultData.channels[c].at(i) = typedData[baseIdx + c];
-            }
-        }, priority);
-    } else {
-        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
-            auto typedData = reinterpret_cast<unsigned char*>(data);
-            size_t baseIdx = i * numChannels;
-            for (int c = 0; c < numChannels; ++c) {
-                if (c == alphaChannelIndex) {
-                    resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
-                } else {
-                    resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                auto typedData = reinterpret_cast<float*>(data);
+                size_t baseIdx = i * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
+                    resultData.channels[c].at(i) = typedData[baseIdx + c];
                 }
-            }
-        }, priority);
+            },
+            priority
+        );
+    } else {
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                auto typedData = reinterpret_cast<unsigned char*>(data);
+                size_t baseIdx = i * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
+                    if (c == alphaChannelIndex) {
+                        resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
+                    } else {
+                        resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
+                    }
+                }
+            },
+            priority
+        );
     }
 
     resultData.hasPremultipliedAlpha = false;
@@ -92,4 +97,4 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     co_return result;
 }
 
-}
+} // namespace tev

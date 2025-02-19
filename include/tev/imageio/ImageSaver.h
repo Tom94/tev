@@ -13,8 +13,7 @@
 
 namespace tev {
 
-template <typename T>
-class TypedImageSaver;
+template <typename T> class TypedImageSaver;
 
 class ImageSaver {
 public:
@@ -23,17 +22,16 @@ public:
     virtual bool hasPremultipliedAlpha() const = 0;
 
     virtual bool canSaveFile(const std::string& extension) const = 0;
-    bool canSaveFile(const fs::path& path) const {
-        return canSaveFile(toLower(toString(path.extension())));
-    }
+    bool canSaveFile(const fs::path& path) const { return canSaveFile(toLower(toString(path.extension()))); }
 
     static const std::vector<std::unique_ptr<ImageSaver>>& getSavers();
 };
 
-template <typename T>
-class TypedImageSaver : public ImageSaver {
+template <typename T> class TypedImageSaver : public ImageSaver {
 public:
-    virtual void save(std::ostream& oStream, const fs::path& path, const std::vector<T>& data, const nanogui::Vector2i& imageSize, int nChannels) const = 0;
+    virtual void save(
+        std::ostream& oStream, const fs::path& path, const std::vector<T>& data, const nanogui::Vector2i& imageSize, int nChannels
+    ) const = 0;
 };
 
-}
+} // namespace tev

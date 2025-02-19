@@ -1,8 +1,8 @@
 // This file was developed by Thomas Müller <contact@tom94.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include <tev/imageio/ClipboardImageLoader.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/ClipboardImageLoader.h>
 
 #include <clip.h>
 
@@ -53,7 +53,6 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         throw invalid_argument{"Image has too many channels."};
     }
 
-
     auto numBytesPerRow = numChannels * size.x();
     auto numBytes = (size_t)numBytesPerRow * size.y();
     int alphaChannelIndex = 3;
@@ -83,25 +82,30 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     //       clip doesn't properly handle this... so copy&pasting transparent images
     //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
     bool premultipliedAlpha = false && numChannels >= 4;
-    co_await ThreadPool::global().parallelForAsync(0, size.y(), [&](int y) {
-        for (int x = 0; x < size.x(); ++x) {
-            int baseIdx = y * numBytesPerRow + x * numChannels;
-            for (int c = numChannels-1; c >= 0; --c) {
-                unsigned char val = data[baseIdx + shifts[c]];
-                if (c == alphaChannelIndex) {
-                    resultData.channels[c].at({x, y}) = val / 255.0f;
-                } else {
-                    float alpha = premultipliedAlpha ? resultData.channels[alphaChannelIndex].at({x, y}) : 1.0f;
-                    float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
-                    resultData.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+    co_await ThreadPool::global().parallelForAsync(
+        0,
+        size.y(),
+        [&](int y) {
+            for (int x = 0; x < size.x(); ++x) {
+                int baseIdx = y * numBytesPerRow + x * numChannels;
+                for (int c = numChannels - 1; c >= 0; --c) {
+                    unsigned char val = data[baseIdx + shifts[c]];
+                    if (c == alphaChannelIndex) {
+                        resultData.channels[c].at({x, y}) = val / 255.0f;
+                    } else {
+                        float alpha = premultipliedAlpha ? resultData.channels[alphaChannelIndex].at({x, y}) : 1.0f;
+                        float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
+                        resultData.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+                    }
                 }
             }
-        }
-    }, priority);
+        },
+        priority
+    );
 
     resultData.hasPremultipliedAlpha = false;
 
     co_return result;
 }
 
-}
+} // namespace tev

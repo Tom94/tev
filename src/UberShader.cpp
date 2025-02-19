@@ -13,11 +13,10 @@ UberShader::UberShader(RenderPass* renderPass) {
     try {
 #if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
 #   if defined(NANOGUI_USE_OPENGL)
-    std::string preamble =
-        R"(#version 110)";
+        std::string preamble = R"(#version 110)";
 #   elif defined(NANOGUI_USE_GLES)
-    std::string preamble =
-        R"(#version 100
+        std::string preamble =
+            R"(#version 100
         precision highp float;)";
 #   endif
         auto vertexShader = preamble +
@@ -389,45 +388,43 @@ UberShader::UberShader(RenderPass* renderPass) {
 #endif
 
         mShader = new Shader{renderPass, "ubershader", vertexShader, fragmentShader};
-    } catch (const runtime_error& e) {
-        tlog::error() << fmt::format("Unable to compile shader: {}", e.what());
-    }
+    } catch (const runtime_error& e) { tlog::error() << fmt::format("Unable to compile shader: {}", e.what()); }
 
     // 2 Triangles
-    uint32_t indices[3*2] = {
-        0, 1, 2,
-        2, 3, 0,
+    uint32_t indices[3 * 2] = {
+        0,
+        1,
+        2,
+        2,
+        3,
+        0,
     };
-    float positions[2*4] = {
-        -1.f, -1.f,
-        1.f, -1.f,
-        1.f, 1.f,
-        -1.f, 1.f,
+    float positions[2 * 4] = {
+        -1.f,
+        -1.f,
+        1.f,
+        -1.f,
+        1.f,
+        1.f,
+        -1.f,
+        1.f,
     };
 
-    mShader->set_buffer("indices", VariableType::UInt32, {3*2}, indices);
+    mShader->set_buffer("indices", VariableType::UInt32, {3 * 2}, indices);
     mShader->set_buffer("position", VariableType::Float32, {4, 2}, positions);
 
     const auto& fcd = colormap::turbo();
 
     mColorMap = new Texture{
-        Texture::PixelFormat::RGBA,
-        Texture::ComponentFormat::Float32,
-        Vector2i{(int)fcd.size() / 4, 1}
+        Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, Vector2i{(int)fcd.size() / 4, 1}
     };
     mColorMap->upload((uint8_t*)fcd.data());
 }
 
-UberShader::~UberShader() { }
+UberShader::~UberShader() {}
 
 void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    draw(
-        pixelSize, checkerSize,
-        nullptr, Matrix3f{0.0f},
-        0.0f, 0.0f, 0.0f, false,
-        ETonemap::SRGB,
-        std::nullopt
-    );
+    draw(pixelSize, checkerSize, nullptr, Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, false, ETonemap::SRGB, std::nullopt);
 }
 
 void UberShader::draw(
@@ -443,12 +440,7 @@ void UberShader::draw(
     const std::optional<Box2i>& crop
 ) {
     draw(
-        pixelSize, checkerSize,
-        textureImage, transformImage,
-        nullptr, Matrix3f{0.0f},
-        exposure, offset, gamma, clipToLdr,
-        tonemap, EMetric::Error,
-        crop
+        pixelSize, checkerSize, textureImage, transformImage, nullptr, Matrix3f{0.0f}, exposure, offset, gamma, clipToLdr, tonemap, EMetric::Error, crop
     );
 }
 
@@ -504,14 +496,7 @@ void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f&
     mShader->set_uniform("bgColor", mBackgroundColor);
 }
 
-void UberShader::bindImageData(
-    Texture* textureImage,
-    const Matrix3f& transformImage,
-    float exposure,
-    float offset,
-    float gamma,
-    ETonemap tonemap
-) {
+void UberShader::bindImageData(Texture* textureImage, const Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap) {
     mShader->set_texture("image", textureImage);
     mShader->set_uniform("imageScale", Vector2f{transformImage.m[0][0], transformImage.m[1][1]});
     mShader->set_uniform("imageOffset", Vector2f{transformImage.m[2][0], transformImage.m[2][1]});
@@ -524,11 +509,7 @@ void UberShader::bindImageData(
     mShader->set_texture("colormap", mColorMap.get());
 }
 
-void UberShader::bindReferenceData(
-    Texture* textureReference,
-    const Matrix3f& transformReference,
-    EMetric metric
-) {
+void UberShader::bindReferenceData(Texture* textureReference, const Matrix3f& transformReference, EMetric metric) {
     mShader->set_texture("reference", textureReference);
     mShader->set_uniform("referenceScale", Vector2f{transformReference.m[0][0], transformReference.m[1][1]});
     mShader->set_uniform("referenceOffset", Vector2f{transformReference.m[2][0], transformReference.m[2][1]});
@@ -536,4 +517,4 @@ void UberShader::bindReferenceData(
     mShader->set_uniform("metric", static_cast<int>(metric));
 }
 
-}
+} // namespace tev

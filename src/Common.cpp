@@ -51,18 +51,14 @@ string utf16to8(const wstring& utf16) {
 }
 
 fs::path toPath(const string& utf8) {
-    // tev's strings are always utf8 encoded, however fs::path does
-    // not know this. Therefore: convert the string to a std::u8string
-    // and pass _that_ string to the fs::path constructor, which will
-    // then take care of converting the utf8 string to the native
-    // file name encoding.
+    // tev's strings are always utf8 encoded, however fs::path does not know this. Therefore: convert the string to a std::u8string and pass
+    // _that_ string to the fs::path constructor, which will then take care of converting the utf8 string to the native file name encoding.
     return toU8string(utf8);
 }
 
 string toString(const fs::path& path) {
-    // Conversely to `toPath`, ensure that the returned string is
-    // utf8 encoded by requesting a std::u8string from the path
-    // object and then convert _that_ string to a regular char string.
+    // Conversely to `toPath`, ensure that the returned string is utf8 encoded by requesting a std::u8string from the path object and then
+    // convert _that_ string to a regular char string.
     return fromU8string(path.u8string());
 }
 
@@ -95,8 +91,7 @@ string toUpper(string str) {
 
 bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
     if (matchedPartId) {
-        // Default value of 0. Is actually returned when the filter
-        // is empty or when there is no match.
+        // Default value of 0. Is actually returned when the filter is empty or when there is no match.
         *matchedPartId = 0;
     }
 
@@ -137,9 +132,7 @@ bool matchesRegex(string text, string filter) {
     try {
         regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
         return regex_search(text, searchRegex);
-    } catch (const regex_error&) {
-        return false;
-    }
+    } catch (const regex_error&) { return false; }
 }
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float shadowAlpha) {
@@ -172,7 +165,13 @@ string errorString(int errorId) {
     char* s = NULL;
     FormatMessage(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, errorId, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
+        NULL,
+        errorId,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&s,
+        0,
+        NULL
+    );
 
     string result = fmt::format("{} ({})", s, errorId);
     LocalFree(s);
@@ -213,13 +212,9 @@ void toggleConsole() {
 
 static std::atomic<bool> sShuttingDown{false};
 
-bool shuttingDown() {
-    return sShuttingDown;
-}
+bool shuttingDown() { return sShuttingDown; }
 
-void setShuttingDown() {
-    sShuttingDown = true;
-}
+void setShuttingDown() { sShuttingDown = true; }
 
 ETonemap toTonemap(string name) {
     // Perform matching on uppercase strings
@@ -230,7 +225,7 @@ ETonemap toTonemap(string name) {
         return Gamma;
     } else if (name == "FALSECOLOR" || name == "FC") {
         return FalseColor;
-    } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" ||name == "+-") {
+    } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" || name == "+-") {
         return PositiveNegative;
     } else {
         return SRGB;
@@ -255,4 +250,4 @@ EMetric toMetric(string name) {
     }
 }
 
-}
+} // namespace tev

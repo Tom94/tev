@@ -13,11 +13,10 @@ namespace tev {
 class EmptyImageLoader : public ImageLoader {
 public:
     bool canLoadFile(std::istream& iStream) const override;
-    Task<std::vector<ImageData>> load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority) const override;
+    Task<std::vector<ImageData>>
+        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority) const override;
 
-    std::string name() const override {
-        return "IPC";
-    }
+    std::string name() const override { return "IPC"; }
 };
 
-}
+} // namespace tev

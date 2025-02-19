@@ -11,15 +11,12 @@ namespace tev {
 
 class StbiHdrImageSaver : public TypedImageSaver<float> {
 public:
-    void save(std::ostream& oStream, const fs::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels) const override;
+    void save(std::ostream& oStream, const fs::path& path, const std::vector<float>& data, const nanogui::Vector2i& imageSize, int nChannels)
+        const override;
 
-    bool hasPremultipliedAlpha() const override {
-        return false;
-    }
+    bool hasPremultipliedAlpha() const override { return false; }
 
-    virtual bool canSaveFile(const std::string& extension) const override {
-        return toLower(extension) == ".hdr";
-    }
+    virtual bool canSaveFile(const std::string& extension) const override { return toLower(extension) == ".hdr"; }
 };
 
-}
+} // namespace tev

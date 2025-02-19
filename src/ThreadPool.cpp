@@ -9,9 +9,7 @@ using namespace std;
 
 namespace tev {
 
-ThreadPool::ThreadPool()
-: ThreadPool{thread::hardware_concurrency()} {
-}
+ThreadPool::ThreadPool() : ThreadPool{thread::hardware_concurrency()} {}
 
 ThreadPool::ThreadPool(size_t maxNumThreads, bool force) {
     if (!force) {
@@ -110,4 +108,4 @@ void ThreadPool::flushQueue() {
     }
 }
 
-}
+} // namespace tev

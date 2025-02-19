@@ -18,10 +18,10 @@ public:
     UberShader(nanogui::RenderPass* renderPass);
     virtual ~UberShader();
 
-    // Draws just a checkerboard.
+    // Draws just a checkerboard
     void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
 
-    // Draws an image.
+    // Draws an image
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
@@ -35,7 +35,7 @@ public:
         const std::optional<Box2i>& crop
     );
 
-    // Draws a difference between a reference and an image.
+    // Draws a difference between a reference and an image
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
@@ -52,31 +52,18 @@ public:
         const std::optional<Box2i>& crop
     );
 
-    const nanogui::Color& backgroundColor() {
-        return mBackgroundColor;
-    }
+    const nanogui::Color& backgroundColor() { return mBackgroundColor; }
 
-    void setBackgroundColor(const nanogui::Color& color) {
-        mBackgroundColor = color;
-    }
+    void setBackgroundColor(const nanogui::Color& color) { mBackgroundColor = color; }
 
 private:
     void bindCheckerboardData(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
 
     void bindImageData(
-        nanogui::Texture* textureImage,
-        const nanogui::Matrix3f& transformImage,
-        float exposure,
-        float offset,
-        float gamma,
-        ETonemap tonemap
+        nanogui::Texture* textureImage, const nanogui::Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap
     );
 
-    void bindReferenceData(
-        nanogui::Texture* textureReference,
-        const nanogui::Matrix3f& transformReference,
-        EMetric metric
-    );
+    void bindReferenceData(nanogui::Texture* textureReference, const nanogui::Matrix3f& transformReference, EMetric metric);
 
     nanogui::ref<nanogui::Shader> mShader;
     nanogui::ref<nanogui::Texture> mColorMap;
@@ -84,4 +71,4 @@ private:
     nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 };
 
-}
+} // namespace tev

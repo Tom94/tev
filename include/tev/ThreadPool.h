@@ -13,7 +13,6 @@
 #include <thread>
 #include <vector>
 
-
 namespace tev {
 
 class ThreadPool {
@@ -27,8 +26,7 @@ public:
         return pool;
     }
 
-    template<class F>
-    auto enqueueTask(F&& f, int priority) {
+    template <class F> auto enqueueTask(F&& f, int priority) {
         using return_type = std::invoke_result_t<decltype(f)>;
 
         ++mNumTasksInSystem;
@@ -49,15 +47,12 @@ public:
     inline auto enqueueCoroutine(int priority) noexcept {
         class Awaiter {
         public:
-            Awaiter(ThreadPool* pool, int priority)
-            : mPool{pool}, mPriority{priority} {}
+            Awaiter(ThreadPool* pool, int priority) : mPool{pool}, mPriority{priority} {}
 
             bool await_ready() const noexcept { return false; }
 
             // Suspend and enqueue coroutine continuation onto the threadpool
-            void await_suspend(std::coroutine_handle<> coroutine) noexcept {
-                mPool->enqueueTask(coroutine, mPriority);
-            }
+            void await_suspend(std::coroutine_handle<> coroutine) noexcept { mPool->enqueueTask(coroutine, mPriority); }
 
             void await_resume() const noexcept {}
 
@@ -72,23 +67,20 @@ public:
     void startThreads(size_t num);
     void shutdownThreads(size_t num);
 
-    size_t numTasksInSystem() const {
-        return mNumTasksInSystem;
-    }
+    size_t numTasksInSystem() const { return mNumTasksInSystem; }
 
     void waitUntilFinished();
     void waitUntilFinishedFor(const std::chrono::microseconds Duration);
     void flushQueue();
 
-    template <typename Int, typename F>
-    Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
+    template <typename Int, typename F> Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
         Int range = end - start;
         Int nTasks = std::min((Int)mNumThreads, range);
 
         std::vector<Task<void>> tasks;
         for (Int i = 0; i < nTasks; ++i) {
             Int taskStart = start + (range * i / nTasks);
-            Int taskEnd = start + (range * (i+1) / nTasks);
+            Int taskEnd = start + (range * (i + 1) / nTasks);
             TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
             tasks.emplace_back([](Int start, Int end, F body, int priority, ThreadPool* pool) -> Task<void> {
@@ -104,8 +96,7 @@ public:
         }
     }
 
-    template <typename Int, typename F>
-    void parallelFor(Int start, Int end, F body, int priority) {
+    template <typename Int, typename F> void parallelFor(Int start, Int end, F body, int priority) {
         parallelForAsync(start, end, body, priority).get();
     }
 
@@ -118,9 +109,7 @@ private:
         std::function<void()> fun;
 
         struct Comparator {
-            bool operator()(const QueuedTask& a, const QueuedTask& b) {
-                return a.priority < b.priority;
-            }
+            bool operator()(const QueuedTask& a, const QueuedTask& b) { return a.priority < b.priority; }
         };
     };
 
@@ -133,4 +122,4 @@ private:
     std::condition_variable mSystemBusyCondition;
 };
 
-}
+} // namespace tev

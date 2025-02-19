@@ -3,8 +3,8 @@
 
 #ifdef _WIN32
 #   define NOMINMAX
-#   include <winsock2.h>
 #   include <Ws2tcpip.h>
+#   include <winsock2.h>
 #   undef NOMINMAX
 #endif
 
@@ -50,7 +50,7 @@ IpcPacket::IpcPacket(const char* data, size_t length) {
     if (length <= 0) {
         throw runtime_error{"Cannot construct an IPC packet from no data."};
     }
-    mPayload.assign(data, data+length);
+    mPayload.assign(data, data + length);
 }
 
 void IpcPacket::setOpenImage(const string& imagePath, const string& channelSelector, bool grabFocus) {
@@ -74,7 +74,16 @@ void IpcPacket::setCloseImage(const string& imageName) {
     payload << imageName;
 }
 
-void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const vector<IpcPacket::ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const vector<float>& stridedImageData) {
+void IpcPacket::setUpdateImage(
+    const string& imageName,
+    bool grabFocus,
+    const vector<IpcPacket::ChannelDesc>& channelDescs,
+    int32_t x,
+    int32_t y,
+    int32_t width,
+    int32_t height,
+    const vector<float>& stridedImageData
+) {
     if (channelDescs.empty()) {
         throw runtime_error{"UpdateImage IPC packet must have a non-zero channel count."};
     }
@@ -104,17 +113,21 @@ void IpcPacket::setUpdateImage(const string& imageName, bool grabFocus, const ve
 
     size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < nChannels; ++c) {
-        stridedImageDataSize = max(stridedImageDataSize, (size_t)(channelOffsets[c] + (nPixels-1) * channelStrides[c] + 1));
+        stridedImageDataSize = max(stridedImageDataSize, (size_t)(channelOffsets[c] + (nPixels - 1) * channelStrides[c] + 1));
     }
 
     if (stridedImageData.size() != stridedImageDataSize) {
-        throw runtime_error{fmt::format("UpdateImage IPC packet's data size does not match specified dimensions, offset, and stride. (Expected: {})", stridedImageDataSize)};
+        throw runtime_error{fmt::format(
+            "UpdateImage IPC packet's data size does not match specified dimensions, offset, and stride. (Expected: {})", stridedImageDataSize
+        )};
     }
 
     payload << stridedImageData;
 }
 
-void IpcPacket::setCreateImage(const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const vector<string>& channelNames) {
+void IpcPacket::setCreateImage(
+    const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const vector<string>& channelNames
+) {
     if ((int32_t)channelNames.size() != nChannels) {
         throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
     }
@@ -165,8 +178,7 @@ IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
     size_t colonPos = imageString.find_last_of(":");
     if (colonPos == string::npos ||
         // windows path of the form X:/* or X:\*
-        (colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/'))
-    ) {
+        (colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/'))) {
         result.imagePath = imageString;
         result.channelSelector = "";
     } else {
@@ -252,7 +264,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 
     size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < result.nChannels; ++c) {
-        stridedImageDataSize = max(stridedImageDataSize, (size_t)(result.channelOffsets[c] + (nPixels-1) * result.channelStrides[c] + 1));
+        stridedImageDataSize = max(stridedImageDataSize, (size_t)(result.channelOffsets[c] + (nPixels - 1) * result.channelStrides[c] + 1));
     }
 
     if (payload.remainingBytes() < stridedImageDataSize * sizeof(float)) {
@@ -260,11 +272,16 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     }
 
     const float* stridedImageData = (const float*)payload.get();
-    ThreadPool::global().parallelFor<size_t>(0, nPixels, [&](size_t px) {
-        for (int32_t c = 0; c < result.nChannels; ++c) {
-            result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
-        }
-    }, numeric_limits<int>::max());
+    ThreadPool::global().parallelFor<size_t>(
+        0,
+        nPixels,
+        [&](size_t px) {
+            for (int32_t c = 0; c < result.nChannels; ++c) {
+                result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];
+            }
+        },
+        numeric_limits<int>::max()
+    );
 
     return result;
 }
@@ -564,9 +581,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     }
 }
 
-Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, const string& name)
-: mSocketFd{fd}, mName{name}
-{
+Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, const string& name) : mSocketFd{fd}, mName{name} {
     TEV_ASSERT(mSocketFd != INVALID_SOCKET, "SocketConnection must receive a valid socket.");
 
     makeSocketNonBlocking(mSocketFd);
@@ -600,16 +615,15 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
         TEV_ASSERT(bytesReceived >= 0, "With no error, the number of bytes received should be positive.");
         mRecvOffset += (size_t)bytesReceived;
 
-        // Since we aren't getting annoying SIGPIPE signals when a client
-        // disconnects, a zero-byte read here is how we know when that happens.
+        // Since we aren't getting annoying SIGPIPE signals when a client disconnects, a zero-byte read here is how we know when that
+        // happens.
         if (bytesReceived == 0) {
             tlog::info() << "Client " << mName << " (#" << mSocketFd << ") disconnected";
             close();
             return;
         }
 
-        // Go through the buffer and service as many complete messages as
-        // we can find.
+        // Go through the buffer and service as many complete messages as we can find.
         size_t processedOffset = 0;
         while (processedOffset + 4 <= mRecvOffset) {
             // There's at least enough to figure out the next message's length.
@@ -631,12 +645,10 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             }
         }
 
-        // TODO: we could save the memcpy by treating 'buffer' as a ring-buffer,
-        // but it's probably not worth the trouble. Revisit when someone throws around
-        // buffers with a size of gigabytes.
+        // TODO: we could save the memcpy by treating 'buffer' as a ring-buffer, but it's probably not worth the trouble. Revisit when
+        // someone throws around buffers with a size of gigabytes.
         if (processedOffset > 0) {
-            // There's a partial message; copy it to the start of 'buffer'
-            // and update the offsets accordingly.
+            // There's a partial message; copy it to the start of 'buffer' and update the offsets accordingly.
             memmove(mBuffer.data(), mBuffer.data() + processedOffset, mRecvOffset - processedOffset);
             mRecvOffset -= processedOffset;
         }
@@ -650,8 +662,6 @@ void Ipc::SocketConnection::close() {
     }
 }
 
-bool Ipc::SocketConnection::isClosed() const {
-    return mSocketFd == INVALID_SOCKET;
-}
+bool Ipc::SocketConnection::isClosed() const { return mSocketFd == INVALID_SOCKET; }
 
-}
+} // namespace tev

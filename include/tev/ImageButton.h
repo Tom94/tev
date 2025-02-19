@@ -5,8 +5,8 @@
 
 #include <tev/Common.h>
 
-#include <nanogui/widget.h>
 #include <nanogui/textbox.h>
+#include <nanogui/widget.h>
 
 #include <string>
 
@@ -16,11 +16,11 @@ class ImageButton : public nanogui::Widget {
 public:
     ImageButton(nanogui::Widget* parent, const std::string& caption, bool canBeReference);
 
-    nanogui::Vector2i preferred_size(NVGcontext *ctx) const override;
+    nanogui::Vector2i preferred_size(NVGcontext* ctx) const override;
 
-    bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
+    bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
 
-    void draw(NVGcontext *ctx) override;
+    void draw(NVGcontext* ctx) override;
 
     void set_theme(nanogui::Theme* theme) override {
         nanogui::Widget::set_theme(theme);
@@ -31,9 +31,7 @@ public:
         mCaptionTextBox->set_theme(captionTextBoxTheme);
     }
 
-    const std::string& caption() const {
-        return mCaption;
-    }
+    const std::string& caption() const { return mCaption; }
 
     void setCaption(const std::string& caption) {
         mCaption = caption;
@@ -47,50 +45,30 @@ public:
         }
     }
 
-    void setReferenceCallback(const std::function<void(bool)> &callback) {
-        mReferenceCallback = callback;
-    }
+    void setReferenceCallback(const std::function<void(bool)>& callback) { mReferenceCallback = callback; }
 
-    void setIsReference(bool isReference) {
-        mIsReference = isReference;
-    }
+    void setIsReference(bool isReference) { mIsReference = isReference; }
 
-    bool isReference() const {
-        return mIsReference;
-    }
+    bool isReference() const { return mIsReference; }
 
-    void setSelectedCallback(const std::function<void()> &callback) {
-        mSelectedCallback = callback;
-    }
+    void setSelectedCallback(const std::function<void()>& callback) { mSelectedCallback = callback; }
 
-    void setCaptionChangeCallback(const std::function<void()> &callback) {
-        mCaptionChangeCallback = callback;
-    }
+    void setCaptionChangeCallback(const std::function<void()>& callback) { mCaptionChangeCallback = callback; }
 
-    void setIsSelected(bool isSelected) {
-        mIsSelected = isSelected;
-    }
+    void setIsSelected(bool isSelected) { mIsSelected = isSelected; }
 
-    bool isSelected() const {
-        return mIsSelected;
-    }
+    bool isSelected() const { return mIsSelected; }
 
-    void setId(size_t id) {
-        mId = id;
-    }
+    void setId(size_t id) { mId = id; }
 
-    size_t id() const {
-        return mId;
-    }
+    size_t id() const { return mId; }
 
     void setHighlightRange(size_t begin, size_t end);
 
     void showTextBox();
     void hideTextBox();
 
-    bool textBoxVisible() const {
-        return mCaptionTextBox->visible();
-    }
+    bool textBoxVisible() const { return mCaptionTextBox->visible(); }
 
 private:
     std::string mCaption;
@@ -114,4 +92,4 @@ private:
     size_t mHighlightEnd = 0;
 };
 
-}
+} // namespace tev
