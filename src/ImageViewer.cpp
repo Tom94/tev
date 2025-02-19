@@ -1644,9 +1644,9 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
     targetSize = min(targetSize, mMaxSize);
 
     auto sizeDiff = targetSize - m_size;
-    move_window(-nanogui::Vector2i{sizeDiff.x() / 2, sizeDiff.y() / 2});
 
     set_size(targetSize);
+    move_window(-nanogui::Vector2i{sizeDiff.x() / 2, sizeDiff.y() / 2});
 }
 
 bool ImageViewer::playingBack() const { return mPlayButton->pushed(); }
