@@ -100,7 +100,7 @@ void MultiGraph::draw(NVGcontext *ctx) {
         nvgFillColor(ctx, mTextColor);
         string meanString = formatNumber(mMean);
         float textWidth = nvgTextBounds(ctx, 0, 0, meanString.c_str(), nullptr, nullptr);
-        drawTextWithShadow(ctx, m_pos.x() + m_size.x() / 2 - textWidth / 2, m_pos.y() + 1, meanString);
+        drawTextWithShadow(ctx, m_pos.x() + (float)m_size.x() / 2 - textWidth / 2, m_pos.y() + 1, meanString);
 
         nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
         nvgFillColor(ctx, mTextColor);
