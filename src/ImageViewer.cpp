@@ -18,6 +18,7 @@
 #include <nanogui/vscrollpanel.h>
 
 #include <chrono>
+#include <limits>
 #include <stdexcept>
 
 using namespace nanogui;
@@ -1745,6 +1746,10 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
     // For sanity, don't make us larger than 8192x8192 to ensure that we
     // don't break any texture size limitations of the user's GPU.
     targetSize = min(targetSize, mMaxSize);
+
+    auto sizeDiff = targetSize - m_size;
+    move_window(-nanogui::Vector2i{sizeDiff.x() / 2, sizeDiff.y() / 2});
+
     set_size(targetSize);
 }
 
