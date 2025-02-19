@@ -32,7 +32,7 @@ public:
 
     void draw_contents() override;
 
-    void draw(NVGcontext *ctx) override;
+    void draw(NVGcontext* ctx) override;
 
     void translate(const nanogui::Vector2f& amount);
     void scale(float amount, const nanogui::Vector2f& origin);
@@ -62,17 +62,13 @@ public:
     void setTonemap(ETonemap tonemap) { mTonemap = tonemap; }
 
     static nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap);
-    nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value) const {
-        return applyTonemap(value, mGamma, mTonemap);
-    }
+    nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value) const { return applyTonemap(value, mGamma, mTonemap); }
 
     EMetric metric() const { return mMetric; }
     void setMetric(EMetric metric) { mMetric = metric; }
 
     static float applyMetric(float value, float reference, EMetric metric);
-    float applyMetric(float value, float reference) const {
-        return applyMetric(value, reference, mMetric);
-    }
+    float applyMetric(float value, float reference) const { return applyMetric(value, reference, mMetric); }
 
     std::optional<Box2i> crop() { return mCrop; }
     void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
@@ -87,9 +83,8 @@ public:
     bool clipToLdr() const { return mClipToLdr; }
     void setClipToLdr(bool value) { mClipToLdr = value; }
 
-    // The following functions return four values per pixel in RGBA order. The number of pixels is given by
-    // `imageDataSize()`. If the canvas does not currently hold an image, or no channels are displayed, then zero pixels
-    // are returned.
+    // The following functions return four values per pixel in RGBA order. The number of pixels is given by `imageDataSize()`. If the canvas
+    // does not currently hold an image, or no channels are displayed, then zero pixels are returned.
     nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
     std::vector<float> getHdrImageData(bool divideAlpha, int priority) const;
     std::vector<char> getLdrImageData(bool divideAlpha, int priority) const;
@@ -102,11 +97,7 @@ public:
 
 private:
     static std::vector<Channel> channelsFromImages(
-        std::shared_ptr<Image> image,
-        std::shared_ptr<Image> reference,
-        const std::string& requestedChannelGroup,
-        EMetric metric,
-        int priority
+        std::shared_ptr<Image> image, std::shared_ptr<Image> reference, const std::string& requestedChannelGroup, EMetric metric, int priority
     );
 
     static Task<std::shared_ptr<CanvasStatistics>> computeCanvasStatistics(
@@ -118,14 +109,13 @@ private:
         int priority
     );
 
-    void drawPixelValuesAsText(NVGcontext *ctx);
-    void drawCoordinateSystem(NVGcontext *ctx);
-    void drawEdgeShadows(NVGcontext *ctx);
+    void drawPixelValuesAsText(NVGcontext* ctx);
+    void drawCoordinateSystem(NVGcontext* ctx);
+    void drawEdgeShadows(NVGcontext* ctx);
 
     nanogui::Vector2f pixelOffset(const nanogui::Vector2i& size) const;
 
-    // Assembles the transform from canonical space to
-    // the [-1, 1] square for the current image.
+    // Assembles the transform from canonical space to the [-1, 1] square for the current image.
     nanogui::Matrix3f transform(const Image* image);
     nanogui::Matrix3f textureToNanogui(const Image* image);
     nanogui::Matrix3f displayWindowToNanogui(const Image* image);
@@ -154,4 +144,4 @@ private:
     std::map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;
 };
 
-}
+} // namespace tev

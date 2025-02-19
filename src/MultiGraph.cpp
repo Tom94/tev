@@ -5,8 +5,8 @@
 
 #include <tev/MultiGraph.h>
 
-#include <nanogui/theme.h>
 #include <nanogui/opengl.h>
+#include <nanogui/theme.h>
 
 #include <array>
 
@@ -20,40 +20,37 @@ string formatNumber(float v) {
     return needsScientificNotation ? fmt::format("{:.2e}", v) : fmt::format("{:.3f}", v);
 }
 
-MultiGraph::MultiGraph(Widget *parent, const std::string &caption)
-: Widget(parent), mCaption(caption) {
+MultiGraph::MultiGraph(Widget* parent, const std::string& caption) : Widget(parent), mCaption(caption) {
     mBackgroundColor = Color(20, 128);
     mForegroundColor = Color(255, 192, 0, 128);
     mTextColor = Color(240, 192);
 }
 
-Vector2i MultiGraph::preferred_size(NVGcontext *) const {
-    return Vector2i(180, 80);
-}
+Vector2i MultiGraph::preferred_size(NVGcontext*) const { return Vector2i(180, 80); }
 
-void MultiGraph::draw(NVGcontext *ctx) {
+void MultiGraph::draw(NVGcontext* ctx) {
     Widget::draw(ctx);
 
-    NVGpaint bg = nvgBoxGradient(ctx,
-        m_pos.x() + 1, m_pos.y() + 1 + 1.0f, m_size.x() - 2, m_size.y() - 2,
-        3, 4, Color(120, 32), Color(32, 32));
+    NVGpaint bg = nvgBoxGradient(ctx, m_pos.x() + 1, m_pos.y() + 1 + 1.0f, m_size.x() - 2, m_size.y() - 2, 3, 4, Color(120, 32), Color(32, 32));
 
     nvgBeginPath(ctx);
-    nvgRoundedRect(ctx, m_pos.x() + 1, m_pos.y() + 1 + 1.0f, m_size.x() - 2,
-        m_size.y() - 2, 3);
+    nvgRoundedRect(ctx, m_pos.x() + 1, m_pos.y() + 1 + 1.0f, m_size.x() - 2, m_size.y() - 2, 3);
 
     nvgFillPaint(ctx, bg);
 
     nvgFill(ctx);
 
     if (mValues.size() >= 2) {
-        array<Color, 3> colors = {{
-            Color{255, 0, 0, 200},
-            Color{0, 255, 0, 200},
-            Color{0, 0, 255, 200},
-        }};
+        array<Color, 3> colors = {
+            {
+             Color{255, 0, 0, 200},
+             Color{0, 255, 0, 200},
+             Color{0, 0, 255, 200},
+             }
+        };
 
         nvgSave(ctx);
+
         // Additive blending
         nvgGlobalCompositeBlendFunc(ctx, NVGblendFactor::NVG_SRC_ALPHA, NVGblendFactor::NVG_ONE);
 
@@ -136,10 +133,9 @@ void MultiGraph::draw(NVGcontext *ctx) {
     nvgFill(ctx);
 
     nvgBeginPath(ctx);
-    nvgRoundedRect(ctx, m_pos.x() + 0.5f, m_pos.y() + 0.5f, m_size.x() - 1,
-        m_size.y() - 1, 2.5f);
+    nvgRoundedRect(ctx, m_pos.x() + 0.5f, m_pos.y() + 0.5f, m_size.x() - 1, m_size.y() - 1, 2.5f);
     nvgStrokeColor(ctx, Color(0, 48));
     nvgStroke(ctx);
 }
 
-}
+} // namespace tev

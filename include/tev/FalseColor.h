@@ -5,15 +5,9 @@
 
 #include <tev/Common.h>
 
-#include <deque>
-#include <mutex>
-#include <condition_variable>
+namespace tev { namespace colormap {
 
-namespace tev {
+const std::vector<float>& turbo();
+const std::vector<float>& viridis();
 
-namespace colormap {
-    const std::vector<float>& turbo();
-    const std::vector<float>& viridis();
-}
-
-}
+}} // namespace tev::colormap

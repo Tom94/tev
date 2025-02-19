@@ -20,21 +20,13 @@ pair<string, string> Channel::split(const string& channel) {
     return {"", channel};
 }
 
-string Channel::tail(const string& channel) {
-    return split(channel).second;
-}
+string Channel::tail(const string& channel) { return split(channel).second; }
 
-string Channel::head(const string& channel) {
-    return split(channel).first;
-}
+string Channel::head(const string& channel) { return split(channel).first; }
 
-bool Channel::isTopmost(const string& channel) {
-    return tail(channel) == channel;
-}
+bool Channel::isTopmost(const string& channel) { return tail(channel) == channel; }
 
-bool Channel::isAlpha(const string& channel) {
-    return toLower(tail(channel)) == "a";
-}
+bool Channel::isAlpha(const string& channel) { return toLower(tail(channel)) == "a"; }
 
 Color Channel::color(string channel) {
     channel = toLower(tail(channel));
@@ -50,30 +42,33 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
-Channel::Channel(const std::string& name, const nanogui::Vector2i& size)
-: mName{name}, mSize{size} {
+Channel::Channel(const std::string& name, const nanogui::Vector2i& size) : mName{name}, mSize{size} {
     mData.resize((size_t)mSize.x() * mSize.y());
 }
 
 Task<void> Channel::divideByAsync(const Channel& other, int priority) {
-    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
-        if (other.at(i) != 0) {
-            at(i) /= other.at(i);
-        } else {
-            at(i) = 0;
-        }
-    }, priority);
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        other.numPixels(),
+        [&](size_t i) {
+            if (other.at(i) != 0) {
+                at(i) /= other.at(i);
+            } else {
+                at(i) = 0;
+            }
+        },
+        priority
+    );
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
-    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) {
-        at(i) *= other.at(i);
-    }, priority);
+    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) { at(i) *= other.at(i); }, priority);
 }
 
 void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {
     if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
-        tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height << "] could not be updated because it does not fit into the channel's size " << size();
+        tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height
+                        << "] could not be updated because it does not fit into the channel's size " << size();
         return;
     }
 
@@ -84,4 +79,4 @@ void Channel::updateTile(int x, int y, int width, int height, const vector<float
     }
 }
 
-}
+} // namespace tev

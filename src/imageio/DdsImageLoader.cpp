@@ -1,8 +1,8 @@
 // This file was developed by Thomas Müller <contact@tom94.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include <tev/imageio/DdsImageLoader.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/DdsImageLoader.h>
 
 #include <DirectXTex.h>
 
@@ -60,8 +60,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
         case DXGI_FORMAT_BC7_UNORM:
         case DXGI_FORMAT_BC7_UNORM_SRGB:
         case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM:
-        case DXGI_FORMAT_B4G4R4A4_UNORM :
-            return 4;
+        case DXGI_FORMAT_B4G4R4A4_UNORM: return 4;
         case DXGI_FORMAT_R32G32B32_TYPELESS:
         case DXGI_FORMAT_R32G32B32_FLOAT:
         case DXGI_FORMAT_R32G32B32_UINT:
@@ -94,8 +93,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
         case DXGI_FORMAT_A8P8:
         case DXGI_FORMAT_P208:
         case DXGI_FORMAT_V208:
-        case DXGI_FORMAT_V408:
-            return 3;
+        case DXGI_FORMAT_V408: return 3;
         case DXGI_FORMAT_R32G32_TYPELESS:
         case DXGI_FORMAT_R32G32_FLOAT:
         case DXGI_FORMAT_R32G32_UINT:
@@ -117,8 +115,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
         case DXGI_FORMAT_BC5_UNORM:
         case DXGI_FORMAT_BC5_SNORM:
         case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-        case DXGI_FORMAT_D24_UNORM_S8_UINT:
-            return 2;
+        case DXGI_FORMAT_D24_UNORM_S8_UINT: return 2;
         case DXGI_FORMAT_R32_TYPELESS:
         case DXGI_FORMAT_D32_FLOAT:
         case DXGI_FORMAT_R32_FLOAT:
@@ -144,11 +141,9 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
         case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
         case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
         case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
-        case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
-            return 1;
+        case DXGI_FORMAT_X24_TYPELESS_G8_UINT: return 1;
         case DXGI_FORMAT_UNKNOWN:
-        default:
-            return 0;
+        default: return 0;
     }
 }
 
@@ -157,7 +152,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};
     }
-    ScopeGuard comScopeGuard{ []() { CoUninitialize(); } };
+    ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
@@ -177,21 +172,12 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     DXGI_FORMAT format;
     int numChannels = getDxgiChannelCount(metadata.format);
     switch (numChannels) {
-        case 4:
-            format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-            break;
-        case 3:
-            format = DXGI_FORMAT_R32G32B32_FLOAT;
-            break;
-        case 2:
-            format = DXGI_FORMAT_R32G32_FLOAT;
-            break;
-        case 1:
-            format = DXGI_FORMAT_R32_FLOAT;
-            break;
+        case 4: format = DXGI_FORMAT_R32G32B32A32_FLOAT; break;
+        case 3: format = DXGI_FORMAT_R32G32B32_FLOAT; break;
+        case 2: format = DXGI_FORMAT_R32G32_FLOAT; break;
+        case 1: format = DXGI_FORMAT_R32_FLOAT; break;
         case 0:
-        default:
-            throw invalid_argument{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
+        default: throw invalid_argument{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
     }
 
     // Use DirectXTex to either decompress or convert to the target floating point format.
@@ -203,13 +189,15 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         std::swap(scratchImage, decompImage);
     } else if (metadata.format != format) {
         DirectX::ScratchImage convertedImage;
-        if (DirectX::Convert(*scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage) != S_OK) {
+        if (DirectX::Convert(
+                *scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage
+            ) != S_OK) {
             throw invalid_argument{"Failed to convert DDS image."};
         }
         std::swap(scratchImage, convertedImage);
     }
 
-    resultData.channels = makeNChannels(numChannels, { (int)metadata.width, (int)metadata.height });
+    resultData.channels = makeNChannels(numChannels, {(int)metadata.width, (int)metadata.height});
 
     auto numPixels = (size_t)metadata.width * metadata.height;
     if (numPixels == 0) {
@@ -222,28 +210,36 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         assert(!DirectX::IsSRGB(metadata.format));
         // Assume that the image data is already in linear space.
         auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
-            size_t baseIdx = i * numChannels;
-            for (int c = 0; c < numChannels; ++c) {
-                resultData.channels[c].at(i) = typedData[baseIdx + c];
-            }
-        }, priority);
-    } else {
-        // Ideally, we'd be able to assume that only *_SRGB format images were in
-        // sRGB space, and only they need to converted to linear. However,
-        // RGB(A) DDS images tend to be in sRGB space, even those not
-        // explicitly stored in an *_SRGB format.
-        auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
-        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, [&](size_t i) {
-            size_t baseIdx = i * numChannels;
-            for (int c = 0; c < numChannels; ++c) {
-                if (c == 3) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                size_t baseIdx = i * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
                     resultData.channels[c].at(i) = typedData[baseIdx + c];
-                } else {
-                    resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c]);
                 }
-            }
-        }, priority);
+            },
+            priority
+        );
+    } else {
+        // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
+        // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
+        auto typedData = reinterpret_cast<float*>(scratchImage.GetPixels());
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                size_t baseIdx = i * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
+                    if (c == 3) {
+                        resultData.channels[c].at(i) = typedData[baseIdx + c];
+                    } else {
+                        resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c]);
+                    }
+                }
+            },
+            priority
+        );
     }
 
     resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
@@ -251,4 +247,4 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     co_return result;
 }
 
-}
+} // namespace tev

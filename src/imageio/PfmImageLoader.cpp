@@ -1,8 +1,8 @@
 // This file was developed by Thomas Müller <contact@tom94.net>.
 // It is published under the BSD 3-Clause License within the LICENSE file.
 
-#include <tev/imageio/PfmImageLoader.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/PfmImageLoader.h>
 
 #include <bit>
 
@@ -62,7 +62,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
     // Skip last newline at the end of the header.
     char c;
-    while (iStream.get(c) && c != '\r' && c != '\n');
+    while (iStream.get(c) && c != '\r' && c != '\n')
+        ;
 
     // Read entire file in binary mode.
     vector<float> data(numFloats);
@@ -74,27 +75,31 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     // Reverse bytes of every float if endianness does not match up with system
     const bool shallSwapBytes = (std::endian::native == std::endian::little) != isPfmLittleEndian;
 
-    co_await ThreadPool::global().parallelForAsync(0, size.y(), [&](int y) {
-        for (int x = 0; x < size.x(); ++x) {
-            int baseIdx = (y * size.x() + x) * numChannels;
-            for (int c = 0; c < numChannels; ++c) {
-                float val = data[baseIdx + c];
+    co_await ThreadPool::global().parallelForAsync(
+        0,
+        size.y(),
+        [&](int y) {
+            for (int x = 0; x < size.x(); ++x) {
+                int baseIdx = (y * size.x() + x) * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
+                    float val = data[baseIdx + c];
 
-                // Thankfully, due to branch prediction, the "if" in the
-                // inner loop is no significant overhead.
-                if (shallSwapBytes) {
-                    val = swapBytes(val);
+                    // Thankfully, due to branch prediction, the "if" in the inner loop is no significant overhead.
+                    if (shallSwapBytes) {
+                        val = swapBytes(val);
+                    }
+
+                    // Flip image vertically due to PFM format
+                    resultData.channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
                 }
-
-                // Flip image vertically due to PFM format
-                resultData.channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
             }
-        }
-    }, priority);
+        },
+        priority
+    );
 
     resultData.hasPremultipliedAlpha = false;
 
     co_return result;
 }
 
-}
+} // namespace tev

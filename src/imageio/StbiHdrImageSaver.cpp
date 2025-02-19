@@ -21,4 +21,4 @@ void StbiHdrImageSaver::save(ostream& oStream, const fs::path&, const vector<flo
     stbi_write_hdr_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
 }
 
-}
+} // namespace tev

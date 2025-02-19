@@ -3,8 +3,8 @@
 
 #include <tev/ImageButton.h>
 
-#include <nanogui/opengl.h>
 #include <nanogui/layout.h>
+#include <nanogui/opengl.h>
 #include <nanogui/theme.h>
 
 #include <cctype>
@@ -14,8 +14,8 @@ using namespace std;
 
 namespace tev {
 
-ImageButton::ImageButton(Widget *parent, const string &caption, bool canBeReference)
-: Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
+ImageButton::ImageButton(Widget* parent, const string& caption, bool canBeReference) :
+    Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
     this->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
     mCaptionTextBox = new TextBox{this, caption};
     mCaptionTextBox->set_visible(false);
@@ -43,7 +43,7 @@ Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
     return Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
 }
 
-bool ImageButton::mouse_button_event(const Vector2i &p, int button, bool down, int modifiers) {
+bool ImageButton::mouse_button_event(const Vector2i& p, int button, bool down, int modifiers) {
     if (Widget::mouse_button_event(p, button, down, modifiers)) {
         return true;
     }
@@ -56,8 +56,7 @@ bool ImageButton::mouse_button_event(const Vector2i &p, int button, bool down, i
         // If we already were the reference, then let's disable using us a reference.
         mIsReference = !mIsReference;
 
-        // If we newly became the reference, then we need to disable the existing reference
-        // if it exists.
+        // If we newly became the reference, then we need to disable the existing reference if it exists.
         if (mIsReference) {
             for (auto widget : parent()->children()) {
                 ImageButton* b = dynamic_cast<ImageButton*>(widget);
@@ -67,8 +66,7 @@ bool ImageButton::mouse_button_event(const Vector2i &p, int button, bool down, i
             }
         }
 
-        // Invoke the callback in any case, such that the surrounding code can
-        // react to new references or a loss of a reference image.
+        // Invoke the callback in any case, such that the surrounding code can react to new references or a loss of a reference image.
         if (mReferenceCallback) {
             mReferenceCallback(mIsReference);
         }
@@ -94,11 +92,12 @@ bool ImageButton::mouse_button_event(const Vector2i &p, int button, bool down, i
     return false;
 }
 
-void ImageButton::draw(NVGcontext *ctx) {
+void ImageButton::draw(NVGcontext* ctx) {
     Widget::draw(ctx);
 
-    if (mCaptionTextBox->visible())
+    if (mCaptionTextBox->visible()) {
         return;
+    }
 
     if (mIsReference) {
         nvgBeginPath(ctx);
@@ -133,8 +132,10 @@ void ImageButton::draw(NVGcontext *ctx) {
         float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
 
         nvgFontSize(ctx, m_font_size);
-        while (mCutoff < mCaption.size() && nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > m_size.x() - 25 - idSize) {
-            mCutoff += codePointLength(mCaption[mCutoff]);;
+        while (mCutoff < mCaption.size() &&
+               nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > m_size.x() - 25 - idSize) {
+            mCutoff += codePointLength(mCaption[mCutoff]);
+            ;
         }
 
         mSizeForWhichCutoffWasComputed = m_size;
@@ -199,10 +200,7 @@ void ImageButton::draw(NVGcontext *ctx) {
 void ImageButton::setHighlightRange(size_t begin, size_t end) {
     size_t beginIndex = begin;
     if (end > mCaption.size()) {
-        throw std::invalid_argument{fmt::format(
-            "end ({}) must not be larger than mCaption.size() ({})",
-            end, mCaption.size()
-        )};
+        throw std::invalid_argument{fmt::format("end ({}) must not be larger than mCaption.size() ({})", end, mCaption.size())};
     }
 
     mHighlightBegin = beginIndex;
@@ -242,4 +240,4 @@ void ImageButton::hideTextBox() {
     mCaptionTextBox->set_visible(false);
 }
 
-}
+} // namespace tev

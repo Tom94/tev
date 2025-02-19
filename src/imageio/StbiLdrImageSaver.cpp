@@ -34,4 +34,4 @@ void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, const vecto
     }
 }
 
-}
+} // namespace tev

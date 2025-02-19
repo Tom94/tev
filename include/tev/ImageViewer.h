@@ -28,7 +28,7 @@ class ImageViewer : public nanogui::Screen {
 public:
     ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool showUi, bool floatBuffer, bool supportsHdr);
 
-    bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
+    bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
     bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;
 
     bool drop_event(const std::vector<std::string>& filenames) override;
@@ -42,18 +42,12 @@ public:
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
 
-    bool hasImageWithName(const std::string& imageName) {
-        return !!imageByName(imageName);
-    }
+    bool hasImageWithName(const std::string& imageName) { return !!imageByName(imageName); }
 
-    void addImage(std::shared_ptr<Image> image, bool shallSelect = false) {
-        insertImage(image, mImages.size(), shallSelect);
-    }
+    void addImage(std::shared_ptr<Image> image, bool shallSelect = false) { insertImage(image, mImages.size(), shallSelect); }
 
     void removeImage(std::shared_ptr<Image> image);
-    void removeImage(const std::string& imageName) {
-        removeImage(imageByName(imageName));
-    }
+    void removeImage(const std::string& imageName) { removeImage(imageByName(imageName)); }
     void removeAllImages();
 
     void replaceImage(std::shared_ptr<Image> image, std::shared_ptr<Image> replacement, bool shallSelect);
@@ -62,9 +56,7 @@ public:
     }
 
     void reloadImage(std::shared_ptr<Image> image, bool shallSelect = false);
-    void reloadImage(const std::string& imageName, bool shallSelect = false) {
-        reloadImage(imageByName(imageName), shallSelect);
-    }
+    void reloadImage(const std::string& imageName, bool shallSelect = false) { reloadImage(imageByName(imageName), shallSelect); }
     void reloadAllImages();
     void reloadImagesWhoseFileChanged();
 
@@ -72,8 +64,10 @@ public:
         const std::string& imageName,
         bool shallSelect,
         const std::string& channel,
-        int x, int y,
-        int width, int height,
+        int x,
+        int y,
+        int width,
+        int height,
         const std::vector<float>& imageData
     );
 
@@ -85,21 +79,15 @@ public:
 
     void selectReference(const std::shared_ptr<Image>& image);
 
-    float exposure() const {
-        return mExposureSlider->value();
-    }
+    float exposure() const { return mExposureSlider->value(); }
 
     void setExposure(float value);
 
-    float offset() const {
-        return mOffsetSlider->value();
-    }
+    float offset() const { return mOffsetSlider->value(); }
 
     void setOffset(float value);
 
-    float gamma() const {
-        return mGammaSlider->value();
-    }
+    float gamma() const { return mGammaSlider->value(); }
 
     void setGamma(float value);
 
@@ -107,15 +95,11 @@ public:
 
     void resetImage();
 
-    ETonemap tonemap() const {
-        return mImageCanvas->tonemap();
-    }
+    ETonemap tonemap() const { return mImageCanvas->tonemap(); }
 
     void setTonemap(ETonemap tonemap);
 
-    EMetric metric() const {
-        return mImageCanvas->metric();
-    }
+    EMetric metric() const { return mImageCanvas->metric(); }
 
     void setMetric(EMetric metric);
 
@@ -138,9 +122,7 @@ public:
     bool isMaximized();
     void toggleMaximized();
 
-    bool isUiVisible() {
-        return mSidebar->visible();
-    }
+    bool isUiVisible() { return mSidebar->visible(); }
     void setUiVisible(bool shouldBeVisible);
 
     void toggleHelpWindow();
@@ -148,18 +130,11 @@ public:
     void openImageDialog();
     void saveImageDialog();
 
-    void requestLayoutUpdate() {
-        mRequiresLayoutUpdate = true;
-    }
+    void requestLayoutUpdate() { mRequiresLayoutUpdate = true; }
 
-    template <typename T>
-    void scheduleToUiThread(const T& fun) {
-        mTaskQueue.push(fun);
-    }
+    template <typename T> void scheduleToUiThread(const T& fun) { mTaskQueue.push(fun); }
 
-    BackgroundImagesLoader& imagesLoader() const {
-        return *mImagesLoader;
-    }
+    BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
 
 private:
     void updateFilter();
@@ -182,13 +157,9 @@ private:
         return mSidebar->visible() && p.x() - mSidebar->fixed_width() < 10 && p.x() - mSidebar->fixed_width() > -5;
     }
 
-    int visibleSidebarWidth() {
-        return mSidebar->visible() ? mSidebar->fixed_width() : 0;
-    }
+    int visibleSidebarWidth() { return mSidebar->visible() ? mSidebar->fixed_width() : 0; }
 
-    int visibleFooterHeight() {
-        return mFooter->visible() ? mFooter->fixed_height() : 0;
-    }
+    int visibleFooterHeight() { return mFooter->visible() ? mFooter->fixed_height() : 0; }
 
     SharedQueue<std::function<void(void)>> mTaskQueue;
 
@@ -275,4 +246,4 @@ private:
     nanogui::Vector2i mMaxSize = {8192, 8192};
 };
 
-}
+} // namespace tev

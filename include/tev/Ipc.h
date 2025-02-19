@@ -63,20 +63,16 @@ public:
         CreateImage = 4,
         UpdateImageV2 = 5, // Adds multi-channel support
         UpdateImageV3 = 6, // Adds custom striding/offset support
-        OpenImageV2 = 7, // Explicit separation of image name and channel selector
+        OpenImageV2 = 7,   // Explicit separation of image name and channel selector
         VectorGraphics = 8,
     };
 
     IpcPacket() = default;
     IpcPacket(const char* data, size_t length);
 
-    const char* data() const {
-        return mPayload.data();
-    }
+    const char* data() const { return mPayload.data(); }
 
-    size_t size() const {
-        return mPayload.size();
-    }
+    size_t size() const { return mPayload.size(); }
 
     EType type() const {
         // The first 4 bytes encode the message size.
@@ -92,8 +88,19 @@ public:
     void setOpenImage(const std::string& imagePath, const std::string& channelSelector, bool grabFocus);
     void setReloadImage(const std::string& imageName, bool grabFocus);
     void setCloseImage(const std::string& imageName);
-    void setUpdateImage(const std::string& imageName, bool grabFocus, const std::vector<ChannelDesc>& channelDescs, int32_t x, int32_t y, int32_t width, int32_t height, const std::vector<float>& stridedImageData);
-    void setCreateImage(const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames);
+    void setUpdateImage(
+        const std::string& imageName,
+        bool grabFocus,
+        const std::vector<ChannelDesc>& channelDescs,
+        int32_t x,
+        int32_t y,
+        int32_t width,
+        int32_t height,
+        const std::vector<float>& stridedImageData
+    );
+    void setCreateImage(
+        const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames
+    );
     void setVectorGraphics(const std::string& imageName, bool grabFocus, bool append, const std::vector<VgCommand>& commands);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
@@ -139,16 +146,14 @@ private:
             return *this;
         }
 
-        template <typename T>
-        IStream& operator>>(std::vector<T>& var) {
+        template <typename T> IStream& operator>>(std::vector<T>& var) {
             for (auto& elem : var) {
                 *this >> elem;
             }
             return *this;
         }
 
-        template <typename T>
-        IStream& operator>>(T& var) {
+        template <typename T> IStream& operator>>(T& var) {
             if (mData.size() < mIdx + sizeof(T)) {
                 throw std::runtime_error{"Trying to read generic type beyond the bounds of the IPC packet payload."};
             }
@@ -158,13 +163,10 @@ private:
             return *this;
         }
 
-        size_t remainingBytes() const {
-            return mData.size() - mIdx;
-        }
+        size_t remainingBytes() const { return mData.size() - mIdx; }
 
-        const char* get() const {
-            return &mData[mIdx];
-        }
+        const char* get() const { return &mData[mIdx]; }
+
     private:
         const std::vector<char>& mData;
         size_t mIdx = 0;
@@ -178,11 +180,11 @@ private:
             *this << (uint32_t)0;
         }
 
-        template <typename T>
-        OStream& operator<<(const std::vector<T>& var) {
+        template <typename T> OStream& operator<<(const std::vector<T>& var) {
             for (auto&& elem : var) {
                 *this << elem;
             }
+
             return *this;
         }
 
@@ -190,6 +192,7 @@ private:
             for (auto&& character : var) {
                 *this << character;
             }
+
             *this << '\0';
             return *this;
         }
@@ -205,8 +208,7 @@ private:
             return *this;
         }
 
-        template <typename T>
-        OStream& operator<<(T var) {
+        template <typename T> OStream& operator<<(T var) {
             if (mData.size() < mIdx + sizeof(T)) {
                 mData.resize(mIdx + sizeof(T));
             }
@@ -216,10 +218,9 @@ private:
             updateSize();
             return *this;
         }
+
     private:
-        void updateSize() {
-            *((uint32_t*)mData.data()) = (uint32_t)mIdx;
-        }
+        void updateSize() { *((uint32_t*)mData.data()) = (uint32_t)mIdx; }
 
         std::vector<char>& mData;
         size_t mIdx = 0;
@@ -237,9 +238,7 @@ public:
     Ipc(const std::string& hostname = "127.0.0.1:14158");
     virtual ~Ipc();
 
-    bool isPrimaryInstance() {
-        return mIsPrimaryInstance;
-    }
+    bool isPrimaryInstance() { return mIsPrimaryInstance; }
 
     bool attemptToBecomePrimaryInstance();
 
@@ -271,9 +270,8 @@ private:
         Ipc::socket_t mSocketFd;
         std::string mName;
 
-        // Because TCP socket recv() calls return as much data as is available
-        // (which may have the partial contents of a client-side send() call,
-        // we need to buffer it up in SocketConnection.
+        // Because TCP socket recv() calls return as much data as is available (which may have the partial contents of a client-side send()
+        // call, we need to buffer it up in SocketConnection.
         std::vector<char> mBuffer;
         // Offset into buffer where next recv() call should start writing.
         size_t mRecvOffset = 0;
@@ -286,4 +284,4 @@ private:
     std::string mLockName;
 };
 
-}
+} // namespace tev

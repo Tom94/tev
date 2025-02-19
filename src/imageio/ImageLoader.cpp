@@ -51,4 +51,4 @@ vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size
     return channels;
 }
 
-}
+} // namespace tev

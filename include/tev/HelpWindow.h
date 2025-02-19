@@ -24,4 +24,4 @@ private:
     std::function<void()> mCloseCallback;
 };
 
-}
+} // namespace tev

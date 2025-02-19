@@ -10,8 +10,8 @@
 #include <nanogui/vector.h>
 
 #include <istream>
-#include <tuple>
 #include <string>
+#include <tuple>
 
 namespace tev {
 
@@ -22,7 +22,8 @@ public:
     virtual bool canLoadFile(std::istream& iStream) const = 0;
 
     // Return loaded image data as well as whether that data has the alpha channel pre-multiplied or not.
-    virtual Task<std::vector<ImageData>> load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority) const = 0;
+    virtual Task<std::vector<ImageData>>
+        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority) const = 0;
 
     virtual std::string name() const = 0;
 
@@ -32,4 +33,4 @@ protected:
     static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size);
 };
 
-}
+} // namespace tev

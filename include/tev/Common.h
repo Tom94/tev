@@ -14,8 +14,8 @@
 #include <cmath>
 #include <filesystem>
 #include <functional>
-#include <string>
 #include <sstream>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -29,11 +29,11 @@
 
 // Define command key for windows/mac/linux
 #ifdef __APPLE__
-#define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_SUPER
-#define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_SUPER
+#   define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_SUPER
+#   define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_SUPER
 #else
-#define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_CONTROL
-#define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
+#   define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_CONTROL
+#   define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
 #endif
 
 #ifdef __GNUC__
@@ -45,7 +45,7 @@
 #endif
 
 #define TEV_ASSERT(cond, description, ...) \
-    if (UNLIKELY(!(cond))) \
+    if (UNLIKELY(!(cond)))                 \
         throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)};
 
 #ifndef TEV_VERSION
@@ -53,18 +53,14 @@
 #endif
 
 // Make std::filesystem::path formattable.
-template <>
-struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const std::filesystem::path& path, FormatContext& ctx) {
+template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
+    template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) {
         return formatter<std::string_view>::format(path.string(), ctx);
     }
 };
 
-template <typename T, uint32_t N_DIMS>
-struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) {
+template <typename T, uint32_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_view> {
+    template <typename FormatContext> auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) {
         std::ostringstream s;
         s << v;
         return formatter<std::string_view>::format(s.str(), ctx);
@@ -74,117 +70,120 @@ struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_vi
 struct NVGcontext;
 
 namespace nanogui {
-    template <typename Value, size_t Size>
-    Array<Value, Size> inverse(const Array<Value, Size> &a) {
-        Array<Value, Size> result;
-        for (size_t i = 0; i < Size; ++i)
-            result.v[i] = 1.0f / a.v[i];
-        return result;
+template <typename Value, size_t Size> Array<Value, Size> inverse(const Array<Value, Size>& a) {
+    Array<Value, Size> result;
+    for (size_t i = 0; i < Size; ++i) {
+        result.v[i] = 1.0f / a.v[i];
     }
 
-    template <typename Value, size_t Size>
-    Value mean(const Array<Value, Size> &a) {
-        Value result = 0;
-        for (size_t i = 0; i < Size; ++i)
-            result += a.v[i];
-        return result / (Value)Size;
+    return result;
+}
+
+template <typename Value, size_t Size> Value mean(const Array<Value, Size>& a) {
+    Value result = 0;
+    for (size_t i = 0; i < Size; ++i) {
+        result += a.v[i];
     }
 
-    inline Matrix3f inverse(Matrix3f mat) {
-        float d11 = mat.m[1][1] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][1];
-        float d12 = mat.m[1][0] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][0];
-        float d13 = mat.m[1][0] * mat.m[2][1] + mat.m[1][1] * -mat.m[2][0];
+    return result / (Value)Size;
+}
 
-        float det = mat.m[0][0] * d11 - mat.m[0][1] * d12 + mat.m[0][2] * d13;
+inline Matrix3f inverse(Matrix3f mat) {
+    float d11 = mat.m[1][1] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][1];
+    float d12 = mat.m[1][0] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][0];
+    float d13 = mat.m[1][0] * mat.m[2][1] + mat.m[1][1] * -mat.m[2][0];
 
-        if (std::abs(det) == 0.0f) {
-            return Matrix3f{0.0f};
+    float det = mat.m[0][0] * d11 - mat.m[0][1] * d12 + mat.m[0][2] * d13;
+
+    if (std::abs(det) == 0.0f) {
+        return Matrix3f{0.0f};
+    }
+
+    det = 1.0f / det;
+
+    float d21 = mat.m[0][1] * mat.m[2][2] + mat.m[0][2] * -mat.m[2][1];
+    float d22 = mat.m[0][0] * mat.m[2][2] + mat.m[0][2] * -mat.m[2][0];
+    float d23 = mat.m[0][0] * mat.m[2][1] + mat.m[0][1] * -mat.m[2][0];
+
+    float d31 = mat.m[0][1] * mat.m[1][2] - mat.m[0][2] * mat.m[1][1];
+    float d32 = mat.m[0][0] * mat.m[1][2] - mat.m[0][2] * mat.m[1][0];
+    float d33 = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
+
+    mat.m[0][0] = +d11 * det;
+    mat.m[0][1] = -d21 * det;
+    mat.m[0][2] = +d31 * det;
+    mat.m[1][0] = -d12 * det;
+    mat.m[1][1] = +d22 * det;
+    mat.m[1][2] = -d32 * det;
+    mat.m[2][0] = +d13 * det;
+    mat.m[2][1] = -d23 * det;
+    mat.m[2][2] = +d33 * det;
+
+    return mat;
+}
+
+inline Matrix2f extract2x2(const Matrix3f& mat) {
+    Matrix2f result;
+    result.m[0][0] = mat.m[0][0];
+    result.m[0][1] = mat.m[0][1];
+    result.m[1][0] = mat.m[1][0];
+    result.m[1][1] = mat.m[1][1];
+
+    return result;
+}
+
+inline float extractScale(const Matrix3f& mat) {
+    float det = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
+    return std::sqrt(det);
+}
+
+template <typename Value, size_t Size> Array<Value, Size> operator*(const Matrix<Value, Size>& m, const Array<Value, Size>& v) {
+    Array<Value, Size> result;
+    for (size_t i = 0; i < Size; ++i) {
+        Value accum = 0;
+        for (size_t k = 0; k < Size; ++k) {
+            accum += m.m[k][i] * v.v[k];
         }
 
-        det = 1.0f / det;
-
-        float d21 = mat.m[0][1] * mat.m[2][2] + mat.m[0][2] * -mat.m[2][1];
-        float d22 = mat.m[0][0] * mat.m[2][2] + mat.m[0][2] * -mat.m[2][0];
-        float d23 = mat.m[0][0] * mat.m[2][1] + mat.m[0][1] * -mat.m[2][0];
-
-        float d31 = mat.m[0][1] * mat.m[1][2] - mat.m[0][2] * mat.m[1][1];
-        float d32 = mat.m[0][0] * mat.m[1][2] - mat.m[0][2] * mat.m[1][0];
-        float d33 = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
-
-        mat.m[0][0] = +d11 * det;
-        mat.m[0][1] = -d21 * det;
-        mat.m[0][2] = +d31 * det;
-        mat.m[1][0] = -d12 * det;
-        mat.m[1][1] = +d22 * det;
-        mat.m[1][2] = -d32 * det;
-        mat.m[2][0] = +d13 * det;
-        mat.m[2][1] = -d23 * det;
-        mat.m[2][2] = +d33 * det;
-        return mat;
+        result.v[i] = accum;
     }
 
-    inline Matrix2f extract2x2(const Matrix3f& mat) {
-        Matrix2f result;
-        result.m[0][0] = mat.m[0][0];
-        result.m[0][1] = mat.m[0][1];
-        result.m[1][0] = mat.m[1][0];
-        result.m[1][1] = mat.m[1][1];
-        return result;
-    }
+    return result;
+}
 
-    inline float extractScale(const Matrix3f& mat) {
-        float det = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
-        return std::sqrt(det);
-    }
+template <typename Value, size_t Size> Array<Value, Size - 1> operator*(const Matrix<Value, Size>& m, const Array<Value, Size - 1>& v) {
+    Array<Value, Size - 1> result;
+    Value w = 0;
+    for (size_t i = 0; i < Size; ++i) {
+        Value accum = 0;
+        for (size_t k = 0; k < Size; ++k) {
+            accum += m.m[k][i] * (k == Size - 1 ? 1 : v.v[k]);
+        }
 
-    template <typename Value, size_t Size>
-    Array<Value, Size> operator*(const Matrix<Value, Size>& m, const Array<Value, Size>& v) {
-        Array<Value, Size> result;
-        for (size_t i = 0; i < Size; ++i) {
-            Value accum = 0;
-            for (size_t k = 0; k < Size; ++k)
-                accum += m.m[k][i] * v.v[k];
-
+        if (i == Size - 1) {
+            w = accum;
+        } else {
             result.v[i] = accum;
         }
-        return result;
     }
 
-    template <typename Value, size_t Size>
-    Array<Value, Size-1> operator*(const Matrix<Value, Size>& m, const Array<Value, Size-1>& v) {
-        Array<Value, Size-1> result;
-        Value w = 0;
-        for (size_t i = 0; i < Size; ++i) {
-            Value accum = 0;
-            for (size_t k = 0; k < Size; ++k)
-                accum += m.m[k][i] * (k == Size - 1 ? 1 : v.v[k]);
-
-            if (i == Size-1) {
-                w = accum;
-            } else {
-                result.v[i] = accum;
-            }
-        }
-        return result / w;
-    }
-
-    template <typename Value, size_t Size>
-    bool operator==(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
-        for (size_t m = 0; m < Size; ++m) {
-            for (size_t n = 0; n < Size; ++n) {
-                if (a.m[m][n] != b.m[m][n]) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    template <typename Value, size_t Size>
-    bool operator!=(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
-        return !(a == b);
-    }
+    return result / w;
 }
+
+template <typename Value, size_t Size> bool operator==(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) {
+    for (size_t m = 0; m < Size; ++m) {
+        for (size_t n = 0; n < Size; ++n) {
+            if (a.m[m][n] != b.m[m][n]) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+template <typename Value, size_t Size> bool operator!=(const Matrix<Value, Size>& a, const Matrix<Value, Size>& b) { return !(a == b); }
+} // namespace nanogui
 
 namespace tev {
 
@@ -228,8 +227,7 @@ std::string utf16to8(const std::wstring& utf16);
 fs::path toPath(const std::string& utf8);
 std::string toString(const fs::path& path);
 
-template <typename T>
-void removeDuplicates(std::vector<T>& vec) {
+template <typename T> void removeDuplicates(std::vector<T>& vec) {
     std::unordered_set<T> tmp;
     size_t idx = 0;
     for (const auto& v : vec) {
@@ -245,8 +243,7 @@ void removeDuplicates(std::vector<T>& vec) {
 }
 
 // Taken from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
-template<typename T>
-typename T::size_type levenshteinDistance(const T& source, const T& target) {
+template <typename T> typename T::size_type levenshteinDistance(const T& source, const T& target) {
     if (source.size() > target.size()) {
         return levenshteinDistance(target, source);
     }
@@ -270,6 +267,7 @@ typename T::size_type levenshteinDistance(const T& source, const T& target) {
             } else {
                 levDist[i] = std::min(std::min(levDist[i - 1], levDist[i]), previousDiagonal) + 1;
             }
+
             previousDiagonal = previousDiagonalSave;
         }
     }
@@ -277,44 +275,43 @@ typename T::size_type levenshteinDistance(const T& source, const T& target) {
     return levDist[minSize];
 }
 
-template <typename F>
-void forEachFileInDir(bool recursive, const fs::path& path, F&& callback) {
-    // Ignore errors in case a directory no longer exists.
-    // Simply don't invoke the loop body in that case.
+template <typename F> void forEachFileInDir(bool recursive, const fs::path& path, F&& callback) {
+    // Ignore errors in case a directory no longer exists. Simply don't invoke the loop body in that case.
     std::error_code ec;
     if (recursive) {
-        for (auto const& entry : fs::recursive_directory_iterator{path, ec}) {
+        for (const auto& entry : fs::recursive_directory_iterator{path, ec}) {
             callback(entry);
         }
     } else {
-        for (auto const& entry : fs::directory_iterator{path, ec}) {
+        for (const auto& entry : fs::directory_iterator{path, ec}) {
             callback(entry);
         }
     }
 }
 
-template <typename T>
-class ScopeGuard {
+template <typename T> class ScopeGuard {
 public:
     ScopeGuard(const T& callback) : mCallback{callback} {}
     ScopeGuard(T&& callback) : mCallback{std::move(callback)} {}
     ScopeGuard(const ScopeGuard<T>& other) = delete;
     ScopeGuard& operator=(const ScopeGuard<T>& other) = delete;
     ScopeGuard(ScopeGuard<T>&& other) { *this = std::move(other); }
-    ScopeGuard& operator=(ScopeGuard<T>&& other) { mCallback = std::move(other.mCallback); other.mCallback = {}; }
+    ScopeGuard& operator=(ScopeGuard<T>&& other) {
+        mCallback = std::move(other.mCallback);
+        other.mCallback = {};
+    }
     ~ScopeGuard() { mCallback(); }
+
 private:
     T mCallback;
 };
 
-template <typename T>
-T round(T value, T decimals) {
+template <typename T> T round(T value, T decimals) {
     auto precision = std::pow(static_cast<T>(10), decimals);
     return std::round(value * precision) / precision;
 }
 
-template <typename T>
-std::string join(const T& components, const std::string& delim) {
+template <typename T> std::string join(const T& components, const std::string& delim) {
     std::ostringstream s;
     for (const auto& component : components) {
         if (&components[0] != &component) {
@@ -374,8 +371,7 @@ enum ETonemap : int {
     FalseColor,
     PositiveNegative,
 
-    // This enum value should never be used directly.
-    // It facilitates looping over all members of this enum.
+    // This enum value should never be used directly. It facilitates looping over all members of this enum.
     NumTonemaps,
 };
 
@@ -388,8 +384,7 @@ enum EMetric : int {
     RelativeAbsoluteError,
     RelativeSquaredError,
 
-    // This enum value should never be used directly.
-    // It facilitates looping over all members of this enum.
+    // This enum value should never be used directly. It facilitates looping over all members of this enum.
     NumMetrics,
 };
 
@@ -408,4 +403,4 @@ static const nanogui::Color IMAGE_COLOR = {0.35f, 0.35f, 0.8f, 1.0f};
 static const nanogui::Color REFERENCE_COLOR = {0.7f, 0.4f, 0.4f, 1.0f};
 static const nanogui::Color CROP_COLOR = {0.2f, 0.5f, 0.2f, 1.0f};
 
-}
+} // namespace tev

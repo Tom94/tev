@@ -28,4 +28,4 @@ const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
     return imageSavers;
 }
 
-}
+} // namespace tev

@@ -12,8 +12,7 @@
 
 namespace tev {
 
-template <typename T>
-class SharedQueue {
+template <typename T> class SharedQueue {
 public:
     bool empty() const {
         std::lock_guard lock{mMutex};
@@ -63,4 +62,4 @@ private:
     std::condition_variable mDataCondition;
 };
 
-}
+} // namespace tev

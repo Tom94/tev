@@ -7,8 +7,7 @@
 
 namespace tev {
 
-template <typename T, uint32_t N_DIMS>
-struct Box {
+template <typename T, uint32_t N_DIMS> struct Box {
     using Vector = nanogui::Array<T, N_DIMS>;
 
     Box(const Vector& min, const Vector& max) : min{min}, max{max} {}
@@ -16,8 +15,7 @@ struct Box {
     Box() : Box{Vector{std::numeric_limits<T>::max()}, Vector{std::numeric_limits<T>::min()}} {}
 
     // Casting boxes of other types to this one
-    template <typename U>
-    Box(const Box<U, N_DIMS>& other) : min{other.min}, max{other.max} {}
+    template <typename U> Box(const Box<U, N_DIMS>& other) : min{other.min}, max{other.max} {}
 
     Box(const std::vector<Vector>& points) : Box() {
         for (const auto& point : points) {
@@ -26,9 +24,7 @@ struct Box {
         }
     }
 
-    Vector size() const {
-        return nanogui::max(max - min, Vector{(T)0});
-    }
+    Vector size() const { return nanogui::max(max - min, Vector{(T)0}); }
 
     using area_t = std::conditional_t<std::is_integral_v<T>, size_t, T>;
     area_t area() const {
@@ -41,9 +37,7 @@ struct Box {
         return result;
     }
 
-    Vector middle() const {
-        return (min + max) / (T)2;
-    }
+    Vector middle() const { return (min + max) / (T)2; }
 
     bool isValid() const {
         bool result = true;
@@ -72,25 +66,15 @@ struct Box {
         return result;
     }
 
-    bool contains(const Box& other) const {
-        return contains_inclusive(other.min) && contains_inclusive(other.max);
-    }
+    bool contains(const Box& other) const { return contains_inclusive(other.min) && contains_inclusive(other.max); }
 
-    Box intersect(const Box& other) const {
-        return {nanogui::max(min, other.min), nanogui::min(max, other.max)};
-    }
+    Box intersect(const Box& other) const { return {nanogui::max(min, other.min), nanogui::min(max, other.max)}; }
 
-    Box translate(const Vector& offset) const {
-        return {min + offset, max + offset};
-    }
+    Box translate(const Vector& offset) const { return {min + offset, max + offset}; }
 
-    bool operator==(const Box& other) const {
-        return min == other.min && max == other.max;
-    }
+    bool operator==(const Box& other) const { return min == other.min && max == other.max; }
 
-    Box<T, N_DIMS> inflate(T amount) const {
-        return {min - Vector{amount}, max + Vector{amount}};
-    }
+    Box<T, N_DIMS> inflate(T amount) const { return {min - Vector{amount}, max + Vector{amount}}; }
 
     Vector min, max;
 };
@@ -102,12 +86,10 @@ using Box2i = Box<int32_t, 2>;
 using Box3i = Box<int32_t, 3>;
 using Box4i = Box<int32_t, 4>;
 
-}
+} // namespace tev
 
-template <typename T, uint32_t N_DIMS>
-struct fmt::formatter<tev::Box<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext>
-    auto format(const tev::Box<T, N_DIMS>& box, FormatContext& ctx) {
+template <typename T, uint32_t N_DIMS> struct fmt::formatter<tev::Box<T, N_DIMS>> : fmt::formatter<std::string_view> {
+    template <typename FormatContext> auto format(const tev::Box<T, N_DIMS>& box, FormatContext& ctx) {
         return formatter<std::string_view>::format(fmt::format("[{}, {}]", box.min, box.max), ctx);
     }
 };
@@ -117,4 +99,3 @@ Stream& operator<<(Stream& os, const tev::Box<T, N_DIMS>& v) {
     os << '[' << v.min << ", " << v.max << ']';
     return os;
 }
-
