@@ -3,9 +3,6 @@
 
 #pragma once
 
-#define FMT_HEADER_ONLY 1
-#include <fmt/core.h>
-
 #include <nanogui/vector.h>
 
 #include <tinylogger/tinylogger.h>
@@ -13,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <format>
 #include <functional>
 #include <sstream>
 #include <string>
@@ -46,21 +44,20 @@
 
 #define TEV_ASSERT(cond, description, ...) \
     if (UNLIKELY(!(cond)))                 \
-        throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)};
+        throw std::runtime_error{std::format(description, ##__VA_ARGS__)};
 
 #ifndef TEV_VERSION
 #   define TEV_VERSION "undefined"
 #endif
 
-// Make std::filesystem::path formattable.
-template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) {
-        return formatter<std::string_view>::format(path.string(), ctx);
+template <> struct std::formatter<std::filesystem::path> : std::formatter<std::string_view> {
+    auto format(const std::filesystem::path& path, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "{}", path.string());
     }
 };
 
-template <typename T, uint32_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) {
+template <typename T, uint32_t N_DIMS> struct std::formatter<nanogui::Array<T, N_DIMS>> : std::formatter<std::string_view> {
+    template <typename FormatContext> auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) const {
         std::ostringstream s;
         s << v;
         return formatter<std::string_view>::format(s.str(), ctx);
