@@ -526,11 +526,7 @@ int mainFunc(const vector<string>& arguments) {
 
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better
     // not try.
-    sImageViewer = new ImageViewer{imagesLoader, maximize, capability10bit || capabilityEdr, capabilityEdr};
-    if (hideUiFlag) {
-        sImageViewer->setUiVisible(false);
-    }
-
+    sImageViewer = new ImageViewer{imagesLoader, maximize, !hideUiFlag, capability10bit || capabilityEdr, capabilityEdr};
     imageViewerIsReady = true;
 
     sImageViewer->draw_all();
@@ -547,7 +543,7 @@ int mainFunc(const vector<string>& arguments) {
     if (watchFlag)    { sImageViewer->setWatchFilesForChanges(true); }
 
     // Refresh only every 250ms if there are no user interactions. This makes an idling tev surprisingly
-        // energy-efficient. :)
+    // energy-efficient. :)
     nanogui::mainloop(250);
 
     return 0;
