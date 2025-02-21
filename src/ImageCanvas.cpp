@@ -165,14 +165,14 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                     if (shiftAndControlHeld) {
                         float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
                         unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
-                        str = fmt::format("{:02X}", discretizedValue);
+                        str = format("{:02X}", discretizedValue);
 
                         pos = Vector2f{
                             m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
                             (float)m_pos.y() + nano.y(),
                         };
                     } else {
-                        str = std::abs(values[i]) > 100000 ? fmt::format("{:6g}", values[i]) : fmt::format("{:.5f}", values[i]);
+                        str = std::abs(values[i]) > 100000 ? format("{:6g}", values[i]) : format("{:.5f}", values[i]);
 
                         pos = Vector2f{
                             (float)m_pos.x() + nano.x(),
@@ -740,7 +740,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
 
     ofstream f{path, ios_base::binary};
     if (!f) {
-        throw invalid_argument{fmt::format("Could not open file {}", path)};
+        throw invalid_argument{format("Could not open file {}", path)};
     }
 
     for (const auto& saver : ImageSaver::getSavers()) {
@@ -762,11 +762,11 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         auto end = chrono::system_clock::now();
         chrono::duration<double> elapsedSeconds = end - start;
 
-        tlog::success() << fmt::format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
+        tlog::success() << format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
         return;
     }
 
-    throw invalid_argument{fmt::format("No save routine for image type {} found.", path.extension())};
+    throw invalid_argument{format("No save routine for image type {} found.", path.extension())};
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
@@ -775,8 +775,8 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     }
 
     string channels = join(mImage->channelsInGroup(mRequestedChannelGroup), ",");
-    string key = mReference ? fmt::format("{}-{}-{}-{}", mImage->id(), channels, mReference->id(), (int)mMetric) :
-                              fmt::format("{}-{}", mImage->id(), channels);
+    string key = mReference ? format("{}-{}-{}-{}", mImage->id(), channels, mReference->id(), (int)mMetric) :
+                              format("{}-{}", mImage->id(), channels);
 
     if (mCrop.has_value()) {
         key += std::string("-crop") + "-" + std::to_string(mCrop->min.x()) + "-" + std::to_string(mCrop->min.y()) + "-" +

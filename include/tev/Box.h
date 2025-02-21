@@ -88,9 +88,9 @@ using Box4i = Box<int32_t, 4>;
 
 } // namespace tev
 
-template <typename T, uint32_t N_DIMS> struct fmt::formatter<tev::Box<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const tev::Box<T, N_DIMS>& box, FormatContext& ctx) {
-        return formatter<std::string_view>::format(fmt::format("[{}, {}]", box.min, box.max), ctx);
+template <typename T, uint32_t N_DIMS> struct std::formatter<tev::Box<T, N_DIMS>> : std::formatter<std::string_view> {
+    template <typename FormatContext> auto format(const tev::Box<T, N_DIMS>& box, FormatContext& ctx) const {
+        return formatter<std::string_view>::format(std::format("[{}, {}]", box.min, box.max), ctx);
     }
 };
 

@@ -173,12 +173,12 @@ string errorString(int errorId) {
         NULL
     );
 
-    string result = fmt::format("{} ({})", s, errorId);
+    string result = format("{} ({})", s, errorId);
     LocalFree(s);
 
     return result;
 #else
-    return fmt::format("{} ({})", strerror(errorId), errno);
+    return format("{} ({})", strerror(errorId), errno);
 #endif
 }
 
