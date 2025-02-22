@@ -9,7 +9,7 @@ on:
       - master
 
 env:
-  IS_PR: ${{ github.event_name == 'pull_request' }}
+  SUPPORT_HEIC: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build_linux:
@@ -31,7 +31,7 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.IS_PR }}
+        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target all --verbose -j
@@ -39,7 +39,7 @@ jobs:
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target package --verbose
       - name: Upload AppImage
-        if: ${{ !env.IS_PR }}
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: Linux executable
@@ -53,9 +53,9 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.IS_PR }}
+        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Upload .dmg
-        if: ${{ !env.IS_PR }}
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: macOS installer
@@ -72,7 +72,7 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.IS_PR }}
+        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
@@ -80,13 +80,13 @@ jobs:
         working-directory: ${{ env.build_dir }}
         run: cpack
       - name: Upload executable
-        if: ${{ !env.IS_PR }}
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: Windows executable
           path: ${{ env.build_dir }}/${{ env.config }}/tev.exe
       - name: Upload installer
-        if: ${{ !env.IS_PR }}
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: Windows installer
