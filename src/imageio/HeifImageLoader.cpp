@@ -106,8 +106,11 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
     ScopeGuard imgGuard{[img] { heif_image_release(img); }};
 
-    int bytes_per_line;
-    const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &bytes_per_line);
+    const int bitsPerPixel = heif_image_get_bits_per_pixel_range(img, heif_channel_interleaved);
+    const float channelScale = 1.0f / float((1 << bitsPerPixel) - 1);
+
+    int bytesPerLine;
+    const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &bytesPerLine);
     if (!data) {
         throw invalid_argument{"Faild to get image data."};
     }
@@ -120,14 +123,13 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
                 size_t i = y * (size_t)size.x() + x;
-                auto typedData = reinterpret_cast<const unsigned short*>(data + y * bytes_per_line);
+                auto typedData = reinterpret_cast<const unsigned short*>(data + y * bytesPerLine);
                 int baseIdx = x * numChannels;
                 for (int c = 0; c < numChannels; ++c) {
-                    // I *think* the data is always 10-bit HDR, hence the division by 1024. TODO: Check this more thoroughly.
                     if (c == 3) {
-                        resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 1024.0f;
+                        resultData.channels[c].at(i) = typedData[baseIdx + c] * channelScale;
                     } else {
-                        resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 1024.0f);
+                        resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c] * channelScale);
                     }
                 }
             }
