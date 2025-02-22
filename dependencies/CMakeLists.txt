@@ -81,6 +81,7 @@ if (TEV_SUPPORT_HEIC)
     # Compile libheif
 
     # General build config
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
     set(WITH_EXAMPLES OFF CACHE BOOL " " FORCE)
     set(WITH_FUZZERS OFF CACHE BOOL " " FORCE)
