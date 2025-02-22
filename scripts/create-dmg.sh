@@ -11,10 +11,9 @@ cd $BUILD_DIR
 MACOSX_DEPLOYMENT_TARGET=10.15
 cmake \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
-    -DTEV_DEPLOY=1 \
-    -DTEV_SUPPORT_HEIC=0 \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+    "$@" \
     ../.. || exit 1
 make -j || exit 1
 cd ..
