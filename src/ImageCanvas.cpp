@@ -35,7 +35,7 @@ bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
     // There is no explicit access to the currently pressed modifier keys here, so we need to directly ask GLFW.
     if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
         scaleAmount /= 10;
-    } else if (glfwGetKey(glfwWindow, SYSTEM_COMMAND_LEFT) || glfwGetKey(glfwWindow, SYSTEM_COMMAND_RIGHT)) {
+    } else if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL)) {
         scaleAmount /= std::log2(1.1f);
     }
 

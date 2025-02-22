@@ -557,7 +557,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
             // There is no explicit access to the currently pressed modifier keys here, so we need to directly ask GLFW.
             if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
                 relativeMovement /= 10;
-            } else if (glfwGetKey(glfwWindow, SYSTEM_COMMAND_LEFT) || glfwGetKey(glfwWindow, SYSTEM_COMMAND_RIGHT)) {
+            } else if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL)) {
                 relativeMovement /= std::log2(1.1f);
             }
 
@@ -858,7 +858,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             float scaleAmount = 1.0f;
             if (modifiers & GLFW_MOD_SHIFT) {
                 scaleAmount /= 10;
-            } else if (modifiers & SYSTEM_COMMAND_MOD) {
+            } else if (modifiers & GLFW_MOD_CONTROL) {
                 scaleAmount /= std::log2(1.1f);
             }
 
@@ -944,10 +944,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         float translationAmount = 64.0f;
         if (modifiers & GLFW_MOD_SHIFT) {
             translationAmount /= 8.0f;
-            if (modifiers & SYSTEM_COMMAND_MOD) {
+            if (modifiers & GLFW_MOD_CONTROL) {
                 translationAmount /= 8.0f;
             }
-        } else if (modifiers & SYSTEM_COMMAND_MOD) {
+        } else if (modifiers & GLFW_MOD_CONTROL) {
             translationAmount *= 8.0f;
         }
 

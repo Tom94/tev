@@ -82,9 +82,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(imageSelection, "Home/End", "Select first/last image");
     addRow(imageSelection, "Space", "Toggle playback of images as video");
 
-    addRow(imageSelection, "Click & Drag or H/J/K/L (+Shift/" + COMMAND + ")", "Translate image");
+    addRow(imageSelection, "Click & Drag or H/J/K/L (+Shift/Ctrl)", "Translate image");
     addRow(imageSelection, "Click & Drag+C (hold)", "Crop image");
-    addRow(imageSelection, "+/- or Scroll (+Shift/" + COMMAND + ")", "Zoom in/out of image");
+    addRow(imageSelection, "+/- or Scroll (+Shift/Ctrl)", "Zoom in/out of image");
 
     addRow(imageSelection, COMMAND + "+0", "Zoom to actual size");
     addRow(imageSelection, COMMAND + "+9/F", "Zoom to fit");
