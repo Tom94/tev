@@ -68,8 +68,8 @@ set(OPENEXR_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_TOOLS OFF CACHE BOOL " " FORCE)
 add_subdirectory(openexr)
 
+# Compile libde265 (dependency of libheif, which follows)
 if (TEV_SUPPORT_HEIC)
-    # Compile libde265 (dependency of libheif, which follows)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(ENABLE_SDL OFF CACHE BOOL " " FORCE)
     add_subdirectory(libde265 EXCLUDE_FROM_ALL)
@@ -77,9 +77,10 @@ if (TEV_SUPPORT_HEIC)
     set(LIBDE265_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libde265" CACHE PATH " " FORCE)
     set(LIBDE265_LIBRARY de265)
     include_directories("${CMAKE_CURRENT_BINARY_DIR}/libde265")
+endif()
 
-    # Compile libheif
-
+# Compile libheif
+if (TEV_USE_LIBHEIF)
     # General build config
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
@@ -88,16 +89,21 @@ if (TEV_SUPPORT_HEIC)
     set(WITH_GDK_PIXBUF OFF CACHE BOOL " " FORCE)
 
     # Codecs
+    set(WITH_LIBDE265 ${TEV_SUPPORT_HEIC})
     set(WITH_X265 OFF CACHE BOOL " " FORCE)
     set(WITH_OpenH264_ENCODER OFF CACHE BOOL " " FORCE)
     set(WITH_OpenH264_DECODER OFF CACHE BOOL " " FORCE)
+
     # TODO: Add aom as dependency to let libheif decode avif images for us.
     # Also consider adding JPEG2000 support via libheif.
     set(WITH_AOM_ENCODER OFF CACHE BOOL " " FORCE)
     set(WITH_AOM_DECODER OFF CACHE BOOL " " FORCE)
 
-    # TODO: Check whether libsharpyuv is needed...
+    # libsharpyuv is not needed for us, because we're not interested in converting from RGB to YUV. tev is primarily an image viewer that
+    # goes from YUV to RGB upon loading images, where libsharpyuv does nothing. See https://www.ctrl.blog/entry/webp-sharp-yuv.html for more
+    # info.
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
+
     add_subdirectory(libheif EXCLUDE_FROM_ALL)
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)

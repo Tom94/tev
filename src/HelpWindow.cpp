@@ -178,21 +178,24 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addSpacer(about, 30);
 
-    addLibrary(about, "args", "", "Single-Header Argument Parsing Library");
-    addLibrary(about, "clip", "", "Cross-Platform Clipboard Library");
-    addLibrary(about, "{fmt}", "", "Fast & Safe Formatting Library");
-    addLibrary(about, "Glad", "", "Multi-Language GL Loader-Generator");
-    addLibrary(about, "GLFW", "", "OpenGL Desktop Development Library");
+    addLibrary(about, "args", "", "Single-header argument parsing library");
+    addLibrary(about, "clip", "", "Cross-platform clipboard library");
+    addLibrary(about, "{fmt}", "", "Fast & safe formatting library");
+    addLibrary(about, "Glad", "", "Multi-language GL loader-generator");
+    addLibrary(about, "GLFW", "", "OpenGL desktop development library");
 #ifdef TEV_SUPPORT_HEIC
-    addLibrary(about, "libde265 (+libheif)", "", "HEIC Support");
+    addLibrary(about, "libde265", "", "Open h.265 video codec implementation.");
 #endif
-    addLibrary(about, "NanoGUI", "", "Small GUI Library");
-    addLibrary(about, "NanoVG", "", "Small Vector Graphics Library");
-    addLibrary(about, "OpenEXR", "", "High Dynamic-Range (HDR) Image File Format");
-    addLibrary(about, "qoi", "", "File Format for Fast, Lossless Image Compression");
-    addLibrary(about, "stb_image(_write)", "", "Single-Header Library for Loading and Writing Images");
-    addLibrary(about, "tinylogger", "", "Minimal Pretty-Logging Library");
-    addLibrary(about, "UTF8-CPP", "", "Lightweight UTF-8 String Manipulation Library");
+#ifdef TEV_USE_LIBHEIF
+    addLibrary(about, "libheif", "", "HEIF and avif file format decoder and encoder");
+#endif
+    addLibrary(about, "NanoGUI", "", "Small GUI library");
+    addLibrary(about, "NanoVG", "", "Small vector graphics library");
+    addLibrary(about, "OpenEXR", "", "High dynamic-range (HDR) image file format");
+    addLibrary(about, "qoi", "", "File format for fast, lossless image compression");
+    addLibrary(about, "stb_image(_write)", "", "Single-header library for loading and writing images");
+    addLibrary(about, "tinylogger", "", "Minimal pretty-logging library");
+    addLibrary(about, "UTF8-CPP", "", "Lightweight UTF-8 string manipulation library");
 
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
