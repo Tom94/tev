@@ -11,6 +11,9 @@
 #ifdef _WIN32
 #   include <tev/imageio/DdsImageLoader.h>
 #endif
+#ifdef TEV_SUPPORT_HEIC
+#   include <tev/imageio/HeifImageLoader.h>
+#endif
 
 using namespace nanogui;
 using namespace std;
@@ -26,6 +29,9 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new EmptyImageLoader());
 #ifdef _WIN32
         imageLoaders.emplace_back(new DdsImageLoader());
+#endif
+#ifdef TEV_SUPPORT_HEIC
+        imageLoaders.emplace_back(new HeifImageLoader());
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());

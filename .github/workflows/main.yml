@@ -28,7 +28,7 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1
+        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=0
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target all --verbose -j
@@ -67,7 +67,7 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1
+        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=0
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose

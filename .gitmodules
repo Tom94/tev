@@ -40,3 +40,6 @@
 [submodule "dependencies/libheif"]
 	path = dependencies/libheif
 	url = https://github.com/strukturag/libheif
+[submodule "dependencies/libde265"]
+	path = dependencies/libde265
+	url = https://github.com/strukturag/libde265

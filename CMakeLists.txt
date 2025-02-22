@@ -20,6 +20,8 @@ elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(TEV_VERSION_ARCH "${TEV_VERSION} (32 bit)")
 endif()
 
+option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
+
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT tev)
@@ -148,6 +150,9 @@ set(TEV_LIBS clip OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
+if (TEV_SUPPORT_HEIC)
+    set(TEV_LIBS ${TEV_LIBS} heif)
+endif()
 
 set(TEV_SOURCES
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
@@ -190,6 +195,9 @@ if (MSVC)
 elseif (APPLE)
     set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/mac-run-tev.sh)
 endif()
+if (TEV_SUPPORT_HEIC)
+    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/HeifImageLoader.h src/imageio/HeifImageLoader.cpp)
+endif()
 
 add_executable(tev ${TEV_SOURCES})
 
@@ -224,6 +232,9 @@ include_directories(
     ${UTFCPP_INCLUDE}
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
+if (TEV_SUPPORT_HEIC)
+    include_directories(${LIBHEIF_INCLUDE})
+endif()
 
 set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
 if (APPLE)
@@ -231,6 +242,9 @@ if (APPLE)
     # away from OpenGL once the underlying nanogui does, so there is no
     # point in keeping the warnings around.
     set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DGL_SILENCE_DEPRECATION)
+endif()
+if (TEV_SUPPORT_HEIC)
+    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_HEIC)
 endif()
 
 add_definitions(${TEV_DEFINITIONS} ${NANOGUI_EXTRA_DEFS})
