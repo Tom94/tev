@@ -151,7 +151,7 @@ if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
 if (TEV_SUPPORT_HEIC)
-    set(TEV_LIBS ${TEV_LIBS} heif)
+    set(TEV_LIBS ${TEV_LIBS} de265 heif)
 endif()
 
 set(TEV_SOURCES

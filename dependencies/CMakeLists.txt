@@ -72,7 +72,7 @@ if (TEV_SUPPORT_HEIC)
     # Compile libde265 (dependency of libheif, which follows)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(ENABLE_SDL OFF CACHE BOOL " " FORCE)
-    add_subdirectory(libde265)
+    add_subdirectory(libde265 EXCLUDE_FROM_ALL)
 
     set(LIBDE265_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libde265" CACHE PATH " " FORCE)
     set(LIBDE265_LIBRARY de265)
@@ -97,7 +97,7 @@ if (TEV_SUPPORT_HEIC)
 
     # TODO: Check whether libsharpyuv is needed...
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
-    add_subdirectory(libheif)
+    add_subdirectory(libheif EXCLUDE_FROM_ALL)
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
 endif()
