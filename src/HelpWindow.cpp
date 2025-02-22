@@ -183,6 +183,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addLibrary(about, "{fmt}", "", "Fast & Safe Formatting Library");
     addLibrary(about, "Glad", "", "Multi-Language GL Loader-Generator");
     addLibrary(about, "GLFW", "", "OpenGL Desktop Development Library");
+#ifdef TEV_SUPPORT_HEIC
+    addLibrary(about, "libde265 (+libheif)", "", "HEIC Support");
+#endif
     addLibrary(about, "NanoGUI", "", "Small GUI Library");
     addLibrary(about, "NanoVG", "", "Small Vector Graphics Library");
     addLibrary(about, "OpenEXR", "", "High Dynamic-Range (HDR) Image File Format");
