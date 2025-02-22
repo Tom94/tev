@@ -1718,6 +1718,9 @@ void ImageViewer::openImageDialog() {
             // HDR formats
             {"exr",  "OpenEXR image"                    },
             {"hdr",  "HDR image"                        },
+#ifdef TEV_SUPPORT_HEIC
+            {"heic", "High Efficiency Image Container"  },
+#endif
             {"pfm",  "Portable Float Map image"         },
             // LDR formats
             {"bmp",  "Bitmap Image File"                },
