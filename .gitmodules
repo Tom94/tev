@@ -37,3 +37,6 @@
 [submodule "dependencies/libdeflate"]
 	path = dependencies/libdeflate
 	url = https://github.com/ebiggers/libdeflate
+[submodule "dependencies/libheif"]
+	path = dependencies/libheif
+	url = https://github.com/strukturag/libheif
