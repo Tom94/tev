@@ -78,11 +78,11 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addRow(imageSelection, "Left Click", "Select hovered image");
     addRow(imageSelection, "1…9", "Select N-th image");
-    addRow(imageSelection, "Down/Up or S/W or J/K or Ctrl+Tab/Ctrl+Shift+Tab", "Select next/previous image");
+    addRow(imageSelection, "Down/Up or S/W or Ctrl+Tab/Ctrl+Shift+Tab", "Select next/previous image");
     addRow(imageSelection, "Home/End", "Select first/last image");
     addRow(imageSelection, "Space", "Toggle playback of images as video");
 
-    addRow(imageSelection, "Click & Drag (+Shift/" + COMMAND + ")", "Translate image");
+    addRow(imageSelection, "Click & Drag or H/J/K/L (+Shift/" + COMMAND + ")", "Translate image");
     addRow(imageSelection, "Click & Drag+C (hold)", "Crop image");
     addRow(imageSelection, "+/- or Scroll (+Shift/" + COMMAND + ")", "Zoom in/out of image");
 
@@ -94,7 +94,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
         addRow(imageSelection, "L", "Display the image as if on an LDR screen");
     }
 
-    addRow(imageSelection, "Shift+Right/Left or Shift+D/A or Shift+L/H", "Select next/previous tonemap");
+    addRow(imageSelection, "Shift+Right/Left or Shift+D/A", "Select next/previous tonemap");
 
     addRow(imageSelection, "E/Shift+E", "Increase/decrease exposure by 0.5");
     addRow(imageSelection, "O/Shift+O", "Increase/decrease offset by 0.1");
@@ -114,10 +114,10 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(referenceSelection, "Shift (hold)", "View currently selected reference");
     addRow(referenceSelection, "Shift+Left Click or Right Click", "Select hovered image as reference");
     addRow(referenceSelection, "Shift+1…9", "Select N-th image as reference");
-    addRow(referenceSelection, "Shift+Down/Up or Shift+S/W or Shift+J/K", "Select next/previous image as reference");
+    addRow(referenceSelection, "Shift+Down/Up or Shift+S/W", "Select next/previous image as reference");
 
     addRow(referenceSelection, "Ctrl (hold)", "View selected image if reference is selected");
-    addRow(referenceSelection, "Ctrl+Right/Left or Ctrl+D/A or Ctrl+L/H", "Select next/previous error metric");
+    addRow(referenceSelection, "Ctrl+Right/Left or Ctrl+D/A", "Select next/previous error metric");
 
     new Label{shortcuts, "Channel group options", "sans-bold", 18};
     auto groupSelection = new Widget{shortcuts};
@@ -125,7 +125,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addRow(groupSelection, "Left Click", "Select hovered channel group");
     addRow(groupSelection, "Ctrl+1…9", "Select N-th channel group");
-    addRow(groupSelection, "Right/Left or D/A or L/H or ]/[", "Select next/previous channel group");
+    addRow(groupSelection, "Right/Left or D/A or ]/[", "Select next/previous channel group");
     addRow(groupSelection, "X", "Explode current channel group");
 
     new Label{shortcuts, "Interface", "sans-bold", 18};
