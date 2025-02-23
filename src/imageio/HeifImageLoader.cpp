@@ -6,6 +6,8 @@
 
 #include <libheif/heif.h>
 
+#include <ImfChromaticities.h>
+
 using namespace nanogui;
 using namespace std;
 
@@ -26,7 +28,7 @@ bool HeifImageLoader::canLoadFile(istream& iStream) const {
     return heif_check_filetype(header, 12) == heif_filetype_yes_supported;
 }
 
-Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
@@ -138,6 +140,46 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
     );
 
     resultData.hasPremultipliedAlpha = hasPremultipliedAlpha;
+
+    // Extract color profile information
+    heif_color_profile_type profileType = heif_image_handle_get_color_profile_type(handle);
+    if (profileType == heif_color_profile_type_nclx) {
+        tlog::info() << "Found NCLX color profile.";
+
+        heif_color_profile_nclx* nclx = nullptr;
+        if (auto error = heif_image_handle_get_nclx_color_profile(handle, &nclx); error.code == heif_error_Ok) {
+            ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+
+            // Only convert if not already in Rec.709/sRGB
+            if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5) {
+                Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
+                Imf::Chromaticities chroma = {
+                    {nclx->color_primary_red_x,   nclx->color_primary_red_y},
+                    {nclx->color_primary_green_x, nclx->color_primary_green_y},
+                    {nclx->color_primary_blue_x,  nclx->color_primary_blue_y},
+                    {nclx->color_primary_white_x, nclx->color_primary_white_y}
+                };
+
+                Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
+                for (int m = 0; m < 4; ++m) {
+                    for (int n = 0; n < 4; ++n) {
+                        resultData.toRec709.m[m][n] = M.x[m][n];
+                    }
+                }
+            }
+        }
+    } else if (profileType == heif_color_profile_type_rICC || profileType == heif_color_profile_type_prof) {
+        tlog::warning() << "Found unsupported ICC color profile. Image may not be displayed correctly.";
+        // TODO: Use ICC profile to convert to Rec.709/sRGB
+
+        // size_t profileSize = heif_image_handle_get_raw_color_profile_size(handle);
+        // if (profileSize > 0) {
+        //     vector<uint8_t> profileData(profileSize);
+        //     if (auto error = heif_image_handle_get_raw_color_profile(handle, profileData.data()); error.code != heif_error_Ok) {
+        //         tlog::warning() << "Failed to read ICC profile: " << error.message;
+        //     }
+        // }
+    }
 
     co_return result;
 }
