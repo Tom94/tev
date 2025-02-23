@@ -70,8 +70,9 @@ if (TEV_SUPPORT_HEIC)
     set(LIBDE265_LIBRARY de265)
 endif()
 
-# Compile libheif
 if (TEV_USE_LIBHEIF)
+    # Compile libheif
+
     # General build config
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
@@ -101,6 +102,14 @@ if (TEV_USE_LIBHEIF)
     target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
+
+    # Compile Little-CMS for ICC color profile handling
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(BUILD_TOOLS OFF CACHE BOOL " " FORCE)
+    set(BUILD_TESTS OFF CACHE BOOL " " FORCE)
+    add_subdirectory(Little-CMS EXCLUDE_FROM_ALL)
+
+    set(LCMS_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include" PARENT_SCOPE)
 endif()
 
 # Compile OpenEXR
