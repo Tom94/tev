@@ -236,7 +236,7 @@ include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 if (TEV_USE_LIBHEIF)
-    include_directories(${LCMS_INCLUDE} ${LIBHEIF_INCLUDE})
+    include_directories(${LIBHEIF_INCLUDE})
 endif()
 
 set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")

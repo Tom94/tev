@@ -7,6 +7,7 @@
 #include <libheif/heif.h>
 
 #include <lcms2.h>
+// #include <lcms2_fast_float.h>
 
 #include <ImfChromaticities.h>
 
@@ -14,6 +15,14 @@ using namespace nanogui;
 using namespace std;
 
 namespace tev {
+
+HeifImageLoader::HeifImageLoader() {
+    cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
+        tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
+    });
+
+    // cmsPlugin(cmsFastFloatExtensions());
+}
 
 bool HeifImageLoader::canLoadFile(istream& iStream) const {
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
@@ -134,10 +143,6 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             tlog::warning() << "Failed to read ICC profile: " << error.message;
             return (cmsHTRANSFORM) nullptr;
         }
-
-        cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
-            tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
-        });
 
         // Create ICC profile from the raw data
         cmsHPROFILE srcProfile = cmsOpenProfileFromMem(profileData.data(), (cmsUInt32Number)profileSize);

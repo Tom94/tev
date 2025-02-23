@@ -104,12 +104,26 @@ if (TEV_USE_LIBHEIF)
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
 
     # Compile Little-CMS for ICC color profile handling
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(BUILD_TOOLS OFF CACHE BOOL " " FORCE)
-    set(BUILD_TESTS OFF CACHE BOOL " " FORCE)
-    add_subdirectory(Little-CMS EXCLUDE_FROM_ALL)
 
-    set(LCMS_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include" PARENT_SCOPE)
+    # WARNING: Enabling the fast float plugin (GPLv3) causes a License conflict with the rest of tev (BSD 3-clause). Therefore, we disable
+    # it here for now. Currently seeking to purchase a more permissive license as per https://www.littlecms.com/plugin/. Will enable once
+    # this is resolved.
+    file(GLOB LCMS_SRCS
+        Little-CMS/src/*.c Little-CMS/include/*.h
+        # Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+    )
+
+    file(GLOB LCMS_HDRS
+        Little-CMS/include/*.h
+        # Little-CMS/plugins/fast_float/include/*.h
+    )
+
+    add_library(lcms2 STATIC ${LCMS_SRCS} ${LCMS_HDRS})
+    set_target_properties(lcms2 PROPERTIES PUBLIC_HEADER "${LCMS_HDRS}")
+    target_include_directories(lcms2 PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include"
+        # "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
+    )
 endif()
 
 # Compile OpenEXR

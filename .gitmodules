@@ -64,5 +64,5 @@
 	shallow = true
 [submodule "dependencies/Little-CMS"]
 	path = dependencies/Little-CMS
-	url = https://github.com/Tom94/Little-CMS
+	url = https://github.com/mm2/Little-CMS
 	shallow = true
