@@ -121,7 +121,7 @@ set(OPENEXR_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_TOOLS OFF CACHE BOOL " " FORCE)
 add_subdirectory(openexr)
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # Fix compilation on Linux when code security checks are enabled
     target_compile_definitions(OpenEXRCore PRIVATE _GNU_SOURCE)
 endif()
