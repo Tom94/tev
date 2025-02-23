@@ -11,7 +11,7 @@
 #ifdef _WIN32
 #   include <tev/imageio/DdsImageLoader.h>
 #endif
-#ifdef TEV_SUPPORT_HEIC
+#ifdef TEV_USE_LIBHEIF
 #   include <tev/imageio/HeifImageLoader.h>
 #endif
 
@@ -30,7 +30,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #ifdef _WIN32
         imageLoaders.emplace_back(new DdsImageLoader());
 #endif
-#ifdef TEV_SUPPORT_HEIC
+#ifdef TEV_USE_LIBHEIF
         imageLoaders.emplace_back(new HeifImageLoader());
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
