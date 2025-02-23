@@ -166,17 +166,17 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
         row->set_height(space);
     };
 
-    addSpacer(about, 15);
+    addSpacer(about, 5);
 
     addText(about, "tev — The EXR Viewer", "sans-bold", 46);
     addText(about, "version " TEV_VERSION, "sans", 26);
 
-    addSpacer(about, 50);
+    addSpacer(about, 20);
 
-    addText(about, "tev was developed by Thomas Müller and is released under the BSD 3-Clause License.");
-    addText(about, "It was built directly or indirectly upon the following amazing third-party libraries.");
+    addText(about, "tev was developed by Thomas Müller <tom94.net> and is released under the BSD 3-Clause");
+    addText(about, "License. It was built directly or indirectly upon the following amazing third-party libraries.");
 
-    addSpacer(about, 30);
+    addSpacer(about, 20);
 
     addLibrary(about, "args", "", "Single-header argument parsing library");
     addLibrary(about, "clip", "", "Cross-platform clipboard library");
