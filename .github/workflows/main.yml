@@ -31,7 +31,7 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DAOM_TARGET_CPU=generic
+        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target all --verbose -j
@@ -53,7 +53,7 @@ jobs:
         with:
           submodules: recursive
       - name: Build
-        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DAOM_TARGET_CPU=generic
+        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Upload .dmg
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
@@ -72,7 +72,7 @@ jobs:
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DAOM_TARGET_CPU=generic
+        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose

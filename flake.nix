@@ -38,7 +38,6 @@
         # Common build inputs shared between dev shell and build
         commonBuildInputs = with pkgs; [
           cmake
-          yasm
         ];
 
         tev = pkgs.stdenv.mkDerivation {

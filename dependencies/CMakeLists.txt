@@ -51,6 +51,7 @@ endif()
 
 # Compile aom (dependency of libheif, which follows)
 if (TEV_SUPPORT_AVIF)
+    set(AOM_TARGET_CPU "generic" CACHE STRING " " FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(ENABLE_DOCS OFF CACHE BOOL " " FORCE)
     add_subdirectory(aom EXCLUDE_FROM_ALL)
