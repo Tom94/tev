@@ -146,6 +146,7 @@ $ cpack --config build/CPackConfig.cmake
 - __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
     - Supports BC1-BC7 compressed formats.
+- __AVIF__ (via [aom](https://aomedia.googlesource.com/aom)+[libheif](https://github.com/strukturag/libheif))
 - __HEIC__ (via [libde265](https://github.com/strukturag/libde265)+[libheif](https://github.com/strukturag/libheif); disabled in binary release. You must build __tev__ yourself with the `TEV_SUPPORT_HEIC` CMake option. Check patent laws in your juristiction before enabling this feature.)
 
 ## License

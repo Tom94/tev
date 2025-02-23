@@ -1,45 +1,64 @@
 [submodule "dependencies/args"]
 	path = dependencies/args
 	url = https://github.com/Taywee/args
+	shallow = true
 [submodule "dependencies/Imath"]
 	path = dependencies/Imath
 	url = https://github.com/AcademySoftwareFoundation/Imath
+	shallow = true
 [submodule "dependencies/openexr"]
 	path = dependencies/openexr
 	url = https://github.com/AcademySoftwareFoundation/openexr
+	shallow = true
 [submodule "dependencies/zlib"]
 	path = dependencies/zlib
 	url = https://github.com/Tom94/zlib
+	shallow = true
 [submodule "dependencies/utfcpp"]
 	path = dependencies/utfcpp
 	url = https://github.com/Tom94/utfcpp
+	shallow = true
 [submodule "dependencies/tinylogger"]
 	path = dependencies/tinylogger
 	url = https://github.com/Tom94/tinylogger
+	shallow = true
 [submodule "dependencies/clip"]
 	path = dependencies/clip
 	url = https://github.com/Tom94/clip
+	shallow = true
 [submodule "dependencies/DirectXTex"]
 	path = dependencies/DirectXTex
 	url = https://github.com/Tom94/DirectXTex
+	shallow = true
 [submodule "dependencies/nanogui"]
 	path = dependencies/nanogui
 	url = https://github.com/Tom94/nanogui-1
+	shallow = true
 [submodule "dependencies/qoi"]
 	path = dependencies/qoi
 	url = https://github.com/phoboslab/qoi.git
+	shallow = true
 [submodule "dependencies/fmt"]
 	path = dependencies/fmt
 	url = https://github.com/fmtlib/fmt
+	shallow = true
 [submodule "scripts/create-dmg"]
 	path = scripts/create-dmg
 	url = https://github.com/create-dmg/create-dmg
+	shallow = true
 [submodule "dependencies/libdeflate"]
 	path = dependencies/libdeflate
 	url = https://github.com/ebiggers/libdeflate
+	shallow = true
 [submodule "dependencies/libheif"]
 	path = dependencies/libheif
 	url = https://github.com/Tom94/libheif
+	shallow = true
 [submodule "dependencies/libde265"]
 	path = dependencies/libde265
 	url = https://github.com/strukturag/libde265
+	shallow = true
+[submodule "dependencies/aom"]
+	path = dependencies/aom
+	url = https://github.com/Tom94/aom
+	shallow = true

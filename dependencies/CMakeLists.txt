@@ -49,6 +49,60 @@ if (WIN32)
     include_directories(${DIRECTXTEX_INCLUDE_DIR})
 endif()
 
+# Compile aom (dependency of libheif, which follows)
+if (TEV_SUPPORT_AVIF)
+    set(AOM_TARGET_CPU "generic" CACHE STRING " " FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(ENABLE_DOCS OFF CACHE BOOL " " FORCE)
+    add_subdirectory(aom EXCLUDE_FROM_ALL)
+
+    set(AOM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/aom" CACHE PATH " " FORCE)
+    set(AOM_LIBRARY aom)
+endif()
+
+# Compile libde265 (dependency of libheif, which follows)
+if (TEV_SUPPORT_HEIC)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(ENABLE_SDL OFF CACHE BOOL " " FORCE)
+    add_subdirectory(libde265 EXCLUDE_FROM_ALL)
+
+    set(LIBDE265_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libde265" CACHE PATH " " FORCE)
+    set(LIBDE265_LIBRARY de265)
+endif()
+
+# Compile libheif
+if (TEV_USE_LIBHEIF)
+    # General build config
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
+    set(WITH_EXAMPLES OFF CACHE BOOL " " FORCE)
+    set(WITH_FUZZERS OFF CACHE BOOL " " FORCE)
+    set(WITH_GDK_PIXBUF OFF CACHE BOOL " " FORCE)
+    set(WITH_INSTALL OFF CACHE BOOL " " FORCE)
+
+    # Codecs
+    set(WITH_LIBDE265 ${TEV_SUPPORT_HEIC})
+    set(WITH_X265 OFF CACHE BOOL " " FORCE)
+    set(WITH_OpenH264_ENCODER OFF CACHE BOOL " " FORCE)
+    set(WITH_OpenH264_DECODER OFF CACHE BOOL " " FORCE)
+
+    set(WITH_AOM_ENCODER OFF CACHE BOOL " " FORCE)
+    set(WITH_AOM_DECODER ${TEV_SUPPORT_AVIF} CACHE BOOL " " FORCE)
+
+    # TODO: Also consider adding JPEG2000 support via libheif.
+
+    # libsharpyuv is not needed for us, because we're not interested in converting from RGB to YUV. tev is primarily an image viewer that
+    # goes from YUV to RGB upon loading images, where libsharpyuv does nothing. See https://www.ctrl.blog/entry/webp-sharp-yuv.html for more
+    # info.
+    set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
+
+    add_subdirectory(libheif EXCLUDE_FROM_ALL)
+    target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/aom")
+    target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
+
+    set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
+endif()
+
 # Compile OpenEXR
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL_PKG_CONFIG OFF CACHE BOOL " " FORCE)
@@ -68,45 +122,9 @@ set(OPENEXR_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(OPENEXR_BUILD_TOOLS OFF CACHE BOOL " " FORCE)
 add_subdirectory(openexr)
 
-# Compile libde265 (dependency of libheif, which follows)
-if (TEV_SUPPORT_HEIC)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(ENABLE_SDL OFF CACHE BOOL " " FORCE)
-    add_subdirectory(libde265 EXCLUDE_FROM_ALL)
-
-    set(LIBDE265_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libde265" CACHE PATH " " FORCE)
-    set(LIBDE265_LIBRARY de265)
-    include_directories("${CMAKE_CURRENT_BINARY_DIR}/libde265")
-endif()
-
-# Compile libheif
-if (TEV_USE_LIBHEIF)
-    # General build config
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
-    set(WITH_EXAMPLES OFF CACHE BOOL " " FORCE)
-    set(WITH_FUZZERS OFF CACHE BOOL " " FORCE)
-    set(WITH_GDK_PIXBUF OFF CACHE BOOL " " FORCE)
-
-    # Codecs
-    set(WITH_LIBDE265 ${TEV_SUPPORT_HEIC})
-    set(WITH_X265 OFF CACHE BOOL " " FORCE)
-    set(WITH_OpenH264_ENCODER OFF CACHE BOOL " " FORCE)
-    set(WITH_OpenH264_DECODER OFF CACHE BOOL " " FORCE)
-
-    # TODO: Add aom as dependency to let libheif decode avif images for us.
-    # Also consider adding JPEG2000 support via libheif.
-    set(WITH_AOM_ENCODER OFF CACHE BOOL " " FORCE)
-    set(WITH_AOM_DECODER OFF CACHE BOOL " " FORCE)
-
-    # libsharpyuv is not needed for us, because we're not interested in converting from RGB to YUV. tev is primarily an image viewer that
-    # goes from YUV to RGB upon loading images, where libsharpyuv does nothing. See https://www.ctrl.blog/entry/webp-sharp-yuv.html for more
-    # info.
-    set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
-
-    add_subdirectory(libheif EXCLUDE_FROM_ALL)
-
-    set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # Fix compilation on Linux when code security checks are enabled
+    target_compile_definitions(OpenEXRCore PRIVATE _GNU_SOURCE)
 endif()
 
 # Compile clip
