@@ -21,12 +21,10 @@ jobs:
     env:
       build_dir: "build"
       config: "Release"
-      CC: gcc-10
-      CXX: g++-10
       APPIMAGE_EXTRACT_AND_RUN: 1# https://github.com/AppImage/AppImageKit/wiki/FUSE#docker
     steps:
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake gcc-10 g++-10 libglu1-mesa-dev xorg-dev zenity zlib1g-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake libglu1-mesa-dev xorg-dev yasm zenity zlib1g-dev
       - uses: actions/checkout@v1
         with:
           submodules: recursive
@@ -49,6 +47,8 @@ jobs:
     name: Build on macOS
     runs-on: macos-13
     steps:
+      - name: Install dependencies
+        run: brew install yasm
       - uses: actions/checkout@v1
         with:
           submodules: recursive
@@ -68,6 +68,8 @@ jobs:
       build_dir: "build"
       config: "Release"
     steps:
+      - name: Install dependencies
+        run: choco install yasm
       - uses: actions/checkout@v1
         with:
           submodules: recursive
