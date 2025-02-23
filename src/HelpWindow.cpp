@@ -179,6 +179,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addSpacer(about, 20);
 
     addLibrary(about, "args", "", "Single-header argument parsing library");
+#ifdef TEV_SUPPORT_AVIF
+    addLibrary(about, "aom", "", "Alliance for Open Media Video Codec");
+#endif
     addLibrary(about, "clip", "", "Cross-platform clipboard library");
     addLibrary(about, "{fmt}", "", "Fast & safe formatting library");
     addLibrary(about, "Glad", "", "Multi-language GL loader-generator");

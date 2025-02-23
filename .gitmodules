@@ -43,3 +43,6 @@
 [submodule "dependencies/libde265"]
 	path = dependencies/libde265
 	url = https://github.com/strukturag/libde265
+[submodule "dependencies/aom"]
+	path = dependencies/aom
+	url = https://aomedia.googlesource.com/aom

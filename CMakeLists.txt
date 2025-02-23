@@ -20,9 +20,10 @@ elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(TEV_VERSION_ARCH "${TEV_VERSION} (32 bit)")
 endif()
 
+option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 
-set(TEV_USE_LIBHEIF ${TEV_SUPPORT_HEIC}) # If other codecs supported by heif are used, adjust this condition.
+set(TEV_USE_LIBHEIF ${TEV_SUPPORT_AVIF} OR ${TEV_SUPPORT_HEIC})
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
@@ -243,6 +244,9 @@ if (APPLE)
     # Starting with macOS Mojave OpenGL is deprecated. tev uses metal by default but can optionally be targeted at GL, so there is no point
     # in keeping the warnings around.
     set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DGL_SILENCE_DEPRECATION)
+endif()
+if (TEV_SUPPORT_AVIF)
+    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_AVIF)
 endif()
 if (TEV_SUPPORT_HEIC)
     set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_HEIC)

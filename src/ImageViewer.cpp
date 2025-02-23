@@ -1735,7 +1735,10 @@ void ImageViewer::toggleHelpWindow() {
 void ImageViewer::openImageDialog() {
     vector<string> paths = file_dialog(
         {
-            // HDR formats
+    // HDR formats
+#ifdef TEV_SUPPORT_AVIF
+            {"avif", "AV1 Image File"                   },
+#endif
             {"exr",  "OpenEXR image"                    },
             {"hdr",  "HDR image"                        },
 #ifdef TEV_SUPPORT_HEIC
@@ -1743,7 +1746,7 @@ void ImageViewer::openImageDialog() {
 #endif
             {"pfm",  "Portable Float Map image"         },
             // LDR formats
-            {"bmp",  "Bitmap Image File"                },
+            {"bmp",  "Bitmap image"                     },
             {"gif",  "Graphics Interchange Format image"},
             {"jpg",  "JPEG image"                       },
             {"jpeg", "JPEG image"                       },
