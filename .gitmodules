@@ -62,3 +62,6 @@
 	path = dependencies/aom
 	url = https://github.com/Tom94/aom
 	shallow = true
+[submodule "dependencies/Little-CMS"]
+	path = dependencies/Little-CMS
+	url = https://github.com/Tom94/Little-CMS

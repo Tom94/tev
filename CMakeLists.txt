@@ -154,7 +154,7 @@ if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
 if (TEV_USE_LIBHEIF)
-    set(TEV_LIBS ${TEV_LIBS} heif)
+    set(TEV_LIBS ${TEV_LIBS} lcms2 heif)
 endif()
 
 set(TEV_SOURCES
@@ -236,7 +236,7 @@ include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 if (TEV_USE_LIBHEIF)
-    include_directories(${LIBHEIF_INCLUDE})
+    include_directories(${LCMS_INCLUDE} ${LIBHEIF_INCLUDE})
 endif()
 
 set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")

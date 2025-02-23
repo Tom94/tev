@@ -191,6 +191,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 #endif
 #ifdef TEV_USE_LIBHEIF
     addLibrary(about, "libheif", "", "HEIF and avif file format decoder and encoder");
+    addLibrary(about, "Little-CMS", "", "FOSS CMM engine. Fast transforms between ICC profiles.");
 #endif
     addLibrary(about, "NanoGUI", "", "Small GUI library");
     addLibrary(about, "NanoVG", "", "Small vector graphics library");

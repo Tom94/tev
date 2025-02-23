@@ -6,6 +6,8 @@
 
 #include <libheif/heif.h>
 
+#include <lcms2.h>
+
 #include <ImfChromaticities.h>
 
 using namespace nanogui;
@@ -117,8 +119,113 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         throw invalid_argument{"Faild to get image data."};
     }
 
-    resultData.channels = makeNChannels(numChannels, size);
+    auto getCmsTransform = [&]() {
+        size_t profileSize = heif_image_handle_get_raw_color_profile_size(handle);
+        if (profileSize == 0) {
+            return (cmsHTRANSFORM) nullptr;
+        }
 
+        vector<uint8_t> profileData(profileSize);
+        if (auto error = heif_image_handle_get_raw_color_profile(handle, profileData.data()); error.code != heif_error_Ok) {
+            if (error.code == heif_error_Color_profile_does_not_exist) {
+                return (cmsHTRANSFORM) nullptr;
+            }
+
+            tlog::warning() << "Failed to read ICC profile: " << error.message;
+            return (cmsHTRANSFORM) nullptr;
+        }
+
+        cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
+            tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
+        });
+
+        // Create ICC profile from the raw data
+        cmsHPROFILE srcProfile = cmsOpenProfileFromMem(profileData.data(), (cmsUInt32Number)profileSize);
+        if (!srcProfile) {
+            tlog::warning() << "Failed to create ICC profile from raw data";
+            return (cmsHTRANSFORM) nullptr;
+        }
+
+        ScopeGuard srcProfileGuard{[srcProfile] { cmsCloseProfile(srcProfile); }};
+
+        cmsCIExyY D65 = {0.3127, 0.3290, 1.0};
+        cmsCIExyYTRIPLE Rec709Primaries = {
+            {0.6400, 0.3300, 1.0},
+            {0.3000, 0.6000, 1.0},
+            {0.1500, 0.0600, 1.0}
+        };
+
+        cmsToneCurve* linearCurve[3];
+        linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(0, 1.0f);
+
+        cmsHPROFILE rec709Profile = cmsCreateRGBProfile(&D65, &Rec709Primaries, linearCurve);
+
+        if (!rec709Profile) {
+            tlog::warning() << "Failed to create Rec.709 color profile";
+            return (cmsHTRANSFORM) nullptr;
+        }
+
+        ScopeGuard rec709ProfileGuard{[rec709Profile] { cmsCloseProfile(rec709Profile); }};
+
+        // Create transform from source profile to Rec.709
+        auto type = numChannels == 4 ? (hasPremultipliedAlpha ? TYPE_RGBA_FLT_PREMUL : TYPE_RGBA_FLT) : TYPE_RGB_FLT;
+        cmsHTRANSFORM transform = cmsCreateTransform(srcProfile, type, rec709Profile, type, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE);
+        if (!transform) {
+            tlog::warning() << "Failed to create color transform from ICC profile to Rec.709";
+            return (cmsHTRANSFORM) nullptr;
+        }
+
+        return transform;
+    };
+
+    resultData.channels = makeNChannels(numChannels, size);
+    resultData.hasPremultipliedAlpha = hasPremultipliedAlpha;
+
+    // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
+    auto transform = getCmsTransform();
+    if (transform) {
+        ScopeGuard transformGuard{[transform] { cmsDeleteTransform(transform); }};
+
+        tlog::debug() << "Found ICC color profile.";
+
+        size_t numPixels = (size_t)size.x() * size.y();
+        vector<float> src(numPixels * numChannels);
+        vector<float> dst(numPixels * numChannels);
+
+        const size_t n_samples_per_row = size.x() * numChannels;
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            size.y(),
+            [&](int y) {
+                size_t offset = y * (size_t)n_samples_per_row;
+                for (size_t x = 0; x < n_samples_per_row; ++x) {
+                    const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * bytesPerLine);
+                    src[offset + x] = (float)typedData[x] * channelScale;
+                }
+
+                // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
+                // So: call cmsDoTransform for each row in parallel.
+                cmsDoTransform(transform, &src[offset], &dst[offset], size.x());
+            },
+            priority
+        );
+
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (size_t c = 0; c < numChannels; ++c) {
+                    resultData.channels[c].at(i) = dst[i * numChannels + c];
+                }
+            },
+            priority
+        );
+
+        co_return result;
+    }
+
+    // Otherwise, assume the image is in Rec.709/sRGB and convert it to linear space, followed by an optional change in color space if an
+    // NCLX profile is present.
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
@@ -127,6 +234,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
                 size_t i = y * (size_t)size.x() + x;
                 auto typedData = reinterpret_cast<const unsigned short*>(data + y * bytesPerLine);
                 int baseIdx = x * numChannels;
+
                 for (int c = 0; c < numChannels; ++c) {
                     if (c == 3) {
                         resultData.channels[c].at(i) = typedData[baseIdx + c] * channelScale;
@@ -139,46 +247,36 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         priority
     );
 
-    resultData.hasPremultipliedAlpha = hasPremultipliedAlpha;
+    heif_color_profile_nclx* nclx = nullptr;
+    if (auto error = heif_image_handle_get_nclx_color_profile(handle, &nclx); error.code != heif_error_Ok) {
+        if (error.code == heif_error_Color_profile_does_not_exist) {
+            co_return result;
+        }
 
-    // Extract color profile information
-    heif_color_profile_type profileType = heif_image_handle_get_color_profile_type(handle);
-    if (profileType == heif_color_profile_type_nclx) {
-        tlog::info() << "Found NCLX color profile.";
+        tlog::warning() << "Failed to read ICC profile: " << error.message;
+        co_return result;
+    }
 
-        heif_color_profile_nclx* nclx = nullptr;
-        if (auto error = heif_image_handle_get_nclx_color_profile(handle, &nclx); error.code == heif_error_Ok) {
-            ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+    ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
 
-            // Only convert if not already in Rec.709/sRGB
-            if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5) {
-                Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
-                Imf::Chromaticities chroma = {
-                    {nclx->color_primary_red_x,   nclx->color_primary_red_y},
-                    {nclx->color_primary_green_x, nclx->color_primary_green_y},
-                    {nclx->color_primary_blue_x,  nclx->color_primary_blue_y},
-                    {nclx->color_primary_white_x, nclx->color_primary_white_y}
-                };
+    tlog::debug() << "Found NCLX color profile.";
 
-                Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
-                for (int m = 0; m < 4; ++m) {
-                    for (int n = 0; n < 4; ++n) {
-                        resultData.toRec709.m[m][n] = M.x[m][n];
-                    }
-                }
+    // Only convert if not already in Rec.709/sRGB
+    if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5) {
+        Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
+        Imf::Chromaticities chroma = {
+            {nclx->color_primary_red_x,   nclx->color_primary_red_y  },
+            {nclx->color_primary_green_x, nclx->color_primary_green_y},
+            {nclx->color_primary_blue_x,  nclx->color_primary_blue_y },
+            {nclx->color_primary_white_x, nclx->color_primary_white_y}
+        };
+
+        Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
+        for (int m = 0; m < 4; ++m) {
+            for (int n = 0; n < 4; ++n) {
+                resultData.toRec709.m[m][n] = M.x[m][n];
             }
         }
-    } else if (profileType == heif_color_profile_type_rICC || profileType == heif_color_profile_type_prof) {
-        tlog::warning() << "Found unsupported ICC color profile. Image may not be displayed correctly.";
-        // TODO: Use ICC profile to convert to Rec.709/sRGB
-
-        // size_t profileSize = heif_image_handle_get_raw_color_profile_size(handle);
-        // if (profileSize > 0) {
-        //     vector<uint8_t> profileData(profileSize);
-        //     if (auto error = heif_image_handle_get_raw_color_profile(handle, profileData.data()); error.code != heif_error_Ok) {
-        //         tlog::warning() << "Failed to read ICC profile: " << error.message;
-        //     }
-        // }
     }
 
     co_return result;
