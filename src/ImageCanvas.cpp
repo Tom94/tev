@@ -657,15 +657,15 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
     std::vector<float> result(4 * numPixels, 0);
 
     ThreadPool::global().parallelFor(
-        0,
-        nChannelsToSave,
-        [&channels, &result, &imageRegion](int i) {
-            const auto& channel = channels[i];
-            for (int y = imageRegion.min.y(); y < imageRegion.max.y(); ++y) {
-                int yresult = y - imageRegion.min.y();
-                for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
+        imageRegion.min.y(),
+        imageRegion.max.y(),
+        [nChannelsToSave, &channels, &result, &imageRegion](int y) {
+            int yresult = y - imageRegion.min.y();
+            for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
+                for (int c = 0; c < nChannelsToSave; ++c) {
+                    const auto& channel = channels[c];
                     int xresult = x - imageRegion.min.x();
-                    result[(yresult * imageRegion.size().x() + xresult) * 4 + i] = channel.at({x, y});
+                    result[(yresult * imageRegion.size().x() + xresult) * 4 + c] = channel.at({x, y});
                 }
             }
         },
@@ -682,16 +682,13 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
         ThreadPool::global().parallelFor(
-            0,
-            min(nChannelsToSave, 3),
-            [&result, numPixels](int i) {
-                for (size_t j = 0; j < numPixels; ++j) {
-                    float alpha = result[j * 4 + 3];
-                    if (alpha == 0) {
-                        result[j * 4 + i] = 0;
-                    } else {
-                        result[j * 4 + i] /= alpha;
-                    }
+            (size_t)0,
+            numPixels,
+            [&result](size_t j) {
+                float alpha = result[j * 4 + 3];
+                float factor = alpha == 0 ? 0 : 1 / alpha;
+                for (int c = 0; c < 3; ++c) {
+                    result[j * 4 + c] *= factor;
                 }
             },
             priority
@@ -840,40 +837,45 @@ vector<Channel> ImageCanvas::channelsFromImages(
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
     }
 
+    const auto channels = image->channels(channelNames);
     if (!reference) {
-        ThreadPool::global().parallelFor(
+        ThreadPool::global().parallelFor<size_t>(
             0,
-            (int)channelNames.size(),
-            [&](int i) {
-                const auto* channel = image->channel(channelNames[i]);
-                for (size_t j = 0; j < channel->numPixels(); ++j) {
-                    result[i].at(j) = channel->at(j);
+            image->numPixels(),
+            [&](size_t j) {
+                for (size_t c = 0; c < channels.size(); ++c) {
+                    result[c].at(j) = channels[c]->at(j);
                 }
             },
             priority
         );
     } else {
+        const auto referenceChannels = reference->channels(channelNames);
+
         Vector2i size = Vector2i{image->size().x(), image->size().y()};
         Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
 
-        ThreadPool::global().parallelFor<size_t>(
-            0,
-            channelNames.size(),
-            [&](size_t i) {
-                const auto* channel = image->channel(channelNames[i]);
+        vector<bool> isAlpha(channelNames.size());
+        for (size_t i = 0; i < channelNames.size(); ++i) {
+            isAlpha[i] = Channel::isAlpha(channelNames[i]);
+        }
 
-                const Channel* referenceChannel = reference->channel(channelNames[i]);
-                if (Channel::isAlpha(result[i].name())) {
-                    for (int y = 0; y < size.y(); ++y) {
+        ThreadPool::global().parallelFor<int>(
+            0,
+            size.y(),
+            [&](int y) {
+                for (size_t c = 0; c < channels.size(); ++c) {
+                    const auto* channel = channels[c];
+                    const auto* referenceChannel = referenceChannels[c];
+
+                    if (isAlpha[c]) {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = 0.5f *
+                            result[c].at({x, y}) = 0.5f *
                                 (channel->eval({x, y}) + (referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 1.0f));
                         }
-                    }
-                } else {
-                    for (int y = 0; y < size.y(); ++y) {
+                    } else {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[i].at({x, y}) = ImageCanvas::applyMetric(
+                            result[c].at({x, y}) = ImageCanvas::applyMetric(
                                 channel->eval({x, y}), referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 0.0f, metric
                             );
                         }
@@ -969,8 +971,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
-    tasks.emplace_back(ThreadPool::global().parallelForAsync(
-        (size_t)0,
+    tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
+        0,
         numPixels,
         [&](size_t j) {
             int x = (int)(j % regionSize.x()) + region.min.x();
@@ -987,8 +989,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_await task;
     }
 
-    co_await ThreadPool::global().parallelForAsync(
-        (size_t)0,
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
         nChannels,
         [&](size_t c) {
             for (size_t j = 0; j < numPixels; ++j) {

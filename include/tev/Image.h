@@ -111,6 +111,14 @@ public:
     bool hasChannel(const std::string& channelName) const { return mData.hasChannel(channelName); }
 
     const Channel* channel(const std::string& channelName) const { return mData.channel(channelName); }
+    std::vector<const Channel*> channels(const std::vector<std::string>& channelNames) const {
+        std::vector<const Channel*> result;
+        for (const auto& channelName : channelNames) {
+            result.push_back(channel(channelName));
+        }
+
+        return result;
+    }
 
     bool isInterleavedRgba(const std::vector<std::string>& channelNames) const;
 
