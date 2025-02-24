@@ -461,7 +461,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
             nvgStrokeWidth(ctx, 3.0f);
 
             size_t saveCounter = 0;
-            for (const auto& command : mImage->vgCommands()) {
+            for (const auto& command : commands) {
                 if (command.type == VgCommand::EType::Save) {
                     ++saveCounter;
                 } else if (command.type == VgCommand::EType::Restore) {
