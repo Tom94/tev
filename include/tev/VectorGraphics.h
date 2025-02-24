@@ -34,7 +34,7 @@ struct VgCommand {
     };
 
     VgCommand() : type{EType::Invalid} {}
-    VgCommand(EType type, const std::vector<float>& data) : type{type}, data{data} {
+    VgCommand(EType _type, const std::vector<float>& _data) : type{_type}, data{_data} {
         if (size() != data.size()) {
             throw std::runtime_error{"VgCommand constructed with invalid amount of data"};
         }

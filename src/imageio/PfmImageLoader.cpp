@@ -61,9 +61,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     auto numBytes = numFloats * sizeof(float);
 
     // Skip last newline at the end of the header.
-    char c;
-    while (iStream.get(c) && c != '\r' && c != '\n')
-        ;
+    {
+        char c;
+        while (iStream.get(c) && c != '\r' && c != '\n')
+            ;
+    }
 
     // Read entire file in binary mode.
     vector<float> data(numFloats);

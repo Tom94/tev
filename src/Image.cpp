@@ -734,7 +734,7 @@ bool BackgroundImagesLoader::publishSortedLoads() {
 
         // null image pointers indicate failed loads. These shouldn't be pushed.
         if (!mPendingLoadedImages.top().images.empty()) {
-            mLoadedImages.push(std::move(mPendingLoadedImages.top()));
+            mLoadedImages.push(mPendingLoadedImages.top());
         }
 
         mPendingLoadedImages.pop();

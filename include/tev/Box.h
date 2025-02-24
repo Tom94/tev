@@ -10,8 +10,8 @@ namespace tev {
 template <typename T, uint32_t N_DIMS> struct Box {
     using Vector = nanogui::Array<T, N_DIMS>;
 
-    Box(const Vector& min, const Vector& max) : min{min}, max{max} {}
-    Box(const Vector& max) : Box{Vector{(T)0}, max} {}
+    Box(const Vector& _min, const Vector& _max) : min{_min}, max{_max} {}
+    Box(const Vector& _max) : Box{Vector{(T)0}, _max} {}
     Box() : Box{Vector{std::numeric_limits<T>::max()}, Vector{std::numeric_limits<T>::min()}} {}
 
     // Casting boxes of other types to this one

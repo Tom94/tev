@@ -14,8 +14,8 @@ using namespace std;
 namespace tev {
 
 void StbiHdrImageSaver::save(ostream& oStream, const fs::path&, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
-    static const auto stbiOStreamWrite = [](void* context, void* data, int size) {
-        reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(data), size);
+    static const auto stbiOStreamWrite = [](void* context, void* stbidata, int size) {
+        reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(stbidata), size);
     };
 
     stbi_write_hdr_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
