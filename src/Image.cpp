@@ -232,6 +232,26 @@ string Image::shortName() const {
     return result;
 }
 
+bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
+    const float* interleavedData = nullptr;
+    for (size_t i = 0; i < 4; ++i) {
+        const auto* chan = channel(channelNames[i]);
+        if (!chan) {
+            break;
+        }
+
+        if (i == 0) {
+            interleavedData = chan->data();
+        }
+
+        if (interleavedData != chan->data() - i || chan->stride() != 4) {
+            return false;
+        }
+    }
+
+    return interleavedData;
+}
+
 Texture* Image::texture(const string& channelGroupName) { return texture(channelsInGroup(channelGroupName)); }
 
 Texture* Image::texture(const vector<string>& channelNames) {
@@ -264,33 +284,37 @@ Texture* Image::texture(const vector<string>& channelNames) {
     );
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
-    auto numPixels = this->numPixels();
-    vector<float> data(numPixels * 4);
+    // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
+    if (isInterleavedRgba(channelNames)) {
+        texture->upload((uint8_t*)channel(channelNames[0])->data());
+    } else {
+        auto numPixels = this->numPixels();
+        vector<float> data = vector<float>(numPixels * 4);
 
-    vector<Task<void>> tasks;
-    for (size_t i = 0; i < 4; ++i) {
-        float defaultVal = i == 3 ? 1 : 0;
-        if (i < channelNames.size()) {
-            const auto* chan = channel(channelNames[i]);
-            if (!chan) {
+        vector<Task<void>> tasks;
+        for (size_t i = 0; i < 4; ++i) {
+            float defaultVal = i == 3 ? 1 : 0;
+            if (i < channelNames.size()) {
+                const auto* chan = channel(channelNames[i]);
+                if (!chan) {
+                    tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
+                        0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
+                    ));
+                } else {
+                    tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
+                        0, numPixels, [chan, &data, i](size_t j) { data[j * 4 + i] = chan->at(j); }, std::numeric_limits<int>::max()
+                    ));
+                }
+            } else {
                 tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
                     0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
                 ));
-            } else {
-                const auto& channelData = chan->data();
-                tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-                    0, numPixels, [&channelData, &data, i](size_t j) { data[j * 4 + i] = channelData[j]; }, std::numeric_limits<int>::max()
-                ));
             }
-        } else {
-            tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-                0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
-            ));
         }
+        waitAll(tasks);
+        texture->upload((uint8_t*)data.data());
     }
-    waitAll(tasks);
 
-    texture->upload((uint8_t*)data.data());
     texture->generate_mipmap();
     return texture.get();
 }

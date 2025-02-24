@@ -4,7 +4,7 @@
 #include <tev/Channel.h>
 #include <tev/ThreadPool.h>
 
-#include <numeric>
+#include <memory>
 
 using namespace nanogui;
 using namespace std;
@@ -42,8 +42,17 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
-Channel::Channel(const std::string& name, const nanogui::Vector2i& size) : mName{name}, mSize{size} {
-    mData.resize((size_t)mSize.x() * mSize.y());
+Channel::Channel(const string& name, const nanogui::Vector2i& size, shared_ptr<vector<float>> data, size_t dataOffset, size_t dataStride) :
+    mName{name}, mSize{size} {
+    if (data) {
+        mData = data;
+        mDataOffset = dataOffset;
+        mDataStride = dataStride;
+    } else {
+        mData = make_shared<vector<float>>((size_t)size.x() * size.y());
+        mDataOffset = 0;
+        mDataStride = 1;
+    }
 }
 
 Task<void> Channel::divideByAsync(const Channel& other, int priority) {

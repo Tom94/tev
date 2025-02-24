@@ -16,7 +16,7 @@ bool StbiImageLoader::canLoadFile(istream&) const {
     return true;
 }
 
-Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
@@ -57,7 +57,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
     resultData.channels = makeNChannels(numChannels, size);
-    int alphaChannelIndex = 3;
+    static const int ALPHA_CHANNEL_INDEX = 3;
 
     auto numPixels = (size_t)size.x() * size.y();
     if (isHdr) {
@@ -81,7 +81,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
                 auto typedData = reinterpret_cast<unsigned char*>(data);
                 size_t baseIdx = i * numChannels;
                 for (int c = 0; c < numChannels; ++c) {
-                    if (c == alphaChannelIndex) {
+                    if (c == ALPHA_CHANNEL_INDEX) {
                         resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
                     } else {
                         resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);

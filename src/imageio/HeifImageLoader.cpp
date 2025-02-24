@@ -174,7 +174,9 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         // Create transform from source profile to Rec.709
         auto type = numChannels == 4 ? (hasPremultipliedAlpha ? TYPE_RGBA_FLT_PREMUL : TYPE_RGBA_FLT) : TYPE_RGB_FLT;
-        cmsHTRANSFORM transform = cmsCreateTransform(srcProfile, type, rec709Profile, type, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE);
+        cmsHTRANSFORM transform =
+            cmsCreateTransform(srcProfile, type, rec709Profile, TYPE_RGBA_FLT, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE);
+
         if (!transform) {
             tlog::warning() << "Failed to create color transform from ICC profile to Rec.709";
             return (cmsHTRANSFORM) nullptr;
@@ -193,6 +195,9 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         tlog::debug() << "Found ICC color profile.";
 
+        // lcms can't perform alpha premultiplication, so we leave it up to downstream processing
+        resultData.hasPremultipliedAlpha = false;
+
         size_t numPixels = (size_t)size.x() * size.y();
         vector<float> src(numPixels * numChannels);
         vector<float> dst(numPixels * numChannels);
@@ -202,26 +207,17 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             0,
             size.y(),
             [&](int y) {
-                size_t offset = y * (size_t)n_samples_per_row;
+                size_t src_offset = y * (size_t)n_samples_per_row;
                 for (size_t x = 0; x < n_samples_per_row; ++x) {
                     const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * bytesPerLine);
-                    src[offset + x] = (float)typedData[x] * channelScale;
+                    src[src_offset + x] = (float)typedData[x] * channelScale;
                 }
 
                 // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
                 // So: call cmsDoTransform for each row in parallel.
-                cmsDoTransform(transform, &src[offset], &dst[offset], size.x());
-            },
-            priority
-        );
-
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                for (size_t c = 0; c < numChannels; ++c) {
-                    resultData.channels[c].at(i) = dst[i * numChannels + c];
-                }
+                // NOTE: This core depends on makeNChannels creating RGBA interleaved buffers!
+                size_t dst_offset = y * (size_t)size.x() * 4;
+                cmsDoTransform(transform, &src[src_offset], &resultData.channels[0].data()[dst_offset], size.x());
             },
             priority
         );

@@ -46,7 +46,7 @@
 
 #define TEV_ASSERT(cond, description, ...) \
     if (UNLIKELY(!(cond)))                 \
-        throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)};
+        throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)}
 
 #ifndef TEV_VERSION
 #   define TEV_VERSION "undefined"
