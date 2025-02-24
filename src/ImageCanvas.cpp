@@ -581,7 +581,7 @@ Vector3f ImageCanvas::applyTonemap(const Vector3f& value, float gamma, ETonemap 
         case ETonemap::FalseColor: {
             static const auto falseColor = [](float linear) {
                 static const auto& fcd = colormap::turbo();
-                int start = 4 * clamp((int)(linear * (fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
+                int start = 4 * clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
                 return Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
             };
 
@@ -917,7 +917,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     auto result = make_shared<CanvasStatistics>();
 
-    size_t nChannels = result->nChannels = alphaChannel ? flattened.size() - 1 : flattened.size();
+    size_t nChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
 
     for (size_t i = 0; i < nChannels; ++i) {
         const auto& channel = flattened[i];
@@ -1021,7 +1021,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     co_return result;
 }
 
-Vector2f ImageCanvas::pixelOffset(const Vector2i& size) const {
+Vector2f ImageCanvas::pixelOffset(const Vector2i& /*size*/) const {
     // Translate by half of a pixel to avoid pixel boundaries aligning perfectly with texels. The translation only needs to happen for axes
     // with even resolution. Odd-resolution axes are implicitly shifted by half a pixel due to the centering operation. Additionally, add
     // 0.1111111 such that our final position is almost never 0 modulo our pixel ratio, which again avoids aligned pixel boundaries with
