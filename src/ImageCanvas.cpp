@@ -969,19 +969,19 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
-    for (size_t i = 0; i < nChannels; ++i) {
-        const auto& channel = flattened[i];
-        tasks.emplace_back(ThreadPool::global().parallelForAsync(
-            (size_t)0,
-            numPixels,
-            [&, i](size_t j) {
-                int x = (j % regionSize.x()) + region.min.x();
-                int y = (j / regionSize.x()) + region.min.y();
-                indices[j + i * numPixels] = valToBin(channel.at({x, y}));
-            },
-            priority
-        ));
-    }
+    tasks.emplace_back(ThreadPool::global().parallelForAsync(
+        (size_t)0,
+        numPixels,
+        [&](size_t j) {
+            int x = (int)(j % regionSize.x()) + region.min.x();
+            int y = (int)(j / regionSize.x()) + region.min.y();
+            for (size_t c = 0; c < nChannels; ++c) {
+                const auto& channel = flattened[c];
+                indices[j * nChannels + c] = valToBin(channel.at({x, y}));
+            }
+        },
+        priority
+    ));
 
     for (auto& task : tasks) {
         co_await task;
@@ -990,11 +990,11 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     co_await ThreadPool::global().parallelForAsync(
         (size_t)0,
         nChannels,
-        [&](size_t i) {
+        [&](size_t c) {
             for (size_t j = 0; j < numPixels; ++j) {
-                int x = (j % regionSize.x()) + region.min.x();
-                int y = (j / regionSize.x()) + region.min.y();
-                result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->at({x, y}) : 1;
+                int x = (int)(j % regionSize.x()) + region.min.x();
+                int y = (int)(j / regionSize.x()) + region.min.y();
+                result->histogram[indices[j * nChannels + c] + c * NUM_BINS] += alphaChannel ? alphaChannel->at({x, y}) : 1;
             }
         },
         priority
