@@ -35,14 +35,6 @@ public:
 
     const std::string& name() const { return mName; }
 
-    float eval(size_t index) const {
-        if (index >= numPixels()) {
-            return 0;
-        }
-
-        return at(index * mDataStride);
-    }
-
     float eval(nanogui::Vector2i index) const {
         if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {
             return 0;
