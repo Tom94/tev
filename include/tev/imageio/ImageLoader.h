@@ -11,7 +11,6 @@
 
 #include <istream>
 #include <string>
-#include <tuple>
 
 namespace tev {
 

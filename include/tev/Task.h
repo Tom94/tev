@@ -5,11 +5,8 @@
 
 #include <tev/Common.h>
 
-#include <condition_variable>
 #include <coroutine>
 #include <future>
-#include <mutex>
-#include <semaphore>
 
 namespace tev {
 

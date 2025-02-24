@@ -22,7 +22,7 @@ bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
@@ -81,7 +81,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     // TODO: figure out when alpha is already premultiplied (prior to tonemapping).
     //       clip doesn't properly handle this... so copy&pasting transparent images
     //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
-    bool premultipliedAlpha = false && numChannels >= 4;
+    bool premultipliedAlpha = false;// && numChannels >= 4;
     co_await ThreadPool::global().parallelForAsync(
         0,
         size.y(),

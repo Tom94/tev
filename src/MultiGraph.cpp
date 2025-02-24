@@ -15,7 +15,7 @@ using namespace std;
 
 namespace tev {
 
-string formatNumber(float v) {
+static string formatNumber(float v) {
     bool needsScientificNotation = v != 0 && (abs(v) < 0.01f || abs(v) >= 1000);
     return needsScientificNotation ? fmt::format("{:.2e}", v) : fmt::format("{:.3f}", v);
 }

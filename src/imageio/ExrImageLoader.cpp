@@ -114,7 +114,7 @@ public:
             channel.size().y(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.at({x, y}) = data[x / mImfChannel.xSampling + (y / mImfChannel.ySampling) * (size_t)widthSubsampled];
+                    channel.at({x, y}) = data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled];
                 }
             },
             priority

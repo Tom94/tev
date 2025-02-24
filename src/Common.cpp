@@ -26,13 +26,13 @@ using namespace std;
 
 namespace tev {
 
-u8string toU8string(const string& str) {
+static u8string toU8string(const string& str) {
     u8string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
 }
 
-string fromU8string(const u8string& str) {
+static string fromU8string(const u8string& str) {
     string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
@@ -69,7 +69,7 @@ vector<string> split(string text, const string& delim) {
         size_t end = text.find_first_of(delim, begin);
         if (end == string::npos) {
             result.emplace_back(text.substr(begin));
-            return result;
+            break;
         } else {
             result.emplace_back(text.substr(begin, end - begin));
             begin = end + 1;

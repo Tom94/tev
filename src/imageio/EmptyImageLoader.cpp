@@ -21,7 +21,7 @@ bool EmptyImageLoader::canLoadFile(istream& iStream) const {
     return result;
 }
 
-Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
+Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, const string&, int) const {
     vector<ImageData> result(1);
     ImageData& data = result.front();
 

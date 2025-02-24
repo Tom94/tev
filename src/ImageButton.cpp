@@ -22,7 +22,7 @@ ImageButton::ImageButton(Widget* parent, const string& caption, bool canBeRefere
     mCaptionTextBox->set_editable(true);
     mCaptionTextBox->set_alignment(TextBox::Alignment::Right);
     mCaptionTextBox->set_placeholder(caption);
-    mCaptionTextBox->set_callback([this](const string& name) {
+    mCaptionTextBox->set_callback([this](const string&) {
         this->hideTextBox();
         return true;
     });
@@ -135,7 +135,6 @@ void ImageButton::draw(NVGcontext* ctx) {
         while (mCutoff < mCaption.size() &&
                nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > m_size.x() - 25 - idSize) {
             mCutoff += codePointLength(mCaption[mCutoff]);
-            ;
         }
 
         mSizeForWhichCutoffWasComputed = m_size;

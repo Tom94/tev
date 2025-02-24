@@ -147,7 +147,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};

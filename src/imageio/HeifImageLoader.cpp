@@ -206,8 +206,8 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             size.y(),
-            [&](int y) {
-                size_t src_offset = y * (size_t)n_samples_per_row;
+            [&](size_t y) {
+                size_t src_offset = y * n_samples_per_row;
                 for (size_t x = 0; x < n_samples_per_row; ++x) {
                     const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * bytesPerLine);
                     src[src_offset + x] = (float)typedData[x] * channelScale;

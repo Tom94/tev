@@ -150,7 +150,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
         new Label{row, text, font, fontSize};
     };
 
-    auto addLibrary = [](Widget* current, string name, string license, string desc) {
+    auto addLibrary = [](Widget* current, string name, string desc) {
         auto row = new Widget{current};
         row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 30});
         auto leftColumn = new Widget{row};
@@ -178,28 +178,28 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addSpacer(about, 20);
 
-    addLibrary(about, "args", "", "Single-header argument parsing library");
+    addLibrary(about, "args", "Single-header argument parsing library");
 #ifdef TEV_SUPPORT_AVIF
-    addLibrary(about, "aom", "", "Alliance for Open Media Video Codec");
+    addLibrary(about, "aom", "Alliance for Open Media Video Codec");
 #endif
-    addLibrary(about, "clip", "", "Cross-platform clipboard library");
-    addLibrary(about, "{fmt}", "", "Fast & safe formatting library");
-    addLibrary(about, "Glad", "", "Multi-language GL loader-generator");
-    addLibrary(about, "GLFW", "", "OpenGL desktop development library");
+    addLibrary(about, "clip", "Cross-platform clipboard library");
+    addLibrary(about, "{fmt}", "Fast & safe formatting library");
+    addLibrary(about, "Glad", "Multi-language GL loader-generator");
+    addLibrary(about, "GLFW", "OpenGL desktop development library");
 #ifdef TEV_SUPPORT_HEIC
-    addLibrary(about, "libde265", "", "Open h.265 video codec implementation.");
+    addLibrary(about, "libde265", "Open h.265 video codec implementation.");
 #endif
 #ifdef TEV_USE_LIBHEIF
-    addLibrary(about, "libheif", "", "HEIF and avif file format decoder and encoder");
-    addLibrary(about, "Little-CMS", "", "FOSS CMM engine. Fast transforms between ICC profiles.");
+    addLibrary(about, "libheif", "HEIF and avif file format decoder and encoder");
+    addLibrary(about, "Little-CMS", "FOSS CMM engine. Fast transforms between ICC profiles.");
 #endif
-    addLibrary(about, "NanoGUI", "", "Small GUI library");
-    addLibrary(about, "NanoVG", "", "Small vector graphics library");
-    addLibrary(about, "OpenEXR", "", "High dynamic-range (HDR) image file format");
-    addLibrary(about, "qoi", "", "File format for fast, lossless image compression");
-    addLibrary(about, "stb_image(_write)", "", "Single-header library for loading and writing images");
-    addLibrary(about, "tinylogger", "", "Minimal pretty-logging library");
-    addLibrary(about, "UTF8-CPP", "", "Lightweight UTF-8 string manipulation library");
+    addLibrary(about, "NanoGUI", "Small GUI library");
+    addLibrary(about, "NanoVG", "Small vector graphics library");
+    addLibrary(about, "OpenEXR", "High dynamic-range (HDR) image file format");
+    addLibrary(about, "qoi", "File format for fast, lossless image compression");
+    addLibrary(about, "stb_image(_write)", "Single-header library for loading and writing images");
+    addLibrary(about, "tinylogger", "Minimal pretty-logging library");
+    addLibrary(about, "UTF8-CPP", "Lightweight UTF-8 string manipulation library");
 
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());

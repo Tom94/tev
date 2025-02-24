@@ -539,7 +539,7 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
         throw runtime_error{"Must be a secondary instance to send to the primary instance."};
     }
 
-    int bytesSent = send(mSocketFd, message.data(), (int)message.size(), 0 /* flags */);
+    int bytesSent = (int)send(mSocketFd, message.data(), (int)message.size(), 0 /* flags */);
     if (bytesSent != int(message.size())) {
         throw runtime_error{fmt::format("send() failed: {}", errorString(lastSocketError()))};
     }
@@ -599,7 +599,7 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
     while (true) {
         // Receive as much data as we can, up to the capacity of 'mBuffer'.
         size_t maxBytes = mBuffer.size() - mRecvOffset;
-        int bytesReceived = recv(mSocketFd, mBuffer.data() + mRecvOffset, (int)maxBytes, 0);
+        int bytesReceived = (int)recv(mSocketFd, mBuffer.data() + mRecvOffset, (int)maxBytes, 0);
         if (bytesReceived == SOCKET_ERROR) {
             int errorId = lastSocketError();
             // no more data; this is fine.

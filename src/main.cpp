@@ -42,7 +42,7 @@ void redrawWindow() {
     }
 }
 
-void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
+static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
     switch (packet.type()) {
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
@@ -127,7 +127,7 @@ void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundIm
     }
 }
 
-int mainFunc(const vector<string>& arguments) {
+static int mainFunc(const vector<string>& arguments) {
     ArgumentParser parser{
         "tev — The EXR Viewer\n"
         "version " TEV_VERSION
