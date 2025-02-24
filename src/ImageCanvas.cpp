@@ -847,7 +847,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
             [&](int i) {
                 const auto* channel = image->channel(channelNames[i]);
                 for (size_t j = 0; j < channel->numPixels(); ++j) {
-                    result[i].at(j) = channel->eval(j);
+                    result[i].at(j) = channel->at(j);
                 }
             },
             priority
@@ -992,7 +992,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         nChannels,
         [&](size_t i) {
             for (size_t j = 0; j < numPixels; ++j) {
-                result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->eval(j) : 1;
+                int x = (j % regionSize.x()) + region.min.x();
+                int y = (j / regionSize.x()) + region.min.y();
+                result->histogram[indices[j + i * numPixels] + i * NUM_BINS] += alphaChannel ? alphaChannel->at({x, y}) : 1;
             }
         },
         priority
