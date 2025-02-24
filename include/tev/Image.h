@@ -112,6 +112,8 @@ public:
 
     const Channel* channel(const std::string& channelName) const { return mData.channel(channelName); }
 
+    bool isInterleavedRgba(const std::vector<std::string>& channelNames) const;
+
     nanogui::Texture* texture(const std::string& channelGroupName);
     nanogui::Texture* texture(const std::vector<std::string>& channelNames);
 

@@ -44,14 +44,27 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 
 vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size) {
     vector<Channel> channels;
+
+    size_t numPixels = (size_t)size.x() * size.y();
+    shared_ptr<vector<float>> data = make_shared<vector<float>>(numPixels * 4);
+
+    // Initialize pattern [0,0,0,1] efficiently using 128-bit writes
+    float* ptr = data->data();
+    const float pattern[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    for (size_t i = 0; i < numPixels; ++i) {
+        memcpy(ptr + i * 4, pattern, 16);
+    }
+
     if (numChannels > 1) {
         const vector<string> channelNames = {"R", "G", "B", "A"};
         for (int c = 0; c < numChannels; ++c) {
             string name = c < (int)channelNames.size() ? channelNames[c] : to_string(c);
-            channels.emplace_back(name, size);
+
+            // We assume that the channels are interleaved.
+            channels.emplace_back(name, size, data, c, 4);
         }
     } else {
-        channels.emplace_back("L", size);
+        channels.emplace_back("L", size, data, 0, 4);
     }
 
     return channels;

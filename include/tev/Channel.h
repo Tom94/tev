@@ -25,18 +25,22 @@ public:
 
     static nanogui::Color color(std::string fullChannel);
 
-    Channel(const std::string& name, const nanogui::Vector2i& size);
+    Channel(
+        const std::string& name,
+        const nanogui::Vector2i& size,
+        std::shared_ptr<std::vector<float>> data = nullptr,
+        size_t dataOffset = 0,
+        size_t dataStride = 1
+    );
 
     const std::string& name() const { return mName; }
 
-    const std::vector<float>& data() const { return mData; }
-
     float eval(size_t index) const {
-        if (index >= mData.size()) {
+        if (index >= numPixels()) {
             return 0;
         }
 
-        return mData[index];
+        return at(index * mDataStride);
     }
 
     float eval(nanogui::Vector2i index) const {
@@ -44,18 +48,14 @@ public:
             return 0;
         }
 
-        return mData[index.x() + index.y() * (size_t)mSize.x()];
+        return at(index.x() + (size_t)index.y() * (size_t)mSize.x());
     }
-
-    float& at(size_t index) { return mData[index]; }
-
-    float at(size_t index) const { return mData[index]; }
 
     float& at(nanogui::Vector2i index) { return at(index.x() + index.y() * (size_t)mSize.x()); }
 
     float at(nanogui::Vector2i index) const { return at(index.x() + index.y() * (size_t)mSize.x()); }
 
-    size_t numPixels() const { return mData.size(); }
+    size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
     const nanogui::Vector2i& size() const { return mSize; }
 
@@ -63,7 +63,11 @@ public:
         float min = std::numeric_limits<float>::infinity();
         float max = -std::numeric_limits<float>::infinity();
         float mean = 0;
-        for (float f : mData) {
+
+        const size_t nPixels = numPixels();
+        for (size_t i = 0; i < nPixels; ++i) {
+            const float f = at(i);
+
             mean += f;
             if (f < min) {
                 min = f;
@@ -74,21 +78,41 @@ public:
             }
         }
 
-        return {min, max, mean / numPixels()};
+        return {min, max, mean / nPixels};
     }
 
     Task<void> divideByAsync(const Channel& other, int priority);
 
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
-    void setZero() { memset(mData.data(), 0, mData.size() * sizeof(float)); }
+    void setZero() {
+        if (mDataStride == 1) {
+            memset(data(), 0, numPixels() * sizeof(float));
+        } else {
+            const size_t nPixels = numPixels();
+            for (size_t i = 0; i < nPixels; ++i) {
+                at(i) = 0.0f;
+            }
+        }
+    }
 
     void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
+
+    float& at(size_t index) { return data()[index * mDataStride]; }
+
+    float at(size_t index) const { return data()[index * mDataStride]; }
+
+    float* data() const { return mData->data() + mDataOffset; }
+
+    size_t offset() const { return mDataOffset; }
+    size_t stride() const { return mDataStride; }
 
 private:
     std::string mName;
     nanogui::Vector2i mSize;
-    std::vector<float> mData;
+    std::shared_ptr<std::vector<float>> mData;
+    size_t mDataOffset;
+    size_t mDataStride;
 };
 
 } // namespace tev
