@@ -397,7 +397,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             string auxTypeStr = auxType ? auxType : "unknown";
 
             // TODO: Better handling of auxiliary images than to just decode them and list them as separate images
-            result.emplace_back(co_await decodeImage(auxImgHandle));
+            // result.emplace_back(co_await decodeImage(auxImgHandle));
 
             // If we found an apple-style gainmap, apply it to the main image.
             if (amn && auxTypeStr.find("apple") != string::npos && auxTypeStr.find("hdrgainmap") != string::npos) {
