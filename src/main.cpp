@@ -272,6 +272,13 @@ static int mainFunc(const vector<string>& arguments) {
         {'r', "recursive"},
     };
 
+    Flag verboseFlag{
+        parser,
+        "VERBOSE",
+        "Verbose log output.",
+        {'v', "verbose"},
+    };
+
     Flag versionFlag{
         parser,
         "VERSION",
@@ -314,6 +321,10 @@ static int mainFunc(const vector<string>& arguments) {
     } catch (const ValidationError& e) {
         cerr << e.what() << endl;
         return -2;
+    }
+
+    if (verboseFlag) {
+        tlog::Logger::global()->showSeverity(tlog::ESeverity::Debug);
     }
 
     if (versionFlag) {

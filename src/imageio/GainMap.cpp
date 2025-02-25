@@ -31,34 +31,28 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
 
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
     float headroom = 1.0f;
-    try {
-        // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
-        float maker33 = amn.tryGetFloat<float>(33, 0.0f);
-        float maker48 = amn.tryGetFloat<float>(48, 8.0f);
 
-        tlog::debug() << fmt::format("Maker 33: {} Maker 48: {}", maker33, maker48);
+    // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
+    float maker33 = amn.tryGetFloat<float>(33, 0.0f);
+    float maker48 = amn.tryGetFloat<float>(48, 8.0f);
 
-        float stops;
-        if (maker33 < 1.0f) {
-            if (maker48 <= 0.01f) {
-                stops = -20.0f * maker48 + 1.8f;
-            } else {
-                stops = -0.101f * maker48 + 1.601f;
-            }
+    float stops;
+    if (maker33 < 1.0f) {
+        if (maker48 <= 0.01f) {
+            stops = -20.0f * maker48 + 1.8f;
         } else {
-            if (maker48 <= 0.01f) {
-                stops = -70.0f * maker48 + 3.0f;
-            } else {
-                stops = -0.303f * maker48 + 2.303f;
-            }
+            stops = -0.101f * maker48 + 1.601f;
         }
-
-        headroom = pow(2.0f, max(stops, 0.0f));
-        tlog::debug() << fmt::format("Found apple gain map headroom: {}", headroom);
-    } catch (const std::invalid_argument& e) {
-        tlog::warning() << fmt::format("Failed to read gain map headroom: {}", e.what());
-        co_return;
+    } else {
+        if (maker48 <= 0.01f) {
+            stops = -70.0f * maker48 + 3.0f;
+        } else {
+            stops = -0.303f * maker48 + 2.303f;
+        }
     }
+
+    headroom = pow(2.0f, max(stops, 0.0f));
+    tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}", headroom, maker33, maker48);
 
     co_await ThreadPool::global().parallelForAsync<int>(
         0,

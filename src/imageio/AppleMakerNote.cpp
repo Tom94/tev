@@ -58,6 +58,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
 
     ofs += 16;
 
+    tlog::debug() << "Decoding Apple maker note:";
     for (uint32_t i = 0; i < tcount; i++) {
         if (ofs + 12 > length) {
             throw invalid_argument{"Overflow"};
@@ -89,7 +90,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
         ofs += 12;
         mTags[entry.tag] = entry;
 
-        tlog::debug() << fmt::format("Tag: {} Format: {} Components: {}", entry.tag, (int)entry.format, entry.nComponents);
+        tlog::debug() << fmt::format("  tag={} format={} components={}", entry.tag, (int)entry.format, entry.nComponents);
     }
 }
 

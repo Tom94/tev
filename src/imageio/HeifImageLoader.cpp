@@ -136,7 +136,10 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
     ScopeGuard handleGuard{[handle] { heif_image_handle_release(handle); }};
 
-    auto decodeImage = [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, const string& namePrefix = "") -> Task<ImageData> {
+    auto decodeImage =
+        [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, const string& namePrefix = "") -> Task<ImageData> {
+        tlog::debug() << fmt::format("Decoding HEIF image {}", namePrefix.empty() ? "main." : namePrefix);
+
         ImageData resultData;
 
         int numChannels = heif_image_handle_has_alpha_channel(imgHandle) ? 4 : 3;
@@ -182,6 +185,8 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             if (profileSize == 0) {
                 return (cmsHTRANSFORM) nullptr;
             }
+
+            tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
             vector<uint8_t> profileData(profileSize);
             if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
@@ -236,9 +241,9 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
         auto transform = getCmsTransform();
         if (transform) {
-            ScopeGuard transformGuard{[transform] { cmsDeleteTransform(transform); }};
+            tlog::debug() << "Applying ICC color profile.";
 
-            tlog::debug() << "Found ICC color profile.";
+            ScopeGuard transformGuard{[transform] { cmsDeleteTransform(transform); }};
 
             // lcms can't perform alpha premultiplication, so we leave it up to downstream processing
             resultData.hasPremultipliedAlpha = false;
@@ -299,13 +304,11 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
                 co_return resultData;
             }
 
-            tlog::warning() << "Failed to read NCLX profile: " << error.message;
+            tlog::warning() << "Failed to read NCLX color profile: " << error.message;
             co_return resultData;
         }
 
         ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
-
-        tlog::debug() << "Found NCLX color profile.";
 
         // Only convert if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
@@ -316,6 +319,18 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
                 {nclx->color_primary_blue_x,  nclx->color_primary_blue_y },
                 {nclx->color_primary_white_x, nclx->color_primary_white_y}
             };
+
+            tlog::debug() << fmt::format(
+                "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",
+                chroma.red.x,
+                chroma.red.y,
+                chroma.green.x,
+                chroma.green.y,
+                chroma.blue.x,
+                chroma.blue.y,
+                chroma.white.x,
+                chroma.white.y
+            );
 
             Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
             for (int m = 0; m < 4; ++m) {
@@ -341,7 +356,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         }
 
         if (numMetadataBlocks > 1) {
-            tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s)";
+            tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
         }
 
         vector<heif_item_id> metadataIDs(numMetadataBlocks);
@@ -364,6 +379,11 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             if (!exif) {
                 tlog::warning() << "Failed to decode EXIF data";
                 continue;
+            }
+
+            tlog::debug() << fmt::format("Loaded EXIF data block #{}. Entries:", i);
+            if (tlog::Logger::global()->hiddenSeverities().count(tlog::ESeverity::Debug) == 0) {
+                exif_data_dump(exif);
             }
 
             ScopeGuard exifGuard{[exif] { exif_data_unref(exif); }};
@@ -475,16 +495,18 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
             // If we found an apple-style gainmap, apply it to the main image.
             if (auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
-                tlog::debug() << fmt::format("Found hdrgainmap: {}", auxLayerName);
+                tlog::debug() << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
                 auto amn = findAppleMakerNote();
                 if (amn) {
-                    tlog::debug() << "Found Apple maker note; applying gain map.";
+                    tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
                     co_await applyAppleGainMap(
                         result.front(), // primary image
                         auxImgData,
                         priority,
                         *amn
                     );
+                } else {
+                    tlog::warning() << "Skipping gain map application, because no Apple maker note was found.";
                 }
             }
         }
