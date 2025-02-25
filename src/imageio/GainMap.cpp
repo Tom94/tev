@@ -67,7 +67,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
             for (int x = 0; x < size.x(); ++x) {
                 size_t i = y * (size_t)size.x() + x;
                 for (int c = 0; c < 3; ++c) {
-                    image.channels[c].at(i) *= (1.0f + (headroom - 1.0f) * gainMap.channels[0].at(i));
+                    image.channels[c].at(i) *= (1.0f + (headroom - 1.0f) * gainMap.channels[c].at(i));
                 }
             }
         },
