@@ -35,7 +35,8 @@ using namespace std;
 
 namespace tev {
 
-ImageCanvas::ImageCanvas(Widget* parent, float pixelRatio) : Canvas{parent, 1, false, false, false}, mPixelRatio{pixelRatio} {
+ImageCanvas::ImageCanvas(Widget* parent, bool supportsHdr, float pixelRatio) :
+    Canvas{parent, 1, false, false, false}, mSupportsHdr{supportsHdr}, mPixelRatio{pixelRatio} {
     mShader.reset(new UberShader{render_pass()});
     set_draw_border(false);
 }
@@ -71,7 +72,7 @@ void ImageCanvas::draw_contents() {
     Image* image = (mReference && viewReferenceOnly) ? mReference.get() : mImage.get();
 
     if (!image) {
-        mShader->draw(2.0f * inverse(Vector2f{m_size}) / mPixelRatio, Vector2f{20.0f});
+        mShader->draw(2.0f * inverse(Vector2f{m_size}) / mPixelRatio, Vector2f{20.0f}, !mSupportsHdr);
         return;
     }
 
@@ -84,6 +85,7 @@ void ImageCanvas::draw_contents() {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
+            !mSupportsHdr,
             image->texture(mImage->channelsInGroup(mRequestedChannelGroup)),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in
             // [0, 1]-space.
@@ -101,6 +103,7 @@ void ImageCanvas::draw_contents() {
     mShader->draw(
         2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
         Vector2f{20.0f},
+        !mSupportsHdr,
         mImage->texture(mRequestedChannelGroup),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in [0,
         // 1]-space.

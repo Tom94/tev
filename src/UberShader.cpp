@@ -17,6 +17,7 @@
  */
 
 #include <tev/FalseColor.h>
+#include <tev/Image.h>
 #include <tev/UberShader.h>
 
 using namespace nanogui;
@@ -38,6 +39,7 @@ UberShader::UberShader(RenderPass* renderPass) {
             R"glsl(
             uniform vec2 pixelSize;
             uniform vec2 checkerSize;
+            uniform float ditherSize;
 
             uniform vec2 imageScale;
             uniform vec2 imageOffset;
@@ -48,11 +50,17 @@ UberShader::UberShader(RenderPass* renderPass) {
             attribute vec2 position;
 
             varying vec2 checkerUv;
+            varying vec2 ditherUv;
+
             varying vec2 imageUv;
             varying vec2 referenceUv;
 
             void main() {
-                checkerUv = position / (pixelSize * checkerSize);
+                // The offset of 0.25 is necessary to avoid sampling exact pixel borders. The offset is 0.25 rather than 0.5, because the
+                // domain of the screen shader is [-1, 1] rather than [0, 1].
+                checkerUv = (position / pixelSize + 0.25) / checkerSize;
+                ditherUv = (position / pixelSize + 0.25) / ditherSize;
+
                 imageUv = position * imageScale + imageOffset;
                 referenceUv = position * referenceScale + referenceOffset;
 
@@ -79,11 +87,13 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform bool hasReference;
 
             uniform sampler2D colormap;
+            uniform sampler2D ditherMatrix;
 
             uniform float exposure;
             uniform float offset;
             uniform float gamma;
             uniform bool clipToLdr;
+            uniform bool useDither;
             uniform int tonemap;
             uniform int metric;
 
@@ -93,6 +103,8 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform vec4 bgColor;
 
             varying vec2 checkerUv;
+            varying vec2 ditherUv;
+
             varying vec2 imageUv;
             varying vec2 referenceUv;
 
@@ -170,15 +182,23 @@ UberShader::UberShader(RenderPass* renderPass) {
                 return color;
             }
 
-            void main() {
+            vec4 dither(vec4 color) {
+                if (!useDither) {
+                    return color;
+                }
+
+                color.rgb += texture2D(ditherMatrix, fract(ditherUv)).r;
+                return color;
+            }
+
+            vec4 computeColor() {
                 vec3 darkGray = vec3(0.5, 0.5, 0.5);
                 vec3 lightGray = vec3(0.55, 0.55, 0.55);
 
                 vec3 checker = abs(mod(floor(checkerUv.x) + floor(checkerUv.y), 2.0)) < 0.5 ? darkGray : lightGray;
                 checker = bgColor.rgb * bgColor.a + checker * (1.0 - bgColor.a);
                 if (!hasImage) {
-                    gl_FragColor = vec4(checker, 1.0);
-                    return;
+                    return vec4(checker, 1.0);
                 }
 
                 float cropAlpha =
@@ -187,12 +207,12 @@ UberShader::UberShader(RenderPass* renderPass) {
                 vec4 imageVal = sample(image, imageUv);
                 imageVal.a *= cropAlpha;
                 if (!hasReference) {
-                    gl_FragColor = vec4(
+                    vec4 result = vec4(
                         applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                         1.0
                     );
-                    gl_FragColor.rgb = clamp(gl_FragColor.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
-                    return;
+                    result.rgb = clamp(result.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
+                    return result;
                 }
 
                 vec4 referenceVal = sample(reference, referenceUv);
@@ -200,12 +220,17 @@ UberShader::UberShader(RenderPass* renderPass) {
 
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5;
-                gl_FragColor = vec4(
+                vec4 result = vec4(
                     applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
                     1.0
                 );
 
-                gl_FragColor.rgb = clamp(gl_FragColor.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
+                result.rgb = clamp(result.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
+                return result;
+            }
+
+            void main() {
+                gl_FragColor = dither(computeColor());
             })glsl";
 #elif defined(NANOGUI_USE_METAL)
         auto vertexShader =
@@ -214,6 +239,7 @@ UberShader::UberShader(RenderPass* renderPass) {
             struct VertexOut {
                 float4 position [[position]];
                 float2 checkerUv;
+                float2 ditherUv;
                 float2 imageUv;
                 float2 referenceUv;
             };
@@ -222,6 +248,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 const device packed_float2* position,
                 const constant float2& pixelSize,
                 const constant float2& checkerSize,
+                const constant float& ditherSize,
                 const constant float2& imageScale,
                 const constant float2& imageOffset,
                 const constant float2& referenceScale,
@@ -230,7 +257,11 @@ UberShader::UberShader(RenderPass* renderPass) {
             ) {
                 VertexOut vert;
                 vert.position = float4(position[id], 1.0f, 1.0f);
-                vert.checkerUv = position[id] / (pixelSize * checkerSize);
+
+                // The offset of 0.25 is necessary to avoid sampling exact pixel borders. The offset is 0.25 rather than 0.5, because the
+                // domain of the screen shader is [-1, 1] rather than [0, 1].
+                vert.checkerUv = (position[id] / pixelSize + 0.25) / checkerSize;
+                vert.ditherUv = (position[id] / pixelSize + 0.25) / ditherSize;
 
                 vert.imageUv = position[id] * imageScale + imageOffset;
                 vert.referenceUv = position[id] * referenceScale + referenceOffset;
@@ -326,9 +357,19 @@ UberShader::UberShader(RenderPass* renderPass) {
             struct VertexOut {
                 float4 position [[position]];
                 float2 checkerUv;
+                float2 ditherUv;
                 float2 imageUv;
                 float2 referenceUv;
             };
+
+            float4 dither(float4 color, texture2d<float, access::sample> ditherMatrix, sampler ditherMatrixSampler, float2 ditherUv, bool useDither) {
+                if (!useDither) {
+                    return color;
+                }
+
+                color.rgb += ditherMatrix.sample(ditherMatrixSampler, fract(ditherUv)).r;
+                return color;
+            }
 
             fragment float4 fragment_main(
                 VertexOut vert [[stage_in]],
@@ -338,12 +379,15 @@ UberShader::UberShader(RenderPass* renderPass) {
                 sampler reference_sampler,
                 texture2d<float, access::sample> colormap,
                 sampler colormap_sampler,
+                texture2d<float, access::sample> ditherMatrix,
+                sampler ditherMatrix_sampler,
                 const constant bool& hasImage,
                 const constant bool& hasReference,
                 const constant float& exposure,
                 const constant float& offset,
                 const constant float& gamma,
                 const constant bool& clipToLdr,
+                const constant bool& useDither,
                 const constant int& tonemap,
                 const constant int& metric,
                 const constant float2& cropMin,
@@ -356,7 +400,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 float3 checker = int(floor(vert.checkerUv.x) + floor(vert.checkerUv.y)) % 2 == 0 ? darkGray : lightGray;
                 checker = bgColor.rgb * bgColor.a + checker * (1.0f - bgColor.a);
                 if (!hasImage) {
-                    return float4(checker, 1.0f);
+                    return dither(float4(checker, 1.0f), ditherMatrix, ditherMatrix_sampler, vert.ditherUv, useDither);
                 }
 
                 float cropAlpha = vert.imageUv.x < cropMin.x || vert.imageUv.x > cropMax.x || vert.imageUv.y < cropMin.y || vert.imageUv.y > cropMax.y ? 0.3f : 1.0f;
@@ -377,7 +421,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                         1.0f
                     );
                     color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
-                    return color;
+                    return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv, useDither);
                 }
 
                 float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv);
@@ -398,7 +442,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                     1.0f
                 );
                 color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
-                return color;
+                return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv, useDither);
             })";
 #endif
 
@@ -434,17 +478,27 @@ UberShader::UberShader(RenderPass* renderPass) {
         Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, Vector2i{(int)fcd.size() / 4, 1}
     };
     mColorMap->upload((uint8_t*)fcd.data());
+
+    mDitherMatrix = new Texture{
+        Texture::PixelFormat::R,
+        Texture::ComponentFormat::Float32,
+        Vector2i{Image::DITHER_MATRIX_SIZE},
+        Texture::InterpolationMode::Nearest,
+        Texture::InterpolationMode::Nearest
+    };
+    mDitherMatrix->upload((uint8_t*)Image::ditherMatrix().data());
 }
 
 UberShader::~UberShader() {}
 
-void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    draw(pixelSize, checkerSize, nullptr, Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, false, ETonemap::SRGB, std::nullopt);
+void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize, bool useDither) {
+    draw(pixelSize, checkerSize, useDither, nullptr, Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, false, ETonemap::SRGB, std::nullopt);
 }
 
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
+    bool useDither,
     Texture* textureImage,
     const Matrix3f& transformImage,
     float exposure,
@@ -455,13 +509,27 @@ void UberShader::draw(
     const std::optional<Box2i>& crop
 ) {
     draw(
-        pixelSize, checkerSize, textureImage, transformImage, nullptr, Matrix3f{0.0f}, exposure, offset, gamma, clipToLdr, tonemap, EMetric::Error, crop
+        pixelSize,
+        checkerSize,
+        useDither,
+        textureImage,
+        transformImage,
+        nullptr,
+        Matrix3f{0.0f},
+        exposure,
+        offset,
+        gamma,
+        clipToLdr,
+        tonemap,
+        EMetric::Error,
+        crop
     );
 }
 
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
+    bool useDither,
     Texture* textureImage,
     const Matrix3f& transformImage,
     Texture* textureReference,
@@ -489,6 +557,7 @@ void UberShader::draw(
     bindCheckerboardData(pixelSize, checkerSize);
     bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
+
     mShader->set_uniform("hasImage", hasImage);
     mShader->set_uniform("hasReference", hasReference);
     mShader->set_uniform("clipToLdr", clipToLdr);
@@ -499,6 +568,10 @@ void UberShader::draw(
         mShader->set_uniform("cropMin", Vector2f{-std::numeric_limits<float>::infinity()});
         mShader->set_uniform("cropMax", Vector2f{std::numeric_limits<float>::infinity()});
     }
+
+    mShader->set_uniform("useDither", useDither);
+    mShader->set_uniform("ditherSize", static_cast<float>(Image::DITHER_MATRIX_SIZE));
+    mShader->set_texture("ditherMatrix", mDitherMatrix.get());
 
     mShader->begin();
     mShader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, true);

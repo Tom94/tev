@@ -34,12 +34,13 @@ public:
     virtual ~UberShader();
 
     // Draws just a checkerboard
-    void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
+    void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize, bool dither);
 
     // Draws an image
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
+        bool dither,
         nanogui::Texture* textureImage,
         const nanogui::Matrix3f& transformImage,
         float exposure,
@@ -54,6 +55,7 @@ public:
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
+        bool dither,
         nanogui::Texture* textureImage,
         const nanogui::Matrix3f& transformImage,
         nanogui::Texture* textureReference,
@@ -82,6 +84,7 @@ private:
 
     nanogui::ref<nanogui::Shader> mShader;
     nanogui::ref<nanogui::Texture> mColorMap;
+    nanogui::ref<nanogui::Texture> mDitherMatrix;
 
     nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 };
