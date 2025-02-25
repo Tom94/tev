@@ -130,13 +130,7 @@ if (TEV_USE_LIBHEIF)
         # Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
     )
 
-    file(GLOB LCMS_HDRS
-        Little-CMS/include/*.h
-        # Little-CMS/plugins/fast_float/include/*.h
-    )
-
-    add_library(lcms2 STATIC ${LCMS_SRCS} ${LCMS_HDRS})
-    set_target_properties(lcms2 PROPERTIES PUBLIC_HEADER "${LCMS_HDRS}")
+    add_library(lcms2 STATIC ${LCMS_SRCS})
 
     # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
     target_compile_definitions(lcms2 PRIVATE -DCMS_DONT_USE_SSE2=1)
@@ -145,6 +139,9 @@ if (TEV_USE_LIBHEIF)
         # "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
     )
 endif()
+
+# Compile libexif for Exif metadata parsing
+add_subdirectory(libexif EXCLUDE_FROM_ALL)
 
 # Compile OpenEXR
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
@@ -179,6 +176,8 @@ add_subdirectory(clip)
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
 
 set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
+
+set(EXIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libexif PARENT_SCOPE)
 
 set(FMT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include PARENT_SCOPE)
 

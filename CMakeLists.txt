@@ -166,7 +166,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
 
-set(TEV_LIBS clip OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
+set(TEV_LIBS clip exif_static OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
@@ -175,10 +175,12 @@ if (TEV_USE_LIBHEIF)
 endif()
 
 set(TEV_SOURCES
+    include/tev/imageio/AppleMakerNote.h src/imageio/AppleMakerNote.cpp
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
     include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
     include/tev/imageio/ExrImageSaver.h src/imageio/ExrImageSaver.cpp
+    include/tev/imageio/GainMap.h src/imageio/GainMap.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
@@ -241,6 +243,7 @@ include_directories(
     ${ARGS_INCLUDE}
     ${CLIP_INCLUDE}
     ${DIRECTXTEX_INCLUDE}
+    ${EXIF_INCLUDE}
     ${FMT_INCLUDE}
     ${GLFW_INCLUDE}
     ${NANOGUI_EXTRA_INCS}
