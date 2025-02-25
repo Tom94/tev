@@ -102,7 +102,7 @@ ImageViewer::ImageViewer(
     mSidebarLayout = new Widget{tmp};
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas{horizontalScreenSplit, pixel_ratio()};
+    mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr, pixel_ratio()};
 
     // Tonemapping sectionim
     {

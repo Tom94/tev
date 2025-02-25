@@ -41,7 +41,7 @@ struct CanvasStatistics {
 
 class ImageCanvas : public nanogui::Canvas {
 public:
-    ImageCanvas(nanogui::Widget* parent, float pixelRatio);
+    ImageCanvas(nanogui::Widget* parent, bool supportsHdr, float pixelRatio);
 
     bool scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) override;
 
@@ -135,6 +135,7 @@ private:
     nanogui::Matrix3f textureToNanogui(const Image* image);
     nanogui::Matrix3f displayWindowToNanogui(const Image* image);
 
+    bool mSupportsHdr = false;
     float mPixelRatio = 1;
     float mExposure = 0;
     float mOffset = 0;

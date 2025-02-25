@@ -26,6 +26,7 @@
 
 #include <nanogui/texture.h>
 
+#include <array>
 #include <atomic>
 #include <istream>
 #include <map>
@@ -110,6 +111,10 @@ struct ImageTexture {
 
 class Image {
 public:
+    static const size_t DITHER_MATRIX_SIZE = 8;
+    using dither_matrix_t = std::array<std::array<float, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
+    static dither_matrix_t ditherMatrix();
+
     Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const std::string& channelSelector);
     virtual ~Image();
 
