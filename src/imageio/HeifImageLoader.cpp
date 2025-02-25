@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/AppleMakerNote.h>
 #include <tev/imageio/GainMap.h>
@@ -76,7 +77,7 @@ bool HeifImageLoader::canLoadFile(istream& iStream) const {
     return heif_check_filetype(header, 12) == heif_filetype_yes_supported;
 }
 
-Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
+Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
     vector<ImageData> result;
 
     iStream.seekg(0, ios_base::end);
@@ -135,7 +136,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
     ScopeGuard handleGuard{[handle] { heif_image_handle_release(handle); }};
 
-    auto decodeImage = [priority](heif_image_handle* imgHandle) -> Task<ImageData> {
+    auto decodeImage = [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, const string& namePrefix = "") -> Task<ImageData> {
         ImageData resultData;
 
         int numChannels = heif_image_handle_has_alpha_channel(imgHandle) ? 4 : 3;
@@ -158,6 +159,13 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         ScopeGuard imgGuard{[img] { heif_image_release(img); }};
 
+        // if (targetSize.x() != 0 && size != targetSize) {
+        //     heif_image* scaledImg;
+        //     heif_image_scale_image(img, &scaledImg, targetSize.x(), targetSize.y(), nullptr);
+        //     heif_image_release(img);
+        //     img = scaledImg;
+        // }
+
         const int bitsPerPixel = heif_image_get_bits_per_pixel_range(img, heif_channel_interleaved);
         const float channelScale = 1.0f / float((1 << bitsPerPixel) - 1);
 
@@ -167,7 +175,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             throw invalid_argument{"Faild to get image data."};
         }
 
-        resultData.channels = makeNChannels(numChannels, size);
+        resultData.channels = makeNChannels(numChannels, size, namePrefix);
 
         auto getCmsTransform = [&imgHandle, &numChannels, &resultData]() {
             size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
@@ -322,6 +330,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
     // Read main image
     result.emplace_back(co_await decodeImage(handle));
+    ImageData& mainImage = result.front();
 
     auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
         // Extract EXIF metadata
@@ -370,7 +379,66 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         return nullptr;
     };
 
-    auto amn = findAppleMakerNote();
+    auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, const string& namePrefix) -> Task<void> {
+        Vector2i size = resultData.channels.front().size();
+        if (size == targetSize) {
+            co_return;
+        }
+
+        int numChannels = (int)resultData.channels.size();
+
+        ImageData scaledResultData;
+        scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
+        scaledResultData.channels = makeNChannels(numChannels, targetSize, namePrefix);
+
+        auto& srcChannels = resultData.channels;
+        auto& dstChannels = scaledResultData.channels;
+
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            targetSize.y(),
+            [&](int dstY) {
+                const float scaleX = (float)size.x() / targetSize.x();
+                const float scaleY = (float)size.y() / targetSize.y();
+
+                for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
+                    float srcX = (dstX + 0.5f) * scaleX - 0.5f;
+                    float srcY = (dstY + 0.5f) * scaleY - 0.5f;
+
+                    int x0 = std::max((int)std::floor(srcX), 0);
+                    int y0 = std::max((int)std::floor(srcY), 0);
+                    int x1 = std::min(x0 + 1, size.x() - 1);
+                    int y1 = std::min(y0 + 1, size.y() - 1);
+
+                    float wx1 = srcX - x0;
+                    float wy1 = srcY - y0;
+                    float wx0 = 1.0f - wx1;
+                    float wy0 = 1.0f - wy1;
+
+                    size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
+
+                    size_t srcIdx00 = y0 * (size_t)size.x() + x0;
+                    size_t srcIdx01 = y0 * (size_t)size.x() + x1;
+                    size_t srcIdx10 = y1 * (size_t)size.x() + x0;
+                    size_t srcIdx11 = y1 * (size_t)size.x() + x1;
+
+                    for (int c = 0; c < numChannels; ++c) {
+                        float p00 = srcChannels[c].at(srcIdx00);
+                        float p01 = srcChannels[c].at(srcIdx01);
+                        float p10 = srcChannels[c].at(srcIdx10);
+                        float p11 = srcChannels[c].at(srcIdx11);
+
+                        float interpolated = wy0 * (wx0 * p00 + wx1 * p01) + wy1 * (wx0 * p10 + wx1 * p11);
+                        dstChannels[c].at(dstIdx) = interpolated;
+                    }
+                }
+            },
+            priority
+        );
+
+        resultData = std::move(scaledResultData);
+        co_return;
+    };
 
     // Read auxiliary images
     int num_aux = heif_image_handle_get_number_of_auxiliary_images(handle, 0);
@@ -394,20 +462,30 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             }
 
             ScopeGuard typeGuard{[auxImgHandle, &auxType] { heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType); }};
-            string auxTypeStr = auxType ? auxType : "unknown";
+            string auxLayerName = auxType ? fmt::format("{}.", auxType) : fmt::format("{}.", num_aux);
+            replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
 
-            // TODO: Better handling of auxiliary images than to just decode them and list them as separate images
-            // result.emplace_back(co_await decodeImage(auxImgHandle));
+            if (!matchesFuzzy(auxLayerName, channelSelector)) {
+                continue;
+            }
+
+            auto auxImgData = co_await decodeImage(auxImgHandle, mainImage.channels.front().size(), auxLayerName);
+            co_await resizeImage(auxImgData, mainImage.channels.front().size(), auxLayerName);
+            mainImage.channels.insert(mainImage.channels.end(), auxImgData.channels.begin(), auxImgData.channels.end());
 
             // If we found an apple-style gainmap, apply it to the main image.
-            if (amn && auxTypeStr.find("apple") != string::npos && auxTypeStr.find("hdrgainmap") != string::npos) {
-                tlog::debug() << fmt::format("Found hdrgainmap: {}", auxTypeStr);
-                co_await applyAppleGainMap(
-                    result.front(), // primary image
-                    co_await decodeImage(auxImgHandle),
-                    priority,
-                    *amn
-                );
+            if (auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
+                tlog::debug() << fmt::format("Found hdrgainmap: {}", auxLayerName);
+                auto amn = findAppleMakerNote();
+                if (amn) {
+                    tlog::debug() << "Found Apple maker note; applying gain map.";
+                    co_await applyAppleGainMap(
+                        result.front(), // primary image
+                        auxImgData,
+                        priority,
+                        *amn
+                    );
+                }
             }
         }
     }
