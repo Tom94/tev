@@ -379,8 +379,6 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         return nullptr;
     };
 
-    auto amn = findAppleMakerNote();
-
     auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, const string& namePrefix) -> Task<void> {
         Vector2i size = resultData.channels.front().size();
         if (size == targetSize) {
@@ -476,14 +474,18 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             mainImage.channels.insert(mainImage.channels.end(), auxImgData.channels.begin(), auxImgData.channels.end());
 
             // If we found an apple-style gainmap, apply it to the main image.
-            if (amn && auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
+            if (auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
                 tlog::debug() << fmt::format("Found hdrgainmap: {}", auxLayerName);
-                co_await applyAppleGainMap(
-                    result.front(), // primary image
-                    auxImgData,
-                    priority,
-                    *amn
-                );
+                auto amn = findAppleMakerNote();
+                if (amn) {
+                    tlog::debug() << "Found Apple maker note; applying gain map.";
+                    co_await applyAppleGainMap(
+                        result.front(), // primary image
+                        auxImgData,
+                        priority,
+                        *amn
+                    );
+                }
             }
         }
     }
