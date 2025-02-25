@@ -127,7 +127,7 @@ if (TEV_USE_LIBHEIF)
     # this is resolved.
     file(GLOB LCMS_SRCS
         Little-CMS/src/*.c Little-CMS/include/*.h
-        # Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+        Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
     )
 
     add_library(lcms2 STATIC ${LCMS_SRCS})
@@ -136,7 +136,7 @@ if (TEV_USE_LIBHEIF)
     target_compile_definitions(lcms2 PRIVATE -DCMS_DONT_USE_SSE2=1)
     target_include_directories(lcms2 PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include"
-        # "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
     )
 endif()
 
