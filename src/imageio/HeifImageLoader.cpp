@@ -22,7 +22,7 @@
 #include <libheif/heif.h>
 
 #include <lcms2.h>
-// #include <lcms2_fast_float.h>
+#include <lcms2_fast_float.h>
 
 #include <ImfChromaticities.h>
 
@@ -36,7 +36,7 @@ HeifImageLoader::HeifImageLoader() {
         tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
     });
 
-    // cmsPlugin(cmsFastFloatExtensions());
+    cmsPlugin(cmsFastFloatExtensions());
 }
 
 bool HeifImageLoader::canLoadFile(istream& iStream) const {

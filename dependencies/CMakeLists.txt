@@ -127,22 +127,16 @@ if (TEV_USE_LIBHEIF)
     # this is resolved.
     file(GLOB LCMS_SRCS
         Little-CMS/src/*.c Little-CMS/include/*.h
-        # Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+        Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
     )
 
-    file(GLOB LCMS_HDRS
-        Little-CMS/include/*.h
-        # Little-CMS/plugins/fast_float/include/*.h
-    )
-
-    add_library(lcms2 STATIC ${LCMS_SRCS} ${LCMS_HDRS})
-    set_target_properties(lcms2 PROPERTIES PUBLIC_HEADER "${LCMS_HDRS}")
+    add_library(lcms2 STATIC ${LCMS_SRCS})
 
     # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
     target_compile_definitions(lcms2 PRIVATE -DCMS_DONT_USE_SSE2=1)
     target_include_directories(lcms2 PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include"
-        # "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
     )
 endif()
 
