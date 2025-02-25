@@ -151,4 +151,8 @@ $ cpack --config build/CPackConfig.cmake
 
 ## License
 
-__tev__ is available under the BSD 3-clause license, which you can find in the `LICENSE.txt` file. [TL;DR](https://tldrlegal.com/license/bsd-3-clause-license-(revised)).
+__tev__ is available under the GPLv3 license, which you can find in the `LICENSE.txt` file.
+[TL;DR](https://www.tldrlegal.com/license/gnu-general-public-license-v3-gpl-3).
+
+Older versions of __tev__ (v1.30 and earlier) are available under the BSD 3-Clause license.
+If required, use git tags to check out these older versions.
