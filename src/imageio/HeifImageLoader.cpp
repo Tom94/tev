@@ -307,8 +307,8 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         tlog::debug() << "Found NCLX color profile.";
 
-        // Only convert if not already in Rec.709/sRGB
-        if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5) {
+        // Only convert if not already in Rec.709/sRGB *and* if primaries are actually specified
+        if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
             Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
             Imf::Chromaticities chroma = {
                 {nclx->color_primary_red_x,   nclx->color_primary_red_y  },
