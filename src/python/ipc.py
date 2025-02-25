@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 
-# This file was developed by Thomas Müller <contact@tom94.net>.
-# It is published under the BSD 3-Clause License within the LICENSE file.
+# tev -- the EXR viewer
+#
+# Copyright (C) 2025 Thomas Müller <contact@tom94.net>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
 Wraps tev.py to ensure backward compatibility
