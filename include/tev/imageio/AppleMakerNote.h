@@ -95,6 +95,14 @@ class AppleMakerNote {
 public:
     AppleMakerNote(const uint8_t* data, size_t length);
 
+    template <typename T> T tryGetFloat(uint16_t tag, T defaultValue) const {
+        if (mTags.count(tag) == 0) {
+            return defaultValue;
+        }
+
+        return getFloat<T>(tag);
+    }
+
     template <typename T> T getFloat(uint16_t tag) const {
         if (mTags.count(tag) == 0) {
             throw std::invalid_argument{"Requested tag does not exist."};

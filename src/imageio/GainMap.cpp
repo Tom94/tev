@@ -32,8 +32,9 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
     float headroom = 1.0f;
     try {
-        float maker33 = amn.getFloat<float>(33);
-        float maker48 = amn.getFloat<float>(48);
+        // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
+        float maker33 = amn.tryGetFloat<float>(33, 0.0f);
+        float maker48 = amn.tryGetFloat<float>(48, 8.0f);
 
         tlog::debug() << fmt::format("Maker 33: {} Maker 48: {}", maker33, maker48);
 
