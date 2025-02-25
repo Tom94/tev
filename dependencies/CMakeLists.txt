@@ -140,6 +140,9 @@ if (TEV_USE_LIBHEIF)
     )
 endif()
 
+# Compile libexif for Exif metadata parsing
+add_subdirectory(libexif EXCLUDE_FROM_ALL)
+
 # Compile OpenEXR
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL_PKG_CONFIG OFF CACHE BOOL " " FORCE)
@@ -173,6 +176,8 @@ add_subdirectory(clip)
 set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
 
 set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
+
+set(EXIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libexif PARENT_SCOPE)
 
 set(FMT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include PARENT_SCOPE)
 
