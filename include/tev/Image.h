@@ -42,6 +42,8 @@ struct ImageData {
     ImageData() = default;
     ImageData(const ImageData&) = delete;
     ImageData(ImageData&&) = default;
+    ImageData& operator=(const ImageData&) = delete;
+    ImageData& operator=(ImageData&&) = default;
 
     std::vector<Channel> channels;
     std::vector<std::string> layers;

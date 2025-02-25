@@ -66,3 +66,6 @@
 	path = dependencies/Little-CMS
 	url = https://github.com/mm2/Little-CMS
 	shallow = true
+[submodule "dependencies/libexif"]
+	path = dependencies/libexif
+	url = https://github.com/francois-random/libexif
