@@ -57,7 +57,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
     return imageLoaders;
 }
 
-vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size) {
+vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, const string& namePrefix) {
     vector<Channel> channels;
 
     size_t numPixels = (size_t)size.x() * size.y();
@@ -73,7 +73,7 @@ vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size
     if (numChannels > 1) {
         const vector<string> channelNames = {"R", "G", "B", "A"};
         for (int c = 0; c < numChannels; ++c) {
-            string name = c < (int)channelNames.size() ? channelNames[c] : to_string(c);
+            string name = namePrefix + (c < (int)channelNames.size() ? channelNames[c] : to_string(c));
 
             // We assume that the channels are interleaved.
             channels.emplace_back(name, size, data, c, 4);

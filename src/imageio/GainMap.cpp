@@ -27,28 +27,7 @@ namespace tev {
 
 Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote& amn) {
     auto size = image.channels[0].size();
-    auto gainMapSize = gainMap.channels[0].size();
-
-    // Assumption: gain maps are always a power of 2 smaller than the image, give or take rounding for odd image dimensions.
-    // Algorithm: find first power of 2 downscale of the image that is smaller than the gain map.
-    uint32_t shift = 0;
-    while ((size.x() >> shift) > gainMapSize.x() && (size.y() >> shift) > gainMapSize.y()) {
-        ++shift;
-    }
-
-    // Warn if final gainmapsize obtained by shifting is off my more than 1 pixels and don't use the gainmap.
-    if (abs((int)(size.x() >> shift) - (int)gainMapSize.x()) > 1 || abs((int)(size.y() >> shift) - (int)gainMapSize.y()) > 1) {
-        tlog::warning() << fmt::format(
-            "Gain map size {}x{} does not match {}-downscaled image size {}x{}",
-            gainMapSize.x(),
-            gainMapSize.y(),
-            shift,
-            size.x() >> shift,
-            size.y() >> shift
-        );
-
-        co_return;
-    }
+    TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size");
 
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
     float headroom = 1.0f;
@@ -86,10 +65,8 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
                 size_t i = y * (size_t)size.x() + x;
-                size_t gmi = (x >> shift) + (y >> shift) * gainMapSize.x();
-
                 for (int c = 0; c < 3; ++c) {
-                    image.channels[c].at(i) *= (1.0f + (headroom - 1.0f) * gainMap.channels[0].at(gmi));
+                    image.channels[c].at(i) *= (1.0f + (headroom - 1.0f) * gainMap.channels[0].at(i));
                 }
             }
         },
