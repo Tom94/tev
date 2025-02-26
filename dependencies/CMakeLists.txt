@@ -122,9 +122,6 @@ if (TEV_USE_LIBHEIF)
 
     # Compile Little-CMS for ICC color profile handling
 
-    # WARNING: Enabling the fast float plugin (GPLv3) causes a License conflict with the rest of tev (BSD 3-clause). Therefore, we disable
-    # it here for now. Currently seeking to purchase a more permissive license as per https://www.littlecms.com/plugin/. Will enable once
-    # this is resolved.
     file(GLOB LCMS_SRCS
         Little-CMS/src/*.c Little-CMS/include/*.h
         Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
