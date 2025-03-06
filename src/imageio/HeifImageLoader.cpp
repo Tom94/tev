@@ -19,15 +19,16 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/AppleMakerNote.h>
+#include <tev/imageio/Chroma.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
+
+#include <nanogui/vector.h>
 
 #include <libheif/heif.h>
 
 #include <lcms2.h>
 #include <lcms2_fast_float.h>
-
-#include <ImfChromaticities.h>
 
 #include <libexif/exif-data.h>
 
@@ -311,32 +312,19 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         // Only convert if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
-            Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
-            Imf::Chromaticities chroma = {
+            array<Vector2f, 4> chroma = {{
                 {nclx->color_primary_red_x,   nclx->color_primary_red_y  },
                 {nclx->color_primary_green_x, nclx->color_primary_green_y},
                 {nclx->color_primary_blue_x,  nclx->color_primary_blue_y },
-                {nclx->color_primary_white_x, nclx->color_primary_white_y}
-            };
+                {nclx->color_primary_white_x, nclx->color_primary_white_y},
+            }};
+
+            resultData.toRec709 = convertChromaToRec709(chroma);
 
             tlog::debug() << fmt::format(
                 "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",
-                chroma.red.x,
-                chroma.red.y,
-                chroma.green.x,
-                chroma.green.y,
-                chroma.blue.x,
-                chroma.blue.y,
-                chroma.white.x,
-                chroma.white.y
+                chroma[0].x(), chroma[0].y(), chroma[1].x(), chroma[1].y(), chroma[2].x(), chroma[2].y(), chroma[3].x(), chroma[3].y()
             );
-
-            Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
-            for (int m = 0; m < 4; ++m) {
-                for (int n = 0; n < 4; ++n) {
-                    resultData.toRec709.m[m][n] = M.x[m][n];
-                }
-            }
         }
 
         co_return resultData;

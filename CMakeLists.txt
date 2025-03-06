@@ -176,6 +176,7 @@ endif()
 
 set(TEV_SOURCES
     include/tev/imageio/AppleMakerNote.h src/imageio/AppleMakerNote.cpp
+    include/tev/imageio/Chroma.h src/imageio/Chroma.cpp
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
     include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp

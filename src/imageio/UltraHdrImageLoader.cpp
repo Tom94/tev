@@ -18,9 +18,11 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/Chroma.h>
 #include <tev/imageio/UltraHdrImageLoader.h>
 
-#include <ImfChromaticities.h>
+// From Imath. Required to convert UltraHDR fp16 images to float.
+#include <half.h>
 
 #include <ultrahdr_api.h>
 
@@ -80,7 +82,7 @@ static string toString(uhdr_color_gamut_t cg) {
     }
 }
 
-Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
+Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
     vector<ImageData> result;
 
     iStream.seekg(0, ios_base::end);
@@ -127,7 +129,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         throw runtime_error{"No decoded image."};
     }
 
-    auto readImage = [](uhdr_raw_image_t* image, int priority) -> Task<ImageData> {
+    auto readImage = [priority](uhdr_raw_image_t* image) -> Task<ImageData> {
         if (image->fmt != UHDR_IMG_FMT_64bppRGBAHalfFloat) {
             throw runtime_error{"Decoded image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
         }
@@ -167,46 +169,28 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         );
 
         // Convert to Rec.709 if necessary
-        Imf::Chromaticities rec709; // default constructor yields rec709 (sRGB) primaries
-        Imf::Chromaticities chroma;
-
         tlog::debug(fmt::format("Ultra HDR image has color gamut: {}", toString(image->cg)));
 
         switch (image->cg) {
             case UHDR_CG_DISPLAY_P3:
-                chroma = {
-                    {0.6800f,  0.3200f },
-                    {0.2650f,  0.6900f },
-                    {0.1500f,  0.0600f },
-                    {0.31271f, 0.32902f}
-                };
+                imageData.toRec709 = convertChromaToRec709({
+                    {{0.6800f, 0.3200f}, {0.2650f, 0.6900f}, {0.1500f, 0.0600f}, {0.31271f, 0.32902f}}
+                });
                 break;
             case UHDR_CG_BT_2100:
-                chroma = {
-                    {0.7080f,  0.2920f },
-                    {0.1700f,  0.7970f },
-                    {0.1310f,  0.0460f },
-                    {0.31271f, 0.32902f}
-                };
+                imageData.toRec709 = convertChromaToRec709({
+                    {{0.7080f, 0.2920f}, {0.1700f, 0.7970f}, {0.1310f, 0.0460f}, {0.31271f, 0.32902f}}
+                });
                 break;
             case UHDR_CG_UNSPECIFIED: tlog::warning() << "Ultra HDR image has unspecified color gamut. Assuming BT.709."; break;
             case UHDR_CG_BT_709: break;
             default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
         }
 
-        if (chroma != rec709) {
-            Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
-            for (int m = 0; m < 4; ++m) {
-                for (int n = 0; n < 4; ++n) {
-                    imageData.toRec709.m[m][n] = M.x[m][n];
-                }
-            }
-        }
-
         co_return imageData;
     };
 
-    result.emplace_back(co_await readImage(decoded_image, priority));
+    result.emplace_back(co_await readImage(decoded_image));
     co_return result;
 }
 

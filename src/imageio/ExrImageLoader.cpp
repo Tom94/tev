@@ -17,11 +17,11 @@
  */
 
 #include <tev/ThreadPool.h>
+#include <tev/imageio/Chroma.h>
 #include <tev/imageio/ExrImageLoader.h>
 
 #include <Iex.h>
 #include <ImfChannelList.h>
-#include <ImfChromaticities.h>
 #include <ImfFrameBuffer.h>
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
@@ -129,7 +129,8 @@ public:
             channel.size().y(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.at({x, y}) = data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled];
+                    channel.at({x, y}
+                    ) = data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled];
                 }
             },
             priority
@@ -284,27 +285,14 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             data.partName = part.header().name();
         }
 
-        // equality comparison for Imf::Chromaticities instances
-        auto chromaEq = [](const Imf::Chromaticities& a, const Imf::Chromaticities& b) {
-            return (a.red - b.red).length2() + (a.green - b.green).length2() + (a.blue - b.blue).length2() + (a.white - b.white).length2() <
-                1e-6f;
-        };
-
-        Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
-
-        // Check if there is a chromaticity header entry and if so, expose it to the image data for later conversion to sRGB/Rec709.
-        Imf::Chromaticities chroma;
         if (Imf::hasChromaticities(part.header())) {
-            chroma = Imf::chromaticities(part.header());
-        }
-
-        if (!chromaEq(chroma, rec709)) {
-            Imath::M44f M = Imf::RGBtoXYZ(chroma, 1) * Imf::XYZtoRGB(rec709, 1);
-            for (int m = 0; m < 4; ++m) {
-                for (int n = 0; n < 4; ++n) {
-                    data.toRec709.m[m][n] = M.x[m][n];
-                }
-            }
+            auto chroma = Imf::chromaticities(part.header());
+            data.toRec709 = convertChromaToRec709({{
+                {chroma.red.x, chroma.red.y},
+                {chroma.green.x, chroma.green.y},
+                {chroma.blue.x, chroma.blue.y},
+                {chroma.white.x, chroma.white.y}
+            }});
         }
     }
 
