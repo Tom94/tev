@@ -189,6 +189,7 @@ set(TEV_SOURCES
     include/tev/imageio/StbiHdrImageSaver.h src/imageio/StbiHdrImageSaver.cpp
     include/tev/imageio/StbiImageLoader.h src/imageio/StbiImageLoader.cpp
     include/tev/imageio/StbiLdrImageSaver.h src/imageio/StbiLdrImageSaver.cpp
+    include/tev/imageio/UltraHdrImageLoader.h src/imageio/UltraHdrImageLoader.cpp
 
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
