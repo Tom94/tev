@@ -69,6 +69,7 @@
 [submodule "dependencies/libexif"]
 	path = dependencies/libexif
 	url = https://github.com/francois-random/libexif
+	shallow = true
 [submodule "dependencies/libultrahdr"]
 	path = dependencies/libultrahdr
 	url = https://github.com/google/libultrahdr
