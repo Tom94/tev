@@ -172,8 +172,8 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         const int bitsPerPixel = heif_image_get_bits_per_pixel_range(img, heif_channel_interleaved);
         const float channelScale = 1.0f / float((1 << bitsPerPixel) - 1);
 
-        int bytesPerLine;
-        const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &bytesPerLine);
+        int samplesPerLine;
+        const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &samplesPerLine);
         if (!data) {
             throw invalid_argument{"Faild to get image data."};
         }
@@ -250,7 +250,6 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
             size_t numPixels = (size_t)size.x() * size.y();
             vector<float> src(numPixels * numChannels);
-            vector<float> dst(numPixels * numChannels);
 
             const size_t n_samples_per_row = size.x() * numChannels;
             co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -259,7 +258,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
                 [&](size_t y) {
                     size_t src_offset = y * n_samples_per_row;
                     for (size_t x = 0; x < n_samples_per_row; ++x) {
-                        const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * bytesPerLine);
+                        const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * samplesPerLine);
                         src[src_offset + x] = (float)typedData[x] * channelScale;
                     }
 
@@ -283,7 +282,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             [&](int y) {
                 for (int x = 0; x < size.x(); ++x) {
                     size_t i = y * (size_t)size.x() + x;
-                    auto typedData = reinterpret_cast<const unsigned short*>(data + y * bytesPerLine);
+                    auto typedData = reinterpret_cast<const unsigned short*>(data + y * samplesPerLine);
                     int baseIdx = x * numChannels;
 
                     for (int c = 0; c < numChannels; ++c) {
@@ -495,7 +494,8 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
             // If we found an apple-style gainmap, apply it to the main image.
             if (auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
-                tlog::debug() << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
+                tlog::debug(
+                ) << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
                 auto amn = findAppleMakerNote();
                 if (amn) {
                     tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
