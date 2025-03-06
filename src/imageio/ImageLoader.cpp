@@ -23,6 +23,8 @@
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/QoiImageLoader.h>
 #include <tev/imageio/StbiImageLoader.h>
+#include <tev/imageio/UltraHdrImageLoader.h>
+
 #ifdef _WIN32
 #   include <tev/imageio/DdsImageLoader.h>
 #endif
@@ -49,6 +51,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new HeifImageLoader());
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
+        imageLoaders.emplace_back(new UltraHdrImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());
         return imageLoaders;
     };

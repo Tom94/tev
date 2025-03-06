@@ -140,6 +140,14 @@ endif()
 # Compile libexif for Exif metadata parsing
 add_subdirectory(libexif EXCLUDE_FROM_ALL)
 
+# Compile libultrahdr for HDR JPG support
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(UHDR_BUILD_DEPS ON CACHE BOOL " " FORCE)
+set(UHDR_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
+set(UHDR_BUILD_TESTS OFF CACHE BOOL " " FORCE)
+set(UHDR_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
+add_subdirectory(libultrahdr EXCLUDE_FROM_ALL)
+
 # Compile OpenEXR
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL_PKG_CONFIG OFF CACHE BOOL " " FORCE)

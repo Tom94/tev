@@ -166,7 +166,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
 
-set(TEV_LIBS clip exif_static OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
+set(TEV_LIBS clip exif_static uhdr OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
@@ -189,6 +189,7 @@ set(TEV_SOURCES
     include/tev/imageio/StbiHdrImageSaver.h src/imageio/StbiHdrImageSaver.cpp
     include/tev/imageio/StbiImageLoader.h src/imageio/StbiImageLoader.cpp
     include/tev/imageio/StbiLdrImageSaver.h src/imageio/StbiLdrImageSaver.cpp
+    include/tev/imageio/UltraHdrImageLoader.h src/imageio/UltraHdrImageLoader.cpp
 
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
