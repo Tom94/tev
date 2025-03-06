@@ -52,13 +52,23 @@ jobs:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
-      - name: Build
-        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
-      - name: Upload .dmg
+      - name: Build x86_64
+        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DCMAKE_OSX_ARCHITECTURES="x86_64"
+      - name: Rename x86_64 .dmg
+        run: mv tev.dmg tev-intel.dmg
+      - name: Build arm64
+        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DCMAKE_OSX_ARCHITECTURES="arm64"
+      - name: Upload x86_64 .dmg
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: macOS installer
+          name: macOS installer (Intel)
+          path: tev-intel.dmg
+      - name: Upload arm64 .dmg
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS installer (M-series)
           path: tev.dmg
 
   build_windows:
