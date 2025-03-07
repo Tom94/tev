@@ -63,26 +63,33 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, const string& namePrefix) {
     vector<Channel> channels;
 
-    size_t numPixels = (size_t)size.x() * size.y();
-    shared_ptr<vector<float>> data = make_shared<vector<float>>(numPixels * 4);
+    // If we have 4 channels or fewer, store them in interleaved RGBA format
+    if (numChannels <= 4) {
+        size_t numPixels = (size_t)size.x() * size.y();
+        shared_ptr<vector<float>> data = make_shared<vector<float>>(numPixels * 4);
 
-    // Initialize pattern [0,0,0,1] efficiently using 128-bit writes
-    float* ptr = data->data();
-    const float pattern[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-    for (size_t i = 0; i < numPixels; ++i) {
-        memcpy(ptr + i * 4, pattern, 16);
-    }
+        // Initialize pattern [0,0,0,1] efficiently using 128-bit writes
+        float* ptr = data->data();
+        const float pattern[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+        for (size_t i = 0; i < numPixels; ++i) {
+            memcpy(ptr + i * 4, pattern, 16);
+        }
 
-    if (numChannels > 1) {
-        const vector<string> channelNames = {"R", "G", "B", "A"};
-        for (int c = 0; c < numChannels; ++c) {
-            string name = namePrefix + (c < (int)channelNames.size() ? channelNames[c] : to_string(c));
+        if (numChannels > 1) {
+            const vector<string> channelNames = {"R", "G", "B", "A"};
+            for (int c = 0; c < numChannels; ++c) {
+                string name = namePrefix + (c < (int)channelNames.size() ? channelNames[c] : to_string(c));
 
-            // We assume that the channels are interleaved.
-            channels.emplace_back(name, size, data, c, 4);
+                // We assume that the channels are interleaved.
+                channels.emplace_back(name, size, data, c, 4);
+            }
+        } else {
+            channels.emplace_back("L", size, data, 0, 4);
         }
     } else {
-        channels.emplace_back("L", size, data, 0, 4);
+        for (int c = 0; c < numChannels; ++c) {
+            channels.emplace_back(namePrefix + to_string(c), size);
+        }
     }
 
     return channels;
