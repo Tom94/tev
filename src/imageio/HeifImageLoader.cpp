@@ -163,13 +163,6 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         ScopeGuard imgGuard{[img] { heif_image_release(img); }};
 
-        // if (targetSize.x() != 0 && size != targetSize) {
-        //     heif_image* scaledImg;
-        //     heif_image_scale_image(img, &scaledImg, targetSize.x(), targetSize.y(), nullptr);
-        //     heif_image_release(img);
-        //     img = scaledImg;
-        // }
-
         const int bitsPerPixel = heif_image_get_bits_per_pixel_range(img, heif_channel_interleaved);
         const float channelScale = 1.0f / float((1 << bitsPerPixel) - 1);
 
