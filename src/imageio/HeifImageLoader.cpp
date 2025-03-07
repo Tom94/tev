@@ -398,53 +398,8 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
         scaledResultData.channels = makeNChannels(numChannels, targetSize, namePrefix);
 
-        auto& srcChannels = resultData.channels;
-        auto& dstChannels = scaledResultData.channels;
-
-        co_await ThreadPool::global().parallelForAsync<int>(
-            0,
-            targetSize.y(),
-            [&](int dstY) {
-                const float scaleX = (float)size.x() / targetSize.x();
-                const float scaleY = (float)size.y() / targetSize.y();
-
-                for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
-                    float srcX = (dstX + 0.5f) * scaleX - 0.5f;
-                    float srcY = (dstY + 0.5f) * scaleY - 0.5f;
-
-                    int x0 = std::max((int)std::floor(srcX), 0);
-                    int y0 = std::max((int)std::floor(srcY), 0);
-                    int x1 = std::min(x0 + 1, size.x() - 1);
-                    int y1 = std::min(y0 + 1, size.y() - 1);
-
-                    float wx1 = srcX - x0;
-                    float wy1 = srcY - y0;
-                    float wx0 = 1.0f - wx1;
-                    float wy0 = 1.0f - wy1;
-
-                    size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
-
-                    size_t srcIdx00 = y0 * (size_t)size.x() + x0;
-                    size_t srcIdx01 = y0 * (size_t)size.x() + x1;
-                    size_t srcIdx10 = y1 * (size_t)size.x() + x0;
-                    size_t srcIdx11 = y1 * (size_t)size.x() + x1;
-
-                    for (int c = 0; c < numChannels; ++c) {
-                        float p00 = srcChannels[c].at(srcIdx00);
-                        float p01 = srcChannels[c].at(srcIdx01);
-                        float p10 = srcChannels[c].at(srcIdx10);
-                        float p11 = srcChannels[c].at(srcIdx11);
-
-                        float interpolated = wy0 * (wx0 * p00 + wx1 * p01) + wy1 * (wx0 * p10 + wx1 * p11);
-                        dstChannels[c].at(dstIdx) = interpolated;
-                    }
-                }
-            },
-            priority
-        );
-
+        co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
         resultData = std::move(scaledResultData);
-        co_return;
     };
 
     // Read auxiliary images

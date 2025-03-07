@@ -95,4 +95,66 @@ vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size
     return channels;
 }
 
+Task<void> ImageLoader::resizeChannelsAsync(const vector<Channel>& srcChannels, vector<Channel>& dstChannels, int priority) {
+    TEV_ASSERT(srcChannels.size() == dstChannels.size(), "Number of source and destination channels must match.");
+    if (srcChannels.empty()) {
+        co_return;
+    }
+
+    const Vector2i size = srcChannels.front().size();
+    const Vector2i targetSize = dstChannels.front().size();
+    const int numChannels = (int)srcChannels.size();
+
+    for (int i = 1; i < numChannels; ++i) {
+        TEV_ASSERT(srcChannels[i].size() == size, "Source channels' size must match.");
+        TEV_ASSERT(dstChannels[i].size() == targetSize, "Destination channels' size must match.");
+    }
+
+    co_await ThreadPool::global().parallelForAsync<int>(
+        0,
+        targetSize.y(),
+        [&](int dstY) {
+            const float scaleX = (float)size.x() / targetSize.x();
+            const float scaleY = (float)size.y() / targetSize.y();
+
+            for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
+                const float srcX = (dstX + 0.5f) * scaleX - 0.5f;
+                const float srcY = (dstY + 0.5f) * scaleY - 0.5f;
+
+                const int x0 = std::max((int)std::floor(srcX), 0);
+                const int y0 = std::max((int)std::floor(srcY), 0);
+                const int x1 = std::min(x0 + 1, size.x() - 1);
+                const int y1 = std::min(y0 + 1, size.y() - 1);
+
+                const float wx1 = srcX - x0;
+                const float wy1 = srcY - y0;
+                const float wx0 = 1.0f - wx1;
+                const float wy0 = 1.0f - wy1;
+
+                const float w00 = wx0 * wy0;
+                const float w01 = wx1 * wy0;
+                const float w10 = wx0 * wy1;
+                const float w11 = wx1 * wy1;
+
+                const size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
+
+                const size_t srcIdx00 = y0 * (size_t)size.x() + x0;
+                const size_t srcIdx01 = y0 * (size_t)size.x() + x1;
+                const size_t srcIdx10 = y1 * (size_t)size.x() + x0;
+                const size_t srcIdx11 = y1 * (size_t)size.x() + x1;
+
+                for (int c = 0; c < numChannels; ++c) {
+                    const float p00 = srcChannels[c].at(srcIdx00);
+                    const float p01 = srcChannels[c].at(srcIdx01);
+                    const float p10 = srcChannels[c].at(srcIdx10);
+                    const float p11 = srcChannels[c].at(srcIdx11);
+
+                    dstChannels[c].at(dstIdx) = w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11;
+                }
+            }
+        },
+        priority
+    );
+}
+
 } // namespace tev

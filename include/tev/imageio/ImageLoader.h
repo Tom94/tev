@@ -45,6 +45,7 @@ public:
 
 protected:
     static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size, const std::string& namePrefix = "");
+    static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
 };
 
 } // namespace tev
