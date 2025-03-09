@@ -26,14 +26,17 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, const string&, int, bool) const {
-    string magic;
-    Vector2i size;
-    int nChannels;
-    iStream >> magic >> size.x() >> size.y() >> nChannels;
+    char magic[6];
+    iStream.read(magic, 6);
+    string magicString(magic, 6);
 
-    if (!iStream || magic != "empty") {
+    if (!iStream || magicString != "empty ") {
         throw FormatNotSupportedException{fmt::format("Invalid magic empty string {}.", magic)};
     }
+
+    Vector2i size;
+    int nChannels;
+    iStream >> size.x() >> size.y() >> nChannels;
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
