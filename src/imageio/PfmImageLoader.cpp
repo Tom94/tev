@@ -27,6 +27,15 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+    char pf[2];
+    iStream.read(pf, 2);
+    if (!iStream || pf[0] != 'P' || (pf[1] != 'F' && pf[1] != 'f')) {
+        throw FormatNotSupportedException{"Invalid PFM magic string."};
+    }
+
+    iStream.clear();
+    iStream.seekg(0);
+
     string magic;
     Vector2i size;
     float scale;
@@ -41,7 +50,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     } else if (magic == "PF4") {
         numChannels = 4;
     } else {
-        throw FormatNotSupportedException{fmt::format("Invalid magic PFM string {}", magic)};
+        throw FormatNotSupportedException{fmt::format("Invalid PFM magic string {}", magic)};
     }
 
     if (!isfinite(scale) || scale == 0) {
