@@ -26,21 +26,7 @@ using namespace std;
 
 namespace tev {
 
-bool PfmImageLoader::canLoadFile(istream& iStream) const {
-    char b[2];
-    iStream.read(b, sizeof(b));
-
-    bool result = !!iStream && iStream.gcount() == sizeof(b) && b[0] == 'P' && (b[1] == 'F' || b[1] == 'f');
-
-    iStream.clear();
-    iStream.seekg(0);
-    return result;
-}
-
-Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
-
+Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
     string magic;
     Vector2i size;
     float scale;
@@ -55,7 +41,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     } else if (magic == "PF4") {
         numChannels = 4;
     } else {
-        throw invalid_argument{fmt::format("Invalid magic PFM string {}", magic)};
+        throw FormatNotSupportedException{fmt::format("Invalid magic PFM string {}", magic)};
     }
 
     if (!isfinite(scale) || scale == 0) {
@@ -64,6 +50,9 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
     bool isPfmLittleEndian = scale < 0;
     scale = abs(scale);
+
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     resultData.channels = makeNChannels(numChannels, size);
 

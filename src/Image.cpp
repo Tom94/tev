@@ -609,7 +609,7 @@ string Image::toString() const {
     return sstream.str();
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector, bool applyGainmaps) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << fmt::format("Could not load {}. {}", toString(path), e.what());
@@ -640,49 +640,50 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         }
 
         std::string loadMethod;
+        vector<ImageData> imageData;
         for (const auto& imageLoader : ImageLoader::getLoaders()) {
-            // If we arrived at the last loader, then we want to at least try loading the image, even if it is likely to fail.
-            bool useLoader = imageLoader == ImageLoader::getLoaders().back() || imageLoader->canLoadFile(iStream);
+            try {
+                loadMethod = imageLoader->name();
+                imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority, applyGainmaps);
+                break;
+            } catch (const ImageLoader::FormatNotSupportedException& e) {
+                tlog::debug(
+                ) << fmt::format("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
 
-            // Reset file cursor in case file load check changed it.
-            iStream.clear();
-            iStream.seekg(0);
-
-            if (!useLoader) {
-                continue;
+                // Reset file cursor to beginning and try next loader.
+                iStream.clear();
+                iStream.seekg(0);
             }
-
-            // Earlier images should be prioritized when loading.
-            loadMethod = imageLoader->name();
-            auto imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority);
-
-            vector<shared_ptr<Image>> images;
-            for (auto& i : imageData) {
-                co_await i.ensureValid(channelSelector, taskPriority);
-
-                // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
-                string localChannelSelector = channelSelector;
-                if (!i.partName.empty()) {
-                    auto selectorParts = split(channelSelector, ",");
-                    if (channelSelector.empty()) {
-                        localChannelSelector = i.partName;
-                    } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
-                        localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
-                    }
-                }
-
-                images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
-            }
-
-            auto end = chrono::system_clock::now();
-            chrono::duration<double> elapsedSeconds = end - start;
-
-            tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
-
-            co_return images;
         }
 
-        throw runtime_error{"No suitable image loader found."};
+        if (imageData.empty()) {
+            throw runtime_error{"No suitable image loader found."};
+        }
+
+        vector<shared_ptr<Image>> images;
+        for (auto& i : imageData) {
+            co_await i.ensureValid(channelSelector, taskPriority);
+
+            // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
+            string localChannelSelector = channelSelector;
+            if (!i.partName.empty()) {
+                auto selectorParts = split(channelSelector, ",");
+                if (channelSelector.empty()) {
+                    localChannelSelector = i.partName;
+                } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
+                    localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
+                }
+            }
+
+            images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
+        }
+
+        auto end = chrono::system_clock::now();
+        chrono::duration<double> elapsedSeconds = end - start;
+
+        tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
+
+        co_return images;
     } catch (const invalid_argument& e) { handleException(e); } catch (const runtime_error& e) {
         handleException(e);
     } catch (const Iex::BaseExc& e) { handleException(e); } catch (const future_error& e) {
@@ -692,11 +693,11 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
     co_return {};
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, istream& iStream, string channelSelector) {
-    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector);
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, istream& iStream, string channelSelector, bool applyGainmaps) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, applyGainmaps);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, string channelSelector) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, string channelSelector, bool applyGainmaps) {
     try {
         path = fs::absolute(path);
     } catch (const runtime_error&) {
@@ -705,11 +706,11 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, st
     }
 
     ifstream fileStream{path, ios_base::binary};
-    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector);
+    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, applyGainmaps);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelector) {
-    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector);
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelector, bool applyGainmaps) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, applyGainmaps);
 }
 
 void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
@@ -736,7 +737,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
-        auto images = co_await tryLoadImage(taskPriority, path, channelSelector);
+        auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mApplyGainmaps);
 
         {
             std::lock_guard lock{mPendingLoadedImagesMutex};

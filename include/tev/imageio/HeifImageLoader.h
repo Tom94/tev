@@ -29,9 +29,8 @@ class HeifImageLoader : public ImageLoader {
 public:
     HeifImageLoader();
 
-    bool canLoadFile(std::istream& iStream) const override;
     Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority) const override;
+        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority, bool applyGainmaps) const override;
 
     std::string name() const override { return "HEIF"; }
 };

@@ -83,7 +83,7 @@ private:
     istream& mStream;
 };
 
-bool ExrImageLoader::canLoadFile(istream& iStream) const {
+static bool isExrImage(istream& iStream) {
     // Taken from http://www.openexr.com/ReadingAndWritingImageFiles.pdf
     char b[4];
     iStream.read(b, sizeof(b));
@@ -170,8 +170,10 @@ private:
     vector<char> mData;
 };
 
-Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority) const {
-    vector<ImageData> result;
+Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority, bool) const {
+    if (!isExrImage(iStream)) {
+        throw FormatNotSupportedException{"File is not an EXR image."};
+    }
 
     StdIStream stdIStream{iStream, toString(path).c_str()};
     Imf::MultiPartInputFile multiPartFile{stdIStream};
@@ -235,6 +237,8 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         size_t partId = rawChannel.partId();
         rawChannel.registerWith(frameBuffers.at(partId), parts.at(partId).header().dataWindow());
     }
+
+    vector<ImageData> result;
 
     // No need for a parallel for loop, because OpenEXR parallelizes internally
     for (size_t partIdx = 0; partIdx < parts.size(); ++partIdx) {

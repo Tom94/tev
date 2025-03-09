@@ -25,19 +25,22 @@
 #include <nanogui/vector.h>
 
 #include <istream>
+#include <stdexcept>
 #include <string>
 
 namespace tev {
 
 class ImageLoader {
 public:
+    class FormatNotSupportedException : public std::runtime_error {
+    public:
+        FormatNotSupportedException(const std::string& message) : std::runtime_error{message} {}
+    };
+
     virtual ~ImageLoader() {}
 
-    virtual bool canLoadFile(std::istream& iStream) const = 0;
-
-    // Return loaded image data as well as whether that data has the alpha channel pre-multiplied or not.
     virtual Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority) const = 0;
+        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority, bool applyGainmaps) const = 0;
 
     virtual std::string name() const = 0;
 

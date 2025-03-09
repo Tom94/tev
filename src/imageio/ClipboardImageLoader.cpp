@@ -26,34 +26,20 @@ using namespace std;
 
 namespace tev {
 
-bool ClipboardImageLoader::canLoadFile(istream& iStream) const {
-    char b[4];
-    iStream.read(b, sizeof(b));
-
-    bool result = !!iStream && iStream.gcount() == sizeof(b) && string(b, sizeof(b)) == "clip";
-
-    iStream.clear();
-    iStream.seekg(0);
-    return result;
-}
-
-Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
-
+Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
     char magic[4];
     clip::image_spec spec;
 
     iStream.read(magic, 4);
     string magicString(magic, 4);
 
-    if (magicString != "clip") {
-        throw invalid_argument{fmt::format("Invalid magic clipboard string {}", magicString)};
+    if (!iStream || magicString != "clip") {
+        throw FormatNotSupportedException{fmt::format("Invalid magic clipboard string {}.", magicString)};
     }
 
     iStream.read(reinterpret_cast<char*>(&spec), sizeof(clip::image_spec));
     if (iStream.gcount() < (streamsize)sizeof(clip::image_spec)) {
-        throw invalid_argument{fmt::format("Not sufficient bytes to read image spec ({} vs {})", iStream.gcount(), sizeof(clip::image_spec))};
+        throw invalid_argument{fmt::format("Insufficient bytes to read image spec ({} vs {}).", iStream.gcount(), sizeof(clip::image_spec))};
     }
 
     Vector2i size{(int)spec.width, (int)spec.height};
@@ -72,12 +58,15 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     auto numBytes = (size_t)numBytesPerRow * size.y();
     int alphaChannelIndex = 3;
 
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
+
     resultData.channels = makeNChannels(numChannels, size);
 
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
     if (iStream.gcount() < (streamsize)numBytes) {
-        throw invalid_argument{fmt::format("Not sufficient bytes to read image data ({} vs {})", iStream.gcount(), numBytes)};
+        throw invalid_argument{fmt::format("Insufficient bytes to read image data ({} vs {}).", iStream.gcount(), numBytes)};
     }
 
     int shifts[4] = {

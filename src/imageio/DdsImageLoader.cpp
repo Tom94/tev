@@ -26,17 +26,6 @@ using namespace std;
 
 namespace tev {
 
-bool DdsImageLoader::canLoadFile(istream& iStream) const {
-    char b[4];
-    iStream.read(b, sizeof(b));
-
-    bool result = !!iStream && iStream.gcount() == sizeof(b) && b[0] == 'D' && b[1] == 'D' && b[2] == 'S' && b[3] == ' ';
-
-    iStream.clear();
-    iStream.seekg(0);
-    return result;
-}
-
 static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     switch (fmt) {
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
@@ -162,21 +151,29 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
+Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+    iStream.seekg(0, iStream.end);
+    size_t dataSize = iStream.tellg();
+    if (dataSize < 4) {
+        throw FormatNotSupportedException{"File is too small."};
+    }
+
+    iStream.clear();
+    iStream.seekg(0);
+    vector<char> data(dataSize);
+    iStream.read(data.data(), 4);
+    if (data[0] != 'D' || data[1] != 'D' || data[2] != 'S' || data[3] != ' ') {
+        throw FormatNotSupportedException{"File is not a DDS file."};
+    }
+
+    iStream.read(data.data() + 4, dataSize - 4);
+
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
         throw invalid_argument{"Failed to initialize COM."};
     }
+
     ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
-
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
-
-    iStream.seekg(0, iStream.end);
-    size_t dataSize = iStream.tellg();
-    iStream.seekg(0, iStream.beg);
-    vector<char> data(dataSize);
-    iStream.read(data.data(), dataSize);
 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
@@ -211,6 +208,9 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         }
         std::swap(scratchImage, convertedImage);
     }
+
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     resultData.channels = makeNChannels(numChannels, {(int)metadata.width, (int)metadata.height});
 

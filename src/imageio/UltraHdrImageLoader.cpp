@@ -33,42 +33,15 @@ namespace tev {
 
 UltraHdrImageLoader::UltraHdrImageLoader() {}
 
-bool UltraHdrImageLoader::canLoadFile(istream& iStream) const {
-    uint8_t header[3] = {};
-    iStream.read((char*)header, 3);
-
-    // Early return if not a JPEG
-    if (header[0] != 0xFF || header[1] != 0xD8 || header[2] != 0xFF) {
-        iStream.clear();
-        iStream.seekg(0);
-        return false;
-    }
-
-    // TODO: avoid loading the whole file to memory just to check whether ultrahdr can load it. At least we only have to do this for JPG
-    // images... and hopefully our caches stay hot for when the image *actually* gets loaded later on.
-    iStream.seekg(0, ios_base::end);
-    int64_t fileSize = iStream.tellg();
-    iStream.clear();
-    iStream.seekg(0);
-
-    vector<char> buffer(fileSize);
-    iStream.read(buffer.data(), fileSize);
-
-    iStream.clear();
-    iStream.seekg(0);
-
-    return is_uhdr_image(buffer.data(), (int)fileSize);
-}
-
 static bool isOkay(uhdr_error_info_t status) { return status.error_code == UHDR_CODEC_OK; }
 
 static string toString(uhdr_error_info_t status) {
     if (isOkay(status)) {
         return "Okay";
     } else if (status.has_detail) {
-        return fmt::format("Error #{}: {}", (uint32_t)status.error_code, status.detail);
+        return fmt::format("Error #{}: {}.", (uint32_t)status.error_code, status.detail);
     } else {
-        return fmt::format("Error #{}", (uint32_t)status.error_code);
+        return fmt::format("Error #{}.", (uint32_t)status.error_code);
     }
 }
 
@@ -82,61 +55,77 @@ static string toString(uhdr_color_gamut_t cg) {
     }
 }
 
-Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
-    vector<ImageData> result;
+Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool applyGainmaps) const {
+    if (!applyGainmaps) {
+        throw FormatNotSupportedException{"Ultra HDR images must have gainmaps applied."};
+    }
 
     iStream.seekg(0, ios_base::end);
     int64_t fileSize = iStream.tellg();
     iStream.clear();
     iStream.seekg(0);
 
+    if (fileSize < 3) {
+        throw FormatNotSupportedException{"File is too small."};
+    }
+
     vector<char> buffer(fileSize);
-    iStream.read(buffer.data(), fileSize);
+    iStream.read(buffer.data(), 3);
+
+    if ((uint8_t)buffer[0] != 0xFF || (uint8_t)buffer[1] != 0xD8 || (uint8_t)buffer[2] != 0xFF) {
+        throw FormatNotSupportedException{"File is not a JPEG."};
+    }
+
+    iStream.read(buffer.data() + 3, fileSize - 3);
 
     auto decoder = uhdr_create_decoder();
     if (!decoder) {
-        throw runtime_error{"Could not create UltraHDR decoder."};
+        throw invalid_argument{"Could not create UltraHDR decoder."};
     }
 
     ScopeGuard decoderGuard{[decoder] { uhdr_release_decoder(decoder); }};
 
-    uhdr_compressed_image_t uhdr_image;
-    uhdr_image.data = buffer.data();
-    uhdr_image.data_sz = fileSize;
-    uhdr_image.capacity = fileSize;
-    uhdr_image.cg = UHDR_CG_UNSPECIFIED;
-    uhdr_image.ct = UHDR_CT_UNSPECIFIED;
-    uhdr_image.range = UHDR_CR_UNSPECIFIED;
+    uhdr_compressed_image_t uhdrImage;
+    uhdrImage.data = buffer.data();
+    uhdrImage.data_sz = fileSize;
+    uhdrImage.capacity = fileSize;
+    uhdrImage.cg = UHDR_CG_UNSPECIFIED;
+    uhdrImage.ct = UHDR_CT_UNSPECIFIED;
+    uhdrImage.range = UHDR_CR_UNSPECIFIED;
 
-    if (auto status = uhdr_dec_set_image(decoder, &uhdr_image); !isOkay(status)) {
-        throw runtime_error{fmt::format("Failed to set image: {}", toString(status))};
+    if (auto status = uhdr_dec_set_image(decoder, &uhdrImage); !isOkay(status)) {
+        throw invalid_argument{fmt::format("Failed to set image: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_set_out_img_format(decoder, UHDR_IMG_FMT_64bppRGBAHalfFloat); !isOkay(status)) {
-        throw runtime_error{fmt::format("Failed to set output format: {}", toString(status))};
+        throw invalid_argument{fmt::format("Failed to set output format: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_set_out_color_transfer(decoder, UHDR_CT_LINEAR); !isOkay(status)) {
-        throw runtime_error{fmt::format("Failed to set output color transfer: {}", toString(status))};
+        throw invalid_argument{fmt::format("Failed to set output color transfer: {}", toString(status))};
+    }
+
+    if (auto status = uhdr_dec_probe(decoder); !isOkay(status)) {
+        throw FormatNotSupportedException{fmt::format("Failed to probe: {}", toString(status))};
     }
 
     if (auto status = uhdr_decode(decoder); !isOkay(status)) {
-        throw runtime_error{fmt::format("Failed to decode: {}", toString(status))};
+        throw invalid_argument{fmt::format("Failed to decode: {}", toString(status))};
     }
 
-    uhdr_raw_image_t* decoded_image = uhdr_get_decoded_image(decoder);
-    if (!decoded_image) {
-        throw runtime_error{"No decoded image."};
+    uhdr_raw_image_t* decodedImage = uhdr_get_decoded_image(decoder);
+    if (!decodedImage) {
+        throw invalid_argument{"No decoded image."};
     }
 
     auto readImage = [priority](uhdr_raw_image_t* image) -> Task<ImageData> {
         if (image->fmt != UHDR_IMG_FMT_64bppRGBAHalfFloat) {
-            throw runtime_error{"Decoded image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
+            throw invalid_argument{"Decoded image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
         }
 
         Vector2i size = {(int)image->w, (int)image->h};
         if (size.x() <= 0 || size.y() <= 0) {
-            throw runtime_error{"Invalid image size."};
+            throw invalid_argument{"Invalid image size."};
         }
 
         const int numChannels = 4;
@@ -190,7 +179,8 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         co_return imageData;
     };
 
-    result.emplace_back(co_await readImage(decoded_image));
+    vector<ImageData> result;
+    result.emplace_back(co_await readImage(decodedImage));
     co_return result;
 }
 

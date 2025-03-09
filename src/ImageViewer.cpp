@@ -836,7 +836,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             //     if (!clip::get_text(path)) {
             //         tlog::error() << "Failed to paste text from clipboard.";
             //     } else {
-            //         auto image = tryLoadImage(toPath(path), "");
+            //         auto image = tryLoadImage(toPath(path), "", mImagesLoader->applyGainmaps());
             //         if (image) {
             //             addImage(image, true);
             //         } else {
@@ -854,7 +854,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                     imageStream << "clip" << string(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec))
                                 << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
 
-                    auto images = tryLoadImage(fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "").get();
+                    auto images =
+                        tryLoadImage(fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->applyGainmaps()).get();
                     if (images.empty()) {
                         tlog::error() << "Failed to load image from clipboard data.";
                     } else {
