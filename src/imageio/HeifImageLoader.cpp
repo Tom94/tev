@@ -63,23 +63,14 @@ HeifImageLoader::HeifImageLoader() {
     // );
 }
 
-bool HeifImageLoader::canLoadFile(istream& iStream) const {
+Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority, bool applyGainmaps) const {
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
     uint8_t header[12];
     iStream.read((char*)header, 12);
-    bool failed = !iStream || iStream.gcount() != 12;
 
-    iStream.clear();
-    iStream.seekg(0);
-    if (failed) {
-        return false;
+    if (!iStream || iStream.gcount() != 12 || heif_check_filetype(header, 12) != heif_filetype_yes_supported) {
+        throw FormatNotSupportedException{"File is not a HEIF image."};
     }
-
-    return heif_check_filetype(header, 12) == heif_filetype_yes_supported;
-}
-
-Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority) const {
-    vector<ImageData> result;
 
     iStream.seekg(0, ios_base::end);
     int64_t fileSize = iStream.tellg();
@@ -195,7 +186,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             // Create ICC profile from the raw data
             cmsHPROFILE srcProfile = cmsOpenProfileFromMem(profileData.data(), (cmsUInt32Number)profileSize);
             if (!srcProfile) {
-                tlog::warning() << "Failed to create ICC profile from raw data";
+                tlog::warning() << "Failed to create ICC profile from raw data.";
                 return (cmsHTRANSFORM) nullptr;
             }
 
@@ -214,7 +205,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             cmsHPROFILE rec709Profile = cmsCreateRGBProfile(&D65, &Rec709Primaries, linearCurve);
 
             if (!rec709Profile) {
-                tlog::warning() << "Failed to create Rec.709 color profile";
+                tlog::warning() << "Failed to create Rec.709 color profile.";
                 return (cmsHTRANSFORM) nullptr;
             }
 
@@ -225,7 +216,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             cmsHTRANSFORM transform = cmsCreateTransform(srcProfile, type, rec709Profile, TYPE_RGBA_FLT, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE);
 
             if (!transform) {
-                tlog::warning() << "Failed to create color transform from ICC profile to Rec.709";
+                tlog::warning() << "Failed to create color transform from ICC profile to Rec.709.";
                 return (cmsHTRANSFORM) nullptr;
             }
 
@@ -324,6 +315,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
     };
 
     // Read main image
+    vector<ImageData> result;
     result.emplace_back(co_await decodeImage(handle));
     ImageData& mainImage = result.front();
 
@@ -331,7 +323,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         // Extract EXIF metadata
         int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(handle, "Exif");
         if (numMetadataBlocks <= 0) {
-            tlog::warning() << "No EXIF metadata found";
+            tlog::warning() << "No EXIF metadata found.";
             return nullptr;
         }
 
@@ -345,7 +337,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
         for (int i = 0; i < numMetadataBlocks; ++i) {
             size_t exifSize = heif_image_handle_get_metadata_size(handle, metadataIDs[i]);
             if (exifSize <= 4) {
-                tlog::warning() << "Failed to get size of EXIF data";
+                tlog::warning() << "Failed to get size of EXIF data.";
                 continue;
             }
 
@@ -357,7 +349,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
             ExifData* exif = exif_data_new_from_data(exifData.data() + 4, (unsigned int)(exifSize - 4));
             if (!exif) {
-                tlog::warning() << "Failed to decode EXIF data";
+                tlog::warning() << "Failed to decode EXIF data.";
                 continue;
             }
 
@@ -429,7 +421,7 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             mainImage.channels.insert(mainImage.channels.end(), auxImgData.channels.begin(), auxImgData.channels.end());
 
             // If we found an apple-style gainmap, apply it to the main image.
-            if (auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
+            if (applyGainmaps && auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
                 tlog::debug(
                 ) << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
                 auto amn = findAppleMakerNote();

@@ -114,7 +114,7 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto images = tryLoadImage(toPath(info.imageName), imageStream, "").get();
+                auto images = tryLoadImage(toPath(info.imageName), imageStream, "", sImageViewer->imagesLoader().applyGainmaps()).get();
                 if (!images.empty()) {
                     sImageViewer->replaceImage(ensureUtf8(info.imageName), images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
@@ -166,6 +166,13 @@ static int mainFunc(const vector<string>& arguments) {
         "The string must have the format 'image:group'. "
         "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.",
         {'f', "filter"},
+    };
+
+    Flag gainmapFlagOff{
+        parser,
+        "NO GAINMAPS",
+        "Do not apply gainmaps to LDR images, even if they come with one.",
+        {"no-gainmaps"},
     };
 
     ValueFlag<float> gammaFlag{
@@ -385,9 +392,8 @@ static int mainFunc(const vector<string>& arguments) {
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
-    if (recursiveFlag) {
-        imagesLoader->setRecursiveDirectories(true);
-    }
+    imagesLoader->setRecursiveDirectories(recursiveFlag);
+    imagesLoader->setApplyGainmaps(!gainmapFlagOff);
 
     // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.

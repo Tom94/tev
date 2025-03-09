@@ -25,34 +25,26 @@ using namespace std;
 
 namespace tev {
 
-bool EmptyImageLoader::canLoadFile(istream& iStream) const {
-    char b[5];
-    iStream.read(b, sizeof(b));
+Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, const string&, int, bool) const {
+    char magic[6];
+    iStream.read(magic, 6);
+    string magicString(magic, 6);
 
-    bool result = !!iStream && iStream.gcount() == sizeof(b) && string(b, sizeof(b)) == "empty";
+    if (!iStream || magicString != "empty ") {
+        throw FormatNotSupportedException{fmt::format("Invalid magic empty string {}.", magic)};
+    }
 
-    iStream.clear();
-    iStream.seekg(0);
-    return result;
-}
-
-Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, const string&, int) const {
-    vector<ImageData> result(1);
-    ImageData& data = result.front();
-
-    string magic;
     Vector2i size;
     int nChannels;
-    iStream >> magic >> size.x() >> size.y() >> nChannels;
-
-    if (magic != "empty") {
-        throw invalid_argument{fmt::format("Invalid magic empty string {}", magic)};
-    }
+    iStream >> size.x() >> size.y() >> nChannels;
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw invalid_argument{"Image has zero pixels."};
     }
+
+    vector<ImageData> result(1);
+    ImageData& data = result.front();
 
     for (int i = 0; i < nChannels; ++i) {
         // The following lines decode strings by prefix length. The reason for using sthis encoding is to allow arbitrary characters,

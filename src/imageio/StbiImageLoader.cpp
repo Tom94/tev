@@ -26,15 +26,7 @@ using namespace std;
 
 namespace tev {
 
-bool StbiImageLoader::canLoadFile(istream&) const {
-    // Pretend you can load any file and throw exception on failure. TODO: Add proper check.
-    return true;
-}
-
-Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
-
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
     static const stbi_io_callbacks callbacks = {
         // Read
         [](void* context, char* data, int size) {
@@ -70,6 +62,9 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     }
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
+
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     resultData.channels = makeNChannels(numChannels, size);
     static const int ALPHA_CHANNEL_INDEX = 3;

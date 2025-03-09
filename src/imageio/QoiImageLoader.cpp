@@ -28,27 +28,13 @@ using namespace std;
 
 namespace tev {
 
-bool QoiImageLoader::canLoadFile(istream& iStream) const {
-    char b[4];
-    iStream.read(b, sizeof(b));
-
-    bool result = !!iStream && iStream.gcount() == sizeof(b) && string(b, sizeof(b)) == "qoif";
-
-    iStream.clear();
-    iStream.seekg(0);
-    return result;
-}
-
-Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority) const {
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
-
+Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
     char magic[4];
     iStream.read(magic, 4);
     string magicString(magic, 4);
 
     if (magicString != "qoif") {
-        throw invalid_argument{fmt::format("Invalid magic QOI string {}", magicString)};
+        throw FormatNotSupportedException{fmt::format("Invalid magic QOI string {}.", magicString)};
     }
 
     iStream.clear();
@@ -77,6 +63,9 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     if (numChannels != 4 && numChannels != 3) {
         throw invalid_argument{fmt::format("Invalid number of channels {}.", numChannels)};
     }
+
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
 
     resultData.channels = makeNChannels(numChannels, size);
     resultData.hasPremultipliedAlpha = false;

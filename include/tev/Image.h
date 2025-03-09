@@ -221,10 +221,10 @@ private:
     int mId;
 };
 
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string channelSelector);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string channelSelector);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string channelSelector);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string channelSelector);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string channelSelector, bool applyGainmaps);
 
 struct ImageAddition {
     int loadId;
@@ -257,8 +257,10 @@ public:
     bool hasPendingLoads() const { return mLoadCounter != mUnsortedLoadCounter; }
 
     bool recursiveDirectories() const { return mRecursiveDirectories; }
-
     void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
+
+    bool applyGainmaps() const { return mApplyGainmaps; }
+    void setApplyGainmaps(bool value) { mApplyGainmaps = value; }
 
 private:
     SharedQueue<ImageAddition> mLoadedImages;
@@ -272,6 +274,8 @@ private:
     bool mRecursiveDirectories = false;
     std::map<fs::path, std::set<std::string>> mDirectories;
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
+
+    bool mApplyGainmaps = true;
 };
 
 } // namespace tev
