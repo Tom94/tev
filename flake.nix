@@ -26,7 +26,6 @@
             darwin.apple_sdk.frameworks.Cocoa
             darwin.apple_sdk.frameworks.OpenGL
           ] else [
-            git
             libGL
             perl
             xorg.libX11
