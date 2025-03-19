@@ -82,24 +82,18 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         }
     }
 
-    // TODO: figure out when alpha is already premultiplied (prior to tonemapping).
-    //       clip doesn't properly handle this... so copy&pasting transparent images
-    //       from browsers tends to produce incorrect color values in alpha!=1/0 regions.
-    bool premultipliedAlpha = false;// && numChannels >= 4;
     co_await ThreadPool::global().parallelForAsync(
         0,
         size.y(),
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
                 const size_t baseIdx = y * numBytesPerRow + x * numChannels;
-                for (int c = numChannels - 1; c >= 0; --c) {
+                for (int c = 0; c < numChannels; ++c) {
                     unsigned char val = data[baseIdx + shifts[c]];
                     if (c == alphaChannelIndex) {
                         resultData.channels[c].at({x, y}) = val / 255.0f;
                     } else {
-                        float alpha = premultipliedAlpha ? resultData.channels[alphaChannelIndex].at({x, y}) : 1.0f;
-                        float alphaFactor = alpha == 0 ? 0 : (1.0f / alpha);
-                        resultData.channels[c].at({x, y}) = toLinear(val / 255.0f * alphaFactor);
+                        resultData.channels[c].at({x, y}) = toLinear(val / 255.0f);
                     }
                 }
             }
