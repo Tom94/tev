@@ -114,9 +114,13 @@ bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
         return true;
     }
 
-    // Perform matching on lowercase strings
-    text = toLower(text);
-    filter = toLower(filter);
+    // Perform matching via smart casing: if the filter is all lowercase, we want to match case-insensitively. If the filter contains any
+    // uppercase characters, we want to match case-sensitively.
+    const bool caseInsensitive = all_of(begin(filter), end(filter), [](char c) { return islower(c); });
+    if (caseInsensitive) {
+        text = toLower(text);
+        filter = toLower(filter);
+    }
 
     auto words = split(filter, ", ");
     // We don't want people entering multiple spaces in a row to match everything.
