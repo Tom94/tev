@@ -54,9 +54,9 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         throw invalid_argument{"Image has too many channels."};
     }
 
-    auto numBytesPerRow = numChannels * size.x();
-    auto numBytes = (size_t)numBytesPerRow * size.y();
-    int alphaChannelIndex = 3;
+    const size_t numBytesPerRow = spec.bytes_per_row;
+    const size_t numBytes = numBytesPerRow * size.y();
+    const int alphaChannelIndex = 3;
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
@@ -69,15 +69,15 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         throw invalid_argument{fmt::format("Insufficient bytes to read image data ({} vs {}).", iStream.gcount(), numBytes)};
     }
 
-    int shifts[4] = {
-        (int)(spec.red_shift / 8),
-        (int)(spec.green_shift / 8),
-        (int)(spec.blue_shift / 8),
-        (int)(spec.alpha_shift / 8),
+    const size_t shifts[4] = {
+        (size_t)(spec.red_shift / 8),
+        (size_t)(spec.green_shift / 8),
+        (size_t)(spec.blue_shift / 8),
+        (size_t)(spec.alpha_shift / 8),
     };
 
     for (int c = 0; c < numChannels; ++c) {
-        if (shifts[c] >= numChannels) {
+        if (shifts[c] >= (size_t)numChannels) {
             throw invalid_argument{"Invalid shift encountered in clipboard image."};
         }
     }
@@ -91,7 +91,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         size.y(),
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
-                int baseIdx = y * numBytesPerRow + x * numChannels;
+                const size_t baseIdx = y * numBytesPerRow + x * numChannels;
                 for (int c = numChannels - 1; c >= 0; --c) {
                     unsigned char val = data[baseIdx + shifts[c]];
                     if (c == alphaChannelIndex) {
