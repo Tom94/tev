@@ -149,7 +149,7 @@ static int mainFunc(const vector<string>& arguments) {
         "\n"
         "Inspection tool for images with high dynamic range",
         "tev was developed by Thomas Müller <contact@tom94.net>. "
-        "Its source code is available under the BSD 3-Clause License at https://tom94.net",
+        "Its source code is available under the GPLv3 License at https://tom94.net/tev",
     };
 
     ValueFlag<float> exposureFlag{

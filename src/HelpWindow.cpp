@@ -188,8 +188,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
     addSpacer(about, 20);
 
-    addText(about, "tev was developed by Thomas Müller <tom94.net> and is released under the BSD 3-Clause");
-    addText(about, "License. It was built directly or indirectly upon the following amazing third-party libraries.");
+    addText(about, "tev was developed by Thomas Müller <tom94.net> and is released under the GPLv3 license.");
+    addText(about, "It was built directly or indirectly upon the following amazing third-party libraries.");
 
     addSpacer(about, 20);
 
