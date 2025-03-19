@@ -127,6 +127,8 @@ public:
 
     bool setFilter(const std::string& filter);
 
+    void setFps(int value);
+
     bool useRegex() const;
     void setUseRegex(bool value);
 

@@ -168,6 +168,13 @@ static int mainFunc(const vector<string>& arguments) {
         {'f', "filter"},
     };
 
+    ValueFlag<int> fpsFlag{
+        parser,
+        "FPS",
+        "Frames per second during playback",
+        {"fps"},
+    };
+
     Flag gainmapFlagOff{
         parser,
         "NO GAINMAPS",
@@ -257,6 +264,13 @@ static int mainFunc(const vector<string>& arguments) {
         "OFFSET",
         "Add an absolute offset to the image after EXPOSURE has been applied. Default is 0.",
         {'o', "offset"},
+    };
+
+    Flag playFlag{
+        parser,
+        "PLAY",
+        "Play back images as a video.",
+        {'p', "play"},
     };
 
     ValueFlag<string> tonemapFlag{
@@ -543,6 +557,10 @@ static int mainFunc(const vector<string>& arguments) {
         sImageViewer->setFilter(get(filterFlag));
     }
 
+    if (fpsFlag) {
+        sImageViewer->setFps(get(fpsFlag));
+    }
+
     if (gammaFlag) {
         sImageViewer->setGamma(get(gammaFlag));
     }
@@ -553,6 +571,10 @@ static int mainFunc(const vector<string>& arguments) {
 
     if (offsetFlag) {
         sImageViewer->setOffset(get(offsetFlag));
+    }
+
+    if (playFlag) {
+        sImageViewer->setPlayingBack(true);
     }
 
     if (tonemapFlag) {

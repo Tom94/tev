@@ -1699,6 +1699,10 @@ bool ImageViewer::setFilter(const string& filter) {
     return true;
 }
 
+void ImageViewer::setFps(int value) {
+    mFpsTextBox->set_value(value);
+}
+
 bool ImageViewer::useRegex() const { return mRegexButton->pushed(); }
 
 void ImageViewer::setUseRegex(bool value) {
