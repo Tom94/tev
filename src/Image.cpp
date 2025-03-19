@@ -301,6 +301,7 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
             texture.nanoguiTexture->generate_mipmap();
             texture.mipmapDirty = false;
         }
+
         return texture.nanoguiTexture.get();
     }
 
@@ -331,8 +332,19 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
     );
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
+    bool directUpload = isInterleavedRgba(channelNames);
+
+    tlog::debug() << fmt::format(
+        "Uploading texture: direct={} filter={}-{} img={}:{}",
+        directUpload,
+        tev::toString(minFilter),
+        tev::toString(magFilter),
+        mName,
+        join(channelNames, ",")
+    );
+
     // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
-    if (isInterleavedRgba(channelNames)) {
+    if (directUpload) {
         texture->upload((uint8_t*)channel(channelNames[0])->data());
     } else {
         auto numPixels = this->numPixels();
