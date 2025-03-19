@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/ImageLoader.h>
@@ -291,19 +292,26 @@ bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
     return interleavedData;
 }
 
-Texture* Image::texture(const string& channelGroupName) { return texture(channelsInGroup(channelGroupName)); }
-
-Texture* Image::texture(const vector<string>& channelNames) {
-    string lookup = join(channelNames, ",");
+Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
+    string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
         auto& texture = iter->second;
-        if (texture.mipmapDirty) {
+        if (texture.mipmapDirty && minFilter == EInterpolationMode::Trilinear) {
             texture.nanoguiTexture->generate_mipmap();
             texture.mipmapDirty = false;
         }
         return texture.nanoguiTexture.get();
     }
+
+    const auto toNanogui = [](EInterpolationMode mode) {
+        switch (mode) {
+            case EInterpolationMode::Nearest: return Texture::InterpolationMode::Nearest;
+            case EInterpolationMode::Bilinear: return Texture::InterpolationMode::Bilinear;
+            case EInterpolationMode::Trilinear: return Texture::InterpolationMode::Trilinear;
+            default: throw runtime_error{"Unknown interpolation mode."};
+        }
+    };
 
     mTextures.emplace(
         lookup,
@@ -312,8 +320,8 @@ Texture* Image::texture(const vector<string>& channelNames) {
                         Texture::PixelFormat::RGBA,
                         Texture::ComponentFormat::Float32,
                         {size().x(), size().y()},
-                        Texture::InterpolationMode::Trilinear,
-                        Texture::InterpolationMode::Nearest,
+                        toNanogui(minFilter),
+                        toNanogui(magFilter),
                         Texture::WrapMode::ClampToEdge,
                         1, Texture::TextureFlags::ShaderRead,
                         true, },
@@ -354,7 +362,10 @@ Texture* Image::texture(const vector<string>& channelNames) {
         texture->upload((uint8_t*)data.data());
     }
 
-    texture->generate_mipmap();
+    if (minFilter == EInterpolationMode::Trilinear) {
+        texture->generate_mipmap();
+    }
+
     return texture.get();
 }
 

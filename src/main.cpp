@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ImageViewer.h>
 #include <tev/Ipc.h>
@@ -244,6 +245,19 @@ static int mainFunc(const vector<string>& arguments) {
         "RSE - Relative Squared Error\n"
         "Default is E.",
         {'m', "metric"},
+    };
+
+    ValueFlag<string> minFilterFlag{
+        parser,
+        "MIN FILTER",
+        "The filter to use when downsampling (minifying) images.",
+        {"min-filter"},
+    };
+    ValueFlag<string> magFilterFlag{
+        parser,
+        "MAG FILTER",
+        "The filter to use when upsampling (magnifying) images.",
+        {"mag-filter"},
     };
 
     Flag newWindowFlagOn{
@@ -567,6 +581,14 @@ static int mainFunc(const vector<string>& arguments) {
 
     if (metricFlag) {
         sImageViewer->setMetric(toMetric(get(metricFlag)));
+    }
+
+    if (minFilterFlag) {
+        sImageViewer->setMinFilter(toInterpolationMode(get(minFilterFlag)));
+    }
+
+    if (magFilterFlag) {
+        sImageViewer->setMagFilter(toInterpolationMode(get(magFilterFlag)));
     }
 
     if (offsetFlag) {

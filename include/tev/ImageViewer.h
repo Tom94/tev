@@ -110,6 +110,12 @@ public:
 
     void resetImage();
 
+    EInterpolationMode minFilter() const { return mImageCanvas->minFilter(); }
+    void setMinFilter(EInterpolationMode value) { mImageCanvas->setMinFilter(value); }
+
+    EInterpolationMode magFilter() const { return mImageCanvas->magFilter(); }
+    void setMagFilter(EInterpolationMode value) { mImageCanvas->setMagFilter(value); }
+
     ETonemap tonemap() const { return mImageCanvas->tonemap(); }
 
     void setTonemap(ETonemap tonemap);

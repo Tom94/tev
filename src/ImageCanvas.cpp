@@ -86,7 +86,7 @@ void ImageCanvas::draw_contents() {
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
             !mSupportsHdr,
-            image->texture(mImage->channelsInGroup(mRequestedChannelGroup)),
+            image->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in
             // [0, 1]-space.
             inverse(transform(image)),
@@ -104,13 +104,13 @@ void ImageCanvas::draw_contents() {
         2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
         Vector2f{20.0f},
         !mSupportsHdr,
-        mImage->texture(mRequestedChannelGroup),
+        mImage->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in [0,
         // 1]-space.
         inverse(transform(mImage.get())),
         // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
         // values (0 for colors, 1 for alpha).
-        mReference->texture(mImage->channelsInGroup(mRequestedChannelGroup)),
+        mReference->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
         inverse(transform(mReference.get())),
         mExposure,
         mOffset,

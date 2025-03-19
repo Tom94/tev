@@ -380,6 +380,18 @@ void toggleConsole();
 bool shuttingDown();
 void setShuttingDown();
 
+enum EInterpolationMode : int {
+    Nearest = 0,
+    Bilinear,
+    Trilinear,
+
+    // This enum value should never be used directly. It facilitates looping over all members of this enum.
+    NumInterpolationModes,
+};
+
+EInterpolationMode toInterpolationMode(std::string name);
+std::string toString(EInterpolationMode mode);
+
 enum ETonemap : int {
     SRGB = 0,
     Gamma,
