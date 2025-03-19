@@ -266,6 +266,13 @@ static int mainFunc(const vector<string>& arguments) {
         {'o', "offset"},
     };
 
+    Flag playFlag{
+        parser,
+        "PLAY",
+        "Play back images as a video.",
+        {'p', "play"},
+    };
+
     ValueFlag<string> tonemapFlag{
         parser,
         "TONEMAP",
@@ -564,6 +571,10 @@ static int mainFunc(const vector<string>& arguments) {
 
     if (offsetFlag) {
         sImageViewer->setOffset(get(offsetFlag));
+    }
+
+    if (playFlag) {
+        sImageViewer->setPlayingBack(true);
     }
 
     if (tonemapFlag) {
