@@ -106,7 +106,7 @@ string toUpper(string str) {
 
 bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
     if (matchedPartId) {
-        // Default value of 0. Is actually returned when the filter is empty or when there is no match.
+        // Default value of 0. Is returned when the filter is empty, when there is no match, or when the filter is a regex.
         *matchedPartId = 0;
     }
 
@@ -114,9 +114,19 @@ bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
         return true;
     }
 
-    // Perform matching on lowercase strings
-    text = toLower(text);
-    filter = toLower(filter);
+    if (filter.front() == '^' || filter.back() == '$') {
+        // If the filter starts with ^ or ends in a $, we'll use regex matching. Otherwise, we use simple substring matching. Regex matching
+        // is always case sensitive.
+        return matchesRegex(text, filter);
+    }
+
+    // Perform matching via smart casing: if the filter is all lowercase, we want to match case-insensitively. If the filter contains any
+    // uppercase characters, we want to match case-sensitively.
+    const bool caseInsensitive = all_of(begin(filter), end(filter), [](char c) { return islower(c); });
+    if (caseInsensitive) {
+        text = toLower(text);
+        filter = toLower(filter);
+    }
 
     auto words = split(filter, ", ");
     // We don't want people entering multiple spaces in a row to match everything.

@@ -63,7 +63,8 @@ HeifImageLoader::HeifImageLoader() {
     // );
 }
 
-Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>>
+    HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority, bool applyGainmaps) const {
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
     uint8_t header[12];
     iStream.read((char*)header, 12);
@@ -296,18 +297,27 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
 
         // Only convert if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
-            array<Vector2f, 4> chroma = {{
-                {nclx->color_primary_red_x,   nclx->color_primary_red_y  },
-                {nclx->color_primary_green_x, nclx->color_primary_green_y},
-                {nclx->color_primary_blue_x,  nclx->color_primary_blue_y },
-                {nclx->color_primary_white_x, nclx->color_primary_white_y},
-            }};
+            array<Vector2f, 4> chroma = {
+                {
+                 {nclx->color_primary_red_x, nclx->color_primary_red_y},
+                 {nclx->color_primary_green_x, nclx->color_primary_green_y},
+                 {nclx->color_primary_blue_x, nclx->color_primary_blue_y},
+                 {nclx->color_primary_white_x, nclx->color_primary_white_y},
+                 }
+            };
 
             resultData.toRec709 = convertChromaToRec709(chroma);
 
             tlog::debug() << fmt::format(
                 "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",
-                chroma[0].x(), chroma[0].y(), chroma[1].x(), chroma[1].y(), chroma[2].x(), chroma[2].y(), chroma[3].x(), chroma[3].y()
+                chroma[0].x(),
+                chroma[0].y(),
+                chroma[1].x(),
+                chroma[1].y(),
+                chroma[2].x(),
+                chroma[2].y(),
+                chroma[3].x(),
+                chroma[3].y()
             );
         }
 
@@ -412,16 +422,19 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
             string auxLayerName = auxType ? fmt::format("{}.", auxType) : fmt::format("{}.", num_aux);
             replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
 
-            if (!matchesFuzzy(auxLayerName, channelSelector)) {
+            const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
+            const bool loadGainmap = applyGainmaps && auxLayerName.find("apple") != string::npos &&
+                auxLayerName.find("hdrgainmap") != string::npos;
+
+            if (!retainAuxLayer && !loadGainmap) {
                 continue;
             }
 
             auto auxImgData = co_await decodeImage(auxImgHandle, mainImage.channels.front().size(), auxLayerName);
             co_await resizeImage(auxImgData, mainImage.channels.front().size(), auxLayerName);
-            mainImage.channels.insert(mainImage.channels.end(), auxImgData.channels.begin(), auxImgData.channels.end());
 
             // If we found an apple-style gainmap, apply it to the main image.
-            if (applyGainmaps && auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos) {
+            if (loadGainmap) {
                 tlog::debug(
                 ) << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
                 auto amn = findAppleMakerNote();
@@ -436,6 +449,14 @@ Task<vector<ImageData>> HeifImageLoader::load(istream& iStream, const fs::path&,
                 } else {
                     tlog::warning() << "Skipping gain map application, because no Apple maker note was found.";
                 }
+            }
+
+            if (retainAuxLayer) {
+                mainImage.channels.insert(
+                    mainImage.channels.end(),
+                    std::make_move_iterator(auxImgData.channels.begin()),
+                    std::make_move_iterator(auxImgData.channels.end())
+                );
             }
         }
     }
