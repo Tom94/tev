@@ -241,6 +241,29 @@ bool shuttingDown() { return sShuttingDown; }
 
 void setShuttingDown() { sShuttingDown = true; }
 
+EInterpolationMode toInterpolationMode(string name) {
+    // Perform matching on uppercase strings
+    name = toUpper(name);
+    if (name == "NEAREST") {
+        return Nearest;
+    } else if (name == "BILINEAR") {
+        return Bilinear;
+    } else if (name == "TRILINEAR" || name == "FC") {
+        return Trilinear;
+    } else {
+        return Nearest;
+    }
+}
+
+string toString(EInterpolationMode mode) {
+    switch (mode) {
+        case Nearest: return "NEAREST";
+        case Bilinear: return "BILINEAR";
+        case Trilinear: return "TRILINEAR";
+        default: throw runtime_error{"Unknown interpolation mode."};
+    }
+}
+
 ETonemap toTonemap(string name) {
     // Perform matching on uppercase strings
     name = toUpper(name);

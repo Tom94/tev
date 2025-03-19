@@ -20,6 +20,7 @@
 
 #include <tev/Box.h>
 #include <tev/Channel.h>
+#include <tev/Common.h>
 #include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 #include <tev/VectorGraphics.h>
@@ -144,8 +145,7 @@ public:
 
     bool isInterleavedRgba(const std::vector<std::string>& channelNames) const;
 
-    nanogui::Texture* texture(const std::string& channelGroupName);
-    nanogui::Texture* texture(const std::vector<std::string>& channelNames);
+    nanogui::Texture* texture(const std::vector<std::string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
 
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     void decomposeChannelGroup(const std::string& groupName);
@@ -221,7 +221,8 @@ private:
     int mId;
 };
 
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>>
+    tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string channelSelector, bool applyGainmaps);
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string channelSelector, bool applyGainmaps);

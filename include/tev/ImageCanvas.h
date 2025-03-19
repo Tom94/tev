@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/Box.h>
+#include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/Lazy.h>
 #include <tev/UberShader.h>
@@ -98,6 +99,12 @@ public:
     bool clipToLdr() const { return mClipToLdr; }
     void setClipToLdr(bool value) { mClipToLdr = value; }
 
+    EInterpolationMode minFilter() const { return mMinFilter; }
+    void setMinFilter(EInterpolationMode value) { mMinFilter = value; }
+
+    EInterpolationMode magFilter() const { return mMagFilter; }
+    void setMagFilter(EInterpolationMode value) { mMagFilter = value; }
+
     // The following functions return four values per pixel in RGBA order. The number of pixels is given by `imageDataSize()`. If the canvas
     // does not currently hold an image, or no channels are displayed, then zero pixels are returned.
     nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
@@ -142,6 +149,9 @@ private:
     float mGamma = 2.2f;
 
     bool mClipToLdr = false;
+
+    EInterpolationMode mMinFilter = EInterpolationMode::Trilinear;
+    EInterpolationMode mMagFilter = EInterpolationMode::Nearest;
 
     std::shared_ptr<Image> mImage;
     std::shared_ptr<Image> mReference;
