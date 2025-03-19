@@ -168,6 +168,13 @@ static int mainFunc(const vector<string>& arguments) {
         {'f', "filter"},
     };
 
+    ValueFlag<int> fpsFlag{
+        parser,
+        "FPS",
+        "Frames per second during playback",
+        {"fps"},
+    };
+
     Flag gainmapFlagOff{
         parser,
         "NO GAINMAPS",
@@ -541,6 +548,10 @@ static int mainFunc(const vector<string>& arguments) {
 
     if (filterFlag) {
         sImageViewer->setFilter(get(filterFlag));
+    }
+
+    if (fpsFlag) {
+        sImageViewer->setFps(get(fpsFlag));
     }
 
     if (gammaFlag) {
