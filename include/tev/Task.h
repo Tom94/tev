@@ -143,10 +143,10 @@ public:
     Task& operator=(const Task& other) = delete;
 
     Task& operator=(Task&& other) {
-        mHandle = other.mHandle;
-        other.mHandle = nullptr;
-        mFuture = std::move(other.mFuture);
-        mState = std::move(other.mState);
+        // Ensure this coroutine is cleaned up by RAII by swapping it into other
+        std::swap(mHandle, other.mHandle);
+        std::swap(mFuture, other.mFuture);
+        std::swap(mState, other.mState);
         return *this;
     }
     Task(Task&& other) { *this = std::move(other); }
@@ -210,9 +210,9 @@ public:
     }
 
 private:
-    std::coroutine_handle<promise_type> mHandle;
-    std::future<T> mFuture;
-    std::shared_ptr<TaskSharedState> mState;
+    std::coroutine_handle<promise_type> mHandle = nullptr;
+    std::future<T> mFuture = {};
+    std::shared_ptr<TaskSharedState> mState = nullptr;
 };
 
 } // namespace tev
