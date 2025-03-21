@@ -2010,7 +2010,7 @@ void ImageViewer::updateTitle() {
         }
 
         caption += fmt::format(
-            " – @{},{} / {}x{}: {}", imageCoords.x(), imageCoords.y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString
+            " – @{},{} ({:.3f},{:.3f}) / {}x{}: {}", imageCoords.x(), imageCoords.y(), imageCoords.x() / (double)mCurrentImage->size().x(), imageCoords.y() / (double)mCurrentImage->size().y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString
         );
     }
 
