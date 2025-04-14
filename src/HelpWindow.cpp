@@ -17,6 +17,7 @@
  */
 
 #include <tev/HelpWindow.h>
+#include <tev/Ipc.h>
 
 #include <nanogui/button.h>
 #include <nanogui/icons.h>
@@ -45,7 +46,7 @@ string HelpWindow::ALT = "Opt";
 string HelpWindow::ALT = "Alt";
 #endif
 
-HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeCallback) :
+HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, function<void()> closeCallback) :
     Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
@@ -154,16 +155,42 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
     addRow(ui, "Escape", "Reset find string");
     addRow(ui, COMMAND + "+Q", "Quit");
 
-    // About tab
-    Widget* about = new Widget(tabWidget);
-    about->set_layout(new GroupLayout{});
-    tabWidget->append_tab("About", about);
-
     auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
         auto row = new Widget{current};
         row->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
         new Label{row, text, font, fontSize};
     };
+
+    auto addSpacer = [](Widget* current, int space) {
+        auto row = new Widget{current};
+        row->set_height(space);
+    };
+
+    // Network tab
+    Widget* network = new Widget(tabWidget);
+    network->set_layout(new GroupLayout{});
+    tabWidget->append_tab("Network", network);
+
+    new Label{network, "Inter process communication (IPC)", "sans-bold", 18};
+    auto ipcSection = new Widget{network};
+    ipcSection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+
+    if (ipc.isPrimaryInstance()) {
+        addRow(network, fmt::format("Listening to {}", ipc.hostname()), "Status");
+        addRow(network, to_string(ipc.nActiveConnections()), "Active connections");
+    } else if (ipc.isConnectedToPrimaryInstance()) {
+        addRow(network, fmt::format("Connected to {}", ipc.hostname()), "Status");
+    } else {
+        addRow(network, fmt::format("Failed to connect to {}", ipc.hostname()), "Status");
+    }
+
+    addRow(network, to_string(ipc.nTotalBytesSent()), "Bytes sent");
+    addRow(network, to_string(ipc.nTotalBytesReceived()), "Bytes received");
+
+    // About tab
+    Widget* about = new Widget(tabWidget);
+    about->set_layout(new GroupLayout{});
+    tabWidget->append_tab("About", about);
 
     auto addLibrary = [](Widget* current, string name, string desc) {
         auto row = new Widget{current};
@@ -174,11 +201,6 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, function<void()> closeC
 
         new Label{leftColumn, name, "sans-bold", 18};
         new Label{row, desc, "sans", 18};
-    };
-
-    auto addSpacer = [](Widget* current, int space) {
-        auto row = new Widget{current};
-        row->set_height(space);
     };
 
     addSpacer(about, 5);

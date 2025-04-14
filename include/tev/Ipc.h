@@ -253,12 +253,21 @@ public:
     Ipc(const std::string& hostname = "127.0.0.1:14158");
     virtual ~Ipc();
 
-    bool isPrimaryInstance() { return mIsPrimaryInstance; }
+    bool isPrimaryInstance() const { return mIsPrimaryInstance; }
+    bool isConnectedToPrimaryInstance() const;
 
     bool attemptToBecomePrimaryInstance();
 
     void sendToPrimaryInstance(const IpcPacket& message);
     void receiveFromSecondaryInstance(std::function<void(const IpcPacket&)> callback);
+
+    std::string ip() const { return mIp; }
+    std::string port() const { return mPort; }
+    std::string hostname() const;
+
+    size_t nActiveConnections() const { return mSocketConnections.size(); }
+    size_t nTotalBytesSent() const { return mNTotalBytesSent; }
+    size_t nTotalBytesReceived() const { return mNTotalBytesReceived; }
 
 private:
     bool mIsPrimaryInstance;
@@ -275,7 +284,8 @@ private:
     public:
         SocketConnection(Ipc::socket_t fd, const std::string& name);
 
-        void service(std::function<void(const IpcPacket&)> callback);
+        // Servicing a connection also returns the total number of bytes received
+        size_t service(std::function<void(const IpcPacket&)> callback);
 
         void close();
 
@@ -297,6 +307,9 @@ private:
     std::string mIp;
     std::string mPort;
     std::string mLockName;
+
+    size_t mNTotalBytesSent = 0;
+    size_t mNTotalBytesReceived = 0;
 };
 
 } // namespace tev

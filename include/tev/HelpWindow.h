@@ -26,9 +26,11 @@
 
 namespace tev {
 
+struct Ipc;
+
 class HelpWindow : public nanogui::Window {
 public:
-    HelpWindow(nanogui::Widget* parent, bool supportsHdr, std::function<void()> closeCallback);
+    HelpWindow(nanogui::Widget* parent, bool supportsHdr, const Ipc& ipc, std::function<void()> closeCallback);
 
     bool keyboard_event(int key, int scancode, int action, int modifiers) override;
 
