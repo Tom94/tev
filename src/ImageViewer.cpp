@@ -45,13 +45,15 @@ static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
-    const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool showUi, bool floatBuffer, bool /*supportsHdr*/
+    const shared_ptr<BackgroundImagesLoader>& imagesLoader, const shared_ptr<Ipc>& ipc, bool maximize, bool showUi, bool floatBuffer, bool /*supportsHdr*/
 ) :
     nanogui::Screen{
         nanogui::Vector2i{1024, 799},
         "tev", true, maximize, false, true, true, floatBuffer
 },
-    mImagesLoader{imagesLoader} {
+    mImagesLoader{imagesLoader},
+    mIpc{ipc} {
+
     if (floatBuffer && !m_float_buffer) {
         tlog::warning() << "Failed to create floating point frame buffer.";
     }
@@ -1699,9 +1701,7 @@ bool ImageViewer::setFilter(const string& filter) {
     return true;
 }
 
-void ImageViewer::setFps(int value) {
-    mFpsTextBox->set_value(value);
-}
+void ImageViewer::setFps(int value) { mFpsTextBox->set_value(value); }
 
 bool ImageViewer::useRegex() const { return mRegexButton->pushed(); }
 
@@ -1743,7 +1743,7 @@ void ImageViewer::toggleHelpWindow() {
         mHelpWindow = nullptr;
         mHelpButton->set_pushed(false);
     } else {
-        mHelpWindow = new HelpWindow{this, mSupportsHdr, [this] { toggleHelpWindow(); }};
+        mHelpWindow = new HelpWindow{this, mSupportsHdr, ipc(), [this] { toggleHelpWindow(); }};
         mHelpWindow->center();
         mHelpWindow->request_focus();
         mHelpButton->set_pushed(true);
@@ -2010,7 +2010,14 @@ void ImageViewer::updateTitle() {
         }
 
         caption += fmt::format(
-            " – @{},{} ({:.3f},{:.3f}) / {}x{}: {}", imageCoords.x(), imageCoords.y(), imageCoords.x() / (double)mCurrentImage->size().x(), imageCoords.y() / (double)mCurrentImage->size().y(), mCurrentImage->size().x(), mCurrentImage->size().y(), valuesString
+            " – @{},{} ({:.3f},{:.3f}) / {}x{}: {}",
+            imageCoords.x(),
+            imageCoords.y(),
+            imageCoords.x() / (double)mCurrentImage->size().x(),
+            imageCoords.y() / (double)mCurrentImage->size().y(),
+            mCurrentImage->size().x(),
+            mCurrentImage->size().y(),
+            valuesString
         );
     }
 

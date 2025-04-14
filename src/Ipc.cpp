@@ -471,6 +471,10 @@ Ipc::~Ipc() {
 #endif
 }
 
+bool Ipc::isConnectedToPrimaryInstance() const {
+    return !mIsPrimaryInstance && mSocketFd != INVALID_SOCKET;
+}
+
 bool Ipc::attemptToBecomePrimaryInstance() {
 #ifdef _WIN32
     // Make sure at most one instance of tev is running
@@ -558,6 +562,8 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
     if (bytesSent != int(message.size())) {
         throw runtime_error{fmt::format("send() failed: {}", errorString(lastSocketError()))};
     }
+
+    mNTotalBytesSent += message.size();
 }
 
 void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback) {
@@ -587,13 +593,17 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     // Service existing connections.
     for (auto iter = mSocketConnections.begin(); iter != mSocketConnections.end();) {
         auto cur = iter++;
-        cur->service(callback);
+        mNTotalBytesReceived += cur->service(callback);
 
         // If the connection became closed, stop keeping track of it.
         if (cur->isClosed()) {
             mSocketConnections.erase(cur);
         }
     }
+}
+
+string Ipc::hostname() const {
+    return fmt::format("{}:{}", ip(), port());
 }
 
 Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, const string& name) : mSocketFd{fd}, mName{name} {
@@ -605,12 +615,13 @@ Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, const string& name) : 
     mBuffer.resize(1024 * 1024);
 }
 
-void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
+size_t Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
     if (isClosed()) {
         // Client disconnected, so don't bother.
-        return;
+        return 0;
     }
 
+    size_t nTotalBytesReceived = 0;
     while (true) {
         // Receive as much data as we can, up to the capacity of 'mBuffer'.
         size_t maxBytes = mBuffer.size() - mRecvOffset;
@@ -623,19 +634,20 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             } else {
                 tlog::warning() << "Error while reading from socket. " << errorString(errorId) << " Connection terminated.";
                 close();
-                return;
+                break;
             }
         }
 
         TEV_ASSERT(bytesReceived >= 0, "With no error, the number of bytes received should be positive.");
         mRecvOffset += (size_t)bytesReceived;
+        nTotalBytesReceived += (size_t)bytesReceived;
 
         // Since we aren't getting annoying SIGPIPE signals when a client disconnects, a zero-byte read here is how we know when that
         // happens.
         if (bytesReceived == 0) {
             tlog::info() << "Client " << mName << " (#" << mSocketFd << ") disconnected";
             close();
-            return;
+            break;
         }
 
         // Go through the buffer and service as many complete messages as we can find.
@@ -668,6 +680,8 @@ void Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
             mRecvOffset -= processedOffset;
         }
     }
+
+    return nTotalBytesReceived;
 }
 
 void Ipc::SocketConnection::close() {

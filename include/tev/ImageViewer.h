@@ -22,6 +22,7 @@
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
 #include <tev/ImageCanvas.h>
+#include <tev/Ipc.h>
 #include <tev/Lazy.h>
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
@@ -41,7 +42,14 @@ namespace tev {
 
 class ImageViewer : public nanogui::Screen {
 public:
-    ImageViewer(const std::shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool showUi, bool floatBuffer, bool supportsHdr);
+    ImageViewer(
+        const std::shared_ptr<BackgroundImagesLoader>& imagesLoader,
+        const std::shared_ptr<Ipc>& ipc,
+        bool maximize,
+        bool showUi,
+        bool floatBuffer,
+        bool supportsHdr
+    );
 
     bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
     bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;
@@ -158,6 +166,7 @@ public:
     template <typename T> void scheduleToUiThread(const T& fun) { mTaskQueue.push(fun); }
 
     BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
+    Ipc& ipc() const { return *mIpc; }
 
 private:
     void updateFilter();
@@ -211,6 +220,7 @@ private:
     nanogui::Widget* mMetricButtonContainer;
 
     std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
+    std::shared_ptr<Ipc> mIpc;
 
     std::shared_ptr<Image> mCurrentImage;
     std::shared_ptr<Image> mCurrentReference;
