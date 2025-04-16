@@ -45,7 +45,12 @@ static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
-    const shared_ptr<BackgroundImagesLoader>& imagesLoader, bool maximize, bool showUi, bool floatBuffer, bool /*supportsHdr*/
+    const shared_ptr<BackgroundImagesLoader>& imagesLoader,
+    bool maximize,
+    bool showUi,
+    bool floatBuffer,
+    bool /*supportsHdr*/,
+    const nanogui::Color& imageCanvasBackgroundColor
 ) :
     nanogui::Screen{
         nanogui::Vector2i{1024, 799},
@@ -103,6 +108,7 @@ ImageViewer::ImageViewer(
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr, pixel_ratio()};
+    mImageCanvas->setBackgroundColor(imageCanvasBackgroundColor);
 
     // Tonemapping sectionim
     {
@@ -191,12 +197,13 @@ ImageViewer::ImageViewer(
 
         // Background color popup
         {
+            auto backgroundColor = mImageCanvas->backgroundColor();
             auto popup = popupBtn->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "Background Color"};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
-            colorwheel->set_color(popupBtn->background_color());
+            auto colorwheel = new ColorWheel{popup, backgroundColor};
+            colorwheel->set_color(backgroundColor);
 
             new Label{popup, "Background Alpha"};
             auto bgAlphaSlider = new Slider{popup};
@@ -211,7 +218,7 @@ ImageViewer::ImageViewer(
                 });
             });
 
-            bgAlphaSlider->set_value(0);
+            bgAlphaSlider->set_value(backgroundColor.a());
 
             colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
                 // popupBtn->set_background_color(value);

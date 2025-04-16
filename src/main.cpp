@@ -153,6 +153,14 @@ static int mainFunc(const vector<string>& arguments) {
         "Its source code is available under the GPLv3 License at https://tom94.net/tev",
     };
 
+    ValueFlag<string> backgroundColorFlag{
+        parser,
+        "BACKGROUND",
+        "Background color used to render canvas."
+        "The string must have the format 'r,g,b,a'. r,g,b,a range: [0,255]. Default is 0,0,0,0.",
+        {'b', "background"},
+    };
+
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
@@ -554,8 +562,9 @@ static int mainFunc(const vector<string>& arguments) {
         return -3;
     }
 
+    auto backgroundColor = toColor(get(backgroundColorFlag));
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better not try.
-    sImageViewer = new ImageViewer{imagesLoader, maximize, !hideUiFlag, capability10bit || capabilityEdr, capabilityEdr};
+    sImageViewer = new ImageViewer{imagesLoader, maximize, !hideUiFlag, capability10bit || capabilityEdr, capabilityEdr, backgroundColor};
     imageViewerIsReady = true;
 
     sImageViewer->draw_all();

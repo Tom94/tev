@@ -298,4 +298,22 @@ EMetric toMetric(string name) {
     }
 }
 
+// Parse name, format: r,g,b,a, where r,g,b,a are integers ranging from 0 to 255.
+nanogui::Color toColor(std::string name) {
+    auto components = split(name, ",");
+    if (components.size() != 4) {
+        return nanogui::Color();
+    }
+
+    int rgba[4] = {0};
+    for (size_t i = 0; i < 4; ++i) {
+        int value = std::stoi(components[i]);
+        if (value >=0 && value <= 255) {
+            rgba[i] = value;
+        }
+    }
+
+    return nanogui::Color(rgba[0], rgba[1], rgba[2], rgba[3]);
+}
+
 } // namespace tev

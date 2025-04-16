@@ -417,6 +417,8 @@ enum EMetric : int {
 
 EMetric toMetric(std::string name);
 
+nanogui::Color toColor(std::string name);
+
 enum EDirection {
     Forward,
     Backward,
