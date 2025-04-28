@@ -175,6 +175,7 @@ endif()
 # Compile clip
 set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(CLIP_TESTS OFF CACHE BOOL " " FORCE)
+set(CLIP_X11_WITH_PNG OFF CACHE BOOL " " FORCE)
 add_subdirectory(clip)
 
 # Manually populate locations of our included dependencies.
