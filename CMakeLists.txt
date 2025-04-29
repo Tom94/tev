@@ -31,6 +31,9 @@ if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
 endif()
 
+# We don't use the SSE2 components of LCMS in tev; disable to simplify ARM compilation
+add_compile_definitions(-DCMS_DONT_USE_SSE2=1)
+
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(TEV_VERSION_ARCH "${TEV_VERSION} (64 bit)")
 elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -39,6 +42,7 @@ endif()
 
 option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
+option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 
 set(TEV_USE_LIBHEIF OFF)
 if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
@@ -176,6 +180,9 @@ endif()
 if (TEV_USE_LIBHEIF)
     set(TEV_LIBS ${TEV_LIBS} lcms2 heif)
 endif()
+if (TEV_SUPPORT_JXL)
+    set(TEV_LIBS ${TEV_LIBS} jxl jxl_dec jxl_threads)
+endif()
 
 set(TEV_SOURCES
     include/tev/imageio/AppleMakerNote.h src/imageio/AppleMakerNote.cpp
@@ -225,6 +232,10 @@ endif()
 if (TEV_USE_LIBHEIF)
     set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/HeifImageLoader.h src/imageio/HeifImageLoader.cpp)
 endif()
+if (TEV_SUPPORT_JXL)
+    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/JxlImageLoader.h src/imageio/JxlImageLoader.cpp)
+    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/JxlImageSaver.h src/imageio/JxlImageSaver.cpp)
+endif()
 
 add_executable(tev ${TEV_SOURCES})
 
@@ -263,6 +274,9 @@ include_directories(
 if (TEV_USE_LIBHEIF)
     include_directories(${LIBHEIF_INCLUDE})
 endif()
+if (TEV_SUPPORT_JXL)
+    include_directories(${LIBJXL_INCLUDE_DIR})
+endif()
 
 set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
 if (APPLE)
@@ -278,6 +292,9 @@ if (TEV_SUPPORT_HEIC)
 endif()
 if (TEV_USE_LIBHEIF)
     set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_USE_LIBHEIF)
+endif()
+if (TEV_SUPPORT_JXL)
+    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_JXL)
 endif()
 
 add_definitions(${TEV_DEFINITIONS} ${NANOGUI_EXTRA_DEFS})

@@ -10,11 +10,12 @@ mkdir $BUILD_DIR
 cd $BUILD_DIR
 MACOSX_DEPLOYMENT_TARGET=10.15
 cmake \
+    -GNinja \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
     -DCMAKE_BUILD_TYPE=Release \
     "$@" \
     ../.. || exit 1
-make -j || exit 1
+cmake --build . --config Release -j || exit 1
 cd ..
 
 echo "Creating dmg..."

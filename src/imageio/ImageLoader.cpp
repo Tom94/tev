@@ -31,6 +31,9 @@
 #ifdef TEV_USE_LIBHEIF
 #   include <tev/imageio/HeifImageLoader.h>
 #endif
+#ifdef TEV_SUPPORT_JXL
+#   include <tev/imageio/JxlImageLoader.h>
+#endif
 
 using namespace nanogui;
 using namespace std;
@@ -49,6 +52,9 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #endif
 #ifdef TEV_USE_LIBHEIF
         imageLoaders.emplace_back(new HeifImageLoader());
+#endif
+#ifdef TEV_SUPPORT_JXL
+        imageLoaders.emplace_back(new JxlImageLoader());
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new UltraHdrImageLoader());

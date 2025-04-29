@@ -113,6 +113,33 @@ if (TEV_SUPPORT_HEIC)
     set(LIBDE265_LIBRARY de265)
 endif()
 
+# Compile JPEG XL library
+if (TEV_SUPPORT_JXL)
+    # General build config
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_FUZZERS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_VIEWERS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_TOOLS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_EXAMPLES OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_BENCHMARK OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_PLUGINS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_SKCMS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_FORCE_SYSTEM_LCMS2 OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_INSTALL ON CACHE BOOL " " FORCE)
+
+    # Add libjxl
+    add_subdirectory(libjxl EXCLUDE_FROM_ALL)
+    set_property(TARGET jxl jxl_dec jxl_threads PROPERTY FOLDER "dependencies")
+
+    set(LIBJXL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/lib/include" CACHE PATH " " FORCE)
+
+    add_definitions(-DTEV_SUPPORT_JXL)
+endif()
+
 if (TEV_USE_LIBHEIF)
     # Compile libheif
 
@@ -153,20 +180,33 @@ if (TEV_USE_LIBHEIF)
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
 
-    # Compile Little-CMS for ICC color profile handling
+    if(TEV_SUPPORT_JXL)
+        set(LCMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/third_party/lcms")
+    else()
+        set(LCMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS")
+    endif()
 
-    file(GLOB LCMS_SRCS
-        Little-CMS/src/*.c Little-CMS/include/*.h
-        Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
-    )
-
-    add_library(lcms2 STATIC ${LCMS_SRCS})
+    if(TEV_SUPPORT_JXL)
+        # Use the lcms2 library bundled with libjxl
+        # However, ensure the lcms2 imported by libjxl is built with the fast_float plugin
+        file(GLOB LCMS_SRCS
+            libjxl/third_party/lcms/plugins/fast_float/src/*.c libjxl/third_party/lcms/plugins/fast_float/include/*.h
+        )
+        target_sources(lcms2 INTERFACE ${LCMS_SRCS})
+    else()
+        # Compile Little-CMS for ICC color profile handling
+        file(GLOB LCMS_SRCS
+            Little-CMS/src/*.c Little-CMS/include/*.h
+            Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+        )
+        add_library(lcms2 STATIC ${LCMS_SRCS})
+    endif()
 
     # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
     target_compile_definitions(lcms2 PRIVATE -DCMS_DONT_USE_SSE2=1)
     target_include_directories(lcms2 PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
+        "${LCMS_DIR}/include"
+        "${LCMS_DIR}/plugins/fast_float/include"
     )
 endif()
 
