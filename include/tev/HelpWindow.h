@@ -26,7 +26,7 @@
 
 namespace tev {
 
-struct Ipc;
+class Ipc;
 
 class HelpWindow : public nanogui::Window {
 public:
