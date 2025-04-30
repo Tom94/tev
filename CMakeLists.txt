@@ -31,9 +31,6 @@ if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
 endif()
 
-# We don't use the SSE2 components of LCMS in tev; disable to simplify ARM compilation
-add_compile_definitions(-DCMS_DONT_USE_SSE2=1)
-
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(TEV_VERSION_ARCH "${TEV_VERSION} (64 bit)")
 elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -178,7 +175,7 @@ if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
 if (TEV_USE_LIBHEIF)
-    set(TEV_LIBS ${TEV_LIBS} lcms2 heif)
+    set(TEV_LIBS ${TEV_LIBS} lcms2-tev heif)
 endif()
 if (TEV_SUPPORT_JXL)
     set(TEV_LIBS ${TEV_LIBS} jxl jxl_dec jxl_threads)

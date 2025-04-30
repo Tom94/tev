@@ -115,7 +115,6 @@ endif()
 
 # Compile JPEG XL library
 if (TEV_SUPPORT_JXL)
-    # General build config
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
     set(JPEGXL_ENABLE_FUZZERS OFF CACHE BOOL " " FORCE)
@@ -128,16 +127,9 @@ if (TEV_SUPPORT_JXL)
     set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL " " FORCE)
     set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL " " FORCE)
     set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_FORCE_SYSTEM_LCMS2 OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_INSTALL ON CACHE BOOL " " FORCE)
 
-    # Add libjxl
     add_subdirectory(libjxl EXCLUDE_FROM_ALL)
     set_property(TARGET jxl jxl_dec jxl_threads PROPERTY FOLDER "dependencies")
-
-    set(LIBJXL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/lib/include" CACHE PATH " " FORCE)
-
-    add_definitions(-DTEV_SUPPORT_JXL)
 endif()
 
 if (TEV_USE_LIBHEIF)
@@ -180,33 +172,20 @@ if (TEV_USE_LIBHEIF)
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
 
-    if(TEV_SUPPORT_JXL)
-        set(LCMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/third_party/lcms")
-    else()
-        set(LCMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS")
-    endif()
+    # Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
+    # comes with lcms2.
+    file(GLOB LCMS_SRCS
+        Little-CMS/src/*.c Little-CMS/include/*.h
+        Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+    )
 
-    if(TEV_SUPPORT_JXL)
-        # Use the lcms2 library bundled with libjxl
-        # However, ensure the lcms2 imported by libjxl is built with the fast_float plugin
-        file(GLOB LCMS_SRCS
-            libjxl/third_party/lcms/plugins/fast_float/src/*.c libjxl/third_party/lcms/plugins/fast_float/include/*.h
-        )
-        target_sources(lcms2 INTERFACE ${LCMS_SRCS})
-    else()
-        # Compile Little-CMS for ICC color profile handling
-        file(GLOB LCMS_SRCS
-            Little-CMS/src/*.c Little-CMS/include/*.h
-            Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
-        )
-        add_library(lcms2 STATIC ${LCMS_SRCS})
-    endif()
+    add_library(lcms2-tev STATIC ${LCMS_SRCS})
 
     # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
-    target_compile_definitions(lcms2 PRIVATE -DCMS_DONT_USE_SSE2=1)
-    target_include_directories(lcms2 PUBLIC
-        "${LCMS_DIR}/include"
-        "${LCMS_DIR}/plugins/fast_float/include"
+    target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
+    target_include_directories(lcms2-tev PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
     )
 endif()
 
@@ -262,6 +241,10 @@ set(FMT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include PARENT_SCOPE)
 
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
     set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)
+endif()
+
+if (TEV_SUPPORT_JXL)
+    set(LIBJXL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/lib/include" PARENT_SCOPE)
 endif()
 
 set(NANOGUI_INCLUDE
