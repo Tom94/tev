@@ -137,9 +137,15 @@ if (TEV_USE_LIBHEIF)
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
 
     add_subdirectory(libheif EXCLUDE_FROM_ALL)
-    add_dependencies(heif ${AOM_TARGET_NAME})
-    target_include_directories(heif PRIVATE "${AOM_BINARY_DIR}")
-    target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
+
+    if (TEV_SUPPORT_AVIF)
+        add_dependencies(heif ${AOM_TARGET_NAME})
+        target_include_directories(heif PRIVATE "${AOM_BINARY_DIR}")
+    endif()
+
+    if (TEV_SUPPORT_HEIC)
+        target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
+    endif()
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
 
