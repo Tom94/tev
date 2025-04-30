@@ -27,6 +27,9 @@ if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nanogui/CMakeLists.txt")
     )
 endif()
 
+include(ExternalProject)
+get_cmake_property(IS_MULTI GENERATOR_IS_MULTI_CONFIG)
+
 # Compile nanogui
 set(NANOGUI_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL " " FORCE)
@@ -68,13 +71,32 @@ endif()
 
 # Compile aom (dependency of libheif, which follows)
 if (TEV_SUPPORT_AVIF)
-    set(AOM_TARGET_CPU "generic" CACHE STRING " " FORCE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(ENABLE_DOCS OFF CACHE BOOL " " FORCE)
-    add_subdirectory(aom EXCLUDE_FROM_ALL)
+    set(AOM_TARGET_NAME aom)
+    set(AOM_PREFIX_DIR ${CMAKE_CURRENT_BINARY_DIR}/${AOM_TARGET_NAME})
+    set(AOM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/aom)
+    set(AOM_BINARY_DIR ${AOM_PREFIX_DIR}/src/${AOM_TARGET_NAME}-build)
+    set(AOM_INCLUDE_DIR ${AOM_SOURCE_DIR})
+    # if(MSVC)
+    #     set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom-static${CMAKE_STATIC_LIBRARY_SUFFIX})
+    # else()
+        set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX})
+    # endif()
+    if(IS_MULTI)
+        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/$<CONFIG>/)
+    else()
+        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/)
+    endif()
+    set(AOM_LIBRARY ${AOM_LIB_PREFIX}${AOM_LIB})
 
-    set(AOM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/aom" CACHE PATH " " FORCE)
-    set(AOM_LIBRARY aom)
+    ExternalProject_Add(${AOM_TARGET_NAME}
+        PREFIX ${AOM_PREFIX_DIR}
+        SOURCE_DIR ${AOM_SOURCE_DIR}
+        BINARY_DIR ${AOM_BINARY_DIR}
+        BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target aom
+        CMAKE_ARGS -DAOM_TARGET_CPU=generic -DBUILD_SHARED_LIBS=0 -DENABLE_DOCS=0
+        BUILD_BYPRODUCTS ${AOM_LIBRARY}
+        INSTALL_COMMAND ""
+    )
 endif()
 
 # Compile libde265 (dependency of libheif, which follows)
@@ -115,7 +137,8 @@ if (TEV_USE_LIBHEIF)
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
 
     add_subdirectory(libheif EXCLUDE_FROM_ALL)
-    target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/aom")
+    add_dependencies(heif ${AOM_TARGET_NAME})
+    target_include_directories(heif PRIVATE "${AOM_BINARY_DIR}")
     target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
 
     set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
