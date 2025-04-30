@@ -40,7 +40,10 @@ endif()
 option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 
-set(TEV_USE_LIBHEIF ${TEV_SUPPORT_AVIF} OR ${TEV_SUPPORT_HEIC})
+set(TEV_USE_LIBHEIF OFF)
+if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
+    set(TEV_USE_LIBHEIF ON)
+endif()
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
