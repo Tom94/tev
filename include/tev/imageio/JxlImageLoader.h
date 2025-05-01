@@ -27,7 +27,9 @@ namespace tev {
 
 class JxlImageLoader : public ImageLoader {
 public:
-    Task<std::vector<ImageData>> 
+    JxlImageLoader();
+
+    Task<std::vector<ImageData>>
         load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority, bool applyGainmaps) const override;
 
     std::string name() const override { return "JPEG XL"; }
