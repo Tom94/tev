@@ -25,16 +25,20 @@ using namespace std;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote& amn) {
+Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote* amn) {
     auto size = image.channels[0].size();
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
 
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
-    float headroom = 1.0f;
 
     // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
-    float maker33 = amn.tryGetFloat<float>(33, 0.0f);
-    float maker48 = amn.tryGetFloat<float>(48, 8.0f);
+    float maker33 = 0.0f;
+    float maker48 = 8.0f;
+
+    if (amn) {
+        maker33 = amn->tryGetFloat(33, maker33);
+        maker48 = amn->tryGetFloat(48, maker48);
+    }
 
     float stops;
     if (maker33 < 1.0f) {
@@ -51,7 +55,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
         }
     }
 
-    headroom = pow(2.0f, max(stops, 0.0f));
+    float headroom = pow(2.0f, max(stops, 0.0f));
     tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
 
     co_await ThreadPool::global().parallelForAsync<int>(

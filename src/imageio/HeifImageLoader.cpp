@@ -337,9 +337,7 @@ Task<vector<ImageData>>
             return nullptr;
         }
 
-        if (numMetadataBlocks > 1) {
-            tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
-        }
+        tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
 
         vector<heif_item_id> metadataIDs(numMetadataBlocks);
         heif_image_handle_get_list_of_metadata_block_IDs(handle, "Exif", metadataIDs.data(), numMetadataBlocks);
@@ -440,15 +438,16 @@ Task<vector<ImageData>>
                 auto amn = findAppleMakerNote();
                 if (amn) {
                     tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
-                    co_await applyAppleGainMap(
-                        result.front(), // primary image
-                        auxImgData,
-                        priority,
-                        *amn
-                    );
                 } else {
-                    tlog::warning() << "Skipping gain map application, because no Apple maker note was found.";
+                    tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
                 }
+
+                co_await applyAppleGainMap(
+                    result.front(), // primary image
+                    auxImgData,
+                    priority,
+                    amn.get()
+                );
             }
 
             if (retainAuxLayer) {
