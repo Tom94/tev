@@ -273,6 +273,11 @@ string Image::shortName() const {
 }
 
 bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
+    // Early out if we don't have enough channels to be RGBA
+    if (channelNames.size() < 4) {
+        return false;
+    }
+
     const float* interleavedData = nullptr;
     for (size_t i = 0; i < 4; ++i) {
         const auto* chan = channel(channelNames[i]);
