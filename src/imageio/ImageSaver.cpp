@@ -23,6 +23,10 @@
 #include <tev/imageio/StbiHdrImageSaver.h>
 #include <tev/imageio/StbiLdrImageSaver.h>
 
+#ifdef TEV_SUPPORT_JXL
+#include <tev/imageio/JxlImageSaver.h>
+#endif
+
 #include <vector>
 
 using namespace std;
@@ -34,6 +38,9 @@ const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
         vector<unique_ptr<ImageSaver>> imageSavers;
         imageSavers.emplace_back(new ExrImageSaver());
         imageSavers.emplace_back(new QoiImageSaver());
+#ifdef TEV_SUPPORT_JXL
+        imageSavers.emplace_back(new JxlImageSaver());
+#endif
         imageSavers.emplace_back(new StbiHdrImageSaver());
         imageSavers.emplace_back(new StbiLdrImageSaver());
         return imageSavers;
