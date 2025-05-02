@@ -22,7 +22,6 @@
 #include <tev/imageio/JxlImageLoader.h>
 
 #include <jxl/cms.h>
-#include <jxl/codestream_header.h>
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
 #include <jxl/encode.h>
@@ -126,6 +125,16 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 hasAlpha = info.alpha_bits > 0;
                 hasPremultipliedAlpha = info.alpha_premultiplied > 0;
                 isAnimation = info.have_animation;
+
+                tlog::debug() << fmt::format(
+                    "Image size: {}x{}, channels: {}, alpha: {}, premultiplied alpha: {}, animation: {}",
+                    info.xsize,
+                    info.ysize,
+                    info.num_color_channels,
+                    hasAlpha,
+                    hasPremultipliedAlpha,
+                    isAnimation
+                );
 
                 if (hasAlpha && info.num_extra_channels == 0) {
                     throw runtime_error{"Image has alpha channel, but no extra channels."};
