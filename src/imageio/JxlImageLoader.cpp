@@ -267,7 +267,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         data.hasPremultipliedAlpha = false;
 
                         colorChannelsLoaded = true;
-                    } catch (const exception& e) { throw runtime_error{"Failed to apply ICC color profile: " + string(e.what())}; }
+                    } catch (const exception& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
                 }
 
                 // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in the
