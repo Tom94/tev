@@ -100,6 +100,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     vector<float> pixels;
     bool hasAlpha = false;
     bool hasPremultipliedAlpha = false;
+    bool isAnimation = false;
+    size_t frameCount = 0;
 
     vector<ImageData> result;
     vector<uint8_t> iccProfile;
@@ -123,6 +125,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 hasAlpha = info.alpha_bits > 0;
                 hasPremultipliedAlpha = info.alpha_premultiplied > 0;
+                isAnimation = info.have_animation;
 
                 if (hasAlpha && info.num_extra_channels == 0) {
                     throw runtime_error{"Image has alpha channel, but no extra channels."};
@@ -268,6 +271,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 data.channels = makeNChannels(numColorChannels, size);
                 data.hasPremultipliedAlpha = hasPremultipliedAlpha;
+                if (isAnimation) {
+                    data.partName = fmt::format("frames.{}", frameCount++);
+                }
 
                 bool colorChannelsLoaded = false;
                 if (!iccProfile.empty()) {
