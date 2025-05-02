@@ -127,7 +127,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw runtime_error{"Image has alpha channel, but no extra channels."};
                 }
 
-                format = {info.num_color_channels + info.num_extra_channels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
+                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel)
+                // and all other extra channels to be decoded as separate channels.
+                uint32_t numChannels = info.num_color_channels + (hasAlpha ? 1 : 0);
+                format = {numChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 break;
             }
             case JXL_DEC_COLOR_ENCODING: {
@@ -177,10 +180,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 status = JxlDecoderProcessInput(decoder.get());
                 if (status == JXL_DEC_ERROR) {
                     std::cout << "Failed to process input: " << std::endl;
-                }
-
-                if (pixels.empty()) {
-                    throw runtime_error{"Failed to decode image data."};
                 }
 
                 result.emplace_back();
