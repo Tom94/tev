@@ -81,3 +81,4 @@
 [submodule "dependencies/libjxl"]
 	path = dependencies/libjxl
 	url = https://github.com/libjxl/libjxl
+    shallow = true
