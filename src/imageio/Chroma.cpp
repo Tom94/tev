@@ -150,6 +150,8 @@ Task<void> convertIccToRec709(
     // TODO: differentiate between single channel RGB and gray
     if (numColorChannels == 1) {
         type |= COLORSPACE_SH(PT_GRAY);
+    } else if (numColorChannels == 4) {
+        type |= COLORSPACE_SH(PT_CMYK);
     } else {
         type |= COLORSPACE_SH(PT_RGB);
     }
