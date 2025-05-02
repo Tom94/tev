@@ -273,16 +273,13 @@ string Image::shortName() const {
 }
 
 bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
-    // Early out if we don't have enough channels to be RGBA
-    if (channelNames.size() < 4) {
-        return false;
-    }
-
+    // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
+    // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
     const float* interleavedData = nullptr;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < channelNames.size(); ++i) {
         const auto* chan = channel(channelNames[i]);
         if (!chan) {
-            break;
+            return false;
         }
 
         if (i == 0) {
