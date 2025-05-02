@@ -27,9 +27,6 @@
 #include <jxl/thread_parallel_runner.h>
 #include <jxl/thread_parallel_runner_cxx.h>
 
-#include <lcms2.h>
-#include <lcms2_fast_float.h>
-
 #include <istream>
 #include <vector>
 
@@ -64,14 +61,6 @@ bool isJxlImage(istream& iStream) {
     return result;
 }
 } // namespace
-
-JxlImageLoader::JxlImageLoader() {
-    cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
-        tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
-    });
-
-    cmsPlugin(cmsFastFloatExtensions());
-}
 
 Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority, bool) const {
     if (!isJxlImage(iStream)) {
@@ -192,74 +181,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 throw runtime_error{"Failed to decode JPEG XL image data."};
             }
 
-            cmsHTRANSFORM transform = nullptr;
-            ScopeGuard transformGuard{[transform] {
-                if (transform) {
-                    cmsDeleteTransform(transform);
-                }
-            }};
-
-            if (!iccProfile.empty()) {
-                tlog::debug() << "Found ICC color profile. Attempting to apply...";
-
-                // Create ICC profile from the raw data
-                cmsHPROFILE srcProfile = cmsOpenProfileFromMem(iccProfile.data(), (cmsUInt32Number)iccProfile.size());
-                if (!srcProfile) {
-                    tlog::warning() << "Failed to create ICC profile from raw data.";
-                }
-
-                ScopeGuard srcProfileGuard{[srcProfile] { cmsCloseProfile(srcProfile); }};
-
-                cmsCIExyY D65 = {0.3127, 0.3290, 1.0};
-                cmsCIExyYTRIPLE Rec709Primaries = {
-                    {0.6400, 0.3300, 1.0},
-                    {0.3000, 0.6000, 1.0},
-                    {0.1500, 0.0600, 1.0}
-                };
-
-                cmsToneCurve* linearCurve[3];
-                linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(0, 1.0f);
-
-                cmsHPROFILE rec709Profile = cmsCreateRGBProfile(&D65, &Rec709Primaries, linearCurve);
-
-                if (!rec709Profile) {
-                    tlog::warning() << "Failed to create Rec.709 color profile.";
-                }
-
-                ScopeGuard rec709ProfileGuard{[rec709Profile] { cmsCloseProfile(rec709Profile); }};
-
-                // Create transform from source profile to Rec.709
-                // From the JxlPixelFormat docs:
-                //   Amount of channels available in a pixel buffer.
-                //     1: single-channel data, e.g. grayscale or a single extra channel
-                //     2: single-channel + alpha
-                //     3: trichromatic, e.g. RGB
-                //     4: trichromatic + alpha
-                //
-                cmsUInt32Number type = 0;
-                switch (format.num_channels) {
-                    case 1: type = TYPE_GRAY_FLT; break;
-                    case 2: type = TYPE_GRAYA_FLT; break;
-                    case 3: type = TYPE_RGB_FLT; break;
-                    case 4: type = TYPE_RGBA_FLT; break;
-                    default:
-                        // TODO: support >4 channels gracefully by appending extra channels without any color transform
-                        tlog::warning() << "Unsupported number of channels in JPEG XL image: " << format.num_channels;
-                        break;
-                }
-
-                if (type != 0) {
-                    transform = cmsCreateTransform(srcProfile, type, rec709Profile, TYPE_RGBA_FLT, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE);
-                    if (!transform) {
-                        tlog::warning() << "Failed to create color transform from ICC profile to Rec.709.";
-                    }
-                }
-            }
-
-            if (!transform) {
-                tlog::warning() << "Loading JPEG XL image without color transform. This may result in incorrect colors.";
-            }
-
             result.emplace_back();
             ImageData& data = result.back();
 
@@ -269,55 +190,49 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
             // Create channels
             int numChannels = format.num_channels;
             data.channels = makeNChannels(numChannels, size);
-            int alphaChannel = info.num_color_channels;
+            data.hasPremultipliedAlpha = hasAlphaPremultiplied;
 
-            // lcms can't deal with alpha premultiplication, so we operate on straight colors
-            data.hasPremultipliedAlpha = false;
+            bool channelsLoaded = false;
+            if (!iccProfile.empty()) {
+                tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
-            const size_t n_samples_per_row = size.x() * numChannels;
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                size.y(),
-                [&](size_t y) {
-                    size_t src_offset = y * n_samples_per_row;
+                try {
+                    co_await convertIccToRec709(
+                        iccProfile,
+                        size,
+                        info.num_color_channels,
+                        hasAlpha ? (hasAlphaPremultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                        pixels.data(),
+                        data.channels.front().data(),
+                        priority
+                    );
 
-                    if (transform) {
-                        // This is horrible: apparently jxl's alpha premultiplication is not in linear space, so we need to unmultiply first.
-                        if (hasAlphaPremultiplied) {
-                            for (int x = 0; x < size.x(); ++x) {
-                                const size_t baseIdx = src_offset + x * numChannels;
-                                const float alpha = pixels[baseIdx + alphaChannel];
-                                const float factor = alpha == 0.0f ? 0.0f : 1.0f / alpha;
-                                for (int c = 0; c < numChannels - 1; ++c) {
-                                    pixels[baseIdx + c] *= factor;
-                                }
-                            }
-                        }
+                    // The abover conversion outputs straight alpha, even if its input was premultiplied
+                    data.hasPremultipliedAlpha = false;
 
-                        // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
-                        // So: call cmsDoTransform for each row in parallel.
-                        // NOTE: This code depends on makeNChannels creating RGBA interleaved buffers!
-                        size_t dst_offset = y * (size_t)size.x() * 4;
-                        cmsDoTransform(transform, &pixels[src_offset], &data.channels[0].data()[dst_offset], size.x());
+                    channelsLoaded = true;
+                } catch (const exception& e) { throw runtime_error{"Failed to apply ICC color profile: " + string(e.what())}; }
+            }
 
-                        if (hasAlpha) {
-                            for (int x = 0; x < size.x(); ++x) {
-                                size_t baseIdx = src_offset + x * numChannels;
-                                data.channels[alphaChannel].at({x, (int)y}) = pixels[baseIdx + alphaChannel];
-                            }
-                        }
-                    } else {
+            // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in the
+            // colorspace tev expects: linear sRGB Rec.709.
+            if (!channelsLoaded) {
+                const size_t nSamplesPerRow = size.x() * numChannels;
+                co_await ThreadPool::global().parallelForAsync<size_t>(
+                    0,
+                    size.y(),
+                    [&](size_t y) {
+                        size_t srcOffset = y * nSamplesPerRow;
                         for (int x = 0; x < size.x(); ++x) {
-                            size_t baseIdx = src_offset + x * numChannels;
+                            size_t baseIdx = srcOffset + x * numChannels;
                             for (int c = 0; c < numChannels; ++c) {
                                 data.channels[c].at({x, (int)y}) = pixels[baseIdx + c];
                             }
                         }
-                    }
-                },
-                priority
-            );
-
+                    },
+                    priority
+                );
+            }
         } else if (status == JXL_DEC_FULL_IMAGE) {
             // We've got the full image
             status = JxlDecoderProcessInput(decoder.get());
