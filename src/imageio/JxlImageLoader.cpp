@@ -16,14 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <jxl/encode.h>
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Chroma.h>
 #include <tev/imageio/JxlImageLoader.h>
 
 #include <jxl/cms.h>
+#include <jxl/codestream_header.h>
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
+#include <jxl/encode.h>
 #include <jxl/thread_parallel_runner.h>
 #include <jxl/thread_parallel_runner_cxx.h>
 
@@ -94,11 +96,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
-    JxlPixelFormat format;
     JxlColorEncoding colorEncoding;
     vector<float> pixels;
     bool hasAlpha = false;
-    bool hasAlphaPremultiplied = false;
+    bool hasPremultipliedAlpha = false;
 
     vector<ImageData> result;
     vector<uint8_t> iccProfile;
@@ -121,16 +122,12 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 hasAlpha = info.alpha_bits > 0;
-                hasAlphaPremultiplied = info.alpha_premultiplied > 0;
+                hasPremultipliedAlpha = info.alpha_premultiplied > 0;
 
                 if (hasAlpha && info.num_extra_channels == 0) {
                     throw runtime_error{"Image has alpha channel, but no extra channels."};
                 }
 
-                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel)
-                // and all other extra channels to be decoded as separate channels.
-                uint32_t numChannels = info.num_color_channels + (hasAlpha ? 1 : 0);
-                format = {numChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 break;
             }
             case JXL_DEC_COLOR_ENCODING: {
@@ -167,14 +164,75 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 break;
             }
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
+                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel)
+                // and all other extra channels to be decoded as separate channels.
+                int numColorChannels = info.num_color_channels + (hasAlpha ? 1 : 0);
+                int numExtraChannels = info.num_extra_channels - (hasAlpha ? 1 : 0);
+
+                // Main image buffer & decode setup
+                JxlPixelFormat imageFormat = {(uint32_t)numColorChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 size_t bufferSize;
-                if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(decoder.get(), &format, &bufferSize)) {
+                if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(decoder.get(), &imageFormat, &bufferSize)) {
                     throw runtime_error{"Failed to get output buffer size."};
                 }
 
                 pixels.resize(bufferSize / sizeof(float));
-                if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &format, pixels.data(), bufferSize)) {
+                if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, pixels.data(), bufferSize)) {
                     throw runtime_error{"Failed to set output buffer."};
+                }
+
+                struct ExtraChannelInfo {
+                    string name;
+                    vector<float> data;
+                    uint32_t dimShift = 0; // number of power of 2 stops the channel is downsampled
+                    bool active = false;
+                };
+
+                // Extra channels buffer & decode setup
+                vector<ExtraChannelInfo> extraChannels(numExtraChannels);
+
+                JxlPixelFormat extraChannelFormat = {1, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
+                for (int i = 0; i < numExtraChannels; ++i) {
+                    ExtraChannelInfo& extraChannel = extraChannels[i];
+                    uint32_t extraChannelIdx = i + (hasAlpha ? 1 : 0);
+
+                    JxlExtraChannelInfo extraChannelInfo;
+                    if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), extraChannelIdx, &extraChannelInfo)) {
+                        throw runtime_error{fmt::format("Failed to get extra channel {}'s info.", i)};
+                    }
+
+                    extraChannel.dimShift = extraChannelInfo.dim_shift;
+                    if (extraChannelInfo.name_length == 0) {
+                        extraChannel.name = fmt::format("extra.{}", i);
+                    } else {
+                        extraChannel.name.resize(extraChannelInfo.name_length + 1); // +1 for null terminator
+                        if (JXL_DEC_SUCCESS !=
+                            JxlDecoderGetExtraChannelName(
+                                decoder.get(), extraChannelIdx, extraChannel.name.data(), extraChannel.name.size() + 1
+                            )) {
+                            throw runtime_error{fmt::format("Failed to get extra channel {}'s name.", i)};
+                        }
+                    }
+
+                    // Skip loading of extra channels that don't match the selector entirely
+                    if (!matchesFuzzy(extraChannel.name, channelSelector)) {
+                        continue;
+                    }
+
+                    tlog::debug() << fmt::format("Loading extra channel {}: {}, dim shift: {}", i, extraChannel.name, extraChannel.dimShift);
+
+                    if (JXL_DEC_SUCCESS !=
+                        JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, extraChannelIdx)) {
+                        throw runtime_error{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
+                    }
+
+                    extraChannel.data.resize(bufferSize / sizeof(float));
+                    if (JXL_DEC_SUCCESS !=
+                        JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, extraChannelIdx)) {
+                        throw runtime_error{fmt::format("Failed to set extra channel {}'s buffer.", i)};
+                    }
+
+                    extraChannel.active = true;
                 }
 
                 status = JxlDecoderProcessInput(decoder.get());
@@ -187,11 +245,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
-                int numChannels = format.num_channels;
-                data.channels = makeNChannels(numChannels, size);
-                data.hasPremultipliedAlpha = hasAlphaPremultiplied;
+                data.channels = makeNChannels(numColorChannels, size);
+                data.hasPremultipliedAlpha = hasPremultipliedAlpha;
 
-                bool channelsLoaded = false;
+                bool colorChannelsLoaded = false;
                 if (!iccProfile.empty()) {
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
@@ -200,7 +257,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             iccProfile,
                             size,
                             info.num_color_channels,
-                            hasAlpha ? (hasAlphaPremultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                            hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
                             pixels.data(),
                             data.channels.front().data(),
                             priority
@@ -209,24 +266,49 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         // The abover conversion outputs straight alpha, even if its input was premultiplied
                         data.hasPremultipliedAlpha = false;
 
-                        channelsLoaded = true;
+                        colorChannelsLoaded = true;
                     } catch (const exception& e) { throw runtime_error{"Failed to apply ICC color profile: " + string(e.what())}; }
                 }
 
                 // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in the
                 // colorspace tev expects: linear sRGB Rec.709.
-                if (!channelsLoaded) {
-                    const size_t nSamplesPerRow = size.x() * numChannels;
+                if (!colorChannelsLoaded) {
+                    const size_t nSamplesPerRow = size.x() * numColorChannels;
                     co_await ThreadPool::global().parallelForAsync<size_t>(
                         0,
                         size.y(),
                         [&](size_t y) {
                             size_t srcOffset = y * nSamplesPerRow;
                             for (int x = 0; x < size.x(); ++x) {
-                                size_t baseIdx = srcOffset + x * numChannels;
-                                for (int c = 0; c < numChannels; ++c) {
+                                size_t baseIdx = srcOffset + x * numColorChannels;
+                                for (int c = 0; c < numColorChannels; ++c) {
                                     data.channels[c].at({x, (int)y}) = pixels[baseIdx + c];
                                 }
+                            }
+                        },
+                        priority
+                    );
+                }
+
+                // Load and upscale extra channels if present
+                for (size_t i = 0; i < extraChannels.size(); ++i) {
+                    const ExtraChannelInfo& extraChannel = extraChannels[i];
+                    if (!extraChannel.active) {
+                        continue;
+                    }
+
+                    // Resize the channel to the image size
+                    data.channels.emplace_back(Channel{extraChannel.name, size});
+                    auto& channel = data.channels.back();
+
+                    // Upscale the channel to the image size
+                    co_await ThreadPool::global().parallelForAsync<size_t>(
+                        0,
+                        size.y(),
+                        [&](size_t y) {
+                            size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
+                            for (int x = 0; x < size.x(); ++x) {
+                                channel.at({x, (int)y}) = extraChannel.data[srcOffset + (x >> extraChannel.dimShift)];
                             }
                         },
                         priority
