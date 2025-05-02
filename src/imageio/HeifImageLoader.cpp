@@ -27,9 +27,6 @@
 
 #include <libheif/heif.h>
 
-#include <lcms2.h>
-#include <lcms2_fast_float.h>
-
 #include <libexif/exif-data.h>
 
 using namespace nanogui;
@@ -37,34 +34,9 @@ using namespace std;
 
 namespace tev {
 
-HeifImageLoader::HeifImageLoader() {
-    cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
-        tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
-    });
-
-    cmsPlugin(cmsFastFloatExtensions());
-
-    // ExifLog* exifLog = exif_log_new();
-    // exif_log_set_func(
-    //     exifLog,
-    //     [](ExifLog* log, ExifLogCode code, const char* domain, const char* format, va_list args, void* data) {
-    //         // sprintf into string
-    //         string message;
-    //         message.resize(1024);
-    //         vsnprintf(message.data(), message.size(), format, args);
-    //         switch (code) {
-    //             case EXIF_LOG_CODE_NONE: tlog::error() << message; break;
-    //             case EXIF_LOG_CODE_DEBUG: tlog::error() << message; break;
-    //             case EXIF_LOG_CODE_NO_MEMORY: tlog::error() << message; break;
-    //             case EXIF_LOG_CODE_CORRUPT_DATA: tlog::error() << message; break;
-    //         }
-    //     },
-    //     nullptr
-    // );
-}
-
 Task<vector<ImageData>>
     HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority, bool applyGainmaps) const {
+
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
     uint8_t header[12];
     iStream.read((char*)header, 12);
@@ -135,7 +107,8 @@ Task<vector<ImageData>>
 
         ImageData resultData;
 
-        int numChannels = heif_image_handle_has_alpha_channel(imgHandle) ? 4 : 3;
+        bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
+        int numChannels = hasAlpha ? 4 : 3;
         resultData.hasPremultipliedAlpha = numChannels == 4 && heif_image_handle_is_premultiplied_alpha(imgHandle);
 
         const bool is_little_endian = std::endian::native == std::endian::little;
@@ -166,10 +139,10 @@ Task<vector<ImageData>>
 
         resultData.channels = makeNChannels(numChannels, size, namePrefix);
 
-        auto getCmsTransform = [&imgHandle, &numChannels, &resultData]() {
+        auto tryIccTransform = [&](const vector<uint8_t>& iccProfile) -> Task<void> {
             size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
             if (profileSize == 0) {
-                return (cmsHTRANSFORM) nullptr;
+                throw invalid_argument{"No ICC color profile found."};
             }
 
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
@@ -177,62 +150,11 @@ Task<vector<ImageData>>
             vector<uint8_t> profileData(profileSize);
             if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code == heif_error_Color_profile_does_not_exist) {
-                    return (cmsHTRANSFORM) nullptr;
+                    throw invalid_argument{"ICC color profile does not exist."};
                 }
 
-                tlog::warning() << "Failed to read ICC profile: " << error.message;
-                return (cmsHTRANSFORM) nullptr;
+                throw invalid_argument{fmt::format("Failed to read ICC profile: {}", error.message)};
             }
-
-            // Create ICC profile from the raw data
-            cmsHPROFILE srcProfile = cmsOpenProfileFromMem(profileData.data(), (cmsUInt32Number)profileSize);
-            if (!srcProfile) {
-                tlog::warning() << "Failed to create ICC profile from raw data.";
-                return (cmsHTRANSFORM) nullptr;
-            }
-
-            ScopeGuard srcProfileGuard{[srcProfile] { cmsCloseProfile(srcProfile); }};
-
-            cmsCIExyY D65 = {0.3127, 0.3290, 1.0};
-            cmsCIExyYTRIPLE Rec709Primaries = {
-                {0.6400, 0.3300, 1.0},
-                {0.3000, 0.6000, 1.0},
-                {0.1500, 0.0600, 1.0}
-            };
-
-            cmsToneCurve* linearCurve[3];
-            linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(0, 1.0f);
-
-            cmsHPROFILE rec709Profile = cmsCreateRGBProfile(&D65, &Rec709Primaries, linearCurve);
-
-            if (!rec709Profile) {
-                tlog::warning() << "Failed to create Rec.709 color profile.";
-                return (cmsHTRANSFORM) nullptr;
-            }
-
-            ScopeGuard rec709ProfileGuard{[rec709Profile] { cmsCloseProfile(rec709Profile); }};
-
-            // Create transform from source profile to Rec.709
-            auto type = numChannels == 4 ? (resultData.hasPremultipliedAlpha ? TYPE_RGBA_FLT_PREMUL : TYPE_RGBA_FLT) : TYPE_RGB_FLT;
-            cmsHTRANSFORM transform = cmsCreateTransform(srcProfile, type, rec709Profile, TYPE_RGBA_FLT, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE);
-
-            if (!transform) {
-                tlog::warning() << "Failed to create color transform from ICC profile to Rec.709.";
-                return (cmsHTRANSFORM) nullptr;
-            }
-
-            return transform;
-        };
-
-        // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
-        auto transform = getCmsTransform();
-        if (transform) {
-            tlog::debug() << "Applying ICC color profile.";
-
-            ScopeGuard transformGuard{[transform] { cmsDeleteTransform(transform); }};
-
-            // lcms can't perform alpha premultiplication, so we leave it up to downstream processing
-            resultData.hasPremultipliedAlpha = false;
 
             size_t numPixels = (size_t)size.x() * size.y();
             vector<float> src(numPixels * numChannels);
@@ -247,17 +169,36 @@ Task<vector<ImageData>>
                         const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * samplesPerLine);
                         src[src_offset + x] = (float)typedData[x] * channelScale;
                     }
-
-                    // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
-                    // So: call cmsDoTransform for each row in parallel.
-                    // NOTE: This core depends on makeNChannels creating RGBA interleaved buffers!
-                    size_t dst_offset = y * (size_t)size.x() * 4;
-                    cmsDoTransform(transform, &src[src_offset], &resultData.channels[0].data()[dst_offset], size.x());
                 },
                 priority
             );
 
-            co_return resultData;
+            co_await convertIccToRec709(
+                iccProfile,
+                size,
+                3,
+                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedLinear : EAlphaKind::Straight) : EAlphaKind::None,
+                src.data(),
+                resultData.channels.front().data(),
+                priority
+            );
+        };
+
+        // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
+        size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
+        if (profileSize != 0) {
+            tlog::debug() << "Found ICC color profile. Attempting to apply...";
+            vector<uint8_t> profileData(profileSize);
+            if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
+                if (error.code != heif_error_Color_profile_does_not_exist) {
+                    tlog::warning() << "Failed to read ICC profile: " << error.message;
+                }
+            } else {
+                try {
+                    co_await tryIccTransform(profileData);
+                    co_return resultData;
+                } catch (const exception& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+            }
         }
 
         // Otherwise, assume the image is in Rec.709/sRGB and convert it to linear space, followed by an optional change in color space if

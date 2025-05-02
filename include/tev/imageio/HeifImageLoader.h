@@ -27,8 +27,6 @@ namespace tev {
 
 class HeifImageLoader : public ImageLoader {
 public:
-    HeifImageLoader();
-
     Task<std::vector<ImageData>>
         load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority, bool applyGainmaps) const override;
 
