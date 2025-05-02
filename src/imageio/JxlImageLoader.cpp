@@ -167,7 +167,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel)
                 // and all other extra channels to be decoded as separate channels.
                 int numColorChannels = info.num_color_channels + (hasAlpha ? 1 : 0);
-                int numExtraChannels = info.num_extra_channels - (hasAlpha ? 1 : 0);
+                int numExtraChannels = info.num_extra_channels;
 
                 // Main image buffer & decode setup
                 JxlPixelFormat imageFormat = {(uint32_t)numColorChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
@@ -194,41 +194,62 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 JxlPixelFormat extraChannelFormat = {1, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 for (int i = 0; i < numExtraChannels; ++i) {
                     ExtraChannelInfo& extraChannel = extraChannels[i];
-                    uint32_t extraChannelIdx = i + (hasAlpha ? 1 : 0);
+
+                    auto extraChannelTypeToString = [](JxlExtraChannelType type) {
+                        switch (type) {
+                            case JXL_CHANNEL_ALPHA: return "alpha";
+                            case JXL_CHANNEL_DEPTH: return "depth";
+                            case JXL_CHANNEL_SPOT_COLOR: return "spot_color";
+                            case JXL_CHANNEL_SELECTION_MASK: return "selection_mask";
+                            case JXL_CHANNEL_BLACK: return "black";
+                            case JXL_CHANNEL_CFA: return "cfa";
+                            case JXL_CHANNEL_THERMAL: return "thermal";
+                            case JXL_CHANNEL_RESERVED0: return "reserved0";
+                            case JXL_CHANNEL_RESERVED1: return "reserved1";
+                            case JXL_CHANNEL_RESERVED2: return "reserved2";
+                            case JXL_CHANNEL_RESERVED3: return "reserved3";
+                            case JXL_CHANNEL_RESERVED4: return "reserved4";
+                            case JXL_CHANNEL_RESERVED5: return "reserved5";
+                            case JXL_CHANNEL_RESERVED6: return "reserved6";
+                            case JXL_CHANNEL_RESERVED7: return "reserved7";
+                            case JXL_CHANNEL_UNKNOWN: return "unknown";
+                            case JXL_CHANNEL_OPTIONAL: return "optional";
+                        }
+
+                        return "unknown";
+                    };
 
                     JxlExtraChannelInfo extraChannelInfo;
-                    if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), extraChannelIdx, &extraChannelInfo)) {
+                    if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), i, &extraChannelInfo)) {
                         throw runtime_error{fmt::format("Failed to get extra channel {}'s info.", i)};
                     }
 
                     extraChannel.dimShift = extraChannelInfo.dim_shift;
                     if (extraChannelInfo.name_length == 0) {
-                        extraChannel.name = fmt::format("extra.{}", i);
+                        extraChannel.name = fmt::format("extra.{}.{}", i, extraChannelTypeToString(extraChannelInfo.type));
                     } else {
                         extraChannel.name.resize(extraChannelInfo.name_length + 1); // +1 for null terminator
                         if (JXL_DEC_SUCCESS !=
-                            JxlDecoderGetExtraChannelName(
-                                decoder.get(), extraChannelIdx, extraChannel.name.data(), extraChannel.name.size() + 1
-                            )) {
+                            JxlDecoderGetExtraChannelName(decoder.get(), i, extraChannel.name.data(), extraChannel.name.size() + 1)) {
                             throw runtime_error{fmt::format("Failed to get extra channel {}'s name.", i)};
                         }
                     }
 
-                    // Skip loading of extra channels that don't match the selector entirely
-                    if (!matchesFuzzy(extraChannel.name, channelSelector)) {
+                    // Skip loading of extra channels that don't match the selector entirely. And skip alpha channels, because they're
+                    // already part of the color channels.
+                    if (!matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA) {
                         continue;
                     }
 
                     tlog::debug() << fmt::format("Loading extra channel {}: {}, dim shift: {}", i, extraChannel.name, extraChannel.dimShift);
 
-                    if (JXL_DEC_SUCCESS !=
-                        JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, extraChannelIdx)) {
+                    if (JXL_DEC_SUCCESS != JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, i)) {
                         throw runtime_error{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
                     }
 
                     extraChannel.data.resize(bufferSize / sizeof(float));
                     if (JXL_DEC_SUCCESS !=
-                        JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, extraChannelIdx)) {
+                        JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, i)) {
                         throw runtime_error{fmt::format("Failed to set extra channel {}'s buffer.", i)};
                     }
 
