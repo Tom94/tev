@@ -94,8 +94,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw runtime_error{"Failed to create JPEG XL decoder."};
     }
 
-    // Set up multi-threaded runner
-    auto runner = JxlThreadParallelRunnerMake(nullptr, 16); // ThreadPool::global().threadCount());
+    auto runner = JxlThreadParallelRunnerMake(nullptr, thread::hardware_concurrency());
     if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(decoder.get(), JxlThreadParallelRunner, runner.get())) {
         throw runtime_error{"Failed to set parallel runner for JPEG XL decoder."};
     }
