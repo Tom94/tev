@@ -116,7 +116,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw runtime_error{"Failed to set parallel runner for decoder."};
     }
 
-    if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE)) {
+    if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME)) {
         throw runtime_error{"Failed to subscribe to decoder events."};
     }
 
@@ -136,7 +136,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     JxlBasicInfo info;
     JxlColorSpace colorSpace = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
     vector<float> colorData;
+
     size_t frameCount = 0;
+    string frameName;
 
     vector<ImageData> result;
     vector<uint8_t> iccProfile;
@@ -218,6 +220,32 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 colorSpace = ce.color_space;
                 tlog::debug() << fmt::format("Image color space: {}", jxlToString(colorSpace));
+                break;
+            }
+            case JXL_DEC_FRAME: {
+                size_t frameId = frameCount++;
+
+                JxlFrameHeader frameHeader;
+                if (JXL_DEC_SUCCESS != JxlDecoderGetFrameHeader(decoder.get(), &frameHeader)) {
+                    throw runtime_error{"Failed to get frame header."};
+                }
+
+                if (frameHeader.name_length == 0) {
+                    frameName = fmt::format("frames.{}", frameId);
+                } else {
+                    frameName.resize(frameHeader.name_length + 1); // +1 for null terminator
+                    if (JXL_DEC_SUCCESS != JxlDecoderGetFrameName(decoder.get(), frameName.data(), frameName.size() + 1)) {
+                        throw runtime_error{"Failed to get frame name."};
+                    }
+                }
+
+                tlog::debug() << fmt::format(
+                    "Frame {}: duration={}, is_last={} name={}",
+                    frameId,
+                    frameHeader.duration,
+                    frameHeader.is_last,
+                    frameName
+                );
                 break;
             }
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
@@ -304,7 +332,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 data.channels = makeNChannels(numColorChannels, size);
                 data.hasPremultipliedAlpha = info.alpha_premultiplied;
                 if (info.have_animation) {
-                    data.partName = fmt::format("frames.{}", frameCount++);
+                    data.partName = frameName;
                 }
 
                 bool colorChannelsLoaded = false;
