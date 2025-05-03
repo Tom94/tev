@@ -118,7 +118,12 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         throw invalid_argument{"No decoded image."};
     }
 
-    auto readImage = [priority](uhdr_raw_image_t* image) -> Task<ImageData> {
+    // We can technically obtain an ICC profile via the uhdr API, but it appears to not correspond directly to the color space of the
+    // decoded image with gainmap applied. Hence we will not use the ICC profile for now and instead rely on manual conversion to Rec.709
+    // via simple matrix color transform. (No need for transfer functions, because we're already getting linear colors.)
+    const uhdr_mem_block_t* iccProfile = nullptr; // uhdr_dec_get_icc(decoder);
+
+    auto readImage = [priority](uhdr_raw_image_t* image, const uhdr_mem_block_t* iccProfile) -> Task<ImageData> {
         if (image->fmt != UHDR_IMG_FMT_64bppRGBAHalfFloat) {
             throw invalid_argument{"Decoded image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
         }
@@ -160,27 +165,50 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         // Convert to Rec.709 if necessary
         tlog::debug(fmt::format("Ultra HDR image has color gamut: {}", toString(image->cg)));
 
-        switch (image->cg) {
-            case UHDR_CG_DISPLAY_P3:
-                imageData.toRec709 = convertChromaToRec709({
-                    {{0.6800f, 0.3200f}, {0.2650f, 0.6900f}, {0.1500f, 0.0600f}, {0.31271f, 0.32902f}}
-                });
-                break;
-            case UHDR_CG_BT_2100:
-                imageData.toRec709 = convertChromaToRec709({
-                    {{0.7080f, 0.2920f}, {0.1700f, 0.7970f}, {0.1310f, 0.0460f}, {0.31271f, 0.32902f}}
-                });
-                break;
-            case UHDR_CG_UNSPECIFIED: tlog::warning() << "Ultra HDR image has unspecified color gamut. Assuming BT.709."; break;
-            case UHDR_CG_BT_709: break;
-            default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
+        // If we have an ICC profile, we will use that to convert to Rec.709. Otherwise, we will use the less rich color gamut information.
+        // The offset of 14 bytes in the below check does not come from documentation, but rather was empirically determined by inspecting
+        // the raw data of the ICC profile. The first 14 bytes appear to be a header of some sort.
+        if (iccProfile && iccProfile->data && iccProfile->data_sz > 14) {
+            tlog::warning() << "Found ICC color profile. Attempting to apply... " << iccProfile->data_sz;
+
+            auto channels = makeNChannels(numChannels, size);
+            try {
+                co_await convertIccToLinearSrgbPremultiplied(
+                    vector<uint8_t>((uint8_t*)iccProfile->data + 14, (uint8_t*)iccProfile->data + iccProfile->data_sz - 14),
+                    size,
+                    3,
+                    EAlphaKind::Straight,
+                    imageData.channels.front().data(),
+                    channels.front().data(),
+                    priority
+                );
+
+                swap(imageData.channels, channels);
+                imageData.hasPremultipliedAlpha = true;
+            } catch (const exception& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+        } else {
+            switch (image->cg) {
+                case UHDR_CG_DISPLAY_P3:
+                    imageData.toRec709 = convertChromaToRec709({
+                        {{0.6800f, 0.3200f}, {0.2650f, 0.6900f}, {0.1500f, 0.0600f}, {0.31271f, 0.32902f}}
+                    });
+                    break;
+                case UHDR_CG_BT_2100:
+                    imageData.toRec709 = convertChromaToRec709({
+                        {{0.7080f, 0.2920f}, {0.1700f, 0.7970f}, {0.1310f, 0.0460f}, {0.31271f, 0.32902f}}
+                    });
+                    break;
+                case UHDR_CG_UNSPECIFIED: tlog::warning() << "Ultra HDR image has unspecified color gamut. Assuming BT.709."; break;
+                case UHDR_CG_BT_709: break;
+                default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
+            }
         }
 
         co_return imageData;
     };
 
     vector<ImageData> result;
-    result.emplace_back(co_await readImage(decodedImage));
+    result.emplace_back(co_await readImage(decodedImage, iccProfile));
     co_return result;
 }
 
