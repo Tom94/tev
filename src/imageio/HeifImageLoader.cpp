@@ -173,15 +173,17 @@ Task<vector<ImageData>>
                 priority
             );
 
-            co_await convertIccToRec709(
+            co_await convertIccToLinearSrgbPremultiplied(
                 iccProfile,
                 size,
                 3,
-                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedLinear : EAlphaKind::Straight) : EAlphaKind::None,
+                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
                 src.data(),
                 resultData.channels.front().data(),
                 priority
             );
+
+            resultData.hasPremultipliedAlpha = true;
         };
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.

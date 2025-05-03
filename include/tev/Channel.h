@@ -49,6 +49,7 @@ public:
     );
 
     const std::string& name() const { return mName; }
+    void setName(const std::string& name) { mName = name; }
 
     float eval(nanogui::Vector2i index) const {
         if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {

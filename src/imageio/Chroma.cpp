@@ -110,7 +110,7 @@ struct CmsContext {
     cmsHPROFILE rec709Profile = nullptr;
 };
 
-Task<void> convertIccToRec709(
+Task<void> convertIccToLinearSrgbPremultiplied(
     const vector<uint8_t>& iccProfile,
     const Vector2i& size,
     int numColorChannels,
@@ -119,13 +119,12 @@ Task<void> convertIccToRec709(
     float* __restrict rgbaDst,
     int priority
 ) {
-    if (numColorChannels < 1 || numColorChannels > 3) {
-        throw runtime_error{"Must have 1, 2 or 3 color channels."};
+    if (numColorChannels < 1 || numColorChannels > 4) {
+        throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
     }
 
     static thread_local CmsContext threadCtx;
 
-    // Create ICC profile from the raw data
     cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(threadCtx.ctx, iccProfile.data(), (cmsUInt32Number)iccProfile.size());
     if (!srcProfile) {
         throw runtime_error{"Failed to create ICC profile from raw data."};
@@ -141,9 +140,10 @@ Task<void> convertIccToRec709(
         type |= EXTRA_SH(1);
     }
 
-    // lcms2 can handle linear-space premultiplied alpha, but not gamma-corrected premultiplied alpha. For the latter case, we will manually
-    // unmultiply before the transform.
-    if (alphaKind == EAlphaKind::PremultipliedLinear) {
+    // lcms2 will internally unmultiply linear-space premultiplied alpha after undoing the transfer function (preserving colors of alpha==0
+    // pixels as-is). But in the case of non-linear premultiplied alpha, we have to manually unmultiply before the transform and initialize
+    // the transform for straight alpha.
+    if (alphaKind == EAlphaKind::Premultiplied) {
         type |= PREMUL_SH(1);
     }
 
@@ -161,11 +161,13 @@ Task<void> convertIccToRec709(
         srcProfile,
         type,
         threadCtx.rec709Profile,
+        // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
+        // if we set this as the output type.
         TYPE_RGBA_FLT,
         // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
         // following rendering intent.
         INTENT_RELATIVE_COLORIMETRIC,
-        0
+        alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
     );
 
     if (!transform) {
@@ -181,28 +183,37 @@ Task<void> convertIccToRec709(
         [&](size_t y) {
             size_t srcOffset = y * nSamplesPerRow;
 
-            // This is horrible: apparently jxl's alpha premultiplication is not in linear space, so we need to unmultiply first.
-            if (alphaKind == EAlphaKind::Premultiplied) {
+            // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
+            if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
                     const size_t baseIdx = srcOffset + x * numChannels;
                     const float alpha = src[baseIdx + numColorChannels];
-                    const float factor = alpha == 0.0f ? 0.0f : 1.0f / alpha;
+                    const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
                     for (int c = 0; c < numChannels - 1; ++c) {
                         src[baseIdx + c] *= factor;
                     }
                 }
             }
 
-            // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
-            // So: call cmsDoTransform for each row in parallel.
-            size_t dst_offset = y * (size_t)size.x() * 4;
-            cmsDoTransform(transform, &src[srcOffset], &rgbaDst[dst_offset], size.x());
+            // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads. So:
+            // call cmsDoTransform for each row in parallel.
+            size_t dstOffset = y * (size_t)size.x() * 4;
+            cmsDoTransform(transform, &src[srcOffset], &rgbaDst[dstOffset], size.x());
 
-            // lcms2 does not write the alpha channel into the output buffer, so we need to do that manually.
+            // The output of the cms transform is always in straight alpha, hence we need to premultiply. If the input image had
+            // premultiplied alpha, alpha==0 pixels were preserved as-is, when converting to straight alpha, so we also should not
+            // re-multiply those.
             if (alphaKind != EAlphaKind::None) {
                 for (int x = 0; x < size.x(); ++x) {
-                    size_t baseIdx = srcOffset + x * numChannels;
-                    rgbaDst[dst_offset + x * 4 + 3] = src[baseIdx + numColorChannels];
+                    const size_t baseIdx = dstOffset + x * 4;
+                    float factor = rgbaDst[baseIdx + 3];
+                    if (factor == 0.0f && (alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Premultiplied)) {
+                        factor = 1.0f;
+                    }
+
+                    for (int c = 0; c < 3; ++c) {
+                        rgbaDst[baseIdx + c] *= factor;
+                    }
                 }
             }
         },
