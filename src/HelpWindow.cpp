@@ -226,6 +226,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 #ifdef TEV_SUPPORT_HEIC
     addLibrary(about, "libde265", "Open h.265 video codec implementation.");
 #endif
+#ifdef TEV_SUPPORT_JXL
+    addLibrary(about, "libjxl", "JPEG XL image format library");
+#endif
 #ifdef TEV_USE_LIBHEIF
     addLibrary(about, "libheif", "HEIF and avif file format decoder and encoder");
     addLibrary(about, "Little-CMS", "FOSS CMM engine. Fast transforms between ICC profiles.");
