@@ -21,7 +21,6 @@
 #include <tev/imageio/Chroma.h>
 #include <tev/imageio/JxlImageLoader.h>
 
-#include <jxl/cms.h>
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
 #include <jxl/encode.h>
@@ -89,13 +88,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw runtime_error{"Failed to set input for decoder."};
     }
 
-    if (JXL_DEC_SUCCESS != JxlDecoderSetCms(decoder.get(), *JxlGetDefaultCms())) {
-        throw runtime_error{"Failed to set CMS for decoder."};
-    }
-
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
-    JxlColorEncoding colorEncoding;
     vector<float> pixels;
     bool hasAlpha = false;
     bool hasPremultipliedAlpha = false;
@@ -143,34 +137,35 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 break;
             }
             case JXL_DEC_COLOR_ENCODING: {
-                size_t size = 0;
-                if (JxlDecoderGetICCProfileSize(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &size) !=
-                    JXL_DEC_SUCCESS) {
-                    throw runtime_error{"Failed to get ICC profile size from image."};
-                }
+                JxlColorEncoding ce;
+                if (JXL_DEC_SUCCESS ==
+                        JxlDecoderGetColorAsEncodedProfile(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &ce) &&
+                    ce.color_space == JxlColorSpace::JXL_COLOR_SPACE_XYB) {
+                    // libjxl's docs say that its decover can *always* convert XYB linear sRGB. Hence, if that's the data color space, we
+                    // can skip external color managemenet via icc profile and just set the decoder's output color space to sRGB. For other
+                    // color spaces, conversion ability is not guaranteed (even when enabling decoder color management), so we need to use
+                    // the ICC profile.
+                    iccProfile.clear();
 
-                iccProfile.resize(size);
-                if (JxlDecoderGetColorAsICCProfile(
-                        decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, iccProfile.data(), size
-                    ) != JXL_DEC_SUCCESS) {
-                    throw runtime_error{"Failed to get ICC profile from image."};
-                }
-
-                if (JxlDecoderGetColorAsEncodedProfile(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &colorEncoding) !=
-                    JXL_DEC_SUCCESS) {
-                    tlog::debug() << "Failed to get color encoding from image. Relying purely on ICC profile.";
+                    JxlColorEncodingSetToLinearSRGB(&ce, false /* XYB is never grayscale */);
+                    if (JxlDecoderSetPreferredColorProfile(decoder.get(), &ce) != JXL_DEC_SUCCESS) {
+                        throw runtime_error{"Failed to set up XYB->sRGB conversion."};
+                    }
                 } else {
-                    if (colorEncoding.color_space == JxlColorSpace::JXL_COLOR_SPACE_XYB) {
-                        tlog::warning() << "Image has XYB color space. This might be broken.";
-                        JxlColorEncodingSetToLinearSRGB(&colorEncoding, false /* XYB is never grayscale */);
-
-                        // Clear the ICC profile and instead rely on the jxl decoder to give us linear sRGB
-                        iccProfile.clear();
+                    // The jxl spec says that color space can *always* unambiguously be determined from an ICC color encoding, so we can
+                    // rely on being able to get the ICC profile from the decoder.
+                    size_t size = 0;
+                    if (JXL_DEC_SUCCESS !=
+                        JxlDecoderGetICCProfileSize(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &size)) {
+                        throw runtime_error{"Failed to get ICC profile size from image."};
                     }
 
-                    // Encourage the decoder to use the specified color profile, even if it is the one we just read
-                    if (JxlDecoderSetPreferredColorProfile(decoder.get(), &colorEncoding) != JXL_DEC_SUCCESS) {
-                        throw runtime_error{"Failed to set preferred color profile."};
+                    iccProfile.resize(size);
+                    if (JXL_DEC_SUCCESS !=
+                        JxlDecoderGetColorAsICCProfile(
+                            decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, iccProfile.data(), size
+                        )) {
+                        throw runtime_error{"Failed to get ICC profile from image."};
                     }
                 }
                 break;
