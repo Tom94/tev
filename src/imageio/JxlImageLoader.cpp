@@ -21,7 +21,6 @@
 #include <tev/imageio/Chroma.h>
 #include <tev/imageio/JxlImageLoader.h>
 
-#include <jxl/cms.h>
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
 #include <jxl/encode.h>
@@ -52,6 +51,42 @@ bool isJxlImage(istream& iStream) {
     iStream.seekg(0);
     return result;
 }
+
+string jxlToString(JxlExtraChannelType type) {
+    switch (type) {
+        case JXL_CHANNEL_ALPHA: return "alpha";
+        case JXL_CHANNEL_DEPTH: return "depth";
+        case JXL_CHANNEL_SPOT_COLOR: return "spot_color";
+        case JXL_CHANNEL_SELECTION_MASK: return "selection_mask";
+        case JXL_CHANNEL_BLACK: return "black";
+        case JXL_CHANNEL_CFA: return "cfa";
+        case JXL_CHANNEL_THERMAL: return "thermal";
+        case JXL_CHANNEL_RESERVED0: return "reserved0";
+        case JXL_CHANNEL_RESERVED1: return "reserved1";
+        case JXL_CHANNEL_RESERVED2: return "reserved2";
+        case JXL_CHANNEL_RESERVED3: return "reserved3";
+        case JXL_CHANNEL_RESERVED4: return "reserved4";
+        case JXL_CHANNEL_RESERVED5: return "reserved5";
+        case JXL_CHANNEL_RESERVED6: return "reserved6";
+        case JXL_CHANNEL_RESERVED7: return "reserved7";
+        case JXL_CHANNEL_UNKNOWN: return "unknown";
+        case JXL_CHANNEL_OPTIONAL: return "optional";
+    }
+
+    return "invalid";
+};
+
+string jxlToString(JxlColorSpace type) {
+    switch (type) {
+        case JXL_COLOR_SPACE_GRAY: return "gray";
+        case JXL_COLOR_SPACE_RGB: return "rgb";
+        case JXL_COLOR_SPACE_XYB: return "xyb";
+        case JXL_COLOR_SPACE_UNKNOWN: return "unknown";
+    }
+
+    return "invalid";
+};
+
 } // namespace
 
 Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority, bool) const {
@@ -85,21 +120,22 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw runtime_error{"Failed to subscribe to decoder events."};
     }
 
+    // We expressly don't want the decoder to unpremultiply the alpha channel for us, because this becomes a more and more lossy operation
+    // the more emissive a color is (i.e. as color/alpha approaches inf). If it turns out that the color profile isn't linaer, we will be
+    // forced to unmultiply the alpha channel due to an idiosyncracy in the jxl format where alpha multiplication is defined in non-linear
+    // space.
+    if (JXL_DEC_SUCCESS != JxlDecoderSetUnpremultiplyAlpha(decoder.get(), JXL_FALSE)) {
+        throw runtime_error{"Failed to set unpremultiply alpha."};
+    }
+
     if (JXL_DEC_SUCCESS != JxlDecoderSetInput(decoder.get(), fileData.data(), fileData.size())) {
         throw runtime_error{"Failed to set input for decoder."};
     }
 
-    if (JXL_DEC_SUCCESS != JxlDecoderSetCms(decoder.get(), *JxlGetDefaultCms())) {
-        throw runtime_error{"Failed to set CMS for decoder."};
-    }
-
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
-    JxlColorEncoding colorEncoding;
-    vector<float> pixels;
-    bool hasAlpha = false;
-    bool hasPremultipliedAlpha = false;
-    bool isAnimation = false;
+    JxlColorSpace colorSpace = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
+    vector<float> colorData;
     size_t frameCount = 0;
 
     vector<ImageData> result;
@@ -122,74 +158,84 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw runtime_error{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
                 }
 
-                hasAlpha = info.alpha_bits > 0;
-                hasPremultipliedAlpha = info.alpha_premultiplied > 0;
-                isAnimation = info.have_animation;
-
                 tlog::debug() << fmt::format(
-                    "Image size: {}x{}, channels: {}, alpha: {}, premultiplied alpha: {}, animation: {}",
+                    "Image size: {}x{}, channels: {}, alpha bits: {}, premultiplied alpha: {}, animation: {}",
                     info.xsize,
                     info.ysize,
                     info.num_color_channels,
-                    hasAlpha,
-                    hasPremultipliedAlpha,
-                    isAnimation
+                    info.alpha_bits,
+                    info.alpha_premultiplied,
+                    info.have_animation
                 );
 
-                if (hasAlpha && info.num_extra_channels == 0) {
+                if (info.alpha_bits && info.num_extra_channels == 0) {
                     throw runtime_error{"Image has alpha channel, but no extra channels."};
                 }
 
                 break;
             }
             case JXL_DEC_COLOR_ENCODING: {
-                size_t size = 0;
-                if (JxlDecoderGetICCProfileSize(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &size) !=
-                    JXL_DEC_SUCCESS) {
-                    throw runtime_error{"Failed to get ICC profile size from image."};
+                JxlColorEncoding ce;
+                ce.color_space = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
+
+                // libjxl's docs say that the decoder can always convert to linear sRGB if `info.uses_original_profile` is false.
+                // Furthermore, the XYB color space can also always be converted to linear sRGB by the decoder. Thus, if either of these is
+                // true, leave color space conversion to the decoder.
+                //
+                // While the docs say that JxlColorEncoding should take precedence over ICC profiles if available, the decoder seems to be
+                // unable of correct conversion to linear sRGB in many cases. Thus, we rely on the ICC profile and offload color conversion
+                // external cms when the above 2 conditions aren't met.
+                bool canDecodeToLinearSRGB = !info.uses_original_profile;
+                if (JXL_DEC_SUCCESS ==
+                    JxlDecoderGetColorAsEncodedProfile(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &ce)) {
+                    canDecodeToLinearSRGB = ce.color_space == JxlColorSpace::JXL_COLOR_SPACE_XYB;
                 }
 
-                iccProfile.resize(size);
-                if (JxlDecoderGetColorAsICCProfile(
-                        decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, iccProfile.data(), size
-                    ) != JXL_DEC_SUCCESS) {
-                    throw runtime_error{"Failed to get ICC profile from image."};
-                }
+                if (canDecodeToLinearSRGB) {
+                    iccProfile.clear();
 
-                if (JxlDecoderGetColorAsEncodedProfile(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &colorEncoding) !=
-                    JXL_DEC_SUCCESS) {
-                    tlog::debug() << "Failed to get color encoding from image. Relying purely on ICC profile.";
+                    JxlColorEncodingSetToLinearSRGB(&ce, false /* XYB is never grayscale */);
+                    if (JxlDecoderSetPreferredColorProfile(decoder.get(), &ce) != JXL_DEC_SUCCESS) {
+                        throw runtime_error{"Failed to set up XYB->sRGB conversion."};
+                    }
                 } else {
-                    if (colorEncoding.color_space == JxlColorSpace::JXL_COLOR_SPACE_XYB) {
-                        tlog::warning() << "Image has XYB color space. This might be broken.";
-                        JxlColorEncodingSetToLinearSRGB(&colorEncoding, false /* XYB is never grayscale */);
-
-                        // Clear the ICC profile and instead rely on the jxl decoder to give us linear sRGB
-                        iccProfile.clear();
+                    // The jxl spec says that color space can *always* unambiguously be determined from an ICC color encoding, so we can
+                    // rely on being able to get the ICC profile from the decoder.
+                    size_t size = 0;
+                    if (JXL_DEC_SUCCESS !=
+                        JxlDecoderGetICCProfileSize(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &size)) {
+                        throw runtime_error{"Failed to get ICC profile size from image."};
                     }
 
-                    // Encourage the decoder to use the specified color profile, even if it is the one we just read
-                    if (JxlDecoderSetPreferredColorProfile(decoder.get(), &colorEncoding) != JXL_DEC_SUCCESS) {
-                        throw runtime_error{"Failed to set preferred color profile."};
+                    iccProfile.resize(size);
+                    if (JXL_DEC_SUCCESS !=
+                        JxlDecoderGetColorAsICCProfile(
+                            decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, iccProfile.data(), size
+                        )) {
+                        throw runtime_error{"Failed to get ICC profile from image."};
                     }
                 }
+
+                colorSpace = ce.color_space;
+                tlog::debug() << fmt::format("Image color space: {}", jxlToString(colorSpace));
                 break;
             }
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
-                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel)
-                // and all other extra channels to be decoded as separate channels.
-                int numColorChannels = info.num_color_channels + (hasAlpha ? 1 : 0);
+                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all other
+                // extra channels to be decoded as separate channels.
+                int numColorChannels = info.num_color_channels + (info.alpha_bits ? 1 : 0);
                 int numExtraChannels = info.num_extra_channels;
+
+                size_t bufferSize;
 
                 // Main image buffer & decode setup
                 JxlPixelFormat imageFormat = {(uint32_t)numColorChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
-                size_t bufferSize;
                 if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(decoder.get(), &imageFormat, &bufferSize)) {
                     throw runtime_error{"Failed to get output buffer size."};
                 }
 
-                pixels.resize(bufferSize / sizeof(float));
-                if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, pixels.data(), bufferSize)) {
+                colorData.resize(bufferSize / sizeof(float));
+                if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, colorData.data(), bufferSize)) {
                     throw runtime_error{"Failed to set output buffer."};
                 }
 
@@ -207,30 +253,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 for (int i = 0; i < numExtraChannels; ++i) {
                     ExtraChannelInfo& extraChannel = extraChannels[i];
 
-                    auto extraChannelTypeToString = [](JxlExtraChannelType type) {
-                        switch (type) {
-                            case JXL_CHANNEL_ALPHA: return "alpha";
-                            case JXL_CHANNEL_DEPTH: return "depth";
-                            case JXL_CHANNEL_SPOT_COLOR: return "spot_color";
-                            case JXL_CHANNEL_SELECTION_MASK: return "selection_mask";
-                            case JXL_CHANNEL_BLACK: return "black";
-                            case JXL_CHANNEL_CFA: return "cfa";
-                            case JXL_CHANNEL_THERMAL: return "thermal";
-                            case JXL_CHANNEL_RESERVED0: return "reserved0";
-                            case JXL_CHANNEL_RESERVED1: return "reserved1";
-                            case JXL_CHANNEL_RESERVED2: return "reserved2";
-                            case JXL_CHANNEL_RESERVED3: return "reserved3";
-                            case JXL_CHANNEL_RESERVED4: return "reserved4";
-                            case JXL_CHANNEL_RESERVED5: return "reserved5";
-                            case JXL_CHANNEL_RESERVED6: return "reserved6";
-                            case JXL_CHANNEL_RESERVED7: return "reserved7";
-                            case JXL_CHANNEL_UNKNOWN: return "unknown";
-                            case JXL_CHANNEL_OPTIONAL: return "optional";
-                        }
-
-                        return "unknown";
-                    };
-
                     JxlExtraChannelInfo extraChannelInfo;
                     if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), i, &extraChannelInfo)) {
                         throw runtime_error{fmt::format("Failed to get extra channel {}'s info.", i)};
@@ -238,7 +260,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     extraChannel.dimShift = extraChannelInfo.dim_shift;
                     if (extraChannelInfo.name_length == 0) {
-                        extraChannel.name = fmt::format("extra.{}.{}", i, extraChannelTypeToString(extraChannelInfo.type));
+                        extraChannel.name = fmt::format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
                     } else {
                         extraChannel.name.resize(extraChannelInfo.name_length + 1); // +1 for null terminator
                         if (JXL_DEC_SUCCESS !=
@@ -249,7 +271,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     // Skip loading of extra channels that don't match the selector entirely. And skip alpha channels, because they're
                     // already part of the color channels.
-                    if (!matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA) {
+                    bool skip = !matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA;
+                    if (skip) {
                         continue;
                     }
 
@@ -279,8 +302,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
                 data.channels = makeNChannels(numColorChannels, size);
-                data.hasPremultipliedAlpha = hasPremultipliedAlpha;
-                if (isAnimation) {
+                data.hasPremultipliedAlpha = info.alpha_premultiplied;
+                if (info.have_animation) {
                     data.partName = fmt::format("frames.{}", frameCount++);
                 }
 
@@ -289,18 +312,17 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        co_await convertIccToRec709(
+                        co_await convertIccToLinearSrgbPremultiplied(
                             iccProfile,
                             size,
                             info.num_color_channels,
-                            hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                            pixels.data(),
+                            info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                            colorData.data(),
                             data.channels.front().data(),
                             priority
                         );
 
-                        // The abover conversion outputs straight alpha, even if its input was premultiplied
-                        data.hasPremultipliedAlpha = false;
+                        data.hasPremultipliedAlpha = true;
 
                         colorChannelsLoaded = true;
                     } catch (const exception& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
@@ -318,7 +340,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             for (int x = 0; x < size.x(); ++x) {
                                 size_t baseIdx = srcOffset + x * numColorChannels;
                                 for (int c = 0; c < numColorChannels; ++c) {
-                                    data.channels[c].at({x, (int)y}) = pixels[baseIdx + c];
+                                    data.channels[c].at({x, (int)y}) = colorData[baseIdx + c];
                                 }
                             }
                         },
