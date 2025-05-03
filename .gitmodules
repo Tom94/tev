@@ -81,4 +81,8 @@
 [submodule "dependencies/libjxl"]
 	path = dependencies/libjxl
 	url = https://github.com/libjxl/libjxl
-    shallow = true
+	shallow = true
+[submodule "dependencies/libpng"]
+	path = dependencies/libpng
+	url = https://github.com/pnggroup/libpng
+	shallow = true
