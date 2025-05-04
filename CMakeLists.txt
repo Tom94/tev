@@ -86,10 +86,6 @@ if (MSVC)
     foreach (CompilerFlag ${CompilerFlags})
         string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
     endforeach()
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    if (${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s USE_ZLIB=1 -s DISABLE_EXCEPTION_CATCHING=0")
-    endif()
 endif()
 
 # Prefer libc++ in conjunction with Clang
