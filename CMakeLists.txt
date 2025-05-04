@@ -139,6 +139,7 @@ set(TEV_SOURCES
     include/tev/imageio/GainMap.h src/imageio/GainMap.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
+    include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
     include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp
@@ -233,7 +234,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS clip exif_static nanogui OpenEXR::OpenEXR png_static uhdr)
+set(TEV_LIBS clip exif_static jpeg-turbo nanogui OpenEXR::OpenEXR png_static uhdr)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()

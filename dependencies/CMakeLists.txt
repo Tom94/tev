@@ -223,6 +223,13 @@ ExternalProject_Add(${JPEGTURBO_TARGET_NAME}
     INSTALL_COMMAND ""
 )
 
+add_library(jpeg-turbo INTERFACE IMPORTED GLOBAL)
+add_dependencies(jpeg-turbo ${JPEGTURBO_TARGET_NAME})
+set_target_properties(jpeg-turbo PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${JPEG_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES "${JPEG_LIBRARIES}"
+)
+
 # Compile libultrahdr for HDR JPG support
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
@@ -232,7 +239,6 @@ set(UHDR_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 set(UHDR_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(libultrahdr EXCLUDE_FROM_ALL)
 add_dependencies(uhdr ${JPEGTURBO_TARGET_NAME})
-target_include_directories(uhdr INTERFACE ${JPEG_INCLUDE_DIRS})
 set(JPEG_FOUND FALSE CACHE BOOL " " FORCE) # Prevent find_package from finding libjpeg-turbo in other dependencies
 
 # Compile OpenEXR

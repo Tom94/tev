@@ -1,0 +1,168 @@
+/*
+ * tev -- the EXR viewer
+ *
+ * Copyright (C) 2025 Thomas Müller <contact@tom94.net>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "libexif/exif-byte-order.h"
+#include "tev/Common.h"
+#include <tev/ThreadPool.h>
+#include <tev/imageio/Chroma.h>
+#include <tev/imageio/JpegTurboImageLoader.h>
+
+#include <jpeglib.h>
+
+#include <libexif/exif-data.h>
+
+using namespace nanogui;
+using namespace std;
+
+namespace tev {
+
+Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+    unsigned char header[2] = {0};
+    iStream.read(reinterpret_cast<char*>(header), 2);
+    if (header[0] != 0xFF || header[1] != 0xD8) {
+        throw FormatNotSupported{"File is not a JPEG image."};
+    }
+
+    iStream.clear();
+    iStream.seekg(0);
+
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+
+    cinfo.err = jpeg_std_error(&jerr);
+    jerr.error_exit = [](j_common_ptr cinfo) {
+        char buffer[JMSG_LENGTH_MAX];
+        (*cinfo->err->format_message)(cinfo, buffer);
+        throw LoadError{fmt::format("JPEG error: {}", buffer)};
+    };
+
+    jpeg_create_decompress(&cinfo);
+    ScopeGuard jpegGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
+
+    // Read the entire stream into memory and decompress from there. JPEG does not support streaming decompression from iostreams.
+    iStream.seekg(0, std::ios::end);
+    size_t fileSize = iStream.tellg();
+    iStream.seekg(0, std::ios::beg);
+
+    std::vector<unsigned char> buffer(fileSize);
+    iStream.read(reinterpret_cast<char*>(buffer.data()), fileSize);
+
+    // Set up source manager to read from memory. In the future we might be able to jury-rig this to read directly from the stream.
+    jpeg_mem_src(&cinfo, buffer.data(), buffer.size());
+
+    // Required call before jpeg_read_header for reading metadata
+    jpeg_save_markers(&cinfo, JPEG_APP0 + 2, 0xFFFF); // ICC, ISO
+
+    if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
+        throw LoadError{"Failed to read JPEG header."};
+    }
+
+    // Try to extract an ICC profile for correct color space conversion
+    JOCTET* iccProfile = nullptr;
+    unsigned int iccProfileSize = 0;
+    if (jpeg_read_icc_profile(&cinfo, &iccProfile, &iccProfileSize) == TRUE) {
+        tlog::debug() << fmt::format("Found ICC color profile of size {} bytes", iccProfileSize);
+    }
+
+    // The ICC profile appears to be the only thing that we need to free ourselves. All other jpeg related data is managed by
+    // libjpeg-turbo's memory manager. See libjpeg-turbo/doc/libjpeg.txt
+    ScopeGuard iccGuard{[&]() {
+        if (iccProfile) {
+            free(iccProfile);
+        }
+    }};
+
+    cinfo.quantize_colors = false;
+
+    jpeg_start_decompress(&cinfo);
+
+    Vector2i size{static_cast<int>(cinfo.output_width), static_cast<int>(cinfo.output_height)};
+    if (size.x() == 0 || size.y() == 0) {
+        throw LoadError{"Image has zero pixels."};
+    }
+
+    // JPEG does not support alpha, so all channels are color channels.
+    int numColorChannels = cinfo.output_components;
+    if (numColorChannels != 1 && numColorChannels != 3) {
+        throw LoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
+    }
+
+    tlog::debug() << fmt::format("JPEG image info: {}x{}, {} channels", size.x(), size.y(), numColorChannels);
+
+    // Allocate memory for image data
+    auto numPixels = static_cast<size_t>(size.x()) * size.y();
+    auto numBytesPerPixel = numColorChannels;
+    vector<uint8_t> imageData(numPixels * numBytesPerPixel);
+
+    // Create row pointers for libjpeg and then read image
+    vector<JSAMPROW> rowPointers(size.y());
+    for (int y = 0; y < size.y(); ++y) {
+        rowPointers[y] = &imageData[y * size.x() * numBytesPerPixel];
+    }
+
+    while (cinfo.output_scanline < cinfo.output_height) {
+        jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+    }
+
+    jpeg_finish_decompress(&cinfo);
+
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
+    resultData.channels = makeNChannels(numColorChannels, size);
+    resultData.hasPremultipliedAlpha = false;
+
+    // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG spec)
+    // and convert it to linear space via inverse sRGB transfer function.
+    if (iccProfile) {
+        try {
+            co_await convertIccToLinearSrgbPremultiplied(
+                vector<uint8_t>(iccProfile, iccProfile + iccProfileSize),
+                size,
+                numColorChannels,
+                EAlphaKind::None,
+                EPixelFormat::U8,
+                imageData.data(),
+                resultData.channels.front().data(),
+                priority
+            );
+
+            resultData.hasPremultipliedAlpha = true;
+            co_return result;
+        } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+    }
+
+    const uint8_t* typedData = imageData.data();
+    co_await ThreadPool::global().parallelForAsync<int>(
+        0,
+        size.y(),
+        [&](int y) {
+            for (int x = 0; x < size.x(); ++x) {
+                size_t i = y * (size_t)size.x() + x;
+                size_t baseIdx = i * numColorChannels;
+                for (int c = 0; c < numColorChannels; ++c) {
+                    resultData.channels[c].at({x, y}) = toLinear(typedData[baseIdx + c] / 255.0f);
+                }
+            }
+        },
+        priority
+    );
+
+    co_return result;
+}
+
+} // namespace tev
