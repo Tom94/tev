@@ -155,7 +155,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     iStream.seekg(0, iStream.end);
     size_t dataSize = iStream.tellg();
     if (dataSize < 4) {
-        throw FormatNotSupportedException{"File is too small."};
+        throw FormatNotSupported{"File is too small."};
     }
 
     iStream.clear();
@@ -163,14 +163,14 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     vector<char> data(dataSize);
     iStream.read(data.data(), 4);
     if (data[0] != 'D' || data[1] != 'D' || data[2] != 'S' || data[3] != ' ') {
-        throw FormatNotSupportedException{"File is not a DDS file."};
+        throw FormatNotSupported{"File is not a DDS file."};
     }
 
     iStream.read(data.data() + 4, dataSize - 4);
 
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
-        throw invalid_argument{"Failed to initialize COM."};
+        throw LoadError{"Failed to initialize COM."};
     }
 
     ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
@@ -178,7 +178,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
     if (DirectX::LoadFromDDSMemory(data.data(), dataSize, DirectX::DDS_FLAGS_NONE, &metadata, scratchImage) != S_OK) {
-        throw invalid_argument{"Failed to read DDS file."};
+        throw LoadError{"Failed to read DDS file."};
     }
 
     DXGI_FORMAT format;
@@ -189,14 +189,14 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         case 2: format = DXGI_FORMAT_R32G32_FLOAT; break;
         case 1: format = DXGI_FORMAT_R32_FLOAT; break;
         case 0:
-        default: throw invalid_argument{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
+        default: throw LoadError{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
     }
 
     // Use DirectXTex to either decompress or convert to the target floating point format.
     if (DirectX::IsCompressed(metadata.format)) {
         DirectX::ScratchImage decompImage;
         if (DirectX::Decompress(*scratchImage.GetImage(0, 0, 0), format, decompImage) != S_OK) {
-            throw invalid_argument{"Failed to decompress DDS image."};
+            throw LoadError{"Failed to decompress DDS image."};
         }
         std::swap(scratchImage, decompImage);
     } else if (metadata.format != format) {
@@ -204,7 +204,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         if (DirectX::Convert(
                 *scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage
             ) != S_OK) {
-            throw invalid_argument{"Failed to convert DDS image."};
+            throw LoadError{"Failed to convert DDS image."};
         }
         std::swap(scratchImage, convertedImage);
     }
@@ -216,7 +216,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     auto numPixels = (size_t)metadata.width * metadata.height;
     if (numPixels == 0) {
-        throw invalid_argument{"DDS image has zero pixels."};
+        throw LoadError{"DDS image has zero pixels."};
     }
 
     bool isFloat = DirectX::FormatDataType(metadata.format) == DirectX::FORMAT_TYPE_FLOAT;

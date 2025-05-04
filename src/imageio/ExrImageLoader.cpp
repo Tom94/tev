@@ -171,154 +171,158 @@ private:
 };
 
 Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority, bool) const {
-    if (!isExrImage(iStream)) {
-        throw FormatNotSupportedException{"File is not an EXR image."};
-    }
+    try {
+        if (!isExrImage(iStream)) {
+            throw FormatNotSupported{"File is not an EXR image."};
+        }
 
-    StdIStream stdIStream{iStream, toString(path).c_str()};
-    Imf::MultiPartInputFile multiPartFile{stdIStream};
-    int numParts = multiPartFile.parts();
+        StdIStream stdIStream{iStream, toString(path).c_str()};
+        Imf::MultiPartInputFile multiPartFile{stdIStream};
+        int numParts = multiPartFile.parts();
 
-    if (numParts <= 0) {
-        throw invalid_argument{"EXR image does not contain any parts."};
-    }
+        if (numParts <= 0) {
+            throw LoadError{"EXR image does not contain any parts."};
+        }
 
-    vector<Imf::InputPart> parts;
-    vector<Imf::FrameBuffer> frameBuffers;
+        vector<Imf::InputPart> parts;
+        vector<Imf::FrameBuffer> frameBuffers;
 
-    vector<RawChannel> rawChannels;
+        vector<RawChannel> rawChannels;
 
-    // Load all parts that match the channel selector
-    for (int partIdx = 0; partIdx < numParts; ++partIdx) {
-        Imf::InputPart part{multiPartFile, partIdx};
+        // Load all parts that match the channel selector
+        for (int partIdx = 0; partIdx < numParts; ++partIdx) {
+            Imf::InputPart part{multiPartFile, partIdx};
 
-        const Imf::ChannelList& imfChannels = part.header().channels();
+            const Imf::ChannelList& imfChannels = part.header().channels();
 
-        auto channelName = [&](Imf::ChannelList::ConstIterator c) {
-            string name = c.name();
+            auto channelName = [&](Imf::ChannelList::ConstIterator c) {
+                string name = c.name();
+                if (part.header().hasName()) {
+                    name = part.header().name() + "."s + name;
+                }
+                return name;
+            };
+
+            Imath::Box2i dataWindow = part.header().dataWindow();
+            Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1, dataWindow.max.y - dataWindow.min.y + 1};
+
+            if (size.x() == 0 || size.y() == 0) {
+                tlog::warning() << "EXR part '" << part.header().name() << "' has zero pixels.";
+                continue;
+            }
+
+            bool matched = false;
+            for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
+                string name = channelName(c);
+                if (matchesFuzzy(name, channelSelector)) {
+                    rawChannels.emplace_back(parts.size(), name, c.name(), c.channel(), size);
+                    matched = true;
+                }
+            }
+
+            if (!matched) {
+                continue;
+            }
+
+            parts.emplace_back(part);
+            frameBuffers.emplace_back();
+        }
+
+        if (rawChannels.empty()) {
+            throw LoadError{fmt::format("No channels match '{}'.", channelSelector)};
+        }
+
+        co_await ThreadPool::global().parallelForAsync(0, (int)rawChannels.size(), [&](int i) { rawChannels.at(i).resize(); }, priority);
+
+        for (auto& rawChannel : rawChannels) {
+            size_t partId = rawChannel.partId();
+            rawChannel.registerWith(frameBuffers.at(partId), parts.at(partId).header().dataWindow());
+        }
+
+        vector<ImageData> result;
+
+        // No need for a parallel for loop, because OpenEXR parallelizes internally
+        for (size_t partIdx = 0; partIdx < parts.size(); ++partIdx) {
+            auto& part = parts.at(partIdx);
+
+            result.emplace_back();
+            ImageData& data = result.back();
+
+            Imath::Box2i dataWindow = part.header().dataWindow();
+            Imath::Box2i displayWindow = part.header().displayWindow();
+
+            // EXR's display- and data windows have inclusive upper ends while tev's upper ends are exclusive. This allows easy conversion
+            // from window to size. Hence the +1.
+            data.dataWindow = {
+                {dataWindow.min.x,     dataWindow.min.y    },
+                {dataWindow.max.x + 1, dataWindow.max.y + 1}
+            };
+            data.displayWindow = {
+                {displayWindow.min.x,     displayWindow.min.y    },
+                {displayWindow.max.x + 1, displayWindow.max.y + 1}
+            };
+
+            if (!data.dataWindow.isValid()) {
+                throw LoadError{fmt::format(
+                    "EXR image has invalid data window: [{},{}] - [{},{}]",
+                    data.dataWindow.min.x(),
+                    data.dataWindow.min.y(),
+                    data.dataWindow.max.x(),
+                    data.dataWindow.max.y()
+                )};
+            }
+
+            if (!data.displayWindow.isValid()) {
+                throw LoadError{fmt::format(
+                    "EXR image has invalid display window: [{},{}] - [{},{}]",
+                    data.displayWindow.min.x(),
+                    data.displayWindow.min.y(),
+                    data.displayWindow.max.x(),
+                    data.displayWindow.max.y()
+                )};
+            }
+
+            part.setFrameBuffer(frameBuffers.at(partIdx));
+            part.readPixels(dataWindow.min.y, dataWindow.max.y);
+
+            data.hasPremultipliedAlpha = true;
             if (part.header().hasName()) {
-                name = part.header().name() + "."s + name;
+                data.partName = part.header().name();
             }
-            return name;
-        };
 
-        Imath::Box2i dataWindow = part.header().dataWindow();
-        Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1, dataWindow.max.y - dataWindow.min.y + 1};
-
-        if (size.x() == 0 || size.y() == 0) {
-            tlog::warning() << "EXR part '" << part.header().name() << "' has zero pixels.";
-            continue;
-        }
-
-        bool matched = false;
-        for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-            string name = channelName(c);
-            if (matchesFuzzy(name, channelSelector)) {
-                rawChannels.emplace_back(parts.size(), name, c.name(), c.channel(), size);
-                matched = true;
+            if (Imf::hasChromaticities(part.header())) {
+                auto chroma = Imf::chromaticities(part.header());
+                data.toRec709 = convertChromaToRec709({
+                    {{chroma.red.x, chroma.red.y},
+                     {chroma.green.x, chroma.green.y},
+                     {chroma.blue.x, chroma.blue.y},
+                     {chroma.white.x, chroma.white.y}}
+                });
             }
         }
 
-        if (!matched) {
-            continue;
+        vector<size_t> channelMapping;
+        for (size_t i = 0; i < rawChannels.size(); ++i) {
+            auto& rawChannel = rawChannels.at(i);
+            auto& data = result.at(rawChannel.partId());
+            channelMapping.emplace_back(data.channels.size());
+            data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size()});
         }
 
-        parts.emplace_back(part);
-        frameBuffers.emplace_back();
-    }
-
-    if (rawChannels.empty()) {
-        throw invalid_argument{fmt::format("No channels match '{}'.", channelSelector)};
-    }
-
-    co_await ThreadPool::global().parallelForAsync(0, (int)rawChannels.size(), [&](int i) { rawChannels.at(i).resize(); }, priority);
-
-    for (auto& rawChannel : rawChannels) {
-        size_t partId = rawChannel.partId();
-        rawChannel.registerWith(frameBuffers.at(partId), parts.at(partId).header().dataWindow());
-    }
-
-    vector<ImageData> result;
-
-    // No need for a parallel for loop, because OpenEXR parallelizes internally
-    for (size_t partIdx = 0; partIdx < parts.size(); ++partIdx) {
-        auto& part = parts.at(partIdx);
-
-        result.emplace_back();
-        ImageData& data = result.back();
-
-        Imath::Box2i dataWindow = part.header().dataWindow();
-        Imath::Box2i displayWindow = part.header().displayWindow();
-
-        // EXR's display- and data windows have inclusive upper ends while tev's upper ends are exclusive. This allows easy conversion from
-        // window to size. Hence the +1.
-        data.dataWindow = {
-            {dataWindow.min.x,     dataWindow.min.y    },
-            {dataWindow.max.x + 1, dataWindow.max.y + 1}
-        };
-        data.displayWindow = {
-            {displayWindow.min.x,     displayWindow.min.y    },
-            {displayWindow.max.x + 1, displayWindow.max.y + 1}
-        };
-
-        if (!data.dataWindow.isValid()) {
-            throw invalid_argument{fmt::format(
-                "EXR image has invalid data window: [{},{}] - [{},{}]",
-                data.dataWindow.min.x(),
-                data.dataWindow.min.y(),
-                data.dataWindow.max.x(),
-                data.dataWindow.max.y()
-            )};
+        vector<Task<void>> tasks;
+        for (size_t i = 0; i < rawChannels.size(); ++i) {
+            auto& rawChannel = rawChannels.at(i);
+            tasks.emplace_back(rawChannel.copyTo(result.at(rawChannel.partId()).channels.at(channelMapping.at(i)), priority));
         }
 
-        if (!data.displayWindow.isValid()) {
-            throw invalid_argument{fmt::format(
-                "EXR image has invalid display window: [{},{}] - [{},{}]",
-                data.displayWindow.min.x(),
-                data.displayWindow.min.y(),
-                data.displayWindow.max.x(),
-                data.displayWindow.max.y()
-            )};
+        for (auto& task : tasks) {
+            co_await task;
         }
 
-        part.setFrameBuffer(frameBuffers.at(partIdx));
-        part.readPixels(dataWindow.min.y, dataWindow.max.y);
-
-        data.hasPremultipliedAlpha = true;
-        if (part.header().hasName()) {
-            data.partName = part.header().name();
-        }
-
-        if (Imf::hasChromaticities(part.header())) {
-            auto chroma = Imf::chromaticities(part.header());
-            data.toRec709 = convertChromaToRec709({{
-                {chroma.red.x, chroma.red.y},
-                {chroma.green.x, chroma.green.y},
-                {chroma.blue.x, chroma.blue.y},
-                {chroma.white.x, chroma.white.y}
-            }});
-        }
+        co_return result;
+    } catch (const Iex::BaseExc& e) {
+        // Translate OpenEXR errors to our own error type
+        throw LoadError{e.what()};
     }
-
-    vector<size_t> channelMapping;
-    for (size_t i = 0; i < rawChannels.size(); ++i) {
-        auto& rawChannel = rawChannels.at(i);
-        auto& data = result.at(rawChannel.partId());
-        channelMapping.emplace_back(data.channels.size());
-        data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size()});
-    }
-
-    vector<Task<void>> tasks;
-    for (size_t i = 0; i < rawChannels.size(); ++i) {
-        auto& rawChannel = rawChannels.at(i);
-        tasks.emplace_back(rawChannel.copyTo(result.at(rawChannel.partId()).channels.at(channelMapping.at(i)), priority));
-    }
-
-    for (auto& task : tasks) {
-        co_await task;
-    }
-
-    co_return result;
 }
-
 } // namespace tev

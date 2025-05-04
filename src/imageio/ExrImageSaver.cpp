@@ -78,7 +78,7 @@ void ExrImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
     };
 
     if (nChannels <= 0 || nChannels > 4) {
-        throw invalid_argument{fmt::format("Invalid number of channels {}.", nChannels)};
+        throw SaveError{fmt::format("Invalid number of channels {}.", nChannels)};
     }
 
     Imf::Header header{imageSize.x(), imageSize.y()};

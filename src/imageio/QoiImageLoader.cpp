@@ -34,7 +34,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     string magicString(magic, 4);
 
     if (magicString != "qoif") {
-        throw FormatNotSupportedException{fmt::format("Invalid magic QOI string {}.", magicString)};
+        throw FormatNotSupported{fmt::format("Invalid magic QOI string {}.", magicString)};
     }
 
     iStream.clear();
@@ -50,18 +50,18 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     ScopeGuard decodedDataGuard{[decodedData] { free(decodedData); }};
 
     if (!decodedData) {
-        throw invalid_argument{"Failed to decode data from the QOI format."};
+        throw LoadError{"Failed to decode data from the QOI format."};
     }
 
     Vector2i size{static_cast<int>(desc.width), static_cast<int>(desc.height)};
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        throw invalid_argument{"Image has zero pixels."};
+        throw LoadError{"Image has zero pixels."};
     }
 
     int numChannels = static_cast<int>(desc.channels);
     if (numChannels != 4 && numChannels != 3) {
-        throw invalid_argument{fmt::format("Invalid number of channels {}.", numChannels)};
+        throw LoadError{fmt::format("Invalid number of channels {}.", numChannels)};
     }
 
     vector<ImageData> result(1);

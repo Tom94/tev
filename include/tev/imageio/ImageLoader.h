@@ -32,9 +32,14 @@ namespace tev {
 
 class ImageLoader {
 public:
-    class FormatNotSupportedException : public std::runtime_error {
+    class FormatNotSupported : public std::runtime_error {
     public:
-        FormatNotSupportedException(const std::string& message) : std::runtime_error{message} {}
+        FormatNotSupported(const std::string& message) : std::runtime_error{message} {}
+    };
+
+    class LoadError : public std::runtime_error {
+    public:
+        LoadError(const std::string& message) : std::runtime_error{message} {}
     };
 
     virtual ~ImageLoader() {}

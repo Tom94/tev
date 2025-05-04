@@ -30,7 +30,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     char pf[2];
     iStream.read(pf, 2);
     if (!iStream || pf[0] != 'P' || (pf[1] != 'F' && pf[1] != 'f')) {
-        throw FormatNotSupportedException{"Invalid PFM magic string."};
+        throw FormatNotSupported{"Invalid PFM magic string."};
     }
 
     iStream.clear();
@@ -50,11 +50,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     } else if (magic == "PF4") {
         numChannels = 4;
     } else {
-        throw FormatNotSupportedException{fmt::format("Invalid PFM magic string {}", magic)};
+        throw FormatNotSupported{fmt::format("Invalid PFM magic string {}", magic)};
     }
 
     if (!isfinite(scale) || scale == 0) {
-        throw invalid_argument{fmt::format("Invalid PFM scale {}", scale)};
+        throw LoadError{fmt::format("Invalid PFM scale {}", scale)};
     }
 
     bool isPfmLittleEndian = scale < 0;
@@ -67,7 +67,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        throw invalid_argument{"Image has zero pixels."};
+        throw LoadError{"Image has zero pixels."};
     }
 
     auto numFloats = numPixels * numChannels;
@@ -84,7 +84,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     vector<float> data(numFloats);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
     if (iStream.gcount() < (streamsize)numBytes) {
-        throw invalid_argument{fmt::format("Not sufficient bytes to read ({} vs {})", iStream.gcount(), numBytes)};
+        throw LoadError{fmt::format("Not sufficient bytes to read ({} vs {})", iStream.gcount(), numBytes)};
     }
 
     // Reverse bytes of every float if endianness does not match up with system

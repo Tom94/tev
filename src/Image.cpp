@@ -21,8 +21,6 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/ImageLoader.h>
 
-#include <Iex.h>
-
 #include <GLFW/glfw3.h>
 
 #include <chrono>
@@ -652,7 +650,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         auto start = chrono::system_clock::now();
 
         if (!iStream) {
-            throw invalid_argument{fmt::format("Image {} could not be opened.", path)};
+            throw ImageLoader::LoadError{fmt::format("Image {} could not be opened.", path)};
         }
 
         fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
@@ -671,7 +669,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                 loadMethod = imageLoader->name();
                 imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority, applyGainmaps);
                 break;
-            } catch (const ImageLoader::FormatNotSupportedException& e) {
+            } catch (const ImageLoader::FormatNotSupported& e) {
                 tlog::debug(
                 ) << fmt::format("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
 
@@ -682,7 +680,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         }
 
         if (imageData.empty()) {
-            throw runtime_error{"No suitable image loader found."};
+            throw ImageLoader::LoadError{"No suitable image loader found."};
         }
 
         vector<shared_ptr<Image>> images;
@@ -709,9 +707,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
         co_return images;
-    } catch (const invalid_argument& e) { handleException(e); } catch (const runtime_error& e) {
-        handleException(e);
-    } catch (const Iex::BaseExc& e) { handleException(e); } catch (const future_error& e) {
+    } catch (const ImageLoader::LoadError& e) { handleException(e); } catch (const future_error& e) {
         handleException(e);
     }
 

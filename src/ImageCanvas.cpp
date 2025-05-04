@@ -747,7 +747,7 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
 void ImageCanvas::saveImage(const fs::path& path) const {
     Vector2i imageSize = imageDataSize();
     if (imageSize.x() == 0 || imageSize.y() == 0) {
-        throw runtime_error{"Can not save image with zero pixels."};
+        throw ImageSaver::SaveError{"Can not save image with zero pixels."};
     }
 
     tlog::info() << "Saving currently displayed image as " << path << ".";
@@ -755,7 +755,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
 
     ofstream f{path, ios_base::binary};
     if (!f) {
-        throw invalid_argument{fmt::format("Could not open file {}", path)};
+        throw ImageSaver::SaveError{fmt::format("Could not open file {}", path)};
     }
 
     for (const auto& saver : ImageSaver::getSavers()) {
@@ -781,7 +781,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         return;
     }
 
-    throw invalid_argument{fmt::format("No save routine for image type {} found.", path.extension())};
+    throw ImageSaver::SaveError{fmt::format("No save routine for image type {} found.", path.extension())};
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
