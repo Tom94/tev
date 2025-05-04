@@ -3,7 +3,7 @@
 Image viewer and comparison tool for graphics people.
 
 - __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
-- __Versatile:__ supports many [file formats](#file-formats), tonemapping operators, error metrics, histograms, and pixel peeping.
+- __Versatile:__ supports many [file formats](#file-formats), histograms, pixel-peeping, tonemaps, and error metrics.
 - __HDR:__ displays true HDR on Apple EDR displays.
 
 
@@ -12,29 +12,25 @@ _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Ima
 
 ## Installation
 
-### Windows
+Download __tev__ for
+- __Windows__: [Installer (.msi)](https://github.com/Tom94/tev/releases/latest/download/tev-installer.msi), [portable executable (.exe)](https://github.com/Tom94/tev/releases/latest/download/tev.exe)
+- __Linux__: [AppImage (.appimage)](https://github.com/Tom94/tev/releases/latest/download/tev.appimage) ([how to run AppImages](https://docs.appimage.org/introduction/quickstart.html))
+- __macOS__: [Installer (.dmg)](https://github.com/Tom94/tev/releases/latest/download/tev.dmg)
 
-Download the __tev__ executable (.exe) from the [releases page](https://github.com/Tom94/tev/releases).
+Or install __tev__ via package managers:
 
-### macOS
+#### macOS
 
-Download the __tev__ application (.dmg) from the [releases page](https://github.com/Tom94/tev/releases) or install it via homebrew.
 ```bash
 brew install --cask tev
 ```
 
-### Linux
-
-Download the __tev__ application (.appimage) from the [releases page](https://github.com/Tom94/tev/releases).
-See [how to run AppImages](https://appimage.org/).
-Or use one of the alternative methods below:
-
-Arch Linux (Arch User Repository):
+#### Arch Linux (Arch User Repository)
 ```bash
 yay -S tev
 ```
 
-NixOS:
+#### NixOS
 ```nix
 # In your inputs
 inputs = {
@@ -47,6 +43,16 @@ environment.systemPackages = with pkgs; [
   ...
   inputs.tev.packages.${system}.default
 ];
+```
+
+#### Install from source
+
+Or build and install __tev__ from source. See the [building tev](#building-tev) section below for details. TL;DR:
+```sh
+$ git clone --recursive https://github.com/Tom94/tev
+$ cmake . -B build
+$ cmake --build build --config Release -j
+$ cmake --install build
 ```
 
 ## Usage
