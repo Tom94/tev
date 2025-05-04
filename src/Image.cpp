@@ -151,8 +151,11 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     }
 
     // TODO: Reorient the data window and display window
-    // dataWindow = orientation.apply(dataWindow);
-    // displayWindow = orientation.apply(displayWindow);
+    if (dataWindow.isValid() || displayWindow.isValid()) {
+        throw runtime_error{"Reorienting the data window and display window is not yet implemented."};
+        // dataWindow = orientation.apply(dataWindow);
+        // displayWindow = orientation.apply(displayWindow);
+    }
 
     orientation = EOrientation::TopLeft;
 }
