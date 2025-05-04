@@ -21,6 +21,7 @@
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
+#include <tev/imageio/PngImageLoader.h>
 #include <tev/imageio/QoiImageLoader.h>
 #include <tev/imageio/StbiImageLoader.h>
 #include <tev/imageio/UltraHdrImageLoader.h>
@@ -58,6 +59,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new UltraHdrImageLoader());
+        imageLoaders.emplace_back(new PngImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());
         return imageLoaders;
     };

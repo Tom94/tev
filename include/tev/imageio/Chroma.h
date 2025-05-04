@@ -41,6 +41,13 @@ enum class EAlphaKind {
     None,
 };
 
+enum class EPixelFormat {
+    U8,
+    U16,
+    F16,
+    F32,
+};
+
 // Converts colors from an ICC profile to linear sRGB Rec.709 w/ premultiplied alpha.
 //
 // Note that, because we this function converts potentially larger color gamuts to sRGB, output channels may have values larger than 1 or
@@ -52,7 +59,8 @@ Task<void> convertIccToLinearSrgbPremultiplied(
     const nanogui::Vector2i& size,
     int numColorChannels,
     EAlphaKind alphaKind,
-    float* __restrict src,
+    EPixelFormat pixelFormat,
+    uint8_t* __restrict src,
     float* __restrict rgbaDst,
     int priority
 );

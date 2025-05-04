@@ -47,6 +47,12 @@ if (WIN32)
 
     add_subdirectory(zlib)
     set_property(TARGET zlibstatic PROPERTY FOLDER "dependencies")
+
+    # The following variables are required by dependencies that use zlib
+    set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib" CACHE PATH " " FORCE)
+    set(ZLIB_LIBRARY zlibstatic)
+
+    include_directories(${ZLIB_INCLUDE_DIR} "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 endif()
 
 # Compile DirectXTex (only on Windows)
@@ -119,9 +125,8 @@ if (TEV_SUPPORT_JXL)
     set_property(TARGET jxl jxl_dec jxl_threads PROPERTY FOLDER "dependencies")
 endif()
 
+# Compile libheif
 if (TEV_USE_LIBHEIF)
-    # Compile libheif
-
     # General build config
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
@@ -160,25 +165,32 @@ if (TEV_USE_LIBHEIF)
     if (TEV_SUPPORT_HEIC)
         target_include_directories(heif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/libde265)
     endif()
-
-    # set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
-
-    # Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
-    # comes with lcms2.
-    file(GLOB LCMS_SRCS
-        Little-CMS/src/*.c Little-CMS/include/*.h
-        Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
-    )
-
-    add_library(lcms2-tev STATIC ${LCMS_SRCS})
-
-    # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
-    target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
-    target_include_directories(lcms2-tev PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include
-    )
 endif()
+
+# Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
+# comes with lcms2.
+file(GLOB LCMS_SRCS
+    Little-CMS/src/*.c Little-CMS/include/*.h
+    Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+)
+
+add_library(lcms2-tev STATIC ${LCMS_SRCS})
+
+# We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
+target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
+target_include_directories(lcms2-tev PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include
+)
+
+# Compile libpng
+set(PNG_SHARED OFF CACHE BOOL " " FORCE)
+set(PNG_STATIC ON CACHE BOOL " " FORCE)
+set(PNG_FRAMEWORK OFF CACHE BOOL " " FORCE)
+set(PNG_TESTS OFF CACHE BOOL " " FORCE)
+set(PNG_TOOLS OFF CACHE BOOL " " FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL " " FORCE)
+add_subdirectory(libpng EXCLUDE_FROM_ALL)
 
 # Compile libexif for Exif metadata parsing
 add_subdirectory(libexif EXCLUDE_FROM_ALL)

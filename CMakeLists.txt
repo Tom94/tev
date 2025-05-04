@@ -129,17 +129,6 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
-set(TEV_LIBS clip exif_static uhdr OpenEXR::OpenEXR nanogui)
-if (MSVC)
-    set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
-endif()
-if (TEV_USE_LIBHEIF)
-    set(TEV_LIBS ${TEV_LIBS} lcms2-tev heif)
-endif()
-if (TEV_SUPPORT_JXL)
-    set(TEV_LIBS ${TEV_LIBS} jxl jxl_dec jxl_threads)
-endif()
-
 set(TEV_SOURCES
     include/tev/imageio/AppleMakerNote.h src/imageio/AppleMakerNote.cpp
     include/tev/imageio/Chroma.h src/imageio/Chroma.cpp
@@ -151,6 +140,7 @@ set(TEV_SOURCES
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
+    include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
     include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp
     include/tev/imageio/QoiImageSaver.h src/imageio/QoiImageSaver.cpp
     include/tev/imageio/StbiHdrImageSaver.h src/imageio/StbiHdrImageSaver.cpp
@@ -179,18 +169,18 @@ set(TEV_SOURCES
     src/main.cpp
 )
 if (MSVC)
-    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.rc)
-    set(TEV_SOURCES ${TEV_SOURCES} resources/tev.manifest)
-    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/DdsImageLoader.h src/imageio/DdsImageLoader.cpp)
+    list(APPEND TEV_SOURCES resources/icon.rc)
+    list(APPEND TEV_SOURCES resources/tev.manifest)
+    list(APPEND TEV_SOURCES include/tev/imageio/DdsImageLoader.h src/imageio/DdsImageLoader.cpp)
 elseif (APPLE)
-    set(TEV_SOURCES ${TEV_SOURCES} resources/icon.icns scripts/mac-run-tev.sh)
+    list(APPEND TEV_SOURCES resources/icon.icns scripts/mac-run-tev.sh)
 endif()
 if (TEV_USE_LIBHEIF)
-    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/HeifImageLoader.h src/imageio/HeifImageLoader.cpp)
+    list(APPEND TEV_SOURCES include/tev/imageio/HeifImageLoader.h src/imageio/HeifImageLoader.cpp)
 endif()
 if (TEV_SUPPORT_JXL)
-    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/JxlImageLoader.h src/imageio/JxlImageLoader.cpp)
-    set(TEV_SOURCES ${TEV_SOURCES} include/tev/imageio/JxlImageSaver.h src/imageio/JxlImageSaver.cpp)
+    list(APPEND TEV_SOURCES include/tev/imageio/JxlImageLoader.h src/imageio/JxlImageLoader.cpp)
+    list(APPEND TEV_SOURCES include/tev/imageio/JxlImageSaver.h src/imageio/JxlImageSaver.cpp)
 endif()
 
 add_executable(tev ${TEV_SOURCES})
@@ -226,22 +216,34 @@ set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
 if (APPLE)
     # Starting with macOS Mojave OpenGL is deprecated. tev uses metal by default but can optionally be targeted at GL, so there is no point
     # in keeping the warnings around.
-    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DGL_SILENCE_DEPRECATION)
+    list(APPEND TEV_DEFINITIONS -DGL_SILENCE_DEPRECATION)
 endif()
 if (TEV_SUPPORT_AVIF)
-    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_AVIF)
+    list(APPEND TEV_DEFINITIONS -DTEV_SUPPORT_AVIF)
 endif()
 if (TEV_SUPPORT_HEIC)
-    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_HEIC)
+    list(APPEND TEV_DEFINITIONS -DTEV_SUPPORT_HEIC)
 endif()
 if (TEV_USE_LIBHEIF)
-    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_USE_LIBHEIF)
+    list(APPEND TEV_DEFINITIONS -DTEV_USE_LIBHEIF)
 endif()
 if (TEV_SUPPORT_JXL)
-    set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_JXL)
+    list(APPEND TEV_DEFINITIONS -DTEV_SUPPORT_JXL)
 endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
+
+set(TEV_LIBS clip exif_static nanogui OpenEXR::OpenEXR png_static uhdr)
+if (MSVC)
+    list(APPEND TEV_LIBS zlibstatic DirectXTex wsock32 ws2_32)
+endif()
+if (TEV_USE_LIBHEIF)
+    list(APPEND TEV_LIBS lcms2-tev heif)
+endif()
+if (TEV_SUPPORT_JXL)
+    list(APPEND TEV_LIBS jxl jxl_dec jxl_threads)
+endif()
+
 target_link_libraries(tev ${TEV_LIBS})
 
 # Custom compile options

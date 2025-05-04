@@ -115,12 +115,17 @@ Task<void> convertIccToLinearSrgbPremultiplied(
     const Vector2i& size,
     int numColorChannels,
     EAlphaKind alphaKind,
-    float* __restrict src,
+    EPixelFormat pixelFormat,
+    uint8_t* __restrict src,
     float* __restrict rgbaDst,
     int priority
 ) {
     if (numColorChannels < 1 || numColorChannels > 4) {
         throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
+    }
+
+    if (alphaKind == EAlphaKind::PremultipliedNonlinear && pixelFormat != EPixelFormat::F32) {
+        throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
     }
 
     static thread_local CmsContext threadCtx;
@@ -134,7 +139,29 @@ Task<void> convertIccToLinearSrgbPremultiplied(
 
     // Create transform from source profile to Rec.709
     int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
-    cmsUInt32Number type = FLOAT_SH(1) | CHANNELS_SH(numColorChannels) | BYTES_SH(4);
+    cmsUInt32Number type = CHANNELS_SH(numColorChannels);
+
+    size_t bytesPerPixel = 0;
+    switch (pixelFormat) {
+        case EPixelFormat::U8:
+            type |= BYTES_SH(1);
+            bytesPerPixel = 1;
+            break;
+        case EPixelFormat::U16:
+            type |= BYTES_SH(2);
+            bytesPerPixel = 2;
+            break;
+        case EPixelFormat::F16:
+            type |= BYTES_SH(2) | FLOAT_SH(1);
+            bytesPerPixel = 2;
+            break;
+        case EPixelFormat::F32:
+            type |= BYTES_SH(4) | FLOAT_SH(1);
+            bytesPerPixel = 4;
+            break;
+        default:
+            throw runtime_error{"Unsupported pixel format."};
+    }
 
     if (alphaKind != EAlphaKind::None) {
         type |= EXTRA_SH(1);
@@ -181,16 +208,16 @@ Task<void> convertIccToLinearSrgbPremultiplied(
         0,
         size.y(),
         [&](size_t y) {
-            size_t srcOffset = y * nSamplesPerRow;
+            size_t srcOffset = y * nSamplesPerRow * bytesPerPixel;
 
             // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
                     const size_t baseIdx = srcOffset + x * numChannels;
-                    const float alpha = src[baseIdx + numColorChannels];
+                    const float alpha = *(float*)&src[(baseIdx + numColorChannels) * bytesPerPixel];
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
                     for (int c = 0; c < numChannels - 1; ++c) {
-                        src[baseIdx + c] *= factor;
+                        *(float*)&src[(baseIdx + c) * bytesPerPixel] *= factor;
                     }
                 }
             }

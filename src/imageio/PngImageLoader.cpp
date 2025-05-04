@@ -1,0 +1,225 @@
+/*
+ * tev -- the EXR viewer
+ *
+ * Copyright (C) 2025 Thomas Müller <contact@tom94.net>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <tev/ThreadPool.h>
+#include <tev/imageio/Chroma.h>
+#include <tev/imageio/PngImageLoader.h>
+
+#include <png.h>
+
+using namespace nanogui;
+using namespace std;
+
+namespace tev {
+
+Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+    png_byte header[8];
+    iStream.read(reinterpret_cast<char*>(header), 8);
+    if (png_sig_cmp(header, 0, 8)) {
+        throw FormatNotSupported{"File is not a PNG image."};
+    }
+
+    png_structp pngPtr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+    if (!pngPtr) {
+        throw LoadError{"Failed to create PNG read struct."};
+    }
+
+    png_infop infoPtr = nullptr;
+    ScopeGuard pngGuard{[&]() { png_destroy_read_struct(&pngPtr, &infoPtr, nullptr); }};
+
+    png_set_error_fn(pngPtr, nullptr, [](png_structp png_ptr, png_const_charp error_msg) {
+        throw LoadError{fmt::format("PNG error: {}", error_msg)};
+    }, [](png_structp png_ptr, png_const_charp warning_msg) {
+        tlog::warning() << fmt::format("PNG warning: {}", warning_msg);
+    });
+
+    infoPtr = png_create_info_struct(pngPtr);
+    if (!infoPtr) {
+        throw LoadError{"Failed to create PNG info struct."};
+    }
+
+    png_set_read_fn(pngPtr, &iStream, [](png_structp png_ptr, png_bytep data, png_size_t length) {
+        auto stream = reinterpret_cast<istream*>(png_get_io_ptr(png_ptr));
+        stream->read(reinterpret_cast<char*>(data), length);
+        if (stream->gcount() != static_cast<std::streamsize>(length)) {
+            png_error(png_ptr, "Read error");
+        }
+    });
+
+    // Tell libpng we've already read the signature
+    png_set_sig_bytes(pngPtr, 8);
+
+    png_read_info(pngPtr, infoPtr);
+
+    png_uint_32 width, height;
+    int bitDepth, colorType, interlaceType;
+    png_get_IHDR(pngPtr, infoPtr, &width, &height, &bitDepth, &colorType, &interlaceType, nullptr, nullptr);
+
+    Vector2i size{static_cast<int>(width), static_cast<int>(height)};
+    if (size.x() == 0 || size.y() == 0) {
+        throw LoadError{"Image has zero pixels."};
+    }
+
+    // Determine number of channels
+    int numColorChannels = 0;
+    int numChannels = 0;
+    switch (colorType) {
+        case PNG_COLOR_TYPE_GRAY: numColorChannels = numChannels = 1; break;
+        case PNG_COLOR_TYPE_GRAY_ALPHA:
+            numColorChannels = 1;
+            numChannels = 2;
+            break;
+        case PNG_COLOR_TYPE_RGB: numColorChannels = numChannels = 3; break;
+        case PNG_COLOR_TYPE_RGB_ALPHA:
+            numColorChannels = 3;
+            numChannels = 4;
+            break;
+        case PNG_COLOR_TYPE_PALETTE:
+            png_set_palette_to_rgb(pngPtr);
+            numColorChannels = numChannels = 3;
+            break;
+        default: numColorChannels = numChannels = 0; break;
+    }
+
+    if (interlaceType != PNG_INTERLACE_NONE) {
+        tlog::debug() << "Image is interlaced. Converting to non-interlaced.";
+        png_set_interlace_handling(pngPtr);
+    }
+
+    // Only grayscale and palette images can have a bit depth of 1, 2, or 4. Since we configure the PNG reader to convert palette images to
+    // RGB, we can additionally configure the reader to convert grayscale images with a bit depth of 1, 2, or 4 to 8-bit and then we only
+    // have to deal with either 16-bit or 8-bit images.
+    if (colorType == PNG_COLOR_TYPE_GRAY && bitDepth < 8) {
+        tlog::debug() << fmt::format("Converting grayscale image with bit depth {} to 8-bit.", bitDepth);
+        png_set_expand_gray_1_2_4_to_8(pngPtr);
+    }
+
+    if (png_get_valid(pngPtr, infoPtr, PNG_INFO_tRNS)) {
+        tlog::debug() << "Image has transparency channel. Converting to alpha channel.";
+
+        png_set_tRNS_to_alpha(pngPtr); // Convert transparency to alpha channel
+        if (numColorChannels != numChannels) {
+            throw LoadError{"Image has transparency channel but already has an alpha channel."};
+        }
+
+        numChannels += 1;
+    }
+
+    if (numColorChannels == 0 || numChannels == 0) {
+        throw LoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
+    }
+
+    png_read_update_info(pngPtr, infoPtr);
+
+    bitDepth = png_get_bit_depth(pngPtr, infoPtr);
+    if (bitDepth != 8 && bitDepth != 16) {
+        throw LoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
+    }
+
+    tlog::debug() << fmt::format("PNG image info: {}x{}, {} channels, {} bit depth, color type: {}", size.x(), size.y(), numChannels, bitDepth, colorType);
+
+    // 16 bit channels are big endian by default, but we want little endian on little endian systems
+    if (bitDepth == 16 && std::endian::little == std::endian::native) {
+        png_set_swap(pngPtr);
+    }
+
+    // Allocate memory for image data
+    auto numPixels = static_cast<size_t>(size.x()) * size.y();
+    auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
+    auto numBytesPerPixel = numBytesPerSample * numChannels;
+    vector<png_byte> imageData(numPixels * numBytesPerPixel);
+
+    // Png wants to read into a 2D array of pointers to rows, so we need to create that
+    vector<png_bytep> rowPointers(height);
+    for (png_uint_32 y = 0; y < height; ++y) {
+        rowPointers[y] = &imageData[y * width * numBytesPerPixel];
+    }
+
+    png_read_image(pngPtr, rowPointers.data());
+
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
+    resultData.channels = makeNChannels(numChannels, size);
+    resultData.hasPremultipliedAlpha = false;
+
+    // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the image is in Rec.709/sRGB (per the PNG spec) and
+    // convert it to linear space via inverse sRGB transfer function.
+    png_bytep iccProfile = nullptr;
+    png_charp iccProfileName = nullptr;
+    png_uint_32 iccProfileSize = 0;
+    if (png_get_iCCP(pngPtr, infoPtr, &iccProfileName, nullptr, &iccProfile, &iccProfileSize) == PNG_INFO_iCCP) {
+        tlog::debug() << fmt::format("Found ICC color profile: {}, attempting to apply...", iccProfileName);
+
+        try {
+            co_await convertIccToLinearSrgbPremultiplied(
+                vector<uint8_t>(iccProfile, iccProfile + iccProfileSize),
+                size,
+                numColorChannels,
+                numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
+                bitDepth == 16 ? EPixelFormat::U16 : EPixelFormat::U8,
+                imageData.data(),
+                resultData.channels.front().data(),
+                priority
+            );
+
+            resultData.hasPremultipliedAlpha = true;
+            co_return result;
+        } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+    }
+
+    static const int ALPHA_CHANNEL_INDEX = 3;
+    if (bitDepth == 16) {
+        const uint16_t* typedData = reinterpret_cast<const uint16_t*>(imageData.data());
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                size_t baseIdx = i * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
+                    if (c == ALPHA_CHANNEL_INDEX && numChannels == 4) {
+                        resultData.channels[c].at(i) = (uint16_t)typedData[baseIdx + c] / 65535.0f;
+                    } else {
+                        resultData.channels[c].at(i) = toLinear((uint16_t)typedData[baseIdx + c] / 65535.0f);
+                    }
+                }
+            },
+            priority
+        );
+    } else {
+        const uint8_t* typedData = reinterpret_cast<const uint8_t*>(imageData.data());
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                size_t baseIdx = i * numChannels;
+                for (int c = 0; c < numChannels; ++c) {
+                    if (c == ALPHA_CHANNEL_INDEX && numChannels == 4) {
+                        resultData.channels[c].at(i) = typedData[baseIdx + c] / 255.0f;
+                    } else {
+                        resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c] / 255.0f);
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    co_return result;
+}
+
+} // namespace tev
