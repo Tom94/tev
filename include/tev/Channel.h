@@ -93,6 +93,8 @@ public:
 
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
+    Task<void> reorient(EOrientation orientation, int priority);
+
     void setZero() {
         if (mDataStride == 1) {
             memset(data(), 0, numPixels() * sizeof(float));

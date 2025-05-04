@@ -422,6 +422,38 @@ enum EDirection {
     Backward,
 };
 
+enum EOrientation : int {
+    TopLeft = 1,
+    TopRight = 2,
+    BottomRight = 3,
+    BottomLeft = 4,
+    LeftTop = 5,
+    RightTop = 6,
+    RightBottom = 7,
+    LeftBottom = 8,
+};
+
+inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogui::Vector2i& pos, const nanogui::Vector2i& size) {
+    switch (orientation) {
+        case TopLeft:
+            return pos;
+        case TopRight:
+            return {size.x() - pos.x() - 1, pos.y()};
+        case BottomRight:
+            return {size.x() - pos.x() - 1, size.y() - pos.y() - 1};
+        case BottomLeft:
+            return {pos.x(), size.y() - pos.y() - 1};
+        case LeftTop:
+            return {pos.y(), pos.x()};
+        case RightTop:
+            return {pos.y(), size.x() - pos.x() - 1};
+        case RightBottom:
+            return {size.y() - pos.y() - 1, size.x() - pos.x() - 1};
+        case LeftBottom:
+            return {size.y() - pos.y() - 1, pos.x()};
+    }
+}
+
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
 void redrawWindow();

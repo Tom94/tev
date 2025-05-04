@@ -136,9 +136,34 @@ Task<void> ImageData::unmultiplyAlpha(int priority) {
     hasPremultipliedAlpha = false;
 }
 
+Task<void> ImageData::orientToTopLeft(int priority) {
+    if (orientation == EOrientation::TopLeft) {
+        co_return;
+    }
+
+    vector<Task<void>> tasks;
+    for (auto& c : channels) {
+        tasks.emplace_back(c.reorient(orientation, priority));
+    }
+
+    for (auto& task : tasks) {
+        co_await task;
+    }
+
+    // TODO: Reorient the data window and display window
+    // dataWindow = orientation.apply(dataWindow);
+    // displayWindow = orientation.apply(displayWindow);
+
+    orientation = EOrientation::TopLeft;
+}
+
 Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriority) {
     if (channels.empty()) {
         throw runtime_error{"Image must have at least one channel."};
+    }
+
+    if (orientation != EOrientation::TopLeft) {
+        co_await orientToTopLeft(taskPriority);
     }
 
     // No data window? Default to the channel size

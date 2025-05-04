@@ -89,6 +89,36 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) { at(i) *= other.at(i); }, priority);
 }
 
+Task<void> Channel::reorient(EOrientation orientation, int priority) {
+    if (orientation == EOrientation::TopLeft) {
+        co_return;
+    }
+
+    Channel copy{name() + ".copy", size()};
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        numPixels(),
+        [&](size_t i) { copy.at(i) = at(i); },
+        priority
+    );
+
+    if (orientation >= EOrientation::LeftTop) {
+        swap(mSize.x(), mSize.y());
+    }
+
+    const int width = size().x();
+    co_await ThreadPool::global().parallelForAsync<int>(
+        0,
+        size().y(),
+        [&](int y) {
+            for (int x = 0; x < width; ++x) {
+                at({x, y}) = copy.at(applyOrientation(orientation, {x, y}, size()));
+            }
+        },
+        priority
+    );
+}
+
 void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {
     if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
         tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height
