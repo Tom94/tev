@@ -178,7 +178,8 @@ Task<vector<ImageData>>
                 size,
                 3,
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                src.data(),
+                EPixelFormat::F32,
+                (uint8_t*)src.data(),
                 resultData.channels.front().data(),
                 priority
             );

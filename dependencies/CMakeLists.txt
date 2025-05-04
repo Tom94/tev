@@ -30,24 +30,27 @@ endif()
 include(ExternalProject)
 get_cmake_property(IS_MULTI GENERATOR_IS_MULTI_CONFIG)
 
+# Some dependencies depend on zlib, so we compile it first
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL " " FORCE)
+set(ZLIB_BUILD_SHARED OFF CACHE BOOL " " FORCE)
+set(ZLIB_BUILD_STATIC ON CACHE BOOL " " FORCE)
+set(ZLIB_BUILD_MINIZIP OFF CACHE BOOL " " FORCE)
+set(ZLIB_INSTALL OFF CACHE BOOL " " FORCE)
+
+add_subdirectory(zlib)
+
+# The following variables ensure that find_package can find zlib
+set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib" CACHE PATH " " FORCE)
+set(ZLIB_LIBRARY zlibstatic CACHE STRING " " FORCE)
+set(ZLIB_FOUND TRUE CACHE BOOL " " FORCE)
+add_library(ZLIB::ZLIB ALIAS zlibstatic)
+
 # Compile nanogui
 set(NANOGUI_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL " " FORCE)
 set(NANOGUI_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(nanogui)
-
-set_property(TARGET nanogui glfw glfw_objects PROPERTY FOLDER "dependencies")
-
-# Compile zlib (only on Windows)
-if (WIN32)
-    set(ZLIB_BUILD_STATIC_LIBS ON CACHE BOOL " " FORCE)
-    set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(SKIP_INSTALL_ALL ON CACHE BOOL " " FORCE)
-
-    add_subdirectory(zlib)
-    set_property(TARGET zlibstatic PROPERTY FOLDER "dependencies")
-endif()
 
 # Compile DirectXTex (only on Windows)
 if (WIN32)
@@ -57,7 +60,6 @@ if (WIN32)
     set(BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
 
     add_subdirectory(DirectXTex)
-    set_property(TARGET DirectXTex PROPERTY FOLDER "dependencies")
 endif()
 
 # Compile aom (dependency of libheif, which follows)
@@ -116,12 +118,10 @@ if (TEV_SUPPORT_JXL)
     set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL " " FORCE)
 
     add_subdirectory(libjxl EXCLUDE_FROM_ALL)
-    set_property(TARGET jxl jxl_dec jxl_threads PROPERTY FOLDER "dependencies")
 endif()
 
+# Compile libheif
 if (TEV_USE_LIBHEIF)
-    # Compile libheif
-
     # General build config
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
@@ -160,25 +160,34 @@ if (TEV_USE_LIBHEIF)
     if (TEV_SUPPORT_HEIC)
         target_include_directories(heif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/libde265)
     endif()
-
-    # set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
-
-    # Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
-    # comes with lcms2.
-    file(GLOB LCMS_SRCS
-        Little-CMS/src/*.c Little-CMS/include/*.h
-        Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
-    )
-
-    add_library(lcms2-tev STATIC ${LCMS_SRCS})
-
-    # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
-    target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
-    target_include_directories(lcms2-tev PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include
-    )
 endif()
+
+# Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
+# comes with lcms2.
+file(GLOB LCMS_SRCS
+    Little-CMS/src/*.c Little-CMS/include/*.h
+    Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
+)
+
+add_library(lcms2-tev STATIC ${LCMS_SRCS})
+
+# We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
+target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
+target_include_directories(lcms2-tev PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include
+)
+
+# Compile libpng
+set(PNG_SHARED OFF CACHE BOOL " " FORCE)
+set(PNG_STATIC ON CACHE BOOL " " FORCE)
+set(PNG_FRAMEWORK OFF CACHE BOOL " " FORCE)
+set(PNG_TESTS OFF CACHE BOOL " " FORCE)
+set(PNG_TOOLS OFF CACHE BOOL " " FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL " " FORCE)
+add_subdirectory(libpng EXCLUDE_FROM_ALL)
+add_dependencies(png_static zlibstatic)
+target_include_directories(png_static PRIVATE ${ZLIB_INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/zlib)
 
 # Compile libexif for Exif metadata parsing
 add_subdirectory(libexif EXCLUDE_FROM_ALL)

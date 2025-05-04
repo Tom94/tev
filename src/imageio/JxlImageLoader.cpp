@@ -345,7 +345,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             size,
                             info.num_color_channels,
                             info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                            colorData.data(),
+                            EPixelFormat::F32,
+                            (uint8_t*)colorData.data(),
                             data.channels.front().data(),
                             priority
                         );

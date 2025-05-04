@@ -119,9 +119,9 @@ There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that sh
 
 All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++20-compatible compiler. On Windows, that's Visual Studio 2019 and newer. On Linux and macOS, your system's GCC or Clang compiler is likely sufficient.
 
-Most Linux distributions additionally require _xorg_, _gl_, _zlib_, and _zenity_. On Ubuntu/Debian simply call
+Most Linux distributions additionally require _xorg_, _gl_, and _zenity_. On Ubuntu/Debian simply call
 ```sh
-$ apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
+$ apt-get install cmake xorg-dev libglu1-mesa-dev zenity
 ```
 
 Once all dependencies are installed, begin by cloning this repository and all its submodules using the following command:
@@ -147,10 +147,11 @@ $ cpack --config build/CPackConfig.cmake
 ## File Formats
 
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
-- __HDR__, __PNG__, __JPEG__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
+- __HDR__, __JPEG__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 - __Ultra HDR JPEG__ (e.g. pictures from newer Android phones; via [libultrahdr](https://github.com/google/libultrahdr))
 - __JPEG XL__ (via [libjxl](https://github.com/libjxl/libjxl). Shoutout to [Johnathon Selstad](https://github.com/zalo) for adding support!)
     - Supports both lossy and lossless compression with full HDR capabilities
+- __PNG__ (via [libpng](https://github.com/pnggroup/libpng))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
 - __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)

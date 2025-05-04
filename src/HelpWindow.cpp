@@ -230,9 +230,10 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addLibrary(about, "libjxl", "JPEG XL image format library");
 #endif
 #ifdef TEV_USE_LIBHEIF
-    addLibrary(about, "libheif", "HEIF and avif file format decoder and encoder");
-    addLibrary(about, "Little-CMS", "FOSS CMM engine. Fast transforms between ICC profiles.");
+    addLibrary(about, "libheif", "HEIF and AVIF image format library");
 #endif
+    addLibrary(about, "libpng", "PNG image format library");
+    addLibrary(about, "Little-CMS", "FOSS CMM engine. Fast transforms between ICC profiles.");
     addLibrary(about, "libultrahdr", "Ultra HDR JPEG image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");
