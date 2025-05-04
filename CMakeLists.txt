@@ -133,8 +133,6 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
-add_compile_options(${NANOGUI_NATIVE_FLAGS})
-
 # Enable more warnings
 if (MSVC)
     if (CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
@@ -170,7 +168,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
 endif()
 
-set(TEV_LIBS clip exif_static uhdr OpenEXR::OpenEXR nanogui ${NANOGUI_EXTRA_LIBS})
+set(TEV_LIBS clip exif_static uhdr OpenEXR::OpenEXR nanogui)
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
 endif()
@@ -252,28 +250,16 @@ if (APPLE)
     )
 endif()
 
-include_directories(
-    ${ARGS_INCLUDE}
-    ${CLIP_INCLUDE}
-    ${DIRECTXTEX_INCLUDE}
-    ${EXIF_INCLUDE}
-    ${FMT_INCLUDE}
-    ${GLFW_INCLUDE}
-    ${NANOGUI_EXTRA_INCS}
-    ${NANOGUI_INCLUDE}
-    ${OPENEXR_INCLUDE_DIRS}
-    ${QOI_INCLUDE}
-    ${STB_INCLUDE}
-    ${TINYLOGGER_INCLUDE}
-    ${UTFCPP_INCLUDE}
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+target_include_directories(tev PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    # Header-only dependencies whose include path cannot be inherited from link targets
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/args
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/fmt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/qoi
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/stb
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinylogger
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/utfcpp/source
 )
-if (TEV_USE_LIBHEIF)
-    include_directories(${LIBHEIF_INCLUDE})
-endif()
-if (TEV_SUPPORT_JXL)
-    include_directories(${LIBJXL_INCLUDE_DIR})
-endif()
 
 set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
 if (APPLE)
@@ -294,8 +280,7 @@ if (TEV_SUPPORT_JXL)
     set(TEV_DEFINITIONS ${TEV_DEFINITIONS} -DTEV_SUPPORT_JXL)
 endif()
 
-add_definitions(${TEV_DEFINITIONS} ${NANOGUI_EXTRA_DEFS})
-
+target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 target_link_libraries(tev ${TEV_LIBS})
 
 set(CPACK_PACKAGE_VENDOR "Tom94 (Thomas Müller)")
