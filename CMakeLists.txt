@@ -129,41 +129,6 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
-# Enable more warnings
-if (MSVC)
-    if (CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-        string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    else()
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-    endif()
-
-    # tev uses UTF-8 chars. Specify UTF-8 charset explicitly.
-    # "/utf-8" is equivalent to "/source-charset:utf-8 /execution-charset:utf-8".
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
-
-    # Disable warnings that are present in dependencies and irrelevant to us
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4100") # unused arguments
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd5054") # deprecated enum & operator
-
-    # To allow for wildcards in command-line path arguments on windows,
-    # we need to link to wsetargv.obj
-    # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} wsetargv.obj")
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-parameter")
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register -Wno-deprecated-anon-enum-enum-conversion")
-    endif()
-    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-misleading-indentation -Wno-deprecated-declarations")
-    endif()
-endif()
-
-# Coroutines need to be explicitly enabled on g++
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcoroutines")
-endif()
-
 set(TEV_LIBS clip exif_static uhdr OpenEXR::OpenEXR nanogui)
 if (MSVC)
     set(TEV_LIBS ${TEV_LIBS} zlibstatic DirectXTex wsock32 ws2_32)
@@ -278,6 +243,36 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 target_link_libraries(tev ${TEV_LIBS})
+
+# Custom compile options
+if (MSVC)
+    # Enable more warnings
+    target_compile_options(tev PRIVATE /W4)
+
+    # tev uses UTF-8 chars. Specify UTF-8 charset explicitly.
+    # "/utf-8" is equivalent to "/source-charset:utf-8 /execution-charset:utf-8".
+    target_compile_options(tev PRIVATE /utf-8)
+
+    # To allow for wildcards in command-line path arguments on windows,
+    # we need to link to wsetargv.obj
+    # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
+    target_link_options(tev PRIVATE wsetargv.obj)
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # Enable more warnings
+    target_compile_options(tev PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(tev PRIVATE -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register -Wno-deprecated-anon-enum-enum-conversion)
+    endif()
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        target_compile_options(tev PRIVATE -Wno-misleading-indentation -Wno-deprecated-declarations)
+    endif()
+
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        # Coroutines need to be explicitly enabled on g++
+        target_compile_options(tev PRIVATE -fcoroutines)
+    endif()
+endif()
+
 
 set(CPACK_PACKAGE_VENDOR "Tom94 (Thomas Müller)")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Image viewer and comparison tool for graphics people.")
