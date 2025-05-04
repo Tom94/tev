@@ -37,21 +37,16 @@ set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL " " FORCE)
 set(NANOGUI_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(nanogui)
 
-set(NANOGUI_TARGETS nanogui glfw glfw_objects)
-set_property(TARGET ${NANOGUI_TARGETS} PROPERTY FOLDER "dependencies")
+set_property(TARGET nanogui glfw glfw_objects PROPERTY FOLDER "dependencies")
 
 # Compile zlib (only on Windows)
 if (WIN32)
     set(ZLIB_BUILD_STATIC_LIBS ON CACHE BOOL " " FORCE)
     set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(SKIP_INSTALL_ALL ON CACHE BOOL " " FORCE)
+
     add_subdirectory(zlib)
     set_property(TARGET zlibstatic PROPERTY FOLDER "dependencies")
-
-    set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib" CACHE PATH " " FORCE)
-    set(ZLIB_LIBRARY zlibstatic)
-
-    include_directories(${ZLIB_INCLUDE_DIR} "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 endif()
 
 # Compile DirectXTex (only on Windows)
@@ -60,13 +55,9 @@ if (WIN32)
     set(BUILD_DX11 OFF CACHE BOOL " " FORCE)
     set(BUILD_DX12 OFF CACHE BOOL " " FORCE)
     set(BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
+
     add_subdirectory(DirectXTex)
     set_property(TARGET DirectXTex PROPERTY FOLDER "dependencies")
-
-    set(DIRECTXTEX_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/DirectXTex/DirectXTex" CACHE PATH " " FORCE)
-    set(DIRECTXTEX_LIBRARY DirectXTex)
-
-    include_directories(${DIRECTXTEX_INCLUDE_DIR})
 endif()
 
 # Compile aom (dependency of libheif, which follows)
@@ -76,11 +67,7 @@ if (TEV_SUPPORT_AVIF)
     set(AOM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/aom)
     set(AOM_BINARY_DIR ${AOM_PREFIX_DIR}/src/${AOM_TARGET_NAME}-build)
     set(AOM_INCLUDE_DIR ${AOM_SOURCE_DIR})
-    # if(MSVC)
-    #     set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom-static${CMAKE_STATIC_LIBRARY_SUFFIX})
-    # else()
-        set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX})
-    # endif()
+    set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX})
     if(IS_MULTI)
         set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/$<CONFIG>/)
     else()
@@ -160,17 +147,21 @@ if (TEV_USE_LIBHEIF)
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
 
     add_subdirectory(libheif EXCLUDE_FROM_ALL)
+    target_include_directories(heif INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api
+        ${CMAKE_CURRENT_BINARY_DIR}/libheif
+    )
 
     if (TEV_SUPPORT_AVIF)
         add_dependencies(heif ${AOM_TARGET_NAME})
-        target_include_directories(heif PRIVATE "${AOM_BINARY_DIR}")
+        target_include_directories(heif PRIVATE ${AOM_BINARY_DIR})
     endif()
 
     if (TEV_SUPPORT_HEIC)
-        target_include_directories(heif PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/libde265")
+        target_include_directories(heif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/libde265)
     endif()
 
-    set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
+    # set(LIBHEIF_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api" "${CMAKE_CURRENT_BINARY_DIR}/libheif" PARENT_SCOPE)
 
     # Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
     # comes with lcms2.
@@ -184,8 +175,8 @@ if (TEV_USE_LIBHEIF)
     # We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
     target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
     target_include_directories(lcms2-tev PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include"
+        ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include
     )
 endif()
 
@@ -229,36 +220,5 @@ set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(CLIP_TESTS OFF CACHE BOOL " " FORCE)
 set(CLIP_X11_WITH_PNG OFF CACHE BOOL " " FORCE)
 add_subdirectory(clip)
+target_include_directories(clip INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/clip)
 
-# Manually populate locations of our included dependencies.
-set(ARGS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/args PARENT_SCOPE)
-
-set(CLIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/clip PARENT_SCOPE)
-
-set(EXIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libexif PARENT_SCOPE)
-
-set(FMT_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include PARENT_SCOPE)
-
-if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Emscripten")
-    set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glfw/include PARENT_SCOPE)
-endif()
-
-if (TEV_SUPPORT_JXL)
-    set(LIBJXL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/lib/include" PARENT_SCOPE)
-endif()
-
-set(NANOGUI_INCLUDE
-    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/nanovg/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/include
-PARENT_SCOPE)
-set(NANOGUI_EXTRA_INCS ${NANOGUI_EXTRA_INCS} PARENT_SCOPE)
-set(NANOGUI_EXTRA_DEFS ${NANOGUI_EXTRA_DEFS} PARENT_SCOPE)
-set(NANOGUI_EXTRA_LIBS ${NANOGUI_EXTRA_LIBS} PARENT_SCOPE)
-
-set(QOI_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/qoi PARENT_SCOPE)
-
-set(STB_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/stb PARENT_SCOPE)
-
-set(TINYLOGGER_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/tinylogger PARENT_SCOPE)
-
-set(UTFCPP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/utfcpp/source PARENT_SCOPE)

@@ -17,6 +17,7 @@
  */
 
 #include <tev/ImageViewer.h>
+#include <tev/imageio/ImageSaver.h>
 
 #include <clip.h>
 
@@ -1819,7 +1820,7 @@ void ImageViewer::saveImageDialog() {
 
     try {
         mImageCanvas->saveImage(path);
-    } catch (const invalid_argument& e) {
+    } catch (const ImageSaver::SaveError& e) {
         new MessageDialog(this, MessageDialog::Type::Warning, "Error", fmt::format("Failed to save image: {}", e.what()));
     }
 

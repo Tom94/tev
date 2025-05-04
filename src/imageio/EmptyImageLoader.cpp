@@ -31,7 +31,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     string magicString(magic, 6);
 
     if (!iStream || magicString != "empty ") {
-        throw FormatNotSupportedException{fmt::format("Invalid magic empty string {}.", magic)};
+        throw FormatNotSupported{fmt::format("Invalid magic empty string {}.", magic)};
     }
 
     Vector2i size;
@@ -40,7 +40,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        throw invalid_argument{"Image has zero pixels."};
+        throw LoadError{"Image has zero pixels."};
     }
 
     vector<ImageData> result(1);

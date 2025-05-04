@@ -57,7 +57,7 @@ static string toString(uhdr_color_gamut_t cg) {
 
 Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool applyGainmaps) const {
     if (!applyGainmaps) {
-        throw FormatNotSupportedException{"Ultra HDR images must have gainmaps applied."};
+        throw FormatNotSupported{"Ultra HDR images must have gainmaps applied."};
     }
 
     iStream.seekg(0, ios_base::end);
@@ -66,21 +66,21 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     iStream.seekg(0);
 
     if (fileSize < 3) {
-        throw FormatNotSupportedException{"File is too small."};
+        throw FormatNotSupported{"File is too small."};
     }
 
     vector<char> buffer(fileSize);
     iStream.read(buffer.data(), 3);
 
     if ((uint8_t)buffer[0] != 0xFF || (uint8_t)buffer[1] != 0xD8 || (uint8_t)buffer[2] != 0xFF) {
-        throw FormatNotSupportedException{"File is not a JPEG."};
+        throw FormatNotSupported{"File is not a JPEG."};
     }
 
     iStream.read(buffer.data() + 3, fileSize - 3);
 
     auto decoder = uhdr_create_decoder();
     if (!decoder) {
-        throw invalid_argument{"Could not create UltraHDR decoder."};
+        throw LoadError{"Could not create UltraHDR decoder."};
     }
 
     ScopeGuard decoderGuard{[decoder] { uhdr_release_decoder(decoder); }};
@@ -94,28 +94,28 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     uhdrImage.range = UHDR_CR_UNSPECIFIED;
 
     if (auto status = uhdr_dec_set_image(decoder, &uhdrImage); !isOkay(status)) {
-        throw invalid_argument{fmt::format("Failed to set image: {}", toString(status))};
+        throw LoadError{fmt::format("Failed to set image: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_set_out_img_format(decoder, UHDR_IMG_FMT_64bppRGBAHalfFloat); !isOkay(status)) {
-        throw invalid_argument{fmt::format("Failed to set output format: {}", toString(status))};
+        throw LoadError{fmt::format("Failed to set output format: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_set_out_color_transfer(decoder, UHDR_CT_LINEAR); !isOkay(status)) {
-        throw invalid_argument{fmt::format("Failed to set output color transfer: {}", toString(status))};
+        throw LoadError{fmt::format("Failed to set output color transfer: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_probe(decoder); !isOkay(status)) {
-        throw FormatNotSupportedException{fmt::format("Failed to probe: {}", toString(status))};
+        throw FormatNotSupported{fmt::format("Failed to probe: {}", toString(status))};
     }
 
     if (auto status = uhdr_decode(decoder); !isOkay(status)) {
-        throw invalid_argument{fmt::format("Failed to decode: {}", toString(status))};
+        throw LoadError{fmt::format("Failed to decode: {}", toString(status))};
     }
 
     uhdr_raw_image_t* decodedImage = uhdr_get_decoded_image(decoder);
     if (!decodedImage) {
-        throw invalid_argument{"No decoded image."};
+        throw LoadError{"No decoded image."};
     }
 
     // We can technically obtain an ICC profile via the uhdr API, but it appears to not correspond directly to the color space of the
@@ -125,12 +125,12 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
     auto readImage = [priority](uhdr_raw_image_t* image, const uhdr_mem_block_t* iccProfile) -> Task<ImageData> {
         if (image->fmt != UHDR_IMG_FMT_64bppRGBAHalfFloat) {
-            throw invalid_argument{"Decoded image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
+            throw LoadError{"Decoded image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
         }
 
         Vector2i size = {(int)image->w, (int)image->h};
         if (size.x() <= 0 || size.y() <= 0) {
-            throw invalid_argument{"Invalid image size."};
+            throw LoadError{"Invalid image size."};
         }
 
         const int numChannels = 4;
@@ -185,7 +185,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
                 swap(imageData.channels, channels);
                 imageData.hasPremultipliedAlpha = true;
-            } catch (const exception& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
         } else {
             switch (image->cg) {
                 case UHDR_CG_DISPLAY_P3:
