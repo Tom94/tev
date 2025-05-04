@@ -20,6 +20,7 @@
 #include <tev/imageio/EmptyImageLoader.h>
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
+#include <tev/imageio/JpegTurboImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>
 #include <tev/imageio/QoiImageLoader.h>
@@ -58,7 +59,10 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new JxlImageLoader());
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
+        // UltraHdr must come before JpegTurbo, because it is meant to load specially tagged JPEG files. Those would be loaded without HDR
+        // feature by JpegTurbo otherwise. JPEGs without HDR gainmaps will be skipped by UltraHdr and then loaded by JpegTurbo.
         imageLoaders.emplace_back(new UltraHdrImageLoader());
+        imageLoaders.emplace_back(new JpegTurboImageLoader());
         imageLoaders.emplace_back(new PngImageLoader());
         imageLoaders.emplace_back(new StbiImageLoader());
         return imageLoaders;

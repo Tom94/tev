@@ -227,6 +227,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addLibrary(about, "libde265", "Open h.265 video codec implementation.");
 #endif
 #ifdef TEV_SUPPORT_JXL
+    addLibrary(about, "libjpeg-turbo", "Fast JPEG image format library");
     addLibrary(about, "libjxl", "JPEG XL image format library");
 #endif
 #ifdef TEV_USE_LIBHEIF

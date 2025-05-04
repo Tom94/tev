@@ -3,9 +3,9 @@
 Image viewer and comparison tool for graphics people.
 
 - __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
-- __Versatile:__ supports many [file formats](#file-formats), histograms, pixel-peeping, tonemaps, and error metrics.
+- __Accurate:__ understands ICC color profiles and HDR. Displays everything in linear sRGB/Rec.709.
+- __Versatile:__ supports many [file formats](#file-formats), histograms, pixel-peeping, tonemaps, error metrics, etc.
 - __HDR:__ displays true HDR on Apple EDR displays.
-
 
 ![Screenshot](resources/screenshot.png)
 _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
@@ -147,10 +147,10 @@ $ cpack --config build/CPackConfig.cmake
 ## File Formats
 
 - __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
-- __HDR__, __JPEG__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 - __Ultra HDR JPEG__ (e.g. pictures from newer Android phones; via [libultrahdr](https://github.com/google/libultrahdr))
 - __JPEG XL__ (via [libjxl](https://github.com/libjxl/libjxl). Shoutout to [Johnathon Selstad](https://github.com/zalo) for adding support!)
     - Supports both lossy and lossless compression with full HDR capabilities
+- __JPEG__ (via [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo))
 - __PNG__ (via [libpng](https://github.com/pnggroup/libpng))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
 - __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
@@ -158,6 +158,7 @@ $ cpack --config build/CPackConfig.cmake
     - Supports BC1-BC7 compressed formats.
 - __AVIF__ (via [aom](https://aomedia.googlesource.com/aom)+[libheif](https://github.com/strukturag/libheif))
 - __HEIC__ (e.g. pictures from iPhones; via [libde265](https://github.com/strukturag/libde265)+[libheif](https://github.com/strukturag/libheif); disabled in binary release. You must build __tev__ yourself with the `TEV_SUPPORT_HEIC` CMake option. Check patent laws in your juristiction before enabling this feature.)
+- __HDR__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 
 ## License
 

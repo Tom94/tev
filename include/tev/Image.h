@@ -50,7 +50,8 @@ struct ImageData {
     std::vector<Channel> channels;
     std::vector<std::string> layers;
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
-    bool hasPremultipliedAlpha;
+    bool hasPremultipliedAlpha = false;
+    EOrientation orientation = EOrientation::TopLeft;
 
     Box2i dataWindow;
     Box2i displayWindow;
@@ -71,6 +72,8 @@ struct ImageData {
 
     Task<void> multiplyAlpha(int priority);
     Task<void> unmultiplyAlpha(int priority);
+
+    Task<void> orientToTopLeft(int priority);
 
     Task<void> ensureValid(const std::string& channelSelector, int taskPriority);
 
