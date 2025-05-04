@@ -113,9 +113,9 @@ There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that sh
 
 All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++20-compatible compiler. On Windows, that's Visual Studio 2019 and newer. On Linux and macOS, your system's GCC or Clang compiler is likely sufficient.
 
-Most Linux distributions additionally require _xorg_, _gl_, _zlib_, and _zenity_. On Ubuntu/Debian simply call
+Most Linux distributions additionally require _xorg_, _gl_, and _zenity_. On Ubuntu/Debian simply call
 ```sh
-$ apt-get install cmake xorg-dev libglu1-mesa-dev zlib1g-dev zenity
+$ apt-get install cmake xorg-dev libglu1-mesa-dev zenity
 ```
 
 Once all dependencies are installed, begin by cloning this repository and all its submodules using the following command:

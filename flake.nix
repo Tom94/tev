@@ -33,7 +33,6 @@
             xorg.libXi
             xorg.libXinerama
             xorg.libXrandr
-            zlib
           ];
 
         # Common build inputs shared between dev shell and build

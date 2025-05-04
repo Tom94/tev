@@ -235,7 +235,7 @@ target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
 set(TEV_LIBS clip exif_static nanogui OpenEXR::OpenEXR png_static uhdr)
 if (MSVC)
-    list(APPEND TEV_LIBS zlibstatic DirectXTex wsock32 ws2_32)
+    list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
 if (TEV_USE_LIBHEIF)
     list(APPEND TEV_LIBS lcms2-tev heif)
@@ -274,7 +274,6 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
         target_compile_options(tev PRIVATE -fcoroutines)
     endif()
 endif()
-
 
 set(CPACK_PACKAGE_VENDOR "Tom94 (Thomas Müller)")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Image viewer and comparison tool for graphics people.")
