@@ -19,11 +19,10 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 
 #include <jpeglib.h>
-
-#include <libexif/exif-data.h>
 
 using namespace nanogui;
 using namespace std;
@@ -31,29 +30,21 @@ using namespace std;
 namespace tev {
 
 namespace {
-// Taken from jpegdecoderhelper in libultrahdr per their Apache 2.0 license.
+// Taken from jpegdecoderhelper in libultrahdr per their Apache 2.0 license and shortened.
 // https://github.com/google/libultrahdr/blob/6db3a83ee2b1f79850f3f597172289808dc6a331/lib/src/jpegdecoderhelper.cpp#L125
 void jpeg_extract_marker_payload(
     const j_decompress_ptr cinfo,
     const uint32_t marker_code,
     const uint8_t* marker_fourcc_code,
     const uint32_t fourcc_length,
-    std::vector<JOCTET>& destination,
-    long& markerPayloadOffsetRelativeToSourceBuffer
+    std::vector<JOCTET>& destination
 ) {
-    unsigned int pos = 2; /* position after reading SOI marker (0xffd8) */
-    markerPayloadOffsetRelativeToSourceBuffer = -1;
-
     for (jpeg_marker_struct* marker = cinfo->marker_list; marker; marker = marker->next) {
-        pos += 4; /* position after reading next marker and its size (0xFFXX, [SIZE = 2 bytes]) */
-
         if (marker->marker == marker_code && marker->data_length > fourcc_length && !memcmp(marker->data, marker_fourcc_code, fourcc_length)) {
             destination.resize(marker->data_length);
             memcpy(static_cast<void*>(destination.data()), marker->data, marker->data_length);
-            markerPayloadOffsetRelativeToSourceBuffer = pos;
             return;
         }
-        pos += marker->original_length; /* position after marker's payload */
     }
 }
 } // namespace
@@ -100,9 +91,6 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         throw LoadError{"Failed to read JPEG header."};
     }
 
-    // Try to extract EXIF data for correct orientation
-    EOrientation orientation = EOrientation::TopLeft;
-
     static const uint8_t EXIF_FOURCC[] = {
         'E',
         'x',
@@ -111,36 +99,9 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         '\0',
         '\0',
     };
+
     std::vector<JOCTET> exifData;
-    long exifOffset = -1;
-    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, EXIF_FOURCC, sizeof(EXIF_FOURCC), exifData, exifOffset);
-
-    if (exifOffset != -1) {
-        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
-
-        ExifData* exif = exif_data_new_from_data(exifData.data(), exifData.size());
-        if (exif) {
-            tlog::debug() << fmt::format("Loaded EXIF data block. Entries:");
-            if (tlog::Logger::global()->hiddenSeverities().count(tlog::ESeverity::Debug) == 0) {
-                exif_data_dump(exif);
-            }
-
-            ScopeGuard exifGuard{[exif] { exif_data_unref(exif); }};
-
-            auto exifByteOrder = exif_data_get_byte_order(exif);
-            auto systemByteOrder = endian::native == std::endian::little ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA;
-            auto readByteOrder = exifByteOrder == systemByteOrder ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA;
-
-            // Extract image orientation info so we can rotate the image if needed
-            ExifEntry* orientationEntry = exif_content_get_entry(exif->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
-            if (orientationEntry) {
-                orientation = (EOrientation)exif_get_short(orientationEntry->data, readByteOrder);
-                tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
-            }
-        } else {
-            tlog::warning() << "Failed to decode EXIF data.";
-        }
-    }
+    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, EXIF_FOURCC, sizeof(EXIF_FOURCC), exifData);
 
     // Try to extract an ICC profile for correct color space conversion
     JOCTET* iccProfile = nullptr;
@@ -191,9 +152,18 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     jpeg_finish_decompress(&cinfo);
 
-    if (orientation != EOrientation::TopLeft) {
-        // Modifies both imageData and size, hence needs to be called before resultData is created.
-        co_await orientToTopLeft(imageData, size, orientation, priority);
+    // Try to extract EXIF data for correct orientation
+    if (!exifData.empty()) {
+        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
+
+        try {
+            EOrientation orientation = Exif(exifData).getOrientation();
+            tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+
+            co_await orientToTopLeft(imageData, size, orientation, priority);
+        } catch (const invalid_argument& e) {
+            tlog::warning() << fmt::format("Failed reorient from EXIF: {}", e.what());
+        }
     }
 
     vector<ImageData> result(1);

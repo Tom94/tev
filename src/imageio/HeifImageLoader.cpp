@@ -20,14 +20,13 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/AppleMakerNote.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
 
 #include <nanogui/vector.h>
 
 #include <libheif/heif.h>
-
-#include <libexif/exif-data.h>
 
 using namespace nanogui;
 using namespace std;
@@ -282,25 +281,14 @@ Task<vector<ImageData>>
                 continue;
             }
 
-            ExifData* exif = exif_data_new_from_data(exifData.data() + 4, (unsigned int)(exifSize - 4));
-            if (!exif) {
-                tlog::warning() << "Failed to decode EXIF data.";
-                continue;
+            // The first four elements are the length and not strictly part of the exif data.
+            exifData.erase(exifData.begin(), exifData.begin() + 4);
+
+            try {
+                return make_unique<AppleMakerNote>(Exif(exifData).tryGetAppleMakerNote());
+            } catch (const invalid_argument& e) {
+                tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
             }
-
-            tlog::debug() << fmt::format("Loaded EXIF data block #{}. Entries:", i);
-            if (tlog::Logger::global()->hiddenSeverities().count(tlog::ESeverity::Debug) == 0) {
-                exif_data_dump(exif);
-            }
-
-            ScopeGuard exifGuard{[exif] { exif_data_unref(exif); }};
-
-            ExifEntry* makerNote = exif_data_get_entry(exif, EXIF_TAG_MAKER_NOTE);
-            if (!isAppleMakernote(makerNote->data, makerNote->size)) {
-                continue;
-            }
-
-            return make_unique<AppleMakerNote>(makerNote->data, makerNote->size);
         }
 
         return nullptr;

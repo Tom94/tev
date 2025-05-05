@@ -85,7 +85,7 @@ struct AppleMakerNoteEntry {
                 return 4;
         }
 
-        throw std::invalid_argument{std::string{"Unknown format: "} + std::to_string((uint32_t)format)};
+        throw std::invalid_argument{fmt::format("AppleMakerNoteEntry: unknown format: {}", (uint32_t)format)};
     }
 
     size_t size() const { return nComponents * formatSize(format); }
@@ -105,7 +105,7 @@ public:
 
     template <typename T> T getFloat(uint16_t tag) const {
         if (mTags.count(tag) == 0) {
-            throw std::invalid_argument{"Requested tag does not exist."};
+            throw std::invalid_argument{"AppleMakerNote: requested tag does not exist."};
         }
 
         const auto& entry = mTags.at(tag);
