@@ -66,6 +66,7 @@ public:
     size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
     const nanogui::Vector2i& size() const { return mSize; }
+    void setSize(const nanogui::Vector2i& size) { mSize = size; }
 
     std::tuple<float, float, float> minMaxMean() const {
         float min = std::numeric_limits<float>::infinity();
@@ -116,6 +117,8 @@ public:
 
     size_t offset() const { return mDataOffset; }
     size_t stride() const { return mDataStride; }
+
+    std::shared_ptr<std::vector<float>>& dataBuf() { return mData; }
 
 private:
     std::string mName;

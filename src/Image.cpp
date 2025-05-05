@@ -26,6 +26,7 @@
 #include <chrono>
 #include <fstream>
 #include <istream>
+#include <unordered_set>
 
 using namespace nanogui;
 using namespace std;
@@ -141,13 +142,61 @@ Task<void> ImageData::orientToTopLeft(int priority) {
         co_return;
     }
 
-    vector<Task<void>> tasks;
+    bool swapAxes = orientation >= EOrientation::LeftTop;
+
+    struct DataDesc {
+        shared_ptr<vector<float>> data;
+        Vector2i size;
+
+        struct Hash {
+            size_t operator()(const DataDesc& interval) const { return std::hash<shared_ptr<vector<float>>>()(interval.data); }
+        };
+
+        bool operator==(const DataDesc& other) const { return data == other.data && size == other.size; }
+    };
+
+    unordered_set<DataDesc, DataDesc::Hash> channelData;
     for (auto& c : channels) {
-        tasks.emplace_back(c.reorient(orientation, priority));
+        if (c.stride() != 1 && c.stride() != 4) {
+            throw runtime_error{"ImageData::orientToTopLeft: only strides 1 and 4 are supported."};
+        }
+
+        if (swapAxes) {
+            c.setSize({c.size().y(), c.size().x()});
+        }
+
+        channelData.insert({c.dataBuf(), c.size()});
     }
 
-    for (auto& task : tasks) {
-        co_await task;
+    for (auto& c : channelData) {
+        const size_t numPixels = (size_t)c.size.x() * c.size.y();
+        const size_t samplesPerPixel = c.data->size() / numPixels;
+        const Vector2i otherSize = swapAxes ? Vector2i{c.size.y(), c.size.x()} : c.size;
+
+        if (samplesPerPixel != 1 && samplesPerPixel != 4) {
+            throw runtime_error{"ImageData::orientToTopLeft: only 1 or 4 samples per pixel are supported."};
+        }
+
+        vector<float> reorientedData(c.data->size());
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            c.size.y(),
+            [&](int y) {
+                for (int x = 0; x < c.size.x(); ++x) {
+                    const size_t i = y * (size_t)c.size.x() + x;
+
+                    const auto other = applyOrientation(orientation, {x, y}, c.size);
+                    const size_t j = other.y() * (size_t)otherSize.x() + other.x();
+
+                    for (size_t s = 0; s < samplesPerPixel; ++s) {
+                        reorientedData[i * samplesPerPixel + s] = (*c.data)[j * samplesPerPixel + s];
+                    }
+                }
+            },
+            priority
+        );
+
+        swap(*c.data, reorientedData);
     }
 
     // TODO: Reorient the data window and display window
