@@ -116,7 +116,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw LoadError{"Failed to set parallel runner for decoder."};
     }
 
-    if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME)) {
+    if (JXL_DEC_SUCCESS !=
+        JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME)) {
         throw LoadError{"Failed to subscribe to decoder events."};
     }
 
@@ -239,13 +240,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     }
                 }
 
-                tlog::debug() << fmt::format(
-                    "Frame {}: duration={}, is_last={} name={}",
-                    frameId,
-                    frameHeader.duration,
-                    frameHeader.is_last,
-                    frameName
-                );
+                tlog::debug(
+                ) << fmt::format("Frame {}: duration={}, is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName);
                 break;
             }
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
@@ -340,8 +336,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        co_await convertIccToLinearSrgbPremultiplied(
-                            iccProfile,
+                        co_await convertColorProfileToLinearSrgbPremultiplied(
+                            ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
                             size,
                             info.num_color_channels,
                             info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
@@ -360,20 +356,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in the
                 // colorspace tev expects: linear sRGB Rec.709.
                 if (!colorChannelsLoaded) {
-                    const size_t nSamplesPerRow = size.x() * numColorChannels;
-                    co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0,
-                        size.y(),
-                        [&](size_t y) {
-                            size_t srcOffset = y * nSamplesPerRow;
-                            for (int x = 0; x < size.x(); ++x) {
-                                size_t baseIdx = srcOffset + x * numColorChannels;
-                                for (int c = 0; c < numColorChannels; ++c) {
-                                    data.channels[c].at({x, (int)y}) = colorData[baseIdx + c];
-                                }
-                            }
-                        },
-                        priority
+                    co_await toFloat32(
+                        (float*)colorData.data(), numColorChannels, data.channels.front().data(), 4, size, info.alpha_bits, priority
                     );
                 }
 

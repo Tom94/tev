@@ -199,44 +199,32 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
     resultData.channels = makeNChannels(numColorChannels, size);
-    resultData.hasPremultipliedAlpha = false;
+
+    // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
+    resultData.hasPremultipliedAlpha = true;
 
     // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG spec)
     // and convert it to linear space via inverse sRGB transfer function.
     if (iccProfile) {
         try {
-            co_await convertIccToLinearSrgbPremultiplied(
-                vector<uint8_t>(iccProfile, iccProfile + iccProfileSize),
+            vector<float> floatData(imageData.size());
+            co_await toFloat32(imageData.data(), numColorChannels, floatData.data(), numColorChannels, size, false, priority);
+            co_await convertColorProfileToLinearSrgbPremultiplied(
+                ColorProfile::fromIcc(iccProfile, iccProfileSize),
                 size,
                 numColorChannels,
                 EAlphaKind::None,
-                EPixelFormat::U8,
-                imageData.data(),
+                EPixelFormat::F32,
+                (uint8_t*)floatData.data(),
                 resultData.channels.front().data(),
                 priority
             );
 
-            resultData.hasPremultipliedAlpha = true;
             co_return result;
         } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    const uint8_t* typedData = imageData.data();
-    co_await ThreadPool::global().parallelForAsync<int>(
-        0,
-        size.y(),
-        [&](int y) {
-            for (int x = 0; x < size.x(); ++x) {
-                size_t i = y * (size_t)size.x() + x;
-                size_t baseIdx = i * numColorChannels;
-                for (int c = 0; c < numColorChannels; ++c) {
-                    resultData.channels[c].at({x, y}) = toLinear(typedData[baseIdx + c] / 255.0f);
-                }
-            }
-        },
-        priority
-    );
-
+    co_await toFloat32<uint8_t, true>(imageData.data(), numColorChannels, resultData.channels.front().data(), 4, size, false, priority);
     co_return result;
 }
 

@@ -63,7 +63,8 @@ nanogui::Matrix4f convertChromaToRec709(std::array<nanogui::Vector2f, 4> chroma)
     return toRec709;
 }
 
-struct GlobalCmsContext {
+class GlobalCmsContext {
+public:
     GlobalCmsContext() {
         cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
             tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
@@ -71,12 +72,23 @@ struct GlobalCmsContext {
     }
 };
 
-struct CmsContext {
+class CmsContext {
+public:
+    static const CmsContext& threadLocal() {
+        static thread_local CmsContext threadCtx;
+        return threadCtx;
+    }
+
+    cmsContext get() const { return mCtx; }
+
+    cmsHPROFILE rec709Profile() const { return mRec709Profile; }
+
+private:
     CmsContext() {
         static GlobalCmsContext globalCtx;
 
-        ctx = cmsCreateContext(cmsFastFloatExtensions(), nullptr);
-        if (!ctx) {
+        mCtx = cmsCreateContext(cmsFastFloatExtensions(), nullptr);
+        if (!mCtx) {
             throw runtime_error{"Failed to create LCMS context."};
         }
 
@@ -88,30 +100,45 @@ struct CmsContext {
         };
 
         cmsToneCurve* linearCurve[3];
-        linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(ctx, 1.0f);
+        linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(mCtx, 1.0f);
 
-        rec709Profile = cmsCreateRGBProfileTHR(ctx, &D65, &Rec709Primaries, linearCurve);
-        if (!rec709Profile) {
+        mRec709Profile = cmsCreateRGBProfileTHR(mCtx, &D65, &Rec709Primaries, linearCurve);
+        if (!mRec709Profile) {
             throw runtime_error{"Failed to create Rec.709 color profile."};
         }
     }
 
     ~CmsContext() {
-        if (rec709Profile) {
-            cmsCloseProfile(rec709Profile);
+        if (mRec709Profile) {
+            cmsCloseProfile(mRec709Profile);
         }
 
-        if (ctx) {
-            cmsDeleteContext(ctx);
+        if (mCtx) {
+            cmsDeleteContext(mCtx);
         }
     }
 
-    cmsContext ctx = nullptr;
-    cmsHPROFILE rec709Profile = nullptr;
+    cmsContext mCtx = nullptr;
+    cmsHPROFILE mRec709Profile = nullptr;
 };
 
-Task<void> convertIccToLinearSrgbPremultiplied(
-    const vector<uint8_t>& iccProfile,
+ColorProfile::~ColorProfile() {
+    if (mProfile) {
+        cmsCloseProfile(mProfile);
+    }
+}
+
+ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
+    cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(CmsContext::threadLocal().get(), iccProfile, (cmsUInt32Number)iccProfileSize);
+    if (!srcProfile) {
+        throw runtime_error{"Failed to create ICC profile from raw data."};
+    }
+
+    return srcProfile;
+}
+
+Task<void> convertColorProfileToLinearSrgbPremultiplied(
+    const ColorProfile& profile,
     const Vector2i& size,
     int numColorChannels,
     EAlphaKind alphaKind,
@@ -120,6 +147,10 @@ Task<void> convertIccToLinearSrgbPremultiplied(
     float* __restrict rgbaDst,
     int priority
 ) {
+    if (!profile.isValid()) {
+        throw runtime_error{"Color profile must be valid."};
+    }
+
     if (numColorChannels < 1 || numColorChannels > 4) {
         throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
     }
@@ -127,15 +158,6 @@ Task<void> convertIccToLinearSrgbPremultiplied(
     if (alphaKind == EAlphaKind::PremultipliedNonlinear && pixelFormat != EPixelFormat::F32) {
         throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
     }
-
-    static thread_local CmsContext threadCtx;
-
-    cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(threadCtx.ctx, iccProfile.data(), (cmsUInt32Number)iccProfile.size());
-    if (!srcProfile) {
-        throw runtime_error{"Failed to create ICC profile from raw data."};
-    }
-
-    ScopeGuard srcProfileGuard{[srcProfile] { cmsCloseProfile(srcProfile); }};
 
     // Create transform from source profile to Rec.709
     int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
@@ -159,8 +181,11 @@ Task<void> convertIccToLinearSrgbPremultiplied(
             type |= BYTES_SH(4) | FLOAT_SH(1);
             bytesPerPixel = 4;
             break;
-        default:
-            throw runtime_error{"Unsupported pixel format."};
+        default: throw runtime_error{"Unsupported pixel format."};
+    }
+
+    if (pixelFormat != EPixelFormat::F32) {
+        tlog::warning() << "Color conversion from non-F32 pixel format detected. This can be significantly slower than F32->F32.";
     }
 
     if (alphaKind != EAlphaKind::None) {
@@ -184,10 +209,10 @@ Task<void> convertIccToLinearSrgbPremultiplied(
     }
 
     cmsHTRANSFORM transform = cmsCreateTransformTHR(
-        threadCtx.ctx,
-        srcProfile,
+        CmsContext::threadLocal().get(),
+        profile.get(),
         type,
-        threadCtx.rec709Profile,
+        CmsContext::threadLocal().rec709Profile(),
         // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
         // if we set this as the output type.
         TYPE_RGBA_FLT,
@@ -198,10 +223,8 @@ Task<void> convertIccToLinearSrgbPremultiplied(
     );
 
     if (!transform) {
-        throw runtime_error{"Failed to create color transform from ICC profile to Rec.709."};
+        throw runtime_error{"Failed to create color transform to Rec.709."};
     }
-
-    tlog::debug() << "Applying ICC color profile.";
 
     const size_t nSamplesPerRow = size.x() * numChannels;
     co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -209,37 +232,40 @@ Task<void> convertIccToLinearSrgbPremultiplied(
         size.y(),
         [&](size_t y) {
             size_t srcOffset = y * nSamplesPerRow * bytesPerPixel;
+            size_t dstOffset = y * (size_t)size.x() * 4;
+
+            uint8_t* __restrict srcPtr = &src[srcOffset];
+            float* __restrict dstPtr = &rgbaDst[dstOffset];
 
             // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = srcOffset + x * numChannels;
-                    const float alpha = *(float*)&src[(baseIdx + numColorChannels) * bytesPerPixel];
+                    const size_t baseIdx = x * numChannels;
+                    const float alpha = *(float*)&srcPtr[(baseIdx + numColorChannels) * bytesPerPixel];
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
                     for (int c = 0; c < numChannels - 1; ++c) {
-                        *(float*)&src[(baseIdx + c) * bytesPerPixel] *= factor;
+                        *(float*)&srcPtr[(baseIdx + c) * bytesPerPixel] *= factor;
                     }
                 }
             }
 
             // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads. So:
             // call cmsDoTransform for each row in parallel.
-            size_t dstOffset = y * (size_t)size.x() * 4;
-            cmsDoTransform(transform, &src[srcOffset], &rgbaDst[dstOffset], size.x());
+            cmsDoTransform(transform, srcPtr, dstPtr, size.x());
 
             // The output of the cms transform is always in straight alpha, hence we need to premultiply. If the input image had
             // premultiplied alpha, alpha==0 pixels were preserved as-is, when converting to straight alpha, so we also should not
             // re-multiply those.
             if (alphaKind != EAlphaKind::None) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = dstOffset + x * 4;
-                    float factor = rgbaDst[baseIdx + 3];
+                    const size_t baseIdx = x * 4;
+                    float factor = dstPtr[baseIdx + 3];
                     if (factor == 0.0f && (alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Premultiplied)) {
                         factor = 1.0f;
                     }
 
                     for (int c = 0; c < 3; ++c) {
-                        rgbaDst[baseIdx + c] *= factor;
+                        dstPtr[baseIdx + c] *= factor;
                     }
                 }
             }

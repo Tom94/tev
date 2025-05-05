@@ -27,6 +27,7 @@
 #include <istream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace tev {
 
@@ -63,6 +64,64 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
     );
 
     std::swap(data, reorientedData);
+}
+
+template <typename T, bool SRGB_TO_LINEAR = false>
+Task<void> toFloat32(
+    const T* __restrict imageData,
+    size_t numSamplesPerPixelIn,
+    float* __restrict floatData,
+    size_t numSamplesPerPixelOut,
+    const nanogui::Vector2i& size,
+    bool hasAlpha,
+    int priority,
+    // 0 defaults to 1/2**bitsPerSample
+    float scale = 0.0f,
+    // 0 defaults to numSamplesPerPixelIn * size.x()
+    size_t numSamplesPerRowIn = 0,
+    size_t numSamplesPerRowOut = 0
+) {
+    if constexpr (std::is_integral_v<T>) {
+        if (scale == 0.0f) {
+            scale = 1.0f / ((1 << (sizeof(T) * 8)) - 1);
+        }
+    } else {
+        if (scale == 0.0f) {
+            scale = 1.0f;
+        }
+    }
+
+    if (numSamplesPerRowIn == 0) {
+        numSamplesPerRowIn = numSamplesPerPixelIn * size.x();
+    }
+
+    if (numSamplesPerRowOut == 0) {
+        numSamplesPerRowOut = numSamplesPerPixelOut * size.x();
+    }
+
+    co_await ThreadPool::global().parallelForAsync<int>(
+        0,
+        size.y(),
+        [&](int y) {
+            size_t rowIdxIn = y * numSamplesPerRowIn;
+            size_t rowIdxOut = y * numSamplesPerRowOut;
+
+            for (int x = 0; x < size.x(); ++x) {
+                size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
+                size_t baseIdxOut = rowIdxOut + x * numSamplesPerPixelOut;
+
+                for (int c = 0; c < numSamplesPerPixelIn; ++c) {
+                    floatData[baseIdxOut + c] = imageData[baseIdxIn + c] * scale;
+                    if constexpr (SRGB_TO_LINEAR) {
+                        if (!hasAlpha || c != numSamplesPerPixelOut - 1) {
+                            floatData[baseIdxOut + c] = toLinear(floatData[baseIdxOut + c]);
+                        }
+                    }
+                }
+            }
+        },
+        priority
+    );
 }
 
 class ImageLoader {

@@ -142,25 +142,10 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         size_t numPixels = (size_t)size.x() * size.y();
         vector<float> src(numPixels * numChannels);
 
-        auto data = reinterpret_cast<half*>(image->planes[UHDR_PLANE_PACKED]);
-        size_t samplesPerLine = image->stride[UHDR_PLANE_PACKED] * numChannels;
+        auto data = reinterpret_cast<const half*>(image->planes[UHDR_PLANE_PACKED]);
+        size_t samplesPerRow = image->stride[UHDR_PLANE_PACKED] * numChannels;
 
-        co_await ThreadPool::global().parallelForAsync<int>(
-            0,
-            size.y(),
-            [&](int y) {
-                for (int x = 0; x < size.x(); ++x) {
-                    size_t i = y * (size_t)size.x() + x;
-                    auto typedData = reinterpret_cast<const half*>(data + y * samplesPerLine);
-                    int baseIdx = x * numChannels;
-
-                    for (int c = 0; c < numChannels; ++c) {
-                        imageData.channels[c].at(i) = typedData[baseIdx + c];
-                    }
-                }
-            },
-            priority
-        );
+        co_await toFloat32((const half*)data, numChannels, imageData.channels.front().data(), 4, size, true, priority, 1.0f, samplesPerRow);
 
         // Convert to Rec.709 if necessary
         tlog::debug(fmt::format("Ultra HDR image has color gamut: {}", toString(image->cg)));
@@ -173,8 +158,8 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
             auto channels = makeNChannels(numChannels, size);
             try {
-                co_await convertIccToLinearSrgbPremultiplied(
-                    vector<uint8_t>((uint8_t*)iccProfile->data + 14, (uint8_t*)iccProfile->data + iccProfile->data_sz - 14),
+                co_await convertColorProfileToLinearSrgbPremultiplied(
+                    ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),
                     size,
                     3,
                     EAlphaKind::Straight,
