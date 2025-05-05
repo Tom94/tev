@@ -30,6 +30,41 @@
 
 namespace tev {
 
+// Modifies both `data` and `size`
+template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::Vector2i& size, EOrientation orientation, int priority) {
+    if (orientation == EOrientation::TopLeft) {
+        co_return;
+    }
+
+    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numSamplesPerPixel = data.size() / numPixels;
+
+    bool swapAxes = orientation >= EOrientation::LeftTop;
+    size = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
+    nanogui::Vector2i otherSize = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
+    std::vector<T> reorientedData(data.size());
+
+    co_await ThreadPool::global().parallelForAsync<int>(
+        0,
+        size.y(),
+        [&](int y) {
+            for (int x = 0; x < size.x(); ++x) {
+                const size_t i = y * (size_t)size.x() + x;
+
+                const auto other = applyOrientation(orientation, {x, y}, size);
+                const size_t j = other.y() * (size_t)otherSize.x() + other.x();
+
+                for (int s = 0; s < numSamplesPerPixel; ++s) {
+                    reorientedData[i * numSamplesPerPixel + s] = data[j * numSamplesPerPixel + s];
+                }
+            }
+        },
+        priority
+    );
+
+    std::swap(data, reorientedData);
+}
+
 class ImageLoader {
 public:
     class FormatNotSupported : public std::runtime_error {

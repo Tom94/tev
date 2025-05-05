@@ -16,8 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "libexif/exif-byte-order.h"
-#include "tev/Common.h"
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Chroma.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
@@ -192,11 +191,15 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     jpeg_finish_decompress(&cinfo);
 
+    if (orientation != EOrientation::TopLeft) {
+        // Modifies both imageData and size, hence needs to be called before resultData is created.
+        co_await orientToTopLeft(imageData, size, orientation, priority);
+    }
+
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
     resultData.channels = makeNChannels(numColorChannels, size);
     resultData.hasPremultipliedAlpha = false;
-    resultData.orientation = orientation;
 
     // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG spec)
     // and convert it to linear space via inverse sRGB transfer function.
