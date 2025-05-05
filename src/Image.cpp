@@ -692,10 +692,12 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
 
         std::string loadMethod;
         vector<ImageData> imageData;
+        bool success = false;
         for (const auto& imageLoader : ImageLoader::getLoaders()) {
             try {
                 loadMethod = imageLoader->name();
                 imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority, applyGainmaps);
+                success = true;
                 break;
             } catch (const ImageLoader::FormatNotSupported& e) {
                 tlog::debug(
@@ -707,7 +709,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
             }
         }
 
-        if (imageData.empty()) {
+        if (!success) {
             throw ImageLoader::LoadError{"No suitable image loader found."};
         }
 
