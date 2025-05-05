@@ -25,12 +25,14 @@
 #include <vector>
 
 struct _ExifData;
+struct _ExifLog;
 
 namespace tev {
 
 class Exif {
 public:
-    Exif(std::vector<uint8_t> exifData);
+    Exif(const uint8_t* exifData, size_t exifDataSize);
+    Exif(std::vector<uint8_t> exifData) : Exif(exifData.data(), exifData.size()) {}
     ~Exif();
 
     AppleMakerNote tryGetAppleMakerNote() const;
@@ -40,6 +42,7 @@ public:
 private:
     bool mReverseEndianess = false;
     _ExifData* mExif = nullptr;
+    _ExifLog* mExifLog = nullptr;
 };
 
 } // namespace tev
