@@ -280,6 +280,9 @@ private:
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 
     bool mApplyGainmaps = true;
+
+    std::chrono::system_clock::time_point mLoadStartTime;
+    int mLoadStartCounter = 0;
 };
 
 } // namespace tev

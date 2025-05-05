@@ -783,6 +783,13 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         return;
     }
 
+    // We want to measure the time it takes to load a whole batch of images. Start measuring when the loader queue goes from empty to
+    // non-empty and stop measuring when the queue goes from non-empty to empty again.
+    if (mUnsortedLoadCounter == mLoadCounter) {
+        mLoadStartTime = chrono::system_clock::now();
+        mLoadStartCounter = mUnsortedLoadCounter;
+    }
+
     int loadId = mUnsortedLoadCounter++;
     invokeTaskDetached([loadId, path, channelSelector, shallSelect, toReplace, this]() -> Task<void> {
         int taskPriority = -Image::drawId();
@@ -831,6 +838,13 @@ bool BackgroundImagesLoader::publishSortedLoads() {
         mPendingLoadedImages.pop();
         pushed = true;
     }
+
+    if (mLoadCounter == mUnsortedLoadCounter && mLoadCounter - mLoadStartCounter > 1) {
+        auto end = chrono::system_clock::now();
+        chrono::duration<double> elapsedSeconds = end - mLoadStartTime;
+        tlog::success() << fmt::format("Loaded {} images in {:.3f} seconds.", mLoadCounter - mLoadStartCounter, elapsedSeconds.count());
+    }
+
     return pushed;
 }
 
