@@ -171,13 +171,16 @@ file(GLOB LCMS_SRCS
 )
 
 add_library(lcms2-tev STATIC ${LCMS_SRCS})
-
-# We don't use the SSE2 components of CMS in tev; disable to simplify ARM compilation
-target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
 target_include_directories(lcms2-tev PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include
     ${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/plugins/fast_float/include
 )
+
+cmake_host_system_information(RESULT HAS_SSE2 QUERY HAS_SSE2)
+if (NOT HAS_SSE2)
+    message(STATUS "SSE2 not supported on this system; disabling it in Little-CMS")
+    target_compile_definitions(lcms2-tev PRIVATE -DCMS_DONT_USE_SSE2=1)
+endif()
 
 # Compile libpng
 set(PNG_SHARED OFF CACHE BOOL " " FORCE)
