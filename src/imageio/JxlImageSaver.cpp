@@ -93,7 +93,9 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
         alphaChannelInfo.alpha_premultiplied = basicInfo.alpha_premultiplied;
 
         if (JXL_ENC_SUCCESS != JxlEncoderSetExtraChannelInfo(encoder.get(), 0, &alphaChannelInfo)) {
-            throw SaveError{fmt::format("Failed to set extra channel info for the alpha channel: {}.", JxlEncoderGetError(encoder.get()))};
+            throw SaveError{
+                fmt::format("Failed to set extra channel info for the alpha channel: {}.", (size_t)JxlEncoderGetError(encoder.get()))
+            };
         }
     }
 

@@ -55,7 +55,7 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
                 const auto other = applyOrientation(orientation, {x, y}, size);
                 const size_t j = other.y() * (size_t)otherSize.x() + other.x();
 
-                for (int s = 0; s < numSamplesPerPixel; ++s) {
+                for (size_t s = 0; s < numSamplesPerPixel; ++s) {
                     reorientedData[i * numSamplesPerPixel + s] = data[j * numSamplesPerPixel + s];
                 }
             }
@@ -110,7 +110,7 @@ Task<void> toFloat32(
                 size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
                 size_t baseIdxOut = rowIdxOut + x * numSamplesPerPixelOut;
 
-                for (int c = 0; c < numSamplesPerPixelIn; ++c) {
+                for (size_t c = 0; c < numSamplesPerPixelIn; ++c) {
                     floatData[baseIdxOut + c] = imageData[baseIdxIn + c] * scale;
                     if constexpr (SRGB_TO_LINEAR) {
                         if (!hasAlpha || c != numSamplesPerPixelOut - 1) {

@@ -82,7 +82,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
     vector<ImageData> result(numFrames);
-    for (size_t frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
+    for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
         ImageData& resultData = result[frameIdx];
 
         resultData.channels = makeNChannels(numChannels, size);

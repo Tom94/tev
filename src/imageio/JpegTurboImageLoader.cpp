@@ -135,7 +135,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
             ExifEntry* orientationEntry = exif_content_get_entry(exif->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
             if (orientationEntry) {
                 orientation = (EOrientation)exif_get_short(orientationEntry->data, readByteOrder);
-                tlog::debug() << fmt::format("EXIF image orientation: {}", orientation);
+                tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
             }
         } else {
             tlog::warning() << "Failed to decode EXIF data.";
