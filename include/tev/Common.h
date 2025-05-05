@@ -452,6 +452,8 @@ inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogu
         case LeftBottom:
             return {size.y() - pos.y() - 1, pos.x()};
     }
+
+    return pos;
 }
 
 // Implemented in main.cpp
