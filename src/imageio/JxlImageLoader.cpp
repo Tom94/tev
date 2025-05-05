@@ -18,7 +18,7 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/JxlImageLoader.h>
 
 #include <jxl/decode.h>
@@ -336,7 +336,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        co_await convertColorProfileToLinearSrgbPremultiplied(
+                        co_await toLinearSrgbPremul(
                             ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
                             size,
                             info.num_color_channels,

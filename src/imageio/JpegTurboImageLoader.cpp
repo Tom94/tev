@@ -18,7 +18,7 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 
 #include <jpeglib.h>
@@ -209,7 +209,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         try {
             vector<float> floatData(imageData.size());
             co_await toFloat32(imageData.data(), numColorChannels, floatData.data(), numColorChannels, size, false, priority);
-            co_await convertColorProfileToLinearSrgbPremultiplied(
+            co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(iccProfile, iccProfileSize),
                 size,
                 numColorChannels,

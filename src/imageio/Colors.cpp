@@ -18,7 +18,7 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 
 #include <nanogui/vector.h>
 
@@ -32,7 +32,7 @@ using namespace nanogui;
 
 namespace tev {
 
-nanogui::Matrix4f convertChromaToRec709(std::array<nanogui::Vector2f, 4> chroma) {
+nanogui::Matrix4f chromaToRec709Matrix(std::array<nanogui::Vector2f, 4> chroma) {
     Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
     Imf::Chromaticities imfChroma = {
         {chroma[0].x(), chroma[0].y()},
@@ -137,7 +137,7 @@ ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileS
     return srcProfile;
 }
 
-Task<void> convertColorProfileToLinearSrgbPremultiplied(
+Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     const Vector2i& size,
     int numColorChannels,

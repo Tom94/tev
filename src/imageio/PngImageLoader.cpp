@@ -17,7 +17,7 @@
  */
 
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/PngImageLoader.h>
 
 #include <png.h>
@@ -178,7 +178,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_await toFloat32(imageData.data(), numChannels, floatData.data(), numChannels, size, hasAlpha, priority);
             }
 
-            co_await convertColorProfileToLinearSrgbPremultiplied(
+            co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(iccProfile, iccProfileSize),
                 size,
                 numColorChannels,

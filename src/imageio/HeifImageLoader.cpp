@@ -19,7 +19,7 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/AppleMakerNote.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
 
@@ -165,7 +165,7 @@ Task<vector<ImageData>>
                 (const uint16_t*)data, numChannels, dataF32.data(), numChannels, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t)
             );
 
-            co_await convertColorProfileToLinearSrgbPremultiplied(
+            co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(profileData.data(), profileData.size()),
                 size,
                 3,
@@ -233,7 +233,7 @@ Task<vector<ImageData>>
                  }
             };
 
-            resultData.toRec709 = convertChromaToRec709(chroma);
+            resultData.toRec709 = chromaToRec709Matrix(chroma);
 
             tlog::debug() << fmt::format(
                 "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",

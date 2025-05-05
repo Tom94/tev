@@ -18,7 +18,7 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/UltraHdrImageLoader.h>
 
 // From Imath. Required to convert UltraHDR fp16 images to float.
@@ -158,7 +158,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
             auto channels = makeNChannels(numChannels, size);
             try {
-                co_await convertColorProfileToLinearSrgbPremultiplied(
+                co_await toLinearSrgbPremul(
                     ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),
                     size,
                     3,
@@ -175,12 +175,12 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         } else {
             switch (image->cg) {
                 case UHDR_CG_DISPLAY_P3:
-                    imageData.toRec709 = convertChromaToRec709({
+                    imageData.toRec709 = chromaToRec709Matrix({
                         {{0.6800f, 0.3200f}, {0.2650f, 0.6900f}, {0.1500f, 0.0600f}, {0.31271f, 0.32902f}}
                     });
                     break;
                 case UHDR_CG_BT_2100:
-                    imageData.toRec709 = convertChromaToRec709({
+                    imageData.toRec709 = chromaToRec709Matrix({
                         {{0.7080f, 0.2920f}, {0.1700f, 0.7970f}, {0.1310f, 0.0460f}, {0.31271f, 0.32902f}}
                     });
                     break;
