@@ -82,7 +82,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
     vector<ImageData> result(numFrames);
-    for (size_t frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
+    for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
         ImageData& resultData = result[frameIdx];
 
         resultData.channels = makeNChannels(numChannels, size);
@@ -91,43 +91,13 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.partName = fmt::format("frames.{}", frameIdx);
         }
 
-        static const int ALPHA_CHANNEL_INDEX = 3;
-
         auto numPixels = (size_t)size.x() * size.y();
         if (isHdr) {
-            auto typedData = reinterpret_cast<float*>(data);
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
-                [&](size_t i) {
-                    size_t baseIdx = i * numChannels;
-                    for (int c = 0; c < numChannels; ++c) {
-                        resultData.channels[c].at(i) = typedData[baseIdx + c];
-                    }
-                },
-                priority
-            );
-
-            data = typedData + numPixels * numChannels;
+            co_await toFloat32((float*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority);
+            data = (float*)data + numPixels * numChannels;
         } else {
-            auto typedData = reinterpret_cast<unsigned char*>(data);
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
-                [&](size_t i) {
-                    size_t baseIdx = i * numChannels;
-                    for (int c = 0; c < numChannels; ++c) {
-                        if (c == ALPHA_CHANNEL_INDEX) {
-                            resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
-                        } else {
-                            resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
-                        }
-                    }
-                },
-                priority
-            );
-
-            data = typedData + numPixels * numChannels;
+            co_await toFloat32<uint8_t, true>((uint8_t*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority);
+            data = (uint8_t*)data + numPixels * numChannels;
         }
     }
 

@@ -131,9 +131,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
 set(TEV_SOURCES
     include/tev/imageio/AppleMakerNote.h src/imageio/AppleMakerNote.cpp
-    include/tev/imageio/Chroma.h src/imageio/Chroma.cpp
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
+    include/tev/imageio/Colors.h src/imageio/Colors.cpp
     include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
+    include/tev/imageio/Exif.h src/imageio/Exif.cpp
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
     include/tev/imageio/ExrImageSaver.h src/imageio/ExrImageSaver.cpp
     include/tev/imageio/GainMap.h src/imageio/GainMap.cpp

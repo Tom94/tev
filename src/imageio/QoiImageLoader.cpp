@@ -71,34 +71,12 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     resultData.hasPremultipliedAlpha = false;
 
     if (desc.colorspace == QOI_LINEAR) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                auto typedData = reinterpret_cast<unsigned char*>(decodedData);
-                size_t baseIdx = i * numChannels;
-                for (int c = 0; c < numChannels; ++c) {
-                    resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
-                }
-            },
-            priority
+        co_await toFloat32<uint8_t, false>(
+            (uint8_t*)decodedData, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
         );
     } else {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                auto typedData = reinterpret_cast<unsigned char*>(decodedData);
-                size_t baseIdx = i * numChannels;
-                for (int c = 0; c < numChannels; ++c) {
-                    if (c == 3) {
-                        resultData.channels[c].at(i) = (typedData[baseIdx + c]) / 255.0f;
-                    } else {
-                        resultData.channels[c].at(i) = toLinear((typedData[baseIdx + c]) / 255.0f);
-                    }
-                }
-            },
-            priority
+        co_await toFloat32<uint8_t, true>(
+            (uint8_t*)decodedData, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
         );
     }
 

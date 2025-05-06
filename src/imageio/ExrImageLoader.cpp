@@ -17,7 +17,7 @@
  */
 
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/ExrImageLoader.h>
 
 #include <Iex.h>
@@ -292,7 +292,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
 
             if (Imf::hasChromaticities(part.header())) {
                 auto chroma = Imf::chromaticities(part.header());
-                data.toRec709 = convertChromaToRec709({
+                data.toRec709 = chromaToRec709Matrix({
                     {{chroma.red.x, chroma.red.y},
                      {chroma.green.x, chroma.green.y},
                      {chroma.blue.x, chroma.blue.y},

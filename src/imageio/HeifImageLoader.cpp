@@ -19,15 +19,14 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/AppleMakerNote.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
 
 #include <nanogui/vector.h>
 
 #include <libheif/heif.h>
-
-#include <libexif/exif-data.h>
 
 using namespace nanogui;
 using namespace std;
@@ -131,8 +130,8 @@ Task<vector<ImageData>>
         const int bitsPerPixel = heif_image_get_bits_per_pixel_range(img, heif_channel_interleaved);
         const float channelScale = 1.0f / float((1 << bitsPerPixel) - 1);
 
-        int samplesPerLine;
-        const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &samplesPerLine);
+        int bytesPerRow;
+        const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &bytesPerRow);
         if (!data) {
             throw LoadError{"Faild to get image data."};
         }
@@ -156,30 +155,22 @@ Task<vector<ImageData>>
                 throw LoadError{fmt::format("Failed to read ICC profile: {}", error.message)};
             }
 
-            size_t numPixels = (size_t)size.x() * size.y();
-            vector<float> src(numPixels * numChannels);
+            if (bytesPerRow % sizeof(uint16_t) != 0) {
+                throw LoadError{"Row size not a multiple of sample size."};
+            }
 
-            const size_t n_samples_per_row = size.x() * numChannels;
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                size.y(),
-                [&](size_t y) {
-                    size_t src_offset = y * n_samples_per_row;
-                    for (size_t x = 0; x < n_samples_per_row; ++x) {
-                        const uint16_t* typedData = reinterpret_cast<const uint16_t*>(data + y * samplesPerLine);
-                        src[src_offset + x] = (float)typedData[x] * channelScale;
-                    }
-                },
-                priority
+            vector<float> dataF32((size_t)size.x() * size.y() * numChannels);
+            co_await toFloat32(
+                (const uint16_t*)data, numChannels, dataF32.data(), numChannels, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t)
             );
 
-            co_await convertIccToLinearSrgbPremultiplied(
-                iccProfile,
+            co_await toLinearSrgbPremul(
+                ColorProfile::fromIcc(profileData.data(), profileData.size()),
                 size,
                 3,
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
-                (uint8_t*)src.data(),
+                (uint8_t*)dataF32.data(),
                 resultData.channels.front().data(),
                 priority
             );
@@ -206,25 +197,16 @@ Task<vector<ImageData>>
 
         // Otherwise, assume the image is in Rec.709/sRGB and convert it to linear space, followed by an optional change in color space if
         // an NCLX profile is present.
-        co_await ThreadPool::global().parallelForAsync<int>(
-            0,
-            size.y(),
-            [&](int y) {
-                for (int x = 0; x < size.x(); ++x) {
-                    size_t i = y * (size_t)size.x() + x;
-                    auto typedData = reinterpret_cast<const unsigned short*>(data + y * samplesPerLine);
-                    int baseIdx = x * numChannels;
-
-                    for (int c = 0; c < numChannels; ++c) {
-                        if (c == 3) {
-                            resultData.channels[c].at(i) = typedData[baseIdx + c] * channelScale;
-                        } else {
-                            resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c] * channelScale);
-                        }
-                    }
-                }
-            },
-            priority
+        co_await toFloat32<uint16_t, true>(
+            (const uint16_t*)data,
+            numChannels,
+            resultData.channels.front().data(),
+            4,
+            size,
+            hasAlpha,
+            priority,
+            channelScale,
+            bytesPerRow / sizeof(uint16_t)
         );
 
         heif_color_profile_nclx* nclx = nullptr;
@@ -250,7 +232,7 @@ Task<vector<ImageData>>
                  }
             };
 
-            resultData.toRec709 = convertChromaToRec709(chroma);
+            resultData.toRec709 = chromaToRec709Matrix(chroma);
 
             tlog::debug() << fmt::format(
                 "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",
@@ -299,25 +281,14 @@ Task<vector<ImageData>>
                 continue;
             }
 
-            ExifData* exif = exif_data_new_from_data(exifData.data() + 4, (unsigned int)(exifSize - 4));
-            if (!exif) {
-                tlog::warning() << "Failed to decode EXIF data.";
-                continue;
+            // The first four elements are the length and not strictly part of the exif data.
+            exifData.erase(exifData.begin(), exifData.begin() + 4);
+
+            try {
+                return make_unique<AppleMakerNote>(Exif(exifData).tryGetAppleMakerNote());
+            } catch (const invalid_argument& e) {
+                tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
             }
-
-            tlog::debug() << fmt::format("Loaded EXIF data block #{}. Entries:", i);
-            if (tlog::Logger::global()->hiddenSeverities().count(tlog::ESeverity::Debug) == 0) {
-                exif_data_dump(exif);
-            }
-
-            ScopeGuard exifGuard{[exif] { exif_data_unref(exif); }};
-
-            ExifEntry* makerNote = exif_data_get_entry(exif, EXIF_TAG_MAKER_NOTE);
-            if (!isAppleMakernote(makerNote->data, makerNote->size)) {
-                continue;
-            }
-
-            return make_unique<AppleMakerNote>(makerNote->data, makerNote->size);
         }
 
         return nullptr;

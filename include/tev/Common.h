@@ -423,6 +423,7 @@ enum EDirection {
 };
 
 enum EOrientation : int {
+    None = 0,
     TopLeft = 1,
     TopRight = 2,
     BottomRight = 3,
@@ -435,6 +436,8 @@ enum EOrientation : int {
 
 inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogui::Vector2i& pos, const nanogui::Vector2i& size) {
     switch (orientation) {
+        case None:
+            return pos;
         case TopLeft:
             return pos;
         case TopRight:

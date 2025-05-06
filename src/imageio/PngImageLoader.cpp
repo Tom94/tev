@@ -17,7 +17,8 @@
  */
 
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Chroma.h>
+#include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/PngImageLoader.h>
 
 #include <png.h>
@@ -42,11 +43,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_infop infoPtr = nullptr;
     ScopeGuard pngGuard{[&]() { png_destroy_read_struct(&pngPtr, &infoPtr, nullptr); }};
 
-    png_set_error_fn(pngPtr, nullptr, [](png_structp png_ptr, png_const_charp error_msg) {
-        throw LoadError{fmt::format("PNG error: {}", error_msg)};
-    }, [](png_structp png_ptr, png_const_charp warning_msg) {
-        tlog::warning() << fmt::format("PNG warning: {}", warning_msg);
-    });
+    png_set_error_fn(
+        pngPtr,
+        nullptr,
+        [](png_structp png_ptr, png_const_charp error_msg) { throw LoadError{fmt::format("PNG error: {}", error_msg)}; },
+        [](png_structp png_ptr, png_const_charp warning_msg) { tlog::warning() << fmt::format("PNG warning: {}", warning_msg); }
+    );
 
     infoPtr = png_create_info_struct(pngPtr);
     if (!infoPtr) {
@@ -131,7 +133,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         throw LoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
-    tlog::debug() << fmt::format("PNG image info: {}x{}, {} channels, {} bit depth, color type: {}", size.x(), size.y(), numChannels, bitDepth, colorType);
+    tlog::debug() << fmt::format(
+        "PNG image info: {}x{}, {} channels, {} bit depth, color type: {}", size.x(), size.y(), numChannels, bitDepth, colorType
+    );
 
     // 16 bit channels are big endian by default, but we want little endian on little endian systems
     if (bitDepth == 16 && std::endian::little == std::endian::native) {
@@ -152,10 +156,30 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     png_read_image(pngPtr, rowPointers.data());
 
+    png_uint_32 exifDataSize = 0;
+    png_bytep exifDataRaw = nullptr;
+    png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
+    if (exifDataRaw) {
+        // libpng strips the exif header, but our exif library actually wants the header, so we prepend it again.
+        std::vector<uint8_t> exifData = {0x45, 0x78, 0x69, 0x66, 0x00, 0x00};
+        exifData.insert(exifData.end(), exifDataRaw, exifDataRaw + exifDataSize);
+
+        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
+
+        try {
+            EOrientation orientation = Exif(exifData).getOrientation();
+            tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+
+            co_await orientToTopLeft(imageData, size, orientation, priority);
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed reorient from EXIF: {}", e.what()); }
+    }
+
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
     resultData.channels = makeNChannels(numChannels, size);
     resultData.hasPremultipliedAlpha = false;
+
+    bool hasAlpha = numChannels > numColorChannels;
 
     // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the image is in Rec.709/sRGB (per the PNG spec) and
     // convert it to linear space via inverse sRGB transfer function.
@@ -166,13 +190,20 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         tlog::debug() << fmt::format("Found ICC color profile: {}, attempting to apply...", iccProfileName);
 
         try {
-            co_await convertIccToLinearSrgbPremultiplied(
-                vector<uint8_t>(iccProfile, iccProfile + iccProfileSize),
+            vector<float> floatData(imageData.size());
+            if (bitDepth == 16) {
+                co_await toFloat32((uint16_t*)imageData.data(), numChannels, floatData.data(), numChannels, size, hasAlpha, priority);
+            } else {
+                co_await toFloat32(imageData.data(), numChannels, floatData.data(), numChannels, size, hasAlpha, priority);
+            }
+
+            co_await toLinearSrgbPremul(
+                ColorProfile::fromIcc(iccProfile, iccProfileSize),
                 size,
                 numColorChannels,
                 numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
-                bitDepth == 16 ? EPixelFormat::U16 : EPixelFormat::U8,
-                imageData.data(),
+                EPixelFormat::F32,
+                (uint8_t*)floatData.data(),
                 resultData.channels.front().data(),
                 priority
             );
@@ -182,41 +213,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    static const int ALPHA_CHANNEL_INDEX = 3;
     if (bitDepth == 16) {
-        const uint16_t* typedData = reinterpret_cast<const uint16_t*>(imageData.data());
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                size_t baseIdx = i * numChannels;
-                for (int c = 0; c < numChannels; ++c) {
-                    if (c == ALPHA_CHANNEL_INDEX && numChannels == 4) {
-                        resultData.channels[c].at(i) = (uint16_t)typedData[baseIdx + c] / 65535.0f;
-                    } else {
-                        resultData.channels[c].at(i) = toLinear((uint16_t)typedData[baseIdx + c] / 65535.0f);
-                    }
-                }
-            },
-            priority
+        co_await toFloat32<uint16_t, true>(
+            (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
         );
     } else {
-        const uint8_t* typedData = reinterpret_cast<const uint8_t*>(imageData.data());
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                size_t baseIdx = i * numChannels;
-                for (int c = 0; c < numChannels; ++c) {
-                    if (c == ALPHA_CHANNEL_INDEX && numChannels == 4) {
-                        resultData.channels[c].at(i) = typedData[baseIdx + c] / 255.0f;
-                    } else {
-                        resultData.channels[c].at(i) = toLinear(typedData[baseIdx + c] / 255.0f);
-                    }
-                }
-            },
-            priority
-        );
+        co_await toFloat32<uint8_t, true>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
     }
 
     co_return result;

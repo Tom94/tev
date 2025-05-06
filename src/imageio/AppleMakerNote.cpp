@@ -27,7 +27,6 @@ static const uint8_t APPLE_SIGNATURE[] = {0x41, 0x70, 0x70, 0x6C, 0x65, 0x20, 0x
 static const size_t SIG_LENGTH = sizeof(APPLE_SIGNATURE);
 
 bool isAppleMakernote(const uint8_t* data, size_t length) {
-
     if (length < SIG_LENGTH) {
         return false;
     }
@@ -39,6 +38,10 @@ bool isAppleMakernote(const uint8_t* data, size_t length) {
 // over at libexif. https://github.com/libexif/libexif/blob/master/libexif/apple/exif-mnote-data-apple.c That, plus quite a bit of trial and
 // error, finally got this to work. Who knows when Apple will break it. :)
 AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
+    if (!isAppleMakernote(data, length)) {
+        throw invalid_argument{"AppleMakerNote: invalid header."};
+    }
+
     mReverseEndianess = false;
 
     size_t ofs = 0;
@@ -47,13 +50,13 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
     } else if ((data[ofs + 12] == 'I') && (data[ofs + 13] == 'I')) {
         mReverseEndianess = std::endian::big == std::endian::native;
     } else {
-        throw invalid_argument{"Failed to determine byte order."};
+        throw invalid_argument{"AppleMakerNote: failed to determine byte order."};
     }
 
     uint32_t tcount = read<uint16_t>(data + ofs + 14, mReverseEndianess);
 
     if (length < ofs + 16 + tcount * 12 + 4) {
-        throw invalid_argument{"Too short"};
+        throw invalid_argument{"AppleMakerNote: too short"};
     }
 
     ofs += 16;
@@ -61,7 +64,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
     tlog::debug() << "Decoding Apple maker note:";
     for (uint32_t i = 0; i < tcount; i++) {
         if (ofs + 12 > length) {
-            throw invalid_argument{"Overflow"};
+            throw invalid_argument{"AppleMakerNote: overflow"};
         }
 
         AppleMakerNoteEntry entry;
@@ -70,7 +73,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
         entry.nComponents = read<uint32_t>(data + ofs + 4, mReverseEndianess);
 
         if (ofs + 4 + entry.size() > length) {
-            throw invalid_argument{"Elem overflow"};
+            throw invalid_argument{"AppleMakerNote: elem overflow"};
         }
 
         size_t entryOffset;
@@ -84,7 +87,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
         entry.data = vector<uint8_t>(data + entryOffset, data + entryOffset + entry.size());
 
         if (entryOffset + entry.size() > length) {
-            throw invalid_argument{"Offset overflow"};
+            throw invalid_argument{"AppleMakerNote: offset overflow"};
         }
 
         ofs += 12;
