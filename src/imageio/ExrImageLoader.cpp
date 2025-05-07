@@ -104,9 +104,7 @@ AttributeNode createColorNode(const std::string& name, const Imath::V2f& value) 
     AttributeNode node;
     node.name = name;
     node.type = "vec2f";
-    std::ostringstream oss;
-    oss << "(" << value[0] << ", " << value[1] << ")";
-    node.value = oss.str();
+    node.value = fmt::format("({}, {})", value[0], value[1]);
     return node;
 }
 
@@ -114,10 +112,46 @@ AttributeNode createColorNode(const std::string& name, const Imath::V2i& value) 
     AttributeNode node;
     node.name = name;
     node.type = "vec2i";
-    std::ostringstream oss;
-    oss << "(" << value[0] << ", " << value[1] << ")";
-    node.value = oss.str();
+    node.value = fmt::format("({}, {})", value[0], value[1]);
     return node;
+}
+
+template <typename T>
+std::string toString(const Imath::Matrix33<T>& value) {
+    std::ostringstream oss;
+    oss << "([";
+    for (uint32_t i = 0; i < 3; ++i) {
+        if (i > 0) {
+            oss << "], [";
+        }
+        for (uint32_t j = 0; j < 3; ++j) {
+            if (j > 0) {
+                oss << ", ";
+            }
+            oss << value[i][j];
+        }
+    }
+    oss << "])";
+    return oss.str();
+}
+
+template <typename T>
+std::string toString(const Imath::Matrix44<T>& value) {
+    std::ostringstream oss;
+    oss << "([";
+    for (uint32_t i = 0; i < 4; ++i) {
+        if (i > 0) {
+            oss << "], [";
+        }
+        for (uint32_t j = 0; j < 4; ++j) {
+            if (j > 0) {
+                oss << ", ";
+            }
+            oss << value[i][j];
+        }
+    }
+    oss << "])";
+    return oss.str();
 }
 
 AttributeNode getHeaderAttributes(const Imf::Header& header) {
@@ -127,38 +161,40 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
         {Imf::PixelType::HALF,  "HALF" },
         {Imf::PixelType::FLOAT, "FLOAT"}
     };
+
     for (auto attributeItr = header.begin(); attributeItr != header.end(); attributeItr++) {
         const Imf::Attribute* attr = &(attributeItr.attribute());
+
         AttributeNode node;
         node.name = std::string(attributeItr.name());
         node.type = std::string(attr->typeName());
-        std::ostringstream oss;
+
         if (const Imf::StringAttribute* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
-            oss << strAttr->value();
+            node.value = strAttr->value();
         } else if (const Imf::IntAttribute* intAttr = dynamic_cast<const Imf::IntAttribute*>(attr)) {
-            oss << intAttr->value();
+            node.value = fmt::format("{}", intAttr->value());
         } else if (const Imf::FloatAttribute* floatAttr = dynamic_cast<const Imf::FloatAttribute*>(attr)) {
-            oss << floatAttr->value();
+            node.value = fmt::format("{}", floatAttr->value());
         } else if (const Imf::DoubleAttribute* doubleAttr = dynamic_cast<const Imf::DoubleAttribute*>(attr)) {
-            oss << doubleAttr->value();
+            node.value = fmt::format("{}", doubleAttr->value());
         } else if (const Imf::V2fAttribute* v2fAttr = dynamic_cast<const Imf::V2fAttribute*>(attr)) {
             auto value = v2fAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ")";
+            node.value = fmt::format("({}, {})", value[0], value[1]);
         } else if (const Imf::V2dAttribute* v2dAttr = dynamic_cast<const Imf::V2dAttribute*>(attr)) {
             auto value = v2dAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ")";
+            node.value = fmt::format("({}, {})", value[0], value[1]);
         } else if (const Imf::V2iAttribute* v2iAttr = dynamic_cast<const Imf::V2iAttribute*>(attr)) {
             auto value = v2iAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ")";
+            node.value = fmt::format("({}, {})", value[0], value[1]);
         } else if (const Imf::V3fAttribute* v3fAttr = dynamic_cast<const Imf::V3fAttribute*>(attr)) {
             auto value = v3fAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ")";
+            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const Imf::V3dAttribute* v3dAttr = dynamic_cast<const Imf::V3dAttribute*>(attr)) {
             auto value = v3dAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ")";
+            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const Imf::V3iAttribute* v3iAttr = dynamic_cast<const Imf::V3iAttribute*>(attr)) {
             auto value = v3iAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ")";
+            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const Imf::Box2iAttribute* box2iAttr = dynamic_cast<const Imf::Box2iAttribute*>(attr)) {
             auto value = box2iAttr->value();
             AttributeNode minNode = createColorNode("min", value.min);
@@ -172,39 +208,54 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
             AttributeNode maxNode = createColorNode("max", value.max);
             node.children.push_back(maxNode);
         } else if (const Imf::M33fAttribute* m33fAttr = dynamic_cast<const Imf::M33fAttribute*>(attr)) {
-            auto value = m33fAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ", " << value[3] << ", " << value[4] << ", " << value[5]
-                << ", " << value[6] << ", " << value[7] << ", " << value[8] << ")";
+            node.value = toString(m33fAttr->value());
         } else if (const Imf::M33dAttribute* m33dAttr = dynamic_cast<const Imf::M33dAttribute*>(attr)) {
-            auto value = m33dAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ", " << value[3] << ", " << value[4] << ", " << value[5]
-                << ", " << value[6] << ", " << value[7] << ", " << value[8] << ")";
+            node.value = toString(m33dAttr->value());
         } else if (const Imf::M44fAttribute* m44fAttr = dynamic_cast<const Imf::M44fAttribute*>(attr)) {
-            auto value = m44fAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ", " << value[3] << ", " << value[4] << ", " << value[5]
-                << ", " << value[6] << ", " << value[7] << ", " << value[8] << ", " << value[9] << ", " << value[10] << ", " << value[11]
-                << ", " << value[12] << ", " << value[13] << ", " << value[14] << ", " << value[15] << ")";
+            node.value = toString(m44fAttr->value());
         } else if (const Imf::M44dAttribute* m44dAttr = dynamic_cast<const Imf::M44dAttribute*>(attr)) {
-            auto value = m44dAttr->value();
-            oss << "(" << value[0] << ", " << value[1] << ", " << value[2] << ", " << value[3] << ", " << value[4] << ", " << value[5]
-                << ", " << value[6] << ", " << value[7] << ", " << value[8] << ", " << value[9] << ", " << value[10] << ", " << value[11]
-                << ", " << value[12] << ", " << value[13] << ", " << value[14] << ", " << value[15] << ")";
+            node.value = toString(m44dAttr->value());
         } else if (const Imf::EnvmapAttribute* envmapAttr = dynamic_cast<const Imf::EnvmapAttribute*>(attr)) {
-            auto value = envmapAttr->value();
-            oss << value;
+            switch (envmapAttr->value()) {
+                case Imf::ENVMAP_LATLONG: node.value = "Latlong"; break;
+                case Imf::ENVMAP_CUBE: node.value = "Cube"; break;
+                default: node.value = "Unknown"; break;
+            }
         } else if (const Imf::CompressionAttribute* compressionAttr = dynamic_cast<const Imf::CompressionAttribute*>(attr)) {
-            auto value = compressionAttr->value();
-            oss << value;
+            switch (compressionAttr->value()) {
+                case Imf::NO_COMPRESSION: node.value = "NO"; break;
+                case Imf::RLE_COMPRESSION: node.value = "RLE"; break;
+                case Imf::ZIPS_COMPRESSION: node.value = "ZIPS"; break;
+                case Imf::ZIP_COMPRESSION: node.value = "ZIP"; break;
+                case Imf::PIZ_COMPRESSION: node.value = "PIZ"; break;
+                case Imf::B44_COMPRESSION: node.value = "B44"; break;
+                case Imf::B44A_COMPRESSION: node.value = "B44A"; break;
+                case Imf::DWAA_COMPRESSION: node.value = "DWAA"; break;
+                case Imf::DWAB_COMPRESSION: node.value = "DWAB"; break;
+                default: node.value = "Unknown"; break;
+            }
         } else if (const Imf::LineOrderAttribute* lineOrderAttr = dynamic_cast<const Imf::LineOrderAttribute*>(attr)) {
-            auto value = lineOrderAttr->value();
-            oss << value;
+            switch (lineOrderAttr->value()) {
+                case Imf::INCREASING_Y: node.value = "Increasing Y"; break;
+                case Imf::DECREASING_Y: node.value = "Decreasing Y"; break;
+                case Imf::RANDOM_Y: node.value = "Random"; break;
+                default: node.value = "Unknown"; break;
+            }
         } else if (const Imf::KeyCodeAttribute* keycodeAttr = dynamic_cast<const Imf::KeyCodeAttribute*>(attr)) {
             auto value = keycodeAttr->value();
-            oss << value.filmMfcCode() << ", " << value.filmType() << ", " << value.prefix() << ", " << value.count() << ", "
-                << value.perfOffset() << ", " << value.perfsPerFrame() << ", " << value.perfsPerCount();
+            node.value = fmt::format(
+                "{}, {}, {}, {}, {}, {}, {}",
+                value.filmMfcCode(),
+                value.filmType(),
+                value.prefix(),
+                value.count(),
+                value.perfOffset(),
+                value.perfsPerFrame(),
+                value.perfsPerCount()
+            );
         } else if (const Imf::RationalAttribute* rationalAttr = dynamic_cast<const Imf::RationalAttribute*>(attr)) {
             auto value = rationalAttr->value();
-            oss << value.n << ", " << value.d;
+            node.value = fmt::format("{}, {}", value.n, value.d);
         } else if (const Imf::ChromaticitiesAttribute* chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute*>(attr)) {
             auto value = chromaticitiesAttr->value();
 
@@ -229,7 +280,7 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
             }
             node.value = std::to_string(cnt);
         } else {
-            oss << "unrecognized attribute : " << attributeItr.attribute().typeName();
+            node.value = fmt::format("UNKNOWN: {}", attributeItr.attribute().typeName());
         }
 
         // TODOS
@@ -237,9 +288,9 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
         // Imf::TimeCodeAttribute;
         // Imf::IDManifestAttribute;
         // Imf::DeepImageStateAttribute;
-        node.value = oss.str();
         attributes.children.push_back(node);
     }
+
     // {
     //     std::ostringstream oss;
     //     auto ch = header.channels();

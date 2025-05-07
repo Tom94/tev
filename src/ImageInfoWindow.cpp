@@ -49,22 +49,18 @@ string ImageInfoWindow::ALT = "Alt";
 void addRow(Widget* current, const string& name, const string& type, const string& value, int indentation) {
     auto row = new Widget{current};
     row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Maximum, 0, 0});
-    std::ostringstream oss;
-    for (int i = 0; i < indentation; ++i) {
-        oss << "-";
-    }
-    if (indentation > 0) {
-        oss << "> ";
-    }
-    oss << name;
-    auto nameWidget = new Label{row, oss.str(), "sans-bold"};
-    nameWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
-    nameWidget->set_fixed_width(150);
+
+    auto spacer = new Widget{row};
+    spacer->set_fixed_width(indentation * 5);
+
+    string dotName = indentation > 0 ? "." + name : name;
+    auto nameWidget = new Label{row, dotName, "sans-bold"};
+    nameWidget->set_fixed_width(150 - indentation * 5);
+
     auto valueWidget = new Label{row, value, "sans"};
-    valueWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
     valueWidget->set_fixed_width(150);
+
     auto typeWidget = new Label{row, type, "sans"};
-    typeWidget->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
     typeWidget->set_fixed_width(150);
 };
 
@@ -85,25 +81,26 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     VScrollPanel* scrollPanel = new VScrollPanel{tmp};
     tabWidget->append_tab("EXR", tmp);
 
-    Widget* shortcuts = new Widget(scrollPanel);
-    shortcuts->set_layout(new GroupLayout{});
+    Widget* container = new Widget(scrollPanel);
+    container->set_layout(new GroupLayout{});
 
-    new Label{shortcuts, "Attributes", "sans-bold", 18};
-    auto imageLoading = new Widget{shortcuts};
-    imageLoading->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    new Label{container, "Attributes", "sans-bold", 18};
+    auto attributes = new Widget{container};
+    attributes->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(imageLoading, "name", "type", "value", 0);
+    addRow(attributes, "name", "type", "value", 0);
     for (const auto& it : (image->attributes().children)) {
-        addRow(imageLoading, it.name, it.type, it.value, 0);
+        addRow(attributes, it.name, it.type, it.value, 0);
         if (it.children.size() > 0) {
             for (const auto& itChild : (it.children)) {
-                addRow(imageLoading, itChild.name, itChild.type, itChild.value, 1);
+                addRow(attributes, itChild.name, itChild.type, itChild.value, 1);
             }
         }
     }
 
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
+
     // scrollPanel->set_fixed_height(about->height() + 12);
     scrollPanel->set_fixed_height(640 - 12);
     tabWidget->set_fixed_height(640);
