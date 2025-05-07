@@ -171,11 +171,11 @@ set(TEV_SOURCES
     src/main.cpp
 )
 if (MSVC)
-    list(APPEND TEV_SOURCES resources/icon.rc)
-    list(APPEND TEV_SOURCES resources/tev.manifest)
+    list(APPEND TEV_SOURCES resources/windows/icon.rc)
+    list(APPEND TEV_SOURCES resources/windows/tev.manifest)
     list(APPEND TEV_SOURCES include/tev/imageio/DdsImageLoader.h src/imageio/DdsImageLoader.cpp)
 elseif (APPLE)
-    list(APPEND TEV_SOURCES resources/icon.icns scripts/mac-run-tev.sh)
+    list(APPEND TEV_SOURCES resources/macos/icon.icns scripts/mac-run-tev.sh)
 endif()
 if (TEV_USE_LIBHEIF)
     list(APPEND TEV_SOURCES include/tev/imageio/HeifImageLoader.h src/imageio/HeifImageLoader.cpp)
@@ -189,13 +189,13 @@ add_executable(tev ${TEV_SOURCES})
 
 if (APPLE)
     set(RESOURCE_FILES
-        resources/icon.icns
+        resources/macos/icon.icns
         scripts/mac-run-tev.sh
     )
 
     set_target_properties(tev PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist"
         MACOSX_BUNDLE_BUNDLE_VERSION ${TEV_VERSION_ARCH}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${TEV_VERSION}
         MACOSX_BUNDLE_LONG_VERSION_STRING ${TEV_VERSION_ARCH}
@@ -293,26 +293,26 @@ elseif (WIN32)
     set(CPACK_GENERATOR "WIX")
     set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-installer")
 
-    set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png")
+    set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/icon.png")
     set(CPACK_PACKAGE_EXECUTABLES "tev" "tev")
 
-    set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/patch.wxs")
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/patch.wxs")
     set(CPACK_WIX_UPGRADE_GUID "F3EC0D95-B2DC-4451-975C-CF591871E162")
     set(CPACK_WIX_PRODUCT_GUID "F7478E0D-33A4-4F00-829B-45CE27B1D0E2")
-    set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.ico")
+    set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/icon.ico")
 
     configure_file(scripts/configure-winget.cmake scripts/configure-winget.cmake @ONLY)
-    configure_file(resources/winget.yaml resources/winget.yaml COPYONLY)
+    configure_file(resources/windows/winget.yaml resources/windows/winget.yaml COPYONLY)
     set(CPACK_POST_BUILD_SCRIPTS "${CMAKE_BINARY_DIR}/scripts/configure-winget.cmake")
 else()
     install(TARGETS tev)
 
-    configure_file(resources/tev.desktop resources/tev.desktop)
-    install(FILES ${CMAKE_BINARY_DIR}/resources/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+    configure_file(resources/linux/tev.desktop resources/linux/tev.desktop)
+    install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
 
     set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
     foreach(RES IN LISTS ICON_RESOLUTIONS)
-        install(FILES resources/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME tev.png)
+        install(FILES resources/linux/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME tev.png)
     endforeach()
 
     list(APPEND CPACK_GENERATOR External)
