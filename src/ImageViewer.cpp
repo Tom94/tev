@@ -432,7 +432,7 @@ ImageViewer::ImageViewer(
             mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
             mWatchFilesForChangesButton->set_change_callback([this](bool value) { setWatchFilesForChanges(value); });
 
-            mImageInfoButton = makeImageButton("", false, {}, FA_INFO, "Show metadata (i)");
+            mImageInfoButton = makeImageButton("", false, {}, FA_INFO, "Show image info and metadata (I)");
             mImageInfoButton->set_flags(Button::ToggleButton);
             mImageInfoButton->set_change_callback([this](bool) { toggleImageInfoWindow(); });
             mAnyImageButtons.push_back(mImageInfoButton);
@@ -749,6 +749,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
+            return true;
+        } else if (key == GLFW_KEY_I) {
+            toggleImageInfoWindow();
             return true;
         } else if (key == GLFW_KEY_R) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
