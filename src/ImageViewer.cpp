@@ -402,7 +402,7 @@ ImageViewer::ImageViewer(
         // Save, refresh, load, close
         {
             auto tools = new Widget{mSidebarLayout};
-            tools->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 1});
+            tools->set_layout(new GridLayout{Orientation::Horizontal, 7, Alignment::Fill, 5, 1});
 
             auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{tools, name, icon};
@@ -432,6 +432,11 @@ ImageViewer::ImageViewer(
             mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
             mWatchFilesForChangesButton->set_change_callback([this](bool value) { setWatchFilesForChanges(value); });
 
+            mImageInfoButton = makeImageButton("", false, {}, FA_INFO, "Show metadata (i)");
+            mImageInfoButton->set_flags(Button::ToggleButton);
+            mImageInfoButton->set_change_callback([this](bool) { toggleImageInfoWindow(); });
+            mAnyImageButtons.push_back(mImageInfoButton);
+
             mCurrentImageButtons.push_back(makeImageButton(
                 "",
                 false,
@@ -449,12 +454,6 @@ ImageViewer::ImageViewer(
                 FA_TIMES,
                 fmt::format("Close ({}+W); Close All ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
-
-            mImageInfoButton = new Button{tools, "", FA_INFO};
-            mImageInfoButton->set_change_callback([this](bool) { toggleImageInfoWindow(); });
-            mImageInfoButton->set_font_size(15);
-            mImageInfoButton->set_tooltip("Show metadata");
-            mImageInfoButton->set_flags(Button::ToggleButton);
 
             spacer = new Widget{mSidebarLayout};
             spacer->set_height(3);
