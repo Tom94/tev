@@ -106,9 +106,6 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addRow(imageSelection, COMMAND + "+9/F", "Zoom to fit");
     addRow(imageSelection, "N", "Normalize image to [0, 1]");
     addRow(imageSelection, "R", "Reset image parameters");
-    if (supportsHdr) {
-        addRow(imageSelection, "L", "Display the image as if on an LDR screen");
-    }
 
     addRow(imageSelection, "Shift+Right/Left or Shift+D/A", "Select next/previous tonemap");
 
@@ -150,7 +147,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 
     addRow(ui, ALT + "+Enter", "Maximize");
     addRow(ui, COMMAND + "+B", "Toggle GUI");
-    addRow(ui, "H or ?", "Show help (this window)");
+    addRow(ui, "?", "Show help (this window)");
     addRow(ui, "I", "Show image info and metadata");
     addRow(ui, COMMAND + "+F", "Find image or channel group");
     addRow(ui, "Escape", "Reset find string");
