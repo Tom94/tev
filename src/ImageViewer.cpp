@@ -1410,6 +1410,13 @@ void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallS
 }
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
+    // Once the selected image has been updated, reflect that in the image info window.
+    ScopeGuard imageInfoGuard{[this]() {
+        if (mImageInfoWindow) {
+            updateImageInfoWindow();
+        }
+    }};
+
     if (stopPlayback) {
         mPlayButton->set_pushed(false);
     }
@@ -1495,11 +1502,6 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
                 activeImageButton->position().y() / divisor
             ));
         }
-    }
-
-    if (mImageInfoButton->pushed()) {
-        toggleImageInfoWindow();
-        toggleImageInfoWindow();
     }
 }
 
@@ -1780,17 +1782,37 @@ void ImageViewer::toggleImageInfoWindow() {
     if (mImageInfoWindow) {
         mImageInfoWindow->dispose();
         mImageInfoWindow = nullptr;
+
         mImageInfoButton->set_pushed(false);
     } else {
         if (mCurrentImage) {
             mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
             mImageInfoWindow->center();
             mImageInfoWindow->request_focus();
+
             mImageInfoButton->set_pushed(true);
         }
     }
 
     requestLayoutUpdate();
+}
+
+void ImageViewer::updateImageInfoWindow() {
+    if (mImageInfoWindow) {
+        auto pos = mImageInfoWindow->position();
+        auto size = mImageInfoWindow->size();
+        mImageInfoWindow->dispose();
+
+        if (mCurrentImage) {
+            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
+            mImageInfoWindow->set_position(pos);
+            mImageInfoWindow->set_size(size);
+            mImageInfoButton->set_pushed(true);
+        } else {
+            mImageInfoWindow = nullptr;
+            mImageInfoButton->set_pushed(false);
+        }
+    }
 }
 
 void ImageViewer::openImageDialog() {

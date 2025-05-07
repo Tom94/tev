@@ -158,7 +158,9 @@ public:
     void setUiVisible(bool shouldBeVisible);
 
     void toggleHelpWindow();
+
     void toggleImageInfoWindow();
+    void updateImageInfoWindow();
 
     void openImageDialog();
     void saveImageDialog();
