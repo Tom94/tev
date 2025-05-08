@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sstream>
 #include <tev/ImageInfoWindow.h>
 
 #include <nanogui/button.h>
@@ -34,34 +33,26 @@ using namespace std;
 
 namespace tev {
 
-#ifdef __APPLE__
-string ImageInfoWindow::COMMAND = "Cmd";
-#else
-string ImageInfoWindow::COMMAND = "Ctrl";
-#endif
-
-#ifdef __APPLE__
-string ImageInfoWindow::ALT = "Opt";
-#else
-string ImageInfoWindow::ALT = "Alt";
-#endif
-
-void addRow(Widget* current, const string& name, const string& type, const string& value, int indentation) {
+void addRows(Widget* current, const AttributeNode& node, int indentation) {
     auto row = new Widget{current};
     row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Maximum, 0, 0});
 
     auto spacer = new Widget{row};
     spacer->set_fixed_width(indentation * 5);
 
-    string dotName = indentation > 0 ? "." + name : name;
-    auto nameWidget = new Label{row, dotName, "sans-bold"};
+    string name = indentation > 0 ? "." + node.name : node.name;
+    auto nameWidget = new Label{row, name, "sans-bold"};
     nameWidget->set_fixed_width(150 - indentation * 5);
 
-    auto valueWidget = new Label{row, value, "sans"};
-    valueWidget->set_fixed_width(150);
+    auto valueWidget = new Label{row, node.value, "sans"};
+    valueWidget->set_fixed_width(300);
 
-    auto typeWidget = new Label{row, type, "sans"};
+    auto typeWidget = new Label{row, node.type, "sans"};
     typeWidget->set_fixed_width(150);
+
+    for (const auto& it : node.children) {
+        addRows(current, it, indentation + 1);
+    }
 };
 
 ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& image, bool supportsHdr, function<void()> closeCallback) :
@@ -70,16 +61,23 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
-    set_layout(new GroupLayout{});
-    set_fixed_width(550);
+    static const int WINDOW_WIDTH = 640;
+    static const int WINDOW_HEIGHT = 680;
 
-    TabWidget* tabWidget = new TabWidget{this};
+    set_layout(new GroupLayout{});
+    set_fixed_width(WINDOW_WIDTH);
+
+    mTabWidget = new TabWidget{this};
 
     // Keybindings tab
-    Widget* tmp = new Widget(tabWidget);
-    tmp->set_fixed_height(640);
+    Widget* tmp = new Widget(mTabWidget);
+    mTabWidget->set_fixed_height(WINDOW_HEIGHT - 12);
+
     VScrollPanel* scrollPanel = new VScrollPanel{tmp};
-    tabWidget->append_tab("EXR", tmp);
+    scrollPanel->set_fixed_height(WINDOW_HEIGHT - 40);
+    scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
+
+    mTabWidget->append_tab("EXR", tmp);
 
     Widget* container = new Widget(scrollPanel);
     container->set_layout(new GroupLayout{});
@@ -88,25 +86,14 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     auto attributes = new Widget{container};
     attributes->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    addRow(attributes, "name", "type", "value", 0);
-    for (const auto& it : (image->attributes().children)) {
-        addRow(attributes, it.name, it.type, it.value, 0);
-        if (it.children.size() > 0) {
-            for (const auto& itChild : (it.children)) {
-                addRow(attributes, itChild.name, itChild.type, itChild.value, 1);
-            }
-        }
+    for (const auto& c : image->attributes().children) {
+        addRows(attributes, c, 0);
     }
 
-    // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
 
-    // scrollPanel->set_fixed_height(about->height() + 12);
-    scrollPanel->set_fixed_height(640 - 12);
-    tabWidget->set_fixed_height(640);
-
-    tabWidget->set_selected_id(0);
-    tabWidget->set_callback([tabWidget](int id) mutable { tabWidget->set_selected_id(id); });
+    mTabWidget->set_selected_id(0);
+    mTabWidget->set_callback([this](int id) mutable { mTabWidget->set_selected_id(id); });
 }
 
 bool ImageInfoWindow::keyboard_event(int key, int scancode, int action, int modifiers) {
@@ -114,9 +101,19 @@ bool ImageInfoWindow::keyboard_event(int key, int scancode, int action, int modi
         return true;
     }
 
-    if (key == GLFW_KEY_ESCAPE) {
-        mCloseCallback();
-        return true;
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_ESCAPE) {
+            mCloseCallback();
+            return true;
+        } else if (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL)) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                mTabWidget->set_selected_id((mTabWidget->selected_id() - 1 + mTabWidget->tab_count()) % mTabWidget->tab_count());
+            } else {
+                mTabWidget->set_selected_id((mTabWidget->selected_id() + 1) % mTabWidget->tab_count());
+            }
+
+            return true;
+        }
     }
 
     return false;
