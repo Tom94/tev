@@ -42,13 +42,13 @@ void addRows(Widget* current, const AttributeNode& node, int indentation) {
 
     string name = indentation > 0 ? "." + node.name : node.name;
     auto nameWidget = new Label{row, name, "sans-bold"};
-    nameWidget->set_fixed_width(150 - indentation * 5);
+    nameWidget->set_fixed_width(160 - indentation * 5);
 
     auto valueWidget = new Label{row, node.value, "sans"};
-    valueWidget->set_fixed_width(300);
+    valueWidget->set_fixed_width(320);
 
     auto typeWidget = new Label{row, node.type, "sans"};
-    typeWidget->set_fixed_width(150);
+    typeWidget->set_fixed_width(160);
 
     for (const auto& it : node.children) {
         addRows(current, it, indentation + 1);
@@ -61,7 +61,7 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
-    static const int WINDOW_WIDTH = 640;
+    static const int WINDOW_WIDTH = 700;
     static const int WINDOW_HEIGHT = 680;
 
     set_layout(new GroupLayout{});

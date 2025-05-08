@@ -24,14 +24,19 @@
 #include <ImfChannelList.h>
 #include <ImfChannelListAttribute.h>
 #include <ImfCompressionAttribute.h>
+#include <ImfDeepImageStateAttribute.h>
 #include <ImfDoubleAttribute.h>
 #include <ImfFrameBuffer.h>
+#include <ImfIDManifestAttribute.h>
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
 #include <ImfLineOrderAttribute.h>
 #include <ImfMultiPartInputFile.h>
+#include <ImfPreviewImageAttribute.h>
 #include <ImfStandardAttributes.h>
+#include <ImfStringVectorAttribute.h>
 #include <ImfTileDescriptionAttribute.h>
+#include <ImfTimeCodeAttribute.h>
 
 #include <istream>
 
@@ -100,7 +105,7 @@ static bool isExrImage(istream& iStream) {
     return result;
 }
 
-AttributeNode createColorNode(const std::string& name, const Imath::V2f& value) {
+AttributeNode createVec2fNode(const std::string& name, const Imath::V2f& value) {
     AttributeNode node;
     node.name = name;
     node.type = "vec2f";
@@ -108,7 +113,7 @@ AttributeNode createColorNode(const std::string& name, const Imath::V2f& value) 
     return node;
 }
 
-AttributeNode createColorNode(const std::string& name, const Imath::V2i& value) {
+AttributeNode createVec2iNode(const std::string& name, const Imath::V2i& value) {
     AttributeNode node;
     node.name = name;
     node.type = "vec2i";
@@ -116,8 +121,7 @@ AttributeNode createColorNode(const std::string& name, const Imath::V2i& value) 
     return node;
 }
 
-template <typename T>
-std::string toString(const Imath::Matrix33<T>& value) {
+template <typename T> std::string toString(const Imath::Matrix33<T>& value) {
     std::ostringstream oss;
     oss << "([";
     for (uint32_t i = 0; i < 3; ++i) {
@@ -135,33 +139,29 @@ std::string toString(const Imath::Matrix33<T>& value) {
     return oss.str();
 }
 
-template <typename T>
-std::string toString(const Imath::Matrix44<T>& value) {
+template <typename T> std::string toString(const Imath::Matrix44<T>& value) {
     std::ostringstream oss;
     oss << "([";
     for (uint32_t i = 0; i < 4; ++i) {
         if (i > 0) {
             oss << "], [";
         }
+
         for (uint32_t j = 0; j < 4; ++j) {
             if (j > 0) {
                 oss << ", ";
             }
+
             oss << value[i][j];
         }
     }
+
     oss << "])";
     return oss.str();
 }
 
 AttributeNode getHeaderAttributes(const Imf::Header& header) {
     AttributeNode attributes;
-    static std::map<Imf::PixelType, std::string> pixelTypeToStringMap{
-        {Imf::PixelType::UINT,  "UINT" },
-        {Imf::PixelType::HALF,  "HALF" },
-        {Imf::PixelType::FLOAT, "FLOAT"}
-    };
-
     for (auto attributeItr = header.begin(); attributeItr != header.end(); attributeItr++) {
         const Imf::Attribute* attr = &(attributeItr.attribute());
 
@@ -169,61 +169,61 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
         node.name = std::string(attributeItr.name());
         node.type = std::string(attr->typeName());
 
-        if (const Imf::StringAttribute* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
+        if (const auto* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
             node.value = strAttr->value();
-        } else if (const Imf::IntAttribute* intAttr = dynamic_cast<const Imf::IntAttribute*>(attr)) {
+        } else if (const auto* intAttr = dynamic_cast<const Imf::IntAttribute*>(attr)) {
             node.value = fmt::format("{}", intAttr->value());
-        } else if (const Imf::FloatAttribute* floatAttr = dynamic_cast<const Imf::FloatAttribute*>(attr)) {
+        } else if (const auto* floatAttr = dynamic_cast<const Imf::FloatAttribute*>(attr)) {
             node.value = fmt::format("{}", floatAttr->value());
-        } else if (const Imf::DoubleAttribute* doubleAttr = dynamic_cast<const Imf::DoubleAttribute*>(attr)) {
+        } else if (const auto* doubleAttr = dynamic_cast<const Imf::DoubleAttribute*>(attr)) {
             node.value = fmt::format("{}", doubleAttr->value());
-        } else if (const Imf::V2fAttribute* v2fAttr = dynamic_cast<const Imf::V2fAttribute*>(attr)) {
+        } else if (const auto* v2fAttr = dynamic_cast<const Imf::V2fAttribute*>(attr)) {
             auto value = v2fAttr->value();
             node.value = fmt::format("({}, {})", value[0], value[1]);
-        } else if (const Imf::V2dAttribute* v2dAttr = dynamic_cast<const Imf::V2dAttribute*>(attr)) {
+        } else if (const auto* v2dAttr = dynamic_cast<const Imf::V2dAttribute*>(attr)) {
             auto value = v2dAttr->value();
             node.value = fmt::format("({}, {})", value[0], value[1]);
-        } else if (const Imf::V2iAttribute* v2iAttr = dynamic_cast<const Imf::V2iAttribute*>(attr)) {
+        } else if (const auto* v2iAttr = dynamic_cast<const Imf::V2iAttribute*>(attr)) {
             auto value = v2iAttr->value();
             node.value = fmt::format("({}, {})", value[0], value[1]);
-        } else if (const Imf::V3fAttribute* v3fAttr = dynamic_cast<const Imf::V3fAttribute*>(attr)) {
+        } else if (const auto* v3fAttr = dynamic_cast<const Imf::V3fAttribute*>(attr)) {
             auto value = v3fAttr->value();
             node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
-        } else if (const Imf::V3dAttribute* v3dAttr = dynamic_cast<const Imf::V3dAttribute*>(attr)) {
+        } else if (const auto* v3dAttr = dynamic_cast<const Imf::V3dAttribute*>(attr)) {
             auto value = v3dAttr->value();
             node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
-        } else if (const Imf::V3iAttribute* v3iAttr = dynamic_cast<const Imf::V3iAttribute*>(attr)) {
+        } else if (const auto* v3iAttr = dynamic_cast<const Imf::V3iAttribute*>(attr)) {
             auto value = v3iAttr->value();
             node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
-        } else if (const Imf::Box2iAttribute* box2iAttr = dynamic_cast<const Imf::Box2iAttribute*>(attr)) {
+        } else if (const auto* box2iAttr = dynamic_cast<const Imf::Box2iAttribute*>(attr)) {
             auto value = box2iAttr->value();
-            AttributeNode minNode = createColorNode("min", value.min);
+            AttributeNode minNode = createVec2iNode("min", value.min);
             node.children.push_back(minNode);
-            AttributeNode maxNode = createColorNode("max", value.max);
+            AttributeNode maxNode = createVec2iNode("max", value.max);
             node.children.push_back(maxNode);
-        } else if (const Imf::Box2fAttribute* box2fAttr = dynamic_cast<const Imf::Box2fAttribute*>(attr)) {
+        } else if (const auto* box2fAttr = dynamic_cast<const Imf::Box2fAttribute*>(attr)) {
             auto value = box2fAttr->value();
-            AttributeNode minNode = createColorNode("min", value.min);
+            AttributeNode minNode = createVec2fNode("min", value.min);
             node.children.push_back(minNode);
-            AttributeNode maxNode = createColorNode("max", value.max);
+            AttributeNode maxNode = createVec2fNode("max", value.max);
             node.children.push_back(maxNode);
-        } else if (const Imf::M33fAttribute* m33fAttr = dynamic_cast<const Imf::M33fAttribute*>(attr)) {
+        } else if (const auto* m33fAttr = dynamic_cast<const Imf::M33fAttribute*>(attr)) {
             node.value = toString(m33fAttr->value());
-        } else if (const Imf::M33dAttribute* m33dAttr = dynamic_cast<const Imf::M33dAttribute*>(attr)) {
+        } else if (const auto* m33dAttr = dynamic_cast<const Imf::M33dAttribute*>(attr)) {
             node.value = toString(m33dAttr->value());
-        } else if (const Imf::M44fAttribute* m44fAttr = dynamic_cast<const Imf::M44fAttribute*>(attr)) {
+        } else if (const auto* m44fAttr = dynamic_cast<const Imf::M44fAttribute*>(attr)) {
             node.value = toString(m44fAttr->value());
-        } else if (const Imf::M44dAttribute* m44dAttr = dynamic_cast<const Imf::M44dAttribute*>(attr)) {
+        } else if (const auto* m44dAttr = dynamic_cast<const Imf::M44dAttribute*>(attr)) {
             node.value = toString(m44dAttr->value());
-        } else if (const Imf::EnvmapAttribute* envmapAttr = dynamic_cast<const Imf::EnvmapAttribute*>(attr)) {
+        } else if (const auto* envmapAttr = dynamic_cast<const Imf::EnvmapAttribute*>(attr)) {
             switch (envmapAttr->value()) {
                 case Imf::ENVMAP_LATLONG: node.value = "Latlong"; break;
                 case Imf::ENVMAP_CUBE: node.value = "Cube"; break;
                 default: node.value = "Unknown"; break;
             }
-        } else if (const Imf::CompressionAttribute* compressionAttr = dynamic_cast<const Imf::CompressionAttribute*>(attr)) {
+        } else if (const auto* compressionAttr = dynamic_cast<const Imf::CompressionAttribute*>(attr)) {
             switch (compressionAttr->value()) {
-                case Imf::NO_COMPRESSION: node.value = "NO"; break;
+                case Imf::NO_COMPRESSION: node.value = "None"; break;
                 case Imf::RLE_COMPRESSION: node.value = "RLE"; break;
                 case Imf::ZIPS_COMPRESSION: node.value = "ZIPS"; break;
                 case Imf::ZIP_COMPRESSION: node.value = "ZIP"; break;
@@ -234,14 +234,14 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
                 case Imf::DWAB_COMPRESSION: node.value = "DWAB"; break;
                 default: node.value = "Unknown"; break;
             }
-        } else if (const Imf::LineOrderAttribute* lineOrderAttr = dynamic_cast<const Imf::LineOrderAttribute*>(attr)) {
+        } else if (const auto* lineOrderAttr = dynamic_cast<const Imf::LineOrderAttribute*>(attr)) {
             switch (lineOrderAttr->value()) {
                 case Imf::INCREASING_Y: node.value = "Increasing Y"; break;
                 case Imf::DECREASING_Y: node.value = "Decreasing Y"; break;
                 case Imf::RANDOM_Y: node.value = "Random"; break;
                 default: node.value = "Unknown"; break;
             }
-        } else if (const Imf::KeyCodeAttribute* keycodeAttr = dynamic_cast<const Imf::KeyCodeAttribute*>(attr)) {
+        } else if (const auto* keycodeAttr = dynamic_cast<const Imf::KeyCodeAttribute*>(attr)) {
             auto value = keycodeAttr->value();
             node.value = fmt::format(
                 "{}, {}, {}, {}, {}, {}, {}",
@@ -253,41 +253,81 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
                 value.perfsPerFrame(),
                 value.perfsPerCount()
             );
-        } else if (const Imf::RationalAttribute* rationalAttr = dynamic_cast<const Imf::RationalAttribute*>(attr)) {
+        } else if (const auto* rationalAttr = dynamic_cast<const Imf::RationalAttribute*>(attr)) {
             auto value = rationalAttr->value();
             node.value = fmt::format("{}, {}", value.n, value.d);
-        } else if (const Imf::ChromaticitiesAttribute* chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute*>(attr)) {
+        } else if (const auto* chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute*>(attr)) {
             auto value = chromaticitiesAttr->value();
 
-            AttributeNode redNode = createColorNode("red", value.red);
+            AttributeNode redNode = createVec2fNode("red", value.red);
             node.children.push_back(redNode);
-            AttributeNode greenNode = createColorNode("green", value.green);
+            AttributeNode greenNode = createVec2fNode("green", value.green);
             node.children.push_back(greenNode);
-            AttributeNode blueNode = createColorNode("blue", value.blue);
+            AttributeNode blueNode = createVec2fNode("blue", value.blue);
             node.children.push_back(blueNode);
-            AttributeNode whiteNode = createColorNode("white", value.white);
+            AttributeNode whiteNode = createVec2fNode("white", value.white);
             node.children.push_back(whiteNode);
-        } else if (const Imf::ChannelListAttribute* chlistAttr = dynamic_cast<const Imf::ChannelListAttribute*>(attr)) {
+        } else if (const auto* chlistAttr = dynamic_cast<const Imf::ChannelListAttribute*>(attr)) {
+            auto toString = [](Imf::PixelType type) {
+                switch (type) {
+                    case Imf::UINT: return "uint";
+                    case Imf::HALF: return "half";
+                    case Imf::FLOAT: return "float";
+                    default: return "Unknown";
+                }
+            };
+
             auto chlist = chlistAttr->value();
-            size_t cnt = 0;
-            for (auto myItr = chlist.begin(); myItr != chlist.end(); myItr++) {
-                Imf::Channel& channel = myItr.channel();
+            for (auto chItr = chlist.begin(); chItr != chlist.end(); chItr++) {
+                // TODO: List other channel properties like x and y sampling and pLinear
+                Imf::Channel& channel = chItr.channel();
                 AttributeNode chNode;
-                chNode.name = myItr.name();
-                chNode.type = pixelTypeToStringMap[channel.type];
-                node.children.push_back(chNode);
-                cnt += 1;
+                chNode.name = chItr.name();
+                chNode.type = "channel";
+                chNode.children.push_back({"type", toString(channel.type), "pixelType", {}});
+                chNode.children.push_back({"xSampling", std::to_string(channel.xSampling), "int", {}});
+                chNode.children.push_back({"ySampling", std::to_string(channel.ySampling), "int", {}});
+                chNode.children.push_back({"pLinear", std::to_string(channel.pLinear), "bool", {}});
+
+                node.children.emplace_back(chNode);
             }
-            node.value = std::to_string(cnt);
+
+            node.value = std::to_string(node.children.size());
+        } else if (const auto* stringVectorAttr = dynamic_cast<const Imf::StringVectorAttribute*>(attr)) {
+            auto value = stringVectorAttr->value();
+            node.value = join(stringVectorAttr->value(), ", ");
+        } else if (const auto* tileDescAttr = dynamic_cast<const Imf::TileDescriptionAttribute*>(attr)) {
+            auto modeToString = [](Imf::LevelMode mode) {
+                switch (mode) {
+                    case Imf::ONE_LEVEL: return "One level";
+                    case Imf::MIPMAP_LEVELS: return "Mipmap levels";
+                    case Imf::RIPMAP_LEVELS: return "Ripmap levels";
+                    default: return "Unknown";
+                }
+            };
+
+            auto roundingModeToString = [](Imf::LevelRoundingMode mode) {
+                switch (mode) {
+                    case Imf::ROUND_DOWN: return "Round down";
+                    case Imf::ROUND_UP: return "Round up";
+                    default: return "Unknown";
+                }
+            };
+
+            auto value = tileDescAttr->value();
+            node.children.push_back({"xSize", std::to_string(value.xSize), "int", {}});
+            node.children.push_back({"ySize", std::to_string(value.ySize), "int", {}});
+            node.children.push_back({"mode", modeToString(value.mode), "levelMode", {}});
+            node.children.push_back({"roundingMode", roundingModeToString(value.roundingMode), "levelRoundingMode", {}});
         } else {
             node.value = fmt::format("UNKNOWN: {}", attributeItr.attribute().typeName());
         }
 
         // TODOS
-        // Imf::StringVectorAttribute;
         // Imf::TimeCodeAttribute;
         // Imf::IDManifestAttribute;
         // Imf::DeepImageStateAttribute;
+        // Imf::PreviewImageAttribute
         attributes.children.push_back(node);
     }
 
