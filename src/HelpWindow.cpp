@@ -52,14 +52,15 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
+    static const int WINDOW_WIDTH = 640;
+
     set_layout(new GroupLayout{});
-    set_fixed_width(640);
+    set_fixed_width(WINDOW_WIDTH);
 
     TabWidget* tabWidget = new TabWidget{this};
 
     // Keybindings tab
     Widget* tmp = new Widget(tabWidget);
-    // tmp->set_fixed_height(400);
     VScrollPanel* scrollPanel = new VScrollPanel{tmp};
     tabWidget->append_tab("Keybindings", tmp);
 
@@ -189,15 +190,16 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     Widget* about = new Widget(tabWidget);
     about->set_layout(new GroupLayout{});
     tabWidget->append_tab("About", about);
+    about->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     auto addLibrary = [](Widget* current, string name, string desc) {
         auto row = new Widget{current};
-        row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 30});
+        row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 4});
         auto leftColumn = new Widget{row};
         leftColumn->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
-        leftColumn->set_fixed_width(135);
+        leftColumn->set_fixed_width(200);
 
-        new Label{leftColumn, name, "sans-bold", 18};
+        new Label{leftColumn, name + ":", "sans-bold", 18};
         new Label{row, desc, "sans", 18};
     };
 
@@ -232,7 +234,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addLibrary(about, "libheif", "HEIF and AVIF image format library");
 #endif
     addLibrary(about, "libpng", "PNG image format library");
-    addLibrary(about, "Little-CMS", "FOSS CMM engine. Fast transforms between ICC profiles.");
+    addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles.");
     addLibrary(about, "libultrahdr", "Ultra HDR JPEG image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");
@@ -245,6 +247,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
     scrollPanel->set_fixed_height(about->height() + 12);
+    scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
 
     tabWidget->set_selected_id(0);
     tabWidget->set_callback([tabWidget](int id) mutable { tabWidget->set_selected_id(id); });
