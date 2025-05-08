@@ -57,12 +57,12 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     set_layout(new GroupLayout{});
     set_fixed_width(WINDOW_WIDTH);
 
-    TabWidget* tabWidget = new TabWidget{this};
+    mTabWidget = new TabWidget{this};
 
     // Keybindings tab
-    Widget* tmp = new Widget(tabWidget);
+    Widget* tmp = new Widget(mTabWidget);
     VScrollPanel* scrollPanel = new VScrollPanel{tmp};
-    tabWidget->append_tab("Keybindings", tmp);
+    mTabWidget->append_tab("Keybindings", tmp);
 
     Widget* shortcuts = new Widget(scrollPanel);
     shortcuts->set_layout(new GroupLayout{});
@@ -166,9 +166,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     };
 
     // Network tab
-    Widget* network = new Widget(tabWidget);
+    Widget* network = new Widget(mTabWidget);
     network->set_layout(new GroupLayout{});
-    tabWidget->append_tab("Network", network);
+    mTabWidget->append_tab("Network", network);
 
     new Label{network, "Inter process communication (IPC)", "sans-bold", 18};
     auto ipcSection = new Widget{network};
@@ -187,9 +187,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addRow(network, to_string(ipc.nTotalBytesReceived()), "Bytes received");
 
     // About tab
-    Widget* about = new Widget(tabWidget);
+    Widget* about = new Widget(mTabWidget);
     about->set_layout(new GroupLayout{});
-    tabWidget->append_tab("About", about);
+    mTabWidget->append_tab("About", about);
     about->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     auto addLibrary = [](Widget* current, string name, string desc) {
@@ -249,8 +249,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     scrollPanel->set_fixed_height(about->height() + 12);
     scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
 
-    tabWidget->set_selected_id(0);
-    tabWidget->set_callback([tabWidget](int id) mutable { tabWidget->set_selected_id(id); });
+    mTabWidget->set_selected_id(0);
+    mTabWidget->set_callback([this](int id) mutable { mTabWidget->set_selected_id(id); });
 }
 
 bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers) {
@@ -258,9 +258,19 @@ bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers
         return true;
     }
 
-    if (key == GLFW_KEY_ESCAPE) {
-        mCloseCallback();
-        return true;
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_ESCAPE) {
+            mCloseCallback();
+            return true;
+        } else if (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL)) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                mTabWidget->set_selected_id((mTabWidget->selected_id() - 1 + mTabWidget->tab_count()) % mTabWidget->tab_count());
+            } else {
+                mTabWidget->set_selected_id((mTabWidget->selected_id() + 1) % mTabWidget->tab_count());
+            }
+
+            return true;
+        }
     }
 
     return false;
