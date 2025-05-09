@@ -77,6 +77,54 @@ string toString(const fs::path& path) {
     return fromU8string(path.u8string());
 }
 
+bool naturalCompare(const string& a, const string& b) {
+    // Compare two strings in a natural way. This means that "10" comes after "2" and before "20". This is done by splitting the strings
+    // into substrings of digits and non-digits and comparing them separately.
+    auto splitDigits = [](const string& str) {
+        const string digits = "0123456789";
+        vector<string> result;
+
+        size_t begin = 0;
+        while (true) {
+            size_t end = str.find_first_of(digits, begin);
+            if (end == string::npos) {
+                result.emplace_back(str.substr(begin));
+                break;
+            } else {
+                result.emplace_back(str.substr(begin, end - begin));
+
+                begin = end;
+                end = str.find_first_not_of(digits, begin);
+                if (end == string::npos) {
+                    result.emplace_back(str.substr(begin));
+                    break;
+                }
+
+                result.emplace_back(str.substr(begin, end - begin));
+                begin = end;
+            }
+        }
+
+        return result;
+    };
+
+    auto aParts = splitDigits(a);
+    auto bParts = splitDigits(b);
+
+    for (size_t i = 0; i < min(aParts.size(), bParts.size()); ++i) {
+        if (aParts[i] != bParts[i]) {
+            // Compare the substrings. If they are both digits, compare them as numbers. Otherwise, compare them as strings.
+            if (isdigit(aParts[i][0]) && isdigit(bParts[i][0])) {
+                return stoi(aParts[i]) < stoi(bParts[i]);
+            } else {
+                return aParts[i] < bParts[i];
+            }
+        }
+    }
+
+    return aParts.size() < bParts.size();
+}
+
 vector<string> split(string text, const string& delim) {
     vector<string> result;
     size_t begin = 0;

@@ -61,7 +61,7 @@
 
 #define TEV_ASSERT(cond, description, ...) \
     if (UNLIKELY(!(cond)))                 \
-        throw std::runtime_error{fmt::format(description, ##__VA_ARGS__)}
+        throw std::runtime_error { fmt::format(description, ##__VA_ARGS__) }
 
 #ifndef TEV_VERSION
 #   define TEV_VERSION "undefined"
@@ -241,6 +241,8 @@ std::string ensureUtf8(const std::string& str);
 std::string utf16to8(const std::wstring& utf16);
 fs::path toPath(const std::string& utf8);
 std::string toString(const fs::path& path);
+
+bool naturalCompare(const std::string& a, const std::string& b);
 
 template <typename T> void removeDuplicates(std::vector<T>& vec) {
     std::unordered_set<T> tmp;
@@ -436,24 +438,15 @@ enum EOrientation : int {
 
 inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogui::Vector2i& pos, const nanogui::Vector2i& size) {
     switch (orientation) {
-        case None:
-            return pos;
-        case TopLeft:
-            return pos;
-        case TopRight:
-            return {size.x() - pos.x() - 1, pos.y()};
-        case BottomRight:
-            return {size.x() - pos.x() - 1, size.y() - pos.y() - 1};
-        case BottomLeft:
-            return {pos.x(), size.y() - pos.y() - 1};
-        case LeftTop:
-            return {pos.y(), pos.x()};
-        case RightTop:
-            return {pos.y(), size.x() - pos.x() - 1};
-        case RightBottom:
-            return {size.y() - pos.y() - 1, size.x() - pos.x() - 1};
-        case LeftBottom:
-            return {size.y() - pos.y() - 1, pos.x()};
+        case None: return pos;
+        case TopLeft: return pos;
+        case TopRight: return {size.x() - pos.x() - 1, pos.y()};
+        case BottomRight: return {size.x() - pos.x() - 1, size.y() - pos.y() - 1};
+        case BottomLeft: return {pos.x(), size.y() - pos.y() - 1};
+        case LeftTop: return {pos.y(), pos.x()};
+        case RightTop: return {pos.y(), size.x() - pos.x() - 1};
+        case RightBottom: return {size.y() - pos.y() - 1, size.x() - pos.x() - 1};
+        case LeftBottom: return {size.y() - pos.y() - 1, pos.x()};
     }
 
     return pos;

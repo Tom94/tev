@@ -71,17 +71,19 @@ Task<void> ImageData::convertToRec709(int priority) {
 
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
-        tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            r->numPixels(),
-            [r, g, b, this](size_t i) {
-                auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
-                r->at(i) = rgb.x();
-                g->at(i) = rgb.y();
-                b->at(i) = rgb.z();
-            },
-            priority
-        ));
+        tasks.emplace_back(
+            ThreadPool::global().parallelForAsync<size_t>(
+                0,
+                r->numPixels(),
+                [r, g, b, this](size_t i) {
+                    auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
+                    r->at(i) = rgb.x();
+                    g->at(i) = rgb.y();
+                    b->at(i) = rgb.z();
+                },
+                priority
+            )
+        );
     }
 
     for (auto& task : tasks) {
@@ -406,18 +408,24 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
             if (i < channelNames.size()) {
                 const auto* chan = channel(channelNames[i]);
                 if (!chan) {
-                    tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-                        0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
-                    ));
+                    tasks.emplace_back(
+                        ThreadPool::global().parallelForAsync<size_t>(
+                            0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
+                        )
+                    );
                 } else {
-                    tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-                        0, numPixels, [chan, &data, i](size_t j) { data[j * 4 + i] = chan->at(j); }, std::numeric_limits<int>::max()
-                    ));
+                    tasks.emplace_back(
+                        ThreadPool::global().parallelForAsync<size_t>(
+                            0, numPixels, [chan, &data, i](size_t j) { data[j * 4 + i] = chan->at(j); }, std::numeric_limits<int>::max()
+                        )
+                    );
                 }
             } else {
-                tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-                    0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
-                ));
+                tasks.emplace_back(
+                    ThreadPool::global().parallelForAsync<size_t>(
+                        0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
+                    )
+                );
             }
         }
         waitAll(tasks);
@@ -794,14 +802,22 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         fs::path canonicalPath = fs::canonical(path);
         mDirectories[canonicalPath].emplace(channelSelector);
 
-        bool first = true;
+        vector<fs::directory_entry> entries;
         forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](const auto& entry) {
             if (!entry.is_directory()) {
                 mFilesFoundInDirectories.emplace(PathAndChannelSelector{entry, channelSelector});
-                enqueue(entry, channelSelector, first ? shallSelect : false);
-                first = false;
+                entries.emplace_back(entry);
             }
         });
+
+        // Open directory entries in natural order (e.g. "file1.exr", "file2.exr", "file10.exr" instead of "file1.exr", "file10.exr"),
+        // selecting the first one.
+        sort(begin(entries), end(entries), [](const auto& a, const auto& b) { return naturalCompare(a.path().string(), b.path().string()); });
+
+        for (size_t i = 0; i < entries.size(); ++i) {
+            enqueue(entries[i], channelSelector, i == 0 ? shallSelect : false);
+        }
+
         return;
     }
 
