@@ -26,12 +26,14 @@
 #include <ImfCompressionAttribute.h>
 #include <ImfDeepImageStateAttribute.h>
 #include <ImfDoubleAttribute.h>
+#include <ImfFloatVectorAttribute.h>
 #include <ImfFrameBuffer.h>
 #include <ImfIDManifestAttribute.h>
 #include <ImfInputFile.h>
 #include <ImfInputPart.h>
 #include <ImfLineOrderAttribute.h>
 #include <ImfMultiPartInputFile.h>
+#include <ImfOpaqueAttribute.h>
 #include <ImfPreviewImageAttribute.h>
 #include <ImfStandardAttributes.h>
 #include <ImfStringVectorAttribute.h>
@@ -105,7 +107,7 @@ static bool isExrImage(istream& iStream) {
     return result;
 }
 
-AttributeNode createVec2fNode(const std::string& name, const Imath::V2f& value) {
+AttributeNode createVec2fNode(const string& name, const Imath::V2f& value) {
     AttributeNode node;
     node.name = name;
     node.type = "vec2f";
@@ -113,7 +115,7 @@ AttributeNode createVec2fNode(const std::string& name, const Imath::V2f& value) 
     return node;
 }
 
-AttributeNode createVec2iNode(const std::string& name, const Imath::V2i& value) {
+AttributeNode createVec2iNode(const string& name, const Imath::V2i& value) {
     AttributeNode node;
     node.name = name;
     node.type = "vec2i";
@@ -121,8 +123,8 @@ AttributeNode createVec2iNode(const std::string& name, const Imath::V2i& value) 
     return node;
 }
 
-template <typename T> std::string toString(const Imath::Matrix33<T>& value) {
-    std::ostringstream oss;
+template <typename T> string toString(const Imath::Matrix33<T>& value) {
+    ostringstream oss;
     oss << "([";
     for (uint32_t i = 0; i < 3; ++i) {
         if (i > 0) {
@@ -139,8 +141,8 @@ template <typename T> std::string toString(const Imath::Matrix33<T>& value) {
     return oss.str();
 }
 
-template <typename T> std::string toString(const Imath::Matrix44<T>& value) {
-    std::ostringstream oss;
+template <typename T> string toString(const Imath::Matrix44<T>& value) {
+    ostringstream oss;
     oss << "([";
     for (uint32_t i = 0; i < 4; ++i) {
         if (i > 0) {
@@ -166,8 +168,8 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
         const Imf::Attribute* attr = &(attributeItr.attribute());
 
         AttributeNode node;
-        node.name = std::string(attributeItr.name());
-        node.type = std::string(attr->typeName());
+        node.name = string(attributeItr.name());
+        node.type = string(attr->typeName());
 
         if (const auto* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
             node.value = strAttr->value();
@@ -243,19 +245,16 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
             }
         } else if (const auto* keycodeAttr = dynamic_cast<const Imf::KeyCodeAttribute*>(attr)) {
             auto value = keycodeAttr->value();
-            node.value = fmt::format(
-                "{}, {}, {}, {}, {}, {}, {}",
-                value.filmMfcCode(),
-                value.filmType(),
-                value.prefix(),
-                value.count(),
-                value.perfOffset(),
-                value.perfsPerFrame(),
-                value.perfsPerCount()
-            );
+            node.children.push_back({"filmMfcCode", to_string(value.filmMfcCode()), "int", {}});
+            node.children.push_back({"filmType", to_string(value.filmType()), "int", {}});
+            node.children.push_back({"prefix", to_string(value.prefix()), "int", {}});
+            node.children.push_back({"count", to_string(value.count()), "int", {}});
+            node.children.push_back({"perfOffset", to_string(value.perfOffset()), "int", {}});
+            node.children.push_back({"perfsPerFrame", to_string(value.perfsPerFrame()), "int", {}});
+            node.children.push_back({"perfsPerCount", to_string(value.perfsPerCount()), "int", {}});
         } else if (const auto* rationalAttr = dynamic_cast<const Imf::RationalAttribute*>(attr)) {
             auto value = rationalAttr->value();
-            node.value = fmt::format("{}, {}", value.n, value.d);
+            node.value = fmt::format("{} / {}", value.n, value.d);
         } else if (const auto* chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute*>(attr)) {
             auto value = chromaticitiesAttr->value();
 
@@ -279,23 +278,23 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
 
             auto chlist = chlistAttr->value();
             for (auto chItr = chlist.begin(); chItr != chlist.end(); chItr++) {
-                // TODO: List other channel properties like x and y sampling and pLinear
                 Imf::Channel& channel = chItr.channel();
                 AttributeNode chNode;
                 chNode.name = chItr.name();
                 chNode.type = "channel";
                 chNode.children.push_back({"type", toString(channel.type), "pixelType", {}});
-                chNode.children.push_back({"xSampling", std::to_string(channel.xSampling), "int", {}});
-                chNode.children.push_back({"ySampling", std::to_string(channel.ySampling), "int", {}});
-                chNode.children.push_back({"pLinear", std::to_string(channel.pLinear), "bool", {}});
+                chNode.children.push_back({"xSampling", to_string(channel.xSampling), "int", {}});
+                chNode.children.push_back({"ySampling", to_string(channel.ySampling), "int", {}});
+                chNode.children.push_back({"pLinear", to_string(channel.pLinear), "bool", {}});
 
                 node.children.emplace_back(chNode);
             }
 
-            node.value = std::to_string(node.children.size());
+            node.value = to_string(node.children.size());
         } else if (const auto* stringVectorAttr = dynamic_cast<const Imf::StringVectorAttribute*>(attr)) {
-            auto value = stringVectorAttr->value();
             node.value = join(stringVectorAttr->value(), ", ");
+        } else if (const auto* floatVectorAttr = dynamic_cast<const Imf::FloatVectorAttribute*>(attr)) {
+            node.value = join(floatVectorAttr->value(), ", ");
         } else if (const auto* tileDescAttr = dynamic_cast<const Imf::TileDescriptionAttribute*>(attr)) {
             auto modeToString = [](Imf::LevelMode mode) {
                 switch (mode) {
@@ -315,28 +314,46 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
             };
 
             auto value = tileDescAttr->value();
-            node.children.push_back({"xSize", std::to_string(value.xSize), "int", {}});
-            node.children.push_back({"ySize", std::to_string(value.ySize), "int", {}});
+            node.children.push_back({"xSize", to_string(value.xSize), "int", {}});
+            node.children.push_back({"ySize", to_string(value.ySize), "int", {}});
             node.children.push_back({"mode", modeToString(value.mode), "levelMode", {}});
             node.children.push_back({"roundingMode", roundingModeToString(value.roundingMode), "levelRoundingMode", {}});
+        } else if (const auto* previewImageAttr = dynamic_cast<const Imf::PreviewImageAttribute*>(attr)) {
+            node.children.push_back({"width", to_string(previewImageAttr->value().width()), "int", {}});
+            node.children.push_back({"height", to_string(previewImageAttr->value().height()), "int", {}});
+        } else if (const auto* deepImageStateAttr = dynamic_cast<const Imf::DeepImageStateAttribute*>(attr)) {
+            auto toString = [](Imf::DeepImageState state) {
+                switch (state) {
+                    case Imf::DIS_MESSY: return "Messy";
+                    case Imf::DIS_SORTED: return "Sorted";
+                    case Imf::DIS_NON_OVERLAPPING: return "Non overlapping";
+                    case Imf::DIS_TIDY: return "Tidy";
+                    default: return "Unknown";
+                }
+            };
+            node.value = toString(deepImageStateAttr->value());
+        } else if (const auto* idManifestAttr = dynamic_cast<const Imf::IDManifestAttribute*>(attr)) {
+            node.children.push_back({"compressedSize", to_string(idManifestAttr->value()._compressedDataSize), "int", {}});
+            node.children.push_back({"uncompressedSize", to_string(idManifestAttr->value()._uncompressedDataSize), "size_t", {}});
+        } else if (const auto* timeCodeAttr = dynamic_cast<const Imf::TimeCodeAttribute*>(attr)) {
+            auto value = timeCodeAttr->value();
+            node.value = fmt::format(
+                "{:02}:{:02}:{:02}.{:03} {} {}",
+                value.hours(),
+                value.minutes(),
+                value.seconds(),
+                value.frame(),
+                value.dropFrame() ? "DF" : "NDF",
+                value.userData()
+            );
+        } else if (const auto* opaqueAttr = dynamic_cast<const Imf::OpaqueAttribute*>(attr)) {
+            node.children.push_back({"size", to_string(opaqueAttr->dataSize()), "int", {}});
         } else {
             node.value = fmt::format("UNKNOWN: {}", attributeItr.attribute().typeName());
         }
 
-        // TODOS
-        // Imf::TimeCodeAttribute;
-        // Imf::IDManifestAttribute;
-        // Imf::DeepImageStateAttribute;
-        // Imf::PreviewImageAttribute
         attributes.children.push_back(node);
     }
-
-    // {
-    //     std::ostringstream oss;
-    //     auto ch = header.channels();
-    //     oss << header.channels();
-    //     attributes["compression"] = oss.str();
-    // }
 
     return attributes;
 }
