@@ -610,6 +610,9 @@ static int mainFunc(const vector<string>& arguments) {
     // Refresh only every 250ms if there are no user interactions. This makes an idling tev surprisingly energy-efficient. :)
     nanogui::mainloop(250);
 
+    ThreadPool::global().flushQueue();
+    ThreadPool::global().shutdown();
+
     return 0;
 }
 
