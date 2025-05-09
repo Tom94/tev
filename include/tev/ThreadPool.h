@@ -81,6 +81,7 @@ public:
 
     void startThreads(size_t num);
     void shutdownThreads(size_t num);
+    void shutdown() { shutdownThreads(mThreads.size()); }
 
     size_t numTasksInSystem() const { return mNumTasksInSystem; }
 
