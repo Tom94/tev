@@ -163,8 +163,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
     if (exifDataRaw) {
         // libpng strips the exif header, but our exif library actually wants the header, so we prepend it again.
-        std::vector<uint8_t> exifData = {0x45, 0x78, 0x69, 0x66, 0x00, 0x00};
-        exifData.insert(exifData.end(), exifDataRaw, exifDataRaw + exifDataSize);
+        std::vector<uint8_t> exifData(exifDataRaw, exifDataRaw + exifDataSize);
+        Exif::prependFourcc(&exifData);
 
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 

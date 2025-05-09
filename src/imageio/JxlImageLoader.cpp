@@ -19,6 +19,7 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/JxlImageLoader.h>
 
 #include <jxl/decode.h>
@@ -121,6 +122,12 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw LoadError{"Failed to subscribe to decoder events."};
     }
 
+    // "Boxes" contain all kinds of metadata, such as exif, which we'll want to get at. By default, they are compressed via Brotli, making
+    // them inaccessible to typical exif libraries. Hence: set them to get decompressed during decoding.
+    if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(decoder.get(), JXL_TRUE)) {
+        throw LoadError{"Failed to set decompress boxes."};
+    }
+
     // We expressly don't want the decoder to unpremultiply the alpha channel for us, because this becomes a more and more lossy operation
     // the more emissive a color is (i.e. as color/alpha approaches inf). If it turns out that the color profile isn't linaer, we will be
     // forced to unmultiply the alpha channel due to an idiosyncracy in the jxl format where alpha multiplication is defined in non-linear
@@ -148,8 +155,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     while (true) {
         JxlDecoderStatus status = JxlDecoderProcessInput(decoder.get());
         switch (status) {
-            default: break; // Ignore other status codes
-            case JXL_DEC_SUCCESS: co_return result;
+            default: throw LoadError{fmt::format("Unknown decoder status: {}", (size_t)status)};
+            case JXL_DEC_SUCCESS: goto l_decode_success;
             case JXL_DEC_ERROR: throw LoadError{"Error decoding image."};
             case JXL_DEC_NEED_MORE_INPUT: throw LoadError{"Incomplete image data."};
             case JXL_DEC_BASIC_INFO: {
@@ -317,7 +324,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 status = JxlDecoderProcessInput(decoder.get());
                 if (status == JXL_DEC_ERROR) {
-                    std::cout << "Failed to process input: " << std::endl;
+                    throw LoadError{"Error processing input."};
                 }
 
                 result.emplace_back();
@@ -387,6 +394,92 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
             } break;
         }
+    }
+l_decode_success:
+
+    JxlDecoderRewind(decoder.get());
+    if (JXL_DEC_SUCCESS != JxlDecoderSetInput(decoder.get(), fileData.data(), fileData.size())) {
+        tlog::warning() << "Failed to set input for second decoder pass.";
+        co_return result;
+    }
+
+    if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BOX)) {
+        tlog::warning() << "Failed to subscribe to box events.";
+        co_return result;
+    }
+
+    // Attempt to get metadata in a separate pass. The reason we perform a separate pass is that box decoding appears to interfere with
+    // regular image decoding behavior.
+    JxlDecoderStatus status = JXL_DEC_SUCCESS;
+    while (true) {
+        status = JxlDecoderProcessInput(decoder.get());
+        if (status != JXL_DEC_BOX) {
+            break;
+        }
+
+        JxlBoxType type = {};
+        if (JXL_DEC_SUCCESS != JxlDecoderGetBoxType(decoder.get(), type, JXL_TRUE)) {
+            throw LoadError{"Failed to get box type."};
+        }
+
+        if (type == "Exif"s) {
+            tlog::debug() << "Found EXIF metadata. Attempting to load...";
+
+            // 1 KiB should be enough for most exif data. If not, we'll dynamically resize as we keep decoding. We can't get the precise
+            // size ahead of time, because the decoder doesn't know how large the box will be until it has been fully decoded.
+            vector<uint8_t> exifData(1024);
+            if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
+                throw LoadError{"Failed to set initial box buffer."};
+            }
+
+            status = JxlDecoderProcessInput(decoder.get());
+            while (status == JXL_DEC_BOX_NEED_MORE_OUTPUT) {
+                tlog::debug() << fmt::format("Doubling box buffer size from {} to {} bytes.", exifData.size(), exifData.size() * 2);
+                if (JXL_DEC_SUCCESS != JxlDecoderReleaseBoxBuffer(decoder.get())) {
+                    throw LoadError{"Failed to release box buffer for resize."};
+                }
+
+                exifData.resize(exifData.size() * 2);
+                if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
+                    throw LoadError{"Failed to set resized box buffer."};
+                }
+
+                status = JxlDecoderProcessInput(decoder.get());
+            }
+
+            if (status != JXL_DEC_SUCCESS && status != JXL_DEC_BOX) {
+                throw LoadError{"Failed to process box."};
+            }
+
+            try {
+                if (exifData.size() < 4) {
+                    throw invalid_argument{"Invalid EXIF data: box size is smaller than 4 bytes."};
+                }
+
+                uint32_t offset = *(uint32_t*)exifData.data();
+                if (endian::native != endian::big) {
+                    offset = swapBytes(offset);
+                }
+
+                if (offset + 4 > exifData.size()) {
+                    throw invalid_argument{"Invalid EXIF data: offset is larger than box size."};
+                }
+
+                tlog::debug() << fmt::format("EXIF data offset: {}", offset);
+                exifData.erase(exifData.begin(), exifData.begin() + 4 + offset);
+
+                Exif::prependFourcc(&exifData);
+                auto exif = Exif{exifData};
+
+                for (auto&& data : result) {
+                    data.attributes = exif.toAttributes();
+                }
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse exif data: {}", e.what()); }
+        }
+    }
+
+    if (status != JXL_DEC_SUCCESS && status != JXL_DEC_NEED_MORE_INPUT) {
+        tlog::warning() << "Unexpected decoder status after processing boxes: " << (size_t)status;
     }
 
     co_return result;

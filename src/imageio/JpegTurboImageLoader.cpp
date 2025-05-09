@@ -91,17 +91,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         throw LoadError{"Failed to read JPEG header."};
     }
 
-    static const uint8_t EXIF_FOURCC[] = {
-        'E',
-        'x',
-        'i',
-        'f',
-        '\0',
-        '\0',
-    };
-
     std::vector<JOCTET> exifData;
-    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, EXIF_FOURCC, sizeof(EXIF_FOURCC), exifData);
+    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, Exif::FOURCC.data(), Exif::FOURCC.size(), exifData);
 
     // Try to extract an ICC profile for correct color space conversion
     JOCTET* iccProfile = nullptr;
