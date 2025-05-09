@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/Image.h>
 #include <tev/imageio/AppleMakerNote.h>
 
 #include <cstdint>
@@ -38,6 +39,8 @@ public:
     AppleMakerNote tryGetAppleMakerNote() const;
 
     EOrientation getOrientation() const;
+
+    AttributeNode toAttributes() const;
 
 private:
     bool mReverseEndianess = false;

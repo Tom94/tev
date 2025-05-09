@@ -152,12 +152,17 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     jpeg_finish_decompress(&cinfo);
 
+    AttributeNode attributes;
+
     // Try to extract EXIF data for correct orientation
     if (!exifData.empty()) {
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 
         try {
-            EOrientation orientation = Exif(exifData).getOrientation();
+            const auto exif = Exif(exifData);
+            attributes = exif.toAttributes();
+
+            EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
             co_await orientToTopLeft(imageData, size, orientation, priority);
@@ -168,6 +173,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
+
+    resultData.attributes = attributes;
     resultData.channels = makeNChannels(numColorChannels, size);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.

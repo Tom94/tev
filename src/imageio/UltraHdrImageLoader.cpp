@@ -118,6 +118,8 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         throw LoadError{"No decoded image."};
     }
 
+    // TODO: Check if image has exif metadata and, if so, read it into image attributes
+
     // We can technically obtain an ICC profile via the uhdr API, but it appears to not correspond directly to the color space of the
     // decoded image with gainmap applied. Hence we will not use the ICC profile for now and instead rely on manual conversion to Rec.709
     // via simple matrix color transform. (No need for transfer functions, because we're already getting linear colors.)

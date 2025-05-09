@@ -156,6 +156,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     png_read_image(pngPtr, rowPointers.data());
 
+    AttributeNode attributes;
+
     png_uint_32 exifDataSize = 0;
     png_bytep exifDataRaw = nullptr;
     png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
@@ -167,7 +169,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 
         try {
-            EOrientation orientation = Exif(exifData).getOrientation();
+            const auto exif = Exif(exifData);
+            attributes = exif.toAttributes();
+
+            EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
             co_await orientToTopLeft(imageData, size, orientation, priority);
@@ -176,6 +181,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
+
+    resultData.attributes = attributes;
     resultData.channels = makeNChannels(numChannels, size);
     resultData.hasPremultipliedAlpha = false;
 

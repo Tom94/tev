@@ -162,8 +162,10 @@ template <typename T> string toString(const Imath::Matrix44<T>& value) {
     return oss.str();
 }
 
-AttributeNode getHeaderAttributes(const Imf::Header& header) {
-    AttributeNode attributes;
+AttributeNode toAttributeNode(const Imf::Header& header) {
+    AttributeNode result;
+    result.name = "EXR";
+
     for (auto attributeItr = header.begin(); attributeItr != header.end(); attributeItr++) {
         const Imf::Attribute* attr = &(attributeItr.attribute());
 
@@ -352,10 +354,10 @@ AttributeNode getHeaderAttributes(const Imf::Header& header) {
             node.value = fmt::format("UNKNOWN: {}", attributeItr.attribute().typeName());
         }
 
-        attributes.children.push_back(node);
+        result.children.push_back(node);
     }
 
-    return attributes;
+    return result;
 }
 
 // Helper class for dealing with the raw channels loaded from an exr file.
@@ -511,7 +513,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             result.emplace_back();
             ImageData& data = result.back();
 
-            data.attributes = getHeaderAttributes(part.header());
+            data.attributes = toAttributeNode(part.header());
 
             Imath::Box2i dataWindow = part.header().dataWindow();
             Imath::Box2i displayWindow = part.header().displayWindow();

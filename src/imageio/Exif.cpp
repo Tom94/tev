@@ -92,4 +92,11 @@ EOrientation Exif::getOrientation() const {
     return (EOrientation)exif_get_short(orientationEntry->data, byteOrder(mReverseEndianess));
 }
 
+AttributeNode Exif::toAttributes() const {
+    AttributeNode result;
+    result.name = "EXIF";
+
+    return result;
+}
+
 } // namespace tev
