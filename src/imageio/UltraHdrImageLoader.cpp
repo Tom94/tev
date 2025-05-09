@@ -137,7 +137,9 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
         ImageData imageData;
         imageData.channels = makeNChannels(numChannels, size);
-        imageData.hasPremultipliedAlpha = false;
+
+        // JPEG always has alpha == 1 in which case there's no distinction between premultiplied and straight alpha
+        imageData.hasPremultipliedAlpha = true;
 
         size_t numPixels = (size_t)size.x() * size.y();
         vector<float> src(numPixels * numChannels);
@@ -170,7 +172,6 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
                 );
 
                 swap(imageData.channels, channels);
-                imageData.hasPremultipliedAlpha = true;
             } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
         } else {
             switch (image->cg) {
