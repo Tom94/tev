@@ -38,11 +38,10 @@ void addRows(Widget* current, const AttributeNode& node, int indentation) {
     row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Maximum, 0, 0});
 
     auto spacer = new Widget{row};
-    spacer->set_fixed_width(indentation * 5);
+    spacer->set_fixed_width(indentation * 8);
 
-    string name = indentation > 0 ? "." + node.name : node.name;
-    auto nameWidget = new Label{row, name, "sans-bold"};
-    nameWidget->set_fixed_width(160 - indentation * 5);
+    auto nameWidget = new Label{row, node.name, "sans-bold"};
+    nameWidget->set_fixed_width(160 - indentation * 8);
 
     auto valueWidget = new Label{row, node.value, "sans"};
     valueWidget->set_fixed_width(320);
@@ -68,32 +67,39 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
     set_fixed_width(WINDOW_WIDTH);
 
     mTabWidget = new TabWidget{this};
-
-    // Keybindings tab
-    Widget* tmp = new Widget(mTabWidget);
     mTabWidget->set_fixed_height(WINDOW_HEIGHT - 12);
 
-    VScrollPanel* scrollPanel = new VScrollPanel{tmp};
-    scrollPanel->set_fixed_height(WINDOW_HEIGHT - 40);
-    scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
+    // Each attributes entry is a tab
+    for (const auto& tab : image->attributes()) {
+        Widget* tmp = new Widget(mTabWidget);
 
-    mTabWidget->append_tab("EXR", tmp);
+        VScrollPanel* scrollPanel = new VScrollPanel{tmp};
+        scrollPanel->set_fixed_height(WINDOW_HEIGHT - 40);
+        scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
 
-    Widget* container = new Widget(scrollPanel);
-    container->set_layout(new GroupLayout{});
+        mTabWidget->append_tab(tab.name, tmp);
 
-    new Label{container, "Attributes", "sans-bold", 18};
-    auto attributes = new Widget{container};
-    attributes->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+        Widget* container = new Widget(scrollPanel);
+        container->set_layout(new GroupLayout{});
 
-    for (const auto& c : image->attributes().children) {
-        addRows(attributes, c, 0);
+        // Each top-level child of the attribute is a section
+        for (const auto& section : tab.children) {
+            new Label{container, section.name, "sans-bold", 18};
+            auto attributes = new Widget{container};
+            attributes->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+
+            for (const auto& c : section.children) {
+                addRows(attributes, c, 0);
+            }
+        }
     }
 
     perform_layout(screen()->nvg_context());
 
-    mTabWidget->set_selected_id(0);
     mTabWidget->set_callback([this](int id) mutable { mTabWidget->set_selected_id(id); });
+    if (mTabWidget->tab_count() > 0) {
+        mTabWidget->set_selected_id(0);
+    }
 }
 
 bool ImageInfoWindow::keyboard_event(int key, int scancode, int action, int modifiers) {

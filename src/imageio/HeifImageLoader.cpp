@@ -287,7 +287,7 @@ Task<vector<ImageData>>
     }
 
     if (exif) {
-        mainImage.attributes = exif->toAttributes();
+        mainImage.attributes.emplace_back(exif->toAttributes());
     }
 
     auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {

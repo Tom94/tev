@@ -59,7 +59,7 @@ struct ImageData {
     nanogui::Matrix4f toRec709 = nanogui::Matrix4f{1.0f}; // Identity by default
     bool hasPremultipliedAlpha = false;
     EOrientation orientation = EOrientation::TopLeft;
-    AttributeNode attributes;
+    std::vector<AttributeNode> attributes;
 
     Box2i dataWindow;
     Box2i displayWindow;
@@ -205,7 +205,7 @@ public:
 
     std::string toString() const;
 
-    const AttributeNode& attributes() const { return mData.attributes; }
+    const std::vector<AttributeNode>& attributes() const { return mData.attributes; }
 
 private:
     static std::atomic<int> sId;

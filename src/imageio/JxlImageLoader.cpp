@@ -472,7 +472,7 @@ l_decode_success:
                 auto exif = Exif{exifData};
 
                 for (auto&& data : result) {
-                    data.attributes = exif.toAttributes();
+                    data.attributes.emplace_back(exif.toAttributes());
                 }
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse exif data: {}", e.what()); }
         }
