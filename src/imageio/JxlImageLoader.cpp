@@ -327,8 +327,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw LoadError{"Error processing input."};
                 }
 
-                result.emplace_back();
-                ImageData& data = result.back();
+                ImageData& data = result.emplace_back();
 
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
@@ -376,10 +375,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     }
 
                     // Resize the channel to the image size
-                    data.channels.emplace_back(Channel{extraChannel.name, size});
-                    auto& channel = data.channels.back();
-
-                    // Upscale the channel to the image size
+                    auto& channel = data.channels.emplace_back(Channel{extraChannel.name, size});
                     co_await ThreadPool::global().parallelForAsync<size_t>(
                         0,
                         size.y(),

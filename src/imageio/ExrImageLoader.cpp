@@ -165,9 +165,8 @@ template <typename T> string toString(const Imath::Matrix44<T>& value) {
 AttributeNode toAttributeNode(const Imf::Header& header) {
     AttributeNode result;
     result.name = "EXR header";
-    result.children.emplace_back();
 
-    AttributeNode& global = result.children.back();
+    AttributeNode& global = result.children.emplace_back();
     global.name = "Global";
 
     for (auto attributeItr = header.begin(); attributeItr != header.end(); attributeItr++) {
@@ -514,8 +513,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         for (size_t partIdx = 0; partIdx < parts.size(); ++partIdx) {
             auto& part = parts.at(partIdx);
 
-            result.emplace_back();
-            ImageData& data = result.back();
+            ImageData& data = result.emplace_back();
 
             data.attributes.emplace_back(toAttributeNode(part.header()));
 

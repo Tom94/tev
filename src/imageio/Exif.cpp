@@ -115,8 +115,7 @@ AttributeNode Exif::toAttributes() const {
             continue;
         }
 
-        result.children.emplace_back();
-        AttributeNode& ifdNode = result.children.back();
+        AttributeNode& ifdNode = result.children.emplace_back();
 
         ifdNode.name = exif_ifd_get_name((ExifIfd)ifd);
         ifdNode.type = "IFD";

@@ -57,8 +57,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
 
         string channelName = channelNameData.data();
 
-        data.channels.emplace_back(Channel{channelName, size});
-        data.channels.back().setZero();
+        data.channels.emplace_back(Channel{channelName, size}).setZero();
     }
 
     data.hasPremultipliedAlpha = true;
