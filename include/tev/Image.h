@@ -164,6 +164,8 @@ public:
 
     nanogui::Vector2i size() const { return mData.size(); }
 
+    nanogui::Vector2i displaySize() const { return mData.displaySize(); }
+
     bool contains(const nanogui::Vector2i& pos) const {
         return pos.x() >= 0 && pos.y() >= 0 && pos.x() < mData.size().x() && pos.y() < mData.size().y();
     }

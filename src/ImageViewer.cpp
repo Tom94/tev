@@ -1672,7 +1672,7 @@ nanogui::Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
         return m_size;
     }
 
-    nanogui::Vector2i requiredSize{image->size().x(), image->size().y()};
+    nanogui::Vector2i requiredSize{image->displaySize().x(), image->displaySize().y()};
 
     // Convert from image pixel coordinates to nanogui coordinates.
     requiredSize = nanogui::Vector2i{nanogui::Vector2f{requiredSize} / pixel_ratio()};
