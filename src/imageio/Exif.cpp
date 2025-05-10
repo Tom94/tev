@@ -109,6 +109,30 @@ AttributeNode Exif::toAttributes() const {
     AttributeNode result;
     result.name = "EXIF";
 
+    for (int ifd = EXIF_IFD_0; ifd < EXIF_IFD_COUNT; ++ifd) {
+        ExifContent* content = mExif->ifd[ifd];
+        if (content->count == 0) {
+            continue;
+        }
+
+        result.children.emplace_back();
+        AttributeNode& ifdNode = result.children.back();
+
+        ifdNode.name = exif_ifd_get_name((ExifIfd)ifd);
+        ifdNode.type = "IFD";
+
+        for (size_t i = 0; i < content->count; ++i) {
+            ExifEntry* entry = content->entries[i];
+
+            string name = exif_tag_get_name(entry->tag);
+            char buf[1024] = {0};
+            string value = exif_entry_get_value(entry, buf, sizeof(buf) - 1);
+            string type = exif_format_get_name(entry->format);
+
+            ifdNode.children.push_back({name, value, type, {}});
+        }
+    }
+
     return result;
 }
 
