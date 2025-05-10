@@ -156,26 +156,33 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     png_read_image(pngPtr, rowPointers.data());
 
+    AttributeNode exifAttributes;
+
     png_uint_32 exifDataSize = 0;
     png_bytep exifDataRaw = nullptr;
     png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
     if (exifDataRaw) {
         // libpng strips the exif header, but our exif library actually wants the header, so we prepend it again.
-        std::vector<uint8_t> exifData = {0x45, 0x78, 0x69, 0x66, 0x00, 0x00};
-        exifData.insert(exifData.end(), exifDataRaw, exifDataRaw + exifDataSize);
+        std::vector<uint8_t> exifData(exifDataRaw, exifDataRaw + exifDataSize);
+        Exif::prependFourcc(&exifData);
 
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 
         try {
-            EOrientation orientation = Exif(exifData).getOrientation();
+            const auto exif = Exif(exifData);
+            exifAttributes = exif.toAttributes();
+
+            EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
             co_await orientToTopLeft(imageData, size, orientation, priority);
-        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed reorient from EXIF: {}", e.what()); }
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
+
+    resultData.attributes.emplace_back(exifAttributes);
     resultData.channels = makeNChannels(numChannels, size);
     resultData.hasPremultipliedAlpha = false;
 

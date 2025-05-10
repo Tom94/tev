@@ -25,13 +25,13 @@
 
 #include <string>
 
+#include <tev/Image.h>
+
 namespace tev {
 
-class Ipc;
-
-class HelpWindow : public nanogui::Window {
+class ImageInfoWindow : public nanogui::Window {
 public:
-    HelpWindow(nanogui::Widget* parent, bool supportsHdr, const Ipc& ipc, std::function<void()> closeCallback);
+    ImageInfoWindow(nanogui::Widget* parent, const std::shared_ptr<Image>& image, bool supportsHdr, std::function<void()> closeCallback);
 
     bool keyboard_event(int key, int scancode, int action, int modifiers) override;
 

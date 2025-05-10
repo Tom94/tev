@@ -52,16 +52,17 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
-    set_layout(new GroupLayout{});
-    set_fixed_width(640);
+    static const int WINDOW_WIDTH = 640;
 
-    TabWidget* tabWidget = new TabWidget{this};
+    set_layout(new GroupLayout{});
+    set_fixed_width(WINDOW_WIDTH);
+
+    mTabWidget = new TabWidget{this};
 
     // Keybindings tab
-    Widget* tmp = new Widget(tabWidget);
-    // tmp->set_fixed_height(400);
+    Widget* tmp = new Widget(mTabWidget);
     VScrollPanel* scrollPanel = new VScrollPanel{tmp};
-    tabWidget->append_tab("Keybindings", tmp);
+    mTabWidget->append_tab("Keybindings", tmp);
 
     Widget* shortcuts = new Widget(scrollPanel);
     shortcuts->set_layout(new GroupLayout{});
@@ -106,9 +107,6 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addRow(imageSelection, COMMAND + "+9/F", "Zoom to fit");
     addRow(imageSelection, "N", "Normalize image to [0, 1]");
     addRow(imageSelection, "R", "Reset image parameters");
-    if (supportsHdr) {
-        addRow(imageSelection, "L", "Display the image as if on an LDR screen");
-    }
 
     addRow(imageSelection, "Shift+Right/Left or Shift+D/A", "Select next/previous tonemap");
 
@@ -150,7 +148,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 
     addRow(ui, ALT + "+Enter", "Maximize");
     addRow(ui, COMMAND + "+B", "Toggle GUI");
-    addRow(ui, "H or ?", "Show help (this window)");
+    addRow(ui, "?", "Show help (this window)");
+    addRow(ui, "I", "Show image info and metadata");
     addRow(ui, COMMAND + "+F", "Find image or channel group");
     addRow(ui, "Escape", "Reset find string");
     addRow(ui, COMMAND + "+Q", "Quit");
@@ -167,9 +166,9 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     };
 
     // Network tab
-    Widget* network = new Widget(tabWidget);
+    Widget* network = new Widget(mTabWidget);
     network->set_layout(new GroupLayout{});
-    tabWidget->append_tab("Network", network);
+    mTabWidget->append_tab("Network", network);
 
     new Label{network, "Inter process communication (IPC)", "sans-bold", 18};
     auto ipcSection = new Widget{network};
@@ -188,18 +187,19 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addRow(network, to_string(ipc.nTotalBytesReceived()), "Bytes received");
 
     // About tab
-    Widget* about = new Widget(tabWidget);
+    Widget* about = new Widget(mTabWidget);
     about->set_layout(new GroupLayout{});
-    tabWidget->append_tab("About", about);
+    mTabWidget->append_tab("About", about);
+    about->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     auto addLibrary = [](Widget* current, string name, string desc) {
         auto row = new Widget{current};
-        row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 30});
+        row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 4});
         auto leftColumn = new Widget{row};
         leftColumn->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Maximum});
-        leftColumn->set_fixed_width(135);
+        leftColumn->set_fixed_width(200);
 
-        new Label{leftColumn, name, "sans-bold", 18};
+        new Label{leftColumn, name + ":", "sans-bold", 18};
         new Label{row, desc, "sans", 18};
     };
 
@@ -234,7 +234,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addLibrary(about, "libheif", "HEIF and AVIF image format library");
 #endif
     addLibrary(about, "libpng", "PNG image format library");
-    addLibrary(about, "Little-CMS", "FOSS CMM engine. Fast transforms between ICC profiles.");
+    addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles.");
     addLibrary(about, "libultrahdr", "Ultra HDR JPEG image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");
@@ -247,9 +247,10 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
     scrollPanel->set_fixed_height(about->height() + 12);
+    scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
 
-    tabWidget->set_selected_id(0);
-    tabWidget->set_callback([tabWidget](int id) mutable { tabWidget->set_selected_id(id); });
+    mTabWidget->set_selected_id(0);
+    mTabWidget->set_callback([this](int id) mutable { mTabWidget->set_selected_id(id); });
 }
 
 bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers) {
@@ -257,9 +258,19 @@ bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers
         return true;
     }
 
-    if (key == GLFW_KEY_ESCAPE) {
-        mCloseCallback();
-        return true;
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_ESCAPE) {
+            mCloseCallback();
+            return true;
+        } else if (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL)) {
+            if (modifiers & GLFW_MOD_SHIFT) {
+                mTabWidget->set_selected_id((mTabWidget->selected_id() - 1 + mTabWidget->tab_count()) % mTabWidget->tab_count());
+            } else {
+                mTabWidget->set_selected_id((mTabWidget->selected_id() + 1) % mTabWidget->tab_count());
+            }
+
+            return true;
+        }
     }
 
     return false;

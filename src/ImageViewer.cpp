@@ -206,24 +206,28 @@ ImageViewer::ImageViewer(
             bgAlphaSlider->set_range({0.0f, 1.0f});
             bgAlphaSlider->set_callback([this](float value) {
                 auto col = mImageCanvas->backgroundColor();
-                mImageCanvas->setBackgroundColor(Color{
-                    col.r(),
-                    col.g(),
-                    col.b(),
-                    value,
-                });
+                mImageCanvas->setBackgroundColor(
+                    Color{
+                        col.r(),
+                        col.g(),
+                        col.b(),
+                        value,
+                    }
+                );
             });
 
             bgAlphaSlider->set_value(0);
 
             colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
                 // popupBtn->set_background_color(value);
-                mImageCanvas->setBackgroundColor(Color{
-                    value.r(),
-                    value.g(),
-                    value.b(),
-                    bgAlphaSlider->value(),
-                });
+                mImageCanvas->setBackgroundColor(
+                    Color{
+                        value.r(),
+                        value.g(),
+                        value.b(),
+                        bgAlphaSlider->value(),
+                    }
+                );
             });
         }
     }
@@ -342,13 +346,15 @@ ImageViewer::ImageViewer(
             mFilter->set_callback([this](const string& filter) { return setFilter(filter); });
 
             mFilter->set_placeholder("Find");
-            mFilter->set_tooltip(fmt::format(
-                "Filters visible images and channel groups according to a supplied string. "
-                "The string must have the format 'image:group'. "
-                "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
-                "Keyboard shortcut:\n{}+P",
-                HelpWindow::COMMAND
-            ));
+            mFilter->set_tooltip(
+                fmt::format(
+                    "Filters visible images and channel groups according to a supplied string. "
+                    "The string must have the format 'image:group'. "
+                    "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
+                    "Keyboard shortcut:\n{}+P",
+                    HelpWindow::COMMAND
+                )
+            );
 
             mRegexButton = new Button{panel, "", FA_SEARCH};
             mRegexButton->set_tooltip("Treat filter as regular expression");
@@ -396,7 +402,7 @@ ImageViewer::ImageViewer(
         // Save, refresh, load, close
         {
             auto tools = new Widget{mSidebarLayout};
-            tools->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 1});
+            tools->set_layout(new GridLayout{Orientation::Horizontal, 7, Alignment::Fill, 5, 1});
 
             auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{tools, name, icon};
@@ -425,6 +431,11 @@ ImageViewer::ImageViewer(
                 makeImageButton("W", true, {}, 0, "Watch image files and directories for changes and reload them automatically.");
             mWatchFilesForChangesButton->set_flags(Button::Flags::ToggleButton);
             mWatchFilesForChangesButton->set_change_callback([this](bool value) { setWatchFilesForChanges(value); });
+
+            mImageInfoButton = makeImageButton("", false, {}, FA_INFO, "Show image info and metadata (I)");
+            mImageInfoButton->set_flags(Button::ToggleButton);
+            mImageInfoButton->set_change_callback([this](bool) { toggleImageInfoWindow(); });
+            mAnyImageButtons.push_back(mImageInfoButton);
 
             mCurrentImageButtons.push_back(makeImageButton(
                 "",
@@ -738,6 +749,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
+            return true;
+        } else if (key == GLFW_KEY_I) {
+            toggleImageInfoWindow();
             return true;
         } else if (key == GLFW_KEY_R) {
             if (modifiers & SYSTEM_COMMAND_MOD) {
@@ -1113,16 +1127,18 @@ void ImageViewer::draw_contents() {
             mHistogram->setMean(statistics->mean);
             mHistogram->setMaximum(statistics->maximum);
             mHistogram->setZero(statistics->histogramZero);
-            mHistogram->set_tooltip(fmt::format(
-                "{}\n\n"
-                "Minimum: {:.3f}\n"
-                "Mean: {:.3f}\n"
-                "Maximum: {:.3f}",
-                histogramTooltipBase,
-                statistics->minimum,
-                statistics->mean,
-                statistics->maximum
-            ));
+            mHistogram->set_tooltip(
+                fmt::format(
+                    "{}\n\n"
+                    "Minimum: {:.3f}\n"
+                    "Mean: {:.3f}\n"
+                    "Maximum: {:.3f}",
+                    histogramTooltipBase,
+                    statistics->minimum,
+                    statistics->mean,
+                    statistics->maximum
+                )
+            );
         }
     } else {
         mHistogram->setNChannels(1);
@@ -1394,6 +1410,13 @@ void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallS
 }
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
+    // Once the selected image has been updated, reflect that in the image info window.
+    ScopeGuard imageInfoGuard{[this]() {
+        if (mImageInfoWindow) {
+            updateImageInfoWindow();
+        }
+    }};
+
     if (stopPlayback) {
         mPlayButton->set_pushed(false);
     }
@@ -1505,14 +1528,16 @@ void ImageViewer::selectGroup(string group) {
 
     // Ensure the currently active group button is always fully on-screen
     if (activeGroupButton) {
-        mGroupButtonContainer->set_position(nanogui::Vector2i{
-            clamp(
-                mGroupButtonContainer->position().x(),
-                -activeGroupButton->position().x(),
-                m_size.x() - activeGroupButton->position().x() - activeGroupButton->width()
-            ),
-            0
-        });
+        mGroupButtonContainer->set_position(
+            nanogui::Vector2i{
+                clamp(
+                    mGroupButtonContainer->position().x(),
+                    -activeGroupButton->position().x(),
+                    m_size.x() - activeGroupButton->position().x() - activeGroupButton->width()
+                ),
+                0
+            }
+        );
     }
 }
 
@@ -1751,6 +1776,43 @@ void ImageViewer::toggleHelpWindow() {
     }
 
     requestLayoutUpdate();
+}
+
+void ImageViewer::toggleImageInfoWindow() {
+    if (mImageInfoWindow) {
+        mImageInfoWindow->dispose();
+        mImageInfoWindow = nullptr;
+
+        mImageInfoButton->set_pushed(false);
+    } else {
+        if (mCurrentImage) {
+            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
+            mImageInfoWindow->center();
+            mImageInfoWindow->request_focus();
+
+            mImageInfoButton->set_pushed(true);
+        }
+    }
+
+    requestLayoutUpdate();
+}
+
+void ImageViewer::updateImageInfoWindow() {
+    if (mImageInfoWindow) {
+        auto pos = mImageInfoWindow->position();
+        auto size = mImageInfoWindow->size();
+        mImageInfoWindow->dispose();
+
+        if (mCurrentImage) {
+            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
+            mImageInfoWindow->set_position(pos);
+            mImageInfoWindow->set_size(size);
+            mImageInfoButton->set_pushed(true);
+        } else {
+            mImageInfoWindow = nullptr;
+            mImageInfoButton->set_pushed(false);
+        }
+    }
 }
 
 void ImageViewer::openImageDialog() {

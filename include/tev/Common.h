@@ -212,15 +212,15 @@ inline uint32_t swapBytes(uint32_t value) {
 #endif
 }
 
-inline float swapBytes(float value) {
-    float result;
+template <typename T>
+T swapBytes(T value) {
+    T result;
     auto valueChars = reinterpret_cast<char*>(&value);
     auto resultChars = reinterpret_cast<char*>(&result);
 
-    resultChars[0] = valueChars[3];
-    resultChars[1] = valueChars[2];
-    resultChars[2] = valueChars[1];
-    resultChars[3] = valueChars[0];
+    for (size_t i = 0; i < sizeof(T); ++i) {
+        resultChars[i] = valueChars[sizeof(T) - 1 - i];
+    }
 
     return result;
 }

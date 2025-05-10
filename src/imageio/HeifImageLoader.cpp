@@ -255,40 +255,51 @@ Task<vector<ImageData>>
     result.emplace_back(co_await decodeImage(handle));
     ImageData& mainImage = result.front();
 
-    auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
-        // Extract EXIF metadata
+    unique_ptr<Exif> exif;
+    try {
         int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(handle, "Exif");
-        if (numMetadataBlocks <= 0) {
+        if (numMetadataBlocks >= 0) {
+            tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
+
+            vector<heif_item_id> metadataIDs(numMetadataBlocks);
+            heif_image_handle_get_list_of_metadata_block_IDs(handle, "Exif", metadataIDs.data(), numMetadataBlocks);
+
+            for (int i = 0; i < numMetadataBlocks; ++i) {
+                size_t exifSize = heif_image_handle_get_metadata_size(handle, metadataIDs[i]);
+                if (exifSize <= 4) {
+                    tlog::warning() << "Failed to get size of EXIF data.";
+                    continue;
+                }
+
+                vector<uint8_t> exifData(exifSize);
+                if (auto error = heif_image_handle_get_metadata(handle, metadataIDs[i], exifData.data()); error.code != heif_error_Ok) {
+                    tlog::warning() << "Failed to read EXIF data: " << error.message;
+                    continue;
+                }
+
+                // The first four elements are the length and not strictly part of the exif data.
+                exifData.erase(exifData.begin(), exifData.begin() + 4);
+                exif = make_unique<Exif>(exifData);
+            }
+        }
+    } catch (const invalid_argument& e) {
+        tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what());
+    }
+
+    if (exif) {
+        mainImage.attributes.emplace_back(exif->toAttributes());
+    }
+
+    auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
+        if (!exif) {
             tlog::warning() << "No EXIF metadata found.";
             return nullptr;
         }
 
-        tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
-
-        vector<heif_item_id> metadataIDs(numMetadataBlocks);
-        heif_image_handle_get_list_of_metadata_block_IDs(handle, "Exif", metadataIDs.data(), numMetadataBlocks);
-
-        for (int i = 0; i < numMetadataBlocks; ++i) {
-            size_t exifSize = heif_image_handle_get_metadata_size(handle, metadataIDs[i]);
-            if (exifSize <= 4) {
-                tlog::warning() << "Failed to get size of EXIF data.";
-                continue;
-            }
-
-            vector<uint8_t> exifData(exifSize);
-            if (auto error = heif_image_handle_get_metadata(handle, metadataIDs[i], exifData.data()); error.code != heif_error_Ok) {
-                tlog::warning() << "Failed to read EXIF data: " << error.message;
-                continue;
-            }
-
-            // The first four elements are the length and not strictly part of the exif data.
-            exifData.erase(exifData.begin(), exifData.begin() + 4);
-
-            try {
-                return make_unique<AppleMakerNote>(Exif(exifData).tryGetAppleMakerNote());
-            } catch (const invalid_argument& e) {
-                tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
-            }
+        try {
+            return make_unique<AppleMakerNote>(exif->tryGetAppleMakerNote());
+        } catch (const invalid_argument& e) {
+            tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
         }
 
         return nullptr;

@@ -91,17 +91,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         throw LoadError{"Failed to read JPEG header."};
     }
 
-    static const uint8_t EXIF_FOURCC[] = {
-        'E',
-        'x',
-        'i',
-        'f',
-        '\0',
-        '\0',
-    };
-
     std::vector<JOCTET> exifData;
-    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, EXIF_FOURCC, sizeof(EXIF_FOURCC), exifData);
+    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, Exif::FOURCC.data(), Exif::FOURCC.size(), exifData);
 
     // Try to extract an ICC profile for correct color space conversion
     JOCTET* iccProfile = nullptr;
@@ -152,22 +143,29 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     jpeg_finish_decompress(&cinfo);
 
+    AttributeNode exifAttributes;
+
     // Try to extract EXIF data for correct orientation
     if (!exifData.empty()) {
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 
         try {
-            EOrientation orientation = Exif(exifData).getOrientation();
+            const auto exif = Exif(exifData);
+            exifAttributes = exif.toAttributes();
+
+            EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
             co_await orientToTopLeft(imageData, size, orientation, priority);
         } catch (const invalid_argument& e) {
-            tlog::warning() << fmt::format("Failed reorient from EXIF: {}", e.what());
+            tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what());
         }
     }
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
+
+    resultData.attributes.emplace_back(exifAttributes);
     resultData.channels = makeNChannels(numColorChannels, size);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.

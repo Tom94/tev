@@ -22,8 +22,6 @@
 
 #include <libexif/exif-data.h>
 
-#include <vector>
-
 using namespace std;
 
 namespace tev {
@@ -32,28 +30,43 @@ namespace {
 ExifByteOrder byteOrder(bool reverseEndianness) { return reverseEndianness ? EXIF_BYTE_ORDER_MOTOROLA : EXIF_BYTE_ORDER_INTEL; }
 } // namespace
 
+void Exif::prependFourcc(vector<uint8_t>* data) {
+    data->insert(data->begin(), FOURCC.begin(), FOURCC.end());
+}
+
 Exif::Exif(const uint8_t* exifData, size_t exifDataSize) {
     mExif = exif_data_new();
     mExifLog = exif_log_new();
+    mExifLogError = make_unique<bool>(false);
+
     exif_log_set_func(
         mExifLog,
-        [](ExifLog* log, ExifLogCode kind, const char* domain, const char* format, va_list args, void* data) {
+        [](ExifLog* log, ExifLogCode kind, const char* domain, const char* format, va_list args, void* userData) {
+            bool* error = static_cast<bool*>(userData);
+
             char buf[1024];
             vsnprintf(buf, sizeof(buf), format, args);
             string msg = fmt::format("{}: {}", domain, buf);
             switch (kind) {
                 case EXIF_LOG_CODE_NONE: tlog::info() << msg; break;
                 case EXIF_LOG_CODE_DEBUG: tlog::debug() << msg; break;
-                case EXIF_LOG_CODE_NO_MEMORY: tlog::error() << msg; break;
-                case EXIF_LOG_CODE_CORRUPT_DATA: tlog::error() << msg; break;
+                case EXIF_LOG_CODE_NO_MEMORY:
+                    *error = true;
+                    tlog::error() << msg;
+                    break;
+                case EXIF_LOG_CODE_CORRUPT_DATA:
+                    *error = true;
+                    tlog::error() << msg;
+                    break;
             }
         },
-        nullptr
+        mExifLogError.get()
     );
+
     exif_data_log(mExif, mExifLog);
     exif_data_load_data(mExif, exifData, exifDataSize);
 
-    if (!mExif) {
+    if (!mExif || *mExifLogError) {
         throw invalid_argument{"Failed to decode EXIF data."};
     }
 
@@ -90,6 +103,37 @@ EOrientation Exif::getOrientation() const {
     }
 
     return (EOrientation)exif_get_short(orientationEntry->data, byteOrder(mReverseEndianess));
+}
+
+AttributeNode Exif::toAttributes() const {
+    AttributeNode result;
+    result.name = "EXIF";
+
+    for (int ifd = EXIF_IFD_0; ifd < EXIF_IFD_COUNT; ++ifd) {
+        ExifContent* content = mExif->ifd[ifd];
+        if (content->count == 0) {
+            continue;
+        }
+
+        result.children.emplace_back();
+        AttributeNode& ifdNode = result.children.back();
+
+        ifdNode.name = exif_ifd_get_name((ExifIfd)ifd);
+        ifdNode.type = "IFD";
+
+        for (size_t i = 0; i < content->count; ++i) {
+            ExifEntry* entry = content->entries[i];
+
+            string name = exif_tag_get_name(entry->tag);
+            char buf[1024] = {0};
+            string value = exif_entry_get_value(entry, buf, sizeof(buf) - 1);
+            string type = exif_format_get_name(entry->format);
+
+            ifdNode.children.push_back({name, value, type, {}});
+        }
+    }
+
+    return result;
 }
 
 } // namespace tev

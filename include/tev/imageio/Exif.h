@@ -19,8 +19,10 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/Image.h>
 #include <tev/imageio/AppleMakerNote.h>
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -31,6 +33,16 @@ namespace tev {
 
 class Exif {
 public:
+    static constexpr std::array<uint8_t, 6> FOURCC = {
+        'E',
+        'x',
+        'i',
+        'f',
+        '\0',
+        '\0',
+    };
+    static void prependFourcc(std::vector<uint8_t>* data);
+
     Exif(const uint8_t* exifData, size_t exifDataSize);
     Exif(std::vector<uint8_t> exifData) : Exif(exifData.data(), exifData.size()) {}
     ~Exif();
@@ -39,10 +51,14 @@ public:
 
     EOrientation getOrientation() const;
 
+    AttributeNode toAttributes() const;
+
 private:
     bool mReverseEndianess = false;
+
     _ExifData* mExif = nullptr;
     _ExifLog* mExifLog = nullptr;
+    std::unique_ptr<bool> mExifLogError = nullptr;
 };
 
 } // namespace tev

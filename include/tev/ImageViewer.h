@@ -22,6 +22,7 @@
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
 #include <tev/ImageCanvas.h>
+#include <tev/ImageInfoWindow.h>
 #include <tev/Ipc.h>
 #include <tev/Lazy.h>
 #include <tev/MultiGraph.h>
@@ -158,6 +159,9 @@ public:
 
     void toggleHelpWindow();
 
+    void toggleImageInfoWindow();
+    void updateImageInfoWindow();
+
     void openImageDialog();
     void saveImageDialog();
 
@@ -238,6 +242,8 @@ private:
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
+    nanogui::Button* mImageInfoButton;
+    ImageInfoWindow* mImageInfoWindow = nullptr;
 
     // Buttons which require at least one image to be meaningful
     std::vector<nanogui::Button*> mAnyImageButtons;
