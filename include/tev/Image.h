@@ -259,7 +259,7 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
             for (int x = 0; x < size.x(); ++x) {
                 const size_t i = y * (size_t)size.x() + x;
 
-                const auto other = applyOrientation(orientation, {x, y}, size);
+                const auto other = applyOrientation(orientation, nanogui::Vector2i{x, y}, size);
                 const size_t j = other.y() * (size_t)otherSize.x() + other.x();
 
                 for (size_t s = 0; s < numSamplesPerPixel; ++s) {
