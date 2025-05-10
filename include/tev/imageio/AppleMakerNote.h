@@ -138,7 +138,7 @@ public:
     }
 
 private:
-    std::map<uint8_t, AppleMakerNoteEntry> mTags;
+    std::map<uint16_t, AppleMakerNoteEntry> mTags;
     bool mReverseEndianess = false;
 };
 
