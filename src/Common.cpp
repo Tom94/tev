@@ -113,11 +113,11 @@ bool naturalCompare(const string& a, const string& b) {
 
     for (size_t i = 0; i < min(aParts.size(), bParts.size()); ++i) {
         if (aParts[i] != bParts[i]) {
-            // Compare the substrings. If they are both digits, compare them as numbers. Otherwise, compare them as strings.
+            // Compare the substrings. If they are both digits, compare them as numbers. Otherwise, compare them case-insensitively as strings.
             if (isdigit(aParts[i][0]) && isdigit(bParts[i][0])) {
                 return stoi(aParts[i]) < stoi(bParts[i]);
             } else {
-                return aParts[i] < bParts[i];
+                return toLower(aParts[i]) < toLower(bParts[i]);
             }
         }
     }
