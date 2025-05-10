@@ -69,13 +69,13 @@
 
 // Make std::filesystem::path formattable.
 template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) {
+    template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) const {
         return formatter<std::string_view>::format(path.string(), ctx);
     }
 };
 
 template <typename T, uint32_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) {
+    template <typename FormatContext> auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) const {
         std::ostringstream s;
         s << v;
         return formatter<std::string_view>::format(s.str(), ctx);
