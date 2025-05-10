@@ -113,7 +113,7 @@ void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& f
 
 Task<void> ImageData::multiplyAlpha(int priority) {
     if (hasPremultipliedAlpha) {
-        throw runtime_error{"Can't multiply with alpha twice."};
+        throw ImageModifyError{"Can't multiply with alpha twice."};
     }
 
     vector<Task<void>> tasks;
@@ -127,7 +127,7 @@ Task<void> ImageData::multiplyAlpha(int priority) {
 
 Task<void> ImageData::unmultiplyAlpha(int priority) {
     if (!hasPremultipliedAlpha) {
-        throw runtime_error{"Can't divide by alpha twice."};
+        throw ImageModifyError{"Can't divide by alpha twice."};
     }
 
     vector<Task<void>> tasks;
@@ -160,7 +160,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     unordered_set<DataDesc, DataDesc::Hash> channelData;
     for (auto& c : channels) {
         if (c.stride() != 1 && c.stride() != 4) {
-            throw runtime_error{"ImageData::orientToTopLeft: only strides 1 and 4 are supported."};
+            throw ImageModifyError{"ImageData::orientToTopLeft: only strides 1 and 4 are supported."};
         }
 
         channelData.insert({c.dataBuf(), c.size()});
@@ -186,7 +186,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
 
 Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriority) {
     if (channels.empty()) {
-        throw runtime_error{"Image must have at least one channel."};
+        throw ImageLoadError{"Image must have at least one channel."};
     }
 
     if (orientation != EOrientation::TopLeft) {
@@ -204,7 +204,7 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
 
     for (const auto& c : channels) {
         if (c.size() != size()) {
-            throw runtime_error{fmt::format(
+            throw ImageLoadError{fmt::format(
                 "All channels must have the same size as the data window. ({}:{}x{} != {}x{})",
                 c.name(),
                 c.size().x(),
@@ -235,7 +235,7 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
         }
 
         if (channels.empty()) {
-            throw runtime_error{fmt::format("Channel selector :{} discards all channels.", channelSelector)};
+            throw ImageLoadError{fmt::format("Channel selector :{} discards all channels.", channelSelector)};
         }
     }
 
@@ -708,7 +708,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         auto start = chrono::system_clock::now();
 
         if (!iStream) {
-            throw ImageLoader::LoadError{fmt::format("Image {} could not be opened.", path)};
+            throw ImageLoadError{fmt::format("Image {} could not be opened.", path)};
         }
 
         fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
@@ -740,7 +740,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         }
 
         if (!success) {
-            throw ImageLoader::LoadError{"No suitable image loader found."};
+            throw ImageLoadError{"No suitable image loader found."};
         }
 
         vector<shared_ptr<Image>> images;
@@ -767,7 +767,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
         tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
         co_return images;
-    } catch (const ImageLoader::LoadError& e) { handleException(e); } catch (const future_error& e) {
+    } catch (const ImageLoadError& e) { handleException(e); } catch (const ImageModifyError& e) {
         handleException(e);
     }
 

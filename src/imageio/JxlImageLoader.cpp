@@ -103,29 +103,29 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     vector<uint8_t> fileData(fileSize);
     iStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
     if (!iStream || static_cast<size_t>(iStream.gcount()) != fileSize) {
-        throw LoadError{"Failed to read file data."};
+        throw ImageLoadError{"Failed to read file data."};
     }
 
     // Set up jxl decoder
     auto decoder = JxlDecoderMake(nullptr);
     if (!decoder) {
-        throw LoadError{"Failed to create decoder."};
+        throw ImageLoadError{"Failed to create decoder."};
     }
 
     auto runner = JxlThreadParallelRunnerMake(nullptr, thread::hardware_concurrency());
     if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(decoder.get(), JxlThreadParallelRunner, runner.get())) {
-        throw LoadError{"Failed to set parallel runner for decoder."};
+        throw ImageLoadError{"Failed to set parallel runner for decoder."};
     }
 
     if (JXL_DEC_SUCCESS !=
         JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME)) {
-        throw LoadError{"Failed to subscribe to decoder events."};
+        throw ImageLoadError{"Failed to subscribe to decoder events."};
     }
 
     // "Boxes" contain all kinds of metadata, such as exif, which we'll want to get at. By default, they are compressed via Brotli, making
     // them inaccessible to typical exif libraries. Hence: set them to get decompressed during decoding.
     if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(decoder.get(), JXL_TRUE)) {
-        throw LoadError{"Failed to set decompress boxes."};
+        throw ImageLoadError{"Failed to set decompress boxes."};
     }
 
     // We expressly don't want the decoder to unpremultiply the alpha channel for us, because this becomes a more and more lossy operation
@@ -133,11 +133,11 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     // forced to unmultiply the alpha channel due to an idiosyncracy in the jxl format where alpha multiplication is defined in non-linear
     // space.
     if (JXL_DEC_SUCCESS != JxlDecoderSetUnpremultiplyAlpha(decoder.get(), JXL_FALSE)) {
-        throw LoadError{"Failed to set unpremultiply alpha."};
+        throw ImageLoadError{"Failed to set unpremultiply alpha."};
     }
 
     if (JXL_DEC_SUCCESS != JxlDecoderSetInput(decoder.get(), fileData.data(), fileData.size())) {
-        throw LoadError{"Failed to set input for decoder."};
+        throw ImageLoadError{"Failed to set input for decoder."};
     }
 
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
@@ -155,17 +155,17 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     while (true) {
         JxlDecoderStatus status = JxlDecoderProcessInput(decoder.get());
         switch (status) {
-            default: throw LoadError{fmt::format("Unknown decoder status: {}", (size_t)status)};
+            default: throw ImageLoadError{fmt::format("Unknown decoder status: {}", (size_t)status)};
             case JXL_DEC_SUCCESS: goto l_decode_success;
-            case JXL_DEC_ERROR: throw LoadError{"Error decoding image."};
-            case JXL_DEC_NEED_MORE_INPUT: throw LoadError{"Incomplete image data."};
+            case JXL_DEC_ERROR: throw ImageLoadError{"Error decoding image."};
+            case JXL_DEC_NEED_MORE_INPUT: throw ImageLoadError{"Incomplete image data."};
             case JXL_DEC_BASIC_INFO: {
                 if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(decoder.get(), &info)) {
-                    throw LoadError{"Failed to get basic info from image."};
+                    throw ImageLoadError{"Failed to get basic info from image."};
                 }
 
                 if (info.num_color_channels > 3) {
-                    throw LoadError{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
+                    throw ImageLoadError{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
                 }
 
                 tlog::debug() << fmt::format(
@@ -179,7 +179,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 );
 
                 if (info.alpha_bits && info.num_extra_channels == 0) {
-                    throw LoadError{"Image has alpha channel, but no extra channels."};
+                    throw ImageLoadError{"Image has alpha channel, but no extra channels."};
                 }
 
                 break;
@@ -206,7 +206,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     JxlColorEncodingSetToLinearSRGB(&ce, false /* XYB is never grayscale */);
                     if (JxlDecoderSetPreferredColorProfile(decoder.get(), &ce) != JXL_DEC_SUCCESS) {
-                        throw LoadError{"Failed to set up XYB->sRGB conversion."};
+                        throw ImageLoadError{"Failed to set up XYB->sRGB conversion."};
                     }
                 } else {
                     // The jxl spec says that color space can *always* unambiguously be determined from an ICC color encoding, so we can
@@ -214,7 +214,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     size_t size = 0;
                     if (JXL_DEC_SUCCESS !=
                         JxlDecoderGetICCProfileSize(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &size)) {
-                        throw LoadError{"Failed to get ICC profile size from image."};
+                        throw ImageLoadError{"Failed to get ICC profile size from image."};
                     }
 
                     iccProfile.resize(size);
@@ -222,7 +222,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         JxlDecoderGetColorAsICCProfile(
                             decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, iccProfile.data(), size
                         )) {
-                        throw LoadError{"Failed to get ICC profile from image."};
+                        throw ImageLoadError{"Failed to get ICC profile from image."};
                     }
                 }
 
@@ -235,7 +235,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 JxlFrameHeader frameHeader;
                 if (JXL_DEC_SUCCESS != JxlDecoderGetFrameHeader(decoder.get(), &frameHeader)) {
-                    throw LoadError{"Failed to get frame header."};
+                    throw ImageLoadError{"Failed to get frame header."};
                 }
 
                 if (frameHeader.name_length == 0) {
@@ -243,7 +243,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 } else {
                     frameName.resize(frameHeader.name_length + 1); // +1 for null terminator
                     if (JXL_DEC_SUCCESS != JxlDecoderGetFrameName(decoder.get(), frameName.data(), frameName.size() + 1)) {
-                        throw LoadError{"Failed to get frame name."};
+                        throw ImageLoadError{"Failed to get frame name."};
                     }
                 }
 
@@ -262,12 +262,12 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 // Main image buffer & decode setup
                 JxlPixelFormat imageFormat = {(uint32_t)numColorChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(decoder.get(), &imageFormat, &bufferSize)) {
-                    throw LoadError{"Failed to get output buffer size."};
+                    throw ImageLoadError{"Failed to get output buffer size."};
                 }
 
                 colorData.resize(bufferSize / sizeof(float));
                 if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, colorData.data(), bufferSize)) {
-                    throw LoadError{"Failed to set output buffer."};
+                    throw ImageLoadError{"Failed to set output buffer."};
                 }
 
                 struct ExtraChannelInfo {
@@ -286,7 +286,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     JxlExtraChannelInfo extraChannelInfo;
                     if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), i, &extraChannelInfo)) {
-                        throw LoadError{fmt::format("Failed to get extra channel {}'s info.", i)};
+                        throw ImageLoadError{fmt::format("Failed to get extra channel {}'s info.", i)};
                     }
 
                     extraChannel.dimShift = extraChannelInfo.dim_shift;
@@ -296,7 +296,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         extraChannel.name.resize(extraChannelInfo.name_length + 1); // +1 for null terminator
                         if (JXL_DEC_SUCCESS !=
                             JxlDecoderGetExtraChannelName(decoder.get(), i, extraChannel.name.data(), extraChannel.name.size() + 1)) {
-                            throw LoadError{fmt::format("Failed to get extra channel {}'s name.", i)};
+                            throw ImageLoadError{fmt::format("Failed to get extra channel {}'s name.", i)};
                         }
                     }
 
@@ -310,13 +310,13 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << fmt::format("Loading extra channel {}: {}, dim shift: {}", i, extraChannel.name, extraChannel.dimShift);
 
                     if (JXL_DEC_SUCCESS != JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, i)) {
-                        throw LoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
+                        throw ImageLoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
                     }
 
                     extraChannel.data.resize(bufferSize / sizeof(float));
                     if (JXL_DEC_SUCCESS !=
                         JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, i)) {
-                        throw LoadError{fmt::format("Failed to set extra channel {}'s buffer.", i)};
+                        throw ImageLoadError{fmt::format("Failed to set extra channel {}'s buffer.", i)};
                     }
 
                     extraChannel.active = true;
@@ -324,7 +324,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 status = JxlDecoderProcessInput(decoder.get());
                 if (status == JXL_DEC_ERROR) {
-                    throw LoadError{"Error processing input."};
+                    throw ImageLoadError{"Error processing input."};
                 }
 
                 ImageData& data = result.emplace_back();
@@ -415,7 +415,7 @@ l_decode_success:
 
         JxlBoxType type = {};
         if (JXL_DEC_SUCCESS != JxlDecoderGetBoxType(decoder.get(), type, JXL_TRUE)) {
-            throw LoadError{"Failed to get box type."};
+            throw ImageLoadError{"Failed to get box type."};
         }
 
         if (type == "Exif"s) {
@@ -425,26 +425,26 @@ l_decode_success:
             // size ahead of time, because the decoder doesn't know how large the box will be until it has been fully decoded.
             vector<uint8_t> exifData(1024);
             if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
-                throw LoadError{"Failed to set initial box buffer."};
+                throw ImageLoadError{"Failed to set initial box buffer."};
             }
 
             status = JxlDecoderProcessInput(decoder.get());
             while (status == JXL_DEC_BOX_NEED_MORE_OUTPUT) {
                 tlog::debug() << fmt::format("Doubling box buffer size from {} to {} bytes.", exifData.size(), exifData.size() * 2);
                 if (JXL_DEC_SUCCESS != JxlDecoderReleaseBoxBuffer(decoder.get())) {
-                    throw LoadError{"Failed to release box buffer for resize."};
+                    throw ImageLoadError{"Failed to release box buffer for resize."};
                 }
 
                 exifData.resize(exifData.size() * 2);
                 if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
-                    throw LoadError{"Failed to set resized box buffer."};
+                    throw ImageLoadError{"Failed to set resized box buffer."};
                 }
 
                 status = JxlDecoderProcessInput(decoder.get());
             }
 
             if (status != JXL_DEC_SUCCESS && status != JXL_DEC_BOX) {
-                throw LoadError{"Failed to process box."};
+                throw ImageLoadError{"Failed to process box."};
             }
 
             try {

@@ -50,18 +50,18 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     ScopeGuard decodedDataGuard{[decodedData] { free(decodedData); }};
 
     if (!decodedData) {
-        throw LoadError{"Failed to decode data from the QOI format."};
+        throw ImageLoadError{"Failed to decode data from the QOI format."};
     }
 
     Vector2i size{static_cast<int>(desc.width), static_cast<int>(desc.height)};
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        throw LoadError{"Image has zero pixels."};
+        throw ImageLoadError{"Image has zero pixels."};
     }
 
     int numChannels = static_cast<int>(desc.channels);
     if (numChannels != 4 && numChannels != 3) {
-        throw LoadError{fmt::format("Invalid number of channels {}.", numChannels)};
+        throw ImageLoadError{fmt::format("Invalid number of channels {}.", numChannels)};
     }
 
     vector<ImageData> result(1);

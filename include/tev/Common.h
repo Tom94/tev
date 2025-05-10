@@ -460,4 +460,20 @@ static const nanogui::Color IMAGE_COLOR = {0.35f, 0.35f, 0.8f, 1.0f};
 static const nanogui::Color REFERENCE_COLOR = {0.7f, 0.4f, 0.4f, 1.0f};
 static const nanogui::Color CROP_COLOR = {0.2f, 0.5f, 0.2f, 1.0f};
 
+// Exceptions
+class ImageLoadError : public std::runtime_error {
+public:
+    ImageLoadError(const std::string& message) : std::runtime_error{message} {}
+};
+
+class ImageModifyError : public std::runtime_error {
+public:
+    ImageModifyError(const std::string& message) : std::runtime_error{message} {}
+};
+
+class ImageSaveError : public std::runtime_error {
+public:
+    ImageSaveError(const std::string& message) : std::runtime_error{message} {}
+};
+
 } // namespace tev

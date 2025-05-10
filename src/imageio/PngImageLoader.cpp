@@ -37,7 +37,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     png_structp pngPtr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
     if (!pngPtr) {
-        throw LoadError{"Failed to create PNG read struct."};
+        throw ImageLoadError{"Failed to create PNG read struct."};
     }
 
     png_infop infoPtr = nullptr;
@@ -46,13 +46,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_set_error_fn(
         pngPtr,
         nullptr,
-        [](png_structp png_ptr, png_const_charp error_msg) { throw LoadError{fmt::format("PNG error: {}", error_msg)}; },
+        [](png_structp png_ptr, png_const_charp error_msg) { throw ImageLoadError{fmt::format("PNG error: {}", error_msg)}; },
         [](png_structp png_ptr, png_const_charp warning_msg) { tlog::warning() << fmt::format("PNG warning: {}", warning_msg); }
     );
 
     infoPtr = png_create_info_struct(pngPtr);
     if (!infoPtr) {
-        throw LoadError{"Failed to create PNG info struct."};
+        throw ImageLoadError{"Failed to create PNG info struct."};
     }
 
     png_set_read_fn(pngPtr, &iStream, [](png_structp png_ptr, png_bytep data, png_size_t length) {
@@ -74,7 +74,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     Vector2i size{static_cast<int>(width), static_cast<int>(height)};
     if (size.x() == 0 || size.y() == 0) {
-        throw LoadError{"Image has zero pixels."};
+        throw ImageLoadError{"Image has zero pixels."};
     }
 
     // Determine number of channels
@@ -116,21 +116,21 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         png_set_tRNS_to_alpha(pngPtr); // Convert transparency to alpha channel
         if (numColorChannels != numChannels) {
-            throw LoadError{"Image has transparency channel but already has an alpha channel."};
+            throw ImageLoadError{"Image has transparency channel but already has an alpha channel."};
         }
 
         numChannels += 1;
     }
 
     if (numColorChannels == 0 || numChannels == 0) {
-        throw LoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
+        throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
     }
 
     png_read_update_info(pngPtr, infoPtr);
 
     bitDepth = png_get_bit_depth(pngPtr, infoPtr);
     if (bitDepth != 8 && bitDepth != 16) {
-        throw LoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
+        throw ImageLoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
     tlog::debug() << fmt::format(

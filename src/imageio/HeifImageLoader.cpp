@@ -83,19 +83,19 @@ Task<vector<ImageData>>
 
     heif_context* ctx = heif_context_alloc();
     if (!ctx) {
-        throw LoadError{"Failed to allocate libheif context."};
+        throw ImageLoadError{"Failed to allocate libheif context."};
     }
 
     ScopeGuard contextGuard{[ctx] { heif_context_free(ctx); }};
 
     if (auto error = heif_context_read_from_reader(ctx, &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
-        throw LoadError{fmt::format("Failed to read image: {}", error.message)};
+        throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 
     // get a handle to the primary image
     heif_image_handle* handle;
     if (auto error = heif_context_get_primary_image_handle(ctx, &handle); error.code != heif_error_Ok) {
-        throw LoadError{fmt::format("Failed to get primary image handle: {}", error.message)};
+        throw ImageLoadError{fmt::format("Failed to get primary image handle: {}", error.message)};
     }
 
     ScopeGuard handleGuard{[handle] { heif_image_handle_release(handle); }};
@@ -117,12 +117,12 @@ Task<vector<ImageData>>
         Vector2i size = {heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
 
         if (size.x() == 0 || size.y() == 0) {
-            throw LoadError{"Image has zero pixels."};
+            throw ImageLoadError{"Image has zero pixels."};
         }
 
         heif_image* img;
         if (auto error = heif_decode_image(imgHandle, &img, heif_colorspace_RGB, format, nullptr); error.code != heif_error_Ok) {
-            throw LoadError{fmt::format("Failed to decode image: {}", error.message)};
+            throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
         ScopeGuard imgGuard{[img] { heif_image_release(img); }};
@@ -133,7 +133,7 @@ Task<vector<ImageData>>
         int bytesPerRow;
         const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &bytesPerRow);
         if (!data) {
-            throw LoadError{"Faild to get image data."};
+            throw ImageLoadError{"Faild to get image data."};
         }
 
         resultData.channels = makeNChannels(numChannels, size, namePrefix);
@@ -141,7 +141,7 @@ Task<vector<ImageData>>
         auto tryIccTransform = [&](const vector<uint8_t>& iccProfile) -> Task<void> {
             size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
             if (profileSize == 0) {
-                throw LoadError{"No ICC color profile found."};
+                throw ImageLoadError{"No ICC color profile found."};
             }
 
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
@@ -149,14 +149,14 @@ Task<vector<ImageData>>
             vector<uint8_t> profileData(profileSize);
             if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code == heif_error_Color_profile_does_not_exist) {
-                    throw LoadError{"ICC color profile does not exist."};
+                    throw ImageLoadError{"ICC color profile does not exist."};
                 }
 
-                throw LoadError{fmt::format("Failed to read ICC profile: {}", error.message)};
+                throw ImageLoadError{fmt::format("Failed to read ICC profile: {}", error.message)};
             }
 
             if (bytesPerRow % sizeof(uint16_t) != 0) {
-                throw LoadError{"Row size not a multiple of sample size."};
+                throw ImageLoadError{"Row size not a multiple of sample size."};
             }
 
             vector<float> dataF32((size_t)size.x() * size.y() * numChannels);

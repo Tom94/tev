@@ -173,8 +173,8 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
         const Imf::Attribute* attr = &(attributeItr.attribute());
 
         AttributeNode node;
-        node.name = string(attributeItr.name());
-        node.type = string(attr->typeName());
+        node.name = attributeItr.name();
+        node.type = attr->typeName();
 
         if (const auto* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
             node.value = strAttr->value();
@@ -449,7 +449,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         int numParts = multiPartFile.parts();
 
         if (numParts <= 0) {
-            throw LoadError{"EXR image does not contain any parts."};
+            throw ImageLoadError{"EXR image does not contain any parts."};
         }
 
         vector<Imf::InputPart> parts;
@@ -497,7 +497,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         }
 
         if (rawChannels.empty()) {
-            throw LoadError{fmt::format("No channels match '{}'.", channelSelector)};
+            throw ImageLoadError{fmt::format("No channels match '{}'.", channelSelector)};
         }
 
         co_await ThreadPool::global().parallelForAsync(0, (int)rawChannels.size(), [&](int i) { rawChannels.at(i).resize(); }, priority);
@@ -532,7 +532,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             };
 
             if (!data.dataWindow.isValid()) {
-                throw LoadError{fmt::format(
+                throw ImageLoadError{fmt::format(
                     "EXR image has invalid data window: [{},{}] - [{},{}]",
                     data.dataWindow.min.x(),
                     data.dataWindow.min.y(),
@@ -542,7 +542,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             }
 
             if (!data.displayWindow.isValid()) {
-                throw LoadError{fmt::format(
+                throw ImageLoadError{fmt::format(
                     "EXR image has invalid display window: [{},{}] - [{},{}]",
                     data.displayWindow.min.x(),
                     data.displayWindow.min.y(),
@@ -591,7 +591,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         co_return result;
     } catch (const Iex::BaseExc& e) {
         // Translate OpenEXR errors to our own error type
-        throw LoadError{e.what()};
+        throw ImageLoadError{e.what()};
     }
 }
 } // namespace tev

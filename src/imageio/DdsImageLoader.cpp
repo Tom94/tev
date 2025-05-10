@@ -170,7 +170,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     // COM must be initialized on the thread executing load().
     if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
-        throw LoadError{"Failed to initialize COM."};
+        throw ImageLoadError{"Failed to initialize COM."};
     }
 
     ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
@@ -178,7 +178,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
     if (DirectX::LoadFromDDSMemory(data.data(), dataSize, DirectX::DDS_FLAGS_NONE, &metadata, scratchImage) != S_OK) {
-        throw LoadError{"Failed to read DDS file."};
+        throw ImageLoadError{"Failed to read DDS file."};
     }
 
     DXGI_FORMAT format;
@@ -189,14 +189,14 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         case 2: format = DXGI_FORMAT_R32G32_FLOAT; break;
         case 1: format = DXGI_FORMAT_R32_FLOAT; break;
         case 0:
-        default: throw LoadError{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
+        default: throw ImageLoadError{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
     }
 
     // Use DirectXTex to either decompress or convert to the target floating point format.
     if (DirectX::IsCompressed(metadata.format)) {
         DirectX::ScratchImage decompImage;
         if (DirectX::Decompress(*scratchImage.GetImage(0, 0, 0), format, decompImage) != S_OK) {
-            throw LoadError{"Failed to decompress DDS image."};
+            throw ImageLoadError{"Failed to decompress DDS image."};
         }
         std::swap(scratchImage, decompImage);
     } else if (metadata.format != format) {
@@ -204,7 +204,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         if (DirectX::Convert(
                 *scratchImage.GetImage(0, 0, 0), format, DirectX::TEX_FILTER_DEFAULT, DirectX::TEX_THRESHOLD_DEFAULT, convertedImage
             ) != S_OK) {
-            throw LoadError{"Failed to convert DDS image."};
+            throw ImageLoadError{"Failed to convert DDS image."};
         }
         std::swap(scratchImage, convertedImage);
     }
@@ -218,7 +218,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        throw LoadError{"DDS image has zero pixels."};
+        throw ImageLoadError{"DDS image has zero pixels."};
     }
 
     bool isFloat = DirectX::FormatDataType(metadata.format) == DirectX::FORMAT_TYPE_FLOAT;

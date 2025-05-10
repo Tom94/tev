@@ -81,7 +81,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
     auto decoder = uhdr_create_decoder();
     if (!decoder) {
-        throw LoadError{"Could not create UltraHDR decoder."};
+        throw ImageLoadError{"Could not create UltraHDR decoder."};
     }
 
     ScopeGuard decoderGuard{[decoder] { uhdr_release_decoder(decoder); }};
@@ -95,15 +95,15 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     uhdrImage.range = UHDR_CR_UNSPECIFIED;
 
     if (auto status = uhdr_dec_set_image(decoder, &uhdrImage); !isOkay(status)) {
-        throw LoadError{fmt::format("Failed to set image: {}", toString(status))};
+        throw ImageLoadError{fmt::format("Failed to set image: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_set_out_img_format(decoder, UHDR_IMG_FMT_64bppRGBAHalfFloat); !isOkay(status)) {
-        throw LoadError{fmt::format("Failed to set output format: {}", toString(status))};
+        throw ImageLoadError{fmt::format("Failed to set output format: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_set_out_color_transfer(decoder, UHDR_CT_LINEAR); !isOkay(status)) {
-        throw LoadError{fmt::format("Failed to set output color transfer: {}", toString(status))};
+        throw ImageLoadError{fmt::format("Failed to set output color transfer: {}", toString(status))};
     }
 
     if (auto status = uhdr_dec_probe(decoder); !isOkay(status)) {
@@ -111,12 +111,12 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     }
 
     if (auto status = uhdr_decode(decoder); !isOkay(status)) {
-        throw LoadError{fmt::format("Failed to decode: {}", toString(status))};
+        throw ImageLoadError{fmt::format("Failed to decode: {}", toString(status))};
     }
 
     uhdr_raw_image_t* image = uhdr_get_decoded_image(decoder);
     if (!image) {
-        throw LoadError{"No decoded image."};
+        throw ImageLoadError{"No decoded image."};
     }
 
     const uhdr_mem_block_t* exifData = uhdr_dec_get_exif(decoder);
@@ -130,12 +130,12 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     ImageData& imageData = result.emplace_back();
 
     if (image->fmt != UHDR_IMG_FMT_64bppRGBAHalfFloat) {
-        throw LoadError{"Image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
+        throw ImageLoadError{"Image is not UHDR_IMG_FMT_64bppRGBAHalfFloat."};
     }
 
     Vector2i size = {(int)image->w, (int)image->h};
     if (size.x() <= 0 || size.y() <= 0) {
-        throw LoadError{"Invalid image size."};
+        throw ImageLoadError{"Invalid image size."};
     }
 
     const int numChannels = 4;

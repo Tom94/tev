@@ -68,15 +68,15 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     }
 
     if (!data) {
-        throw LoadError{std::string{stbi_failure_reason()}};
+        throw ImageLoadError{std::string{stbi_failure_reason()}};
     }
 
     if (numFrames == 0) {
-        throw LoadError{"Image has zero frames."};
+        throw ImageLoadError{"Image has zero frames."};
     }
 
     if (size.x() == 0 || size.y() == 0) {
-        throw LoadError{"Image has zero pixels."};
+        throw ImageLoadError{"Image has zero pixels."};
     }
 
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};

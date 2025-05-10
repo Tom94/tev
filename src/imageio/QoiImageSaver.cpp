@@ -32,7 +32,7 @@ namespace tev {
 void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& data, const Vector2i& imageSize, int nChannels) const {
     // The QOI image format expects nChannels to be either 3 for RGB data or 4 for RGBA.
     if (nChannels != 4 && nChannels != 3) {
-        throw SaveError{fmt::format("Invalid number of channels {}.", nChannels)};
+        throw ImageSaveError{fmt::format("Invalid number of channels {}.", nChannels)};
     }
 
     const qoi_desc desc{
@@ -47,7 +47,7 @@ void QoiImageSaver::save(ostream& oStream, const fs::path&, const vector<char>& 
     ScopeGuard encodedDataGuard{[encodedData] { free(encodedData); }};
 
     if (!encodedData) {
-        throw SaveError{"Failed to encode data into the QOI format."};
+        throw ImageSaveError{"Failed to encode data into the QOI format."};
     }
 
     oStream.write(reinterpret_cast<char*>(encodedData), sizeInBytes);

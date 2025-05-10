@@ -39,27 +39,27 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
 
     auto encoder = JxlEncoderMake(nullptr);
     if (!encoder) {
-        throw SaveError{"Failed to create encoder."};
+        throw ImageSaveError{"Failed to create encoder."};
     }
 
     auto runner = JxlThreadParallelRunnerMake(nullptr, thread::hardware_concurrency());
     if (JXL_ENC_SUCCESS != JxlEncoderSetParallelRunner(encoder.get(), JxlThreadParallelRunner, runner.get())) {
-        throw SaveError{"Failed to set parallel runner."};
+        throw ImageSaveError{"Failed to set parallel runner."};
     }
 
     // Configure encoder options for lossless HDR output
     JxlEncoderFrameSettings* options = JxlEncoderFrameSettingsCreate(encoder.get(), nullptr);
     if (!options) {
-        throw SaveError{"Failed to create encoder options."};
+        throw ImageSaveError{"Failed to create encoder options."};
     }
 
     // Set the effort level (0-9, 9 is the highest quality)
     if (JXL_ENC_SUCCESS != JxlEncoderFrameSettingsSetOption(options, JXL_ENC_FRAME_SETTING_EFFORT, 7)) {
-        throw SaveError{"Failed to set effort level."};
+        throw ImageSaveError{"Failed to set effort level."};
     }
 
     if (JXL_ENC_SUCCESS != JxlEncoderSetFrameLossless(options, 1)) {
-        throw SaveError{"Failed to set lossless mode."};
+        throw ImageSaveError{"Failed to set lossless mode."};
     }
 
     JxlBasicInfo basicInfo;
@@ -81,7 +81,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
     basicInfo.num_extra_channels = hasAlpha ? 1 : 0;
 
     if (JXL_ENC_SUCCESS != JxlEncoderSetBasicInfo(encoder.get(), &basicInfo)) {
-        throw SaveError{"Failed to set basic info."};
+        throw ImageSaveError{"Failed to set basic info."};
     }
 
     // Since JXL treats alpha channels as extra channels, a bit of redundant information needs to be attached to it here.
@@ -93,7 +93,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
         alphaChannelInfo.alpha_premultiplied = basicInfo.alpha_premultiplied;
 
         if (JXL_ENC_SUCCESS != JxlEncoderSetExtraChannelInfo(encoder.get(), 0, &alphaChannelInfo)) {
-            throw SaveError{
+            throw ImageSaveError{
                 fmt::format("Failed to set extra channel info for the alpha channel: {}.", (size_t)JxlEncoderGetError(encoder.get()))
             };
         }
@@ -103,7 +103,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
     JxlColorEncodingSetToLinearSRGB(&colorEncoding, nChannels == 1 ? JXL_TRUE : JXL_FALSE); // Assume 1 channel is grayscale
 
     if (JXL_ENC_SUCCESS != JxlEncoderSetColorEncoding(encoder.get(), &colorEncoding)) {
-        throw SaveError{"Failed to set color encoding."};
+        throw ImageSaveError{"Failed to set color encoding."};
     }
 
     JxlPixelFormat pixelFormat = {
@@ -115,7 +115,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
 
     // Add the frame to be encoded
     if (JXL_ENC_SUCCESS != JxlEncoderAddImageFrame(options, &pixelFormat, data.data(), data.size() * sizeof(float))) {
-        throw SaveError{"Failed to add image frame to encoder."};
+        throw ImageSaveError{"Failed to add image frame to encoder."};
     }
 
     JxlEncoderCloseInput(encoder.get());
@@ -140,7 +140,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
     }
 
     if (processResult != JXL_ENC_SUCCESS) {
-        throw SaveError{"Failed to encode."};
+        throw ImageSaveError{"Failed to encode."};
     }
 
     // Trim the output buffer to the actual size
@@ -148,7 +148,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<fl
 
     oStream.write(reinterpret_cast<const char*>(compressed.data()), compressed.size());
     if (!oStream) {
-        throw SaveError{fmt::format("Failed to write data to {}.", toString(path))};
+        throw ImageSaveError{fmt::format("Failed to write data to {}.", toString(path))};
     }
 }
 

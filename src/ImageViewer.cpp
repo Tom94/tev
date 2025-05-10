@@ -1882,7 +1882,7 @@ void ImageViewer::saveImageDialog() {
 
     try {
         mImageCanvas->saveImage(path);
-    } catch (const ImageSaver::SaveError& e) {
+    } catch (const ImageSaveError& e) {
         new MessageDialog(this, MessageDialog::Type::Warning, "Error", fmt::format("Failed to save image: {}", e.what()));
     }
 

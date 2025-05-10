@@ -32,11 +32,6 @@ template <typename T> class TypedImageSaver;
 
 class ImageSaver {
 public:
-    class SaveError : public std::runtime_error {
-    public:
-        SaveError(const std::string& message) : std::runtime_error{message} {}
-    };
-
     virtual ~ImageSaver() {}
 
     virtual bool hasPremultipliedAlpha() const = 0;

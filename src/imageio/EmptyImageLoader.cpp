@@ -40,7 +40,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        throw LoadError{"Image has zero pixels."};
+        throw ImageLoadError{"Image has zero pixels."};
     }
 
     vector<ImageData> result(1);

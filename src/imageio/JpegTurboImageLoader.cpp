@@ -66,7 +66,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     jerr.error_exit = [](j_common_ptr cinfo) {
         char buffer[JMSG_LENGTH_MAX];
         (*cinfo->err->format_message)(cinfo, buffer);
-        throw LoadError{fmt::format("JPEG error: {}", buffer)};
+        throw ImageLoadError{fmt::format("JPEG error: {}", buffer)};
     };
 
     jpeg_create_decompress(&cinfo);
@@ -88,7 +88,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     jpeg_save_markers(&cinfo, JPEG_APP0 + 2, 0xFFFF); // ICC, ISO
 
     if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
-        throw LoadError{"Failed to read JPEG header."};
+        throw ImageLoadError{"Failed to read JPEG header."};
     }
 
     std::vector<JOCTET> exifData;
@@ -115,13 +115,13 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     Vector2i size{static_cast<int>(cinfo.output_width), static_cast<int>(cinfo.output_height)};
     if (size.x() == 0 || size.y() == 0) {
-        throw LoadError{"Image has zero pixels."};
+        throw ImageLoadError{"Image has zero pixels."};
     }
 
     // JPEG does not support alpha, so all channels are color channels.
     int numColorChannels = cinfo.output_components;
     if (numColorChannels != 1 && numColorChannels != 3) {
-        throw LoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
+        throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
     }
 
     tlog::debug() << fmt::format("JPEG image info: {}x{}, {} channels", size.x(), size.y(), numColorChannels);
