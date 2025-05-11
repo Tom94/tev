@@ -25,6 +25,7 @@
 #include <tev/imageio/PngImageLoader.h>
 #include <tev/imageio/QoiImageLoader.h>
 #include <tev/imageio/StbiImageLoader.h>
+#include <tev/imageio/TiffImageLoader.h>
 #include <tev/imageio/UltraHdrImageLoader.h>
 
 #ifdef _WIN32
@@ -61,6 +62,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new QoiImageLoader());
         // UltraHdr must come before JpegTurbo, because it is meant to load specially tagged JPEG files. Those would be loaded without HDR
         // feature by JpegTurbo otherwise. JPEGs without HDR gainmaps will be skipped by UltraHdr and then loaded by JpegTurbo.
+        imageLoaders.emplace_back(new TiffImageLoader());
         imageLoaders.emplace_back(new UltraHdrImageLoader());
         imageLoaders.emplace_back(new JpegTurboImageLoader());
         imageLoaders.emplace_back(new PngImageLoader());
@@ -72,36 +74,50 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
     return imageLoaders;
 }
 
-vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, const string& namePrefix) {
+vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, const string& namePrefix) {
     vector<Channel> channels;
+    if (numChannels > 4) {
+        throw ImageLoadError{"Image has too many RGBA channels."};
+    }
 
-    // If we have 4 channels or fewer, store them in interleaved RGBA format
-    if (numChannels <= 4) {
-        size_t numPixels = (size_t)size.x() * size.y();
-        shared_ptr<vector<float>> data = make_shared<vector<float>>(numPixels * 4);
+    int numColorChannels = numChannels - (hasAlpha ? 1 : 0);
+    if (numColorChannels <= 0 || numColorChannels > 3) {
+        throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
+    }
 
-        // Initialize pattern [0,0,0,1] efficiently using 128-bit writes
-        float* ptr = data->data();
-        const float pattern[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-        for (size_t i = 0; i < numPixels; ++i) {
-            memcpy(ptr + i * 4, pattern, 16);
-        }
+    size_t numPixels = (size_t)size.x() * size.y();
+    shared_ptr<vector<float>> data = make_shared<vector<float>>(numPixels * 4);
 
-        if (numChannels > 1) {
-            const vector<string> channelNames = {"R", "G", "B", "A"};
-            for (int c = 0; c < numChannels; ++c) {
-                string name = namePrefix + (c < (int)channelNames.size() ? channelNames[c] : to_string(c));
+    // Initialize pattern [0,0,0,1] efficiently using 128-bit writes
+    float* ptr = data->data();
+    const float pattern[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    for (size_t i = 0; i < numPixels; ++i) {
+        memcpy(ptr + i * 4, pattern, 16);
+    }
 
-                // We assume that the channels are interleaved.
-                channels.emplace_back(name, size, data, c, 4);
-            }
-        } else {
-            channels.emplace_back("L", size, data, 0, 4);
+    if (numColorChannels > 1) {
+        const vector<string> channelNames = {"R", "G", "B"};
+        for (int c = 0; c < numColorChannels; ++c) {
+            string name = namePrefix + (c < (int)channelNames.size() ? channelNames[c] : to_string(c));
+
+            // We assume that the channels are interleaved.
+            channels.emplace_back(name, size, data, c, 4);
         }
     } else {
-        for (int c = 0; c < numChannels; ++c) {
-            channels.emplace_back(namePrefix + to_string(c), size);
-        }
+        channels.emplace_back("L", size, data, 0, 4);
+    }
+
+    if (hasAlpha) {
+        channels.emplace_back("A", size, data, 3, 4);
+    }
+
+    return channels;
+}
+
+vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, const string& namePrefix) {
+    vector<Channel> channels;
+    for (int c = 0; c < numChannels; ++c) {
+        channels.emplace_back(namePrefix + to_string(c), size);
     }
 
     return channels;

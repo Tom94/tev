@@ -124,8 +124,14 @@ AttributeNode Exif::toAttributes() const {
             ExifEntry* entry = content->entries[i];
 
             string name = exif_tag_get_name(entry->tag);
-            char buf[1024] = {0};
-            string value = exif_entry_get_value(entry, buf, sizeof(buf) - 1);
+            char buf[256] = {0};
+            string value = exif_entry_get_value(entry, buf, sizeof(buf));
+            if (value.empty()) {
+                value = "n/a";
+            } else if (value.length() >= 255) {
+                value += "…"s;
+            }
+
             string type = exif_format_get_name(entry->format);
 
             ifdNode.children.push_back({name, value, type, {}});

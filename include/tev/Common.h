@@ -328,6 +328,19 @@ template <typename T> T round(T value, T decimals) {
     return std::round(value * precision) / precision;
 }
 
+template <typename T> T nextPot(T value) {
+    if (value == 0) {
+        return 1;
+    }
+
+    T pot = 1;
+    while (pot < value) {
+        pot <<= 1;
+    }
+
+    return pot;
+}
+
 template <typename T> std::string join(const T& components, const std::string& delim) {
     std::ostringstream s;
     for (const auto& component : components) {

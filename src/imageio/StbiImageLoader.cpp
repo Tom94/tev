@@ -85,7 +85,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
         ImageData& resultData = result[frameIdx];
 
-        resultData.channels = makeNChannels(numChannels, size);
+        resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size);
         resultData.hasPremultipliedAlpha = false;
         if (numFrames > 1) {
             resultData.partName = fmt::format("frames.{}", frameIdx);

@@ -179,14 +179,14 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
+    bool hasAlpha = numChannels > numColorChannels;
+
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
     resultData.attributes.emplace_back(exifAttributes);
-    resultData.channels = makeNChannels(numChannels, size);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
     resultData.hasPremultipliedAlpha = false;
-
-    bool hasAlpha = numChannels > numColorChannels;
 
     // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the image is in Rec.709/sRGB (per the PNG spec) and
     // convert it to linear space via inverse sRGB transfer function.

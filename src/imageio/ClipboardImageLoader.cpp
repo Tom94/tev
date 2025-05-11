@@ -61,7 +61,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    resultData.channels = makeNChannels(numChannels, size);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size);
 
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);

@@ -86,3 +86,7 @@
 	path = dependencies/libpng
 	url = https://github.com/pnggroup/libpng
 	shallow = true
+[submodule "dependencies/libtiff"]
+	path = dependencies/libtiff
+	url = https://gitlab.com/libtiff/libtiff
+	shallow = true

@@ -32,8 +32,6 @@ using namespace std;
 
 namespace tev {
 
-UltraHdrImageLoader::UltraHdrImageLoader() {}
-
 static bool isOkay(uhdr_error_info_t status) { return status.error_code == UHDR_CODEC_OK; }
 
 static string toString(uhdr_error_info_t status) {
@@ -138,9 +136,9 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         throw ImageLoadError{"Invalid image size."};
     }
 
+    // Ultra HDR always outputs 4 channels (RGBA), even though alpha is always 1.
     const int numChannels = 4;
-
-    imageData.channels = makeNChannels(numChannels, size);
+    imageData.channels = makeRgbaInterleavedChannels(numChannels, true, size);
 
     // JPEG always has alpha == 1 in which case there's no distinction between premultiplied and straight alpha
     imageData.hasPremultipliedAlpha = true;
@@ -162,7 +160,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     if (iccProfile && iccProfile->data && iccProfile->data_sz > 14) {
         tlog::warning() << "Found ICC color profile. Attempting to apply... " << iccProfile->data_sz;
 
-        auto channels = makeNChannels(numChannels, size);
+        auto channels = makeRgbaInterleavedChannels(numChannels, true, size);
         try {
             co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),

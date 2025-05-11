@@ -217,14 +217,14 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 
     addLibrary(about, "args", "Single-header argument parsing library");
 #ifdef TEV_SUPPORT_AVIF
-    addLibrary(about, "aom", "Alliance for Open Media Video Codec");
+    addLibrary(about, "aom", "AV1 video codec library");
 #endif
     addLibrary(about, "clip", "Cross-platform clipboard library");
     addLibrary(about, "{fmt}", "Fast & safe formatting library");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
     addLibrary(about, "GLFW", "OpenGL desktop development library");
 #ifdef TEV_SUPPORT_HEIC
-    addLibrary(about, "libde265", "Open h.265 video codec implementation.");
+    addLibrary(about, "libde265", "Open h.265 video codec library");
 #endif
 #ifdef TEV_SUPPORT_JXL
     addLibrary(about, "libjpeg-turbo", "Fast JPEG image format library");
@@ -234,11 +234,12 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addLibrary(about, "libheif", "HEIF and AVIF image format library");
 #endif
     addLibrary(about, "libpng", "PNG image format library");
-    addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles.");
+    addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles");
+    addLibrary(about, "libtiff", "TIFF image format library");
     addLibrary(about, "libultrahdr", "Ultra HDR JPEG image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");
-    addLibrary(about, "OpenEXR", "High dynamic-range (HDR) image file format");
+    addLibrary(about, "OpenEXR", "EXR image file format");
     addLibrary(about, "qoi", "File format for fast, lossless image compression");
     addLibrary(about, "stb_image(_write)", "Single-header library for loading and writing images");
     addLibrary(about, "tinylogger", "Minimal pretty-logging library");

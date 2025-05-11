@@ -28,6 +28,7 @@
 namespace tev {
 
 nanogui::Matrix4f chromaToRec709Matrix(std::array<nanogui::Vector2f, 4> chroma);
+nanogui::Matrix4f xyzToRec709Matrix();
 
 enum class EAlphaKind {
     // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of

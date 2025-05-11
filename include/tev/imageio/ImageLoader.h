@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "tev/Common.h"
 #include <tev/Channel.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
@@ -40,7 +41,7 @@ Task<void> toFloat32(
     const nanogui::Vector2i& size,
     bool hasAlpha,
     int priority,
-    // 0 defaults to 1/2**bitsPerSample
+    // 0 defaults to 1/(2**bitsPerSample-1)
     float scale = 0.0f,
     // 0 defaults to numSamplesPerPixelIn * size.x()
     size_t numSamplesPerRowIn = 0,
@@ -48,7 +49,7 @@ Task<void> toFloat32(
 ) {
     if constexpr (std::is_integral_v<T>) {
         if (scale == 0.0f) {
-            scale = 1.0f / ((1 << (sizeof(T) * 8)) - 1);
+            scale = 1.0f / (((size_t)1 << (sizeof(T) * 8)) - 1);
         }
     } else {
         if (scale == 0.0f) {
@@ -64,6 +65,7 @@ Task<void> toFloat32(
         numSamplesPerRowOut = numSamplesPerPixelOut * size.x();
     }
 
+    size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, numSamplesPerPixelOut);
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
@@ -75,11 +77,15 @@ Task<void> toFloat32(
                 size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
                 size_t baseIdxOut = rowIdxOut + x * numSamplesPerPixelOut;
 
-                for (size_t c = 0; c < numSamplesPerPixelIn; ++c) {
-                    floatData[baseIdxOut + c] = imageData[baseIdxIn + c] * scale;
-                    if constexpr (SRGB_TO_LINEAR) {
-                        if (!hasAlpha || c != numSamplesPerPixelOut - 1) {
-                            floatData[baseIdxOut + c] = toLinear(floatData[baseIdxOut + c]);
+                for (size_t c = 0; c < numSamplesPerPixel; ++c) {
+                    if (hasAlpha && c == numSamplesPerPixelIn - 1) {
+                        // Copy alpha channel to the last output channel without conversion
+                        floatData[baseIdxOut + numSamplesPerPixelOut - 1] = (float)imageData[baseIdxIn + c] * scale;
+                    } else {
+                        if constexpr (SRGB_TO_LINEAR) {
+                            floatData[baseIdxOut + c] = toLinear(imageData[baseIdxIn + c] * scale);
+                        } else {
+                            floatData[baseIdxOut + c] = imageData[baseIdxIn + c] * scale;
                         }
                     }
                 }
@@ -106,6 +112,8 @@ public:
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
 
 protected:
+    static std::vector<Channel>
+        makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const nanogui::Vector2i& size, const std::string& namePrefix = "");
     static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size, const std::string& namePrefix = "");
     static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
 };
