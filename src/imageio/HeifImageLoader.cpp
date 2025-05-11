@@ -136,7 +136,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{"Faild to get image data."};
         }
 
-        resultData.channels = makeNChannels(numChannels, size, namePrefix);
+        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, namePrefix);
 
         auto tryIccTransform = [&](const vector<uint8_t>& iccProfile) -> Task<void> {
             size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
@@ -282,9 +282,7 @@ Task<vector<ImageData>>
                 exif = make_unique<Exif>(exifData);
             }
         }
-    } catch (const invalid_argument& e) {
-        tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what());
-    }
+    } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 
     if (exif) {
         mainImage.attributes.emplace_back(exif->toAttributes());
@@ -315,7 +313,7 @@ Task<vector<ImageData>>
 
         ImageData scaledResultData;
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
-        scaledResultData.channels = makeNChannels(numChannels, targetSize, namePrefix);
+        scaledResultData.channels = makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(namePrefix + "A"), targetSize, namePrefix);
 
         co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
         resultData = std::move(scaledResultData);

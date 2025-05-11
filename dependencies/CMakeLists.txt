@@ -226,12 +226,17 @@ ExternalProject_Add(${JPEGTURBO_TARGET_NAME}
     INSTALL_COMMAND ""
 )
 
+# The following variables ensure that find_package can find libjpeg-turbo
+set(JPEG_LIBRARY ${JPEG_LIBRARIES})
+set(JPEG_INCLUDE_DIR ${JPEG_SOURCE_DIR})
+
 add_library(jpeg-turbo INTERFACE IMPORTED GLOBAL)
 add_dependencies(jpeg-turbo ${JPEGTURBO_TARGET_NAME})
 set_target_properties(jpeg-turbo PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${JPEG_INCLUDE_DIRS}"
     INTERFACE_LINK_LIBRARIES "${JPEG_LIBRARIES}"
 )
+add_library(JPEG::JPEG ALIAS jpeg-turbo)
 
 # Compile libultrahdr for HDR JPG support
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
@@ -242,7 +247,16 @@ set(UHDR_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 set(UHDR_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(libultrahdr EXCLUDE_FROM_ALL)
 add_dependencies(uhdr ${JPEGTURBO_TARGET_NAME})
-set(JPEG_FOUND FALSE CACHE BOOL " " FORCE) # Prevent find_package from finding libjpeg-turbo in other dependencies
+
+# Compile libtiff
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(tiff-tools OFF CACHE BOOL " " FORCE)
+set(tiff-tests OFF CACHE BOOL " " FORCE)
+set(tiff-contrib OFF CACHE BOOL " " FORCE)
+set(tiff-docs OFF CACHE BOOL " " FORCE)
+set(tiff-deprecated OFF CACHE BOOL " " FORCE)
+set(tiff-install OFF CACHE BOOL " " FORCE)
+add_subdirectory(libtiff EXCLUDE_FROM_ALL)
 
 # Compile OpenEXR
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)

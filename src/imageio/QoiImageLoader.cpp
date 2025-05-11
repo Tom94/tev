@@ -67,7 +67,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    resultData.channels = makeNChannels(numChannels, size);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size);
     resultData.hasPremultipliedAlpha = false;
 
     if (desc.colorspace == QOI_LINEAR) {

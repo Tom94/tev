@@ -63,6 +63,20 @@ nanogui::Matrix4f chromaToRec709Matrix(std::array<nanogui::Vector2f, 4> chroma) 
     return toRec709;
 }
 
+nanogui::Matrix4f xyzToRec709Matrix() {
+    Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
+    Imath::M44f M = Imf::XYZtoRGB(rec709, 1);
+
+    nanogui::Matrix4f toRec709;
+    for (int m = 0; m < 4; ++m) {
+        for (int n = 0; n < 4; ++n) {
+            toRec709.m[m][n] = M.x[m][n];
+        }
+    }
+
+    return toRec709;
+}
+
 class GlobalCmsContext {
 public:
     GlobalCmsContext() {

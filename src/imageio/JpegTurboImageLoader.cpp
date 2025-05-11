@@ -166,7 +166,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     ImageData& resultData = result.front();
 
     resultData.attributes.emplace_back(exifAttributes);
-    resultData.channels = makeNChannels(numColorChannels, size);
+    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
     resultData.hasPremultipliedAlpha = true;

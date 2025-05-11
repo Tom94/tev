@@ -331,7 +331,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
-                data.channels = makeNChannels(numColorChannels, size);
+                data.channels = makeRgbaInterleavedChannels(numColorChannels, info.alpha_bits, size);
                 data.hasPremultipliedAlpha = info.alpha_premultiplied;
                 if (info.have_animation) {
                     data.partName = frameName;
