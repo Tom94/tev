@@ -144,8 +144,6 @@ Task<vector<ImageData>>
                 throw ImageLoadError{"No ICC color profile found."};
             }
 
-            tlog::debug() << "Found ICC color profile. Attempting to apply...";
-
             vector<uint8_t> profileData(profileSize);
             if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code == heif_error_Color_profile_does_not_exist) {
@@ -258,7 +256,7 @@ Task<vector<ImageData>>
     unique_ptr<Exif> exif;
     try {
         int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(handle, "Exif");
-        if (numMetadataBlocks >= 0) {
+        if (numMetadataBlocks > 0) {
             tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
 
             vector<heif_item_id> metadataIDs(numMetadataBlocks);
