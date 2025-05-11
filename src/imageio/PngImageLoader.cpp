@@ -188,8 +188,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
     resultData.hasPremultipliedAlpha = false;
 
-    // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the image is in Rec.709/sRGB (per the PNG spec) and
-    // convert it to linear space via inverse sRGB transfer function.
+    // According to http://www.libpng.org/pub/png/spec/1.2/PNG-Contents.html, if an ICC profile exists, use it to convert to linear sRGB.
+    // Otherwise, check the sRGB chunk for whether the image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and
+    // chromaticity values and use them to convert to linear sRGB. And lastly (this isn't in the spec, but based on having seen a lot of
+    // PNGs), if none of these chunks are present, fall back to sRGB.
     png_bytep iccProfile = nullptr;
     png_charp iccProfileName = nullptr;
     png_uint_32 iccProfileSize = 0;
@@ -220,12 +222,76 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
+    int srgbIntent = 0;
+    bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
+
+    double gamma64 = 2.2;
+    bool hasChunkGama = png_get_gAMA(pngPtr, infoPtr, &gamma64) == PNG_INFO_gAMA;
+    float gamma = (float)gamma64;
+
+    array<double, 8> ch = {0};
+    bool hasChunkChrm = png_get_cHRM(pngPtr, infoPtr, &ch[0], &ch[1], &ch[2], &ch[3], &ch[4], &ch[5], &ch[6], &ch[7]) == PNG_INFO_cHRM;
+
+    if (hasChunkSrgb || (!hasChunkGama && !hasChunkChrm)) {
+        if (hasChunkSrgb) {
+            tlog::debug() << fmt::format("Using sRGB chunk w/ rendering intent {}", srgbIntent);
+        } else {
+            tlog::debug() << "No iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
+        }
+
+        if (bitDepth == 16) {
+            co_await toFloat32<uint16_t, true>(
+                (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
+            );
+        } else {
+            co_await toFloat32<uint8_t, true>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
+        }
+
+        co_return result;
+    }
+
+    tlog::debug() << fmt::format("Using gamma={}", gamma64);
     if (bitDepth == 16) {
-        co_await toFloat32<uint16_t, true>(
+        co_await toFloat32<uint16_t, false>(
             (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
         );
     } else {
-        co_await toFloat32<uint8_t, true>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
+        co_await toFloat32<uint8_t, false>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
+    }
+
+    auto* pixelData = resultData.channels.front().data();
+    co_await ThreadPool::global().parallelForAsync<float>(
+        0,
+        numPixels,
+        [&](size_t i) {
+            for (int c = 0; c < 3; ++c) {
+                pixelData[i * 4 + c] = pow(pixelData[i * 4 + c], gamma);
+            }
+        },
+        priority
+    );
+
+    if (hasChunkChrm) {
+        tlog::debug() << fmt::format(
+            "Using cHRM chunk with chromaticity values: R({:.4f}, {:.4f}), G({:.4f}, {:.4f}), B({:.4f}, {:.4f}), W({:.4f}, {:.4f})",
+            ch[2],
+            ch[3],
+            ch[4],
+            ch[5],
+            ch[6],
+            ch[7],
+            ch[0],
+            ch[1]
+        );
+
+        resultData.toRec709 = chromaToRec709Matrix({
+            {
+             {(float)ch[2], (float)ch[3]}, // red
+                {(float)ch[4], (float)ch[5]}, // green
+                {(float)ch[6], (float)ch[7]}, // blue
+                {(float)ch[0], (float)ch[1]}, // white
+            }
+        });
     }
 
     co_return result;
