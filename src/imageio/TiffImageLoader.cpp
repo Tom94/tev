@@ -354,6 +354,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
         // Auto-convert LogLUV and LogL to RGB float. See http://www.anyhere.com/gward/pixformat/tiffluv.html
         if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
+            tlog::debug() << "Converting LogLUV/LogL to XYZ float.";
+
             if (compression != COMPRESSION_SGILOG && compression != COMPRESSION_SGILOG24) {
                 throw ImageLoadError{"Unsupported compression for log data."};
             }
@@ -367,11 +369,24 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         }
 
         if (photometric == PHOTOMETRIC_YCBCR && compression == COMPRESSION_JPEG) {
+            tlog::debug() << "Converting JPEG YCbCr to RGB.";
+
             if (!TIFFSetField(tif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB)) {
                 throw ImageLoadError{"Failed to set JPEG color mode."};
             }
 
             photometric = PHOTOMETRIC_RGB;
+        }
+
+        if (compression == COMPRESSION_PIXARLOG) {
+            tlog::debug() << "Converting PIXAR log data to RGB float.";
+
+            if (!TIFFSetField(tif, TIFFTAG_PIXARLOGDATAFMT, PIXARLOGDATAFMT_FLOAT)) {
+                throw ImageLoadError{"Failed to set PIXAR log data format."};
+            }
+
+            bitsPerSample = 32;
+            sampleFormat = SAMPLEFORMAT_IEEEFP;
         }
 
         if (photometric > PHOTOMETRIC_PALETTE && photometric != PHOTOMETRIC_LOGL && photometric != PHOTOMETRIC_LOGLUV) {
@@ -663,7 +678,9 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         }
 
         // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.
-        if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
+        if (compression == COMPRESSION_PIXARLOG) {
+            // If we're a Pixar log image, the data is already linear
+        } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
             // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
             resultData.toRec709 = xyzToRec709Matrix();
         } else if (photometric <= PHOTOMETRIC_PALETTE) {
