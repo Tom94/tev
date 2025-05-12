@@ -269,9 +269,6 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         throw FormatNotSupported{"File is not a TIFF image."};
     }
 
-    iStream.clear();
-    iStream.seekg(0);
-
     TIFFSetErrorHandler(tiffErrorHandler);
     TIFFSetWarningHandler(tiffWarningHandler);
 
@@ -282,14 +279,14 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     size_t fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
 
-    vector<unsigned char> buffer(fileSize + sizeof(Exif::FOURCC));
+    vector<uint8_t> buffer(fileSize + sizeof(Exif::FOURCC));
     copy(Exif::FOURCC.begin(), Exif::FOURCC.end(), buffer.data());
-    iStream.read(reinterpret_cast<char*>(buffer.data() + sizeof(Exif::FOURCC)), fileSize);
+    iStream.read((char*)buffer.data() + sizeof(Exif::FOURCC), fileSize);
 
-    AttributeNode exifAttributes;
+    unique_ptr<AttributeNode> exifAttributes;
     try {
         auto exif = Exif(buffer.data(), buffer.size());
-        exifAttributes = exif.toAttributes();
+        exifAttributes = make_unique<AttributeNode>(exif.toAttributes());
     } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 
     TiffData data(buffer.data() + sizeof(Exif::FOURCC), fileSize);
@@ -479,7 +476,9 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         tlog::debug() << fmt::format("numRgbaChannels={}, numNonRgbaChannels={}, ", numRgbaChannels, numNonRgbaChannels);
 
         ImageData resultData;
-        resultData.attributes.emplace_back(exifAttributes);
+        if (exifAttributes) {
+            resultData.attributes.emplace_back(*exifAttributes);
+        }
 
         uint16_t orientation = 1;
         if (!TIFFGetFieldDefaulted(tif, TIFFTAG_ORIENTATION, &orientation)) {

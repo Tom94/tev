@@ -152,6 +152,7 @@ $ cpack --config build/CPackConfig.cmake
     - Supports both lossy and lossless compression with full HDR capabilities
 - __JPEG__ (via [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo))
 - __PNG__ (via [libpng](https://github.com/pnggroup/libpng))
+- __WEBP__ (via [libwebp](https://chromium.googlesource.com/webm/libwebp))
 - __PFM__ (compatible with [Netbpm](http://www.pauldebevec.com/Research/HDR/PFM/))
 - __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)

@@ -21,8 +21,8 @@ jobs:
     env:
       build_dir: "build"
       config: "Release"
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       APPIMAGE_EXTRACT_AND_RUN: 1# https://github.com/AppImage/AppImageKit/wiki/FUSE#docker
     steps:
       - name: Install dependencies

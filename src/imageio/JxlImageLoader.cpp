@@ -466,9 +466,10 @@ l_decode_success:
 
                 Exif::prependFourcc(&exifData);
                 auto exif = Exif{exifData};
+                auto exifAttributes = exif.toAttributes();
 
                 for (auto&& data : result) {
-                    data.attributes.emplace_back(exif.toAttributes());
+                    data.attributes.emplace_back(exifAttributes);
                 }
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse exif data: {}", e.what()); }
         }

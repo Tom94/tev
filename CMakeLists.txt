@@ -150,6 +150,7 @@ set(TEV_SOURCES
     include/tev/imageio/StbiLdrImageSaver.h src/imageio/StbiLdrImageSaver.cpp
     include/tev/imageio/TiffImageLoader.h src/imageio/TiffImageLoader.cpp
     include/tev/imageio/UltraHdrImageLoader.h src/imageio/UltraHdrImageLoader.cpp
+    include/tev/imageio/WebpImageLoader.h src/imageio/WebpImageLoader.cpp
 
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
@@ -237,7 +238,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS clip exif_static jpeg-turbo nanogui OpenEXR::OpenEXR png_static tiff uhdr)
+set(TEV_LIBS clip exif_static jpeg-turbo nanogui OpenEXR::OpenEXR png_static tiff uhdr webpdemux)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
