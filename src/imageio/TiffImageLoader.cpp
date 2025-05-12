@@ -16,9 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "nanogui/vector.h"
-#include "tiff.h"
-#include <iterator>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
@@ -361,9 +358,20 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 throw ImageLoadError{"Unsupported compression for log data."};
             }
 
-            TIFFSetField(tif, TIFFTAG_SGILOGDATAFMT, SGILOGDATAFMT_FLOAT);
+            if (!TIFFSetField(tif, TIFFTAG_SGILOGDATAFMT, SGILOGDATAFMT_FLOAT)) {
+                throw ImageLoadError{"Failed to set SGI log data format."};
+            }
+
             bitsPerSample = 32;
             sampleFormat = SAMPLEFORMAT_IEEEFP;
+        }
+
+        if (photometric == PHOTOMETRIC_YCBCR && compression == COMPRESSION_JPEG) {
+            if (!TIFFSetField(tif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB)) {
+                throw ImageLoadError{"Failed to set JPEG color mode."};
+            }
+
+            photometric = PHOTOMETRIC_RGB;
         }
 
         if (photometric > PHOTOMETRIC_PALETTE && photometric != PHOTOMETRIC_LOGL && photometric != PHOTOMETRIC_LOGLUV) {

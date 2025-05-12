@@ -228,7 +228,7 @@ ExternalProject_Add(${JPEGTURBO_TARGET_NAME}
 
 # The following variables ensure that find_package can find libjpeg-turbo
 set(JPEG_LIBRARY ${JPEG_LIBRARIES})
-set(JPEG_INCLUDE_DIR ${JPEG_SOURCE_DIR})
+set(JPEG_INCLUDE_DIR ${JPEGTURBO_SOURCE_DIR})
 
 add_library(jpeg-turbo INTERFACE IMPORTED GLOBAL)
 add_dependencies(jpeg-turbo ${JPEGTURBO_TARGET_NAME})
