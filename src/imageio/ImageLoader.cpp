@@ -27,6 +27,7 @@
 #include <tev/imageio/StbiImageLoader.h>
 #include <tev/imageio/TiffImageLoader.h>
 #include <tev/imageio/UltraHdrImageLoader.h>
+#include <tev/imageio/WebpImageLoader.h>
 
 #ifdef _WIN32
 #   include <tev/imageio/DdsImageLoader.h>
@@ -60,6 +61,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new JxlImageLoader());
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
+        imageLoaders.emplace_back(new WebpImageLoader());
         // UltraHdr must come before JpegTurbo, because it is meant to load specially tagged JPEG files. Those would be loaded without HDR
         // feature by JpegTurbo otherwise. JPEGs without HDR gainmaps will be skipped by UltraHdr and then loaded by JpegTurbo.
         imageLoaders.emplace_back(new TiffImageLoader());

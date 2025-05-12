@@ -90,3 +90,7 @@
 	path = dependencies/libtiff
 	url = https://gitlab.com/libtiff/libtiff
 	shallow = true
+[submodule "dependencies/libwebp"]
+	path = dependencies/libwebp
+	url = https://chromium.googlesource.com/webm/libwebp
+	shallow = true

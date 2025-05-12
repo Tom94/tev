@@ -31,7 +31,10 @@ ExifByteOrder byteOrder(bool reverseEndianness) { return reverseEndianness ? EXI
 } // namespace
 
 void Exif::prependFourcc(vector<uint8_t>* data) {
-    data->insert(data->begin(), FOURCC.begin(), FOURCC.end());
+    // If data doesn't already start with fourcc, prepend
+    if (data->size() < 6 || memcmp(data->data(), Exif::FOURCC.data(), 6) != 0) {
+        data->insert(data->begin(), FOURCC.begin(), FOURCC.end());
+    }
 }
 
 Exif::Exif(const uint8_t* exifData, size_t exifDataSize) {
