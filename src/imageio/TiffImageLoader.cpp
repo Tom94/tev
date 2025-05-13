@@ -221,34 +221,46 @@ static void tiffUnmapProc(thandle_t, tdata_t, toff_t) {
     // No need to unmap, as we are not actually using memory mapping.
 }
 
-template <typename T>
-void unpackBits(
-    const uint8_t* __restrict input, size_t inputSize, int bitwidth, T* __restrict output, size_t outputSize, bool shallSwapBytes, bool handleSign
-) {
-    uint64_t currentBits = 0;
-    int bitsAvailable = 0;
-    const uint8_t* end = input + inputSize;
-    size_t i = 0;
+void unpackBits(const uint8_t* __restrict input, size_t inputSize, int bitwidth, uint32_t* __restrict output, size_t outputSize, bool handleSign) {
+    // If the bitwidth is byte aligned (multiple of 8), libtiff already arranged the data in our machine's endianness
+    if (bitwidth % 8 == 0) {
+        const uint32_t bytesPerSample = bitwidth / 8;
 
-    while (input < end && i < outputSize) {
-        // Refill buffer if needed
-        while (bitsAvailable < bitwidth && input < end) {
-            currentBits = (currentBits << 8) | *(input++);
-            bitsAvailable += 8;
-        }
-
-        // Extract value
-        while (bitsAvailable >= bitwidth && i < outputSize) {
-            bitsAvailable -= bitwidth;
-            output[i] = (currentBits >> bitsAvailable) & ((1ull << bitwidth) - 1);
-
-            if (shallSwapBytes) {
-                output[i] = swapBytes(output[i]) >> (sizeof(T) * 8 - bitwidth);
+        for (size_t i = 0; i < outputSize; ++i) {
+            output[i] = 0;
+            for (uint32_t j = 0; j < bytesPerSample; ++j) {
+                if constexpr (endian::native == endian::little) {
+                    output[i] |= input[i * bytesPerSample + j] << (8 * j);
+                } else {
+                    output[i] |= input[i * bytesPerSample + j] << (24 - 8 * j);
+                }
             }
 
             // If signbit is set, set all bits to the left to 1
             if (handleSign && (output[i] & (1 << (bitwidth - 1)))) {
-                output[i] |= ~(T)((1ull << bitwidth) - 1);
+                output[i] |= ~(uint32_t)((1ull << bitwidth) - 1);
+            }
+        }
+
+        return;
+    }
+
+    // Otherwise, the data is packed in a bitwise, MSB first / big endian manner
+    uint64_t currentBits = 0;
+    int bitsAvailable = 0;
+    size_t i = 0;
+
+    for (size_t j = 0; j < inputSize; ++j) {
+        currentBits = (currentBits << 8) | input[j];
+        bitsAvailable += 8;
+
+        while (bitsAvailable >= bitwidth && i < outputSize) {
+            bitsAvailable -= bitwidth;
+            output[i] = (currentBits >> bitsAvailable) & ((1ull << bitwidth) - 1);
+
+            // If signbit is set, set all bits to the left to 1
+            if (handleSign && (output[i] & (1 << (bitwidth - 1)))) {
+                output[i] |= ~(uint32_t)((1ull << bitwidth) - 1);
             }
 
             ++i;
@@ -610,11 +622,6 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         const size_t unpackedTileSize = tile.height * unpackedTileRowSize;
         vector<uint32_t> unpackedTile(unpackedTileSize * tile.count);
 
-        // IEEEFP floats are encoded the same, regardless of machine; always swap to get them right. Int and uint data, on the other hand,
-        // is only encoded in the file's endianness if the bitwidth is a power of 2 larger than 16. It's a bit of a peculiar condition, that
-        // required examining the bitdepth test images at https://gitlab.com/libtiff/libtiff-pics to figure out conclusively. libtiff claims
-        // to automatically byteswap to the native endianness, but that doesn't seem to be the case for all bit depths.
-        const bool swapBytes = sampleFormat == SAMPLEFORMAT_IEEEFP || (bitsPerSample >= 16 && isPot(bitsPerSample) && reverseBytes);
         const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
 
         vector<Task<void>> decodeTasks;
@@ -649,13 +656,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                             [&](int y) {
                                 int y0 = y - yStart;
                                 unpackBits(
-                                    td + tile.rowSize * y0,
-                                    tile.rowSize,
-                                    bitsPerSample,
-                                    utd + unpackedTileRowSize * y0,
-                                    unpackedTileRowSize,
-                                    swapBytes,
-                                    handleSign
+                                    td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd + unpackedTileRowSize * y0, unpackedTileRowSize, handleSign
                                 );
 
                                 if (planar == PLANARCONFIG_CONTIG) {

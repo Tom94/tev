@@ -204,11 +204,27 @@ namespace tev {
 
 namespace fs = std::filesystem;
 
+inline uint16_t swapBytes(uint16_t value) {
+#ifdef _WIN32
+    return _byteswap_ushort(value);
+#else
+    return __builtin_bswap16(value);
+#endif
+}
+
 inline uint32_t swapBytes(uint32_t value) {
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
     return __builtin_bswap32(value);
+#endif
+}
+
+inline uint64_t swapBytes(uint64_t value) {
+#ifdef _WIN32
+    return _byteswap_uint64(value);
+#else
+    return __builtin_bswap64(value);
 #endif
 }
 
