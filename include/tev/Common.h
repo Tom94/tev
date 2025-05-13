@@ -341,6 +341,14 @@ template <typename T> T nextPot(T value) {
     return pot;
 }
 
+inline bool isPot(size_t value) {
+    if (value == 0) {
+        return false;
+    }
+
+    return (value & (value - 1)) == 0;
+}
+
 template <typename T> std::string join(const T& components, const std::string& delim) {
     std::ostringstream s;
     for (const auto& component : components) {

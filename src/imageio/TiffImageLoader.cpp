@@ -74,7 +74,7 @@ Task<void> tiffDataToFloat32(
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numSamples, [&](size_t i) { *(float*)&imageData[i] = *((half*)&imageData[i] + 1); }, priority
+            0, numSamples, [&](size_t i) { *(float*)&imageData[i] = *(half*)&imageData[i]; }, priority
         );
 
         kind = ETiffKind::F32;
@@ -86,9 +86,9 @@ Task<void> tiffDataToFloat32(
             [&](size_t i) {
                 uint32_t packed = imageData[i];
                 // 1-7-16 layout:
-                uint32_t sign = (packed >> 31) & 0x1;       // 1-bit sign
-                uint32_t exponent = (packed >> 24) & 0x7F;  // 7-bit exponent
-                uint16_t mantissa = (packed >> 8) & 0xFFFF; // 16-bit mantissa
+                uint32_t sign = (packed >> 23) & 0x1;      // 1-bit sign
+                uint32_t exponent = (packed >> 16) & 0x7F; // 7-bit exponent
+                uint16_t mantissa = packed & 0xFFFF;       // 16-bit mantissa
                 // Convert to ieee (1-8-23 layout):
                 uint32_t ieee_exponent = exponent == 0 ? 0 : (exponent - 63 + 127); // Twice the bias range
                 uint32_t ieee_mantissa = mantissa << 7;                             // Pad with 7 zeros
@@ -226,7 +226,7 @@ void unpackBits(
     const uint8_t* end = input + inputSize;
     size_t i = 0;
 
-    while ((input < end || bitsAvailable >= bitwidth) && i < outputSize) {
+    while (input < end && i < outputSize) {
         // Refill buffer if needed
         while (bitsAvailable < bitwidth && input < end) {
             currentBits = (currentBits << 8) | *(input++);
@@ -234,12 +234,12 @@ void unpackBits(
         }
 
         // Extract value
-        if (bitsAvailable >= bitwidth) {
+        while (bitsAvailable >= bitwidth && i < outputSize) {
             bitsAvailable -= bitwidth;
             output[i] = (currentBits >> bitsAvailable) & ((1ull << bitwidth) - 1);
 
             if (shallSwapBytes) {
-                output[i] = swapBytes(output[i]);
+                output[i] = swapBytes(output[i]) >> (sizeof(T) * 8 - bitwidth);
             }
 
             // If signbit is set, set all bits to the left to 1
@@ -550,13 +550,15 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         const bool isTiled = TIFFIsTiled(tif);
 
         struct TileInfo {
-            size_t size, count, numX, numY;
+            size_t size, rowSize, count, numX, numY;
             uint32_t width, height;
         } tile;
         auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
 
+        const size_t numPlanes = planar == PLANARCONFIG_CONTIG ? 1 : samplesPerPixel;
         if (isTiled) {
             tile.size = TIFFTileSize64(tif);
+            tile.rowSize = TIFFTileRowSize64(tif);
             tile.count = TIFFNumberOfTiles(tif);
 
             if (!TIFFGetField(tif, TIFFTAG_TILEWIDTH, &tile.width) || !TIFFGetField(tif, TIFFTAG_TILELENGTH, &tile.height)) {
@@ -572,6 +574,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             tile.numY = (size.y() + tile.height - 1) / tile.height;
         } else {
             tile.size = TIFFStripSize64(tif);
+            tile.rowSize = TIFFScanlineSize64(tif);
             tile.count = TIFFNumberOfStrips(tif);
 
             // Strips are just tiles with the same width as the image
@@ -588,7 +591,6 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             throw ImageLoadError{"Number of tiles/strips is not a multiple of samples per pixel."};
         }
 
-        const size_t numPlanes = planar == PLANARCONFIG_CONTIG ? 1 : samplesPerPixel;
         if (tile.count != tile.numX * tile.numY * numPlanes) {
             throw ImageLoadError{"Number of tiles/strips does not match expected dimensions."};
         }
@@ -600,10 +602,14 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         vector<uint8_t> tileData(tile.size * tile.count);
 
         const size_t numTilesPerPlane = tile.count / numPlanes;
-        const size_t unpackedTileSize = tile.width * (size_t)tile.height * samplesPerPixel / numPlanes;
+        const size_t unpackedTileRowSize = tile.width * samplesPerPixel / numPlanes;
+        const size_t unpackedTileSize = tile.height * unpackedTileRowSize;
         vector<uint32_t> unpackedTile(unpackedTileSize * tile.count);
 
-        const bool swapBytes = sampleFormat == SAMPLEFORMAT_IEEEFP;
+        // IEEEFP floats are encoded the same, regardless of machine; always swap to get them right. Int and uint data, on the other hand,
+        // is only encoded in the file's endianness if the bitwidth is a power of 2 larger than 16. It's a bit of a peculiar condition, that
+        // required examining the bitdepth test images at https://gitlab.com/libtiff/libtiff-pics to figure out conclusively.
+        const bool swapBytes = sampleFormat == SAMPLEFORMAT_IEEEFP || (bitsPerSample >= 16 && isPot(bitsPerSample) && reverseBytes);
         const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
 
         vector<Task<void>> decodeTasks;
@@ -621,7 +627,6 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 ThreadPool::global().enqueueCoroutine(
                     [&, i, td]() -> Task<void> {
                         uint32_t* const utd = unpackedTile.data() + unpackedTileSize * i;
-                        unpackBits(td, tile.size, bitsPerSample, utd, unpackedTileSize, swapBytes, handleSign);
 
                         size_t planeTile = i % numTilesPerPlane;
                         size_t tileX = planeTile % tile.numX;
@@ -637,17 +642,28 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                             yStart,
                             yEnd,
                             [&](int y) {
+                                int y0 = y - yStart;
+                                unpackBits(
+                                    td + tile.rowSize * y0,
+                                    tile.rowSize,
+                                    bitsPerSample,
+                                    utd + unpackedTileRowSize * y0,
+                                    unpackedTileRowSize,
+                                    swapBytes,
+                                    handleSign
+                                );
+
                                 if (planar == PLANARCONFIG_CONTIG) {
                                     for (int x = xStart; x < xEnd; ++x) {
                                         for (int c = 0; c < samplesPerPixel; ++c) {
-                                            auto pixel = utd[((y - yStart) * tile.width + x - xStart) * samplesPerPixel + c];
+                                            auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
                                             imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
                                         }
                                     }
                                 } else {
                                     int c = i / numTilesPerPlane;
                                     for (int x = xStart; x < xEnd; ++x) {
-                                        auto pixel = utd[(y - yStart) * tile.width + x - xStart];
+                                        auto pixel = utd[y0 * tile.width + x - xStart];
                                         imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
                                     }
                                 }
