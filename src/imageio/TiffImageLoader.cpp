@@ -209,12 +209,16 @@ static toff_t tiffSizeProc(thandle_t handle) {
     return tiffData->size;
 }
 
-static int tiffMapProc(thandle_t, tdata_t*, toff_t*) {
-    return 0; // Memory mapping not supported
+static int tiffMapProc(thandle_t handle, tdata_t* pdata, toff_t* psize) {
+    // We're not actually using memory mapping -- merely passing a pointer to the in-memory file data.
+    auto tiffData = reinterpret_cast<TiffData*>(handle);
+    *pdata = (tdata_t)tiffData->data;
+    *psize = tiffData->size;
+    return 1;
 }
 
 static void tiffUnmapProc(thandle_t, tdata_t, toff_t) {
-    // Memory mapping not supported
+    // No need to unmap, as we are not actually using memory mapping.
 }
 
 template <typename T>
@@ -297,7 +301,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     TiffData data(buffer.data() + sizeof(Exif::FOURCC), fileSize);
     TIFF* tif = TIFFClientOpen(
         toString(path).c_str(),
-        "r",
+        "rM", // read-only w/ memory mapping
         reinterpret_cast<thandle_t>(&data),
         tiffReadProc,
         tiffWriteProc,
@@ -608,7 +612,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
         // IEEEFP floats are encoded the same, regardless of machine; always swap to get them right. Int and uint data, on the other hand,
         // is only encoded in the file's endianness if the bitwidth is a power of 2 larger than 16. It's a bit of a peculiar condition, that
-        // required examining the bitdepth test images at https://gitlab.com/libtiff/libtiff-pics to figure out conclusively.
+        // required examining the bitdepth test images at https://gitlab.com/libtiff/libtiff-pics to figure out conclusively. libtiff claims
+        // to automatically byteswap to the native endianness, but that doesn't seem to be the case for all bit depths.
         const bool swapBytes = sampleFormat == SAMPLEFORMAT_IEEEFP || (bitsPerSample >= 16 && isPot(bitsPerSample) && reverseBytes);
         const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
 
