@@ -215,4 +215,9 @@ private:
     std::shared_ptr<TaskSharedState> mState = nullptr;
 };
 
+template <typename F, typename... Args> Task<void> invokeTask(F&& executor, Args&&... args) {
+    auto exec = std::move(executor);
+    co_await exec(args...);
+}
+
 } // namespace tev

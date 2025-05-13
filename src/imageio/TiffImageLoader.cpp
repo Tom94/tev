@@ -226,10 +226,10 @@ void unpackBits(
     const uint8_t* end = input + inputSize;
     size_t i = 0;
 
-    while (input < end || bitsAvailable >= bitwidth) {
+    while ((input < end || bitsAvailable >= bitwidth) && i < outputSize) {
         // Refill buffer if needed
         while (bitsAvailable < bitwidth && input < end) {
-            currentBits = (currentBits << 8) | *input++;
+            currentBits = (currentBits << 8) | *(input++);
             bitsAvailable += 8;
         }
 
@@ -432,7 +432,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             throw ImageLoadError{"Failed to read planar configuration."};
         }
 
-        Vector2i size{static_cast<int>(width), static_cast<int>(height)};
+        Vector2i size{(int)width, (int)height};
         if (size.x() == 0 || size.y() == 0) {
             throw ImageLoadError{"Image has zero pixels."};
         }
@@ -598,51 +598,71 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
         );
 
-        const size_t numTilesPerPlane = tile.count / numPlanes;
+        vector<uint8_t> tileData(tile.size * tile.count);
 
-        vector<uint8_t> tileData(tile.size);
-        vector<uint32_t> unpackedTile(tile.width * (size_t)tile.height * samplesPerPixel / numPlanes);
+        const size_t numTilesPerPlane = tile.count / numPlanes;
+        const size_t unpackedTileSize = tile.width * (size_t)tile.height * samplesPerPixel / numPlanes;
+        vector<uint32_t> unpackedTile(unpackedTileSize * tile.count);
+
+        const bool swapBytes = sampleFormat == SAMPLEFORMAT_IEEEFP;
+        const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
+
+        vector<Task<void>> decodeTasks;
 
         // Read tiled/striped data. Unfortunately, libtiff doesn't support reading all tiles/strips in parallel, so we have to do that
         // sequentially.
-        vector<uint32_t> imageData(static_cast<size_t>(size.x()) * size.y() * samplesPerPixel);
+        vector<uint32_t> imageData((size_t)size.x() * size.y() * samplesPerPixel);
         for (size_t i = 0; i < tile.count; ++i) {
-            if (readTile(tif, i, tileData.data(), tile.size) < 0) {
+            uint8_t* const td = tileData.data() + tile.size * i;
+            if (readTile(tif, i, td, tile.size) < 0) {
                 throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
 
-            bool swapBytes = sampleFormat == SAMPLEFORMAT_IEEEFP;
-            bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
-            unpackBits(tileData.data(), tile.size, bitsPerSample, unpackedTile.data(), unpackedTile.size(), swapBytes, handleSign);
+            decodeTasks.emplace_back(
+                ThreadPool::global().enqueueCoroutine(
+                    [&, i, td]() -> Task<void> {
+                        uint32_t* const utd = unpackedTile.data() + unpackedTileSize * i;
+                        unpackBits(td, tile.size, bitsPerSample, utd, unpackedTileSize, swapBytes, handleSign);
 
-            size_t planeTile = i % numTilesPerPlane;
-            size_t tileX = planeTile % tile.numX;
-            size_t tileY = planeTile / tile.numX;
+                        size_t planeTile = i % numTilesPerPlane;
+                        size_t tileX = planeTile % tile.numX;
+                        size_t tileY = planeTile / tile.numX;
 
-            int xStart = tileX * tile.width;
-            int xEnd = min((int)((tileX + 1) * tile.width), size.x());
+                        int xStart = tileX * tile.width;
+                        int xEnd = min((int)((tileX + 1) * tile.width), size.x());
 
-            int yStart = tileY * tile.height;
-            int yEnd = min((int)((tileY + 1) * tile.height), size.y());
+                        int yStart = tileY * tile.height;
+                        int yEnd = min((int)((tileY + 1) * tile.height), size.y());
 
-            if (planar == PLANARCONFIG_CONTIG) {
-                for (int y = yStart; y < yEnd; ++y) {
-                    for (int x = xStart; x < xEnd; ++x) {
-                        for (int c = 0; c < samplesPerPixel; ++c) {
-                            auto pixel = unpackedTile[((y - yStart) * tile.width + x - xStart) * samplesPerPixel + c];
-                            imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
-                        }
-                    }
-                }
-            } else {
-                int c = i / numTilesPerPlane;
-                for (int y = yStart; y < yEnd; ++y) {
-                    for (int x = xStart; x < xEnd; ++x) {
-                        auto pixel = unpackedTile[(y - yStart) * tile.width + x - xStart];
-                        imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
-                    }
-                }
-            }
+                        co_await ThreadPool::global().parallelForAsync<int>(
+                            yStart,
+                            yEnd,
+                            [&](int y) {
+                                if (planar == PLANARCONFIG_CONTIG) {
+                                    for (int x = xStart; x < xEnd; ++x) {
+                                        for (int c = 0; c < samplesPerPixel; ++c) {
+                                            auto pixel = utd[((y - yStart) * tile.width + x - xStart) * samplesPerPixel + c];
+                                            imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                        }
+                                    }
+                                } else {
+                                    int c = i / numTilesPerPlane;
+                                    for (int x = xStart; x < xEnd; ++x) {
+                                        auto pixel = utd[(y - yStart) * tile.width + x - xStart];
+                                        imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                    }
+                                }
+                            },
+                            priority
+                        );
+                    },
+                    priority
+                )
+            );
+        }
+
+        for (auto&& task : decodeTasks) {
+            co_await task;
         }
 
         float scale = 1.0f;

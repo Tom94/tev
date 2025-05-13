@@ -79,6 +79,15 @@ public:
         return Awaiter{this, priority};
     }
 
+    template <class F> auto enqueueCoroutine(F&& fun, int priority) -> Task<void> {
+        return [](F&& fun, ThreadPool* pool, int tPriority) -> Task<void> {
+            // Makes sure the function's captures have same lifetime as coroutine
+            auto exec = std::move(fun);
+            co_await pool->enqueueCoroutine(tPriority);
+            co_await exec();
+        }(std::forward<F>(fun), this, priority);
+    }
+
     void startThreads(size_t num);
     void shutdownThreads(size_t num);
     void shutdown() { shutdownThreads(mThreads.size()); }
