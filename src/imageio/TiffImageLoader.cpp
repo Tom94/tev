@@ -1214,7 +1214,10 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                     numPixels,
                     [&](size_t i) {
                         for (int c = 0; c < numColorChannels; ++c) {
-                            floatRgbaData[i * numRgbaChannels + c] = pow(max(floatRgbaData[i * numRgbaChannels + c], 0.0f), 2.2f);
+                            // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
+                            // the power behaves like an odd exponent, thereby preserving the range of R.
+                            float v = floatRgbaData[i * numRgbaChannels + c];
+                            floatRgbaData[i * numRgbaChannels + c] = copysign(pow(abs(v), 2.2f), v);
                         }
                     },
                     priority
