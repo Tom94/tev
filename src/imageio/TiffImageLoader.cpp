@@ -376,6 +376,10 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             compression = COMPRESSION_JPEG;
         }
 
+        if (compression == COMPRESSION_JXL_DNG_1_7) {
+            throw ImageLoadError{"DNG JXL compression is unsupported."};
+        }
+
         if (!TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &photometric)) {
             throw ImageLoadError{"Failed to read photometric interpretation."};
         }
