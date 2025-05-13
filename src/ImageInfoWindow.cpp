@@ -96,9 +96,14 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& i
 
     perform_layout(screen()->nvg_context());
 
-    mTabWidget->set_callback([this](int id) mutable { mTabWidget->set_selected_id(id); });
+    mTabWidget->set_callback([this](int id) mutable {
+        mTabWidget->set_selected_id(id);
+        mScrollPanel = dynamic_cast<VScrollPanel*>(mTabWidget->child_at(0)->child_at(0));
+    });
+
     if (mTabWidget->tab_count() > 0) {
         mTabWidget->set_selected_id(0);
+        mScrollPanel = dynamic_cast<VScrollPanel*>(mTabWidget->child_at(0)->child_at(0));
     }
 }
 
@@ -107,8 +112,9 @@ bool ImageInfoWindow::keyboard_event(int key, int scancode, int action, int modi
         return true;
     }
 
-    if (action == GLFW_PRESS) {
-        if (key == GLFW_KEY_ESCAPE) {
+    // TODO: unify this implementation with the help window
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             mCloseCallback();
             return true;
         } else if (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL)) {
@@ -116,6 +122,18 @@ bool ImageInfoWindow::keyboard_event(int key, int scancode, int action, int modi
                 mTabWidget->set_selected_id((mTabWidget->selected_id() - 1 + mTabWidget->tab_count()) % mTabWidget->tab_count());
             } else {
                 mTabWidget->set_selected_id((mTabWidget->selected_id() + 1) % mTabWidget->tab_count());
+            }
+
+            return true;
+        } else if (key == GLFW_KEY_J) {
+            if (mScrollPanel) {
+                mScrollPanel->scroll_absolute(48.0f);
+            }
+
+            return true;
+        } else if (key == GLFW_KEY_K) {
+            if (mScrollPanel) {
+                mScrollPanel->scroll_absolute(-48.0f);
             }
 
             return true;

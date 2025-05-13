@@ -21,6 +21,7 @@
 #include <tev/Common.h>
 
 #include <nanogui/tabwidget.h>
+#include <nanogui/vscrollpanel.h>
 #include <nanogui/window.h>
 
 #include <string>
@@ -41,6 +42,7 @@ public:
 private:
     std::function<void()> mCloseCallback;
     nanogui::TabWidget* mTabWidget = nullptr;
+    nanogui::VScrollPanel* mScrollPanel = nullptr;
 };
 
 } // namespace tev

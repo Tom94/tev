@@ -847,6 +847,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                     tlog::error() << "Failed to copy image to clipboard.";
                 }
             }
+
+            return true;
         } else if (key == GLFW_KEY_V && (modifiers & SYSTEM_COMMAND_MOD)) {
             // if (clip::has(clip::text_format())) {
             //     string path;
@@ -882,6 +884,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                     }
                 }
             }
+
+            return true;
         }
     }
 
@@ -902,6 +906,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             nanogui::Vector2f origin = nanogui::Vector2f{mImageCanvas->position()} + nanogui::Vector2f{mImageCanvas->size()} * 0.5f;
 
             mImageCanvas->scale(scaleAmount, {origin.x(), origin.y()});
+            return true;
         }
 
         if (key == GLFW_KEY_E) {
@@ -910,6 +915,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 setExposure(exposure() + 0.5f);
             }
+
+            return true;
         }
 
         if (key == GLFW_KEY_O) {
@@ -918,6 +925,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 setOffset(offset() + 0.1f);
             }
+
+            return true;
         }
 
         if (mGammaSlider->enabled()) {
@@ -928,6 +937,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                     setGamma(gamma() + 0.1f);
                 }
             }
+
+            return true;
         }
 
         if (key == GLFW_KEY_W && (modifiers & SYSTEM_COMMAND_MOD)) {
@@ -936,6 +947,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 removeImage(mCurrentImage);
             }
+
+            return true;
         } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP ||
                    (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT))) {
             if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
@@ -943,6 +956,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 selectImage(nextImage(mCurrentImage, Backward));
             }
+
+            return true;
         } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN ||
                    (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT))) {
             if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
@@ -950,6 +965,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 selectImage(nextImage(mCurrentImage, Forward));
             }
+
+            return true;
         }
 
         if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D || key == GLFW_KEY_RIGHT_BRACKET) {
@@ -962,6 +979,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 selectGroup(nextGroup(mCurrentGroup, Forward));
             }
+
+            return true;
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
                 setTonemap(static_cast<ETonemap>((tonemap() - 1 + NumTonemaps) % NumTonemaps));
@@ -972,6 +991,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             } else {
                 selectGroup(nextGroup(mCurrentGroup, Backward));
             }
+
+            return true;
         }
 
         float translationAmount = 64.0f;
@@ -986,12 +1007,16 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
 
         if (key == GLFW_KEY_H) {
             mImageCanvas->translate({-translationAmount, 0});
+            return true;
         } else if (key == GLFW_KEY_L) {
             mImageCanvas->translate({translationAmount, 0});
+            return true;
         } else if (key == GLFW_KEY_J) {
             mImageCanvas->translate({0, translationAmount});
+            return true;
         } else if (key == GLFW_KEY_K) {
             mImageCanvas->translate({0, -translationAmount});
+            return true;
         }
     }
 
@@ -1807,6 +1832,8 @@ void ImageViewer::updateImageInfoWindow() {
             mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
             mImageInfoWindow->set_position(pos);
             mImageInfoWindow->set_size(size);
+            mImageInfoWindow->request_focus();
+
             mImageInfoButton->set_pushed(true);
         } else {
             mImageInfoWindow = nullptr;

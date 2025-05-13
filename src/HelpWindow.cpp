@@ -61,10 +61,10 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 
     // Keybindings tab
     Widget* tmp = new Widget(mTabWidget);
-    VScrollPanel* scrollPanel = new VScrollPanel{tmp};
+    mScrollPanel = new VScrollPanel{tmp};
     mTabWidget->append_tab("Keybindings", tmp);
 
-    Widget* shortcuts = new Widget(scrollPanel);
+    Widget* shortcuts = new Widget(mScrollPanel);
     shortcuts->set_layout(new GroupLayout{});
 
     auto addRow = [](Widget* current, string keys, string desc) {
@@ -248,8 +248,8 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
-    scrollPanel->set_fixed_height(about->height() + 12);
-    scrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
+    mScrollPanel->set_fixed_height(about->height() + 12);
+    mScrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
 
     mTabWidget->set_selected_id(0);
     mTabWidget->set_callback([this](int id) mutable { mTabWidget->set_selected_id(id); });
@@ -260,8 +260,8 @@ bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers
         return true;
     }
 
-    if (action == GLFW_PRESS) {
-        if (key == GLFW_KEY_ESCAPE) {
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
             mCloseCallback();
             return true;
         } else if (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL)) {
@@ -271,6 +271,12 @@ bool HelpWindow::keyboard_event(int key, int scancode, int action, int modifiers
                 mTabWidget->set_selected_id((mTabWidget->selected_id() + 1) % mTabWidget->tab_count());
             }
 
+            return true;
+        } else if (key == GLFW_KEY_J) {
+            mScrollPanel->scroll_absolute(48.0f);
+            return true;
+        } else if (key == GLFW_KEY_K) {
+            mScrollPanel->scroll_absolute(-48.0f);
             return true;
         }
     }
