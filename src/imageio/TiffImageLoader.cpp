@@ -301,7 +301,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     TiffData data(buffer.data() + sizeof(Exif::FOURCC), fileSize);
     TIFF* tif = TIFFClientOpen(
         toString(path).c_str(),
-        "rM", // read-only w/ memory mapping
+        "rMc", // read-only w/ memory mapping; no strip chopping
         reinterpret_cast<thandle_t>(&data),
         tiffReadProc,
         tiffWriteProc,
