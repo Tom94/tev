@@ -217,6 +217,19 @@ void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float sh
     nvgText(ctx, x, y, text.c_str(), NULL);
 }
 
+int maxTextureSize() {
+#if NANOGUI_USE_METAL
+    // There's unfortunately not a nice API to query this in Metal. Thankfully, macs all have had the same limit so far.
+    return 16384;
+#else
+    static struct MaxSize {
+        MaxSize() { glGetIntegerv(GL_MAX_TEXTURE_SIZE, &value); }
+        GLint value;
+    } maxSize;
+    return maxSize.value;
+#endif
+}
+
 int lastError() {
 #ifdef _WIN32
     return GetLastError();

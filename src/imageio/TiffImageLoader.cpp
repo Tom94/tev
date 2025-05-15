@@ -331,26 +331,27 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     ScopeGuard tiffGuard{[tif] { TIFFClose(tif); }};
 
     auto readImage = [&]() -> Task<ImageData> {
-        // Read TIFF dimensions and properties
         uint32_t width, height;
-        uint16_t bitsPerSample, samplesPerPixel, photometric, planar, sampleFormat, compression;
-
         if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
             throw ImageLoadError{"Failed to read dimensions."};
         }
 
+
         // Note: libtiff doesn't support variable bits per sample, which is technically allowed by the TIFF 6.0 spec. We assume all samples
         // have the same bit depth.
-        if (!TIFFGetField(tif, TIFFTAG_BITSPERSAMPLE, &bitsPerSample)) {
-            bitsPerSample = 1;
+        uint16_t bitsPerSample;
+        if (!TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &bitsPerSample)) {
+            throw ImageLoadError{"Failed to read bits per sample."};
         }
 
-        if (!TIFFGetField(tif, TIFFTAG_SAMPLESPERPIXEL, &samplesPerPixel)) {
-            samplesPerPixel = 1;
+        uint16_t samplesPerPixel;
+        if (!TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLESPERPIXEL, &samplesPerPixel)) {
+            throw ImageLoadError{"Failed to read samples per pixel."};
         }
 
-        if (!TIFFGetField(tif, TIFFTAG_SAMPLEFORMAT, &sampleFormat)) {
-            sampleFormat = SAMPLEFORMAT_UINT;
+        uint16_t sampleFormat;
+        if (!TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLEFORMAT, &sampleFormat)) {
+            throw ImageLoadError{"Failed to read sample format."};
         }
 
         // Interpret untyped data as unsigned integer... let's try displaying it
@@ -362,8 +363,9 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
         }
 
-        if (!TIFFGetField(tif, TIFFTAG_COMPRESSION, &compression)) {
-            compression = COMPRESSION_NONE;
+        uint16_t compression;
+        if (!TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &compression)) {
+            throw ImageLoadError{"Failed to read compression type."};
         }
 
         // DNG's lossy JPEG compression can be decoded by libtiff's regular JPEG decoder
@@ -380,7 +382,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             throw ImageLoadError{"DNG JXL compression is unsupported."};
         }
 
-        if (!TIFFGetField(tif, TIFFTAG_PHOTOMETRIC, &photometric)) {
+        uint16_t photometric;
+        if (!TIFFGetFieldDefaulted(tif, TIFFTAG_PHOTOMETRIC, &photometric)) {
             throw ImageLoadError{"Failed to read photometric interpretation."};
         }
 
@@ -445,7 +448,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
         }
 
-        if (!TIFFGetField(tif, TIFFTAG_PLANARCONFIG, &planar)) {
+        uint16_t planar;
+        if (!TIFFGetFieldDefaulted(tif, TIFFTAG_PLANARCONFIG, &planar)) {
             throw ImageLoadError{"Failed to read planar configuration."};
         }
 
@@ -600,7 +604,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             // Strips are just tiles with the same width as the image
             tile.width = size.x();
             if (!TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &tile.height)) {
-                throw ImageLoadError{"Failed to read rows per strip."};
+                tlog::warning() << "Failed to read rows per strip; assuming image height.";
+                tile.height = size.y();
             }
 
             tile.numX = 1;
@@ -639,51 +644,49 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
 
-            decodeTasks.emplace_back(
-                ThreadPool::global().enqueueCoroutine(
-                    [&, i, td]() -> Task<void> {
-                        uint32_t* const utd = unpackedTile.data() + unpackedTileSize * i;
+            decodeTasks.emplace_back(ThreadPool::global().enqueueCoroutine(
+                [&, i, td]() -> Task<void> {
+                    uint32_t* const utd = unpackedTile.data() + unpackedTileSize * i;
 
-                        size_t planeTile = i % numTilesPerPlane;
-                        size_t tileX = planeTile % tile.numX;
-                        size_t tileY = planeTile / tile.numX;
+                    size_t planeTile = i % numTilesPerPlane;
+                    size_t tileX = planeTile % tile.numX;
+                    size_t tileY = planeTile / tile.numX;
 
-                        int xStart = tileX * tile.width;
-                        int xEnd = min((int)((tileX + 1) * tile.width), size.x());
+                    int xStart = tileX * tile.width;
+                    int xEnd = min((int)((tileX + 1) * tile.width), size.x());
 
-                        int yStart = tileY * tile.height;
-                        int yEnd = min((int)((tileY + 1) * tile.height), size.y());
+                    int yStart = tileY * tile.height;
+                    int yEnd = min((int)((tileY + 1) * tile.height), size.y());
 
-                        co_await ThreadPool::global().parallelForAsync<int>(
-                            yStart,
-                            yEnd,
-                            [&](int y) {
-                                int y0 = y - yStart;
-                                unpackBits(
-                                    td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd + unpackedTileRowSize * y0, unpackedTileRowSize, handleSign
-                                );
+                    co_await ThreadPool::global().parallelForAsync<int>(
+                        yStart,
+                        yEnd,
+                        [&](int y) {
+                            int y0 = y - yStart;
+                            unpackBits(
+                                td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd + unpackedTileRowSize * y0, unpackedTileRowSize, handleSign
+                            );
 
-                                if (planar == PLANARCONFIG_CONTIG) {
-                                    for (int x = xStart; x < xEnd; ++x) {
-                                        for (int c = 0; c < samplesPerPixel; ++c) {
-                                            auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
-                                            imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
-                                        }
-                                    }
-                                } else {
-                                    int c = i / numTilesPerPlane;
-                                    for (int x = xStart; x < xEnd; ++x) {
-                                        auto pixel = utd[y0 * tile.width + x - xStart];
+                            if (planar == PLANARCONFIG_CONTIG) {
+                                for (int x = xStart; x < xEnd; ++x) {
+                                    for (int c = 0; c < samplesPerPixel; ++c) {
+                                        auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
                                         imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
                                     }
                                 }
-                            },
-                            priority
-                        );
-                    },
-                    priority
-                )
-            );
+                            } else {
+                                int c = i / numTilesPerPlane;
+                                for (int x = xStart; x < xEnd; ++x) {
+                                    auto pixel = utd[y0 * tile.width + x - xStart];
+                                    imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                }
+                            }
+                        },
+                        priority
+                    );
+                },
+                priority
+            ));
         }
 
         for (auto&& task : decodeTasks) {
@@ -773,7 +776,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 tlog::debug() << "Found active area data; applying...";
                 switch (TIFFFieldDataType(field)) {
                     case TIFF_SHORT:
-                        if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
+                        if (uint16_t * aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
                             activeArea.min.y() = aa[0];
                             activeArea.min.x() = aa[1];
                             activeArea.max.y() = aa[2];
@@ -781,7 +784,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                         }
                         break;
                     case TIFF_LONG:
-                        if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
+                        if (uint32_t * aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
                             activeArea.min.y() = aa[0];
                             activeArea.min.x() = aa[1];
                             activeArea.max.y() = aa[2];
@@ -800,7 +803,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             uint32_t numRead = 0;
 
             // 1. Map colors via linearization table if it exists
-            if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
+            if (uint16_t * linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
                 tlog::debug() << "Found linearization table; applying...";
 
                 const float scale = 1.0f / 65535.0f;
@@ -832,7 +835,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 uint16_t blackLevelRepeatRows = 1;
                 uint16_t blackLevelRepeatCols = 1;
 
-                if (uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
+                if (uint16_t * blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
                     blackLevelRepeatRows = blackLevelRepeatDim[0];
                     blackLevelRepeatCols = blackLevelRepeatDim[1];
                 }
@@ -844,7 +847,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 vector<float> blackLevel(numBlackLevelPixels * samplesPerPixel, 0.0f);
                 switch (TIFFFieldDataType(field)) {
                     case TIFF_SHORT:
-                        if (uint16_t* blackLevelShort; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelShort)) {
+                        if (uint16_t * blackLevelShort; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelShort)) {
                             if (numRead != blackLevel.size()) {
                                 throw ImageLoadError{"Invalid number of black level pixels."};
                             }
@@ -858,7 +861,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                         }
                         break;
                     case TIFF_LONG:
-                        if (uint32_t* blackLevelLong; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelLong)) {
+                        if (uint32_t * blackLevelLong; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelLong)) {
                             if (numRead != blackLevel.size()) {
                                 throw ImageLoadError{"Invalid number of black level pixels."};
                             }
@@ -954,7 +957,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
                 switch (TIFFFieldDataType(field)) {
                     case TIFF_SHORT:
-                        if (uint16_t* whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
+                        if (uint16_t * whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
                             if (numRead != whiteLevel.size()) {
                                 throw ImageLoadError{"Invalid number of white level pixels."};
                             }
@@ -967,7 +970,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                         }
                         break;
                     case TIFF_LONG:
-                        if (uint32_t* whiteLevelLong; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelLong)) {
+                        if (uint32_t * whiteLevelLong; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelLong)) {
                             if (numRead != whiteLevel.size()) {
                                 throw ImageLoadError{"Invalid number of white level pixels."};
                             }
@@ -1047,7 +1050,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             auto readCameraToXyz = [&](int CCTAG, int CMTAG) {
                 Imath::M33f colorMatrix = Imath::identity33f;
                 if (float* cmt; TIFFGetField(tif, CMTAG, &numRead, &cmt)) {
-                    if (numRead != samplesPerPixel * samplesPerPixel) {
+                    if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
                         throw ImageLoadError{"Invalid number of camera matrix entries."};
                     }
 
@@ -1060,7 +1063,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
                 Imath::M33f cameraCalibration = Imath::identity33f;
                 if (float* cct; TIFFGetField(tif, CCTAG, &numRead, &cct)) {
-                    if (numRead != samplesPerPixel * samplesPerPixel) {
+                    if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
                         throw ImageLoadError{"Invalid number of camera calibration entries."};
                     }
 
@@ -1128,7 +1131,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 }
             }
 
-            if (uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
+            if (uint32_t * dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
                 uint32_t hueDivisions = dims[0];
                 uint32_t satDivisions = dims[1];
                 uint32_t valueDivisions = dims[2];

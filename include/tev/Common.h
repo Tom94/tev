@@ -390,6 +390,8 @@ inline bool matchesFuzzyOrRegex(const std::string& text, const std::string& filt
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
 
+int maxTextureSize();
+
 inline float toSRGB(float linear, float gamma = 2.4f) {
     static const float a = 0.055f;
     if (linear <= 0.0031308f) {
