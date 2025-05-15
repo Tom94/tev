@@ -346,6 +346,11 @@ bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
 }
 
 Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
+    if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
+        tlog::error() << fmt::format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
+        return nullptr;
+    }
+
     string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
     auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
