@@ -367,7 +367,7 @@ ImageViewer::ImageViewer(
         // Playback controls
         {
             auto playback = new Widget{mSidebarLayout};
-            playback->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+            playback->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
             auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
                 auto button = new Button{playback, name, icon};
@@ -375,6 +375,7 @@ ImageViewer::ImageViewer(
                 button->set_tooltip(tooltip);
                 button->set_font_size(15);
                 button->set_enabled(enabled);
+                button->set_padding({10, 10});
                 return button;
             };
 
@@ -397,6 +398,12 @@ ImageViewer::ImageViewer(
             mFpsTextBox->set_alignment(TextBox::Alignment::Right);
             mFpsTextBox->set_min_max_values(1, 1000);
             mFpsTextBox->set_spinnable(true);
+            mFpsTextBox->set_size(30);
+
+            mAutoFitToScreenButton =
+                makePlaybackButton("", true, {}, FA_EXPAND_ARROWS_ALT, "Automatically fit image to screen upon selection.");
+            mAutoFitToScreenButton->set_flags(Button::Flags::ToggleButton);
+            mAutoFitToScreenButton->set_change_callback([this](bool value) { setAutoFitToScreen(value); });
         }
 
         // Save, refresh, load, close
@@ -410,6 +417,7 @@ ImageViewer::ImageViewer(
                 button->set_tooltip(tooltip);
                 button->set_font_size(15);
                 button->set_enabled(enabled);
+                button->set_padding({10, 10});
                 return button;
             };
 
@@ -1528,6 +1536,10 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
             ));
         }
     }
+
+    if (autoFitToScreen()) {
+        mImageCanvas->fitImageToScreen(*mCurrentImage);
+    }
 }
 
 void ImageViewer::selectGroup(string group) {
@@ -1764,6 +1776,15 @@ void ImageViewer::setUseRegex(bool value) {
 bool ImageViewer::watchFilesForChanges() const { return mWatchFilesForChangesButton->pushed(); }
 
 void ImageViewer::setWatchFilesForChanges(bool value) { mWatchFilesForChangesButton->set_pushed(value); }
+
+bool ImageViewer::autoFitToScreen() const { return mAutoFitToScreenButton->pushed(); }
+
+void ImageViewer::setAutoFitToScreen(bool value) {
+    mAutoFitToScreenButton->set_pushed(value);
+    if (value && mCurrentImage) {
+        mImageCanvas->fitImageToScreen(*mCurrentImage);
+    }
+}
 
 void ImageViewer::maximize() { glfwMaximizeWindow(m_glfw_window); }
 
