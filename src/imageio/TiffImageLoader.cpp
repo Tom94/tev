@@ -604,7 +604,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             // Strips are just tiles with the same width as the image
             tile.width = size.x();
             if (!TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &tile.height)) {
-                throw ImageLoadError{"Failed to read rows per strip."};
+                tlog::warning() << "Failed to read rows per strip; assuming image height.";
+                tile.height = size.y();
             }
 
             tile.numX = 1;
