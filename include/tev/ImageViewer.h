@@ -150,6 +150,9 @@ public:
     bool watchFilesForChanges() const;
     void setWatchFilesForChanges(bool value);
 
+    bool autoFitToScreen() const;
+    void setAutoFitToScreen(bool value);
+
     void maximize();
     bool isMaximized();
     void toggleMaximized();
@@ -239,6 +242,8 @@ private:
 
     nanogui::Button* mWatchFilesForChangesButton;
     std::chrono::steady_clock::time_point mLastFileChangesCheckTime = {};
+
+    nanogui::Button* mAutoFitToScreenButton;
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
