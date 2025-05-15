@@ -153,6 +153,13 @@ static int mainFunc(const vector<string>& arguments) {
         "Its source code is available under the GPLv3 License at https://tom94.net/tev",
     };
 
+    Flag autoFitFlag{
+        parser,
+        "AUTO FIT",
+        "Automatically fit selected images to tev's window size.",
+        {"auto-fit"},
+    };
+
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
@@ -563,6 +570,10 @@ static int mainFunc(const vector<string>& arguments) {
     sImageViewer->redraw();
 
     // Apply parameter flags
+    if (autoFitFlag) {
+        sImageViewer->setAutoFitToScreen(true);
+    }
+
     if (exposureFlag) {
         sImageViewer->setExposure(get(exposureFlag));
     }

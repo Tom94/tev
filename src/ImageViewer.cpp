@@ -1748,6 +1748,10 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
 
     set_size(targetSize);
     move_window(-nanogui::Vector2i{sizeDiff.x() / 2, sizeDiff.y() / 2});
+
+    if (autoFitToScreen() && mCurrentImage) {
+        mImageCanvas->fitImageToScreen(*mCurrentImage);
+    }
 }
 
 bool ImageViewer::playingBack() const { return mPlayButton->pushed(); }
@@ -1786,7 +1790,12 @@ void ImageViewer::setAutoFitToScreen(bool value) {
     }
 }
 
-void ImageViewer::maximize() { glfwMaximizeWindow(m_glfw_window); }
+void ImageViewer::maximize() {
+    glfwMaximizeWindow(m_glfw_window);
+    if (autoFitToScreen() && mCurrentImage) {
+        mImageCanvas->fitImageToScreen(*mCurrentImage);
+    }
+}
 
 bool ImageViewer::isMaximized() { return glfwGetWindowAttrib(m_glfw_window, GLFW_MAXIMIZED) != 0; }
 
