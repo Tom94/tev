@@ -699,9 +699,9 @@ string Image::toString() const {
 Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector, bool applyGainmaps) {
     auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << fmt::format("Could not load {}. {}", toString(path), e.what());
+            tlog::error() << fmt::format("Could not load {}: {}", toString(path), e.what());
         } else {
-            tlog::error() << fmt::format("Could not load {}:{}. {}", toString(path), channelSelector, e.what());
+            tlog::error() << fmt::format("Could not load {}:{}: {}", toString(path), channelSelector, e.what());
         }
     };
 
