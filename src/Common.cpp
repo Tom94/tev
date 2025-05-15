@@ -78,51 +78,32 @@ string toString(const fs::path& path) {
 }
 
 bool naturalCompare(const string& a, const string& b) {
-    // Compare two strings in a natural way. This means that "10" comes after "2" and before "20". This is done by splitting the strings
-    // into substrings of digits and non-digits and comparing them separately.
-    auto splitDigits = [](const string& str) {
-        const string digits = "0123456789";
-        vector<string> result;
+    size_t i = 0, j = 0;
+    while (i < a.size() && j < b.size()) {
+        if (isdigit(a[i]) && isdigit(b[j])) {
+            size_t aNum = 0;
+            size_t bNum = 0;
 
-        size_t begin = 0;
-        while (true) {
-            size_t end = str.find_first_of(digits, begin);
-            if (end == string::npos) {
-                result.emplace_back(str.substr(begin));
-                break;
-            } else {
-                result.emplace_back(str.substr(begin, end - begin));
+            do {
+                aNum = aNum * 10 + (a[i++] - '0');
+            } while (i < a.size() && isdigit(a[i]));
 
-                begin = end;
-                end = str.find_first_not_of(digits, begin);
-                if (end == string::npos) {
-                    result.emplace_back(str.substr(begin));
-                    break;
-                }
+            do {
+                bNum = bNum * 10 + (b[j++] - '0');
+            } while (j < b.size() && isdigit(b[j]));
 
-                result.emplace_back(str.substr(begin, end - begin));
-                begin = end;
+            if (aNum != bNum) {
+                return aNum < bNum;
             }
-        }
-
-        return result;
-    };
-
-    auto aParts = splitDigits(a);
-    auto bParts = splitDigits(b);
-
-    for (size_t i = 0; i < min(aParts.size(), bParts.size()); ++i) {
-        if (aParts[i] != bParts[i]) {
-            // Compare the substrings. If they are both digits, compare them as numbers. Otherwise, compare them case-insensitively as strings.
-            if (isdigit(aParts[i][0]) && isdigit(bParts[i][0])) {
-                return stoi(aParts[i]) < stoi(bParts[i]);
-            } else {
-                return toLower(aParts[i]) < toLower(bParts[i]);
+        } else {
+            char lowerA = tolower(a[i++]), lowerB = tolower(b[j++]);
+            if (lowerA != lowerB) {
+                return lowerA < lowerB;
             }
         }
     }
 
-    return aParts.size() < bParts.size();
+    return a.size() - i < b.size() - j;
 }
 
 vector<string> split(string text, const string& delim) {
