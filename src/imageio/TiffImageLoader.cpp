@@ -25,6 +25,8 @@
 #include <half.h>
 #include <tiffio.h>
 
+#include <span>
+
 using namespace nanogui;
 using namespace std;
 
@@ -263,6 +265,545 @@ void unpackBits(const uint8_t* __restrict input, size_t inputSize, int bitwidth,
     }
 }
 
+Task<void> postprocessLinearRawDng(
+    TIFF* tif,
+    uint16_t bitsPerSample,
+    uint16_t samplesPerPixel,
+    int numColorChannels,
+    int numRgbaChannels,
+    span<float> floatRgbaData,
+    ImageData& resultData,
+    int priority
+) {
+    // We follow page 96 of https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
+    tlog::debug() << "Mapping LinearRAW to linear RGB...";
+
+    Vector2i size = resultData.size();
+    Box2i activeArea = {Vector2i(0, 0), size};
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_ACTIVEAREA, TIFF_ANY)) {
+        tlog::debug() << "Found active area data; applying...";
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
+                    activeArea.min.y() = aa[0];
+                    activeArea.min.x() = aa[1];
+                    activeArea.max.y() = aa[2];
+                    activeArea.max.x() = aa[3];
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
+                    activeArea.min.y() = aa[0];
+                    activeArea.min.x() = aa[1];
+                    activeArea.max.y() = aa[2];
+                    activeArea.max.x() = aa[3];
+                }
+                break;
+            default: throw ImageLoadError{"Unsupported active area data type."};
+        }
+
+        resultData.displayWindow = activeArea;
+    }
+
+    tlog::debug(
+    ) << fmt::format("Active area: min=({},{}) max=({},{})", activeArea.min.x(), activeArea.min.y(), activeArea.max.x(), activeArea.max.y());
+
+    // Utility var that we'll reuse whenever reading a variable TIFF array
+    uint32_t numRead = 0;
+
+    // 1. Map colors via linearization table if it exists
+    if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
+        tlog::debug() << "Found linearization table; applying...";
+
+        const float scale = 1.0f / 65535.0f;
+        const size_t maxIdx = (1ull << bitsPerSample) - 1;
+
+        co_await ThreadPool::global().parallelForAsync<int>(
+            activeArea.min.y(),
+            activeArea.max.y(),
+            [&](int y) {
+                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                    size_t i = (size_t)y * size.x() + x;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        float val = floatRgbaData[i * numRgbaChannels + c];
+
+                        // Lerp the transfer function
+                        size_t idx = clamp((size_t)(val * maxIdx), (size_t)0, maxIdx - 1);
+                        float w = val * maxIdx - idx;
+                        floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    // 2. Subtract black level
+    vector<float> maxBlackLevel(samplesPerPixel, 0.0f);
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_BLACKLEVEL, TIFF_ANY)) {
+        uint16_t blackLevelRepeatRows = 1;
+        uint16_t blackLevelRepeatCols = 1;
+
+        if (uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
+            blackLevelRepeatRows = blackLevelRepeatDim[0];
+            blackLevelRepeatCols = blackLevelRepeatDim[1];
+        }
+
+        tlog::debug() << fmt::format("Found {}x{} black level data; applying...", blackLevelRepeatRows, blackLevelRepeatCols);
+
+        const size_t numBlackLevelPixels = blackLevelRepeatRows * blackLevelRepeatCols;
+
+        vector<float> blackLevel(numBlackLevelPixels * samplesPerPixel, 0.0f);
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* blackLevelShort; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelShort)) {
+                    if (numRead != blackLevel.size()) {
+                        throw ImageLoadError{"Invalid number of black level pixels."};
+                    }
+
+                    const float scale = 1.0f / 65535.0f;
+                    for (size_t i = 0; i < blackLevel.size(); ++i) {
+                        blackLevel[i] = blackLevelShort[i] * scale;
+                    }
+                } else {
+                    throw ImageLoadError{"Failed to read short black level data."};
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* blackLevelLong; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelLong)) {
+                    if (numRead != blackLevel.size()) {
+                        throw ImageLoadError{"Invalid number of black level pixels."};
+                    }
+
+                    const double scale = 1.0 / (uint32_t)0xFFFFFFFF;
+                    for (size_t i = 0; i < blackLevel.size(); ++i) {
+                        blackLevel[i] = blackLevelLong[i] * scale;
+                    }
+                } else {
+                    throw ImageLoadError{"Failed to read short black level data."};
+                }
+                break;
+            case TIFF_RATIONAL:
+                if (float* blackLevelFloat; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelFloat)) {
+                    if (numRead != blackLevel.size()) {
+                        throw ImageLoadError{"Invalid number of black level pixels."};
+                    }
+
+                    for (size_t i = 0; i < blackLevel.size(); ++i) {
+                        blackLevel[i] = blackLevelFloat[i];
+                    }
+                } else {
+                    throw ImageLoadError{"Failed to read short black level data."};
+                }
+                break;
+            default: throw ImageLoadError{fmt::format("Unsupported black level data type: {}", (uint32_t)TIFFFieldDataType(field))};
+        }
+
+        vector<float> blackLevelDeltaH(activeArea.size().x(), 0.0f);
+        vector<float> blackLevelDeltaV(activeArea.size().y(), 0.0f);
+
+        if (float* bldh; TIFFGetField(tif, TIFFTAG_BLACKLEVELDELTAH, &numRead, &bldh)) {
+            tlog::debug() << fmt::format("Found {} black level H entries", numRead);
+            if (numRead != blackLevelDeltaH.size()) {
+                throw ImageLoadError{"Invalid number of black level delta H pixels."};
+            }
+
+            for (size_t i = 0; i < blackLevelDeltaH.size(); ++i) {
+                blackLevelDeltaH[i] = bldh[i];
+            }
+        }
+
+        if (float* bldv; TIFFGetField(tif, TIFFTAG_BLACKLEVELDELTAV, &numRead, &bldv)) {
+            tlog::debug() << fmt::format("Found {} black level V entries", numRead);
+            if (numRead != blackLevelDeltaV.size()) {
+                throw ImageLoadError{"Invalid number of black level delta V pixels."};
+            }
+
+            for (size_t i = 0; i < blackLevelDeltaV.size(); ++i) {
+                blackLevelDeltaV[i] = bldv[i];
+            }
+        }
+
+        vector<float> maxBlackLevelY(samplesPerPixel * activeArea.size().y(), 0.0f);
+        co_await ThreadPool::global().parallelForAsync<int>(
+            activeArea.min.y(),
+            activeArea.max.y(),
+            [&](const int y) {
+                int yIdx = y - activeArea.min.y();
+
+                const float deltaV = blackLevelDeltaV[yIdx];
+                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                    const float deltaH = blackLevelDeltaH[x - activeArea.min.x()];
+                    const float delta = deltaH + deltaV;
+
+                    const size_t idx = (size_t)y * size.x() + x;
+                    const size_t blIdx = (y % blackLevelRepeatRows) * blackLevelRepeatCols + (x % blackLevelRepeatCols);
+
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        const float bl = blackLevel[blIdx * samplesPerPixel + c] + delta;
+                        floatRgbaData[idx * numRgbaChannels + c] -= bl;
+
+                        maxBlackLevelY[yIdx * samplesPerPixel + c] = max(maxBlackLevelY[yIdx * samplesPerPixel + c], bl);
+                    }
+                }
+            },
+            priority
+        );
+
+        maxBlackLevel.assign(samplesPerPixel, numeric_limits<float>::lowest());
+        for (int y = activeArea.min.y(); y < activeArea.max.y(); ++y) {
+            int yIdx = y - activeArea.min.y();
+            for (int c = 0; c < numColorChannels; ++c) {
+                maxBlackLevel[c] = max(maxBlackLevel[c], maxBlackLevelY[yIdx * samplesPerPixel + c]);
+            }
+        }
+    }
+
+    // 3. Rescale to 0-1 range per white level
+    vector<float> whiteLevel(samplesPerPixel, 1.0f);
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_WHITELEVEL, TIFFDataType::TIFF_ANY)) {
+        const float scale = 1.0f / ((1ull << bitsPerSample) - 1);
+
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
+                    if (numRead != whiteLevel.size()) {
+                        throw ImageLoadError{"Invalid number of white level pixels."};
+                    }
+
+                    for (size_t i = 0; i < whiteLevel.size(); ++i) {
+                        whiteLevel[i] = whiteLevelShort[i] * scale;
+                    }
+                } else {
+                    throw ImageLoadError{"Failed to read short white level data."};
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* whiteLevelLong; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelLong)) {
+                    if (numRead != whiteLevel.size()) {
+                        throw ImageLoadError{"Invalid number of white level pixels."};
+                    }
+
+                    for (size_t i = 0; i < whiteLevel.size(); ++i) {
+                        whiteLevel[i] = whiteLevelLong[i] * scale;
+                    }
+                } else {
+                    throw ImageLoadError{"Failed to read short white level data."};
+                }
+                break;
+            default: throw ImageLoadError{fmt::format("Unsupported white level data type: {}", (uint32_t)TIFFFieldDataType(field))};
+        }
+
+        tlog::debug() << "Found white level data";
+    }
+
+    vector<float> channelScale(samplesPerPixel);
+    for (int c = 0; c < samplesPerPixel; ++c) {
+        tlog::debug() << fmt::format("whiteLevel[{}] = {}", c, whiteLevel[c]);
+        tlog::debug() << fmt::format("maxBlackLevel[{}] = {}", c, maxBlackLevel[c]);
+        channelScale[c] = 1.0f / (whiteLevel[c] - maxBlackLevel[c]);
+    }
+
+    if (any_of(channelScale.begin(), channelScale.end(), [](float s) { return s != 1.0f; })) {
+        tlog::debug() << "Non-1.0 channel scale";
+
+        const size_t numPixels = (size_t)size.x() * size.y();
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (int c = 0; c < numColorChannels; ++c) {
+                    floatRgbaData[i * numRgbaChannels + c] *= channelScale[c];
+                }
+            },
+            priority
+        );
+    }
+
+    // 4. Clipping: the docs recommend clipping to 1 from above but to keep sub-zero values intact
+    const size_t numPixels = (size_t)size.x() * size.y();
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        numPixels,
+        [&](size_t i) {
+            for (int c = 0; c < numColorChannels; ++c) {
+                floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
+            }
+        },
+        priority
+    );
+
+    // 5. Apply camera to XYZ matrix
+    if (samplesPerPixel != 3) {
+        throw ImageLoadError{"Linear RAW images with sampledPerPixel != 3 are not supported."};
+    }
+
+    // Camera parameters are stored in IFD 0, so let's switch to it temporarily.
+    tdir_t prevIdf = TIFFCurrentDirectory(tif);
+    TIFFSetDirectory(tif, 0);
+    ScopeGuard guard{[&]() { TIFFSetDirectory(tif, prevIdf); }};
+
+    const auto readCameraToXyz = [&](int CCTAG, int CMTAG) {
+        Matrix3f colorMatrix{1.0f};
+        if (float* cmt; TIFFGetField(tif, CMTAG, &numRead, &cmt)) {
+            if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
+                throw ImageLoadError{"Invalid number of camera matrix entries."};
+            }
+
+            for (size_t i = 0; i < samplesPerPixel; ++i) {
+                for (size_t j = 0; j < samplesPerPixel; ++j) {
+                    colorMatrix.m[j][i] = cmt[i * samplesPerPixel + j];
+                }
+            }
+        } else {
+            return optional<Matrix3f>{};
+        }
+
+        Matrix3f cameraCalibration{1.0f};
+        if (float* cct; TIFFGetField(tif, CCTAG, &numRead, &cct)) {
+            if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
+                throw ImageLoadError{"Invalid number of camera calibration entries."};
+            }
+
+            for (size_t i = 0; i < samplesPerPixel; ++i) {
+                for (size_t j = 0; j < samplesPerPixel; ++j) {
+                    cameraCalibration.m[j][i] = cct[i * samplesPerPixel + j];
+                }
+            }
+        }
+
+        const auto xyzToCamera = cameraCalibration * colorMatrix;
+        return optional<Matrix3f>{inverse(xyzToCamera)};
+    };
+
+    const array<pair<uint16_t, uint16_t>, 3> camTags = {
+        {
+         {TIFFTAG_CAMERACALIBRATION3, TIFFTAG_COLORMATRIX3},
+         {TIFFTAG_CAMERACALIBRATION2, TIFFTAG_COLORMATRIX2},
+         {TIFFTAG_CAMERACALIBRATION1, TIFFTAG_COLORMATRIX1},
+         }
+    };
+
+    Vector3f analogBalance{1.0f};
+    if (float* abt; TIFFGetField(tif, TIFFTAG_ANALOGBALANCE, &numRead, &abt)) {
+        if (numRead != samplesPerPixel) {
+            throw ImageLoadError{"Invalid number of analog balance pixels."};
+        }
+
+        for (size_t i = 0; i < numRead; ++i) {
+            analogBalance[i] = abt[i];
+        }
+
+        tlog::debug() << fmt::format("Analog balance: ({}, {}, {})", analogBalance[0], analogBalance[1], analogBalance[2]);
+    }
+
+    // D65 white point
+    // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3127f, 0.3290f});
+    // D50 white point -- produces ~identity ca matrix as expected
+    // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3457f, 0.5385});
+    const auto chromaticAdaptation = Matrix3f{1.0f};
+
+    // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
+    // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
+    // (aka RIMM space) in which we will apply the camera profile.
+    auto toRimm = xyzToChromaMatrix(proPhotoChroma());
+    for (size_t i = 0; i < camTags.size(); ++i) {
+        if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
+            tlog::debug() << fmt::format("Found camera calibration data; applying...");
+            toRimm = toRimm * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation * camToXyz.value());
+            break;
+        }
+    }
+
+    // Convert colors to RGB here rather than letting Image.cpp handle it, because there's still post-processing to do.
+
+    // Take advantage of the fact that RGB channels are adjacent in memory
+    span<Vector3f> rgbData{reinterpret_cast<Vector3f*>(floatRgbaData.data()), (size_t)size.x() * size.y()};
+    co_await ThreadPool::global().parallelForAsync<int>(
+        activeArea.min.y(),
+        activeArea.max.y(),
+        [&](int y) {
+            for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                size_t i = (size_t)y * size.x() + x;
+                rgbData[i] = toRimm * rgbData[i];
+            }
+        },
+        priority
+    );
+
+    // Once we're done, we want to convert from RIMM space to sRGB/Rec709
+    resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
+
+    if (const char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
+        tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
+    }
+
+    if (const uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
+        uint32_t hueDivisions = dims[0];
+        uint32_t satDivisions = dims[1];
+        uint32_t valueDivisions = dims[2];
+
+        tlog::debug() << fmt::format("Hue/sat/val map dimensions: {} {} {}", hueDivisions, satDivisions, valueDivisions);
+
+        // TODO: implement hue/sat/val map...
+        tlog::warning() << "Found hue/sat/val map, but not implemented yet. Image may look wrong.";
+    }
+
+    if (const float* tonecurve; TIFFGetField(tif, TIFFTAG_PROFILETONECURVE, &numRead, &tonecurve)) {
+        if (numRead % 2 != 0 || numRead < 4) {
+            throw ImageLoadError{"Number of tone curve entries must be divisible by 2 and >=4."};
+        }
+
+        tlog::debug() << fmt::format("Applying profile tone curve of length {}", numRead);
+
+        span<const Vector2f> tc{reinterpret_cast<const Vector2f*>(tonecurve), numRead / 2};
+        if (tc.front().x() != 0.0f || tc.back().x() != 1.0f) {
+            throw ImageLoadError{"Tone curve must start at 0."};
+        }
+
+        const auto applyPwLinear = [](span<const Vector2f> tc, float x) {
+            const auto it = lower_bound(tc.begin(), tc.end(), x, [](auto a, float b) { return a.x() < b; });
+            size_t i = distance(tc.begin(), it);
+
+            // The spec says to extend the slope of the last segment.
+            if (i > 0) {
+                --i;
+            } else if (i >= tc.size() - 1) {
+                i = tc.size() - 2;
+            }
+
+            // TODO: Docs say to use cubic spline interpolation, whereas we're using linear interpolation. The difference seems to
+            // be negligible so far, but we should fix this at some point.
+            const float w = (x - tc[i].x()) / (tc[i + 1].x() - tc[i].x());
+            return (1.0f - w) * tc[i].y() + w * tc[i + 1].y();
+        };
+
+        co_await ThreadPool::global().parallelForAsync<int>(
+            activeArea.min.y(),
+            activeArea.max.y(),
+            [&](int y) {
+                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                    size_t i = (size_t)y * size.x() + x;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        const size_t idx = i * numRgbaChannels + c;
+                        floatRgbaData[idx] = applyPwLinear(tc, floatRgbaData[idx]);
+                    }
+                }
+            },
+            priority
+        );
+    }
+}
+
+Task<void> postprocessRgb(
+    TIFF* tif,
+    const uint16_t photometric,
+    const uint16_t bitsPerSample,
+    const int numColorChannels,
+    const int numRgbaChannels,
+    span<float> floatRgbaData,
+    ImageData& resultData,
+    const int priority
+) {
+    Vector2i size = resultData.size();
+
+    array<Vector2f, 4> chroma = rec709Chroma();
+
+    if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries)) {
+        tlog::debug() << "Found custom primaries; applying...";
+        chroma[0] = {primaries[0], primaries[1]};
+        chroma[1] = {primaries[2], primaries[3]};
+        chroma[2] = {primaries[4], primaries[5]};
+    }
+
+    if (float* whitePoint; TIFFGetField(tif, TIFFTAG_WHITEPOINT, &whitePoint)) {
+        tlog::debug() << "Found custom white point; applying...";
+        chroma[3] = {whitePoint[0], whitePoint[1]};
+    }
+
+    resultData.toRec709 = chromaToRec709Matrix(chroma);
+
+    enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
+
+    if (uint16_t* transferFunction[3];
+        TIFFGetField(tif, TIFFTAG_TRANSFERFUNCTION, &transferFunction[0], &transferFunction[1], &transferFunction[2])) {
+        // In TIFF, transfer functions are stored as bitsPerSample**2 values in the range [0, 65535] per color channel. The transfer
+        // function is a linear interpolation between these values.
+        tlog::debug() << "Found custom transfer function; applying...";
+
+        const float scale = 1.0f / 65535.0f;
+
+        const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : bitsPerSample;
+        const size_t maxIdx = (1ull << bps) - 1;
+
+        const size_t numPixels = (size_t)size.x() * size.y();
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (int c = 0; c < numColorChannels; ++c) {
+                    float val = floatRgbaData[i * numRgbaChannels + c];
+
+                    // Lerp the transfer function
+                    size_t idx = clamp((size_t)(val * maxIdx), (size_t)0, maxIdx - 1);
+                    float w = val * maxIdx - idx;
+                    floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * transferFunction[c][idx] * scale +
+                        w * transferFunction[c][idx + 1] * scale;
+                }
+            },
+            priority
+        );
+    } else if (uint32_t previewColorSpace; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &previewColorSpace) && previewColorSpace > 1) {
+        // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
+        // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
+        tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)previewColorSpace);
+
+        if (previewColorSpace == EPreviewColorSpace::AdobeRGB || previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
+            tlog::warning(
+            ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
+        }
+
+        size_t numPixels = (size_t)size.x() * size.y();
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (int c = 0; c < numColorChannels; ++c) {
+                    float v = floatRgbaData[i * numRgbaChannels + c];
+                    floatRgbaData[i * numRgbaChannels + c] = toLinear(v);
+                }
+            },
+            priority
+        );
+
+        if (previewColorSpace == EPreviewColorSpace::AdobeRGB) {
+            resultData.toRec709 = chromaToRec709Matrix(adobeChroma());
+        } else if (previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
+            resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
+        }
+    } else {
+        // If there's no transfer function specified, the TIFF spec says to use gamma 2.2 for RGB data and no transfer (linear) for
+        // grayscale data. That said, all grayscale TIFF images I've seen in the wild so far assume gamma 2.2, so we'll go against the
+        // spec here.
+        tlog::debug() << "No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.";
+
+        size_t numPixels = (size_t)size.x() * size.y();
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (int c = 0; c < numColorChannels; ++c) {
+                    // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
+                    // the power behaves like an odd exponent, thereby preserving the range of R.
+                    float v = floatRgbaData[i * numRgbaChannels + c];
+                    floatRgbaData[i * numRgbaChannels + c] = copysign(pow(abs(v), 2.2f), v);
+                }
+            },
+            priority
+        );
+    }
+}
+
 Task<ImageData> readTiffImage(TIFF* tif, int priority) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
@@ -467,6 +1008,10 @@ Task<ImageData> readTiffImage(TIFF* tif, int priority) {
     tlog::debug() << fmt::format("numRgbaChannels={}, numNonRgbaChannels={}, ", numRgbaChannels, numNonRgbaChannels);
 
     ImageData resultData;
+    resultData.dataWindow = resultData.displayWindow = {
+        {0, 0},
+        size
+    };
 
     uint16_t orientation = 1;
     if (!TIFFGetFieldDefaulted(tif, TIFFTAG_ORIENTATION, &orientation)) {
@@ -694,540 +1239,17 @@ Task<ImageData> readTiffImage(TIFF* tif, int priority) {
         // If we're a Pixar log image, the data is already linear
     } else if (photometric == PHOTOMETRIC_LINEAR_RAW) {
         if (samplesPerPixel < numColorChannels) {
-            throw ImageLoadError{"Linear RAW images must have as many samples per pixel as color channels."};
+            throw ImageLoadError{"Linear RAW images must have at least as many samples per pixel as color channels."};
         }
 
-        // We follow page 96 of https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
-        tlog::debug() << "Mapping LinearRAW to linear RGB...";
-
-        Box2i activeArea = {Vector2i(0, 0), size};
-        if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_ACTIVEAREA, TIFF_ANY)) {
-            tlog::debug() << "Found active area data; applying...";
-            switch (TIFFFieldDataType(field)) {
-                case TIFF_SHORT:
-                    if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
-                        activeArea.min.y() = aa[0];
-                        activeArea.min.x() = aa[1];
-                        activeArea.max.y() = aa[2];
-                        activeArea.max.x() = aa[3];
-                    }
-                    break;
-                case TIFF_LONG:
-                    if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
-                        activeArea.min.y() = aa[0];
-                        activeArea.min.x() = aa[1];
-                        activeArea.max.y() = aa[2];
-                        activeArea.max.x() = aa[3];
-                    }
-                    break;
-                default: throw ImageLoadError{"Unsupported active area data type."};
-            }
-        }
-
-        tlog::debug() << fmt::format(
-            "Active area: min=({},{}) max=({},{})", activeArea.min.x(), activeArea.min.y(), activeArea.max.x(), activeArea.max.y()
+        co_await postprocessLinearRawDng(
+            tif, bitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority
         );
-
-        // Utility var that we'll reuse whenever reading a variable TIFF array
-        uint32_t numRead = 0;
-
-        // 1. Map colors via linearization table if it exists
-        if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
-            tlog::debug() << "Found linearization table; applying...";
-
-            const float scale = 1.0f / 65535.0f;
-            const size_t maxIdx = (1ull << bitsPerSample) - 1;
-
-            co_await ThreadPool::global().parallelForAsync<int>(
-                activeArea.min.y(),
-                activeArea.max.y(),
-                [&](int y) {
-                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                        size_t i = (size_t)y * size.x() + x;
-                        for (int c = 0; c < numColorChannels; ++c) {
-                            float val = floatRgbaData[i * numRgbaChannels + c];
-
-                            // Lerp the transfer function
-                            size_t idx = clamp((size_t)(val * maxIdx), (size_t)0, maxIdx - 1);
-                            float w = val * maxIdx - idx;
-                            floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
-                        }
-                    }
-                },
-                priority
-            );
-        }
-
-        // 2. Subtract black level
-        vector<float> maxBlackLevel(samplesPerPixel, 0.0f);
-        if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_BLACKLEVEL, TIFF_ANY)) {
-            uint16_t blackLevelRepeatRows = 1;
-            uint16_t blackLevelRepeatCols = 1;
-
-            if (uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
-                blackLevelRepeatRows = blackLevelRepeatDim[0];
-                blackLevelRepeatCols = blackLevelRepeatDim[1];
-            }
-
-            tlog::debug() << fmt::format("Found {}x{} black level data; applying...", blackLevelRepeatRows, blackLevelRepeatCols);
-
-            const size_t numBlackLevelPixels = blackLevelRepeatRows * blackLevelRepeatCols;
-
-            vector<float> blackLevel(numBlackLevelPixels * samplesPerPixel, 0.0f);
-            switch (TIFFFieldDataType(field)) {
-                case TIFF_SHORT:
-                    if (uint16_t* blackLevelShort; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelShort)) {
-                        if (numRead != blackLevel.size()) {
-                            throw ImageLoadError{"Invalid number of black level pixels."};
-                        }
-
-                        const float scale = 1.0f / 65535.0f;
-                        for (size_t i = 0; i < blackLevel.size(); ++i) {
-                            blackLevel[i] = blackLevelShort[i] * scale;
-                        }
-                    } else {
-                        throw ImageLoadError{"Failed to read short black level data."};
-                    }
-                    break;
-                case TIFF_LONG:
-                    if (uint32_t* blackLevelLong; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelLong)) {
-                        if (numRead != blackLevel.size()) {
-                            throw ImageLoadError{"Invalid number of black level pixels."};
-                        }
-
-                        const double scale = 1.0 / (uint32_t)0xFFFFFFFF;
-                        for (size_t i = 0; i < blackLevel.size(); ++i) {
-                            blackLevel[i] = blackLevelLong[i] * scale;
-                        }
-                    } else {
-                        throw ImageLoadError{"Failed to read short black level data."};
-                    }
-                    break;
-                case TIFF_RATIONAL:
-                    if (float* blackLevelFloat; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelFloat)) {
-                        if (numRead != blackLevel.size()) {
-                            throw ImageLoadError{"Invalid number of black level pixels."};
-                        }
-
-                        for (size_t i = 0; i < blackLevel.size(); ++i) {
-                            blackLevel[i] = blackLevelFloat[i];
-                        }
-                    } else {
-                        throw ImageLoadError{"Failed to read short black level data."};
-                    }
-                    break;
-                default: throw ImageLoadError{fmt::format("Unsupported black level data type: {}", (uint32_t)TIFFFieldDataType(field))};
-            }
-
-            vector<float> blackLevelDeltaH(activeArea.size().x(), 0.0f);
-            vector<float> blackLevelDeltaV(activeArea.size().y(), 0.0f);
-
-            if (float* bldh; TIFFGetField(tif, TIFFTAG_BLACKLEVELDELTAH, &numRead, &bldh)) {
-                tlog::debug() << fmt::format("Found {} black level H entries", numRead);
-                if (numRead != blackLevelDeltaH.size()) {
-                    throw ImageLoadError{"Invalid number of black level delta H pixels."};
-                }
-
-                for (size_t i = 0; i < blackLevelDeltaH.size(); ++i) {
-                    blackLevelDeltaH[i] = bldh[i];
-                }
-            }
-
-            if (float* bldv; TIFFGetField(tif, TIFFTAG_BLACKLEVELDELTAV, &numRead, &bldv)) {
-                tlog::debug() << fmt::format("Found {} black level V entries", numRead);
-                if (numRead != blackLevelDeltaV.size()) {
-                    throw ImageLoadError{"Invalid number of black level delta V pixels."};
-                }
-
-                for (size_t i = 0; i < blackLevelDeltaV.size(); ++i) {
-                    blackLevelDeltaV[i] = bldv[i];
-                }
-            }
-
-            vector<float> maxBlackLevelY(samplesPerPixel * activeArea.size().y(), 0.0f);
-            co_await ThreadPool::global().parallelForAsync<int>(
-                activeArea.min.y(),
-                activeArea.max.y(),
-                [&](const int y) {
-                    int yIdx = y - activeArea.min.y();
-
-                    const float deltaV = blackLevelDeltaV[yIdx];
-                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                        const float deltaH = blackLevelDeltaH[x - activeArea.min.x()];
-                        const float delta = deltaH + deltaV;
-
-                        const size_t idx = (size_t)y * size.x() + x;
-                        const size_t blIdx = (y % blackLevelRepeatRows) * blackLevelRepeatCols + (x % blackLevelRepeatCols);
-
-                        for (int c = 0; c < numColorChannels; ++c) {
-                            const float bl = blackLevel[blIdx * samplesPerPixel + c] + delta;
-                            floatRgbaData[idx * numRgbaChannels + c] -= bl;
-
-                            maxBlackLevelY[yIdx * samplesPerPixel + c] = max(maxBlackLevelY[yIdx * samplesPerPixel + c], bl);
-                        }
-                    }
-                },
-                priority
-            );
-
-            maxBlackLevel.assign(samplesPerPixel, numeric_limits<float>::lowest());
-            for (int y = activeArea.min.y(); y < activeArea.max.y(); ++y) {
-                int yIdx = y - activeArea.min.y();
-                for (int c = 0; c < numColorChannels; ++c) {
-                    maxBlackLevel[c] = max(maxBlackLevel[c], maxBlackLevelY[yIdx * samplesPerPixel + c]);
-                }
-            }
-        }
-
-        // 3. Rescale to 0-1 range per white level
-        vector<float> whiteLevel(samplesPerPixel, 1.0f);
-        if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_WHITELEVEL, TIFFDataType::TIFF_ANY)) {
-            const float scale = 1.0f / ((1ull << bitsPerSample) - 1);
-
-            switch (TIFFFieldDataType(field)) {
-                case TIFF_SHORT:
-                    if (uint16_t* whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
-                        if (numRead != whiteLevel.size()) {
-                            throw ImageLoadError{"Invalid number of white level pixels."};
-                        }
-
-                        for (size_t i = 0; i < whiteLevel.size(); ++i) {
-                            whiteLevel[i] = whiteLevelShort[i] * scale;
-                        }
-                    } else {
-                        throw ImageLoadError{"Failed to read short white level data."};
-                    }
-                    break;
-                case TIFF_LONG:
-                    if (uint32_t* whiteLevelLong; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelLong)) {
-                        if (numRead != whiteLevel.size()) {
-                            throw ImageLoadError{"Invalid number of white level pixels."};
-                        }
-
-                        for (size_t i = 0; i < whiteLevel.size(); ++i) {
-                            whiteLevel[i] = whiteLevelLong[i] * scale;
-                        }
-                    } else {
-                        throw ImageLoadError{"Failed to read short white level data."};
-                    }
-                    break;
-                default: throw ImageLoadError{fmt::format("Unsupported white level data type: {}", (uint32_t)TIFFFieldDataType(field))};
-            }
-
-            tlog::debug() << "Found white level data";
-        }
-
-        vector<float> channelScale(samplesPerPixel);
-        for (int c = 0; c < samplesPerPixel; ++c) {
-            tlog::debug() << fmt::format("whiteLevel[{}] = {}", c, whiteLevel[c]);
-            tlog::debug() << fmt::format("maxBlackLevel[{}] = {}", c, maxBlackLevel[c]);
-            channelScale[c] = 1.0f / (whiteLevel[c] - maxBlackLevel[c]);
-        }
-
-        if (any_of(channelScale.begin(), channelScale.end(), [](float s) { return s != 1.0f; })) {
-            tlog::debug() << "Non-1.0 channel scale";
-
-            const size_t numPixels = (size_t)size.x() * size.y();
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
-                [&](size_t i) {
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        floatRgbaData[i * numRgbaChannels + c] *= channelScale[c];
-                    }
-                },
-                priority
-            );
-        }
-
-        // 4. Clipping: the docs recommend clipping to 1 from above but to keep sub-zero values intact
-        const size_t numPixels = (size_t)size.x() * size.y();
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
-                    floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
-                }
-            },
-            priority
-        );
-
-        // 5. Apply camera to XYZ matrix
-        if (samplesPerPixel != 3) {
-            throw ImageLoadError{"Linear RAW images with sampledPerPixel != 3 are not supported."};
-        }
-
-        // Camera parameters are stored in IFD 0, so let's switch to it temporarily.
-        tdir_t prevIdf = TIFFCurrentDirectory(tif);
-        TIFFSetDirectory(tif, 0);
-        ScopeGuard guard{[&]() { TIFFSetDirectory(tif, prevIdf); }};
-
-        const auto readCameraToXyz = [&](int CCTAG, int CMTAG) {
-            Matrix3f colorMatrix{1.0f};
-            if (float* cmt; TIFFGetField(tif, CMTAG, &numRead, &cmt)) {
-                if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
-                    throw ImageLoadError{"Invalid number of camera matrix entries."};
-                }
-
-                for (size_t i = 0; i < samplesPerPixel; ++i) {
-                    for (size_t j = 0; j < samplesPerPixel; ++j) {
-                        colorMatrix.m[j][i] = cmt[i * samplesPerPixel + j];
-                    }
-                }
-            } else {
-                return optional<Matrix3f>{};
-            }
-
-            Matrix3f cameraCalibration{1.0f};
-            if (float* cct; TIFFGetField(tif, CCTAG, &numRead, &cct)) {
-                if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
-                    throw ImageLoadError{"Invalid number of camera calibration entries."};
-                }
-
-                for (size_t i = 0; i < samplesPerPixel; ++i) {
-                    for (size_t j = 0; j < samplesPerPixel; ++j) {
-                        cameraCalibration.m[j][i] = cct[i * samplesPerPixel + j];
-                    }
-                }
-            }
-
-            const auto xyzToCamera = cameraCalibration * colorMatrix;
-            return optional<Matrix3f>{inverse(xyzToCamera)};
-        };
-
-        const array<pair<uint16_t, uint16_t>, 3> camTags = {
-            {
-             {TIFFTAG_CAMERACALIBRATION3, TIFFTAG_COLORMATRIX3},
-             {TIFFTAG_CAMERACALIBRATION2, TIFFTAG_COLORMATRIX2},
-             {TIFFTAG_CAMERACALIBRATION1, TIFFTAG_COLORMATRIX1},
-             }
-        };
-
-        Vector3f analogBalance{1.0f};
-        if (float* abt; TIFFGetField(tif, TIFFTAG_ANALOGBALANCE, &numRead, &abt)) {
-            if (numRead != samplesPerPixel) {
-                throw ImageLoadError{"Invalid number of analog balance pixels."};
-            }
-
-            for (size_t i = 0; i < numRead; ++i) {
-                analogBalance[i] = abt[i];
-            }
-
-            tlog::debug() << fmt::format("Analog balance: ({}, {}, {})", analogBalance[0], analogBalance[1], analogBalance[2]);
-        }
-
-        // D65 white point
-        // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3127f, 0.3290f});
-        // D50 white point -- produces ~identity ca matrix as expected
-        // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3457f, 0.5385});
-        const auto chromaticAdaptation = Matrix3f{1.0f};
-
-        // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
-        // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
-        // (aka RIMM space) in which we will apply the camera profile.
-        auto toRimm = xyzToChromaMatrix(proPhotoChroma());
-        for (size_t i = 0; i < camTags.size(); ++i) {
-            if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
-                tlog::debug() << fmt::format("Found camera calibration data; applying...");
-                toRimm = toRimm * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation * camToXyz.value());
-                break;
-            }
-        }
-
-        // Convert colors to RGB here rather than letting Image.cpp handle it, because there's still post-processing to do.
-        co_await ThreadPool::global().parallelForAsync<int>(
-            activeArea.min.y(),
-            activeArea.max.y(),
-            [&](int y) {
-                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                    size_t i = (size_t)y * size.x() + x;
-
-                    // Take advantage of the fact that RGB channels are adjacent in memory
-                    Vector3f* rgb = (Vector3f*)&floatRgbaData[i * numRgbaChannels];
-                    *rgb = toRimm * (*rgb);
-                }
-            },
-            priority
-        );
-
-        // Once we're done, we want to convert from RIMM space to sRGB/Rec709
-        resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
-
-        if (char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
-            tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
-        }
-
-        if (uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
-            uint32_t hueDivisions = dims[0];
-            uint32_t satDivisions = dims[1];
-            uint32_t valueDivisions = dims[2];
-
-            tlog::debug() << fmt::format("Hue/sat/val map dimensions: {} {} {}", hueDivisions, satDivisions, valueDivisions);
-
-            // TODO: implement hue/sat/val map...
-            tlog::warning() << "Found hue/sat/val map, but not implemented yet. Image may look wrong.";
-        }
-
-        if (float* tonecurve; TIFFGetField(tif, TIFFTAG_PROFILETONECURVE, &numRead, &tonecurve)) {
-            if (numRead % 2 != 0 || numRead < 4) {
-                throw ImageLoadError{"Number of tone curve entries must be divisible by 2 and >=4."};
-            }
-
-            tlog::debug() << fmt::format("Applying profile tone curve of length {}", numRead);
-
-            vector<float> xs(numRead / 2), ys(numRead / 2);
-            for (size_t i = 0; i < xs.size(); ++i) {
-                xs[i] = tonecurve[i * 2];
-                ys[i] = tonecurve[i * 2 + 1];
-            }
-
-            if (xs.front() != 0.0f || xs.back() != 1.0f) {
-                throw ImageLoadError{"Tone curve must start at 0."};
-            }
-
-            const auto applyToneCurve = [&](float x) {
-                auto it = lower_bound(xs.begin(), xs.end(), x);
-                size_t i = distance(xs.begin(), it);
-
-                // The spec says to extend the slope of the last segment.
-                if (i > 0) {
-                    --i;
-                } else if (i >= xs.size() - 1) {
-                    i = xs.size() - 2;
-                }
-
-                // TODO: Docs say to use cubic spline interpolation, whereas we're using linear interpolation. The difference seems to
-                // be negligible so far, but we should fix this at some point.
-                const float w = (x - xs[i]) / (xs[i + 1] - xs[i]);
-                return (1.0f - w) * ys[i] + w * ys[i + 1];
-            };
-
-            co_await ThreadPool::global().parallelForAsync<int>(
-                activeArea.min.y(),
-                activeArea.max.y(),
-                [&](int y) {
-                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                        size_t i = (size_t)y * size.x() + x;
-                        for (int c = 0; c < numColorChannels; ++c) {
-                            const float val = floatRgbaData[i * numRgbaChannels + c];
-                            floatRgbaData[i * numRgbaChannels + c] = applyToneCurve(val);
-                        }
-                    }
-                },
-                priority
-            );
-        }
-
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
         resultData.toRec709 = xyzToRec709Matrix();
     } else if (photometric <= PHOTOMETRIC_PALETTE) {
-        // If we're a grayscale or RGB image: initialize the chromaticity data to Rec.709 primaries and D65 white point, then update
-        // with whatever we find in the TIFF file.
-        array<Vector2f, 4> chroma = {
-            {
-             {0.64f, 0.33f},
-             {0.30f, 0.60f},
-             {0.15f, 0.06f},
-             {0.3127f, 0.3290f},
-             }
-        };
-
-        float* primaries = nullptr;
-        if (TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries)) {
-            tlog::debug() << "Found custom primaries; applying...";
-            chroma[0] = {primaries[0], primaries[1]};
-            chroma[1] = {primaries[2], primaries[3]};
-            chroma[2] = {primaries[4], primaries[5]};
-        }
-
-        float* whitePoint = nullptr;
-        if (TIFFGetField(tif, TIFFTAG_WHITEPOINT, &whitePoint)) {
-            tlog::debug() << "Found custom white point; applying...";
-            chroma[3] = {whitePoint[0], whitePoint[1]};
-        }
-
-        resultData.toRec709 = chromaToRec709Matrix(chroma);
-
-        enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
-
-        // In TIFF, transfer functions are stored as bitsPerSample**2 values in the range [0, 65535] per color channel. The transfer
-        // function is a linear interpolation between these values. If there's no transfer function specified, the TIFF spec says to
-        // use gamma 2.2 for RGB data and no transfer (linear) for grayscale data. That said, all grayscale TIFF images I've seen in
-        // the wild so far assume gamma 2.2, so we'll go against the spec here.
-        if (uint16_t* transferFunction[3];
-            TIFFGetField(tif, TIFFTAG_TRANSFERFUNCTION, &transferFunction[0], &transferFunction[1], &transferFunction[2])) {
-            tlog::debug() << "Found custom transfer function; applying...";
-
-            const float scale = 1.0f / 65535.0f;
-
-            const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : bitsPerSample;
-            const size_t maxIdx = (1ull << bps) - 1;
-
-            const size_t numPixels = (size_t)size.x() * size.y();
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
-                [&](size_t i) {
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        float val = floatRgbaData[i * numRgbaChannels + c];
-
-                        // Lerp the transfer function
-                        size_t idx = clamp((size_t)(val * maxIdx), (size_t)0, maxIdx - 1);
-                        float w = val * maxIdx - idx;
-                        floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * transferFunction[c][idx] * scale +
-                            w * transferFunction[c][idx + 1] * scale;
-                    }
-                },
-                priority
-            );
-            // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer.
-            // Values 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
-        } else if (uint32_t previewColorSpace; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &previewColorSpace) && previewColorSpace > 1) {
-            tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)previewColorSpace);
-
-            if (previewColorSpace == EPreviewColorSpace::AdobeRGB || previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
-                tlog::warning(
-                ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
-            }
-
-            size_t numPixels = (size_t)size.x() * size.y();
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
-                [&](size_t i) {
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        float v = floatRgbaData[i * numRgbaChannels + c];
-                        floatRgbaData[i * numRgbaChannels + c] = toLinear(v);
-                    }
-                },
-                priority
-            );
-
-            if (previewColorSpace == EPreviewColorSpace::AdobeRGB) {
-                resultData.toRec709 = chromaToRec709Matrix(adobeChroma());
-            } else if (previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
-                resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
-            }
-        } else {
-            tlog::debug() << "No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.";
-
-            size_t numPixels = (size_t)size.x() * size.y();
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
-                [&](size_t i) {
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
-                        // the power behaves like an odd exponent, thereby preserving the range of R.
-                        float v = floatRgbaData[i * numRgbaChannels + c];
-                        floatRgbaData[i * numRgbaChannels + c] = copysign(pow(abs(v), 2.2f), v);
-                    }
-                },
-                priority
-            );
-        }
+        co_await postprocessRgb(tif, photometric, bitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
     } else {
         // Other photometric interpretations do not need a transfer
     }
