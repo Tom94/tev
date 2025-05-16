@@ -70,7 +70,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         }
     }
 
-    unique_ptr<AttributeNode> exifAttributes;
+    optional<AttributeNode> exifAttributes;
     if (flags & EXIF_FLAG) {
         if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunkIter)) {
             ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
@@ -80,7 +80,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
                 Exif::prependFourcc(&exifData);
                 auto exif = Exif(exifData);
-                exifAttributes = make_unique<AttributeNode>(exif.toAttributes());
+                exifAttributes = exif.toAttributes();
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get EXIF chunk from webp image, despite flag being set.";
@@ -106,7 +106,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             ImageData& resultData = result.emplace_back();
             if (exifAttributes) {
-                resultData.attributes.emplace_back(*exifAttributes);
+                resultData.attributes.emplace_back(exifAttributes.value());
             }
 
             resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size);

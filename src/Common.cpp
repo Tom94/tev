@@ -41,31 +41,31 @@ using namespace std;
 
 namespace tev {
 
-static u8string toU8string(const string& str) {
+static u8string toU8string(string_view str) {
     u8string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
 }
 
-static string fromU8string(const u8string& str) {
+static string fromU8string(u8string_view str) {
     string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
 }
 
-string ensureUtf8(const string& str) {
+string ensureUtf8(string_view str) {
     string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));
     return temp;
 }
 
-string utf16to8(const wstring& utf16) {
+string utf16to8(wstring_view utf16) {
     string utf8;
     utf8::utf16to8(begin(utf16), end(utf16), back_inserter(utf8));
     return utf8;
 }
 
-fs::path toPath(const string& utf8) {
+fs::path toPath(string_view utf8) {
     // tev's strings are always utf8 encoded, however fs::path does not know this. Therefore: convert the string to a std::u8string and pass
     // _that_ string to the fs::path constructor, which will then take care of converting the utf8 string to the native file name encoding.
     return toU8string(utf8);
@@ -77,7 +77,7 @@ string toString(const fs::path& path) {
     return fromU8string(path.u8string());
 }
 
-bool naturalCompare(const string& a, const string& b) {
+bool naturalCompare(string_view a, string_view b) {
     size_t i = 0, j = 0;
     while (i < a.size() && j < b.size()) {
         if (isdigit(a[i]) && isdigit(b[j])) {
@@ -106,7 +106,7 @@ bool naturalCompare(const string& a, const string& b) {
     return a.size() - i < b.size() - j;
 }
 
-vector<string> split(string text, const string& delim) {
+vector<string> split(string_view text, string_view delim) {
     vector<string> result;
     size_t begin = 0;
     while (true) {
@@ -123,17 +123,19 @@ vector<string> split(string text, const string& delim) {
     return result;
 }
 
-string toLower(string str) {
-    transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)tolower(c); });
-    return str;
+string toLower(string_view str) {
+    string result{str};
+    transform(begin(result), end(result), begin(result), [](unsigned char c) { return (char)tolower(c); });
+    return result;
 }
 
-string toUpper(string str) {
-    transform(begin(str), end(str), begin(str), [](unsigned char c) { return (char)toupper(c); });
-    return str;
+string toUpper(string_view str) {
+    string result{str};
+    transform(begin(result), end(result), begin(result), [](unsigned char c) { return (char)toupper(c); });
+    return result;
 }
 
-bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
+bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
     if (matchedPartId) {
         // Default value of 0. Is returned when the filter is empty, when there is no match, or when the filter is a regex.
         *matchedPartId = 0;
@@ -152,9 +154,15 @@ bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
     // Perform matching via smart casing: if the filter is all lowercase, we want to match case-insensitively. If the filter contains any
     // uppercase characters, we want to match case-sensitively.
     const bool caseInsensitive = all_of(begin(filter), end(filter), [](char c) { return islower(c); });
+
+    string casedText, casedFilter;
     if (caseInsensitive) {
-        text = toLower(text);
-        filter = toLower(filter);
+        casedText = toLower(text);
+        casedFilter = toLower(filter);
+
+        // Update views to point to local cased strings
+        text = casedText;
+        filter = casedFilter;
     }
 
     auto words = split(filter, ", ");
@@ -178,24 +186,26 @@ bool matchesFuzzy(string text, string filter, size_t* matchedPartId) {
     return false;
 }
 
-bool matchesRegex(string text, string filter) {
+bool matchesRegex(string_view text, string_view filter) {
     if (filter.empty()) {
         return true;
     }
 
     try {
-        regex searchRegex{filter, std::regex_constants::ECMAScript | std::regex_constants::icase};
-        return regex_search(text, searchRegex);
+        // std::regex doesn't support std::string_view yet
+        regex searchRegex{string{filter}, std::regex_constants::ECMAScript | std::regex_constants::icase};
+        return regex_search(string{text}, searchRegex);
     } catch (const regex_error&) { return false; }
 }
 
-void drawTextWithShadow(NVGcontext* ctx, float x, float y, string text, float shadowAlpha) {
+void drawTextWithShadow(NVGcontext* ctx, float x, float y, string_view text, float shadowAlpha) {
+    string str{text};
     nvgSave(ctx);
     nvgFontBlur(ctx, 2);
     nvgFillColor(ctx, Color{0.0f, shadowAlpha});
-    nvgText(ctx, x + 1, y + 1, text.c_str(), NULL);
+    nvgText(ctx, x + 1, y + 1, str.c_str(), NULL);
     nvgRestore(ctx);
-    nvgText(ctx, x, y, text.c_str(), NULL);
+    nvgText(ctx, x, y, str.c_str(), NULL);
 }
 
 int maxTextureSize() {
@@ -283,14 +293,14 @@ bool shuttingDown() { return sShuttingDown; }
 
 void setShuttingDown() { sShuttingDown = true; }
 
-EInterpolationMode toInterpolationMode(string name) {
+EInterpolationMode toInterpolationMode(string_view name) {
     // Perform matching on uppercase strings
-    name = toUpper(name);
-    if (name == "NEAREST") {
+    const auto upperName = toUpper(name);
+    if (upperName == "NEAREST") {
         return Nearest;
-    } else if (name == "BILINEAR") {
+    } else if (upperName == "BILINEAR") {
         return Bilinear;
-    } else if (name == "TRILINEAR" || name == "FC") {
+    } else if (upperName == "TRILINEAR" || upperName == "FC") {
         return Trilinear;
     } else {
         return Nearest;
@@ -306,34 +316,34 @@ string toString(EInterpolationMode mode) {
     }
 }
 
-ETonemap toTonemap(string name) {
+ETonemap toTonemap(string_view name) {
     // Perform matching on uppercase strings
-    name = toUpper(name);
-    if (name == "SRGB") {
+    const auto upperName = toUpper(name);
+    if (upperName == "SRGB") {
         return SRGB;
-    } else if (name == "GAMMA") {
+    } else if (upperName == "GAMMA") {
         return Gamma;
-    } else if (name == "FALSECOLOR" || name == "FC") {
+    } else if (upperName == "FALSECOLOR" || upperName == "FC") {
         return FalseColor;
-    } else if (name == "POSITIVENEGATIVE" || name == "POSNEG" || name == "PN" || name == "+-") {
+    } else if (upperName == "POSITIVENEGATIVE" || upperName == "POSNEG" || upperName == "PN" || upperName == "+-") {
         return PositiveNegative;
     } else {
         return SRGB;
     }
 }
 
-EMetric toMetric(string name) {
+EMetric toMetric(string_view name) {
     // Perform matching on uppercase strings
-    name = toUpper(name);
-    if (name == "E") {
+    const auto upperName = toUpper(name);
+    if (upperName == "E") {
         return Error;
-    } else if (name == "AE") {
+    } else if (upperName == "AE") {
         return AbsoluteError;
-    } else if (name == "SE") {
+    } else if (upperName == "SE") {
         return SquaredError;
-    } else if (name == "RAE") {
+    } else if (upperName == "RAE") {
         return RelativeAbsoluteError;
-    } else if (name == "RSE") {
+    } else if (upperName == "RSE") {
         return RelativeSquaredError;
     } else {
         return Error;

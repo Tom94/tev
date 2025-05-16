@@ -103,7 +103,7 @@ template <typename Value, size_t Size> Value mean(const Array<Value, Size>& a) {
     return result / (Value)Size;
 }
 
-inline Matrix3f inverse(Matrix3f mat) {
+inline Matrix3f inverse(const Matrix3f& mat) {
     float d11 = mat.m[1][1] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][1];
     float d12 = mat.m[1][0] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][0];
     float d13 = mat.m[1][0] * mat.m[2][1] + mat.m[1][1] * -mat.m[2][0];
@@ -124,17 +124,29 @@ inline Matrix3f inverse(Matrix3f mat) {
     float d32 = mat.m[0][0] * mat.m[1][2] - mat.m[0][2] * mat.m[1][0];
     float d33 = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
 
-    mat.m[0][0] = +d11 * det;
-    mat.m[0][1] = -d21 * det;
-    mat.m[0][2] = +d31 * det;
-    mat.m[1][0] = -d12 * det;
-    mat.m[1][1] = +d22 * det;
-    mat.m[1][2] = -d32 * det;
-    mat.m[2][0] = +d13 * det;
-    mat.m[2][1] = -d23 * det;
-    mat.m[2][2] = +d33 * det;
+    Matrix3f result;
+    result.m[0][0] = +d11 * det;
+    result.m[0][1] = -d21 * det;
+    result.m[0][2] = +d31 * det;
+    result.m[1][0] = -d12 * det;
+    result.m[1][1] = +d22 * det;
+    result.m[1][2] = -d32 * det;
+    result.m[2][0] = +d13 * det;
+    result.m[2][1] = -d23 * det;
+    result.m[2][2] = +d33 * det;
 
-    return mat;
+    return result;
+}
+
+inline Matrix3f transpose(const Matrix3f& mat) {
+    Matrix3f result;
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            result.m[m][n] = mat.m[n][m];
+        }
+    }
+
+    return result;
 }
 
 inline Matrix2f extract2x2(const Matrix3f& mat) {
@@ -253,12 +265,12 @@ inline int codePointLength(char first) {
     }
 }
 
-std::string ensureUtf8(const std::string& str);
-std::string utf16to8(const std::wstring& utf16);
-fs::path toPath(const std::string& utf8);
+std::string ensureUtf8(std::string_view str);
+std::string utf16to8(std::wstring_view utf16);
+fs::path toPath(std::string_view utf8);
 std::string toString(const fs::path& path);
 
-bool naturalCompare(const std::string& a, const std::string& b);
+bool naturalCompare(std::string_view a, std::string_view b);
 
 template <typename T> void removeDuplicates(std::vector<T>& vec) {
     std::unordered_set<T> tmp;
@@ -377,18 +389,18 @@ template <typename T> std::string join(const T& components, const std::string& d
     return s.str();
 }
 
-std::vector<std::string> split(std::string text, const std::string& delim);
+std::vector<std::string> split(std::string_view text, std::string_view delim);
 
-std::string toLower(std::string str);
-std::string toUpper(std::string str);
+std::string toLower(std::string_view str);
+std::string toUpper(std::string_view str);
 
-bool matchesFuzzy(std::string text, std::string filter, size_t* matchedPartId = nullptr);
-bool matchesRegex(std::string text, std::string filter);
-inline bool matchesFuzzyOrRegex(const std::string& text, const std::string& filter, bool isRegex) {
+bool matchesFuzzy(std::string_view text, std::string_view filter, size_t* matchedPartId = nullptr);
+bool matchesRegex(std::string_view text, std::string_view filter);
+inline bool matchesFuzzyOrRegex(std::string_view text, std::string_view filter, bool isRegex) {
     return isRegex ? matchesRegex(text, filter) : matchesFuzzy(text, filter);
 }
 
-void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
+void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string_view text, float shadowAlpha = 1.0f);
 
 int maxTextureSize();
 
@@ -430,7 +442,7 @@ enum EInterpolationMode : int {
     NumInterpolationModes,
 };
 
-EInterpolationMode toInterpolationMode(std::string name);
+EInterpolationMode toInterpolationMode(std::string_view name);
 std::string toString(EInterpolationMode mode);
 
 enum ETonemap : int {
@@ -443,7 +455,7 @@ enum ETonemap : int {
     NumTonemaps,
 };
 
-ETonemap toTonemap(std::string name);
+ETonemap toTonemap(std::string_view name);
 
 enum EMetric : int {
     Error = 0,
@@ -456,7 +468,7 @@ enum EMetric : int {
     NumMetrics,
 };
 
-EMetric toMetric(std::string name);
+EMetric toMetric(std::string_view name);
 
 enum EDirection {
     Forward,

@@ -111,7 +111,6 @@ public:
 
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
 
-protected:
     static std::vector<Channel>
         makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const nanogui::Vector2i& size, const std::string& namePrefix = "");
     static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size, const std::string& namePrefix = "");

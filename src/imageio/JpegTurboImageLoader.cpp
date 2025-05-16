@@ -143,7 +143,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     jpeg_finish_decompress(&cinfo);
 
-    unique_ptr<AttributeNode> exifAttributes;
+    optional<AttributeNode> exifAttributes;
 
     // Try to extract EXIF data for correct orientation
     if (!exifData.empty()) {
@@ -151,7 +151,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
         try {
             const auto exif = Exif(exifData);
-            exifAttributes = make_unique<AttributeNode>(exif.toAttributes());
+            exifAttributes = exif.toAttributes();
 
             EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
@@ -166,7 +166,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     ImageData& resultData = result.front();
 
     if (exifAttributes) {
-        resultData.attributes.emplace_back(*exifAttributes);
+        resultData.attributes.emplace_back(exifAttributes.value());
     }
 
     resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size);

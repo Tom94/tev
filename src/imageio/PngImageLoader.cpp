@@ -156,7 +156,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     png_read_image(pngPtr, rowPointers.data());
 
-    unique_ptr<AttributeNode> exifAttributes;
+    optional<AttributeNode> exifAttributes;
 
     png_uint_32 exifDataSize = 0;
     png_bytep exifDataRaw = nullptr;
@@ -170,7 +170,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         try {
             const auto exif = Exif(exifData);
-            exifAttributes = make_unique<AttributeNode>(exif.toAttributes());
+            exifAttributes = exif.toAttributes();
 
             EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
@@ -185,7 +185,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     ImageData& resultData = result.front();
 
     if (exifAttributes) {
-        resultData.attributes.emplace_back(*exifAttributes);
+        resultData.attributes.emplace_back(exifAttributes.value());
     }
 
     resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
