@@ -1275,10 +1275,10 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     copy(Exif::FOURCC.begin(), Exif::FOURCC.end(), buffer.data());
     iStream.read((char*)buffer.data() + sizeof(Exif::FOURCC), fileSize);
 
-    unique_ptr<AttributeNode> exifAttributes;
+    optional<AttributeNode> exifAttributes;
     try {
         auto exif = Exif(buffer.data(), buffer.size());
-        exifAttributes = make_unique<AttributeNode>(exif.toAttributes());
+        exifAttributes = exif.toAttributes();
     } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 
     TiffData data(buffer.data() + sizeof(Exif::FOURCC), fileSize);
@@ -1347,7 +1347,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             data.partName = name;
 
             if (exifAttributes) {
-                data.attributes.emplace_back(*exifAttributes);
+                data.attributes.emplace_back(exifAttributes.value());
             }
         } catch (const ImageLoadError& e) { tlog::warning() << fmt::format("Failed to load {}: {}", name, e.what()); }
     };
