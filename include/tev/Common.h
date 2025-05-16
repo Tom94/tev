@@ -103,7 +103,7 @@ template <typename Value, size_t Size> Value mean(const Array<Value, Size>& a) {
     return result / (Value)Size;
 }
 
-inline Matrix3f inverse(Matrix3f mat) {
+inline Matrix3f inverse(const Matrix3f& mat) {
     float d11 = mat.m[1][1] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][1];
     float d12 = mat.m[1][0] * mat.m[2][2] + mat.m[1][2] * -mat.m[2][0];
     float d13 = mat.m[1][0] * mat.m[2][1] + mat.m[1][1] * -mat.m[2][0];
@@ -124,17 +124,29 @@ inline Matrix3f inverse(Matrix3f mat) {
     float d32 = mat.m[0][0] * mat.m[1][2] - mat.m[0][2] * mat.m[1][0];
     float d33 = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
 
-    mat.m[0][0] = +d11 * det;
-    mat.m[0][1] = -d21 * det;
-    mat.m[0][2] = +d31 * det;
-    mat.m[1][0] = -d12 * det;
-    mat.m[1][1] = +d22 * det;
-    mat.m[1][2] = -d32 * det;
-    mat.m[2][0] = +d13 * det;
-    mat.m[2][1] = -d23 * det;
-    mat.m[2][2] = +d33 * det;
+    Matrix3f result;
+    result.m[0][0] = +d11 * det;
+    result.m[0][1] = -d21 * det;
+    result.m[0][2] = +d31 * det;
+    result.m[1][0] = -d12 * det;
+    result.m[1][1] = +d22 * det;
+    result.m[1][2] = -d32 * det;
+    result.m[2][0] = +d13 * det;
+    result.m[2][1] = -d23 * det;
+    result.m[2][2] = +d33 * det;
 
-    return mat;
+    return result;
+}
+
+inline Matrix3f transpose(const Matrix3f& mat) {
+    Matrix3f result;
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            result.m[m][n] = mat.m[n][m];
+        }
+    }
+
+    return result;
 }
 
 inline Matrix2f extract2x2(const Matrix3f& mat) {

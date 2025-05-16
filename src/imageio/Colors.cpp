@@ -32,7 +32,42 @@ using namespace nanogui;
 
 namespace tev {
 
-nanogui::Matrix4f chromaToRec709Matrix(std::array<nanogui::Vector2f, 4> chroma) {
+// This function takes matrix params in row-major order and converts them to column-major Matrix3f
+Matrix3f toMatrix3(const float data[3][3]) {
+    Matrix3f result;
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            result.m[m][n] = data[n][m];
+        }
+    }
+
+    return result;
+}
+
+Matrix4f transpose(const Imath::M44f& mat) {
+    Matrix4f result;
+    for (int m = 0; m < 4; ++m) {
+        for (int n = 0; n < 4; ++n) {
+            // No flipping of indices needed, because Imath::M44f is row-major while Matrix4f is column-major
+            result.m[m][n] = mat.x[m][n];
+        }
+    }
+
+    return result;
+}
+
+Matrix4f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) {
+    Imf::Chromaticities imfChroma = {
+        {chroma[0].x(), chroma[0].y()},
+        {chroma[1].x(), chroma[1].y()},
+        {chroma[2].x(), chroma[2].y()},
+        {chroma[3].x(), chroma[3].y()},
+    };
+
+    return transpose(Imf::XYZtoRGB(imfChroma, 1));
+}
+
+Matrix4f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma) {
     Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
     Imf::Chromaticities imfChroma = {
         {chroma[0].x(), chroma[0].y()},
@@ -48,33 +83,58 @@ nanogui::Matrix4f chromaToRec709Matrix(std::array<nanogui::Vector2f, 4> chroma) 
     };
 
     if (chromaEq(imfChroma, rec709)) {
-        return nanogui::Matrix4f{1.0f};
+        return Matrix4f{1.0f};
     }
 
-    Imath::M44f M = Imf::RGBtoXYZ(imfChroma, 1) * Imf::XYZtoRGB(rec709, 1);
-
-    nanogui::Matrix4f toRec709;
-    for (int m = 0; m < 4; ++m) {
-        for (int n = 0; n < 4; ++n) {
-            toRec709.m[m][n] = M.x[m][n];
-        }
-    }
-
-    return toRec709;
+    return transpose(Imf::RGBtoXYZ(imfChroma, 1) * Imf::XYZtoRGB(rec709, 1));
 }
 
-nanogui::Matrix4f xyzToRec709Matrix() {
+Matrix4f xyzToRec709Matrix() {
     Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
-    Imath::M44f M = Imf::XYZtoRGB(rec709, 1);
+    return transpose(Imf::XYZtoRGB(rec709, 1));
+}
 
-    nanogui::Matrix4f toRec709;
-    for (int m = 0; m < 4; ++m) {
-        for (int n = 0; n < 4; ++n) {
-            toRec709.m[m][n] = M.x[m][n];
+// Adapted from LittleCMS's AdaptToXYZD50 function
+Matrix3f adaptToXYZD50Bradford(const Vector2f& w) {
+    const float br[3][3] = {
+        {0.8951f,  0.2664f,  -0.1614f},
+        {-0.7502f, 1.7135f,  0.0367f },
+        {0.0389f,  -0.0685f, 1.0296f },
+    };
+    const auto kBradford = toMatrix3(br);
+    const float brInv[3][3] = {
+        {0.9869929f,  -0.1470543f, 0.1599627f},
+        {0.4323053f,  0.5183603f,  0.0492912f},
+        {-0.0085287f, 0.0400428f,  0.9684867f},
+    };
+    const auto kBradfordInv = toMatrix3(brInv);
+
+    const Vector3f white{w.x() / w.y(), 1.0f, (1.0f - w.x() - w.y()) / w.y()};
+    const Vector3f white50{0.96422f, 1.0f, 0.82521f};
+
+    const auto lms = kBradford * white;
+    const auto lms50 = kBradford * white50;
+
+    const float a[3][3] = {
+        {lms50[0] / lms[0], 0,                 0                },
+        {0,              lms50[1] / lms[1], 0                },
+        {0,              0,              lms50[2] / lms[2]},
+    };
+    const auto aMat = toMatrix3(a);
+
+    const auto b = aMat * kBradford;
+    return kBradfordInv * b;
+}
+
+Matrix4f toMatrix4(const Matrix3f& mat) {
+    Matrix4f result{1.0f};
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            result.m[m][n] = mat.m[m][n];
         }
     }
 
-    return toRec709;
+    return result;
 }
 
 class GlobalCmsContext {

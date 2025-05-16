@@ -25,11 +25,6 @@
 #include <half.h>
 #include <tiffio.h>
 
-#include <ImathMatrix.h>
-#include <ImathMatrixAlgo.h>
-#include <ImathVec.h>
-#include <ImfChromaticities.h>
-
 using namespace nanogui;
 using namespace std;
 
@@ -335,7 +330,6 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
             throw ImageLoadError{"Failed to read dimensions."};
         }
-
 
         // Note: libtiff doesn't support variable bits per sample, which is technically allowed by the TIFF 6.0 spec. We assume all samples
         // have the same bit depth.
@@ -644,49 +638,51 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
 
-            decodeTasks.emplace_back(ThreadPool::global().enqueueCoroutine(
-                [&, i, td]() -> Task<void> {
-                    uint32_t* const utd = unpackedTile.data() + unpackedTileSize * i;
+            decodeTasks.emplace_back(
+                ThreadPool::global().enqueueCoroutine(
+                    [&, i, td]() -> Task<void> {
+                        uint32_t* const utd = unpackedTile.data() + unpackedTileSize * i;
 
-                    size_t planeTile = i % numTilesPerPlane;
-                    size_t tileX = planeTile % tile.numX;
-                    size_t tileY = planeTile / tile.numX;
+                        size_t planeTile = i % numTilesPerPlane;
+                        size_t tileX = planeTile % tile.numX;
+                        size_t tileY = planeTile / tile.numX;
 
-                    int xStart = tileX * tile.width;
-                    int xEnd = min((int)((tileX + 1) * tile.width), size.x());
+                        int xStart = tileX * tile.width;
+                        int xEnd = min((int)((tileX + 1) * tile.width), size.x());
 
-                    int yStart = tileY * tile.height;
-                    int yEnd = min((int)((tileY + 1) * tile.height), size.y());
+                        int yStart = tileY * tile.height;
+                        int yEnd = min((int)((tileY + 1) * tile.height), size.y());
 
-                    co_await ThreadPool::global().parallelForAsync<int>(
-                        yStart,
-                        yEnd,
-                        [&](int y) {
-                            int y0 = y - yStart;
-                            unpackBits(
-                                td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd + unpackedTileRowSize * y0, unpackedTileRowSize, handleSign
-                            );
+                        co_await ThreadPool::global().parallelForAsync<int>(
+                            yStart,
+                            yEnd,
+                            [&](int y) {
+                                int y0 = y - yStart;
+                                unpackBits(
+                                    td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd + unpackedTileRowSize * y0, unpackedTileRowSize, handleSign
+                                );
 
-                            if (planar == PLANARCONFIG_CONTIG) {
-                                for (int x = xStart; x < xEnd; ++x) {
-                                    for (int c = 0; c < samplesPerPixel; ++c) {
-                                        auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
+                                if (planar == PLANARCONFIG_CONTIG) {
+                                    for (int x = xStart; x < xEnd; ++x) {
+                                        for (int c = 0; c < samplesPerPixel; ++c) {
+                                            auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
+                                            imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                        }
+                                    }
+                                } else {
+                                    int c = i / numTilesPerPlane;
+                                    for (int x = xStart; x < xEnd; ++x) {
+                                        auto pixel = utd[y0 * tile.width + x - xStart];
                                         imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
                                     }
                                 }
-                            } else {
-                                int c = i / numTilesPerPlane;
-                                for (int x = xStart; x < xEnd; ++x) {
-                                    auto pixel = utd[y0 * tile.width + x - xStart];
-                                    imageData[(y * size.x() + x) * samplesPerPixel + c] = pixel;
-                                }
-                            }
-                        },
-                        priority
-                    );
-                },
-                priority
-            ));
+                            },
+                            priority
+                        );
+                    },
+                    priority
+                )
+            );
         }
 
         for (auto&& task : decodeTasks) {
@@ -776,7 +772,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 tlog::debug() << "Found active area data; applying...";
                 switch (TIFFFieldDataType(field)) {
                     case TIFF_SHORT:
-                        if (uint16_t * aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
+                        if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
                             activeArea.min.y() = aa[0];
                             activeArea.min.x() = aa[1];
                             activeArea.max.y() = aa[2];
@@ -784,7 +780,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                         }
                         break;
                     case TIFF_LONG:
-                        if (uint32_t * aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
+                        if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
                             activeArea.min.y() = aa[0];
                             activeArea.min.x() = aa[1];
                             activeArea.max.y() = aa[2];
@@ -803,7 +799,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             uint32_t numRead = 0;
 
             // 1. Map colors via linearization table if it exists
-            if (uint16_t * linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
+            if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
                 tlog::debug() << "Found linearization table; applying...";
 
                 const float scale = 1.0f / 65535.0f;
@@ -835,7 +831,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 uint16_t blackLevelRepeatRows = 1;
                 uint16_t blackLevelRepeatCols = 1;
 
-                if (uint16_t * blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
+                if (uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
                     blackLevelRepeatRows = blackLevelRepeatDim[0];
                     blackLevelRepeatCols = blackLevelRepeatDim[1];
                 }
@@ -847,7 +843,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 vector<float> blackLevel(numBlackLevelPixels * samplesPerPixel, 0.0f);
                 switch (TIFFFieldDataType(field)) {
                     case TIFF_SHORT:
-                        if (uint16_t * blackLevelShort; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelShort)) {
+                        if (uint16_t* blackLevelShort; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelShort)) {
                             if (numRead != blackLevel.size()) {
                                 throw ImageLoadError{"Invalid number of black level pixels."};
                             }
@@ -861,7 +857,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                         }
                         break;
                     case TIFF_LONG:
-                        if (uint32_t * blackLevelLong; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelLong)) {
+                        if (uint32_t* blackLevelLong; TIFFGetField(tif, TIFFTAG_BLACKLEVEL, &numRead, &blackLevelLong)) {
                             if (numRead != blackLevel.size()) {
                                 throw ImageLoadError{"Invalid number of black level pixels."};
                             }
@@ -957,7 +953,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
                 switch (TIFFFieldDataType(field)) {
                     case TIFF_SHORT:
-                        if (uint16_t * whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
+                        if (uint16_t* whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
                             if (numRead != whiteLevel.size()) {
                                 throw ImageLoadError{"Invalid number of white level pixels."};
                             }
@@ -970,7 +966,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                         }
                         break;
                     case TIFF_LONG:
-                        if (uint32_t * whiteLevelLong; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelLong)) {
+                        if (uint32_t* whiteLevelLong; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelLong)) {
                             if (numRead != whiteLevel.size()) {
                                 throw ImageLoadError{"Invalid number of white level pixels."};
                             }
@@ -1034,21 +1030,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             TIFFSetDirectory(tif, 0);
             ScopeGuard guard{[&]() { TIFFSetDirectory(tif, prevIdf); }};
 
-            Imath::M33f analogBalance = Imath::identity33f;
-            if (float* abt; TIFFGetField(tif, TIFFTAG_ANALOGBALANCE, &numRead, &abt)) {
-                if (numRead != samplesPerPixel) {
-                    throw ImageLoadError{"Invalid number of analog balance pixels."};
-                }
-
-                for (size_t i = 0; i < numRead; ++i) {
-                    analogBalance[i][i] = abt[i];
-                }
-            }
-
-            tlog::debug() << fmt::format("Analog balance: ({}, {}, {})", analogBalance[0][0], analogBalance[1][1], analogBalance[2][2]);
-
-            auto readCameraToXyz = [&](int CCTAG, int CMTAG) {
-                Imath::M33f colorMatrix = Imath::identity33f;
+            const auto readCameraToXyz = [&](int CCTAG, int CMTAG) {
+                Matrix3f colorMatrix{1.0f};
                 if (float* cmt; TIFFGetField(tif, CMTAG, &numRead, &cmt)) {
                     if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
                         throw ImageLoadError{"Invalid number of camera matrix entries."};
@@ -1056,12 +1039,14 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
                     for (size_t i = 0; i < samplesPerPixel; ++i) {
                         for (size_t j = 0; j < samplesPerPixel; ++j) {
-                            colorMatrix[i][j] = cmt[i * samplesPerPixel + j];
+                            colorMatrix.m[j][i] = cmt[i * samplesPerPixel + j];
                         }
                     }
+                } else {
+                    return optional<Matrix3f>{};
                 }
 
-                Imath::M33f cameraCalibration = Imath::identity33f;
+                Matrix3f cameraCalibration{1.0f};
                 if (float* cct; TIFFGetField(tif, CCTAG, &numRead, &cct)) {
                     if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
                         throw ImageLoadError{"Invalid number of camera calibration entries."};
@@ -1069,84 +1054,147 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
                     for (size_t i = 0; i < samplesPerPixel; ++i) {
                         for (size_t j = 0; j < samplesPerPixel; ++j) {
-                            cameraCalibration[i][j] = cct[i * samplesPerPixel + j];
+                            cameraCalibration.m[j][i] = cct[i * samplesPerPixel + j];
                         }
                     }
                 }
 
-                // Adapted from LittleCMS's AdaptToXYZD50 function
-                auto adaptToXYZD50Bradford = [&](const Imath::V2f& w) {
-                    float br[3][3] = {
-                        {0.8951f,  0.2664f,  -0.1614f},
-                        {-0.7502f, 1.7135f,  0.0367f },
-                        {0.0389f,  -0.0685f, 1.0296f },
-                    };
-                    Imath::M33f kBradford{br};
-                    float brInv[3][3] = {
-                        {0.9869929f,  -0.1470543f, 0.1599627f},
-                        {0.4323053f,  0.5183603f,  0.0492912f},
-                        {-0.0085287f, 0.0400428f,  0.9684867f},
-                    };
-                    Imath::M33f kBradfordInv{brInv};
-
-                    Imath::V3f white{w.x / w.y, 1.0f, (1.0f - w.x - w.y) / w.y};
-                    Imath::V3f white50{0.96422f, 1.0f, 0.82521f};
-
-                    Imath::V3f lms = white * kBradford.transposed();
-                    Imath::V3f lms50 = white50 * kBradford.transposed();
-
-                    float a[3][3] = {
-                        {lms50[0] / lms[0], 0,                 0                },
-                        {0,                 lms50[1] / lms[1], 0                },
-                        {0,                 0,                 lms50[2] / lms[2]},
-                    };
-                    Imath::M33f aMat{a};
-
-                    Imath::M33f b = aMat * kBradford;
-                    return kBradfordInv * b;
-                };
-
-                auto xyzToCamera = analogBalance * cameraCalibration * colorMatrix;
-
-                // D65 white point
-                // auto ca = adaptToXYZD50Bradford({0.3127f, 0.3290f});
-                // D50 white point -- produces ~identity ca matrix as expected
-                // auto ca = adaptToXYZD50Bradford({0.3457f, 0.5385});
-                Imath::M33f chromaticAdaptation = Imath::identity33f;
-                return chromaticAdaptation * xyzToCamera.inverse();
+                const auto xyzToCamera = cameraCalibration * colorMatrix;
+                return optional<Matrix3f>{inverse(xyzToCamera)};
             };
 
-            array<Imath::M33f, 3> camToXyz = {
-                readCameraToXyz(TIFFTAG_CAMERACALIBRATION3, TIFFTAG_COLORMATRIX3),
-                readCameraToXyz(TIFFTAG_CAMERACALIBRATION2, TIFFTAG_COLORMATRIX2),
-                readCameraToXyz(TIFFTAG_CAMERACALIBRATION1, TIFFTAG_COLORMATRIX1),
+            const array<pair<uint16_t, uint16_t>, 3> camTags = {
+                {
+                 {TIFFTAG_CAMERACALIBRATION3, TIFFTAG_COLORMATRIX3},
+                 {TIFFTAG_CAMERACALIBRATION2, TIFFTAG_COLORMATRIX2},
+                 {TIFFTAG_CAMERACALIBRATION1, TIFFTAG_COLORMATRIX1},
+                 }
             };
+
+            Vector3f analogBalance{1.0f};
+            if (float* abt; TIFFGetField(tif, TIFFTAG_ANALOGBALANCE, &numRead, &abt)) {
+                if (numRead != samplesPerPixel) {
+                    throw ImageLoadError{"Invalid number of analog balance pixels."};
+                }
+
+                for (size_t i = 0; i < numRead; ++i) {
+                    analogBalance[i] = abt[i];
+                }
+
+                tlog::debug() << fmt::format("Analog balance: ({}, {}, {})", analogBalance[0], analogBalance[1], analogBalance[2]);
+            }
+
+            // D65 white point
+            // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3127f, 0.3290f});
+            // D50 white point -- produces ~identity ca matrix as expected
+            // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3457f, 0.5385});
+            const auto chromaticAdaptation = Matrix3f{1.0f};
 
             // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
-            // is supposed to be the colder one (closer to D65).
-            Imath::M44f camToRgb;
-            for (size_t i = 0; i < camToXyz.size(); ++i) {
-                if (i == camToXyz.size() - 1 || camToXyz[i] != Imath::identity33f) {
-                    camToRgb = Imath::M44f(camToXyz[i].transposed(), Imath::V3f{0}) * Imf::XYZtoRGB(Imf::Chromaticities{}, 1.0f);
+            // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
+            // (aka RIMM space) in which we will apply the camera profile.
+            array<Vector2f, 4> rimmChromaticities = {
+                {
+                 {0.734699f, 0.265301f},
+                 {0.159597f, 0.840403f},
+                 {0.036598f, 0.000105f},
+                 {0.345704f, 0.358540f},
+                 }
+            };
+
+            auto toRimm = xyzToChromaMatrix(rimmChromaticities);
+            for (size_t i = 0; i < camTags.size(); ++i) {
+                if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
+                    tlog::debug() << fmt::format("Found camera calibration data; applying...");
+                    toRimm = toRimm * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation * camToXyz.value());
+                    break;
                 }
             }
 
-            if (uint32_t * dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
+            // Convert colors to RGB here rather than letting Image.cpp handle it, because there's still post-processing to do.
+            co_await ThreadPool::global().parallelForAsync<int>(
+                activeArea.min.y(),
+                activeArea.max.y(),
+                [&](int y) {
+                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                        size_t i = (size_t)y * size.x() + x;
+
+                        // Take advantage of the fact that RGB channels are adjacent in memory
+                        Vector3f* rgb = (Vector3f*)&floatRgbaData[i * numRgbaChannels];
+                        *rgb = toRimm * (*rgb);
+                    }
+                },
+                priority
+            );
+
+            // Once we're done, we want to convert from RIMM space to sRGB/Rec709
+            resultData.toRec709 = chromaToRec709Matrix(rimmChromaticities);
+
+            if (char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
+                tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
+            }
+
+            if (uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
                 uint32_t hueDivisions = dims[0];
                 uint32_t satDivisions = dims[1];
                 uint32_t valueDivisions = dims[2];
 
-                tlog::debug() << fmt::format("hue/sat/val map dimensions: {} {} {}", hueDivisions, satDivisions, valueDivisions);
+                tlog::debug() << fmt::format("Hue/sat/val map dimensions: {} {} {}", hueDivisions, satDivisions, valueDivisions);
 
-                // TODO: implement hue/sat/val map... this requires back and forth conversion between camera colors, RGB and HSV, so would
-                // be quite involved to put in here. Possibly will never implement.
+                // TODO: implement hue/sat/val map...
+                tlog::warning() << "Found hue/sat/val map, but not implemented yet. Image may look wrong.";
             }
 
-            for (int m = 0; m < 4; ++m) {
-                for (int n = 0; n < 4; ++n) {
-                    resultData.toRec709.m[m][n] = camToRgb.x[m][n];
+            if (float* tonecurve; TIFFGetField(tif, TIFFTAG_PROFILETONECURVE, &numRead, &tonecurve)) {
+                if (numRead % 2 != 0 || numRead < 4) {
+                    throw ImageLoadError{"Number of tone curve entries must be divisible by 2 and >=4."};
                 }
+
+                tlog::debug() << fmt::format("Applying profile tone curve of length {}", numRead);
+
+                vector<float> xs(numRead / 2), ys(numRead / 2);
+                for (size_t i = 0; i < xs.size(); ++i) {
+                    xs[i] = tonecurve[i * 2];
+                    ys[i] = tonecurve[i * 2 + 1];
+                }
+
+                if (xs.front() != 0.0f || xs.back() != 1.0f) {
+                    throw ImageLoadError{"Tone curve must start at 0."};
+                }
+
+                const auto applyToneCurve = [&](float x) {
+                    auto it = lower_bound(xs.begin(), xs.end(), x);
+                    size_t i = distance(xs.begin(), it);
+
+                    // The spec says to extend the slope of the last segment.
+                    if (i > 0) {
+                        --i;
+                    } else if (i >= xs.size() - 1) {
+                        i = xs.size() - 2;
+                    }
+
+                    // TODO: Docs say to use cubic spline interpolation, whereas we're using linear interpolation. The difference seems to
+                    // be negligible so far, but we should fix this at some point.
+                    const float w = (x - xs[i]) / (xs[i + 1] - xs[i]);
+                    return (1.0f - w) * ys[i] + w * ys[i + 1];
+                };
+
+                co_await ThreadPool::global().parallelForAsync<int>(
+                    activeArea.min.y(),
+                    activeArea.max.y(),
+                    [&](int y) {
+                        for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                            size_t i = (size_t)y * size.x() + x;
+                            for (int c = 0; c < numColorChannels; ++c) {
+                                const float val = floatRgbaData[i * numRgbaChannels + c];
+                                floatRgbaData[i * numRgbaChannels + c] = applyToneCurve(val);
+                            }
+                        }
+                    },
+                    priority
+                );
             }
+
         } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
             // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
             resultData.toRec709 = xyzToRec709Matrix();
