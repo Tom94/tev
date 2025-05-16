@@ -265,12 +265,12 @@ inline int codePointLength(char first) {
     }
 }
 
-std::string ensureUtf8(const std::string& str);
-std::string utf16to8(const std::wstring& utf16);
-fs::path toPath(const std::string& utf8);
+std::string ensureUtf8(std::string_view str);
+std::string utf16to8(std::wstring_view utf16);
+fs::path toPath(std::string_view utf8);
 std::string toString(const fs::path& path);
 
-bool naturalCompare(const std::string& a, const std::string& b);
+bool naturalCompare(std::string_view a, std::string_view b);
 
 template <typename T> void removeDuplicates(std::vector<T>& vec) {
     std::unordered_set<T> tmp;
@@ -389,18 +389,18 @@ template <typename T> std::string join(const T& components, const std::string& d
     return s.str();
 }
 
-std::vector<std::string> split(std::string text, const std::string& delim);
+std::vector<std::string> split(std::string_view text, std::string_view delim);
 
-std::string toLower(std::string str);
-std::string toUpper(std::string str);
+std::string toLower(std::string_view str);
+std::string toUpper(std::string_view str);
 
-bool matchesFuzzy(std::string text, std::string filter, size_t* matchedPartId = nullptr);
-bool matchesRegex(std::string text, std::string filter);
-inline bool matchesFuzzyOrRegex(const std::string& text, const std::string& filter, bool isRegex) {
+bool matchesFuzzy(std::string_view text, std::string_view filter, size_t* matchedPartId = nullptr);
+bool matchesRegex(std::string_view text, std::string_view filter);
+inline bool matchesFuzzyOrRegex(std::string_view text, std::string_view filter, bool isRegex) {
     return isRegex ? matchesRegex(text, filter) : matchesFuzzy(text, filter);
 }
 
-void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string text, float shadowAlpha = 1.0f);
+void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string_view text, float shadowAlpha = 1.0f);
 
 int maxTextureSize();
 
@@ -442,7 +442,7 @@ enum EInterpolationMode : int {
     NumInterpolationModes,
 };
 
-EInterpolationMode toInterpolationMode(std::string name);
+EInterpolationMode toInterpolationMode(std::string_view name);
 std::string toString(EInterpolationMode mode);
 
 enum ETonemap : int {
@@ -455,7 +455,7 @@ enum ETonemap : int {
     NumTonemaps,
 };
 
-ETonemap toTonemap(std::string name);
+ETonemap toTonemap(std::string_view name);
 
 enum EMetric : int {
     Error = 0,
@@ -468,7 +468,7 @@ enum EMetric : int {
     NumMetrics,
 };
 
-EMetric toMetric(std::string name);
+EMetric toMetric(std::string_view name);
 
 enum EDirection {
     Forward,
