@@ -1093,16 +1093,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
             // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
             // (aka RIMM space) in which we will apply the camera profile.
-            array<Vector2f, 4> rimmChromaticities = {
-                {
-                 {0.734699f, 0.265301f},
-                 {0.159597f, 0.840403f},
-                 {0.036598f, 0.000105f},
-                 {0.345704f, 0.358540f},
-                 }
-            };
-
-            auto toRimm = xyzToChromaMatrix(rimmChromaticities);
+            auto toRimm = xyzToChromaMatrix(proPhotoChroma());
             for (size_t i = 0; i < camTags.size(); ++i) {
                 if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
                     tlog::debug() << fmt::format("Found camera calibration data; applying...");
@@ -1128,7 +1119,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             );
 
             // Once we're done, we want to convert from RIMM space to sRGB/Rec709
-            resultData.toRec709 = chromaToRec709Matrix(rimmChromaticities);
+            resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
 
             if (char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
                 tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
@@ -1226,12 +1217,14 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
             resultData.toRec709 = chromaToRec709Matrix(chroma);
 
+            enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
+
             // In TIFF, transfer functions are stored as bitsPerSample**2 values in the range [0, 65535] per color channel. The transfer
             // function is a linear interpolation between these values. If there's no transfer function specified, the TIFF spec says to
             // use gamma 2.2 for RGB data and no transfer (linear) for grayscale data. That said, all grayscale TIFF images I've seen in
             // the wild so far assume gamma 2.2, so we'll go against the spec here.
-            uint16_t* transferFunction[3] = {};
-            if (TIFFGetField(tif, TIFFTAG_TRANSFERFUNCTION, &transferFunction[0], &transferFunction[1], &transferFunction[2])) {
+            if (uint16_t* transferFunction[3];
+                TIFFGetField(tif, TIFFTAG_TRANSFERFUNCTION, &transferFunction[0], &transferFunction[1], &transferFunction[2])) {
                 tlog::debug() << "Found custom transfer function; applying...";
 
                 const float scale = 1.0f / 65535.0f;
@@ -1256,6 +1249,35 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                     },
                     priority
                 );
+                // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer.
+                // Values 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
+            } else if (uint32_t previewColorSpace;
+                       TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &previewColorSpace) && previewColorSpace > 1) {
+                tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)previewColorSpace);
+
+                if (previewColorSpace == EPreviewColorSpace::AdobeRGB || previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
+                    tlog::warning(
+                    ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
+                }
+
+                size_t numPixels = (size_t)size.x() * size.y();
+                co_await ThreadPool::global().parallelForAsync<size_t>(
+                    0,
+                    numPixels,
+                    [&](size_t i) {
+                        for (int c = 0; c < numColorChannels; ++c) {
+                            float v = floatRgbaData[i * numRgbaChannels + c];
+                            floatRgbaData[i * numRgbaChannels + c] = toLinear(v);
+                        }
+                    },
+                    priority
+                );
+
+                if (previewColorSpace == EPreviewColorSpace::AdobeRGB) {
+                    resultData.toRec709 = chromaToRec709Matrix(adobeChroma());
+                } else if (previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
+                    resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
+                }
             } else {
                 tlog::debug() << "No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.";
 

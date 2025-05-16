@@ -94,6 +94,39 @@ Matrix4f xyzToRec709Matrix() {
     return transpose(Imf::XYZtoRGB(rec709, 1));
 }
 
+array<Vector2f, 4> rec709Chroma() {
+    return {
+        {
+         {0.6400f, 0.3300f},
+         {0.3000f, 0.6000f},
+         {0.1500f, 0.0600f},
+         {0.3127f, 0.3290f},
+         }
+    };
+}
+
+array<Vector2f, 4> adobeChroma() {
+    return {
+        {
+         {0.6400f, 0.3300f},
+         {0.2100f, 0.7100f},
+         {0.1500f, 0.0600f},
+         {0.3127f, 0.3290f},
+         }
+    };
+}
+
+array<Vector2f, 4> proPhotoChroma() {
+    return {
+        {
+         {0.734699f, 0.265301f},
+         {0.159597f, 0.840403f},
+         {0.036598f, 0.000105f},
+         {0.345704f, 0.358540f},
+         }
+    };
+}
+
 // Adapted from LittleCMS's AdaptToXYZD50 function
 Matrix3f adaptToXYZD50Bradford(const Vector2f& w) {
     const float br[3][3] = {

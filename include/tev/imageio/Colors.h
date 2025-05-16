@@ -29,8 +29,15 @@ namespace tev {
 
 nanogui::Matrix4f chromaToRec709Matrix(const std::array<nanogui::Vector2f, 4>& chroma);
 nanogui::Matrix4f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
-
 nanogui::Matrix4f xyzToRec709Matrix();
+
+nanogui::Matrix4f adobeToRec709Matrix();
+nanogui::Matrix4f proPhotoToRec709Matrix();
+
+std::array<nanogui::Vector2f, 4> rec709Chroma();
+std::array<nanogui::Vector2f, 4> adobeChroma();
+std::array<nanogui::Vector2f, 4> proPhotoChroma();
+
 nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
 
 nanogui::Matrix4f toMatrix4(const nanogui::Matrix3f& mat);
