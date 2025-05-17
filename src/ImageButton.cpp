@@ -49,11 +49,11 @@ Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans-bold");
     string idString = to_string(mId);
-    float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
+    float idSize = nvgTextBounds(ctx, 0, 0, idString.data(), idString.data() + idString.size(), nullptr);
 
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans");
-    float tw = nvgTextBounds(ctx, 0, 0, mCaption.c_str(), nullptr, nullptr);
+    float tw = nvgTextBounds(ctx, 0, 0, mCaption.data(), mCaption.data() + mCaption.size(), nullptr);
 
     return Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
 }
@@ -135,8 +135,7 @@ void ImageButton::draw(NVGcontext* ctx) {
         nvgFill(ctx);
     }
 
-    string idString = to_string(mId);
-
+    const string idString = to_string(mId);
     if (m_size.x() == preferred_size(ctx).x()) {
         mCutoff = 0;
     } else if (m_size != mSizeForWhichCutoffWasComputed) {
@@ -144,11 +143,15 @@ void ImageButton::draw(NVGcontext* ctx) {
 
         nvgFontSize(ctx, m_font_size + 2);
         nvgFontFace(ctx, "sans-bold");
-        float idSize = nvgTextBounds(ctx, 0, 0, idString.c_str(), nullptr, nullptr);
+        const float idSize = nvgTextBounds(ctx, 0, 0, idString.data(), idString.data() + idString.size(), nullptr);
 
         nvgFontSize(ctx, m_font_size);
-        while (mCutoff < mCaption.size() &&
-               nvgTextBounds(ctx, 0, 0, mCaption.substr(mCutoff).c_str(), nullptr, nullptr) > m_size.x() - 25 - idSize) {
+        while (mCutoff < mCaption.size()) {
+            float bounds = nvgTextBounds(ctx, 0, 0, mCaption.data() + mCutoff, mCaption.data() + mCaption.size(), nullptr);
+            if (bounds <= m_size.x() - 25 - idSize) {
+                break;
+            }
+
             mCutoff += codePointLength(mCaption[mCutoff]);
         }
 
@@ -156,32 +159,32 @@ void ImageButton::draw(NVGcontext* ctx) {
     }
 
     // Image name
-    string caption = mCaption.substr(mCutoff);
-
-    vector<string> pieces;
+    const string_view caption = string_view{mCaption}.substr(mCutoff);
+    vector<string_view> pieces;
     if (mHighlightBegin <= mCutoff) {
         if (mHighlightEnd <= mCutoff) {
             pieces.emplace_back(caption);
         } else {
-            size_t offset = mHighlightEnd - mCutoff;
+            const size_t offset = mHighlightEnd - mCutoff;
             pieces.emplace_back(caption.substr(offset));
             pieces.emplace_back(caption.substr(0, offset));
         }
     } else {
-        size_t beginOffset = mHighlightBegin - mCutoff;
-        size_t endOffset = mHighlightEnd - mCutoff;
+        const size_t beginOffset = mHighlightBegin - mCutoff;
+        const size_t endOffset = mHighlightEnd - mCutoff;
         pieces.emplace_back(caption.substr(endOffset));
         pieces.emplace_back(caption.substr(beginOffset, endOffset - beginOffset));
         pieces.emplace_back(caption.substr(0, beginOffset));
     }
 
     if (mCutoff > 0 && mCutoff < mCaption.size()) {
-        pieces.back() = "…"s + pieces.back();
+        pieces.emplace_back("…");
     }
 
-    Vector2f center = Vector2f{m_pos} + Vector2f{m_size} * 0.5f;
-    Vector2f bottomRight = Vector2f{m_pos} + Vector2f{m_size};
-    Vector2f textPos(bottomRight.x() - 5, center.y() + 0.5f * (m_font_size + 1));
+    const Vector2f center = Vector2f{m_pos} + Vector2f{m_size} * 0.5f;
+    const Vector2f bottomRight = Vector2f{m_pos} + Vector2f{m_size};
+    Vector2f textPos{bottomRight.x() - 5, center.y() + 0.5f * (m_font_size + 1)};
+
     NVGcolor regularTextColor = mCanBeReference ? Color(150, 255) : Color(190, 255);
     NVGcolor hightlightedTextColor = Color(190, 255);
     if (mIsSelected || mIsReference || m_mouse_focus) {
@@ -194,8 +197,8 @@ void ImageButton::draw(NVGcontext* ctx) {
     for (size_t i = 0; i < pieces.size(); ++i) {
         nvgFontFace(ctx, i == 1 ? "sans-bold" : "sans");
         nvgFillColor(ctx, i == 1 ? hightlightedTextColor : regularTextColor);
-        nvgText(ctx, textPos.x(), textPos.y(), pieces[i].c_str(), nullptr);
-        textPos.x() -= nvgTextBounds(ctx, 0, 0, pieces[i].c_str(), nullptr, nullptr);
+        nvgText(ctx, textPos.x(), textPos.y(), pieces[i].data(), pieces[i].data() + pieces[i].size());
+        textPos.x() -= nvgTextBounds(ctx, 0, 0, pieces[i].data(), pieces[i].data() + pieces[i].size(), nullptr);
     }
 
     // Image number
@@ -208,7 +211,7 @@ void ImageButton::draw(NVGcontext* ctx) {
     nvgFontFace(ctx, "sans-bold");
     nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     nvgFillColor(ctx, idColor);
-    nvgText(ctx, m_pos.x() + 5, textPos.y(), idString.c_str(), nullptr);
+    nvgText(ctx, m_pos.x() + 5, textPos.y(), idString.data(), idString.data() + idString.size());
 }
 
 void ImageButton::setHighlightRange(size_t begin, size_t end) {

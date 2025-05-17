@@ -200,13 +200,12 @@ bool matchesRegex(string_view text, string_view filter) {
 }
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, string_view text, float shadowAlpha) {
-    string str{text};
     nvgSave(ctx);
     nvgFontBlur(ctx, 2);
     nvgFillColor(ctx, Color{0.0f, shadowAlpha});
-    nvgText(ctx, x + 1, y + 1, str.c_str(), NULL);
+    nvgText(ctx, x + 1, y + 1, text.data(), text.data() + text.size());
     nvgRestore(ctx);
-    nvgText(ctx, x, y, str.c_str(), NULL);
+    nvgText(ctx, x, y, text.data(), text.data() + text.size());
 }
 
 int maxTextureSize() {
