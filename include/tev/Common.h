@@ -31,6 +31,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -413,19 +414,20 @@ inline bool isPot(size_t value) {
     return (value & (value - 1)) == 0;
 }
 
-template <typename T> std::string join(const T& components, const std::string& delim) {
+template <typename T> std::string join(const T& components, std::string_view delim) {
     std::ostringstream s;
     for (const auto& component : components) {
         if (&components[0] != &component) {
             s << delim;
         }
+
         s << component;
     }
 
     return s.str();
 }
 
-std::vector<std::string> split(std::string_view text, std::string_view delim);
+std::vector<std::string_view> split(std::string_view text, std::string_view delim);
 
 std::string toLower(std::string_view str);
 std::string toUpper(std::string_view str);

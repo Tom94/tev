@@ -49,7 +49,7 @@ void jpeg_extract_marker_payload(
 }
 } // namespace
 
-Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     unsigned char header[2] = {0};
     iStream.read(reinterpret_cast<char*>(header), 2);
     if (header[0] != 0xFF || header[1] != 0xD8) {

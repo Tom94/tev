@@ -37,7 +37,7 @@ static string formatNumber(float v) {
     return needsScientificNotation ? fmt::format("{:.2e}", v) : fmt::format("{:.3f}", v);
 }
 
-MultiGraph::MultiGraph(Widget* parent, const std::string& caption) : Widget(parent), mCaption(caption) {
+MultiGraph::MultiGraph(Widget* parent, std::string_view caption) : Widget{parent}, mCaption{caption} {
     mBackgroundColor = Color(20, 128);
     mForegroundColor = Color(255, 192, 0, 128);
     mTextColor = Color(240, 192);

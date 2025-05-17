@@ -218,7 +218,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         Region = 2,
     };
 
-    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, const std::string& name, DrawFlags flags) {
+    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, std::string_view name, DrawFlags flags) {
         float fontSize = 20;
         float strokeWidth = 3.0f;
 
@@ -244,7 +244,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         nvgFontFace(ctx, "sans-bold");
         nvgFontSize(ctx, fontSize);
         nvgTextAlign(ctx, (right ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT) | (top ? NVG_ALIGN_BOTTOM : NVG_ALIGN_TOP));
-        float textWidth = nvgTextBounds(ctx, 0, 0, name.c_str(), nullptr, nullptr);
+        float textWidth = nvgTextBounds(ctx, 0, 0, name.data(), name.data() + name.size(), nullptr);
         float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
         float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
 
@@ -292,7 +292,11 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
 
             nvgFillColor(ctx, textColor);
             nvgText(
-                ctx, right ? (topRight.x() - 2 * strokeWidth) : (topLeft.x() + 2 * strokeWidth) - strokeWidth / 2, topLeft.y(), name.c_str(), NULL
+                ctx,
+                right ? (topRight.x() - 2 * strokeWidth) : (topLeft.x() + 2 * strokeWidth) - strokeWidth / 2,
+                topLeft.y(),
+                name.data(),
+                name.data() + name.size()
             );
         }
 
@@ -844,7 +848,7 @@ void ImageCanvas::purgeCanvasStatistics(int imageId) {
 }
 
 vector<Channel> ImageCanvas::channelsFromImages(
-    shared_ptr<Image> image, shared_ptr<Image> reference, const string& requestedChannelGroup, EMetric metric, int priority
+    shared_ptr<Image> image, shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority
 ) {
     if (!image) {
         return {};
@@ -909,7 +913,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
 }
 
 Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
-    std::shared_ptr<Image> image, std::shared_ptr<Image> reference, const string& requestedChannelGroup, EMetric metric, const Box2i& region, int priority
+    std::shared_ptr<Image> image, std::shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, const Box2i& region, int priority
 ) {
     TEV_ASSERT(region.isValid(), "Region must be valid.");
     TEV_ASSERT(Box2i{image->size()}.contains(region), "Region must be contained in image.");
@@ -990,19 +994,21 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     std::vector<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
-    tasks.emplace_back(ThreadPool::global().parallelForAsync<size_t>(
-        0,
-        numPixels,
-        [&](size_t j) {
-            int x = (int)(j % regionSize.x()) + region.min.x();
-            int y = (int)(j / regionSize.x()) + region.min.y();
-            for (size_t c = 0; c < nChannels; ++c) {
-                const auto& channel = flattened[c];
-                indices[j * nChannels + c] = valToBin(channel.at({x, y}));
-            }
-        },
-        priority
-    ));
+    tasks.emplace_back(
+        ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t j) {
+                int x = (int)(j % regionSize.x()) + region.min.x();
+                int y = (int)(j / regionSize.x()) + region.min.y();
+                for (size_t c = 0; c < nChannels; ++c) {
+                    const auto& channel = flattened[c];
+                    indices[j * nChannels + c] = valToBin(channel.at({x, y}));
+                }
+            },
+            priority
+        )
+    );
 
     for (auto& task : tasks) {
         co_await task;

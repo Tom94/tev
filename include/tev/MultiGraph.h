@@ -32,16 +32,16 @@ namespace tev {
 
 class MultiGraph : public nanogui::Widget {
 public:
-    MultiGraph(nanogui::Widget* parent, const std::string& caption = "Untitled");
+    MultiGraph(nanogui::Widget* parent, std::string_view caption = "Untitled");
 
-    const std::string& caption() const { return mCaption; }
-    void setCaption(const std::string& caption) { mCaption = caption; }
+    std::string_view caption() const { return mCaption; }
+    void setCaption(std::string_view caption) { mCaption = caption; }
 
-    const std::string& header() const { return mHeader; }
-    void setHeader(const std::string& header) { mHeader = header; }
+    std::string_view header() const { return mHeader; }
+    void setHeader(std::string_view header) { mHeader = header; }
 
-    const std::string& footer() const { return mFooter; }
-    void setFooter(const std::string& footer) { mFooter = footer; }
+    std::string_view footer() const { return mFooter; }
+    void setFooter(std::string_view footer) { mFooter = footer; }
 
     const nanogui::Color& backgroundColor() const { return mBackgroundColor; }
     void setBackgroundColor(const nanogui::Color& backgroundColor) { mBackgroundColor = backgroundColor; }

@@ -24,7 +24,6 @@
 
 #include <ostream>
 #include <span>
-#include <string>
 #include <vector>
 
 namespace tev {
@@ -37,8 +36,8 @@ public:
 
     virtual bool hasPremultipliedAlpha() const = 0;
 
-    virtual bool canSaveFile(const std::string& extension) const = 0;
-    bool canSaveFile(const fs::path& path) const { return canSaveFile(toLower(toString(path.extension()))); }
+    virtual bool canSaveFile(std::string_view extension) const = 0;
+    bool canSaveFile(const fs::path& path) const { return canSaveFile(std::string_view{toLower(toString(path.extension()))}); }
 
     static const std::vector<std::unique_ptr<ImageSaver>>& getSavers();
 };

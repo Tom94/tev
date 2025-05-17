@@ -28,7 +28,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     png_byte header[8] = {0};
     iStream.read(reinterpret_cast<char*>(header), 8);
     if (png_sig_cmp(header, 0, 8)) {

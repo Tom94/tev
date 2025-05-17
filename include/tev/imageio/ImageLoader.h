@@ -105,15 +105,15 @@ public:
     virtual ~ImageLoader() {}
 
     virtual Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, const std::string& channelSelector, int priority, bool applyGainmaps) const = 0;
+        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, bool applyGainmaps) const = 0;
 
     virtual std::string name() const = 0;
 
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
 
     static std::vector<Channel>
-        makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const nanogui::Vector2i& size, const std::string& namePrefix = "");
-    static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size, const std::string& namePrefix = "");
+        makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const nanogui::Vector2i& size, std::string_view namePrefix = "");
+    static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size, std::string_view namePrefix = "");
     static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
 };
 

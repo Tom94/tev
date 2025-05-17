@@ -165,11 +165,11 @@ ImageViewer::ImageViewer(
         auto buttonContainer = new Widget{mSidebarLayout};
         buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, mSupportsHdr ? 4 : 3, Alignment::Fill, 5, 2});
 
-        auto makeButton = [&](const string& name, function<void()> callback, int icon = 0, string tooltip = "") {
-            auto button = new Button{buttonContainer, name, icon};
+        auto makeButton = [&](string_view name, function<void()> callback, int icon = 0, string_view tooltip = "") {
+            auto button = new Button{buttonContainer, string{name}, icon};
             button->set_font_size(15);
             button->set_callback(callback);
-            button->set_tooltip(tooltip);
+            button->set_tooltip(string{tooltip});
             return button;
         };
 
@@ -237,8 +237,8 @@ ImageViewer::ImageViewer(
         mTonemapButtonContainer = new Widget{mSidebarLayout};
         mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
-        auto makeTonemapButton = [&](const string& name, function<void()> callback) {
-            auto button = new Button{mTonemapButtonContainer, name};
+        auto makeTonemapButton = [&](string_view name, function<void()> callback) {
+            auto button = new Button{mTonemapButtonContainer, string{name}};
             button->set_flags(Button::RadioButton);
             button->set_font_size(15);
             button->set_callback(callback);
@@ -274,8 +274,8 @@ ImageViewer::ImageViewer(
         mMetricButtonContainer = new Widget{mSidebarLayout};
         mMetricButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
-        auto makeMetricButton = [&](const string& name, function<void()> callback) {
-            auto button = new Button{mMetricButtonContainer, name};
+        auto makeMetricButton = [&](string_view name, function<void()> callback) {
+            auto button = new Button{mMetricButtonContainer, string{name}};
             button->set_flags(Button::RadioButton);
             button->set_font_size(15);
             button->set_callback(callback);
@@ -343,7 +343,7 @@ ImageViewer::ImageViewer(
             mFilter = new TextBox{panel, ""};
             mFilter->set_editable(true);
             mFilter->set_alignment(TextBox::Alignment::Left);
-            mFilter->set_callback([this](const string& filter) { return setFilter(filter); });
+            mFilter->set_callback([this](string_view filter) { return setFilter(filter); });
 
             mFilter->set_placeholder("Find");
             mFilter->set_tooltip(
@@ -369,10 +369,10 @@ ImageViewer::ImageViewer(
             auto playback = new Widget{mSidebarLayout};
             playback->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
-            auto makePlaybackButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
-                auto button = new Button{playback, name, icon};
+            auto makePlaybackButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
+                auto button = new Button{playback, string{name}, icon};
                 button->set_callback(callback);
-                button->set_tooltip(tooltip);
+                button->set_tooltip(string{tooltip});
                 button->set_font_size(15);
                 button->set_enabled(enabled);
                 button->set_padding({10, 10});
@@ -411,10 +411,10 @@ ImageViewer::ImageViewer(
             auto tools = new Widget{mSidebarLayout};
             tools->set_layout(new GridLayout{Orientation::Horizontal, 7, Alignment::Fill, 5, 1});
 
-            auto makeImageButton = [&](const string& name, bool enabled, function<void()> callback, int icon = 0, string tooltip = "") {
-                auto button = new Button{tools, name, icon};
+            auto makeImageButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
+                auto button = new Button{tools, string{name}, icon};
                 button->set_callback(callback);
-                button->set_tooltip(tooltip);
+                button->set_tooltip(string{tooltip});
                 button->set_font_size(15);
                 button->set_enabled(enabled);
                 button->set_padding({10, 10});
@@ -625,9 +625,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
             auto imageCoords = mImageCanvas->getDisplayWindowCoords(mCurrentImage.get(), relMousePos);
 
             // sanitize the input crop
-            Box2i crop = {
-                {{startImageCoords, imageCoords}}
-            };
+            Box2i crop = {{{startImageCoords, imageCoords}}};
             crop.max += Vector2i{1};
 
             // we do not need to worry about min/max ordering here, as setCrop sanitizes the input for us
@@ -825,7 +823,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                if (clip::set_text(mCurrentImage->name())) {
+                if (clip::set_text(string{mCurrentImage->name()})) {
                     tlog::success() << "Image path copied to clipboard.";
                 } else {
                     tlog::error() << "Failed to copy image path to clipboard.";
@@ -1340,8 +1338,8 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
         throw std::runtime_error{"Must not replace image with nullptr."};
     }
 
-    int currentId = imageId(mCurrentImage);
-    int id = imageId(image);
+    const int currentId = imageId(mCurrentImage);
+    const int id = imageId(image);
     if (id == -1) {
         addImage(replacement, shallSelect);
         return;
@@ -1349,7 +1347,7 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
 
     // Preserve image button caption when replacing an image
     ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[id]);
-    std::string caption = ib->caption();
+    const std::string caption{ib->caption()};
 
     // If we already have the image selected, we must re-select it regardless of the `shallSelect` parameter.
     shallSelect |= currentId == id;
@@ -1406,7 +1404,7 @@ void ImageViewer::reloadImagesWhoseFileChanged() {
 }
 
 void ImageViewer::updateImage(
-    const string& imageName, bool shallSelect, const string& channel, int x, int y, int width, int height, span<const float> imageData
+    string_view imageName, bool shallSelect, string_view channel, int x, int y, int width, int height, span<const float> imageData
 ) {
     auto image = imageByName(imageName);
     if (!image) {
@@ -1429,7 +1427,7 @@ void ImageViewer::updateImage(
     }
 }
 
-void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallSelect, bool append, span<const VgCommand> commands) {
+void ImageViewer::updateImageVectorGraphics(string_view imageName, bool shallSelect, bool append, span<const VgCommand> commands) {
     auto image = imageByName(imageName);
     if (!image) {
         tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
@@ -1762,8 +1760,8 @@ void ImageViewer::setPlayingBack(bool value) {
     redraw();
 }
 
-bool ImageViewer::setFilter(const string& filter) {
-    mFilter->set_value(filter);
+bool ImageViewer::setFilter(string_view filter) {
+    mFilter->set_value(string{filter});
     mRequiresFilterUpdate = true;
     return true;
 }
@@ -2001,18 +1999,17 @@ void ImageViewer::updateFilter() {
                 do {
                     int len = codePointLength(first[beginOffset]);
 
-                    allStartWithSameChar =
-                        all_of(begin(activeImageNames), end(activeImageNames), [&first, beginOffset, len](const string& name) {
-                            if (beginOffset + len > (int)name.size()) {
+                    allStartWithSameChar = all_of(begin(activeImageNames), end(activeImageNames), [&first, beginOffset, len](string_view name) {
+                        if (beginOffset + len > (int)name.size()) {
+                            return false;
+                        }
+                        for (int i = beginOffset; i < beginOffset + len; ++i) {
+                            if (name[i] != first[i]) {
                                 return false;
                             }
-                            for (int i = beginOffset; i < beginOffset + len; ++i) {
-                                if (name[i] != first[i]) {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        });
+                        }
+                        return true;
+                    });
 
                     if (allStartWithSameChar) {
                         beginOffset += len;
@@ -2022,7 +2019,7 @@ void ImageViewer::updateFilter() {
                 bool allEndWithSameChar;
                 do {
                     char lastChar = first[firstSize - endOffset - 1];
-                    allEndWithSameChar = all_of(begin(activeImageNames), end(activeImageNames), [lastChar, endOffset](const string& name) {
+                    allEndWithSameChar = all_of(begin(activeImageNames), end(activeImageNames), [lastChar, endOffset](string_view name) {
                         int index = (int)name.size() - endOffset - 1;
                         return index >= 0 && name[index] == lastChar;
                     });
@@ -2156,7 +2153,7 @@ string ImageViewer::groupName(size_t index) {
     return groups[index].name;
 }
 
-int ImageViewer::groupId(const string& groupName) const {
+int ImageViewer::groupId(string_view groupName) const {
     if (!mCurrentImage) {
         return 0;
     }
@@ -2177,14 +2174,14 @@ int ImageViewer::imageId(const shared_ptr<Image>& image) const {
     return pos >= mImages.size() ? -1 : (int)pos;
 }
 
-int ImageViewer::imageId(const string& imageName) const {
+int ImageViewer::imageId(string_view imageName) const {
     auto pos = static_cast<size_t>(distance(begin(mImages), find_if(begin(mImages), end(mImages), [&](const shared_ptr<Image>& image) {
                                                 return image->name() == imageName;
                                             })));
     return pos >= mImages.size() ? -1 : (int)pos;
 }
 
-string ImageViewer::nextGroup(const string& group, EDirection direction) {
+string ImageViewer::nextGroup(string_view group, EDirection direction) {
     if (mGroupButtonContainer->child_count() == 0) {
         return mCurrentGroup;
     }
@@ -2248,7 +2245,7 @@ shared_ptr<Image> ImageViewer::nthVisibleImage(size_t n) {
     return lastVisible;
 }
 
-shared_ptr<Image> ImageViewer::imageByName(const string& imageName) {
+shared_ptr<Image> ImageViewer::imageByName(string_view imageName) {
     int id = imageId(imageName);
     if (id != -1) {
         return mImages[id];

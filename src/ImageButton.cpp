@@ -29,14 +29,14 @@ using namespace std;
 
 namespace tev {
 
-ImageButton::ImageButton(Widget* parent, const string& caption, bool canBeReference) :
+ImageButton::ImageButton(Widget* parent, string_view caption, bool canBeReference) :
     Widget{parent}, mCaption{caption}, mCanBeReference{canBeReference} {
     this->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill});
-    mCaptionTextBox = new TextBox{this, caption};
+    mCaptionTextBox = new TextBox{this, string{caption}};
     mCaptionTextBox->set_visible(false);
     mCaptionTextBox->set_editable(true);
     mCaptionTextBox->set_alignment(TextBox::Alignment::Right);
-    mCaptionTextBox->set_placeholder(caption);
+    mCaptionTextBox->set_placeholder(string{caption});
     mCaptionTextBox->set_callback([this](const string&) {
         this->hideTextBox();
         return true;

@@ -32,7 +32,7 @@ public:
 
     bool hasPremultipliedAlpha() const override { return false; }
 
-    virtual bool canSaveFile(const std::string& extension) const override {
+    virtual bool canSaveFile(std::string_view extension) const override {
         std::string lowerExtension = toLower(extension);
         return lowerExtension == ".jpg" || lowerExtension == ".jpeg" || lowerExtension == ".png" || lowerExtension == ".bmp" ||
             lowerExtension == ".tga";

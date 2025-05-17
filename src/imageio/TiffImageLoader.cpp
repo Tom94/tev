@@ -1266,7 +1266,7 @@ Task<ImageData> readTiffImage(TIFF* tif, int priority) {
     co_return resultData;
 }
 
-Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, const string&, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, bool applyGainmaps) const {
     // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
     // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
     // It became quite huge, but there are still many things that are not supported, most notably the photometric specifiers for CIELAB, CIE Lab, and ICC Lab.
@@ -1362,12 +1362,14 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     vector<ImageData> result;
 
     const auto tryLoadImage = [&](tdir_t dir, int subId, int subChainId) -> Task<void> {
-        string name = subId != -1 ? fmt::format("main.{}.sub.{}.{}", dir, subId, subChainId) : fmt::format("main.{}", dir);
-        try {
-            if (EDngSubfileType type; isDng && TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
-                name = dngSubFileTypeToString(type);
-            }
+        string name;
+        if (EDngSubfileType type; isDng && TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
+            name = dngSubFileTypeToString(type);
+        } else {
+            name = subId != -1 ? fmt::format("main.{}.sub.{}.{}", dir, subId, subChainId) : fmt::format("main.{}", dir);
+        }
 
+        try {
             tlog::debug() << fmt::format("Loading {}", name);
 
             ImageData& data = result.emplace_back(co_await readTiffImage(tif, priority));

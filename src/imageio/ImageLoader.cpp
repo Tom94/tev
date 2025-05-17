@@ -76,7 +76,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
     return imageLoaders;
 }
 
-vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, const string& namePrefix) {
+vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, string_view namePrefix) {
     vector<Channel> channels;
     if (numChannels > 4) {
         throw ImageLoadError{"Image has too many RGBA channels."};
@@ -98,9 +98,9 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool h
     }
 
     if (numColorChannels > 1) {
-        const vector<string> channelNames = {"R", "G", "B"};
+        const vector<string_view> channelNames = {"R", "G", "B"};
         for (int c = 0; c < numColorChannels; ++c) {
-            string name = namePrefix + (c < (int)channelNames.size() ? channelNames[c] : to_string(c));
+            string name = fmt::format("{}{}", namePrefix, (c < (int)channelNames.size() ? channelNames[c] : to_string(c)));
 
             // We assume that the channels are interleaved.
             channels.emplace_back(name, size, data, c, 4);
@@ -116,10 +116,10 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool h
     return channels;
 }
 
-vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, const string& namePrefix) {
+vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, string_view namePrefix) {
     vector<Channel> channels;
     for (int c = 0; c < numChannels; ++c) {
-        channels.emplace_back(namePrefix + to_string(c), size);
+        channels.emplace_back(fmt::format("{}{}", namePrefix, to_string(c)), size);
     }
 
     return channels;

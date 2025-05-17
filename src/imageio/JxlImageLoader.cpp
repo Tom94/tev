@@ -90,7 +90,7 @@ string jxlToString(JxlColorSpace type) {
 
 } // namespace
 
-Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority, bool) const {
+Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool) const {
     if (!isJxlImage(iStream)) {
         throw FormatNotSupported{"File is not a JPEG XL image."};
     }

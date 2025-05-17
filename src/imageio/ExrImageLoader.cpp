@@ -107,7 +107,7 @@ static bool isExrImage(istream& iStream) {
     return result;
 }
 
-AttributeNode createVec2fNode(const string& name, const Imath::V2f& value) {
+AttributeNode createVec2fNode(string_view name, const Imath::V2f& value) {
     AttributeNode node;
     node.name = name;
     node.type = "vec2f";
@@ -115,7 +115,7 @@ AttributeNode createVec2fNode(const string& name, const Imath::V2f& value) {
     return node;
 }
 
-AttributeNode createVec2iNode(const string& name, const Imath::V2i& value) {
+AttributeNode createVec2iNode(string_view name, const Imath::V2i& value) {
     AttributeNode node;
     node.name = name;
     node.type = "vec2i";
@@ -366,7 +366,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
 // Helper class for dealing with the raw channels loaded from an exr file.
 class RawChannel {
 public:
-    RawChannel(size_t partId, string name, string imfName, Imf::Channel imfChannel, const Vector2i& size) :
+    RawChannel(size_t partId, string_view name, string_view imfName, Imf::Channel imfChannel, const Vector2i& size) :
         mPartId{partId}, mName{name}, mImfName{imfName}, mImfChannel{imfChannel}, mSize{size} {}
 
     void resize() { mData.resize((size_t)mSize.x() * mSize.y() * bytesPerPixel()); }
@@ -416,7 +416,7 @@ public:
 
     size_t partId() const { return mPartId; }
 
-    const string& name() const { return mName; }
+    string_view name() const { return mName; }
 
     const Vector2i& size() const { return mSize; }
 
@@ -438,7 +438,7 @@ private:
     vector<char> mData;
 };
 
-Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, const string& channelSelector, int priority, bool) const {
+Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool) const {
     try {
         if (!isExrImage(iStream)) {
             throw FormatNotSupported{"File is not an EXR image."};

@@ -62,7 +62,7 @@ public:
 
     void setImage(std::shared_ptr<Image> image) { mImage = image; }
     void setReference(std::shared_ptr<Image> reference) { mReference = reference; }
-    void setRequestedChannelGroup(const std::string& groupName) { mRequestedChannelGroup = groupName; }
+    void setRequestedChannelGroup(std::string_view groupName) { mRequestedChannelGroup = groupName; }
 
     nanogui::Vector2i getImageCoords(const Image* image, nanogui::Vector2i mousePos);
     nanogui::Vector2i getDisplayWindowCoords(const Image* image, nanogui::Vector2i mousePos);
@@ -119,13 +119,13 @@ public:
 
 private:
     static std::vector<Channel> channelsFromImages(
-        std::shared_ptr<Image> image, std::shared_ptr<Image> reference, const std::string& requestedChannelGroup, EMetric metric, int priority
+        std::shared_ptr<Image> image, std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority
     );
 
     static Task<std::shared_ptr<CanvasStatistics>> computeCanvasStatistics(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
-        const std::string& requestedChannelGroup,
+        std::string_view requestedChannelGroup,
         EMetric metric,
         const Box2i& region,
         int priority

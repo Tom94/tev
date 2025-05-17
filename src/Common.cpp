@@ -106,8 +106,8 @@ bool naturalCompare(string_view a, string_view b) {
     return a.size() - i < b.size() - j;
 }
 
-vector<string> split(string_view text, string_view delim) {
-    vector<string> result;
+vector<string_view> split(string_view text, string_view delim) {
+    vector<string_view> result;
     size_t begin = 0;
     while (true) {
         size_t end = text.find_first_of(delim, begin);
@@ -179,6 +179,7 @@ bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
             if (matchedPartId) {
                 *matchedPartId = i;
             }
+
             return true;
         }
     }

@@ -28,7 +28,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     char magic[4];
     iStream.read(magic, 4);
     string magicString(magic, 4);

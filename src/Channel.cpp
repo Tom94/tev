@@ -26,7 +26,7 @@ using namespace std;
 
 namespace tev {
 
-pair<string, string> Channel::split(const string& channel) {
+pair<string_view, string_view> Channel::split(string_view channel) {
     size_t dotPosition = channel.rfind(".");
     if (dotPosition != string::npos) {
         return {channel.substr(0, dotPosition + 1), channel.substr(dotPosition + 1)};
@@ -35,16 +35,16 @@ pair<string, string> Channel::split(const string& channel) {
     return {"", channel};
 }
 
-string Channel::tail(const string& channel) { return split(channel).second; }
+string_view Channel::tail(string_view channel) { return split(channel).second; }
 
-string Channel::head(const string& channel) { return split(channel).first; }
+string_view Channel::head(string_view channel) { return split(channel).first; }
 
-bool Channel::isTopmost(const string& channel) { return tail(channel) == channel; }
+bool Channel::isTopmost(string_view channel) { return tail(channel) == channel; }
 
-bool Channel::isAlpha(const string& channel) { return toLower(tail(channel)) == "a"; }
+bool Channel::isAlpha(string_view channel) { return toLower(tail(channel)) == "a"; }
 
-Color Channel::color(string channel) {
-    channel = toLower(tail(channel));
+Color Channel::color(string_view channel) {
+    auto lowerChannel = toLower(tail(channel));
 
     if (channel == "r") {
         return Color(0.8f, 0.2f, 0.2f, 1.0f);
@@ -57,7 +57,7 @@ Color Channel::color(string channel) {
     return Color(1.0f, 1.0f);
 }
 
-Channel::Channel(const string& name, const nanogui::Vector2i& size, shared_ptr<vector<float>> data, size_t dataOffset, size_t dataStride) :
+Channel::Channel(string_view name, const nanogui::Vector2i& size, shared_ptr<vector<float>> data, size_t dataOffset, size_t dataStride) :
     mName{name}, mSize{size} {
     if (data) {
         mData = data;

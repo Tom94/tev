@@ -32,7 +32,7 @@ public:
 
     bool hasPremultipliedAlpha() const override { return true; }
 
-    virtual bool canSaveFile(const std::string& extension) const override { return toLower(extension) == ".exr"; }
+    virtual bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".exr"; }
 };
 
 } // namespace tev

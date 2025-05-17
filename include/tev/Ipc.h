@@ -101,11 +101,11 @@ public:
         int64_t stride;
     };
 
-    void setOpenImage(const std::string& imagePath, const std::string& channelSelector, bool grabFocus);
-    void setReloadImage(const std::string& imageName, bool grabFocus);
-    void setCloseImage(const std::string& imageName);
+    void setOpenImage(std::string_view imagePath, std::string_view channelSelector, bool grabFocus);
+    void setReloadImage(std::string_view imageName, bool grabFocus);
+    void setCloseImage(std::string_view imageName);
     void setUpdateImage(
-        const std::string& imageName,
+        std::string_view imageName,
         bool grabFocus,
         std::span<const ChannelDesc> channelDescs,
         int32_t x,
@@ -115,9 +115,9 @@ public:
         std::span<const float> stridedImageData
     );
     void setCreateImage(
-        const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, std::span<const std::string> channelNames
+        std::string_view imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, std::span<const std::string> channelNames
     );
-    void setVectorGraphics(const std::string& imageName, bool grabFocus, bool append, std::span<const VgCommand> commands);
+    void setVectorGraphics(std::string_view imageName, bool grabFocus, bool append, std::span<const VgCommand> commands);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
@@ -204,7 +204,7 @@ private:
             return *this;
         }
 
-        OStream& operator<<(const std::string& var) {
+        OStream& operator<<(std::string_view var) {
             for (auto&& character : var) {
                 *this << character;
             }
@@ -251,7 +251,7 @@ public:
     using socket_t = int;
 #endif
 
-    Ipc(const std::string& hostname = "127.0.0.1:14158");
+    Ipc(std::string_view hostname = "127.0.0.1:14158");
     virtual ~Ipc();
 
     bool isPrimaryInstance() const { return mIsPrimaryInstance; }
@@ -283,7 +283,7 @@ private:
 
     class SocketConnection {
     public:
-        SocketConnection(Ipc::socket_t fd, const std::string& name);
+        SocketConnection(Ipc::socket_t fd, std::string_view name);
 
         // Servicing a connection also returns the total number of bytes received
         size_t service(std::function<void(const IpcPacket&)> callback);
