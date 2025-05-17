@@ -22,6 +22,7 @@
 
 #include <coroutine>
 #include <future>
+#include <span>
 
 namespace tev {
 
@@ -43,8 +44,8 @@ private:
     std::atomic<int> mCounter;
 };
 
-template <typename T> void waitAll(std::vector<T>& futures) {
-    for (auto& f : futures) {
+template <typename T> void waitAll(std::span<T> futures) {
+    for (auto&& f : futures) {
         f.get();
     }
 }

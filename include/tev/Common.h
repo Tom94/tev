@@ -277,8 +277,7 @@ inline uint64_t swapBytes(uint64_t value) {
 #endif
 }
 
-template <typename T>
-T swapBytes(T value) {
+template <typename T> T swapBytes(T value) {
     T result;
     auto valueChars = reinterpret_cast<char*>(&value);
     auto resultChars = reinterpret_cast<char*>(&result);

@@ -92,10 +92,10 @@ public:
         int y,
         int width,
         int height,
-        const std::vector<float>& imageData
+        std::span<const float> imageData
     );
 
-    void updateImageVectorGraphics(const std::string& imageName, bool shallSelect, bool append, const std::vector<VgCommand>& commands);
+    void updateImageVectorGraphics(const std::string& imageName, bool shallSelect, bool append, std::span<const VgCommand> commands);
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 

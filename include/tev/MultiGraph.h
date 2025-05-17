@@ -26,6 +26,8 @@
 
 #include <nanogui/widget.h>
 
+#include <span>
+
 namespace tev {
 
 class MultiGraph : public nanogui::Widget {
@@ -50,9 +52,8 @@ public:
     const nanogui::Color& textColor() const { return mTextColor; }
     void setTextColor(const nanogui::Color& textColor) { mTextColor = textColor; }
 
-    const std::vector<float>& values() const { return mValues; }
-    std::vector<float>& values() { return mValues; }
-    void setValues(const std::vector<float>& values) { mValues = values; }
+    std::span<const float> values() const { return mValues; }
+    void setValues(std::span<const float> values) { mValues = {values.begin(), values.end()}; }
 
     void setNChannels(int nChannels) { mNChannels = nChannels; }
 

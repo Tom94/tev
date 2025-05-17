@@ -67,8 +67,8 @@ public:
     nanogui::Vector2i getImageCoords(const Image* image, nanogui::Vector2i mousePos);
     nanogui::Vector2i getDisplayWindowCoords(const Image* image, nanogui::Vector2i mousePos);
 
-    void getValuesAtNanoPos(nanogui::Vector2i nanoPos, std::vector<float>& result, const std::vector<std::string>& channels);
-    std::vector<float> getValuesAtNanoPos(nanogui::Vector2i nanoPos, const std::vector<std::string>& channels) {
+    void getValuesAtNanoPos(nanogui::Vector2i nanoPos, std::vector<float>& result, std::span<const std::string> channels);
+    std::vector<float> getValuesAtNanoPos(nanogui::Vector2i nanoPos, std::span<const std::string> channels) {
         std::vector<float> result;
         getValuesAtNanoPos(nanoPos, result, channels);
         return result;

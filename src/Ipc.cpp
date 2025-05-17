@@ -92,12 +92,12 @@ void IpcPacket::setCloseImage(const string& imageName) {
 void IpcPacket::setUpdateImage(
     const string& imageName,
     bool grabFocus,
-    const vector<IpcPacket::ChannelDesc>& channelDescs,
+    span<const IpcPacket::ChannelDesc> channelDescs,
     int32_t x,
     int32_t y,
     int32_t width,
     int32_t height,
-    const vector<float>& stridedImageData
+    span<const float> stridedImageData
 ) {
     if (channelDescs.empty()) {
         throw runtime_error{"UpdateImage IPC packet must have a non-zero channel count."};
@@ -141,7 +141,7 @@ void IpcPacket::setUpdateImage(
 }
 
 void IpcPacket::setCreateImage(
-    const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const vector<string>& channelNames
+    const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, span<const string> channelNames
 ) {
     if ((int32_t)channelNames.size() != nChannels) {
         throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
@@ -156,7 +156,7 @@ void IpcPacket::setCreateImage(
     payload << channelNames;
 }
 
-void IpcPacket::setVectorGraphics(const string& imageName, bool grabFocus, bool append, const vector<VgCommand>& commands) {
+void IpcPacket::setVectorGraphics(const string& imageName, bool grabFocus, bool append, span<const VgCommand> commands) {
     OStream payload{mPayload};
     payload << EType::VectorGraphics;
     payload << grabFocus;

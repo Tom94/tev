@@ -143,7 +143,7 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
     }
 }
 
-static int mainFunc(const vector<string>& arguments) {
+static int mainFunc(span<const string> arguments) {
     ArgumentParser parser{
         "tev — The EXR Viewer\n"
         "version " TEV_VERSION

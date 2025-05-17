@@ -22,6 +22,7 @@
 #include <tev/VectorGraphics.h>
 
 #include <list>
+#include <span>
 #include <vector>
 
 namespace tev {
@@ -106,17 +107,17 @@ public:
     void setUpdateImage(
         const std::string& imageName,
         bool grabFocus,
-        const std::vector<ChannelDesc>& channelDescs,
+        std::span<const ChannelDesc> channelDescs,
         int32_t x,
         int32_t y,
         int32_t width,
         int32_t height,
-        const std::vector<float>& stridedImageData
+        std::span<const float> stridedImageData
     );
     void setCreateImage(
-        const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const std::vector<std::string>& channelNames
+        const std::string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, std::span<const std::string> channelNames
     );
-    void setVectorGraphics(const std::string& imageName, bool grabFocus, bool append, const std::vector<VgCommand>& commands);
+    void setVectorGraphics(const std::string& imageName, bool grabFocus, bool append, std::span<const VgCommand> commands);
 
     IpcPacketOpenImage interpretAsOpenImage() const;
     IpcPacketReloadImage interpretAsReloadImage() const;
@@ -130,7 +131,7 @@ private:
 
     class IStream {
     public:
-        IStream(const std::vector<char>& data) : mData{data} {
+        IStream(std::span<const char> data) : mData{data} {
             uint32_t size;
             *this >> size;
             if ((size_t)size != data.size()) {
@@ -161,7 +162,7 @@ private:
             return *this;
         }
 
-        template <typename T> IStream& operator>>(std::vector<T>& var) {
+        template <typename T> IStream& operator>>(std::span<T> var) {
             for (auto& elem : var) {
                 *this >> elem;
             }
@@ -183,7 +184,7 @@ private:
         const char* get() const { return &mData[mIdx]; }
 
     private:
-        const std::vector<char>& mData;
+        std::span<const char> mData;
         size_t mIdx = 0;
     };
 
@@ -195,7 +196,7 @@ private:
             *this << (uint32_t)0;
         }
 
-        template <typename T> OStream& operator<<(const std::vector<T>& var) {
+        template <typename T> OStream& operator<<(std::span<const T> var) {
             for (auto&& elem : var) {
                 *this << elem;
             }

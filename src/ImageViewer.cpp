@@ -626,7 +626,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
             // sanitize the input crop
             Box2i crop = {
-                {startImageCoords, imageCoords}
+                {{startImageCoords, imageCoords}}
             };
             crop.max += Vector2i{1};
 
@@ -1175,7 +1175,7 @@ void ImageViewer::draw_contents() {
         }
     } else {
         mHistogram->setNChannels(1);
-        mHistogram->setValues({0.0f});
+        mHistogram->setValues({{0.0f}});
         mHistogram->setMinimum(0);
         mHistogram->setMean(0);
         mHistogram->setMaximum(0);
@@ -1406,7 +1406,7 @@ void ImageViewer::reloadImagesWhoseFileChanged() {
 }
 
 void ImageViewer::updateImage(
-    const string& imageName, bool shallSelect, const string& channel, int x, int y, int width, int height, const vector<float>& imageData
+    const string& imageName, bool shallSelect, const string& channel, int x, int y, int width, int height, span<const float> imageData
 ) {
     auto image = imageByName(imageName);
     if (!image) {
@@ -1429,7 +1429,7 @@ void ImageViewer::updateImage(
     }
 }
 
-void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallSelect, bool append, const vector<VgCommand>& commands) {
+void ImageViewer::updateImageVectorGraphics(const string& imageName, bool shallSelect, bool append, span<const VgCommand> commands) {
     auto image = imageByName(imageName);
     if (!image) {
         tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
@@ -2151,7 +2151,9 @@ string ImageViewer::groupName(size_t index) {
         return "";
     }
 
-    return mCurrentImage->channelGroups().at(index).name;
+    const auto groups = mCurrentImage->channelGroups();
+    TEV_ASSERT(index < groups.size(), "Group index out of bounds.");
+    return groups[index].name;
 }
 
 int ImageViewer::groupId(const string& groupName) const {

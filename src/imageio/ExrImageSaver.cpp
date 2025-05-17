@@ -27,6 +27,7 @@
 #include <ImfOutputFile.h>
 
 #include <ostream>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -69,7 +70,7 @@ private:
     ostream& mStream;
 };
 
-void ExrImageSaver::save(ostream& oStream, const fs::path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
+void ExrImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
     vector<string> channelNames = {
         "R",
         "G",

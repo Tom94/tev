@@ -23,6 +23,7 @@
 
 #include <nanogui/vector.h>
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -105,7 +106,7 @@ public:
         }
     }
 
-    void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
+    void updateTile(int x, int y, int width, int height, std::span<const float> newData);
 
     float& at(size_t index) { return data()[index * mDataStride]; }
 

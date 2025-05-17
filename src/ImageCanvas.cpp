@@ -29,6 +29,7 @@
 
 #include <fstream>
 #include <set>
+#include <span>
 
 using namespace nanogui;
 using namespace std;
@@ -471,7 +472,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         };
 
         // Draw image-specific vector graphics overlay for both the currently selected image as well as the reference.
-        auto applyVgCommandsSandboxed = [&](const Color& defaultColor, const vector<VgCommand>& commands) {
+        auto applyVgCommandsSandboxed = [&](const Color& defaultColor, span<const VgCommand> commands) {
             nvgSave(ctx);
 
             nvgFillColor(ctx, defaultColor);
@@ -557,7 +558,7 @@ Vector2i ImageCanvas::getDisplayWindowCoords(const Image* image, Vector2i nanoPo
     return imageCoords;
 }
 
-void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, const vector<string>& channels) {
+void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, span<const string> channels) {
     result.clear();
     if (!mImage) {
         return;

@@ -757,15 +757,16 @@ Task<void> postprocessRgb(
             },
             priority
         );
-    } else if (uint32_t previewColorSpace; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &previewColorSpace) && previewColorSpace > 1) {
+    } else if (uint32_t pcsInt; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &pcsInt) && pcsInt > 1) {
         // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
         // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
-        tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)previewColorSpace);
+        tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)pcsInt);
 
-        if (previewColorSpace == EPreviewColorSpace::AdobeRGB || previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
-            tlog::warning(
-            ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
-        }
+        const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(pcsInt);
+        // if (pcs == EPreviewColorSpace::AdobeRGB || pcs == EPreviewColorSpace::ProPhotoRGB) {
+        //     tlog::warning(
+        //     ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
+        // }
 
         size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -780,9 +781,9 @@ Task<void> postprocessRgb(
             priority
         );
 
-        if (previewColorSpace == EPreviewColorSpace::AdobeRGB) {
+        if (pcs == EPreviewColorSpace::AdobeRGB) {
             resultData.toRec709 = chromaToRec709Matrix(adobeChroma());
-        } else if (previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
+        } else if (pcs == EPreviewColorSpace::ProPhotoRGB) {
             resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
         }
     } else {

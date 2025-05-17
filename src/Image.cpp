@@ -27,6 +27,7 @@
 #include <fstream>
 #include <istream>
 #include <unordered_set>
+#include <vector>
 
 using namespace nanogui;
 using namespace std;
@@ -323,7 +324,7 @@ string Image::shortName() const {
     return result;
 }
 
-bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
+bool Image::isInterleavedRgba(span<const string> channelNames) const {
     // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
     // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
     const float* interleavedData = nullptr;
@@ -345,7 +346,7 @@ bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
     return interleavedData;
 }
 
-Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
+Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
     if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
         tlog::error() << fmt::format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
         return nullptr;
@@ -384,7 +385,7 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
                         Texture::WrapMode::ClampToEdge,
                         1, Texture::TextureFlags::ShaderRead,
                         true, },
-            channelNames,
+            {channelNames.begin(), channelNames.end()},
             false,
     }
     );
@@ -434,7 +435,7 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
                 );
             }
         }
-        waitAll(tasks);
+        waitAll<Task<void>>(tasks);
         texture->upload((uint8_t*)data.data());
     }
 
@@ -592,7 +593,7 @@ vector<string> Image::getSortedChannels(const string& layerName) const {
     return result;
 }
 
-vector<string> Image::getExistingChannels(const vector<string>& requestedChannels) const {
+vector<string> Image::getExistingChannels(span<const string> requestedChannels) const {
     vector<string> result;
     std::copy_if(std::begin(requestedChannels), std::end(requestedChannels), std::back_inserter(result), [&](const string& c) {
         return hasChannel(c);
@@ -600,7 +601,7 @@ vector<string> Image::getExistingChannels(const vector<string>& requestedChannel
     return result;
 }
 
-void Image::updateChannel(const string& channelName, int x, int y, int width, int height, const vector<float>& data) {
+void Image::updateChannel(const string& channelName, int x, int y, int width, int height, span<const float> data) {
     Channel* chan = mutableChannel(channelName);
     if (!chan) {
         tlog::warning() << "Channel " << channelName << " could not be updated, because it does not exist.";
@@ -645,7 +646,7 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     }
 }
 
-void Image::updateVectorGraphics(bool append, const vector<VgCommand>& commands) {
+void Image::updateVectorGraphics(bool append, span<const VgCommand> commands) {
     if (!append) {
         mVgCommands.clear();
     }

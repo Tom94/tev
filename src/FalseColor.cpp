@@ -23,7 +23,7 @@ using namespace std;
 namespace tev {
 
 namespace colormap {
-    const vector<float>& turbo() {
+    span<const float> turbo() {
         // "turbo" colormap data generated with scripts/sample-colormap.py
         static const vector<float> data = {
             0.18995f, 0.07176f, 0.23217f, 1.0f,
@@ -287,7 +287,7 @@ namespace colormap {
         return data;
     }
 
-    const vector<float>& viridis() {
+    span<const float> viridis() {
         // "viridis" colormap data generated with scripts/sample-colormap.py
         static const vector<float> data = {
             0.267004f, 0.004874f, 0.329415f, 1.0f,

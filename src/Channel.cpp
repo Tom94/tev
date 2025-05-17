@@ -89,7 +89,7 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) { at(i) *= other.at(i); }, priority);
 }
 
-void Channel::updateTile(int x, int y, int width, int height, const vector<float>& newData) {
+void Channel::updateTile(int x, int y, int width, int height, span<const float> newData) {
     if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
         tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height
                         << "] could not be updated because it does not fit into the channel's size " << size();

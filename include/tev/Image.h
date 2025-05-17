@@ -34,6 +34,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <span>
 #include <vector>
 
 namespace tev {
@@ -143,7 +144,7 @@ public:
     bool hasChannel(const std::string& channelName) const { return mData.hasChannel(channelName); }
 
     const Channel* channel(const std::string& channelName) const { return mData.channel(channelName); }
-    std::vector<const Channel*> channels(const std::vector<std::string>& channelNames) const {
+    std::vector<const Channel*> channels(std::span<const std::string> channelNames) const {
         std::vector<const Channel*> result;
         for (const auto& channelName : channelNames) {
             result.push_back(channel(channelName));
@@ -152,15 +153,15 @@ public:
         return result;
     }
 
-    bool isInterleavedRgba(const std::vector<std::string>& channelNames) const;
+    bool isInterleavedRgba(std::span<const std::string> channelNames) const;
 
-    nanogui::Texture* texture(const std::vector<std::string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
+    nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
 
     std::vector<std::string> channelsInGroup(const std::string& groupName) const;
     void decomposeChannelGroup(const std::string& groupName);
 
     std::vector<std::string> getSortedChannels(const std::string& layerName) const;
-    std::vector<std::string> getExistingChannels(const std::vector<std::string>& requestedChannels) const;
+    std::vector<std::string> getExistingChannels(std::span<const std::string> requestedChannels) const;
 
     nanogui::Vector2i size() const { return mData.size(); }
 
@@ -180,7 +181,7 @@ public:
 
     size_t numPixels() const { return mData.numPixels(); }
 
-    const std::vector<ChannelGroup>& channelGroups() const { return mChannelGroups; }
+    std::span<const ChannelGroup> channelGroups() const { return mChannelGroups; }
 
     int id() const { return mId; }
 
@@ -195,17 +196,17 @@ public:
 
     static int drawId() { return sId++; }
 
-    void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
+    void updateChannel(const std::string& channelName, int x, int y, int width, int height, std::span<const float> data);
 
-    void updateVectorGraphics(bool append, const std::vector<VgCommand>& commands);
+    void updateVectorGraphics(bool append, std::span<const VgCommand> commands);
 
-    const std::vector<VgCommand>& vgCommands() const { return mVgCommands; }
+    std::span<const VgCommand> vgCommands() const { return mVgCommands; }
 
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
     std::string toString() const;
 
-    const std::vector<AttributeNode>& attributes() const { return mData.attributes; }
+    std::span<const AttributeNode> attributes() const { return mData.attributes; }
 
 private:
     static std::atomic<int> sId;
