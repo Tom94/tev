@@ -404,8 +404,18 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
     if (directUpload) {
+        ScopeGuard guard{[now = chrono::system_clock::now()]() {
+            const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
+            tlog::debug() << fmt::format("Direct upload took {:.03}s", duration.count());
+        }};
+
         texture->upload((uint8_t*)channel(channelNames[0])->data());
     } else {
+        ScopeGuard guard{[now = chrono::system_clock::now()]() {
+            const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
+            tlog::debug() << fmt::format("Indirect upload took {:.03}s", duration.count());
+        }};
+
         auto numPixels = this->numPixels();
         vector<float> data = vector<float>(numPixels * 4);
 
@@ -435,11 +445,17 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
                 );
             }
         }
+
         waitAll<Task<void>>(tasks);
         texture->upload((uint8_t*)data.data());
     }
 
     if (minFilter == EInterpolationMode::Trilinear) {
+        ScopeGuard guard{[now = chrono::system_clock::now()]() {
+            const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
+            tlog::debug() << fmt::format("Mipmap generation took {:.03}s", duration.count());
+        }};
+
         texture->generate_mipmap();
     }
 
