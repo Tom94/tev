@@ -555,6 +555,8 @@ Task<void> postprocessLinearRawDng(
                     colorMatrix.m[j][i] = cmt[i * samplesPerPixel + j];
                 }
             }
+
+            tlog::debug() << fmt::format("Found color matrix: {}", colorMatrix);
         } else {
             return optional<Matrix3f>{};
         }
@@ -570,6 +572,8 @@ Task<void> postprocessLinearRawDng(
                     cameraCalibration.m[j][i] = cct[i * samplesPerPixel + j];
                 }
             }
+
+            tlog::debug() << fmt::format("Found camera calibration matrix: {}", colorMatrix);
         }
 
         const auto xyzToCamera = cameraCalibration * colorMatrix;
@@ -594,7 +598,7 @@ Task<void> postprocessLinearRawDng(
             analogBalance[i] = abt[i];
         }
 
-        tlog::debug() << fmt::format("Analog balance: ({}, {}, {})", analogBalance[0], analogBalance[1], analogBalance[2]);
+        tlog::debug() << fmt::format("Analog balance: {}", analogBalance);
     }
 
     // D65 white point
@@ -606,11 +610,11 @@ Task<void> postprocessLinearRawDng(
     // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
     // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
     // (aka RIMM space) in which we will apply the camera profile.
-    auto toRimm = xyzToChromaMatrix(proPhotoChroma());
+    auto toRimm = xyzToChromaMatrix(proPhotoChroma()) * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation);
     for (size_t i = 0; i < camTags.size(); ++i) {
         if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
-            tlog::debug() << fmt::format("Found camera calibration data; applying...");
-            toRimm = toRimm * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation * camToXyz.value());
+            tlog::debug() << fmt::format("Applying resulting camToXyz matrix {}", camToXyz.value());
+            toRimm = toRimm * toMatrix4(camToXyz.value());
             break;
         }
     }
@@ -643,7 +647,7 @@ Task<void> postprocessLinearRawDng(
         uint32_t satDivisions = dims[1];
         uint32_t valueDivisions = dims[2];
 
-        tlog::debug() << fmt::format("Hue/sat/val map dimensions: {} {} {}", hueDivisions, satDivisions, valueDivisions);
+        tlog::debug() << fmt::format("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
         tlog::warning() << "Found hue/sat/val map, but not implemented yet. Image may look wrong.";
