@@ -196,7 +196,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     try {
         if (exifData && exifData->data && exifData->data_sz > 0) {
             tlog::debug(fmt::format("Found EXIF data of size {} bytes", exifData->data_sz));
-            imageData.attributes.emplace_back(Exif{(uint8_t*)exifData->data, exifData->data_sz}.toAttributes());
+            imageData.attributes.emplace_back(Exif({(uint8_t*)exifData->data, exifData->data_sz}).toAttributes());
         }
     } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 

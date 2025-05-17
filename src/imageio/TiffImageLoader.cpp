@@ -218,7 +218,18 @@ static void tiffUnmapProc(thandle_t, tdata_t, toff_t) {
     // No need to unmap, as we are not actually using memory mapping.
 }
 
-void unpackBits(const uint8_t* __restrict input, size_t inputSize, int bitwidth, uint32_t* __restrict output, size_t outputSize, bool handleSign) {
+// https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf page 94
+float dngHdrEncodingFunction(const float x) { return x * (256.0f + x) / (256.0f * (1 + x)); }
+float dngHdrDecodingFunction(const float x) { return 16.0f * (8.0f * x - 8.0f + sqrt(64.0f * x * x - 127.0f * x + 64.0f)); }
+
+void unpackBits(
+    const uint8_t* const __restrict input,
+    const size_t inputSize,
+    const int bitwidth,
+    uint32_t* const __restrict output,
+    const size_t outputSize,
+    const bool handleSign
+) {
     // If the bitwidth is byte aligned (multiple of 8), libtiff already arranged the data in our machine's endianness
     if (bitwidth % 8 == 0) {
         const uint32_t bytesPerSample = bitwidth / 8;
@@ -267,13 +278,14 @@ void unpackBits(const uint8_t* __restrict input, size_t inputSize, int bitwidth,
 
 Task<void> postprocessLinearRawDng(
     TIFF* tif,
-    uint16_t bitsPerSample,
-    uint16_t samplesPerPixel,
-    int numColorChannels,
-    int numRgbaChannels,
+    const uint16_t bitsPerSample,
+    const uint16_t samplesPerPixel,
+    const int numColorChannels,
+    const int numRgbaChannels,
     span<float> floatRgbaData,
     ImageData& resultData,
-    int priority
+    const bool reverseEndian,
+    const int priority
 ) {
     // We follow page 96 of https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
     tlog::debug() << "Mapping LinearRAW to linear RGB...";
@@ -343,8 +355,7 @@ Task<void> postprocessLinearRawDng(
     if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_BLACKLEVEL, TIFF_ANY)) {
         uint16_t blackLevelRepeatRows = 1;
         uint16_t blackLevelRepeatCols = 1;
-
-        if (uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
+        if (const uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
             blackLevelRepeatRows = blackLevelRepeatDim[0];
             blackLevelRepeatCols = blackLevelRepeatDim[1];
         }
@@ -520,18 +531,20 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
-    // 4. Clipping: the docs recommend clipping to 1 from above but to keep sub-zero values intact
-    const size_t numPixels = (size_t)size.x() * size.y();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
-        numPixels,
-        [&](size_t i) {
-            for (int c = 0; c < numColorChannels; ++c) {
-                floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
-            }
-        },
-        priority
-    );
+    // 4. Clipping: the docs recommend clipping to 1 from above but to keep sub-zero values intact. We will, however, completely skip
+    // clipping just in case there's HDR data in there. We can revisit this decision if we encounter an image that looks wrong without this
+    // clipping.
+    // const size_t numPixels = (size_t)size.x() * size.y();
+    // co_await ThreadPool::global().parallelForAsync<size_t>(
+    //     0,
+    //     numPixels,
+    //     [&](size_t i) {
+    //         for (int c = 0; c < numColorChannels; ++c) {
+    //             floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
+    //         }
+    //     },
+    //     priority
+    // );
 
     // 5. Apply camera to XYZ matrix
     if (samplesPerPixel != 3) {
@@ -619,9 +632,7 @@ Task<void> postprocessLinearRawDng(
         }
     }
 
-    // Convert colors to RGB here rather than letting Image.cpp handle it, because there's still post-processing to do.
-
-    // Take advantage of the fact that RGB channels are adjacent in memory
+    // The remaining camera profile transformation is applied in linear ProPhoto RGB space (aka RIMM space)
     span<Vector3f> rgbData{reinterpret_cast<Vector3f*>(floatRgbaData.data()), (size_t)size.x() * size.y()};
     co_await ThreadPool::global().parallelForAsync<int>(
         activeArea.min.y(),
@@ -637,6 +648,66 @@ Task<void> postprocessLinearRawDng(
 
     // Once we're done, we want to convert from RIMM space to sRGB/Rec709
     resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
+
+    struct ProfileDynamicRange {
+        uint16_t version, dynamicRange;
+        float hintMaxOutputValue;
+    };
+
+    bool isHdr = 0;
+    static constexpr uint16_t TIFFTAG_PROFILEDYNAMICRANGE = 52551;
+    if (ProfileDynamicRange* pdr; TIFFGetField(tif, TIFFTAG_PROFILEDYNAMICRANGE, &pdr)) {
+        if (reverseEndian) {
+            pdr->version = swapBytes(pdr->version);
+            pdr->dynamicRange = swapBytes(pdr->dynamicRange);
+        }
+
+        tlog::debug() << fmt::format(
+            "Found profile dynamic range: version={}, dynamicRange={}, hintMaxOutputValue={}", pdr->version, pdr->dynamicRange, pdr->hintMaxOutputValue
+        );
+
+        // Per DNG 1.7.0.0, page 93, a value of 1 refers to HDR images that need to be compressed into 0-1 before the following transforms
+        // take place.
+        isHdr = pdr->dynamicRange == 1;
+    }
+
+    if (isHdr) {
+        tlog::debug() << "Encoding DNG HDR before applying profile";
+        co_await ThreadPool::global().parallelForAsync<int>(
+            activeArea.min.y(),
+            activeArea.max.y(),
+            [&](const int y) {
+                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                    const size_t i = (size_t)y * size.x() + x;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        const size_t idx = i * numRgbaChannels + c;
+                        floatRgbaData[idx] = dngHdrEncodingFunction(floatRgbaData[idx]);
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    ScopeGuard hdrGuard{[&]() -> Task<void> {
+        if (isHdr) {
+            tlog::debug() << "Decoding DNG HDR after applying profile";
+            co_await ThreadPool::global().parallelForAsync<int>(
+                activeArea.min.y(),
+                activeArea.max.y(),
+                [&](const int y) {
+                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                        const size_t i = (size_t)y * size.x() + x;
+                        for (int c = 0; c < numColorChannels; ++c) {
+                            const size_t idx = i * numRgbaChannels + c;
+                            floatRgbaData[idx] = dngHdrDecodingFunction(floatRgbaData[idx]);
+                        }
+                    }
+                },
+                priority
+            );
+        }
+    }};
 
     if (const char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
         tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
@@ -709,10 +780,9 @@ Task<void> postprocessRgb(
     ImageData& resultData,
     const int priority
 ) {
-    Vector2i size = resultData.size();
+    const Vector2i size = resultData.size();
 
     array<Vector2f, 4> chroma = rec709Chroma();
-
     if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries)) {
         tlog::debug() << "Found custom primaries; applying...";
         chroma[0] = {primaries[0], primaries[1]};
@@ -809,7 +879,7 @@ Task<void> postprocessRgb(
     }
 }
 
-Task<ImageData> readTiffImage(TIFF* tif, int priority) {
+Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int priority) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
         throw ImageLoadError{"Failed to read dimensions."};
@@ -1248,7 +1318,7 @@ Task<ImageData> readTiffImage(TIFF* tif, int priority) {
         }
 
         co_await postprocessLinearRawDng(
-            tif, bitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority
+            tif, bitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
@@ -1276,14 +1346,10 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         throw FormatNotSupported{"File is not a TIFF image."};
     }
 
-    auto fileEndianness = magic[0] == 'I' ? endian::little : endian::big;
-    bool reverseBytes = fileEndianness != endian::native;
+    const auto fileEndianness = magic[0] == 'I' ? endian::little : endian::big;
+    const bool reverseEndian = fileEndianness != endian::native;
 
-    uint16_t answer = magic[3] << 8 | magic[2];
-    if (reverseBytes) {
-        answer = swapBytes(answer);
-    }
-
+    const uint16_t answer = reverseEndian ? (magic[2] << 8 | magic[3]) : (magic[3] << 8 | magic[2]);
     if (answer != 42) {
         throw FormatNotSupported{"File is not a TIFF image."};
     }
@@ -1295,7 +1361,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     // additionally load the TIFF image via our EXIF library, which requires the file to be in memory. For the same reason, we also prepend
     // the EXIF FOURCC to the data ahead of the TIFF header.
     iStream.seekg(0, ios::end);
-    size_t fileSize = iStream.tellg();
+    const size_t fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
 
     vector<uint8_t> buffer(fileSize + sizeof(Exif::FOURCC));
@@ -1304,7 +1370,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     optional<AttributeNode> exifAttributes;
     try {
-        auto exif = Exif(buffer.data(), buffer.size());
+        const auto exif = Exif{buffer};
         exifAttributes = exif.toAttributes();
     } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 
@@ -1372,7 +1438,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         try {
             tlog::debug() << fmt::format("Loading {}", name);
 
-            ImageData& data = result.emplace_back(co_await readTiffImage(tif, priority));
+            ImageData& data = result.emplace_back(co_await readTiffImage(tif, reverseEndian, priority));
             data.partName = name;
 
             if (exifAttributes) {

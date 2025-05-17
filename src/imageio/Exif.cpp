@@ -37,7 +37,7 @@ void Exif::prependFourcc(vector<uint8_t>* data) {
     }
 }
 
-Exif::Exif(const uint8_t* exifData, size_t exifDataSize) {
+Exif::Exif(span<const uint8_t> exifData) {
     mExif = exif_data_new();
     mExifLog = exif_log_new();
     mExifLogError = make_unique<bool>(false);
@@ -67,7 +67,7 @@ Exif::Exif(const uint8_t* exifData, size_t exifDataSize) {
     );
 
     exif_data_log(mExif, mExifLog);
-    exif_data_load_data(mExif, exifData, exifDataSize);
+    exif_data_load_data(mExif, exifData.data(), exifData.size());
 
     if (!mExif || *mExifLogError) {
         throw invalid_argument{"Failed to decode EXIF data."};
