@@ -53,7 +53,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
         throw invalid_argument{"AppleMakerNote: failed to determine byte order."};
     }
 
-    uint32_t tcount = read<uint16_t>(data + ofs + 14, mReverseEndianess);
+    uint32_t tcount = read<uint16_t>(data + ofs + 14);
 
     if (length < ofs + 16 + tcount * 12 + 4) {
         throw invalid_argument{"AppleMakerNote: too short"};
@@ -68,9 +68,9 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
         }
 
         AppleMakerNoteEntry entry;
-        entry.tag = read<uint16_t>(data + ofs, mReverseEndianess);
-        entry.format = read<AppleMakerNoteEntry::EFormat>(data + ofs + 2, mReverseEndianess);
-        entry.nComponents = read<uint32_t>(data + ofs + 4, mReverseEndianess);
+        entry.tag = read<uint16_t>(data + ofs);
+        entry.format = read<AppleMakerNoteEntry::EFormat>(data + ofs + 2);
+        entry.nComponents = read<uint32_t>(data + ofs + 4);
 
         if (ofs + 4 + entry.size() > length) {
             throw invalid_argument{"AppleMakerNote: elem overflow"};
@@ -79,7 +79,7 @@ AppleMakerNote::AppleMakerNote(const uint8_t* data, size_t length) {
         size_t entryOffset;
         if (entry.size() > 4) {
             // Entry is stored somewhere else, pointed to by the following
-            entryOffset = read<uint32_t>(data + ofs + 8, mReverseEndianess); // -6?
+            entryOffset = read<uint32_t>(data + ofs + 8); // -6?
         } else {
             entryOffset = ofs + 8;
         }
