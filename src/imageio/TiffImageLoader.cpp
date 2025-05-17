@@ -555,6 +555,8 @@ Task<void> postprocessLinearRawDng(
                     colorMatrix.m[j][i] = cmt[i * samplesPerPixel + j];
                 }
             }
+
+            tlog::debug() << fmt::format("Found color matrix: {}", colorMatrix);
         } else {
             return optional<Matrix3f>{};
         }
@@ -570,6 +572,8 @@ Task<void> postprocessLinearRawDng(
                     cameraCalibration.m[j][i] = cct[i * samplesPerPixel + j];
                 }
             }
+
+            tlog::debug() << fmt::format("Found camera calibration matrix: {}", colorMatrix);
         }
 
         const auto xyzToCamera = cameraCalibration * colorMatrix;
@@ -594,7 +598,7 @@ Task<void> postprocessLinearRawDng(
             analogBalance[i] = abt[i];
         }
 
-        tlog::debug() << fmt::format("Analog balance: ({}, {}, {})", analogBalance[0], analogBalance[1], analogBalance[2]);
+        tlog::debug() << fmt::format("Analog balance: {}", analogBalance);
     }
 
     // D65 white point
@@ -606,11 +610,11 @@ Task<void> postprocessLinearRawDng(
     // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
     // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
     // (aka RIMM space) in which we will apply the camera profile.
-    auto toRimm = xyzToChromaMatrix(proPhotoChroma());
+    auto toRimm = xyzToChromaMatrix(proPhotoChroma()) * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation);
     for (size_t i = 0; i < camTags.size(); ++i) {
         if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
-            tlog::debug() << fmt::format("Found camera calibration data; applying...");
-            toRimm = toRimm * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation * camToXyz.value());
+            tlog::debug() << fmt::format("Applying resulting camToXyz matrix {}", camToXyz.value());
+            toRimm = toRimm * toMatrix4(camToXyz.value());
             break;
         }
     }
@@ -643,7 +647,7 @@ Task<void> postprocessLinearRawDng(
         uint32_t satDivisions = dims[1];
         uint32_t valueDivisions = dims[2];
 
-        tlog::debug() << fmt::format("Hue/sat/val map dimensions: {} {} {}", hueDivisions, satDivisions, valueDivisions);
+        tlog::debug() << fmt::format("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
         tlog::warning() << "Found hue/sat/val map, but not implemented yet. Image may look wrong.";
@@ -753,15 +757,16 @@ Task<void> postprocessRgb(
             },
             priority
         );
-    } else if (uint32_t previewColorSpace; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &previewColorSpace) && previewColorSpace > 1) {
+    } else if (uint32_t pcsInt; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &pcsInt) && pcsInt > 1) {
         // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
         // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
-        tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)previewColorSpace);
+        tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)pcsInt);
 
-        if (previewColorSpace == EPreviewColorSpace::AdobeRGB || previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
-            tlog::warning(
-            ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
-        }
+        const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(pcsInt);
+        // if (pcs == EPreviewColorSpace::AdobeRGB || pcs == EPreviewColorSpace::ProPhotoRGB) {
+        //     tlog::warning(
+        //     ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
+        // }
 
         size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -776,9 +781,9 @@ Task<void> postprocessRgb(
             priority
         );
 
-        if (previewColorSpace == EPreviewColorSpace::AdobeRGB) {
+        if (pcs == EPreviewColorSpace::AdobeRGB) {
             resultData.toRec709 = chromaToRec709Matrix(adobeChroma());
-        } else if (previewColorSpace == EPreviewColorSpace::ProPhotoRGB) {
+        } else if (pcs == EPreviewColorSpace::ProPhotoRGB) {
             resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
         }
     } else {
@@ -1261,7 +1266,7 @@ Task<ImageData> readTiffImage(TIFF* tif, int priority) {
     co_return resultData;
 }
 
-Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, const string&, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, bool applyGainmaps) const {
     // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
     // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
     // It became quite huge, but there are still many things that are not supported, most notably the photometric specifiers for CIELAB, CIE Lab, and ICC Lab.
@@ -1357,12 +1362,14 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     vector<ImageData> result;
 
     const auto tryLoadImage = [&](tdir_t dir, int subId, int subChainId) -> Task<void> {
-        string name = subId != -1 ? fmt::format("main.{}.sub.{}.{}", dir, subId, subChainId) : fmt::format("main.{}", dir);
-        try {
-            if (EDngSubfileType type; isDng && TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
-                name = dngSubFileTypeToString(type);
-            }
+        string name;
+        if (EDngSubfileType type; isDng && TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
+            name = dngSubFileTypeToString(type);
+        } else {
+            name = subId != -1 ? fmt::format("main.{}.sub.{}.{}", dir, subId, subChainId) : fmt::format("main.{}", dir);
+        }
 
+        try {
             tlog::debug() << fmt::format("Loading {}", name);
 
             ImageData& data = result.emplace_back(co_await readTiffImage(tif, priority));

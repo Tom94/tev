@@ -29,19 +29,6 @@ namespace tev {
 
 bool isAppleMakernote(const uint8_t* data, size_t length);
 
-template <typename T> T read(const uint8_t* data, bool reverseEndianness) {
-    if (reverseEndianness) {
-        T result;
-        for (size_t i = 0; i < sizeof(T); ++i) {
-            reinterpret_cast<uint8_t*>(&result)[i] = data[sizeof(T) - i - 1];
-        }
-
-        return result;
-    } else {
-        return *reinterpret_cast<const T*>(data);
-    }
-}
-
 struct AppleMakerNoteEntry {
     enum class EFormat : uint16_t {
         Byte = 1,
@@ -95,6 +82,15 @@ class AppleMakerNote {
 public:
     AppleMakerNote(const uint8_t* data, size_t length);
 
+    template <typename T> T read(const uint8_t* data) const {
+        T result = *reinterpret_cast<const T*>(data);
+        if (mReverseEndianess) {
+            result = swapBytes(result);
+        }
+
+        return result;
+    }
+
     template <typename T> T tryGetFloat(uint16_t tag, T defaultValue) const {
         if (mTags.count(tag) == 0) {
             return defaultValue;
@@ -113,19 +109,19 @@ public:
 
         switch (entry.format) {
             case AppleMakerNoteEntry::EFormat::Byte: return static_cast<T>(*data);
-            case AppleMakerNoteEntry::EFormat::Short: return static_cast<T>(read<uint16_t>(data, mReverseEndianess));
-            case AppleMakerNoteEntry::EFormat::Long: return static_cast<T>(read<uint32_t>(data, mReverseEndianess));
+            case AppleMakerNoteEntry::EFormat::Short: return static_cast<T>(read<uint16_t>(data));
+            case AppleMakerNoteEntry::EFormat::Long: return static_cast<T>(read<uint32_t>(data));
             case AppleMakerNoteEntry::EFormat::Rational: {
-                uint32_t numerator = read<uint32_t>(data, mReverseEndianess);
-                uint32_t denominator = read<uint32_t>(data + sizeof(uint32_t), mReverseEndianess);
+                uint32_t numerator = read<uint32_t>(data);
+                uint32_t denominator = read<uint32_t>(data + sizeof(uint32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
             case AppleMakerNoteEntry::EFormat::Sbyte: return static_cast<T>(*reinterpret_cast<const int8_t*>(data));
-            case AppleMakerNoteEntry::EFormat::Sshort: return static_cast<T>(read<int16_t>(data, mReverseEndianess));
-            case AppleMakerNoteEntry::EFormat::Slong: return static_cast<T>(read<int32_t>(data, mReverseEndianess));
+            case AppleMakerNoteEntry::EFormat::Sshort: return static_cast<T>(read<int16_t>(data));
+            case AppleMakerNoteEntry::EFormat::Slong: return static_cast<T>(read<int32_t>(data));
             case AppleMakerNoteEntry::EFormat::Srational: {
-                int32_t numerator = read<int32_t>(data, mReverseEndianess);
-                int32_t denominator = read<int32_t>(data + sizeof(int32_t), mReverseEndianess);
+                int32_t numerator = read<int32_t>(data);
+                int32_t denominator = read<int32_t>(data + sizeof(int32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
             case AppleMakerNoteEntry::EFormat::Float: return static_cast<T>(*reinterpret_cast<const float*>(data));

@@ -29,7 +29,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     char magic[16] = {0};
     iStream.read(magic, sizeof(magic));
     if (!iStream || strncmp(magic, "RIFF", 4) != 0 || strncmp(magic + 8, "WEBP", 4) != 0) {
@@ -62,9 +62,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             try {
                 tlog::debug() << "Found ICC color profile. Attempting to apply...";
                 iccProfile = make_unique<ColorProfile>(ColorProfile::fromIcc(chunkIter.chunk.bytes, chunkIter.chunk.size));
-            } catch (const runtime_error& e) {
-                tlog::warning() << fmt::format("Failed to create ICC color profile: {}", e.what());
-            }
+            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to create ICC color profile: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get ICCP chunk from webp image, despite flag being set.";
         }

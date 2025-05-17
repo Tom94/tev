@@ -151,7 +151,7 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     iStream.seekg(0, iStream.end);
     size_t dataSize = iStream.tellg();
     if (dataSize < 4) {

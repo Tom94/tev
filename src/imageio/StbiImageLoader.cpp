@@ -27,7 +27,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     static const stbi_io_callbacks callbacks = {
         // Read
         [](void* context, char* data, int size) {
@@ -96,7 +96,9 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             co_await toFloat32((float*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority);
             data = (float*)data + numPixels * numChannels;
         } else {
-            co_await toFloat32<uint8_t, true>((uint8_t*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority);
+            co_await toFloat32<uint8_t, true>(
+                (uint8_t*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+            );
             data = (uint8_t*)data + numPixels * numChannels;
         }
     }

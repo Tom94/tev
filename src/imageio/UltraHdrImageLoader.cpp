@@ -54,7 +54,7 @@ static string toString(uhdr_color_gamut_t cg) {
     }
 }
 
-Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool applyGainmaps) const {
     if (!applyGainmaps) {
         throw FormatNotSupported{"Ultra HDR images must have gainmaps applied."};
     }

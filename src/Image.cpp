@@ -27,13 +27,14 @@
 #include <fstream>
 #include <istream>
 #include <unordered_set>
+#include <vector>
 
 using namespace nanogui;
 using namespace std;
 
 namespace tev {
 
-vector<string> ImageData::channelsInLayer(string layerName) const {
+vector<string> ImageData::channelsInLayer(string_view layerName) const {
     vector<string> result;
 
     for (const auto& c : channels) {
@@ -151,7 +152,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
         Vector2i size;
 
         struct Hash {
-            size_t operator()(const DataDesc& interval) const { return std::hash<shared_ptr<vector<float>>>()(interval.data); }
+            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<vector<float>>>()(interval.data); }
         };
 
         bool operator==(const DataDesc& other) const { return data == other.data && size == other.size; }
@@ -185,7 +186,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     orientation = EOrientation::TopLeft;
 }
 
-Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriority) {
+Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
     }
@@ -243,10 +244,10 @@ Task<void> ImageData::ensureValid(const string& channelSelector, int taskPriorit
     if (layers.empty()) {
         set<string> layerNames;
         for (auto& c : channels) {
-            layerNames.insert(Channel::head(c.name()));
+            layerNames.emplace(Channel::head(c.name()));
         }
 
-        for (const string& l : layerNames) {
+        for (string_view l : layerNames) {
             layers.emplace_back(l);
         }
     }
@@ -287,7 +288,7 @@ Image::dither_matrix_t Image::ditherMatrix() {
     return thresholdMatrix;
 }
 
-Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const string& channelSelector) :
+Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector) :
     mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
     mName = channelSelector.empty() ? tev::toString(path) : fmt::format("{}:{}", tev::toString(path), channelSelector);
 
@@ -323,7 +324,7 @@ string Image::shortName() const {
     return result;
 }
 
-bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
+bool Image::isInterleavedRgba(span<const string> channelNames) const {
     // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
     // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
     const float* interleavedData = nullptr;
@@ -345,7 +346,7 @@ bool Image::isInterleavedRgba(const vector<string>& channelNames) const {
     return interleavedData;
 }
 
-Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
+Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
     if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
         tlog::error() << fmt::format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
         return nullptr;
@@ -384,7 +385,7 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
                         Texture::WrapMode::ClampToEdge,
                         1, Texture::TextureFlags::ShaderRead,
                         true, },
-            channelNames,
+            {channelNames.begin(), channelNames.end()},
             false,
     }
     );
@@ -416,25 +417,25 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
                 if (!chan) {
                     tasks.emplace_back(
                         ThreadPool::global().parallelForAsync<size_t>(
-                            0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
+                            0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, numeric_limits<int>::max()
                         )
                     );
                 } else {
                     tasks.emplace_back(
                         ThreadPool::global().parallelForAsync<size_t>(
-                            0, numPixels, [chan, &data, i](size_t j) { data[j * 4 + i] = chan->at(j); }, std::numeric_limits<int>::max()
+                            0, numPixels, [chan, &data, i](size_t j) { data[j * 4 + i] = chan->at(j); }, numeric_limits<int>::max()
                         )
                     );
                 }
             } else {
                 tasks.emplace_back(
                     ThreadPool::global().parallelForAsync<size_t>(
-                        0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, std::numeric_limits<int>::max()
+                        0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, numeric_limits<int>::max()
                     )
                 );
             }
         }
-        waitAll(tasks);
+        waitAll<Task<void>>(tasks);
         texture->upload((uint8_t*)data.data());
     }
 
@@ -445,7 +446,7 @@ Texture* Image::texture(const vector<string>& channelNames, EInterpolationMode m
     return texture.get();
 }
 
-vector<string> Image::channelsInGroup(const string& groupName) const {
+vector<string> Image::channelsInGroup(string_view groupName) const {
     for (const auto& group : mChannelGroups) {
         if (group.name == groupName) {
             return group.channels;
@@ -455,7 +456,7 @@ vector<string> Image::channelsInGroup(const string& groupName) const {
     return {};
 }
 
-void Image::decomposeChannelGroup(const string& groupName) {
+void Image::decomposeChannelGroup(string_view groupName) {
     // Takes all channels of a given group and turns them into individual groups.
 
     auto group = find_if(mChannelGroups.begin(), mChannelGroups.end(), [&](const auto& g) { return g.name == groupName; });
@@ -483,7 +484,7 @@ void Image::decomposeChannelGroup(const string& groupName) {
     removeDuplicates(mChannelGroups);
 }
 
-vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
+vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     vector<vector<string>> groups = {
         {"R", "G", "B"},
         {"r", "g", "b"},
@@ -495,28 +496,22 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
         {"z"},
     };
 
-    auto createChannelGroup = [](string layer, vector<string> channels) {
+    auto createChannelGroup = [](string_view layer, vector<string> channels) {
         TEV_ASSERT(!channels.empty(), "Can't create a channel group without channels.");
 
-        auto channelTails = channels;
-        // Remove duplicates
+        vector<string_view> channelTails = {channels.begin(), channels.end()};
         channelTails.erase(unique(begin(channelTails), end(channelTails)), end(channelTails));
         transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
-        string channelsString = join(channelTails, ",");
 
-        string name;
-        if (layer.empty()) {
-            name = channelsString;
-        } else if (channelTails.size() == 1) {
-            name = layer + channelsString;
-        } else {
-            name = layer + "(" + channelsString + ")";
-        }
+        const string channelsString = join(channelTails, ",");
+        const string name = layer.empty() ?
+            channelsString :
+            (channelTails.size() == 1 ? fmt::format("{}{}", layer, channelsString) : fmt::format("{}({})", layer, channelsString));
 
         return ChannelGroup{name, std::move(channels)};
     };
 
-    string alphaChannelName = layerName + "A";
+    string alphaChannelName = fmt::format("{}A", layerName);
 
     vector<string> allChannels = mData.channelsInLayer(layerName);
 
@@ -530,8 +525,8 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
 
     for (const auto& group : groups) {
         vector<string> groupChannels;
-        for (const string& channel : group) {
-            string name = layerName + channel;
+        for (string_view channel : group) {
+            string name = fmt::format("{}{}", layerName, channel);
             auto it = find(begin(allChannels), end(allChannels), name);
             if (it != end(allChannels)) {
                 groupChannels.emplace_back(name);
@@ -570,8 +565,8 @@ vector<ChannelGroup> Image::getGroupedChannels(const string& layerName) const {
     return result;
 }
 
-vector<string> Image::getSortedChannels(const string& layerName) const {
-    string alphaChannelName = layerName + "A";
+vector<string> Image::getSortedChannels(string_view layerName) const {
+    string alphaChannelName = fmt::format("{}A", layerName);
 
     bool includesAlphaChannel = false;
 
@@ -592,16 +587,14 @@ vector<string> Image::getSortedChannels(const string& layerName) const {
     return result;
 }
 
-vector<string> Image::getExistingChannels(const vector<string>& requestedChannels) const {
+vector<string> Image::getExistingChannels(span<const string> requestedChannels) const {
     vector<string> result;
-    std::copy_if(std::begin(requestedChannels), std::end(requestedChannels), std::back_inserter(result), [&](const string& c) {
-        return hasChannel(c);
-    });
+    copy_if(begin(requestedChannels), end(requestedChannels), back_inserter(result), [&](string_view c) { return hasChannel(c); });
     return result;
 }
 
-void Image::updateChannel(const string& channelName, int x, int y, int width, int height, const vector<float>& data) {
-    Channel* chan = mutableChannel(channelName);
+void Image::updateChannel(string_view channelName, int x, int y, int width, int height, span<const float> data) {
+    Channel* const chan = mutableChannel(channelName);
     if (!chan) {
         tlog::warning() << "Channel " << channelName << " could not be updated, because it does not exist.";
         return;
@@ -610,13 +603,13 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     chan->updateTile(x, y, width, height, data);
 
     // Update textures that are cached for this channel
-    for (auto& kv : mTextures) {
+    for (auto&& kv : mTextures) {
         auto& imageTexture = kv.second;
         if (find(begin(imageTexture.channels), end(imageTexture.channels), channelName) == end(imageTexture.channels)) {
             continue;
         }
 
-        auto numPixels = (size_t)width * height;
+        const auto numPixels = (size_t)width * height;
         vector<float> textureData(numPixels * 4);
 
         // Populate data for sub-region of the texture to be updated
@@ -645,12 +638,12 @@ void Image::updateChannel(const string& channelName, int x, int y, int width, in
     }
 }
 
-void Image::updateVectorGraphics(bool append, const vector<VgCommand>& commands) {
+void Image::updateVectorGraphics(bool append, span<const VgCommand> commands) {
     if (!append) {
         mVgCommands.clear();
     }
 
-    std::copy(std::begin(commands), std::end(commands), std::back_inserter(mVgCommands));
+    copy(begin(commands), end(commands), back_inserter(mVgCommands));
 }
 
 template <typename T> time_t to_time_t(T timePoint) {
@@ -665,7 +658,7 @@ string Image::toString() const {
     sstream << mName << "\n\n";
 
     {
-        time_t cftime = to_time_t(mFileLastModified);
+        const time_t cftime = to_time_t(mFileLastModified);
         sstream << "Last modified:\n" << asctime(localtime(&cftime)) << "\n";
     }
 
@@ -683,6 +676,7 @@ string Image::toString() const {
     transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
         auto channels = mData.channelsInLayer(layer);
         transform(begin(channels), end(channels), begin(channels), [](string channel) { return Channel::tail(channel); });
+
         if (layer.empty()) {
             return join(channels, ",");
         } else if (channels.size() == 1) {
@@ -696,8 +690,8 @@ string Image::toString() const {
     return sstream.str();
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string channelSelector, bool applyGainmaps) {
-    auto handleException = [&](const exception& e) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps) {
+    const auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << fmt::format("Could not load {}: {}", toString(path), e.what());
         } else {
@@ -711,7 +705,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
     }
 
     try {
-        auto start = chrono::system_clock::now();
+        const auto start = chrono::system_clock::now();
 
         if (!iStream) {
             throw ImageLoadError{fmt::format("Image {} could not be opened.", path)};
@@ -726,7 +720,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
             } catch (...) {}
         }
 
-        std::string loadMethod;
+        string loadMethod;
         vector<ImageData> imageData;
         bool success = false;
         for (const auto& imageLoader : ImageLoader::getLoaders()) {
@@ -754,21 +748,25 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
             co_await i.ensureValid(channelSelector, taskPriority);
 
             // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
-            string localChannelSelector = channelSelector;
-            if (!i.partName.empty()) {
-                auto selectorParts = split(channelSelector, ",");
+            string localChannelSelector;
+            if (i.partName.empty()) {
+                localChannelSelector = string{channelSelector};
+            } else {
+                const auto selectorParts = split(channelSelector, ",");
                 if (channelSelector.empty()) {
                     localChannelSelector = i.partName;
                 } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
-                    localChannelSelector = join(vector<string>{i.partName, channelSelector}, ",");
+                    localChannelSelector = fmt::format("{},{}", i.partName, channelSelector);
+                } else {
+                    localChannelSelector = string{channelSelector};
                 }
             }
 
             images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
         }
 
-        auto end = chrono::system_clock::now();
-        chrono::duration<double> elapsedSeconds = end - start;
+        const auto end = chrono::system_clock::now();
+        const chrono::duration<double> elapsedSeconds = end - start;
 
         tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
 
@@ -780,11 +778,11 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
     co_return {};
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, istream& iStream, string channelSelector, bool applyGainmaps) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps) {
     co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, applyGainmaps);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, string channelSelector, bool applyGainmaps) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, string_view channelSelector, bool applyGainmaps) {
     try {
         path = fs::absolute(path);
     } catch (const runtime_error&) {
@@ -796,22 +794,22 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, st
     co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, applyGainmaps);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string channelSelector, bool applyGainmaps) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string_view channelSelector, bool applyGainmaps) {
     co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, applyGainmaps);
 }
 
-void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
+void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
     // If we're trying to open a directory, try loading all the images inside of that directory
     if (fs::exists(path) && fs::is_directory(path)) {
         tlog::info() << "Loading images " << (mRecursiveDirectories ? "recursively " : "") << "from directory " << toString(path);
 
-        fs::path canonicalPath = fs::canonical(path);
+        const fs::path canonicalPath = fs::canonical(path);
         mDirectories[canonicalPath].emplace(channelSelector);
 
         vector<fs::directory_entry> entries;
         forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](const auto& entry) {
             if (!entry.is_directory()) {
-                mFilesFoundInDirectories.emplace(PathAndChannelSelector{entry, channelSelector});
+                mFilesFoundInDirectories.emplace(PathAndChannelSelector{entry, string{channelSelector}});
                 entries.emplace_back(entry);
             }
         });
@@ -834,15 +832,15 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, const string& channel
         mLoadStartCounter = mUnsortedLoadCounter;
     }
 
-    int loadId = mUnsortedLoadCounter++;
-    invokeTaskDetached([loadId, path, channelSelector, shallSelect, toReplace, this]() -> Task<void> {
-        int taskPriority = -Image::drawId();
+    const int loadId = mUnsortedLoadCounter++;
+    invokeTaskDetached([loadId, path, channelSelector = string{channelSelector}, shallSelect, toReplace, this]() -> Task<void> {
+        const int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
-        auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mApplyGainmaps);
+        const auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mApplyGainmaps);
 
         {
-            std::lock_guard lock{mPendingLoadedImagesMutex};
+            const lock_guard lock{mPendingLoadedImagesMutex};
             mPendingLoadedImages.push({loadId, shallSelect, images, toReplace});
         }
 
@@ -857,7 +855,7 @@ void BackgroundImagesLoader::checkDirectoriesForNewFilesAndLoadThose() {
         forEachFileInDir(mRecursiveDirectories, dir.first, [&](const auto& entry) {
             if (!entry.is_directory()) {
                 for (const auto& channelSelector : dir.second) {
-                    PathAndChannelSelector p = {entry, channelSelector};
+                    const PathAndChannelSelector p = {entry, channelSelector};
                     if (!mFilesFoundInDirectories.contains(p)) {
                         mFilesFoundInDirectories.emplace(p);
                         enqueue(entry, channelSelector, false);
@@ -869,7 +867,7 @@ void BackgroundImagesLoader::checkDirectoriesForNewFilesAndLoadThose() {
 }
 
 bool BackgroundImagesLoader::publishSortedLoads() {
-    std::lock_guard lock{mPendingLoadedImagesMutex};
+    const lock_guard lock{mPendingLoadedImagesMutex};
     bool pushed = false;
     while (!mPendingLoadedImages.empty() && mPendingLoadedImages.top().loadId == mLoadCounter) {
         ++mLoadCounter;
@@ -884,8 +882,8 @@ bool BackgroundImagesLoader::publishSortedLoads() {
     }
 
     if (mLoadCounter == mUnsortedLoadCounter && mLoadCounter - mLoadStartCounter > 1) {
-        auto end = chrono::system_clock::now();
-        chrono::duration<double> elapsedSeconds = end - mLoadStartTime;
+        const auto end = chrono::system_clock::now();
+        const chrono::duration<double> elapsedSeconds = end - mLoadStartTime;
         tlog::success() << fmt::format("Loaded {} images in {:.3f} seconds.", mLoadCounter - mLoadStartCounter, elapsedSeconds.count());
     }
 

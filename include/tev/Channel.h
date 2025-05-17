@@ -23,6 +23,7 @@
 
 #include <nanogui/vector.h>
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -30,26 +31,26 @@ namespace tev {
 
 class Channel {
 public:
-    static std::pair<std::string, std::string> split(const std::string& fullChannel);
+    static std::pair<std::string_view, std::string_view> split(std::string_view fullChannel);
 
-    static std::string tail(const std::string& fullChannel);
-    static std::string head(const std::string& fullChannel);
+    static std::string_view tail(std::string_view fullChannel);
+    static std::string_view head(std::string_view fullChannel);
 
-    static bool isTopmost(const std::string& fullChannel);
-    static bool isAlpha(const std::string& fullChannel);
+    static bool isTopmost(std::string_view fullChannel);
+    static bool isAlpha(std::string_view fullChannel);
 
-    static nanogui::Color color(std::string fullChannel);
+    static nanogui::Color color(std::string_view fullChannel);
 
     Channel(
-        const std::string& name,
+        std::string_view name,
         const nanogui::Vector2i& size,
         std::shared_ptr<std::vector<float>> data = nullptr,
         size_t dataOffset = 0,
         size_t dataStride = 1
     );
 
-    const std::string& name() const { return mName; }
-    void setName(const std::string& name) { mName = name; }
+    std::string_view name() const { return mName; }
+    void setName(std::string_view name) { mName = name; }
 
     float eval(nanogui::Vector2i index) const {
         if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {
@@ -105,7 +106,7 @@ public:
         }
     }
 
-    void updateTile(int x, int y, int width, int height, const std::vector<float>& newData);
+    void updateTile(int x, int y, int width, int height, std::span<const float> newData);
 
     float& at(size_t index) { return data()[index * mDataStride]; }
 

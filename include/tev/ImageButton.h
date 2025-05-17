@@ -29,7 +29,7 @@ namespace tev {
 
 class ImageButton : public nanogui::Widget {
 public:
-    ImageButton(nanogui::Widget* parent, const std::string& caption, bool canBeReference);
+    ImageButton(nanogui::Widget* parent, std::string_view caption, bool canBeReference);
 
     nanogui::Vector2i preferred_size(NVGcontext* ctx) const override;
 
@@ -46,10 +46,11 @@ public:
         mCaptionTextBox->set_theme(captionTextBoxTheme);
     }
 
-    const std::string& caption() const { return mCaption; }
+    std::string_view caption() const { return mCaption; }
 
-    void setCaption(const std::string& caption) {
+    void setCaption(std::string_view caption) {
         mCaption = caption;
+
         // Reset drawing state
         mSizeForWhichCutoffWasComputed = {0};
         mHighlightBegin = 0;

@@ -20,6 +20,8 @@
 
 #include <tev/Common.h>
 
+#include <span>
+
 namespace tev {
 
 struct VgCommand {
@@ -49,7 +51,7 @@ struct VgCommand {
     };
 
     VgCommand() : type{EType::Invalid} {}
-    VgCommand(EType _type, const std::vector<float>& _data) : type{_type}, data{_data} {
+    VgCommand(EType _type, std::span<const float> _data) : type{_type}, data{_data.begin(), _data.end()} {
         if (size() != data.size()) {
             throw std::runtime_error{"VgCommand constructed with invalid amount of data"};
         }
@@ -106,89 +108,50 @@ struct VgCommand {
     static VgCommand save() { return {EType::Save, {}}; }
     static VgCommand restore() { return {EType::Restore, {}}; }
 
-    static VgCommand fillColor(const Color& c) {
-        return {
-            EType::FillColor, {c.r, c.g, c.b, c.a}
-        };
-    }
+    static VgCommand fillColor(const Color& c) { return {EType::FillColor, {{c.r, c.g, c.b, c.a}}}; }
     static VgCommand fill() { return {EType::Fill, {}}; }
 
-    static VgCommand strokeColor(const Color& c) {
-        return {
-            EType::StrokeColor, {c.r, c.g, c.b, c.a}
-        };
-    }
+    static VgCommand strokeColor(const Color& c) { return {EType::StrokeColor, {{c.r, c.g, c.b, c.a}}}; }
     static VgCommand stroke() { return {EType::Stroke, {}}; }
 
     static VgCommand beginPath() { return {EType::BeginPath, {}}; }
     static VgCommand closePath() { return {EType::ClosePath, {}}; }
-    static VgCommand pathWinding(EWinding winding) { return {EType::PathWinding, {(float)(int)winding}}; }
+    static VgCommand pathWinding(EWinding winding) { return {EType::PathWinding, {{(float)(int)winding}}}; }
 
-    static VgCommand moveTo(const Pos& p) {
-        return {
-            EType::MoveTo, {p.x, p.y}
-        };
-    }
+    static VgCommand moveTo(const Pos& p) { return {EType::MoveTo, {{p.x, p.y}}}; }
 
-    static VgCommand lineTo(const Pos& p) {
-        return {
-            EType::LineTo, {p.x, p.y}
-        };
-    }
+    static VgCommand lineTo(const Pos& p) { return {EType::LineTo, {{p.x, p.y}}}; }
 
-    static VgCommand arcTo(const Pos& p1, const Pos& p2, float radius) {
-        return {
-            EType::ArcTo, {p1.x, p1.y, p2.x, p2.y, radius}
-        };
-    }
+    static VgCommand arcTo(const Pos& p1, const Pos& p2, float radius) { return {EType::ArcTo, {{p1.x, p1.y, p2.x, p2.y, radius}}}; }
 
     static VgCommand arc(const Pos& center, float radius, float angle_begin, float angle_end, EWinding winding) {
-        return {
-            EType::Arc, {center.x, center.y, radius, angle_begin, angle_end, (float)(int)winding}
-        };
+        return {EType::Arc, {{center.x, center.y, radius, angle_begin, angle_end, (float)(int)winding}}};
     }
 
     static VgCommand bezierTo(const Pos& c1, const Pos& c2, const Pos& p) {
-        return {
-            EType::BezierTo, {c1.x, c1.y, c2.x, c2.y, p.x, p.y}
-        };
+        return {EType::BezierTo, {{c1.x, c1.y, c2.x, c2.y, p.x, p.y}}};
     }
 
-    static VgCommand circle(const Pos& center, float radius) {
-        return {
-            EType::Circle, {center.x, center.y, radius}
-        };
-    }
+    static VgCommand circle(const Pos& center, float radius) { return {EType::Circle, {{center.x, center.y, radius}}}; }
 
     static VgCommand ellipse(const Pos& center, const Size& radius) {
-        return {
-            EType::Ellipse, {center.x, center.y, radius.width, radius.height}
-        };
+        return {EType::Ellipse, {{center.x, center.y, radius.width, radius.height}}};
     }
 
-    static VgCommand quadTo(const Pos& c, const Pos& p) {
-        return {
-            EType::QuadTo, {c.x, c.y, p.x, p.y}
-        };
-    }
+    static VgCommand quadTo(const Pos& c, const Pos& p) { return {EType::QuadTo, {{c.x, c.y, p.x, p.y}}}; }
 
-    static VgCommand rect(const Pos& p, const Size& size) {
-        return {
-            EType::Rect, {p.x, p.y, size.width, size.height}
-        };
-    }
+    static VgCommand rect(const Pos& p, const Size& size) { return {EType::Rect, {{p.x, p.y, size.width, size.height}}}; }
 
     static VgCommand roundedRect(const Pos& p, const Size& size, float radius) {
-        return {
-            EType::RoundedRect, {p.x, p.y, size.width, size.height, radius}
-        };
+        return {EType::RoundedRect, {{p.x, p.y, size.width, size.height, radius}}};
     }
 
     static VgCommand roundedRectVarying(
         const Pos& p, const Size& size, float radiusTopLeft, float radiusTopRight, float radiusBottomRight, float radiusBottomLeft
     ) {
         return {
-            EType::RoundedRectVarying, {p.x, p.y, size.width, size.height, radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft}
+            EType::RoundedRectVarying,
+            {{p.x, p.y, size.width, size.height, radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft}}
         };
     }
 

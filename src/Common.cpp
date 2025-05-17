@@ -106,8 +106,8 @@ bool naturalCompare(string_view a, string_view b) {
     return a.size() - i < b.size() - j;
 }
 
-vector<string> split(string_view text, string_view delim) {
-    vector<string> result;
+vector<string_view> split(string_view text, string_view delim) {
+    vector<string_view> result;
     size_t begin = 0;
     while (true) {
         size_t end = text.find_first_of(delim, begin);
@@ -179,6 +179,7 @@ bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
             if (matchedPartId) {
                 *matchedPartId = i;
             }
+
             return true;
         }
     }
@@ -199,13 +200,12 @@ bool matchesRegex(string_view text, string_view filter) {
 }
 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, string_view text, float shadowAlpha) {
-    string str{text};
     nvgSave(ctx);
     nvgFontBlur(ctx, 2);
     nvgFillColor(ctx, Color{0.0f, shadowAlpha});
-    nvgText(ctx, x + 1, y + 1, str.c_str(), NULL);
+    nvgText(ctx, x + 1, y + 1, text.data(), text.data() + text.size());
     nvgRestore(ctx);
-    nvgText(ctx, x, y, str.c_str(), NULL);
+    nvgText(ctx, x, y, text.data(), text.data() + text.size());
 }
 
 int maxTextureSize() {

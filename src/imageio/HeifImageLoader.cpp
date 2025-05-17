@@ -34,7 +34,7 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>>
-    HeifImageLoader::load(istream& iStream, const fs::path&, const string& channelSelector, int priority, bool applyGainmaps) const {
+    HeifImageLoader::load(istream& iStream, const fs::path&, string_view channelSelector, int priority, bool applyGainmaps) const {
 
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
     uint8_t header[12];
@@ -101,7 +101,7 @@ Task<vector<ImageData>>
     ScopeGuard handleGuard{[handle] { heif_image_handle_release(handle); }};
 
     auto decodeImage =
-        [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, const string& namePrefix = "") -> Task<ImageData> {
+        [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, string_view namePrefix = "") -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image {}", namePrefix.empty() ? "main." : namePrefix);
 
         ImageData resultData;
@@ -301,7 +301,7 @@ Task<vector<ImageData>>
         return nullptr;
     };
 
-    auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, const string& namePrefix) -> Task<void> {
+    auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view namePrefix) -> Task<void> {
         Vector2i size = resultData.channels.front().size();
         if (size == targetSize) {
             co_return;
@@ -311,7 +311,8 @@ Task<vector<ImageData>>
 
         ImageData scaledResultData;
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
-        scaledResultData.channels = makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(namePrefix + "A"), targetSize, namePrefix);
+        scaledResultData.channels =
+            makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, namePrefix);
 
         co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
         resultData = std::move(scaledResultData);

@@ -31,6 +31,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -74,11 +75,48 @@ template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::s
     }
 };
 
-template <typename T, uint32_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const nanogui::Array<T, N_DIMS>& v, FormatContext& ctx) const {
-        std::ostringstream s;
-        s << v;
-        return formatter<std::string_view>::format(s.str(), ctx);
+template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> {
+    template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
+    template <class FmtContext> FmtContext::iterator format(const nanogui::Array<T, N_DIMS>& v, FmtContext& ctx) const {
+        auto&& out = ctx.out();
+
+        fmt::format_to(out, "[");
+        for (size_t i = 0; i < N_DIMS; ++i) {
+            if (i != 0) {
+                fmt::format_to(out, ", ");
+            }
+
+            fmt::format_to(out, "{}", v[i]);
+        }
+
+        return fmt::format_to(ctx.out(), "]");
+    }
+};
+
+template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Matrix<T, N_DIMS>> {
+    template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
+    template <class FmtContext> FmtContext::iterator format(const nanogui::Matrix<T, N_DIMS>& m, FmtContext& ctx) const {
+        auto&& out = ctx.out();
+
+        fmt::format_to(out, "[");
+        for (size_t i = 0; i < N_DIMS; ++i) {
+            if (i != 0) {
+                fmt::format_to(out, ", ");
+            }
+
+            fmt::format_to(out, "[");
+            for (size_t j = 0; j < N_DIMS; ++j) {
+                if (j != 0) {
+                    fmt::format_to(out, ", ");
+                }
+
+                fmt::format_to(out, "{}", m.m[j][i]);
+            }
+
+            fmt::format_to(out, "]");
+        }
+
+        return fmt::format_to(ctx.out(), "]");
     }
 };
 
@@ -240,8 +278,7 @@ inline uint64_t swapBytes(uint64_t value) {
 #endif
 }
 
-template <typename T>
-T swapBytes(T value) {
+template <typename T> T swapBytes(T value) {
     T result;
     auto valueChars = reinterpret_cast<char*>(&value);
     auto resultChars = reinterpret_cast<char*>(&result);
@@ -377,19 +414,20 @@ inline bool isPot(size_t value) {
     return (value & (value - 1)) == 0;
 }
 
-template <typename T> std::string join(const T& components, const std::string& delim) {
+template <typename T> std::string join(const T& components, std::string_view delim) {
     std::ostringstream s;
     for (const auto& component : components) {
         if (&components[0] != &component) {
             s << delim;
         }
+
         s << component;
     }
 
     return s.str();
 }
 
-std::vector<std::string> split(std::string_view text, std::string_view delim);
+std::vector<std::string_view> split(std::string_view text, std::string_view delim);
 
 std::string toLower(std::string_view str);
 std::string toUpper(std::string_view str);

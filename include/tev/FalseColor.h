@@ -20,9 +20,11 @@
 
 #include <tev/Common.h>
 
+#include <span>
+
 namespace tev { namespace colormap {
 
-const std::vector<float>& turbo();
-const std::vector<float>& viridis();
+std::span<const float> turbo();
+std::span<const float> viridis();
 
 }} // namespace tev::colormap

@@ -24,6 +24,7 @@
 #include <jxl/thread_parallel_runner_cxx.h>
 
 #include <ostream>
+#include <span>
 #include <thread>
 #include <vector>
 
@@ -32,7 +33,7 @@ using namespace std;
 
 namespace tev {
 
-void JxlImageSaver::save(ostream& oStream, const fs::path& path, const vector<float>& data, const Vector2i& imageSize, int nChannels) const {
+void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
     if (nChannels <= 0 || nChannels > 4098) {
         throw invalid_argument{fmt::format("Invalid number of channels {}.", nChannels)};
     }

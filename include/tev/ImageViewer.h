@@ -66,36 +66,36 @@ public:
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
 
-    bool hasImageWithName(const std::string& imageName) { return !!imageByName(imageName); }
+    bool hasImageWithName(std::string_view imageName) { return !!imageByName(imageName); }
 
     void addImage(std::shared_ptr<Image> image, bool shallSelect = false) { insertImage(image, mImages.size(), shallSelect); }
 
     void removeImage(std::shared_ptr<Image> image);
-    void removeImage(const std::string& imageName) { removeImage(imageByName(imageName)); }
+    void removeImage(std::string_view imageName) { removeImage(imageByName(imageName)); }
     void removeAllImages();
 
     void replaceImage(std::shared_ptr<Image> image, std::shared_ptr<Image> replacement, bool shallSelect);
-    void replaceImage(const std::string& imageName, std::shared_ptr<Image> replacement, bool shallSelect) {
+    void replaceImage(std::string_view imageName, std::shared_ptr<Image> replacement, bool shallSelect) {
         replaceImage(imageByName(imageName), replacement, shallSelect);
     }
 
     void reloadImage(std::shared_ptr<Image> image, bool shallSelect = false);
-    void reloadImage(const std::string& imageName, bool shallSelect = false) { reloadImage(imageByName(imageName), shallSelect); }
+    void reloadImage(std::string_view imageName, bool shallSelect = false) { reloadImage(imageByName(imageName), shallSelect); }
     void reloadAllImages();
     void reloadImagesWhoseFileChanged();
 
     void updateImage(
-        const std::string& imageName,
+        std::string_view imageName,
         bool shallSelect,
-        const std::string& channel,
+        std::string_view channel,
         int x,
         int y,
         int width,
         int height,
-        const std::vector<float>& imageData
+        std::span<const float> imageData
     );
 
-    void updateImageVectorGraphics(const std::string& imageName, bool shallSelect, bool append, const std::vector<VgCommand>& commands);
+    void updateImageVectorGraphics(std::string_view imageName, bool shallSelect, bool append, std::span<const VgCommand> commands);
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
@@ -140,7 +140,7 @@ public:
     bool playingBack() const;
     void setPlayingBack(bool value);
 
-    bool setFilter(const std::string& filter);
+    bool setFilter(std::string_view filter);
 
     void setFps(int value);
 
@@ -181,16 +181,16 @@ private:
     void updateTitle();
     std::string groupName(size_t index);
 
-    int groupId(const std::string& groupName) const;
+    int groupId(std::string_view groupName) const;
     int imageId(const std::shared_ptr<Image>& image) const;
-    int imageId(const std::string& imageName) const;
+    int imageId(std::string_view imageName) const;
 
-    std::string nextGroup(const std::string& groupName, EDirection direction);
+    std::string nextGroup(std::string_view groupName, EDirection direction);
     std::string nthVisibleGroup(size_t n);
 
     std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);
-    std::shared_ptr<Image> imageByName(const std::string& imageName);
+    std::shared_ptr<Image> imageByName(std::string_view imageName);
 
     bool canDragSidebarFrom(const nanogui::Vector2i& p) {
         return mSidebar->visible() && p.x() - mSidebar->fixed_width() < 10 && p.x() - mSidebar->fixed_width() > -5;

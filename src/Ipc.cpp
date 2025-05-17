@@ -68,7 +68,7 @@ IpcPacket::IpcPacket(const char* data, size_t length) {
     mPayload.assign(data, data + length);
 }
 
-void IpcPacket::setOpenImage(const string& imagePath, const string& channelSelector, bool grabFocus) {
+void IpcPacket::setOpenImage(string_view imagePath, string_view channelSelector, bool grabFocus) {
     OStream payload{mPayload};
     payload << EType::OpenImageV2;
     payload << grabFocus;
@@ -76,28 +76,28 @@ void IpcPacket::setOpenImage(const string& imagePath, const string& channelSelec
     payload << channelSelector;
 }
 
-void IpcPacket::setReloadImage(const string& imageName, bool grabFocus) {
+void IpcPacket::setReloadImage(string_view imageName, bool grabFocus) {
     OStream payload{mPayload};
     payload << EType::ReloadImage;
     payload << grabFocus;
     payload << imageName;
 }
 
-void IpcPacket::setCloseImage(const string& imageName) {
+void IpcPacket::setCloseImage(string_view imageName) {
     OStream payload{mPayload};
     payload << EType::CloseImage;
     payload << imageName;
 }
 
 void IpcPacket::setUpdateImage(
-    const string& imageName,
+    string_view imageName,
     bool grabFocus,
-    const vector<IpcPacket::ChannelDesc>& channelDescs,
+    span<const IpcPacket::ChannelDesc> channelDescs,
     int32_t x,
     int32_t y,
     int32_t width,
     int32_t height,
-    const vector<float>& stridedImageData
+    span<const float> stridedImageData
 ) {
     if (channelDescs.empty()) {
         throw runtime_error{"UpdateImage IPC packet must have a non-zero channel count."};
@@ -141,7 +141,7 @@ void IpcPacket::setUpdateImage(
 }
 
 void IpcPacket::setCreateImage(
-    const string& imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, const vector<string>& channelNames
+    string_view imageName, bool grabFocus, int32_t width, int32_t height, int32_t nChannels, span<const string> channelNames
 ) {
     if ((int32_t)channelNames.size() != nChannels) {
         throw runtime_error{"CreateImage IPC packet's channel names size does not match number of channels."};
@@ -156,7 +156,7 @@ void IpcPacket::setCreateImage(
     payload << channelNames;
 }
 
-void IpcPacket::setVectorGraphics(const string& imageName, bool grabFocus, bool append, const vector<VgCommand>& commands) {
+void IpcPacket::setVectorGraphics(string_view imageName, bool grabFocus, bool append, span<const VgCommand> commands) {
     OStream payload{mPayload};
     payload << EType::VectorGraphics;
     payload << grabFocus;
@@ -370,10 +370,10 @@ static int closeSocket(Ipc::socket_t socket) {
 #endif
 }
 
-Ipc::Ipc(const string& hostname) : mSocketFd{INVALID_SOCKET} {
-    mLockName = ".tev-lock."s + hostname;
+Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
+    mLockName = fmt::format(".tev-lock.{}", hostname);
 
-    auto parts = split(hostname, ":");
+    const auto parts = split(hostname, ":");
     mIp = parts.front();
     mPort = parts.back();
 
@@ -399,7 +399,7 @@ Ipc::Ipc(const string& hostname) : mSocketFd{INVALID_SOCKET} {
         struct addrinfo hints = {}, *addrinfo;
         hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
-        int err = getaddrinfo(mIp.c_str(), mPort.c_str(), &hints, &addrinfo);
+        const int err = getaddrinfo(mIp.c_str(), mPort.c_str(), &hints, &addrinfo);
         if (err != 0) {
             throw runtime_error{fmt::format("getaddrinfo() failed: {}", gai_strerror(err))};
         }
@@ -606,7 +606,7 @@ string Ipc::hostname() const {
     return fmt::format("{}:{}", ip(), port());
 }
 
-Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, const string& name) : mSocketFd{fd}, mName{name} {
+Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, string_view name) : mSocketFd{fd}, mName{name} {
     TEV_ASSERT(mSocketFd != INVALID_SOCKET, "SocketConnection must receive a valid socket.");
 
     makeSocketNonBlocking(mSocketFd);

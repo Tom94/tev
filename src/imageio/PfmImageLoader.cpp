@@ -26,7 +26,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, const string&, int priority, bool) const {
+Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     char pf[2];
     iStream.read(pf, 2);
     if (!iStream || pf[0] != 'P' || (pf[1] != 'F' && pf[1] != 'f')) {

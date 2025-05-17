@@ -33,6 +33,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -70,7 +71,7 @@ struct ImageData {
 
     size_t numPixels() const { return channels.front().numPixels(); }
 
-    std::vector<std::string> channelsInLayer(std::string layerName) const;
+    std::vector<std::string> channelsInLayer(std::string_view layerName) const;
 
     Task<void> convertToRec709(int priority);
 
@@ -81,13 +82,12 @@ struct ImageData {
 
     Task<void> orientToTopLeft(int priority);
 
-    Task<void> ensureValid(const std::string& channelSelector, int taskPriority);
+    Task<void> ensureValid(std::string_view channelSelector, int taskPriority);
 
-    bool hasChannel(const std::string& channelName) const { return channel(channelName) != nullptr; }
+    bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }
 
-    const Channel* channel(const std::string& channelName) const {
+    const Channel* channel(std::string_view channelName) const {
         auto it = std::find_if(std::begin(channels), std::end(channels), [&channelName](const Channel& c) { return c.name() == channelName; });
-
         if (it != std::end(channels)) {
             return &(*it);
         } else {
@@ -95,9 +95,8 @@ struct ImageData {
         }
     }
 
-    Channel* mutableChannel(const std::string& channelName) {
+    Channel* mutableChannel(std::string_view channelName) {
         auto it = std::find_if(std::begin(channels), std::end(channels), [&channelName](const Channel& c) { return c.name() == channelName; });
-
         if (it != std::end(channels)) {
             return &(*it);
         } else {
@@ -125,7 +124,7 @@ public:
     using dither_matrix_t = std::array<std::array<float, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
     static dither_matrix_t ditherMatrix();
 
-    Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, const std::string& channelSelector);
+    Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, std::string_view channelSelector);
     virtual ~Image();
 
     const fs::path& path() const { return mPath; }
@@ -134,16 +133,16 @@ public:
 
     void setFileLastModified(fs::file_time_type value) { mFileLastModified = value; }
 
-    const std::string& channelSelector() const { return mChannelSelector; }
+    std::string_view channelSelector() const { return mChannelSelector; }
 
-    const std::string& name() const { return mName; }
+    std::string_view name() const { return mName; }
 
     std::string shortName() const;
 
-    bool hasChannel(const std::string& channelName) const { return mData.hasChannel(channelName); }
+    bool hasChannel(std::string_view channelName) const { return mData.hasChannel(channelName); }
 
-    const Channel* channel(const std::string& channelName) const { return mData.channel(channelName); }
-    std::vector<const Channel*> channels(const std::vector<std::string>& channelNames) const {
+    const Channel* channel(std::string_view channelName) const { return mData.channel(channelName); }
+    std::vector<const Channel*> channels(std::span<const std::string> channelNames) const {
         std::vector<const Channel*> result;
         for (const auto& channelName : channelNames) {
             result.push_back(channel(channelName));
@@ -152,15 +151,15 @@ public:
         return result;
     }
 
-    bool isInterleavedRgba(const std::vector<std::string>& channelNames) const;
+    bool isInterleavedRgba(std::span<const std::string> channelNames) const;
 
-    nanogui::Texture* texture(const std::vector<std::string>& channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
+    nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
 
-    std::vector<std::string> channelsInGroup(const std::string& groupName) const;
-    void decomposeChannelGroup(const std::string& groupName);
+    std::vector<std::string> channelsInGroup(std::string_view groupName) const;
+    void decomposeChannelGroup(std::string_view groupName);
 
-    std::vector<std::string> getSortedChannels(const std::string& layerName) const;
-    std::vector<std::string> getExistingChannels(const std::vector<std::string>& requestedChannels) const;
+    std::vector<std::string> getSortedChannels(std::string_view layerName) const;
+    std::vector<std::string> getExistingChannels(std::span<const std::string> requestedChannels) const;
 
     nanogui::Vector2i size() const { return mData.size(); }
 
@@ -180,7 +179,7 @@ public:
 
     size_t numPixels() const { return mData.numPixels(); }
 
-    const std::vector<ChannelGroup>& channelGroups() const { return mChannelGroups; }
+    std::span<const ChannelGroup> channelGroups() const { return mChannelGroups; }
 
     int id() const { return mId; }
 
@@ -195,24 +194,24 @@ public:
 
     static int drawId() { return sId++; }
 
-    void updateChannel(const std::string& channelName, int x, int y, int width, int height, const std::vector<float>& data);
+    void updateChannel(std::string_view channelName, int x, int y, int width, int height, std::span<const float> data);
 
-    void updateVectorGraphics(bool append, const std::vector<VgCommand>& commands);
+    void updateVectorGraphics(bool append, std::span<const VgCommand> commands);
 
-    const std::vector<VgCommand>& vgCommands() const { return mVgCommands; }
+    std::span<const VgCommand> vgCommands() const { return mVgCommands; }
 
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
     std::string toString() const;
 
-    const std::vector<AttributeNode>& attributes() const { return mData.attributes; }
+    std::span<const AttributeNode> attributes() const { return mData.attributes; }
 
 private:
     static std::atomic<int> sId;
 
-    Channel* mutableChannel(const std::string& channelName) { return mData.mutableChannel(channelName); }
+    Channel* mutableChannel(std::string_view channelName) { return mData.mutableChannel(channelName); }
 
-    std::vector<ChannelGroup> getGroupedChannels(const std::string& layerName) const;
+    std::vector<ChannelGroup> getGroupedChannels(std::string_view layerName) const;
 
     fs::path mPath;
     fs::file_time_type mFileLastModified;
@@ -276,10 +275,10 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
 }
 
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string channelSelector, bool applyGainmaps);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string channelSelector, bool applyGainmaps);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string channelSelector, bool applyGainmaps);
+    tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, bool applyGainmaps);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string_view channelSelector, bool applyGainmaps);
 
 struct ImageAddition {
     int loadId;
@@ -303,7 +302,7 @@ struct PathAndChannelSelector {
 
 class BackgroundImagesLoader {
 public:
-    void enqueue(const fs::path& path, const std::string& channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
+    void enqueue(const fs::path& path, std::string_view channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
     void checkDirectoriesForNewFilesAndLoadThose();
 
     std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }

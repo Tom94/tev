@@ -37,7 +37,7 @@ static string formatNumber(float v) {
     return needsScientificNotation ? fmt::format("{:.2e}", v) : fmt::format("{:.3f}", v);
 }
 
-MultiGraph::MultiGraph(Widget* parent, const std::string& caption) : Widget(parent), mCaption(caption) {
+MultiGraph::MultiGraph(Widget* parent, std::string_view caption) : Widget{parent}, mCaption{caption} {
     mBackgroundColor = Color(20, 128);
     mForegroundColor = Color(255, 192, 0, 128);
     mTextColor = Color(240, 192);
@@ -124,21 +124,21 @@ void MultiGraph::draw(NVGcontext* ctx) {
             nvgFontSize(ctx, 14.0f);
             nvgTextAlign(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
             nvgFillColor(ctx, mTextColor);
-            nvgText(ctx, m_pos.x() + 3, m_pos.y() + 1, mCaption.c_str(), NULL);
+            nvgText(ctx, m_pos.x() + 3, m_pos.y() + 1, mCaption.data(), mCaption.data() + mCaption.size());
         }
 
         if (!mHeader.empty()) {
             nvgFontSize(ctx, 18.0f);
             nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
             nvgFillColor(ctx, mTextColor);
-            nvgText(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, mHeader.c_str(), NULL);
+            nvgText(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + 1, mHeader.data(), mHeader.data() + mHeader.size());
         }
 
         if (!mFooter.empty()) {
             nvgFontSize(ctx, 15.0f);
             nvgTextAlign(ctx, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
             nvgFillColor(ctx, mTextColor);
-            nvgText(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + m_size.y() - 1, mFooter.c_str(), NULL);
+            nvgText(ctx, m_pos.x() + m_size.x() - 3, m_pos.y() + m_size.y() - 1, mFooter.data(), mFooter.data() + mFooter.size());
         }
     }
 
