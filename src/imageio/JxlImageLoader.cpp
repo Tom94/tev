@@ -112,8 +112,57 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw ImageLoadError{"Failed to create decoder."};
     }
 
-    auto runner = JxlThreadParallelRunnerMake(nullptr, thread::hardware_concurrency());
-    if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(decoder.get(), JxlThreadParallelRunner, runner.get())) {
+    struct RunnerData {
+        int priority;
+    } runnerData{priority};
+
+    const auto jxlRunParallel = [](void* runnerOpaque,
+                                   void* jpegxlOpaque,
+                                   JxlParallelRunInit init,
+                                   JxlParallelRunFunction func,
+                                   uint32_t startRange,
+                                   uint32_t endRange) {
+        const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+
+        const uint32_t range = endRange - startRange;
+        const uint32_t nTasks = std::min((uint32_t)ThreadPool::global().numThreads(), range);
+
+        const auto initResult = init(jpegxlOpaque, nTasks);
+        if (initResult != 0) {
+            return initResult;
+        }
+
+        std::vector<Task<void>> tasks;
+        for (uint32_t i = 0; i < nTasks; ++i) {
+            const uint32_t taskStart = startRange + (range * i / nTasks);
+            const uint32_t taskEnd = startRange + (range * (i + 1) / nTasks);
+            TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
+
+            tasks.emplace_back(
+                [](JxlParallelRunFunction func, void* jpegxlOpaque, uint32_t taskId, uint32_t tStart, uint32_t tEnd, int tPriority, ThreadPool* pool
+                ) -> Task<void> {
+                    co_await pool->enqueueCoroutine(tPriority);
+                    for (uint32_t j = tStart; j < tEnd; ++j) {
+                        func(jpegxlOpaque, j, taskId);
+                    }
+                }(func, jpegxlOpaque, i, taskStart, taskEnd, runnerData->priority, &ThreadPool::global())
+            );
+        }
+
+        // This is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get the thread pool to cooperate
+        // with the JXL API that expects a non-coroutine function here. We will offload the JxlImageLoader::load() function into a
+        // wholly separate thread to avoid blocking the thread pool as a consequence.
+        waitAll<Task<void>>(tasks);
+        return 0;
+    };
+
+    // Since we allow the JXL decoder to run in our coroutine thread pool, despite being not a coroutine itself and thus having to wait on
+    // each task's completion, we need to offload the governing code (i.e. this function) to a separate thread to avoid stalling the
+    // threadpool. Furthermore, we will have to offload to detached threads every time we get scheduled back onto the thread pool, e.g. by
+    // invoking ThreadPool::parallelForAsync (see additional calls to `enqueueCoroutineToDetachedThread()` below).
+    co_await enqueueCoroutineToDetachedThread();
+
+    if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(decoder.get(), jxlRunParallel, &runnerData)) {
         throw ImageLoadError{"Failed to set parallel runner for decoder."};
     }
 
@@ -122,16 +171,16 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw ImageLoadError{"Failed to subscribe to decoder events."};
     }
 
-    // "Boxes" contain all kinds of metadata, such as exif, which we'll want to get at. By default, they are compressed via Brotli, making
-    // them inaccessible to typical exif libraries. Hence: set them to get decompressed during decoding.
+    // "Boxes" contain all kinds of metadata, such as exif, which we'll want to get at. By default, they are compressed via Brotli,
+    // making them inaccessible to typical exif libraries. Hence: set them to get decompressed during decoding.
     if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(decoder.get(), JXL_TRUE)) {
         throw ImageLoadError{"Failed to set decompress boxes."};
     }
 
-    // We expressly don't want the decoder to unpremultiply the alpha channel for us, because this becomes a more and more lossy operation
-    // the more emissive a color is (i.e. as color/alpha approaches inf). If it turns out that the color profile isn't linaer, we will be
-    // forced to unmultiply the alpha channel due to an idiosyncracy in the jxl format where alpha multiplication is defined in non-linear
-    // space.
+    // We expressly don't want the decoder to unpremultiply the alpha channel for us, because this becomes a more and more lossy
+    // operation the more emissive a color is (i.e. as color/alpha approaches inf). If it turns out that the color profile isn't linaer,
+    // we will be forced to unmultiply the alpha channel due to an idiosyncracy in the jxl format where alpha multiplication is defined
+    // in non-linear space.
     if (JXL_DEC_SUCCESS != JxlDecoderSetUnpremultiplyAlpha(decoder.get(), JXL_FALSE)) {
         throw ImageLoadError{"Failed to set unpremultiply alpha."};
     }
@@ -189,12 +238,12 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 ce.color_space = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
 
                 // libjxl's docs say that the decoder can always convert to linear sRGB if `info.uses_original_profile` is false.
-                // Furthermore, the XYB color space can also always be converted to linear sRGB by the decoder. Thus, if either of these is
-                // true, leave color space conversion to the decoder.
+                // Furthermore, the XYB color space can also always be converted to linear sRGB by the decoder. Thus, if either of these
+                // is true, leave color space conversion to the decoder.
                 //
-                // While the docs say that JxlColorEncoding should take precedence over ICC profiles if available, the decoder seems to be
-                // unable of correct conversion to linear sRGB in many cases. Thus, we rely on the ICC profile and offload color conversion
-                // external cms when the above 2 conditions aren't met.
+                // While the docs say that JxlColorEncoding should take precedence over ICC profiles if available, the decoder seems to
+                // be unable of correct conversion to linear sRGB in many cases. Thus, we rely on the ICC profile and offload color
+                // conversion external cms when the above 2 conditions aren't met.
                 bool canDecodeToLinearSRGB = !info.uses_original_profile;
                 if (JXL_DEC_SUCCESS ==
                     JxlDecoderGetColorAsEncodedProfile(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &ce)) {
@@ -252,8 +301,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 break;
             }
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
-                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all other
-                // extra channels to be decoded as separate channels.
+                // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all
+                // other extra channels to be decoded as separate channels.
                 int numColorChannels = info.num_color_channels + (info.alpha_bits ? 1 : 0);
                 int numExtraChannels = info.num_extra_channels;
 
@@ -359,8 +408,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
                 }
 
-                // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in the
-                // colorspace tev expects: linear sRGB Rec.709.
+                // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in
+                // the colorspace tev expects: linear sRGB Rec.709.
                 if (!colorChannelsLoaded) {
                     co_await toFloat32(
                         (float*)colorData.data(), numColorChannels, data.channels.front().data(), 4, size, info.alpha_bits, priority
@@ -388,6 +437,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         priority
                     );
                 }
+
+                // See big comment above: we need to offload the rest of the function to a detached thread after using the thread pool.
+                co_await enqueueCoroutineToDetachedThread();
             } break;
         }
     }

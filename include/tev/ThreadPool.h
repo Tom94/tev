@@ -116,7 +116,7 @@ public:
             }(taskStart, taskEnd, body, priority, this));
         }
 
-        for (auto& task : tasks) {
+        for (auto&& task : tasks) {
             co_await task;
         }
     }
@@ -124,6 +124,8 @@ public:
     template <typename Int, typename F> void parallelFor(Int start, Int end, F body, int priority) {
         parallelForAsync(start, end, body, priority).get();
     }
+
+    size_t numThreads() const { return mNumThreads; }
 
 private:
     size_t mNumThreads = 0;
