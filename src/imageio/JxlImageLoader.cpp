@@ -230,9 +230,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 if (info.alpha_bits && info.num_extra_channels == 0) {
                     throw ImageLoadError{"Image has alpha channel, but no extra channels."};
                 }
-
-                break;
-            }
+            } break;
             case JXL_DEC_COLOR_ENCODING: {
                 JxlColorEncoding ce;
                 ce.color_space = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
@@ -277,8 +275,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 colorSpace = ce.color_space;
                 tlog::debug() << fmt::format("Image color space: {}", jxlToString(colorSpace));
-                break;
-            }
+            } break;
             case JXL_DEC_FRAME: {
                 size_t frameId = frameCount++;
 
@@ -298,8 +295,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 tlog::debug(
                 ) << fmt::format("Frame {}: duration={}, is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName);
-                break;
-            }
+            } break;
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
                 // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all
                 // other extra channels to be decoded as separate channels.
