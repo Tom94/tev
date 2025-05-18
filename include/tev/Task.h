@@ -23,6 +23,7 @@
 #include <coroutine>
 #include <future>
 #include <span>
+#include <thread>
 
 namespace tev {
 
@@ -72,6 +73,16 @@ struct DetachedTask {
 template <typename F, typename... Args> DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
     auto exec = std::move(executor);
     co_await exec(args...);
+}
+
+inline auto enqueueCoroutineToDetachedThread() noexcept {
+    struct Awaiter {
+        bool await_ready() const noexcept { return false; }
+        // Suspend and enqueue coroutine continuation onto the thread
+        void await_suspend(std::coroutine_handle<> coroutine) noexcept { std::thread{coroutine}.detach(); }
+        void await_resume() const noexcept {}
+    };
+    return Awaiter{};
 }
 
 template <typename data_t> class TaskPromiseBase {
