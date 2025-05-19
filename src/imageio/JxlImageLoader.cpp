@@ -123,9 +123,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                                    uint32_t startRange,
                                    uint32_t endRange) {
         const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+        static const uint32_t hardwareConcurrency = std::thread::hardware_concurrency();
 
         const uint32_t range = endRange - startRange;
-        const uint32_t nTasks = std::min((uint32_t)ThreadPool::global().numThreads(), range);
+        const uint32_t nTasks = std::min({(uint32_t)ThreadPool::global().numThreads(), hardwareConcurrency, range});
 
         const auto initResult = init(jpegxlOpaque, nTasks);
         if (initResult != 0) {
@@ -158,9 +159,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
     // Since we allow the JXL decoder to run in our coroutine thread pool, despite being not a coroutine itself and thus having to wait on
     // each task's completion, we need to offload the governing code (i.e. this function) to a separate thread to avoid stalling the
-    // threadpool. Furthermore, we will have to offload to detached threads every time we get scheduled back onto the thread pool, e.g. by
-    // invoking ThreadPool::parallelForAsync (see additional calls to `enqueueCoroutineToDetachedThread()` below).
-    co_await enqueueCoroutineToDetachedThread();
+    // threadpool. We achieve this by temporarily adding an extra thread to the thread pool until JXL is done.
+    ThreadPool::global().startThreads(1);
+    const ScopeGuard threadPoolGuard{[] { ThreadPool::global().shutdownThreads(1); }};
 
     if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(decoder.get(), jxlRunParallel, &runnerData)) {
         throw ImageLoadError{"Failed to set parallel runner for decoder."};
@@ -433,9 +434,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         priority
                     );
                 }
-
-                // See big comment above: we need to offload the rest of the function to a detached thread after using the thread pool.
-                co_await enqueueCoroutineToDetachedThread();
             } break;
         }
     }
