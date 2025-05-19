@@ -30,6 +30,7 @@ ThreadPool::ThreadPool(size_t maxNumThreads, bool force) {
     if (!force) {
         maxNumThreads = min((size_t)thread::hardware_concurrency(), maxNumThreads);
     }
+
     startThreads(maxNumThreads);
     mNumTasksInSystem.store(0);
 }
@@ -40,23 +41,31 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::startThreads(size_t num) {
+    const lock_guard lock{mTaskQueueMutex};
+
     mNumThreads += num;
     for (size_t i = mThreads.size(); i < mNumThreads; ++i) {
-        mThreads.emplace_back([this, i] {
+        mThreads.emplace_back([this] {
+            const auto id = this_thread::get_id();
+            tlog::debug() << "Spawning thread pool thread " << id;
+
+            unique_lock lock{mTaskQueueMutex};
             while (true) {
-                unique_lock lock{mTaskQueueMutex};
+                if (!lock) {
+                    lock.lock();
+                }
 
                 // look for a work item
-                while (i < mNumThreads && mTaskQueue.empty()) {
+                while (mThreads.size() <= mNumThreads && mTaskQueue.empty()) {
                     // if there are none wait for notification
                     mWorkerCondition.wait(lock);
                 }
 
-                if (i >= mNumThreads) {
+                if (mThreads.size() > mNumThreads) {
                     break;
                 }
 
-                function<void()> task{std::move(mTaskQueue.top().fun)};
+                const function<void()> task{std::move(mTaskQueue.top().fun)};
                 mTaskQueue.pop();
 
                 // Unlock the lock, so we can process the task without blocking other threads
@@ -67,31 +76,37 @@ void ThreadPool::startThreads(size_t num) {
                 mNumTasksInSystem--;
 
                 {
-                    unique_lock localLock{mSystemBusyMutex};
+                    const unique_lock localLock{mSystemBusyMutex};
 
                     if (mNumTasksInSystem == 0) {
                         mSystemBusyCondition.notify_all();
                     }
                 }
             }
+
+            // Remove oneself from the thread pool. NOTE: at this point, the lock is still held, so modifying mThreads is safe.
+            tlog::debug() << "Shutting down thread pool thread " << id;
+
+            const auto it = find_if(mThreads.begin(), mThreads.end(), [&id](const std::thread& t) { return t.get_id() == id; });
+            TEV_ASSERT(it != mThreads.end(), "Thread not found in thread pool.");
+
+            // Thread must be detached, otherwise running our own constructor while still running would result in errors.
+            it->detach();
+            mThreads.erase(it);
         });
     }
 }
 
 void ThreadPool::shutdownThreads(size_t num) {
-    auto numToClose = min(num, mNumThreads);
-
     {
-        lock_guard lock{mTaskQueueMutex};
+        const lock_guard lock{mTaskQueueMutex};
+
+        const auto numToClose = min(num, mNumThreads);
         mNumThreads -= numToClose;
     }
 
     // Wake up all the threads to have them quit
     mWorkerCondition.notify_all();
-    for (auto i = 0u; i < numToClose; ++i) {
-        mThreads.back().join();
-        mThreads.pop_back();
-    }
 }
 
 void ThreadPool::waitUntilFinished() {
