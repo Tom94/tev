@@ -37,11 +37,18 @@ ThreadPool::ThreadPool(size_t maxNumThreads, bool force) {
 
 ThreadPool::~ThreadPool() {
     waitUntilFinished();
-    shutdownThreads(mThreads.size());
+    shutdown();
+
+    while (!mThreads.empty()) {
+        this_thread::sleep_for(1ms);
+    }
 }
 
 void ThreadPool::startThreads(size_t num) {
     const lock_guard lock{mTaskQueueMutex};
+    if (mShuttingDown) {
+        return;
+    }
 
     mNumThreads += num;
     for (size_t i = mThreads.size(); i < mNumThreads; ++i) {
@@ -73,10 +80,10 @@ void ThreadPool::startThreads(size_t num) {
 
                 task();
 
-                mNumTasksInSystem--;
-
                 {
-                    const unique_lock localLock{mSystemBusyMutex};
+                    const unique_lock localLock{mTaskQueueMutex};
+
+                    mNumTasksInSystem--;
 
                     if (mNumTasksInSystem == 0) {
                         mSystemBusyCondition.notify_all();
@@ -91,8 +98,10 @@ void ThreadPool::startThreads(size_t num) {
             TEV_ASSERT(it != mThreads.end(), "Thread not found in thread pool.");
 
             // Thread must be detached, otherwise running our own constructor while still running would result in errors.
-            it->detach();
+            thread self = std::move(*it);
             mThreads.erase(it);
+
+            self.detach();
         });
     }
 }
@@ -109,8 +118,20 @@ void ThreadPool::shutdownThreads(size_t num) {
     mWorkerCondition.notify_all();
 }
 
+void ThreadPool::shutdown() {
+    {
+        const lock_guard lock{mTaskQueueMutex};
+
+        mNumThreads = 0;
+        mShuttingDown = true;
+    }
+
+    // Wake up all the threads to have them quit
+    mWorkerCondition.notify_all();
+}
+
 void ThreadPool::waitUntilFinished() {
-    unique_lock lock{mSystemBusyMutex};
+    unique_lock lock{mTaskQueueMutex};
 
     if (mNumTasksInSystem == 0) {
         return;
@@ -120,7 +141,7 @@ void ThreadPool::waitUntilFinished() {
 }
 
 void ThreadPool::waitUntilFinishedFor(const chrono::microseconds Duration) {
-    unique_lock lock{mSystemBusyMutex};
+    unique_lock lock{mTaskQueueMutex};
 
     if (mNumTasksInSystem == 0) {
         return;
@@ -130,11 +151,15 @@ void ThreadPool::waitUntilFinishedFor(const chrono::microseconds Duration) {
 }
 
 void ThreadPool::flushQueue() {
-    lock_guard lock{mTaskQueueMutex};
+    const lock_guard lock{mTaskQueueMutex};
 
     mNumTasksInSystem -= mTaskQueue.size();
     while (!mTaskQueue.empty()) {
         mTaskQueue.pop();
+    }
+
+    if (mNumTasksInSystem == 0) {
+        mSystemBusyCondition.notify_all();
     }
 }
 

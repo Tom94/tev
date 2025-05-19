@@ -44,15 +44,16 @@ public:
     template <class F> auto enqueueTask(F&& f, int priority) {
         using return_type = std::invoke_result_t<decltype(f)>;
 
-        ++mNumTasksInSystem;
-
-        auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
-
+        const auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
         auto res = task->get_future();
 
         {
-            std::lock_guard<std::mutex> lock{mTaskQueueMutex};
-            mTaskQueue.push({priority, [task]() { (*task)(); }});
+            const std::lock_guard<std::mutex> lock{mTaskQueueMutex};
+
+            if (!mShuttingDown) {
+                mTaskQueue.push({priority, [task]() { (*task)(); }});
+                ++mNumTasksInSystem;
+            }
         }
 
         mWorkerCondition.notify_one();
@@ -90,7 +91,7 @@ public:
 
     void startThreads(size_t num);
     void shutdownThreads(size_t num);
-    void shutdown() { shutdownThreads(mThreads.size()); }
+    void shutdown();
 
     size_t numTasksInSystem() const { return mNumTasksInSystem; }
 
@@ -129,6 +130,8 @@ public:
 
 private:
     size_t mNumThreads = 0;
+    bool mShuttingDown = false;
+
     const size_t mHardwareConcurrency = std::thread::hardware_concurrency();
     std::vector<std::thread> mThreads;
 
@@ -144,10 +147,9 @@ private:
     std::priority_queue<QueuedTask, std::vector<QueuedTask>, QueuedTask::Comparator> mTaskQueue;
     std::mutex mTaskQueueMutex;
     std::condition_variable mWorkerCondition;
+    std::condition_variable mSystemBusyCondition;
 
     std::atomic<size_t> mNumTasksInSystem;
-    std::mutex mSystemBusyMutex;
-    std::condition_variable mSystemBusyCondition;
 };
 
 } // namespace tev
