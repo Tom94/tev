@@ -100,7 +100,7 @@ public:
 
     template <typename Int, typename F> Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
         Int range = end - start;
-        Int nTasks = std::min((Int)mNumThreads, range);
+        Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, range});
 
         std::vector<Task<void>> tasks;
         for (Int i = 0; i < nTasks; ++i) {
@@ -129,6 +129,7 @@ public:
 
 private:
     size_t mNumThreads = 0;
+    const size_t mHardwareConcurrency = std::thread::hardware_concurrency();
     std::vector<std::thread> mThreads;
 
     struct QueuedTask {
