@@ -689,26 +689,6 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
-    ScopeGuard hdrGuard{[&]() -> Task<void> {
-        if (isHdr) {
-            tlog::debug() << "Decoding DNG HDR after applying profile";
-            co_await ThreadPool::global().parallelForAsync<int>(
-                activeArea.min.y(),
-                activeArea.max.y(),
-                [&](const int y) {
-                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                        const size_t i = (size_t)y * size.x() + x;
-                        for (int c = 0; c < numColorChannels; ++c) {
-                            const size_t idx = i * numRgbaChannels + c;
-                            floatRgbaData[idx] = dngHdrDecodingFunction(floatRgbaData[idx]);
-                        }
-                    }
-                },
-                priority
-            );
-        }
-    }};
-
     if (const char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
         tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
     }
@@ -762,6 +742,24 @@ Task<void> postprocessLinearRawDng(
                     for (int c = 0; c < numColorChannels; ++c) {
                         const size_t idx = i * numRgbaChannels + c;
                         floatRgbaData[idx] = applyPwLinear(tc, floatRgbaData[idx]);
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    if (isHdr) {
+        tlog::debug() << "Decoding DNG HDR after applying profile";
+        co_await ThreadPool::global().parallelForAsync<int>(
+            activeArea.min.y(),
+            activeArea.max.y(),
+            [&](const int y) {
+                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                    const size_t i = (size_t)y * size.x() + x;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        const size_t idx = i * numRgbaChannels + c;
+                        floatRgbaData[idx] = dngHdrDecodingFunction(floatRgbaData[idx]);
                     }
                 }
             },
