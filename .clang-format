@@ -2,25 +2,36 @@ AccessModifierOffset: -4
 AlignAfterOpenBracket: BlockIndent
 AlignArrayOfStructures: Left
 AlignConsecutiveBitFields: Consecutive
+AlignConsecutiveShortCaseStatements:
+  Enabled: false
 AlignEscapedNewlines: Left
 AlignOperands: false
+AlignTrailingComments:
+  Kind: Leave
 AllowAllArgumentsOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
-AllowShortFunctionsOnASingleLine: true
 AllowShortBlocksOnASingleLine: Always
+AllowShortCaseExpressionOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
+AllowShortCompoundRequirementOnASingleLine: true
 AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true
 AllowShortLambdasOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
 AlwaysBreakBeforeMultilineStrings: true
-AlwaysBreakTemplateDeclarations: MultiLine
 BinPackArguments: false
 BinPackParameters: false
 BreakAfterAttributes: Leave
+BreakAfterReturnType: Automatic
 BreakBeforeBraces: Attach
+BreakBeforeConceptDeclarations: Allowed
+# BreakBeforeTemplateCloser: true
 BreakBeforeTernaryOperators: false
 BreakConstructorInitializers: AfterColon
-BreakInheritanceList: BeforeComma
+BreakInheritanceList: AfterColon
 BreakStringLiterals: false
+BreakTemplateDeclarations: MultiLine
 ColumnLimit: 140
 CompactNamespaces: true
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
@@ -50,6 +61,7 @@ PointerAlignment: Left
 QualifierAlignment: Left
 ReferenceAlignment: Left
 SortIncludes: CaseSensitive
+SortUsingDeclarations: true
 SpaceAfterCStyleCast: false
 SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: true
@@ -58,4 +70,4 @@ SpaceBeforeParens: ControlStatementsExceptForEachMacros
 SpacesInAngles: Never
 TabWidth: 4
 UseCRLF: false
-UseTab: AlignWithSpaces
+UseTab: Never

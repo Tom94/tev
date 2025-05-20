@@ -9,5 +9,5 @@ charset = utf-8
 trim_trailing_whitespace = true
 max_line_length = 140
 
-[*.{yml,nix}]
+[*.{yml,nix,clang-format}]
 indent_size = 2
