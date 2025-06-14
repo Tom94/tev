@@ -159,7 +159,7 @@ $ cpack --config build/CPackConfig.cmake
 - __WEBP__ (via [libwebp](https://chromium.googlesource.com/webm/libwebp))
 - __TIFF__, DNG (via [libtiff](https://gitlab.com/libtiff/libtiff); only some DNG files supported)
 - __AVIF__ (via [aom](https://aomedia.googlesource.com/aom)+[libheif](https://github.com/strukturag/libheif))
-- __HEIC__ (e.g. pictures from iPhones; via [libde265](https://github.com/strukturag/libde265)+[libheif](https://github.com/strukturag/libheif); disabled in binary release. You must build __tev__ yourself with the `TEV_SUPPORT_HEIC` CMake option. Check patent laws in your juristiction before enabling this feature.)
+- __HEIC__ (e.g. pictures from iPhones; via [libde265](https://github.com/strukturag/libde265)+[libheif](https://github.com/strukturag/libheif); disabled in binary release. You must build __tev__ yourself with the `TEV_SUPPORT_HEIC` CMake option. Check patent laws in your jurisdiction before enabling this feature.)
 - __HDR__, BMP, GIF, PIC, PNM, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 
 ## License
