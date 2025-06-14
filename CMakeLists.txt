@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.13)
 
 project(
     tev
-    VERSION 2.0
+    VERSION 2.1
     DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
     LANGUAGES C CXX
 )
