@@ -169,6 +169,11 @@ private:
             return *this;
         }
 
+        template <typename T> IStream& operator>>(std::vector<T>& var) {
+            *this >> std::span<T>{var};
+            return *this;
+        }
+
         template <typename T> IStream& operator>>(T& var) {
             if (mData.size() < mIdx + sizeof(T)) {
                 throw std::runtime_error{"Trying to read generic type beyond the bounds of the IPC packet payload."};
@@ -204,12 +209,22 @@ private:
             return *this;
         }
 
+        template <typename T> OStream& operator<<(const std::vector<T>& var) {
+            *this << std::span<const T>{var};
+            return *this;
+        }
+
         OStream& operator<<(std::string_view var) {
             for (auto&& character : var) {
                 *this << character;
             }
 
             *this << '\0';
+            return *this;
+        }
+
+        OStream& operator<<(const std::string& var) {
+            *this << std::string_view{var};
             return *this;
         }
 
