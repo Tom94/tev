@@ -28,8 +28,8 @@
 #include <utf8.h>
 
 #ifdef __APPLE__
-#   define GLFW_EXPOSE_NATIVE_COCOA
-#   include <GLFW/glfw3native.h>
+#    define GLFW_EXPOSE_NATIVE_COCOA
+#    include <GLFW/glfw3native.h>
 #endif
 
 #include <iostream>
@@ -115,7 +115,15 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
                     imageStream << info.channelNames[i].length() << info.channelNames[i];
                 }
 
-                auto images = tryLoadImage(toPath(info.imageName), imageStream, "", sImageViewer->imagesLoader().applyGainmaps()).get();
+                auto imagesLoadTask = tryLoadImage(
+                    toPath(info.imageName),
+                    imageStream,
+                    "",
+                    sImageViewer->imagesLoader().applyGainmaps(),
+                    sImageViewer->imagesLoader().groupChannels()
+                );
+                const auto images = imagesLoadTask.get();
+
                 if (!images.empty()) {
                     sImageViewer->replaceImage(ensureUtf8(info.imageName), images.front(), info.grabFocus);
                     TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
@@ -158,6 +166,13 @@ static int mainFunc(span<const string> arguments) {
         "AUTO FIT",
         "Automatically fit selected images to tev's window size.",
         {"auto-fit"},
+    };
+
+    Flag channelGroupingFlagOff{
+        parser,
+        "NO CHANNEL GROUPING",
+        "Do not group channels into channel groups.",
+        {"no-channel-grouping"},
     };
 
     ValueFlag<float> exposureFlag{
@@ -429,6 +444,7 @@ static int mainFunc(span<const string> arguments) {
     shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
     imagesLoader->setRecursiveDirectories(recursiveFlag);
     imagesLoader->setApplyGainmaps(!gainmapFlagOff);
+    imagesLoader->setGroupChannels(!channelGroupingFlagOff);
 
     // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
