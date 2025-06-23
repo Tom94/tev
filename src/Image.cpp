@@ -288,13 +288,25 @@ Image::dither_matrix_t Image::ditherMatrix() {
     return thresholdMatrix;
 }
 
-Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector) :
+Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector, bool groupChannels) :
     mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
     mName = channelSelector.empty() ? tev::toString(path) : fmt::format("{}:{}", tev::toString(path), channelSelector);
 
-    for (const auto& l : mData.layers) {
-        auto groups = getGroupedChannels(l);
-        mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
+    if (groupChannels) {
+        for (const auto& l : mData.layers) {
+            auto groups = getGroupedChannels(l);
+            mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
+        }
+    } else {
+        // If we don't group channels, then each channel is its own group.
+        for (const auto& c : mData.channels) {
+            mChannelGroups.emplace_back(
+                ChannelGroup{
+                    string{c.name()},
+                    vector<string>{string{c.name()}, string{c.name()}, string{c.name()}}
+            }
+            );
+        }
     }
 }
 
@@ -581,28 +593,6 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     return result;
 }
 
-vector<string> Image::getSortedChannels(string_view layerName) const {
-    string alphaChannelName = fmt::format("{}A", layerName);
-
-    bool includesAlphaChannel = false;
-
-    vector<string> result;
-    for (const auto& group : getGroupedChannels(layerName)) {
-        for (auto name : group.channels) {
-            if (name == alphaChannelName) {
-                if (includesAlphaChannel) {
-                    continue;
-                }
-
-                includesAlphaChannel = true;
-            }
-            result.emplace_back(name);
-        }
-    }
-
-    return result;
-}
-
 vector<string> Image::getExistingChannels(span<const string> requestedChannels) const {
     vector<string> result;
     copy_if(begin(requestedChannels), end(requestedChannels), back_inserter(result), [&](string_view c) { return hasChannel(c); });
@@ -706,7 +696,8 @@ string Image::toString() const {
     return sstream.str();
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps) {
+Task<vector<shared_ptr<Image>>>
+    tryLoadImage(int taskPriority, fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
     const auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << fmt::format("Could not load {}: {}", toString(path), e.what());
@@ -778,7 +769,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
                 }
             }
 
-            images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector));
+            images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector, groupChannels));
         }
 
         const auto end = chrono::system_clock::now();
@@ -794,11 +785,13 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, is
     co_return {};
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps) {
-    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, applyGainmaps);
+Task<vector<shared_ptr<Image>>>
+    tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, applyGainmaps, groupChannels);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, string_view channelSelector, bool applyGainmaps) {
+Task<vector<shared_ptr<Image>>>
+    tryLoadImage(int taskPriority, fs::path path, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
     try {
         path = fs::absolute(path);
     } catch (const runtime_error&) {
@@ -807,11 +800,11 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(int taskPriority, fs::path path, st
     }
 
     ifstream fileStream{path, ios_base::binary};
-    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, applyGainmaps);
+    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, applyGainmaps, groupChannels);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string_view channelSelector, bool applyGainmaps) {
-    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, applyGainmaps);
+Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, applyGainmaps, groupChannels);
 }
 
 void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
@@ -853,7 +846,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSe
         const int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
-        const auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mApplyGainmaps);
+        const auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mApplyGainmaps, mGroupChannels);
 
         {
             const lock_guard lock{mPendingLoadedImagesMutex};

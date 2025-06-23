@@ -879,8 +879,15 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                     imageStream << "clip" << string(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec))
                                 << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
 
-                    auto images =
-                        tryLoadImage(fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->applyGainmaps()).get();
+                    auto imagesLoadTask = tryLoadImage(
+                        fmt::format("clipboard ({})", ++mClipboardIndex),
+                        imageStream,
+                        "",
+                        mImagesLoader->applyGainmaps(),
+                        mImagesLoader->groupChannels()
+                    );
+                    const auto images = imagesLoadTask.get();
+
                     if (images.empty()) {
                         tlog::error() << "Failed to load image from clipboard data.";
                     } else {

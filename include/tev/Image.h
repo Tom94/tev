@@ -124,7 +124,7 @@ public:
     using dither_matrix_t = std::array<std::array<float, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
     static dither_matrix_t ditherMatrix();
 
-    Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, std::string_view channelSelector);
+    Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, std::string_view channelSelector, bool groupChannels);
     virtual ~Image();
 
     const fs::path& path() const { return mPath; }
@@ -158,7 +158,6 @@ public:
     std::vector<std::string> channelsInGroup(std::string_view groupName) const;
     void decomposeChannelGroup(std::string_view groupName);
 
-    std::vector<std::string> getSortedChannels(std::string_view layerName) const;
     std::vector<std::string> getExistingChannels(std::span<const std::string> requestedChannels) const;
 
     nanogui::Vector2i size() const { return mData.size(); }
@@ -275,10 +274,12 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
 }
 
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, bool applyGainmaps);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string_view channelSelector, bool applyGainmaps);
+    tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
+Task<std::vector<std::shared_ptr<Image>>>
+    tryLoadImage(fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
+Task<std::vector<std::shared_ptr<Image>>>
+    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
 
 struct ImageAddition {
     int loadId;
@@ -316,6 +317,9 @@ public:
     bool applyGainmaps() const { return mApplyGainmaps; }
     void setApplyGainmaps(bool value) { mApplyGainmaps = value; }
 
+    bool groupChannels() const { return mGroupChannels; }
+    void setGroupChannels(bool value) { mGroupChannels = value; }
+
 private:
     SharedQueue<ImageAddition> mLoadedImages;
 
@@ -330,6 +334,7 @@ private:
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 
     bool mApplyGainmaps = true;
+    bool mGroupChannels = true;
 
     std::chrono::system_clock::time_point mLoadStartTime;
     int mLoadStartCounter = 0;
