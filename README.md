@@ -102,6 +102,7 @@ The following operations exist:
 | `VectorGraphics` | Draws vector graphics over a specified image.
 
 __tev__'s network protocol is already implemented in the following languages:
+- [C++](https://github.com/westlicht/tevclient) by Simon Kallweit
 - [Python](src/python/tev.py) by Tomáš Iser
 - [Rust](https://crates.io/crates/tev_client) by Karel Peeters
 
@@ -112,7 +113,7 @@ If using these implementations is not an option, it's easy to write your own one
 ```
 where integers are encoded in little endian.
 
-There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that show exactly how each packet has to be assembled. These functions do not rely on external dependencies, so it is recommended to copy and paste them into your project for interfacing with __tev__.
+There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that show exactly how each packet has to be assembled. These functions do not rely on external dependencies, so you can copy and paste them into your project to interface with __tev__.
 
 
 ## Building tev
