@@ -102,10 +102,10 @@ The following operations exist:
 | `VectorGraphics` | Draws vector graphics over a specified image.
 
 __tev__'s network protocol is already implemented in the following languages:
-- [C++](https://github.com/westlicht/tevclient) by Simon Kallweit
-- [Python](src/python/tev.py) by Tomáš Iser
-- [Rust](https://crates.io/crates/tev_client) by Karel Peeters
-
+- [C++](https://github.com/westlicht/tevclient) (by Simon Kallweit)
+- [Python](https://pypi.org/project/tevclient/) (initial implementation by Tomáš Iser)
+  - `pip install tevclient`
+- [Rust](https://crates.io/crates/tev_client) (by Karel Peeters)
 
 If using these implementations is not an option, it's easy to write your own one. Each packet has the simple form
 ```
