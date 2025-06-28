@@ -392,7 +392,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
                             size,
                             info.num_color_channels,
-                            info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                            info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                                              EAlphaKind::None,
                             EPixelFormat::F32,
                             (uint8_t*)colorData.data(),
                             data.channels.front().data(),

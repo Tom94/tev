@@ -304,12 +304,13 @@ Task<void> toLinearSrgbPremul(
         type |= EXTRA_SH(1);
     }
 
-    // lcms2 will internally unmultiply linear-space premultiplied alpha after undoing the transfer function (preserving colors of alpha==0
-    // pixels as-is). But in the case of non-linear premultiplied alpha, we have to manually unmultiply before the transform and initialize
-    // the transform for straight alpha.
-    if (alphaKind == EAlphaKind::Premultiplied) {
-        type |= PREMUL_SH(1);
-    }
+    // We expressly *don't* tell lcms2 that the alpha channel is premultiplied, because it would divide the alpha channel prior to color
+    // space conversion and inverse transfer function application. This would be bad for multiple reasons: first, EAlphaKind::Premultiplied
+    // indicated premultiplication in linear space, and second, lcms2 does not handle the case of alpha close to 0 very accurately. This is
+    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedNonlinear below rather than relying on lcms2.
+    // if (alphaKind == EAlphaKind::Premultiplied) {
+    //     type |= PREMUL_SH(1);
+    // }
 
     // TODO: differentiate between single channel RGB and gray
     if (numColorChannels == 1) {
@@ -365,14 +366,14 @@ Task<void> toLinearSrgbPremul(
             // call cmsDoTransform for each row in parallel.
             cmsDoTransform(transform, srcPtr, dstPtr, size.x());
 
-            // The output of the cms transform is always in straight alpha, hence we need to premultiply. If the input image had
-            // premultiplied alpha, alpha==0 pixels were preserved as-is, when converting to straight alpha, so we also should not
-            // re-multiply those.
-            if (alphaKind != EAlphaKind::None) {
+            // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the
+            // input image had non-linear premultiplied alpha, alpha==0 pixels were preserved as-is when converting to straight alpha, so we
+            // also should not re-multiply those.
+            if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
                 for (int x = 0; x < size.x(); ++x) {
                     const size_t baseIdx = x * 4;
                     float factor = dstPtr[baseIdx + 3];
-                    if (factor == 0.0f && (alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Premultiplied)) {
+                    if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
                         factor = 1.0f;
                     }
 

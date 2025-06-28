@@ -45,10 +45,11 @@ nanogui::Matrix4f toMatrix4(const nanogui::Matrix3f& mat);
 enum class EAlphaKind {
     // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
     // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
-    // represent premultiplied alpha this way.
+    // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
+    // expects this kind of premultiplied alpha, so we have to support it.
     PremultipliedNonlinear,
-    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most common
-    // and useful kind of premultiplied alpha and the one color management systems (like lcms2) expect.
+    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
+    // kind of premultiplied alpha.
     Premultiplied,
     Straight,
     None,
