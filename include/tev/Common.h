@@ -447,7 +447,7 @@ inline float toSRGB(float linear, float gamma = 2.4f) {
     if (linear <= 0.0031308f) {
         return 12.92f * linear;
     } else {
-        return (1.0f + a) * (float)pow(linear, 1.0f / gamma) - a;
+        return (1.0f + a) * std::pow(linear, 1.0f / gamma) - a;
     }
 }
 
@@ -456,7 +456,7 @@ inline float toLinear(float sRGB, float gamma = 2.4f) {
     if (sRGB <= 0.04045f) {
         return sRGB / 12.92f;
     } else {
-        return (float)pow((sRGB + a) / (1.0f + a), gamma);
+        return std::pow((sRGB + a) / (1.0f + a), gamma);
     }
 }
 

@@ -94,13 +94,18 @@ Matrix4f xyzToRec709Matrix() {
     return transpose(Imf::XYZtoRGB(rec709, 1));
 }
 
+Vector2f whiteD65() { return {0.3127f, 0.3290f}; }
+Vector2f whiteCenter() { return {0.333333f, 0.333333f}; }
+Vector2f whiteC() { return {0.310f, 0.316f}; }
+Vector2f whiteDci() { return {0.314f, 0.351f}; }
+
 array<Vector2f, 4> rec709Chroma() {
     return {
         {
          {0.6400f, 0.3300f},
          {0.3000f, 0.6000f},
          {0.1500f, 0.0600f},
-         {0.3127f, 0.3290f},
+         whiteD65(),
          }
     };
 }
@@ -111,7 +116,7 @@ array<Vector2f, 4> adobeChroma() {
          {0.6400f, 0.3300f},
          {0.2100f, 0.7100f},
          {0.1500f, 0.0600f},
-         {0.3127f, 0.3290f},
+         whiteD65(),
          }
     };
 }
@@ -150,8 +155,8 @@ Matrix3f adaptToXYZD50Bradford(const Vector2f& w) {
 
     const float a[3][3] = {
         {lms50[0] / lms[0], 0,                 0                },
-        {0,              lms50[1] / lms[1], 0                },
-        {0,              0,              lms50[2] / lms[2]},
+        {0,                 lms50[1] / lms[1], 0                },
+        {0,                 0,                 lms50[2] / lms[2]},
     };
     const auto aMat = toMatrix3(a);
 
@@ -380,5 +385,100 @@ Task<void> toLinearSrgbPremul(
         priority
     );
 }
+
+// Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
+namespace ituth273 {
+array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
+    switch (primaries) {
+        default: tlog::warning() << fmt::format("Unknown color primaries {}. Using Rec.709 chroma.", (int)primaries); return rec709Chroma();
+        case EColorPrimaries::BT709: return rec709Chroma();
+        case EColorPrimaries::Unspecified: tlog::warning() << "Unspecified color primaries. Using Rec.709 chroma."; return rec709Chroma();
+        case EColorPrimaries::BT470M:
+            return {
+                {
+                 {0.6700f, 0.3300f},
+                 {0.2100f, 0.7100f},
+                 {0.1400f, 0.0800f},
+                 whiteC(),
+                 }
+            };
+        case EColorPrimaries::BT470BG:
+            return {
+                {
+                 {0.6400f, 0.3300f},
+                 {0.2900f, 0.6000f},
+                 {0.1500f, 0.0600f},
+                 whiteD65(),
+                 }
+            };
+        case EColorPrimaries::SMPTE170M:
+        case EColorPrimaries::SMPTE240M:
+            return {
+                {
+                 {0.6300f, 0.3400f},
+                 {0.3100f, 0.5950f},
+                 {0.1550f, 0.0700f},
+                 whiteD65(),
+                 }
+            };
+        case EColorPrimaries::Film:
+            return {
+                {
+                 {0.6810f, 0.3190f}, // Wratten 25
+                    {0.2430f, 0.6920f}, // Wratten 58
+                    {0.1450f, 0.0490f}, // Wratten 47
+                    whiteC(),
+                 }
+            };
+        case EColorPrimaries::BT2020:
+            return {
+                {
+                 {0.7080f, 0.2920f},
+                 {0.1700f, 0.7970f},
+                 {0.1310f, 0.0460f},
+                 whiteD65(),
+                 }
+            };
+        case EColorPrimaries::SMPTE428:
+            return {
+                {
+                 {1.0f, 0.0f},
+                 {0.0f, 1.0f},
+                 {0.0f, 0.0f},
+                 whiteCenter(),
+                 }
+            };
+        case EColorPrimaries::SMPTE431:
+            return {
+                {
+                 {0.6800f, 0.3200f},
+                 {0.2650f, 0.6900f},
+                 {0.1500f, 0.0600f},
+                 whiteDci(),
+                 }
+            };
+        case EColorPrimaries::SMPTE432:
+            return {
+                {
+                 {0.6800f, 0.3200f},
+                 {0.2650f, 0.6900f},
+                 {0.1500f, 0.0600f},
+                 whiteD65(),
+                 }
+            };
+        case EColorPrimaries::Weird:
+            return {
+                {
+                 {0.6300f, 0.3400f},
+                 {0.2950f, 0.6050f},
+                 {0.1550f, 0.0770f},
+                 whiteD65(),
+                 }
+            };
+    }
+
+    return rec709Chroma(); // Fallback to Rec.709 if unknown
+}
+} // namespace ituth273
 
 } // namespace tev
