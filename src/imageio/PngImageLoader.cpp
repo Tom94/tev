@@ -191,10 +191,61 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
     resultData.hasPremultipliedAlpha = false;
 
-    // According to http://www.libpng.org/pub/png/spec/1.2/PNG-Contents.html, if an ICC profile exists, use it to convert to linear sRGB.
-    // Otherwise, check the sRGB chunk for whether the image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and
-    // chromaticity values and use them to convert to linear sRGB. And lastly (this isn't in the spec, but based on having seen a lot of
-    // PNGs), if none of these chunks are present, fall back to sRGB.
+    // According to https://www.w3.org/TR/png-3/#color-chunk-precendence, if a cICP chunk exists, use it to convert to sRGB. Else, if an
+    // iCCP chunk exists, use its embedded ICC color profile to convert to linear sRGB. Otherwise, check the sRGB chunk for whether the
+    // image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and chromaticity values and use them to convert to
+    // linear sRGB. And lastly (this isn't in the spec, but based on having seen a lot of PNGs), if none of these chunks are present, fall
+    // back to sRGB.
+    struct cICP {
+        png_byte colourPrimaries;
+        png_byte transferFunction;
+        png_byte matrixCoefficients;
+        png_byte videoFullRangeFlag;
+    } cicp;
+    if (png_get_cICP(pngPtr, infoPtr, &cicp.colourPrimaries, &cicp.transferFunction, &cicp.matrixCoefficients, &cicp.videoFullRangeFlag) ==
+        PNG_INFO_cICP) {
+        tlog::debug() << "Found cICP chunk. Converting to sRGB.";
+
+        if (cicp.videoFullRangeFlag == 0) {
+            tlog::warning() << "tev does not support limited range color spaces. Assuming full range color space.";
+        }
+
+        if (cicp.matrixCoefficients != 0) {
+            tlog::warning() << fmt::format(
+                "Unsupported matrix coefficients in cICP chunk: {}. PNG images only support RGB (=0). Ignoring.", cicp.matrixCoefficients
+            );
+        }
+
+        if (!ituth273::isTransferImplemented(cicp.transferFunction)) {
+            tlog::warning(
+            ) << fmt::format("Unsupported transfer function {} in cICP chunk. Using sRGB transfer instead.", cicp.transferFunction);
+            cicp.transferFunction = 13;
+        }
+
+        if (bitDepth == 16) {
+            co_await toFloat32<uint16_t, false>(
+                (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
+            );
+        } else {
+            co_await toFloat32<uint8_t, false>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
+        }
+
+        auto* pixelData = resultData.channels.front().data();
+        co_await ThreadPool::global().parallelForAsync<float>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (size_t c = 0; c < 3; ++c) {
+                    pixelData[i * 4 + c] = ituth273::invTransfer(cicp.transferFunction, pixelData[i * 4 + c]);
+                }
+            },
+            priority
+        );
+        resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(ituth273::EColorPrimaries(cicp.colourPrimaries)));
+
+        co_return result;
+    }
+
     png_bytep iccProfile = nullptr;
     png_charp iccProfileName = nullptr;
     png_uint_32 iccProfileSize = 0;
@@ -235,7 +286,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     array<double, 8> ch = {0};
     bool hasChunkChrm = png_get_cHRM(pngPtr, infoPtr, &ch[0], &ch[1], &ch[2], &ch[3], &ch[4], &ch[5], &ch[6], &ch[7]) == PNG_INFO_cHRM;
 
-    if (hasChunkSrgb || (!hasChunkGama && !hasChunkChrm)) {
+    const bool useSrgb = hasChunkSrgb || (!hasChunkGama && !hasChunkChrm);
+    if (useSrgb) {
         if (hasChunkSrgb) {
             tlog::debug() << fmt::format("Using sRGB chunk w/ rendering intent {}", srgbIntent);
         } else {
