@@ -190,7 +190,8 @@ inline float invTransfer(const uint8_t transfer, float val) {
             constexpr float n = 1305.0f / 8192.0f;
 
             const float tmp = std::pow(val, 1.0f / m);
-            return 10000.0f * std::pow((tmp - c1) / (c2 - c3 * tmp), 1.0f / n);
+            const float result_cdm2 = 10000.0f * std::pow((tmp - c1) / (c2 - c3 * tmp), 1.0f / n);
+            return result_cdm2 / 80.0f; // Convert to sRGB units where SDR white (1.0) is 80 cd/m^2
         }
         case 17: // SMPTE ST 428-1
             return std::pow((52.37f / 48.0f) * val, 2.6f);
@@ -199,7 +200,8 @@ inline float invTransfer(const uint8_t transfer, float val) {
             constexpr float a = 0.17883277f;
             constexpr float b = 0.28466892f;
             constexpr float c = 0.55991073f;
-            return val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) * a) + b) / 12.0f);
+            const float result_cdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
+            return result_cdm2 / 80.0f; // Convert to sRGB units where SDR white (1.0) is 80 cd/m^2
         }
     }
 }

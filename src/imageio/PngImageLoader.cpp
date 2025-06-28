@@ -291,7 +291,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         if (hasChunkSrgb) {
             tlog::debug() << fmt::format("Using sRGB chunk w/ rendering intent {}", srgbIntent);
         } else {
-            tlog::debug() << "No iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
+            tlog::debug() << "No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
         }
 
         if (bitDepth == 16) {
