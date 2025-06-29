@@ -202,10 +202,20 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     } cicp;
     if (png_get_cICP(pngPtr, infoPtr, &cicp.colourPrimaries, &cicp.transferFunction, &cicp.matrixCoefficients, &cicp.videoFullRangeFlag) ==
         PNG_INFO_cICP) {
-        tlog::debug() << "Found cICP chunk. Converting to sRGB.";
 
+        auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
+        auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
+
+        tlog::debug() << fmt::format(
+            "cICP: primaries={}, transfer={}, full_range={}",
+            ituth273::toString(primaries),
+            ituth273::toString(transfer),
+            cicp.videoFullRangeFlag == 1 ? "yes" : "no"
+        );
+
+        LimitedRange range = LimitedRange::full();
         if (cicp.videoFullRangeFlag == 0) {
-            tlog::warning() << "tev does not support limited range color spaces. Assuming full range color space.";
+            range = limitedRangeForBitsPerPixel(bitDepth);
         }
 
         if (cicp.matrixCoefficients != 0) {
@@ -214,10 +224,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             );
         }
 
-        if (!ituth273::isTransferImplemented(cicp.transferFunction)) {
-            tlog::warning(
-            ) << fmt::format("Unsupported transfer function {} in cICP chunk. Using sRGB transfer instead.", cicp.transferFunction);
-            cicp.transferFunction = 13;
+        if (!ituth273::isTransferImplemented(transfer)) {
+            tlog::warning() << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
+            transfer = ituth273::ETransferCharacteristics::SRGB;
         }
 
         if (bitDepth == 16) {
@@ -234,12 +243,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             numPixels,
             [&](size_t i) {
                 for (size_t c = 0; c < 3; ++c) {
-                    pixelData[i * 4 + c] = ituth273::invTransfer(cicp.transferFunction, pixelData[i * 4 + c]);
+                    const float val = (pixelData[i * 4 + c] - range.offset) * range.scale;
+                    pixelData[i * 4 + c] = ituth273::invTransfer(transfer, val);
                 }
             },
             priority
         );
-        resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(ituth273::EColorPrimaries(cicp.colourPrimaries)));
+        resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
 
         co_return result;
     }

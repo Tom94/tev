@@ -113,39 +113,31 @@ enum class EColorPrimaries : uint8_t {
     Weird = 22, // The spec says "No corresponding industry specification identified"
 };
 
+std::string_view toString(const EColorPrimaries primaries);
 std::array<nanogui::Vector2f, 4> chroma(const EColorPrimaries primaries);
 
-inline bool isTransferImplemented(const uint8_t transfer) {
-    switch (transfer) {
-        // BT.709
-        case 1:
-        case 6:
-        case 14:
-        case 15:
-        // Variations of BT.709
-        case 11: // Handles negative values by mirroring
-        case 12: // Has special negative value handling
-        // Simple gamma transfers
-        case 4:
-        case 5:
-        // SMPTE ST 240
-        case 7:
-        // Linear
-        case 8:
-        // Logarithmic
-        case 9:
-        case 10:
-        // sRGB
-        case 13:
-        // SMPTE ST 2084 (PQ)
-        case 16:
-        // SMPTE ST 428-1
-        case 17:
-        // HLG (hybrid log gamma)
-        case 18: return true;
-        default: return false;
-    }
-}
+enum class ETransferCharacteristics : uint8_t {
+    BT709 = 1, // Also BT1361
+    Unspecified = 2,
+    BT470M = 4,
+    BT470BG = 5,
+    BT601 = 6, // Also BT1358, BT1700, SMPTE ST 170
+    SMPTE240 = 7,
+    Linear = 8,
+    Log100 = 9,
+    Log100Sqrt10 = 10,
+    IEC61966 = 11,
+    BT1361Extended = 12,
+    SRGB = 13,
+    BT202010bit = 14,
+    BT202012bit = 15,
+    PQ = 16, // Perceptual Quantizer, SMPTE ST 2084
+    SMPTE428 = 17,
+    HLG = 18, // Hybrid Log-Gamma
+};
+
+std::string_view toString(const ETransferCharacteristics transfer);
+bool isTransferImplemented(const ETransferCharacteristics transfer);
 
 inline float bt709ToLinear(float val) {
     constexpr float beta = 0.018053968510807f;
@@ -186,6 +178,8 @@ inline float pqToLinear(float val) {
     return resultCdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
 }
 
+inline float smpteSt428ToLinear(float val) { return std::pow(val, 2.6f) * (52.37f / 48.0f); }
+
 inline float hlgToLinear(float val) {
     constexpr float a = 0.17883277f;
     constexpr float b = 0.28466892f;
@@ -194,42 +188,41 @@ inline float hlgToLinear(float val) {
     return resultCdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
 }
 
-inline float invTransfer(const uint8_t transfer, float val) {
+inline float invTransfer(const ETransferCharacteristics transfer, float val) {
     switch (transfer) {
-        default: return val; // Not implemented
-        case 1: // BT.709, BT.1361
-        case 6: // BT.601, BT.1358, BT.1700, SMPTE ST 170
-        case 14: // BT.2020 (10 bit)
-        case 15: // BT.2020 (12 bit)
-            return bt709ToLinear(val);
-        case 11: // IEC 61966-2-4 (Handle negative values by mirroring)
+        case ETransferCharacteristics::BT709:
+        case ETransferCharacteristics::BT601:
+        case ETransferCharacteristics::BT202010bit:
+        case ETransferCharacteristics::BT202012bit: return bt709ToLinear(val);
+        case ETransferCharacteristics::IEC61966: // handles negative values by mirroring
             return std::copysign(bt709ToLinear(std::abs(val)), val);
-        case 12: // BT 1361 extended color gamut system
+        case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
             return bt1361ExtendedToLinear(val);
-        case 4: // Gamma 2.2
-            return std::pow(val, 2.2f);
-        case 5: // Gamma 2.8
-            return std::pow(val, 2.8f);
-        case 7: // SMPTE ST 240
-            return smpteSt240ToLinear(val);
-        case 8: // Linear
-            return val;
-        case 9: // Logarithmic 100:1
-            return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;
-        case 10: // Logarithmic 100*srqt(10):1
-            return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f;
-        case 13: // sRGB
-            return toLinear(val);
-        case 16: // SMPTE ST 2084 (PQ)
-            return pqToLinear(val);
-        case 17: // SMPTE ST 428-1
-            return std::pow((52.37f / 48.0f) * val, 2.6f);
-        case 18: // HLG (hybrid log gamma)
-            return hlgToLinear(val);
+        case ETransferCharacteristics::BT470M: return std::pow(val, 2.2f);
+        case ETransferCharacteristics::BT470BG: return std::pow(val, 2.8f);
+        case ETransferCharacteristics::SMPTE240: return smpteSt240ToLinear(val);
+        case ETransferCharacteristics::Linear: return val;
+        case ETransferCharacteristics::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;
+        case ETransferCharacteristics::Log100Sqrt10: return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f;
+        case ETransferCharacteristics::SRGB: return toLinear(val);
+        case ETransferCharacteristics::PQ: return pqToLinear(val);
+        case ETransferCharacteristics::SMPTE428: return smpteSt428ToLinear(val);
+        case ETransferCharacteristics::HLG: return hlgToLinear(val);
+        case ETransferCharacteristics::Unspecified: return val; // Default to linear if unspecified
     }
 
+    // Other transfer functions are not implemented. Default to linear.
     return val;
 }
 } // namespace ituth273
+
+struct LimitedRange {
+    float scale = 1.0f; // Scale factor for limited range to full range conversion
+    float offset = 0.0f; // Offset for limited range to full range conversion
+
+    static constexpr LimitedRange full() { return {1.0f, 0.0f}; }
+};
+
+LimitedRange limitedRangeForBitsPerPixel(int bitsPerPixel);
 
 } // namespace tev

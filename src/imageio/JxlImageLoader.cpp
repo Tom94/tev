@@ -88,6 +88,28 @@ string jxlToString(JxlColorSpace type) {
     return "invalid";
 };
 
+string jxlToString(JxlPrimaries type) {
+    switch (type) {
+        case JXL_PRIMARIES_SRGB: return "srgb";
+        case JXL_PRIMARIES_CUSTOM: return "custom";
+        case JXL_PRIMARIES_2100: return "bt2100";
+        case JXL_PRIMARIES_P3: return "p3";
+    }
+
+    return "invalid";
+};
+
+string jxlToString(JxlWhitePoint type) {
+    switch (type) {
+        case JXL_WHITE_POINT_D65: return "d65";
+        case JXL_WHITE_POINT_CUSTOM: return "custom";
+        case JXL_WHITE_POINT_E: return "e";
+        case JXL_WHITE_POINT_DCI: return "dci";
+    }
+
+    return "invalid";
+};
+
 string jxlToString(JxlTransferFunction type) {
     switch (type) {
         case JXL_TRANSFER_FUNCTION_709: return "709";
@@ -281,9 +303,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         throw ImageLoadError{"Failed to get ICC profile from image."};
                     }
                 }
-
-                const JxlColorSpace colorSpace = ce ? ce->color_space : JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
-                tlog::debug() << fmt::format("Image color space: {}", jxlToString(colorSpace));
             } break;
             case JXL_DEC_FRAME: {
                 const size_t frameId = frameCount++;
@@ -423,27 +442,37 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
                     if (ce) {
+                        tlog::debug() << fmt::format(
+                            "JxlColorEncoding: colorspace={}, primaries={}, whitepoint={}, transfer={}",
+                            jxlToString(ce->color_space),
+                            jxlToString(ce->primaries),
+                            jxlToString(ce->white_point),
+                            jxlToString(ce->transfer_function)
+                        );
+
                         // Primaries are only valid for RGB data. We need to set up a conversion matrix only if we aren't already in sRGB.
-                        if (ce->color_space == JXL_COLOR_SPACE_RGB && ce->primaries != JXL_PRIMARIES_SRGB) {
-                            data.toRec709 = chromaToRec709Matrix({
-                                {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
-                                 {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
-                                 {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
-                                 {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
-                            });
+                        if (ce->color_space == JXL_COLOR_SPACE_RGB) {
+                            if (ce->primaries != JXL_PRIMARIES_SRGB || ce->white_point != JXL_WHITE_POINT_D65) {
+                                data.toRec709 = chromaToRec709Matrix({
+                                    {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
+                                     {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
+                                     {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
+                                     {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
+                                });
+                            }
                         }
 
-                        const bool has_gamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
-                        if (has_gamma) {
-                            tlog::debug() << fmt::format("Gamma: {}", ce->gamma);
-                        } else {
-                            tlog::debug() << fmt::format("CICP transfer function: {}", jxlToString(ce->transfer_function));
+                        const bool hasGamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
+                        if (hasGamma) {
+                            tlog::debug() << fmt::format("gamma={}", ce->gamma);
                         }
 
-                        uint8_t cicp_transfer = has_gamma ? 2 : (uint8_t)ce->transfer_function;
-                        if (!has_gamma && !ituth273::isTransferImplemented(cicp_transfer)) {
-                            tlog::warning() << fmt::format("Unsupported transfer function {}. Using sRGB transfer instead.", cicp_transfer);
-                            cicp_transfer = JXL_TRANSFER_FUNCTION_SRGB;
+                        auto cicpTransfer = hasGamma ? ituth273::ETransferCharacteristics::Unspecified :
+                                                       static_cast<ituth273::ETransferCharacteristics>(ce->transfer_function);
+
+                        if (!hasGamma && !ituth273::isTransferImplemented(cicpTransfer)) {
+                            tlog::warning() << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
+                            cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
                         }
 
                         auto* pixelData = data.channels.front().data();
@@ -461,10 +490,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                                 for (size_t c = 0; c < 3; ++c) {
                                     const float val = pixelData[i * 4 + c];
-                                    if (has_gamma) {
+                                    if (hasGamma) {
                                         pixelData[i * 4 + c] = invFactor * std::pow(factor * val, 1.0f / (float)ce->gamma);
                                     } else {
-                                        pixelData[i * 4 + c] = invFactor * ituth273::invTransfer(cicp_transfer, factor * val);
+                                        pixelData[i * 4 + c] = invFactor * ituth273::invTransfer(cicpTransfer, factor * val);
                                     }
                                 }
                             },
