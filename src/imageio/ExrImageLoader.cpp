@@ -532,23 +532,15 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             };
 
             if (!data.dataWindow.isValid()) {
-                throw ImageLoadError{fmt::format(
-                    "EXR image has invalid data window: [{},{}] - [{},{}]",
-                    data.dataWindow.min.x(),
-                    data.dataWindow.min.y(),
-                    data.dataWindow.max.x(),
-                    data.dataWindow.max.y()
-                )};
+                throw ImageLoadError{
+                    fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)
+                };
             }
 
             if (!data.displayWindow.isValid()) {
-                throw ImageLoadError{fmt::format(
-                    "EXR image has invalid display window: [{},{}] - [{},{}]",
-                    data.displayWindow.min.x(),
-                    data.displayWindow.min.y(),
-                    data.displayWindow.max.x(),
-                    data.displayWindow.max.y()
-                )};
+                throw ImageLoadError{
+                    fmt::format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
+                };
             }
 
             part.setFrameBuffer(frameBuffers.at(partIdx));

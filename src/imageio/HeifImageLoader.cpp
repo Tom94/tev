@@ -232,17 +232,7 @@ Task<vector<ImageData>>
 
             resultData.toRec709 = chromaToRec709Matrix(chroma);
 
-            tlog::debug() << fmt::format(
-                "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",
-                chroma[0].x(),
-                chroma[0].y(),
-                chroma[1].x(),
-                chroma[1].y(),
-                chroma[2].x(),
-                chroma[2].y(),
-                chroma[3].x(),
-                chroma[3].y()
-            );
+            tlog::debug() << fmt::format("Applying NCLX color profile with primaries: {}", chroma);
         }
 
         co_return resultData;

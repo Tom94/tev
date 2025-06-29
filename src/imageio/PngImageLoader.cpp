@@ -133,9 +133,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
-    tlog::debug() << fmt::format(
-        "PNG image info: {}x{}, {} channels, {} bit depth, color type: {}", size.x(), size.y(), numChannels, bitDepth, colorType
-    );
+    tlog::debug() << fmt::format("PNG image info: size={}, numChannels={}, bitDepth={}, colorType={}", size, numChannels, bitDepth, colorType);
 
     // 16 bit channels are big endian by default, but we want little endian on little endian systems
     if (bitDepth == 16 && std::endian::little == std::endian::native) {
