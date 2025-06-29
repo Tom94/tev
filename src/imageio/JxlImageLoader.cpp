@@ -423,8 +423,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
                     if (ce) {
-                        // Primaries are only valid for RGB data
-                        if (ce->color_space == JXL_COLOR_SPACE_RGB) {
+                        // Primaries are only valid for RGB data. We need to set up a conversion matrix only if we aren't already in sRGB.
+                        if (ce->color_space == JXL_COLOR_SPACE_RGB && ce->primaries != JXL_PRIMARIES_SRGB) {
                             data.toRec709 = chromaToRec709Matrix({
                                 {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
                                  {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
