@@ -124,7 +124,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
     }
 
-    tlog::debug() << fmt::format("JPEG image info: {}x{}, {} channels", size.x(), size.y(), numColorChannels);
+    tlog::debug() << fmt::format("JPEG image info: size={}, numColorChannels={}", size, numColorChannels);
 
     // Allocate memory for image data
     auto numPixels = static_cast<size_t>(size.x()) * size.y();
@@ -157,9 +157,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
             co_await orientToTopLeft(imageData, size, orientation, priority);
-        } catch (const invalid_argument& e) {
-            tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what());
-        }
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
     vector<ImageData> result(1);

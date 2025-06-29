@@ -317,8 +317,7 @@ Task<void> postprocessLinearRawDng(
         resultData.displayWindow = activeArea;
     }
 
-    tlog::debug(
-    ) << fmt::format("Active area: min=({},{}) max=({},{})", activeArea.min.x(), activeArea.min.y(), activeArea.max.x(), activeArea.max.y());
+    tlog::debug() << fmt::format("Active area: min={} max={}", activeArea.min, activeArea.max);
 
     // Utility var that we'll reuse whenever reading a variable TIFF array
     uint32_t numRead = 0;
@@ -1005,9 +1004,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     }
 
     tlog::debug() << fmt::format(
-        "TIFF info: {}x{}, bps={}, spp={}, photometric={}, planar={}, sampleFormat={}, compression={}",
-        size.x(),
-        size.y(),
+        "TIFF info: size={}, bps={}, spp={}, photometric={}, planar={}, sampleFormat={}, compression={}",
+        size,
         bitsPerSample,
         samplesPerPixel,
         photometric,

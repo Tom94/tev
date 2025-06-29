@@ -193,9 +193,32 @@ Task<vector<ImageData>>
             }
         }
 
-        // Otherwise, assume the image is in Rec.709/sRGB and convert it to linear space, followed by an optional change in color space if
-        // an NCLX profile is present.
-        co_await toFloat32<uint16_t, true>(
+        // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
+        // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
+        heif_color_profile_nclx* nclx = nullptr;
+        if (auto error = heif_image_handle_get_nclx_color_profile(imgHandle, &nclx); error.code != heif_error_Ok) {
+            if (error.code != heif_error_Color_profile_does_not_exist) {
+                tlog::warning() << "Failed to read NCLX color profile: " << error.message;
+            }
+
+            co_await toFloat32<uint16_t, true>(
+                (const uint16_t*)data,
+                numChannels,
+                resultData.channels.front().data(),
+                4,
+                size,
+                hasAlpha,
+                priority,
+                channelScale,
+                bytesPerRow / sizeof(uint16_t)
+            );
+
+            co_return resultData;
+        }
+
+        ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+
+        co_await toFloat32<uint16_t, false>(
             (const uint16_t*)data,
             numChannels,
             resultData.channels.front().data(),
@@ -207,19 +230,45 @@ Task<vector<ImageData>>
             bytesPerRow / sizeof(uint16_t)
         );
 
-        heif_color_profile_nclx* nclx = nullptr;
-        if (auto error = heif_image_handle_get_nclx_color_profile(imgHandle, &nclx); error.code != heif_error_Ok) {
-            if (error.code == heif_error_Color_profile_does_not_exist) {
-                co_return resultData;
-            }
-
-            tlog::warning() << "Failed to read NCLX color profile: " << error.message;
-            co_return resultData;
+        LimitedRange range = LimitedRange::full();
+        if (nclx->full_range_flag == 0) {
+            range = limitedRangeForBitsPerPixel(bitsPerPixel);
         }
 
-        ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+        auto cicpTransfer = static_cast<ituth273::ETransferCharacteristics>(nclx->transfer_characteristics);
+        tlog::debug() << fmt::format(
+            "NCLX: primaries={}, transfer={}, full_range={}",
+            ituth273::toString((ituth273::EColorPrimaries)nclx->color_primaries),
+            ituth273::toString(cicpTransfer),
+            nclx->full_range_flag == 1 ? "yes" : "no"
+        );
 
-        // Only convert if not already in Rec.709/sRGB *and* if primaries are actually specified
+        if (!ituth273::isTransferImplemented(cicpTransfer)) {
+            tlog::warning() << fmt::format("Unsupported transfer '{}' in NCLX. Using sRGB instead.", ituth273::toString(cicpTransfer));
+            cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
+        }
+
+        auto* pixelData = resultData.channels.front().data();
+        const size_t numPixels = size.x() * (size_t)size.y();
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                // HEIF/AVIF unfortunately tends to have the alpha channel premultiplied in non-linear space (after application of the
+                // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
+                const float alpha = hasAlpha ? pixelData[i * 4 + 3] : 1.0f;
+                const float factor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
+                const float invFactor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? alpha : 1.0f;
+
+                for (size_t c = 0; c < 3; ++c) {
+                    const float val = (pixelData[i * 4 + c] - range.offset) * range.scale;
+                    pixelData[i * 4 + c] = invFactor * ituth273::invTransfer(cicpTransfer, factor * val);
+                }
+            },
+            priority
+        );
+
+        // Only convert color space if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
             array<Vector2f, 4> chroma = {
                 {
@@ -232,17 +281,7 @@ Task<vector<ImageData>>
 
             resultData.toRec709 = chromaToRec709Matrix(chroma);
 
-            tlog::debug() << fmt::format(
-                "Applying NCLX color profile with primaries: red ({}, {}), green ({}, {}), blue ({}, {}), white ({}, {}).",
-                chroma[0].x(),
-                chroma[0].y(),
-                chroma[1].x(),
-                chroma[1].y(),
-                chroma[2].x(),
-                chroma[2].y(),
-                chroma[3].x(),
-                chroma[3].y()
-            );
+            tlog::warning() << fmt::format("Applying NCLX color profile: primaries={}", chroma);
         }
 
         co_return resultData;

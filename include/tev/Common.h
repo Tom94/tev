@@ -26,6 +26,7 @@
 #include <tinylogger/tinylogger.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <functional>
@@ -36,28 +37,28 @@
 #include <vector>
 
 #ifdef _WIN32
-#   define NOMINMAX
-#   include <Windows.h>
-#   undef NOMINMAX
-#   pragma warning(disable : 4127) // warning C4127: conditional expression is constant
-#   pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
+#    define NOMINMAX
+#    include <Windows.h>
+#    undef NOMINMAX
+#    pragma warning(disable : 4127) // warning C4127: conditional expression is constant
+#    pragma warning(disable : 4244) // warning C4244: conversion from X to Y, possible loss of data
 #endif
 
 // Define command key for windows/mac/linux
 #ifdef __APPLE__
-#   define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_SUPER
-#   define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_SUPER
+#    define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_SUPER
+#    define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_SUPER
 #else
-#   define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_CONTROL
-#   define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
+#    define SYSTEM_COMMAND_LEFT GLFW_KEY_LEFT_CONTROL
+#    define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
 #endif
 
 #ifdef __GNUC__
-#   define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
-#   define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
+#    define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
+#    define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
 #else
-#   define LIKELY(condition) condition
-#   define UNLIKELY(condition) condition
+#    define LIKELY(condition) condition
+#    define UNLIKELY(condition) condition
 #endif
 
 #define TEV_ASSERT(cond, description, ...) \
@@ -65,13 +66,31 @@
         throw std::runtime_error { fmt::format(description, ##__VA_ARGS__) }
 
 #ifndef TEV_VERSION
-#   define TEV_VERSION "undefined"
+#    define TEV_VERSION "undefined"
 #endif
 
 // Make std::filesystem::path formattable.
 template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
     template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) const {
         return formatter<std::string_view>::format(path.string(), ctx);
+    }
+};
+
+template <typename T, size_t N_DIMS> struct fmt::formatter<std::array<T, N_DIMS>> {
+    template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
+    template <class FmtContext> FmtContext::iterator format(const std::array<T, N_DIMS>& v, FmtContext& ctx) const {
+        auto&& out = ctx.out();
+
+        fmt::format_to(out, "[");
+        for (size_t i = 0; i < N_DIMS; ++i) {
+            if (i != 0) {
+                fmt::format_to(out, ", ");
+            }
+
+            fmt::format_to(out, "{}", v[i]);
+        }
+
+        return fmt::format_to(ctx.out(), "]");
     }
 };
 

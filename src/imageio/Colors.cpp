@@ -389,6 +389,26 @@ Task<void> toLinearSrgbPremul(
 
 // Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
 namespace ituth273 {
+
+string_view toString(const EColorPrimaries primaries) {
+    switch (primaries) {
+        case EColorPrimaries::BT709: return "bt709";
+        case EColorPrimaries::Unspecified: return "unspecified";
+        case EColorPrimaries::BT470M: return "bt470m";
+        case EColorPrimaries::BT470BG: return "bt470bg";
+        case EColorPrimaries::SMPTE170M: return "smpte170m";
+        case EColorPrimaries::SMPTE240M: return "smpte240m";
+        case EColorPrimaries::Film: return "film";
+        case EColorPrimaries::BT2020: return "bt2020";
+        case EColorPrimaries::SMPTE428: return "smpte428";
+        case EColorPrimaries::SMPTE431: return "smpte431";
+        case EColorPrimaries::SMPTE432: return "smpte432";
+        case EColorPrimaries::Weird: return "weird";
+    }
+
+    return "invalid";
+}
+
 array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
     switch (primaries) {
         default: tlog::warning() << fmt::format("Unknown color primaries {}. Using Rec.709 chroma.", (int)primaries); return rec709Chroma();
@@ -480,6 +500,66 @@ array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
 
     return rec709Chroma(); // Fallback to Rec.709 if unknown
 }
+
+string_view toString(const ETransferCharacteristics transfer) {
+    switch (transfer) {
+        case ETransferCharacteristics::BT709: return "bt709";
+        case ETransferCharacteristics::Unspecified: return "unspecified";
+        case ETransferCharacteristics::BT470M: return "bt470m";
+        case ETransferCharacteristics::BT470BG: return "bt470bg";
+        case ETransferCharacteristics::BT601: return "bt601";
+        case ETransferCharacteristics::SMPTE240: return "smpte240";
+        case ETransferCharacteristics::Linear: return "linear";
+        case ETransferCharacteristics::Log100: return "log100";
+        case ETransferCharacteristics::Log100Sqrt10: return "log100_sqrt10";
+        case ETransferCharacteristics::IEC61966: return "iec61966";
+        case ETransferCharacteristics::BT1361Extended: return "bt1361_extended";
+        case ETransferCharacteristics::SRGB: return "srgb";
+        case ETransferCharacteristics::BT202010bit: return "bt2020_10bit";
+        case ETransferCharacteristics::BT202012bit: return "bt2020_12bit";
+        case ETransferCharacteristics::PQ: return "pq";
+        case ETransferCharacteristics::SMPTE428: return "smpte428";
+        case ETransferCharacteristics::HLG: return "hlg";
+    }
+
+    return "invalid";
+}
+
+bool isTransferImplemented(const ETransferCharacteristics transfer) {
+    switch (transfer) {
+        case ETransferCharacteristics::BT709:
+        case ETransferCharacteristics::BT601:
+        case ETransferCharacteristics::BT202010bit:
+        case ETransferCharacteristics::BT202012bit:
+        case ETransferCharacteristics::IEC61966: // handles negative values by mirroring
+        case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
+        case ETransferCharacteristics::BT470M:
+        case ETransferCharacteristics::BT470BG:
+        case ETransferCharacteristics::SMPTE240:
+        case ETransferCharacteristics::Linear:
+        case ETransferCharacteristics::Log100:
+        case ETransferCharacteristics::Log100Sqrt10:
+        case ETransferCharacteristics::SRGB:
+        case ETransferCharacteristics::PQ:
+        case ETransferCharacteristics::SMPTE428:
+        case ETransferCharacteristics::HLG:
+        case ETransferCharacteristics::Unspecified: return true;
+    }
+
+    return false;
+}
+
 } // namespace ituth273
+
+LimitedRange limitedRangeForBitsPerPixel(int bitsPerPixel) {
+    switch (bitsPerPixel) {
+        case 8: return {255.0f / 219.0f, 16.0f / 255.0f};
+        case 10: return {1023.0f / 876.0f, 64.0f / 1023.0f};
+        case 12: return {4095.0f / 3504.0f, 256.0f / 4095.0f};
+    }
+
+    tlog::warning() << fmt::format("Unsupported bits per pixel {} with limited range flag.", bitsPerPixel);
+    return {1.0f, 0.0f};
+}
 
 } // namespace tev

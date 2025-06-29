@@ -206,14 +206,9 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     for (const auto& c : channels) {
         if (c.size() != size()) {
-            throw ImageLoadError{fmt::format(
-                "All channels must have the same size as the data window. ({}:{}x{} != {}x{})",
-                c.name(),
-                c.size().x(),
-                c.size().y(),
-                size().x(),
-                size().y()
-            )};
+            throw ImageLoadError{
+                fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())
+            };
         }
     }
 
