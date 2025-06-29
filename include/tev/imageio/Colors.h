@@ -182,16 +182,16 @@ inline float pqToLinear(float val) {
     constexpr float invm2 = 32.0f / 2523.0f;
 
     const float tmp = std::pow(std::max(val, 0.0f), invm2);
-    const float result_cdm2 = 10000.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-5f), invm1);
-    return result_cdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
+    const float resultCdm2 = 10000.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-5f), invm1);
+    return resultCdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
 }
 
 inline float hlgToLinear(float val) {
     constexpr float a = 0.17883277f;
     constexpr float b = 0.28466892f;
     constexpr float c = 0.55991073f;
-    const float result_cdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
-    return result_cdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
+    const float resultCdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
+    return resultCdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
 }
 
 inline float invTransfer(const uint8_t transfer, float val) {

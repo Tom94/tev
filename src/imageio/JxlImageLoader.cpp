@@ -257,16 +257,16 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 // test images when it did so, so we will do the color space conversion ourselves as long as the color space isn't XYB which
                 // we do not support yet.
                 const auto target = JXL_COLOR_PROFILE_TARGET_DATA;
-                if (JxlColorEncoding local_ce; JXL_DEC_SUCCESS == JxlDecoderGetColorAsEncodedProfile(decoder.get(), target, &local_ce)) {
+                if (JxlColorEncoding localCe; JXL_DEC_SUCCESS == JxlDecoderGetColorAsEncodedProfile(decoder.get(), target, &localCe)) {
                     iccProfile.clear();
-                    if (local_ce.color_space == JXL_COLOR_SPACE_XYB) {
+                    if (localCe.color_space == JXL_COLOR_SPACE_XYB) {
                         ce = nullopt;
                         JxlColorEncodingSetToLinearSRGB(&ce.value(), false /* XYB is never grayscale */);
                         if (JxlDecoderSetPreferredColorProfile(decoder.get(), &ce.value()) != JXL_DEC_SUCCESS) {
                             throw ImageLoadError{"Failed to set up XYB->sRGB conversion."};
                         }
                     } else {
-                        ce = local_ce;
+                        ce = localCe;
                     }
                 } else {
                     // The jxl spec says that color space can *always* unambiguously be determined from an ICC color encoding, so we can
