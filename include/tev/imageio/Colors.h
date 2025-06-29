@@ -120,10 +120,11 @@ inline bool isTransferImplemented(const uint8_t transfer) {
         // BT.709
         case 1:
         case 6:
-        case 11: // Handles negative values by mirroring
-        case 12: // Has special negative value handling that we don't support
         case 14:
         case 15:
+        // Variations of BT.709
+        case 11: // Handles negative values by mirroring
+        case 12: // Has special negative value handling
         // Simple gamma transfers
         case 4:
         case 5:
@@ -146,34 +147,71 @@ inline bool isTransferImplemented(const uint8_t transfer) {
     }
 }
 
+inline float bt709ToLinear(float val) {
+    constexpr float beta = 0.018053968510807f;
+    constexpr float alpha = 1.0f + 5.5f * beta;
+    constexpr float thres = 4.5f * beta;
+    return val <= thres ? (val / 4.5f) : std::pow((val + alpha - 1.0f) / alpha, 1.0f / 0.45f);
+}
+
+// From https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.1361-0-199802-W!!PDF-E.pdf, generalized to the more precise constants from the
+// bt709ToLinear function as defined in https://www.itu.int/rec/T-REC-H.273-202407-I/en.
+inline float bt1361ExtendedToLinear(float val) {
+    constexpr float beta = 0.018053968510807f;
+    constexpr float alpha = 1.0f + 5.5f * beta;
+    constexpr float thres = 4.5f * beta;
+    constexpr float negThres = -thres / 4.0f;
+
+    if (val < negThres) {
+        return -std::pow((-val * 4.0f + alpha - 1.0f) / alpha, 1.0f / 0.45f) / 4.0f;
+    } else if (val <= thres) {
+        return val / 4.5f;
+    } else {
+        return std::pow((val + alpha - 1.0f) / alpha, 1.0f / 0.45f);
+    }
+}
+
+// From http://car.france3.mars.free.fr/HD/INA-%2026%20jan%2006/SMPTE%20normes%20et%20confs/s240m.pdf
+inline float smpteSt240ToLinear(float val) { return val <= 0.0913f ? (val / 4.0f) : pow((val + 0.1115f) / 1.1115f, 1.0f / 0.45f); }
+
+inline float pqToLinear(float val) {
+    constexpr float c1 = 107.0f / 128.0f;
+    constexpr float c2 = 2413.0f / 128.0f;
+    constexpr float c3 = 2392.0f / 128.0f;
+    constexpr float m1 = 1305.0f / 8192.0f;
+    constexpr float m2 = 2523.0f / 32.0f;
+
+    const float tmp = std::pow(std::max(val, 0.0f), 1.0f / m2);
+    const float result_cdm2 = 10000.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-10f), 1.0f / m1);
+    return result_cdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
+}
+
+inline float hlgToLinear(float val) {
+    constexpr float a = 0.17883277f;
+    constexpr float b = 0.28466892f;
+    constexpr float c = 0.55991073f;
+    const float result_cdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
+    return result_cdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
+}
+
 inline float invTransfer(const uint8_t transfer, float val) {
     switch (transfer) {
         default: return val; // Not implemented
-        case 1:
-        case 6:
-        case 11:
-        case 12:
-        case 14:
-        case 15: {
-            constexpr float beta = 0.018053968510807f;
-            constexpr float alpha = 1.0f + 5.5f * beta;
-            constexpr float thres = 4.5f * beta;
-
-            // TODO: Implement another case for 12's negative value handling
-            if (val <= -thres && transfer == 11) {
-                return -std::pow((-val + (alpha - 1.0f)) / alpha, 1.0f / 0.45f);
-            } else if (val <= thres) {
-                return val / 4.5f;
-            } else {
-                return std::pow((val + (alpha - 1.0f)) / alpha, 1.0f / 0.45f);
-            }
-        }
+        case 1: // BT.709, BT.1361
+        case 6: // BT.601, BT.1358, BT.1700, SMPTE ST 170
+        case 14: // BT.2020 (10 bit)
+        case 15: // BT.2020 (12 bit)
+            return bt709ToLinear(val);
+        case 11: // IEC 61966-2-4 (Handle negative values by mirroring)
+            return std::copysign(bt709ToLinear(std::abs(val)), val);
+        case 12: // BT 1361 extended color gamut system
+            return bt1361ExtendedToLinear(val);
         case 4: // Gamma 2.2
             return std::pow(val, 2.2f);
         case 5: // Gamma 2.8
             return std::pow(val, 2.8f);
         case 7: // SMPTE ST 240
-            return val <= 0.0913f ? (val / 4.0f) : pow((val + 0.1115f) / 1.1115f, 1.0f / 0.45f);
+            return smpteSt240ToLinear(val);
         case 8: // Linear
             return val;
         case 9: // Logarithmic 100:1
@@ -183,27 +221,11 @@ inline float invTransfer(const uint8_t transfer, float val) {
         case 13: // sRGB
             return toLinear(val);
         case 16: // SMPTE ST 2084 (PQ)
-        {
-            constexpr float c1 = 107.0f / 128.0f;
-            constexpr float c2 = 2413.0f / 128.0f;
-            constexpr float c3 = 2392.0f / 128.0f;
-            constexpr float m1 = 1305.0f / 8192.0f;
-            constexpr float m2 = 2523.0f / 32.0f;
-
-            const float tmp = std::pow(std::max(val, 0.0f), 1.0f / m2);
-            const float result_cdm2 = 10000.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-10f), 1.0f / m1);
-            return result_cdm2 / 80.0f; // Convert to sRGB units where SDR white (1.0) is 80 cd/m^2
-        }
+            return pqToLinear(val);
         case 17: // SMPTE ST 428-1
             return std::pow((52.37f / 48.0f) * val, 2.6f);
         case 18: // HLG (hybrid log gamma)
-        {
-            constexpr float a = 0.17883277f;
-            constexpr float b = 0.28466892f;
-            constexpr float c = 0.55991073f;
-            const float result_cdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
-            return result_cdm2 / 80.0f; // Convert to sRGB units where SDR white (1.0) is 80 cd/m^2
-        }
+            return hlgToLinear(val);
     }
 }
 } // namespace ituth273
