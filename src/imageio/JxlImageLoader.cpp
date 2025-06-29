@@ -88,6 +88,21 @@ string jxlToString(JxlColorSpace type) {
     return "invalid";
 };
 
+string jxlToString(JxlTransferFunction type) {
+    switch (type) {
+        case JXL_TRANSFER_FUNCTION_709: return "709";
+        case JXL_TRANSFER_FUNCTION_UNKNOWN: return "unknown";
+        case JXL_TRANSFER_FUNCTION_LINEAR: return "linear";
+        case JXL_TRANSFER_FUNCTION_SRGB: return "srgb";
+        case JXL_TRANSFER_FUNCTION_PQ: return "pq";
+        case JXL_TRANSFER_FUNCTION_DCI: return "dci";
+        case JXL_TRANSFER_FUNCTION_HLG: return "hlg";
+        case JXL_TRANSFER_FUNCTION_GAMMA: return "gamma";
+    }
+
+    return "invalid";
+};
+
 } // namespace
 
 Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool) const {
@@ -192,7 +207,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
-    JxlColorSpace colorSpace = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
     vector<float> colorData;
 
     size_t frameCount = 0;
@@ -200,6 +214,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
     vector<ImageData> result;
     vector<uint8_t> iccProfile;
+
+    optional<JxlColorEncoding> ce = nullopt;
 
     // Decode the image
     while (true) {
@@ -233,52 +249,44 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
             } break;
             case JXL_DEC_COLOR_ENCODING: {
-                JxlColorEncoding ce;
-                ce.color_space = JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
-
-                // libjxl's docs say that the decoder can always convert to linear sRGB if `info.uses_original_profile` is false.
-                // Furthermore, the XYB color space can also always be converted to linear sRGB by the decoder. Thus, if either of these
-                // is true, leave color space conversion to the decoder.
+                // JxlColorEncoding takes precedence over ICC profiles if it is available. While ICC presence is always guaranteed,
+                // JxlColorEncoding has certain advantages in the presence of HDR transfer functions, such as PQ or HLG, so we cannot rely
+                // only on the ICC profile for color space conversion.
                 //
-                // While the docs say that JxlColorEncoding should take precedence over ICC profiles if available, the decoder seems to
-                // be unable of correct conversion to linear sRGB in many cases. Thus, we rely on the ICC profile and offload color
-                // conversion external cms when the above 2 conditions aren't met.
-                bool canDecodeToLinearSRGB = !info.uses_original_profile;
-                if (JXL_DEC_SUCCESS ==
-                    JxlDecoderGetColorAsEncodedProfile(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &ce)) {
-                    canDecodeToLinearSRGB = ce.color_space == JxlColorSpace::JXL_COLOR_SPACE_XYB;
-                }
-
-                if (canDecodeToLinearSRGB) {
+                // Technically, the Jxl decoder can directly convert to linear sRGB in many cases but we observed artifacts in some of our
+                // test images when it did so, so we will do the color space conversion ourselves as long as the color space isn't XYB which
+                // we do not support yet.
+                const auto target = JXL_COLOR_PROFILE_TARGET_DATA;
+                if (JxlColorEncoding local_ce; JXL_DEC_SUCCESS == JxlDecoderGetColorAsEncodedProfile(decoder.get(), target, &local_ce)) {
                     iccProfile.clear();
-
-                    JxlColorEncodingSetToLinearSRGB(&ce, false /* XYB is never grayscale */);
-                    if (JxlDecoderSetPreferredColorProfile(decoder.get(), &ce) != JXL_DEC_SUCCESS) {
-                        throw ImageLoadError{"Failed to set up XYB->sRGB conversion."};
+                    if (local_ce.color_space == JXL_COLOR_SPACE_XYB) {
+                        ce = nullopt;
+                        JxlColorEncodingSetToLinearSRGB(&ce.value(), false /* XYB is never grayscale */);
+                        if (JxlDecoderSetPreferredColorProfile(decoder.get(), &ce.value()) != JXL_DEC_SUCCESS) {
+                            throw ImageLoadError{"Failed to set up XYB->sRGB conversion."};
+                        }
+                    } else {
+                        ce = local_ce;
                     }
                 } else {
                     // The jxl spec says that color space can *always* unambiguously be determined from an ICC color encoding, so we can
-                    // rely on being able to get the ICC profile from the decoder.
+                    // rely on being able to get the ICC profile from the decoder if all else fails.
                     size_t size = 0;
-                    if (JXL_DEC_SUCCESS !=
-                        JxlDecoderGetICCProfileSize(decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, &size)) {
+                    if (JXL_DEC_SUCCESS != JxlDecoderGetICCProfileSize(decoder.get(), target, &size)) {
                         throw ImageLoadError{"Failed to get ICC profile size from image."};
                     }
 
                     iccProfile.resize(size);
-                    if (JXL_DEC_SUCCESS !=
-                        JxlDecoderGetColorAsICCProfile(
-                            decoder.get(), JxlColorProfileTarget::JXL_COLOR_PROFILE_TARGET_DATA, iccProfile.data(), size
-                        )) {
+                    if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(decoder.get(), target, iccProfile.data(), size)) {
                         throw ImageLoadError{"Failed to get ICC profile from image."};
                     }
                 }
 
-                colorSpace = ce.color_space;
+                const JxlColorSpace colorSpace = ce ? ce->color_space : JxlColorSpace::JXL_COLOR_SPACE_UNKNOWN;
                 tlog::debug() << fmt::format("Image color space: {}", jxlToString(colorSpace));
             } break;
             case JXL_DEC_FRAME: {
-                size_t frameId = frameCount++;
+                const size_t frameId = frameCount++;
 
                 JxlFrameHeader frameHeader;
                 if (JXL_DEC_SUCCESS != JxlDecoderGetFrameHeader(decoder.get(), &frameHeader)) {
@@ -392,7 +400,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
                             size,
                             info.num_color_channels,
-                            info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                            info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                                              EAlphaKind::None,
                             EPixelFormat::F32,
                             (uint8_t*)colorData.data(),
                             data.channels.front().data(),
@@ -405,12 +414,63 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
                 }
 
-                // If we didn't load the channels via the ICC profile, we need to do it manually. We'll assume the image is already in
-                // the colorspace tev expects: linear sRGB Rec.709.
+                // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
                     co_await toFloat32(
                         (float*)colorData.data(), numColorChannels, data.channels.front().data(), 4, size, info.alpha_bits, priority
                     );
+
+                    // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
+                    // decoder has already prepared the data in linear sRGB for us.
+                    if (ce) {
+                        // Primaries are only valid for RGB data
+                        if (ce->color_space == JXL_COLOR_SPACE_RGB) {
+                            data.toRec709 = chromaToRec709Matrix({
+                                {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
+                                 {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
+                                 {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
+                                 {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
+                            });
+                        }
+
+                        const bool has_gamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
+                        if (has_gamma) {
+                            tlog::debug() << fmt::format("Gamma: {}", ce->gamma);
+                        } else {
+                            tlog::debug() << fmt::format("CICP transfer function: {}", jxlToString(ce->transfer_function));
+                        }
+
+                        uint8_t cicp_transfer = has_gamma ? 2 : (uint8_t)ce->transfer_function;
+                        if (!has_gamma && !ituth273::isTransferImplemented(cicp_transfer)) {
+                            tlog::warning() << fmt::format("Unsupported transfer function {}. Using sRGB transfer instead.", cicp_transfer);
+                            cicp_transfer = JXL_TRANSFER_FUNCTION_SRGB;
+                        }
+
+                        auto* pixelData = data.channels.front().data();
+                        const size_t numPixels = size.x() * (size_t)size.y();
+                        co_await ThreadPool::global().parallelForAsync<size_t>(
+                            0,
+                            numPixels,
+                            [&](size_t i) {
+                                // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
+                                // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
+                                // See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
+                                const float alpha = info.alpha_bits ? pixelData[i * 4 + 3] : 1.0f;
+                                const float factor = info.alpha_premultiplied && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
+                                const float invFactor = info.alpha_premultiplied && alpha > 0.0001f ? alpha : 1.0f;
+
+                                for (size_t c = 0; c < 3; ++c) {
+                                    const float val = pixelData[i * 4 + c];
+                                    if (has_gamma) {
+                                        pixelData[i * 4 + c] = invFactor * std::pow(factor * val, 1.0f / (float)ce->gamma);
+                                    } else {
+                                        pixelData[i * 4 + c] = invFactor * ituth273::invTransfer(cicp_transfer, factor * val);
+                                    }
+                                }
+                            },
+                            priority
+                        );
+                    }
                 }
 
                 // Load and upscale extra channels if present

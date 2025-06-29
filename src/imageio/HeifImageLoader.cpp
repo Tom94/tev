@@ -166,7 +166,7 @@ Task<vector<ImageData>>
                 ColorProfile::fromIcc(profileData.data(), profileData.size()),
                 size,
                 3,
-                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)dataF32.data(),
                 resultData.channels.front().data(),
