@@ -37,6 +37,10 @@ nanogui::Matrix4f proPhotoToRec709Matrix();
 std::array<nanogui::Vector2f, 4> rec709Chroma();
 std::array<nanogui::Vector2f, 4> adobeChroma();
 std::array<nanogui::Vector2f, 4> proPhotoChroma();
+std::array<nanogui::Vector2f, 4> displayP3Chroma();
+std::array<nanogui::Vector2f, 4> dciP3Chroma();
+std::array<nanogui::Vector2f, 4> bt2020Chroma();
+std::array<nanogui::Vector2f, 4> bt2100Chroma();
 
 nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
 
@@ -106,7 +110,7 @@ enum class EColorPrimaries : uint8_t {
     SMPTE170M = 6,
     SMPTE240M = 7,
     Film = 8,
-    BT2020 = 9,
+    BT2020 = 9, // Same as BT2100
     SMPTE428 = 10,
     SMPTE431 = 11,
     SMPTE432 = 12,

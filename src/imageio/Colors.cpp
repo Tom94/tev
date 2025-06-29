@@ -94,7 +94,7 @@ Matrix4f xyzToRec709Matrix() {
     return transpose(Imf::XYZtoRGB(rec709, 1));
 }
 
-Vector2f whiteD65() { return {0.3127f, 0.3290f}; }
+Vector2f whiteD65() { return {0.31271f, 0.32902f}; }
 Vector2f whiteCenter() { return {0.333333f, 0.333333f}; }
 Vector2f whiteC() { return {0.310f, 0.316f}; }
 Vector2f whiteDci() { return {0.314f, 0.351f}; }
@@ -130,6 +130,43 @@ array<Vector2f, 4> proPhotoChroma() {
          {0.345704f, 0.358540f},
          }
     };
+}
+
+array<Vector2f, 4> displayP3Chroma() {
+    return {
+        {
+         {0.6800f, 0.3200f},
+         {0.2650f, 0.6900f},
+         {0.1500f, 0.0600f},
+         whiteD65(),
+         }
+    };
+}
+
+array<Vector2f, 4> dciP3Chroma() {
+    return {
+        {
+         {0.6800f, 0.3200f},
+         {0.2650f, 0.6900f},
+         {0.1500f, 0.0600f},
+         whiteDci(),
+         }
+    };
+}
+
+array<Vector2f, 4> bt2020Chroma() {
+    return {
+        {
+         {0.7080f, 0.2920f},
+         {0.1700f, 0.7970f},
+         {0.1310f, 0.0460f},
+         whiteD65(),
+         }
+    };
+}
+
+array<Vector2f, 4> bt2100Chroma() {
+    return bt2020Chroma(); // BT.2100 uses the same primaries as BT.2020
 }
 
 // Adapted from LittleCMS's AdaptToXYZD50 function
@@ -451,15 +488,7 @@ array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
                     whiteC(),
                  }
             };
-        case EColorPrimaries::BT2020:
-            return {
-                {
-                 {0.7080f, 0.2920f},
-                 {0.1700f, 0.7970f},
-                 {0.1310f, 0.0460f},
-                 whiteD65(),
-                 }
-            };
+        case EColorPrimaries::BT2020: return bt2020Chroma();
         case EColorPrimaries::SMPTE428:
             return {
                 {
@@ -469,24 +498,8 @@ array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
                  whiteCenter(),
                  }
             };
-        case EColorPrimaries::SMPTE431:
-            return {
-                {
-                 {0.6800f, 0.3200f},
-                 {0.2650f, 0.6900f},
-                 {0.1500f, 0.0600f},
-                 whiteDci(),
-                 }
-            };
-        case EColorPrimaries::SMPTE432:
-            return {
-                {
-                 {0.6800f, 0.3200f},
-                 {0.2650f, 0.6900f},
-                 {0.1500f, 0.0600f},
-                 whiteD65(),
-                 }
-            };
+        case EColorPrimaries::SMPTE431: return dciP3Chroma();
+        case EColorPrimaries::SMPTE432: return displayP3Chroma();
         case EColorPrimaries::Weird:
             return {
                 {

@@ -177,18 +177,10 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     } else {
         switch (image->cg) {
-            case UHDR_CG_DISPLAY_P3:
-                imageData.toRec709 = chromaToRec709Matrix({
-                    {{0.6800f, 0.3200f}, {0.2650f, 0.6900f}, {0.1500f, 0.0600f}, {0.31271f, 0.32902f}}
-                });
-                break;
-            case UHDR_CG_BT_2100:
-                imageData.toRec709 = chromaToRec709Matrix({
-                    {{0.7080f, 0.2920f}, {0.1700f, 0.7970f}, {0.1310f, 0.0460f}, {0.31271f, 0.32902f}}
-                });
-                break;
+            case UHDR_CG_DISPLAY_P3: imageData.toRec709 = chromaToRec709Matrix(displayP3Chroma()); break;
+            case UHDR_CG_BT_2100: imageData.toRec709 = chromaToRec709Matrix(bt2100Chroma()); break;
             case UHDR_CG_UNSPECIFIED: tlog::warning() << "Ultra HDR image has unspecified color gamut. Assuming BT.709."; break;
-            case UHDR_CG_BT_709: break;
+            case UHDR_CG_BT_709: break; // This is already linear sRGB / Rec.709, so no conversion needed.
             default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
         }
     }
