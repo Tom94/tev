@@ -448,7 +448,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                         auto* pixelData = data.channels.front().data();
                         const size_t numPixels = size.x() * (size_t)size.y();
-                        co_await ThreadPool::global().parallelForAsync<float>(
+                        co_await ThreadPool::global().parallelForAsync<size_t>(
                             0,
                             numPixels,
                             [&](size_t i) {

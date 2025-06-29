@@ -231,7 +231,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         auto* pixelData = resultData.channels.front().data();
-        co_await ThreadPool::global().parallelForAsync<float>(
+        co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
             [&](size_t i) {
@@ -315,7 +315,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     auto* pixelData = resultData.channels.front().data();
-    co_await ThreadPool::global().parallelForAsync<float>(
+    co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
         [&](size_t i) {
