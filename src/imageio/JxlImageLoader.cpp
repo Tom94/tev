@@ -599,7 +599,6 @@ l_decode_success:
                 tlog::debug() << fmt::format("EXIF data offset: {}", offset);
                 exifData.erase(exifData.begin(), exifData.begin() + 4 + offset);
 
-                Exif::prependFourcc(&exifData);
                 auto exif = Exif{exifData};
                 auto exifAttributes = exif.toAttributes();
 

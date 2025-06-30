@@ -150,7 +150,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 
         try {
-            const auto exif = Exif(exifData);
+            const auto exif = Exif{exifData};
             exifAttributes = exif.toAttributes();
 
             EOrientation orientation = exif.getOrientation();

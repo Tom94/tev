@@ -30,14 +30,16 @@ namespace {
 ExifByteOrder byteOrder(bool reverseEndianness) { return reverseEndianness ? EXIF_BYTE_ORDER_MOTOROLA : EXIF_BYTE_ORDER_INTEL; }
 } // namespace
 
-void Exif::prependFourcc(vector<uint8_t>* data) {
+Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) {
     // If data doesn't already start with fourcc, prepend
-    if (data->size() < 6 || memcmp(data->data(), Exif::FOURCC.data(), 6) != 0) {
-        data->insert(data->begin(), FOURCC.begin(), FOURCC.end());
+    vector<uint8_t> newExifData;
+    if (autoPrependFourcc && (exifData.size() < 6 || memcmp(exifData.data(), Exif::FOURCC.data(), 6) != 0)) {
+        newExifData.reserve(exifData.size() + FOURCC.size());
+        newExifData.insert(newExifData.end(), FOURCC.begin(), FOURCC.end());
+        newExifData.insert(newExifData.end(), exifData.begin(), exifData.end());
+        exifData = newExifData;
     }
-}
 
-Exif::Exif(span<const uint8_t> exifData) {
     mExif = exif_data_new();
     mExifLog = exif_log_new();
     mExifLogError = make_unique<bool>(false);

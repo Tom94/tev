@@ -41,10 +41,8 @@ public:
         '\0',
         '\0',
     };
-    static void prependFourcc(std::vector<uint8_t>* data);
 
-    Exif(std::span<const uint8_t> exifData);
-    Exif(std::vector<uint8_t> exifData) : Exif(std::span{exifData}) {}
+    Exif(std::span<const uint8_t> exifData, bool autoPrependFourcc = true);
     ~Exif();
 
     AppleMakerNote tryGetAppleMakerNote() const;

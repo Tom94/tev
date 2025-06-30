@@ -280,8 +280,6 @@ Task<vector<ImageData>>
             };
 
             resultData.toRec709 = chromaToRec709Matrix(chroma);
-
-            tlog::warning() << fmt::format("Applying NCLX color profile: primaries={}", chroma);
         }
 
         co_return resultData;

@@ -76,7 +76,6 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             try {
                 vector<uint8_t> exifData(chunkIter.chunk.bytes, chunkIter.chunk.bytes + chunkIter.chunk.size);
 
-                Exif::prependFourcc(&exifData);
                 auto exif = Exif(exifData);
                 exifAttributes = exif.toAttributes();
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
