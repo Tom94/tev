@@ -232,10 +232,11 @@ private:
     int mId;
 };
 
-// Modifies both `data` and `size`
-template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::Vector2i& size, EOrientation orientation, int priority) {
+// Modifies `data` and returns the new size of the data after reorientation.
+template <typename T>
+Task<nanogui::Vector2i> orientToTopLeft(std::vector<T>& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
     if (orientation == EOrientation::TopLeft) {
-        co_return;
+        co_return size;
     }
 
     bool swapAxes = orientation >= EOrientation::LeftTop;
@@ -244,7 +245,7 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
 
     const size_t numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
-        co_return;
+        co_return size;
     } else if (data.size() % numPixels != 0) {
         throw ImageModifyError{"Image data size is not a multiple of the number of pixels."};
     }
@@ -271,6 +272,7 @@ template <typename T> Task<void> orientToTopLeft(std::vector<T>& data, nanogui::
     );
 
     std::swap(data, reorientedData);
+    co_return size;
 }
 
 Task<std::vector<std::shared_ptr<Image>>>

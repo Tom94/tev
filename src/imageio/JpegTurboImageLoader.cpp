@@ -156,7 +156,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
             EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
-            co_await orientToTopLeft(imageData, size, orientation, priority);
+            size = co_await orientToTopLeft(imageData, size, orientation, priority);
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 

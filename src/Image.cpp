@@ -171,8 +171,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     }
 
     for (auto& c : channelData) {
-        Vector2i size = c.size;
-        co_await tev::orientToTopLeft<float>(*c.data, size, orientation, priority);
+        co_await tev::orientToTopLeft<float>(*c.data, c.size, orientation, priority);
     }
 
     if (dataWindow.isValid()) {
