@@ -141,9 +141,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     // Allocate memory for image data
-    auto numPixels = static_cast<size_t>(size.x()) * size.y();
-    auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
-    auto numBytesPerPixel = numBytesPerSample * numChannels;
+    const auto numPixels = static_cast<size_t>(size.x()) * size.y();
+    const auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
+    const auto numBytesPerPixel = numBytesPerSample * numChannels;
     vector<png_byte> imageData(numPixels * numBytesPerPixel);
 
     // Png wants to read into a 2D array of pointers to rows, so we need to create that
@@ -175,7 +175,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
-    bool hasAlpha = numChannels > numColorChannels;
+    const bool hasAlpha = numChannels > numColorChannels;
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
@@ -201,7 +201,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     if (png_get_cICP(pngPtr, infoPtr, &cicp.colourPrimaries, &cicp.transferFunction, &cicp.matrixCoefficients, &cicp.videoFullRangeFlag) ==
         PNG_INFO_cICP) {
 
-        auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
+        const auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
         auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
 
         tlog::debug() << fmt::format(
@@ -283,14 +283,14 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     int srgbIntent = 0;
-    bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
+    const bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
 
-    double gamma64 = 2.2;
-    bool hasChunkGama = png_get_gAMA(pngPtr, infoPtr, &gamma64) == PNG_INFO_gAMA;
-    float gamma = (float)gamma64;
+    double invGamma64 = 1.0 / 2.2;
+    const bool hasChunkGama = png_get_gAMA(pngPtr, infoPtr, &invGamma64) == PNG_INFO_gAMA;
+    const float gamma = 1.0f / (float)invGamma64;
 
     array<double, 8> ch = {0};
-    bool hasChunkChrm = png_get_cHRM(pngPtr, infoPtr, &ch[0], &ch[1], &ch[2], &ch[3], &ch[4], &ch[5], &ch[6], &ch[7]) == PNG_INFO_cHRM;
+    const bool hasChunkChrm = png_get_cHRM(pngPtr, infoPtr, &ch[0], &ch[1], &ch[2], &ch[3], &ch[4], &ch[5], &ch[6], &ch[7]) == PNG_INFO_cHRM;
 
     const bool useSrgb = hasChunkSrgb || (!hasChunkGama && !hasChunkChrm);
     if (useSrgb) {
@@ -311,7 +311,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         co_return result;
     }
 
-    tlog::debug() << fmt::format("Using gamma={}", gamma64);
+    tlog::debug() << fmt::format("Using gamma={}", invGamma64);
     if (bitDepth == 16) {
         co_await toFloat32<uint16_t, false>(
             (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
@@ -333,26 +333,17 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     );
 
     if (hasChunkChrm) {
-        tlog::debug() << fmt::format(
-            "Using cHRM chunk with chromaticity values: R({:.4f}, {:.4f}), G({:.4f}, {:.4f}), B({:.4f}, {:.4f}), W({:.4f}, {:.4f})",
-            ch[2],
-            ch[3],
-            ch[4],
-            ch[5],
-            ch[6],
-            ch[7],
-            ch[0],
-            ch[1]
-        );
-
-        resultData.toRec709 = chromaToRec709Matrix({
+        array<Vector2f, 4> chroma = {
             {
              {(float)ch[2], (float)ch[3]}, // red
                 {(float)ch[4], (float)ch[5]}, // green
                 {(float)ch[6], (float)ch[7]}, // blue
                 {(float)ch[0], (float)ch[1]}, // white
             }
-        });
+        };
+        resultData.toRec709 = chromaToRec709Matrix(chroma);
+
+        tlog::debug() << fmt::format("cHRM: primaries={}", chroma);
     }
 
     co_return result;
