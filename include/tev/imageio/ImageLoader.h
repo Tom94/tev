@@ -32,7 +32,7 @@
 
 namespace tev {
 
-template <typename T, bool SRGB_TO_LINEAR = false>
+template <typename T, bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false>
 Task<void> toFloat32(
     const T* __restrict imageData,
     size_t numSamplesPerPixelIn,
@@ -82,11 +82,20 @@ Task<void> toFloat32(
                         // Copy alpha channel to the last output channel without conversion
                         floatData[baseIdxOut + numSamplesPerPixelOut - 1] = (float)imageData[baseIdxIn + c] * scale;
                     } else {
+                        float result;
                         if constexpr (SRGB_TO_LINEAR) {
-                            floatData[baseIdxOut + c] = toLinear(imageData[baseIdxIn + c] * scale);
+                            result = toLinear(imageData[baseIdxIn + c] * scale);
                         } else {
-                            floatData[baseIdxOut + c] = imageData[baseIdxIn + c] * scale;
+                            result = imageData[baseIdxIn + c] * scale;
                         }
+
+                        if constexpr (MULTIPLY_ALPHA) {
+                            if (hasAlpha) {
+                                result *= (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale;
+                            }
+                        }
+
+                        floatData[baseIdxOut + c] = result;
                     }
                 }
             }
@@ -113,6 +122,7 @@ public:
 
     static std::vector<Channel>
         makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const nanogui::Vector2i& size, std::string_view namePrefix = "");
+
     static std::vector<Channel> makeNChannels(int numChannels, const nanogui::Vector2i& size, std::string_view namePrefix = "");
     static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
 };

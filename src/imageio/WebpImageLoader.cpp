@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Box.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
@@ -51,7 +52,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
     ScopeGuard demuxGuard{[demux] { WebPDemuxDelete(demux); }};
 
-    uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
+    const uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
 
     WebPChunkIterator chunkIter;
 
@@ -84,17 +85,45 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         }
     }
 
+    const uint32_t width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
+    const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
+    array<float, 4> bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
+
+    if (flags & ANIMATION_FLAG) {
+        const uint32_t bgColor8bit = WebPDemuxGetI(demux, WEBP_FF_BACKGROUND_COLOR);
+
+        // Byte order: BGRA (https://developers.google.com/speed/webp/docs/riff_container#animation)
+        const uint8_t* bgColorBytes = (const uint8_t*)&bgColor8bit;
+
+        bgColor = {bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
+        if (iccProfile) {
+            try {
+                const auto tmp = bgColor;
+                co_await toLinearSrgbPremul(
+                    *iccProfile, {1, 1}, 3, EAlphaKind::Straight, EPixelFormat::F32, (uint8_t*)tmp.data(), bgColor.data(), priority
+                );
+            } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
+        } else {
+            for (uint32_t i = 0; i < 3; ++i) {
+                bgColor[i] = toLinear(bgColor[i]) * bgColor[3]; // Premultiply alpha
+            }
+        }
+    }
+
+    const Vector2i size{(int)width, (int)height};
+
+    const int numChannels = 4;
+    const int numColorChannels = 3;
+
     vector<ImageData> result;
 
     WebPIterator iter;
     size_t frameIdx = 0;
+    bool disposed = true;
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
         do {
-            const int numChannels = 4;
-            const int numColorChannels = 3;
-
-            Vector2i size;
-            uint8_t* data = WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &size.x(), &size.y());
+            Vector2i frameSize;
+            uint8_t* data = WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y());
             if (!data) {
                 throw ImageLoadError{"Failed to decode webp frame."};
             }
@@ -112,31 +141,77 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             ++frameIdx;
 
+            const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+            const size_t numFrameSamples = numFramePixels * numChannels;
+
+            vector<float> frameData(numFrameSamples);
             if (iccProfile) {
                 try {
                     // Color space conversion from float to float is faster than u8 to float, hence we convert first.
-                    const size_t numSamples = (size_t)size.x() * size.y() * numChannels;
-                    vector<float> floatData(numSamples);
-                    co_await toFloat32(data, numChannels, floatData.data(), numChannels, size, true, priority);
+                    vector<float> floatData(numFrameSamples);
+                    co_await toFloat32(data, numChannels, floatData.data(), numChannels, frameSize, true, priority);
                     co_await toLinearSrgbPremul(
                         *iccProfile,
-                        size,
+                        frameSize,
                         numColorChannels,
                         EAlphaKind::Straight,
                         EPixelFormat::F32,
                         (uint8_t*)floatData.data(),
-                        resultData.channels.front().data(),
+                        frameData.data(),
                         priority
                     );
-
-                    resultData.hasPremultipliedAlpha = true;
-                    continue;
                 } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
+            } else {
+                co_await toFloat32<uint8_t, true, true>(
+                    (uint8_t*)data, numChannels, frameData.data(), 4, frameSize, numChannels == 4, priority
+                );
             }
 
-            co_await toFloat32<uint8_t, true>(
-                (uint8_t*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+            // If we did not dispose the previous canvas, we need to blend the current frame onto it. Otherwise, blend onto background. The
+            // first frame is always disposed.
+            const float* prevCanvas = result.size() > 1 ? result.at(result.size() - 2).channels.front().data() : nullptr;
+            bool useBg = disposed || prevCanvas == nullptr;
+            disposed = iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND;
+
+            co_await ThreadPool::global().parallelForAsync<int>(
+                0,
+                size.y(),
+                [&](int y) {
+                    Vector2i framePos;
+                    framePos.y() = y - iter.y_offset;
+                    for (int x = 0; x < size.x(); ++x) {
+                        const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;
+                        framePos.x() = x - iter.x_offset;
+
+                        bool isInFrame = Box2i{frameSize}.contains(framePos);
+
+                        for (int c = 0; c < numChannels; ++c) {
+                            const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
+                            float val;
+
+                            const float bg = useBg ? bgColor[c] : prevCanvas[canvasSampleIdx];
+                            if (isInFrame) {
+                                const size_t framePixelIdx = (size_t)framePos.y() * frameSize.x() + (size_t)framePos.x();
+                                const size_t frameSampleIdx = framePixelIdx * numChannels + c;
+                                const size_t frameAlphaIdx = framePixelIdx * numChannels + 3;
+
+                                if (iter.blend_method == WEBP_MUX_NO_BLEND) {
+                                    val = frameData[frameSampleIdx];
+                                } else {
+                                    val = frameData[frameSampleIdx] + bg * (1.0f - frameData[frameAlphaIdx]);
+                                }
+                            } else {
+                                val = bg;
+                            }
+
+                            resultData.channels.front().data()[canvasSampleIdx] = val;
+                        }
+                    }
+                },
+                priority
             );
+
+            resultData.hasPremultipliedAlpha = true;
         } while (WebPDemuxNextFrame(&iter));
         WebPDemuxReleaseIterator(&iter);
     }
