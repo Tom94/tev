@@ -1019,16 +1019,16 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         }
 
         if (key == GLFW_KEY_H) {
-            mImageCanvas->translate({-translationAmount, 0});
-            return true;
-        } else if (key == GLFW_KEY_L) {
             mImageCanvas->translate({translationAmount, 0});
             return true;
+        } else if (key == GLFW_KEY_L) {
+            mImageCanvas->translate({-translationAmount, 0});
+            return true;
         } else if (key == GLFW_KEY_J) {
-            mImageCanvas->translate({0, translationAmount});
+            mImageCanvas->translate({0, -translationAmount});
             return true;
         } else if (key == GLFW_KEY_K) {
-            mImageCanvas->translate({0, -translationAmount});
+            mImageCanvas->translate({0, translationAmount});
             return true;
         }
     }
