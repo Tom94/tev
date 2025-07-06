@@ -942,8 +942,8 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         }
 
-        if (mGammaSlider->enabled()) {
-            if (key == GLFW_KEY_G) {
+        if (key == GLFW_KEY_G) {
+            if (mGammaSlider->enabled()) {
                 if (modifiers & GLFW_MOD_SHIFT) {
                     setGamma(gamma() - 0.1f);
                 } else {
