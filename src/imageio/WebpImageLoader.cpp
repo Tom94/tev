@@ -56,13 +56,13 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
     WebPChunkIterator chunkIter;
 
-    unique_ptr<ColorProfile> iccProfile;
+    vector<uint8_t> iccProfileData;
     if (flags & ICCP_FLAG) {
         if (WebPDemuxGetChunk(demux, "ICCP", 1, &chunkIter)) {
             ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
             try {
-                tlog::debug() << "Found ICC color profile. Attempting to apply...";
-                iccProfile = make_unique<ColorProfile>(ColorProfile::fromIcc(chunkIter.chunk.bytes, chunkIter.chunk.size));
+                tlog::debug() << "Found ICC color profile.";
+                iccProfileData.assign(chunkIter.chunk.bytes, chunkIter.chunk.bytes + chunkIter.chunk.size);
             } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to create ICC color profile: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get ICCP chunk from webp image, despite flag being set.";
@@ -96,11 +96,18 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         const uint8_t* bgColorBytes = (const uint8_t*)&bgColor8bit;
 
         bgColor = {bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
-        if (iccProfile) {
+        if (!iccProfileData.empty()) {
             try {
                 const auto tmp = bgColor;
                 co_await toLinearSrgbPremul(
-                    *iccProfile, {1, 1}, 3, EAlphaKind::Straight, EPixelFormat::F32, (uint8_t*)tmp.data(), bgColor.data(), priority
+                    ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size()),
+                    {1, 1},
+                    3,
+                    EAlphaKind::Straight,
+                    EPixelFormat::F32,
+                    (uint8_t*)tmp.data(),
+                    bgColor.data(),
+                    priority
                 );
             } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
         } else {
@@ -120,6 +127,17 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     WebPIterator iter;
     size_t frameIdx = 0;
     bool disposed = true;
+
+    // Conservatively allocate enough space such that any frame can be decoded into it.
+    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numSamples = numPixels * numChannels;
+    vector<float> frameData(numSamples);
+    vector<float> iccTmpFloatData;
+    if (iccProfileData.empty()) {
+        // If we don't have an ICC profile, we can use the frame data directly.
+        iccTmpFloatData.resize(numSamples);
+    }
+
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
         do {
             Vector2i frameSize;
@@ -143,20 +161,30 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
             const size_t numFrameSamples = numFramePixels * numChannels;
+            if (numFrameSamples > frameData.size()) {
+                tlog::warning() << fmt::format(
+                    "WebP frame data is larger than allocated buffer. Allocating {} bytes instead of {} bytes.",
+                    numFrameSamples * sizeof(float),
+                    frameData.size() * sizeof(float)
+                );
 
-            vector<float> frameData(numFrameSamples);
-            if (iccProfile) {
+                frameData.resize(numFrameSamples);
+                if (!iccProfileData.empty()) {
+                    iccTmpFloatData.resize(numFrameSamples);
+                }
+            }
+
+            if (!iccProfileData.empty()) {
                 try {
                     // Color space conversion from float to float is faster than u8 to float, hence we convert first.
-                    vector<float> floatData(numFrameSamples);
-                    co_await toFloat32(data, numChannels, floatData.data(), numChannels, frameSize, true, priority);
+                    co_await toFloat32(data, numChannels, iccTmpFloatData.data(), numChannels, frameSize, true, priority);
                     co_await toLinearSrgbPremul(
-                        *iccProfile,
+                        ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size()),
                         frameSize,
                         numColorChannels,
                         EAlphaKind::Straight,
                         EPixelFormat::F32,
-                        (uint8_t*)floatData.data(),
+                        (uint8_t*)iccTmpFloatData.data(),
                         frameData.data(),
                         priority
                     );
