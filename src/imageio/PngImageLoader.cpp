@@ -140,25 +140,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         png_set_swap(pngPtr);
     }
 
-    // Allocate memory for image data
-    const auto numPixels = static_cast<size_t>(size.x()) * size.y();
-    const auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
-    const auto numBytesPerPixel = numBytesPerSample * numChannels;
-    vector<png_byte> imageData(numPixels * numBytesPerPixel);
-
-    // Png wants to read into a 2D array of pointers to rows, so we need to create that
-    vector<png_bytep> rowPointers(height);
-    for (png_uint_32 y = 0; y < height; ++y) {
-        rowPointers[y] = &imageData[y * width * numBytesPerPixel];
-    }
-
-    png_read_image(pngPtr, rowPointers.data());
-
     optional<AttributeNode> exifAttributes;
 
     png_uint_32 exifDataSize = 0;
     png_bytep exifDataRaw = nullptr;
     png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
+
+    EOrientation orientation = EOrientation::TopLeft;
     if (exifDataRaw) {
         std::vector<uint8_t> exifData(exifDataRaw, exifDataRaw + exifDataSize);
 
@@ -167,183 +155,332 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         try {
             const auto exif = Exif(exifData);
             exifAttributes = exif.toAttributes();
-
-            EOrientation orientation = exif.getOrientation();
+            orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
-
-            size = co_await orientToTopLeft(imageData, size, orientation, priority);
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
     const bool hasAlpha = numChannels > numColorChannels;
 
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
-
-    if (exifAttributes) {
-        resultData.attributes.emplace_back(exifAttributes.value());
-    }
-
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
-    resultData.hasPremultipliedAlpha = false;
-
-    // According to https://www.w3.org/TR/png-3/#color-chunk-precendence, if a cICP chunk exists, use it to convert to sRGB. Else, if an
-    // iCCP chunk exists, use its embedded ICC color profile to convert to linear sRGB. Otherwise, check the sRGB chunk for whether the
-    // image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and chromaticity values and use them to convert to
-    // linear sRGB. And lastly (this isn't in the spec, but based on having seen a lot of PNGs), if none of these chunks are present, fall
-    // back to sRGB.
-    struct cICP {
-        png_byte colourPrimaries;
-        png_byte transferFunction;
-        png_byte matrixCoefficients;
-        png_byte videoFullRangeFlag;
-    } cicp;
-    if (png_get_cICP(pngPtr, infoPtr, &cicp.colourPrimaries, &cicp.transferFunction, &cicp.matrixCoefficients, &cicp.videoFullRangeFlag) ==
-        PNG_INFO_cICP) {
-
-        const auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
-        auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
-
-        tlog::debug() << fmt::format(
-            "cICP: primaries={}, transfer={}, full_range={}",
-            ituth273::toString(primaries),
-            ituth273::toString(transfer),
-            cicp.videoFullRangeFlag == 1 ? "yes" : "no"
-        );
-
-        LimitedRange range = LimitedRange::full();
-        if (cicp.videoFullRangeFlag == 0) {
-            range = limitedRangeForBitsPerPixel(bitDepth);
-        }
-
-        if (cicp.matrixCoefficients != 0) {
-            tlog::warning() << fmt::format(
-                "Unsupported matrix coefficients in cICP chunk: {}. PNG images only support RGB (=0). Ignoring.", cicp.matrixCoefficients
-            );
-        }
-
-        if (!ituth273::isTransferImplemented(transfer)) {
-            tlog::warning() << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
-            transfer = ituth273::ETransferCharacteristics::SRGB;
-        }
-
-        if (bitDepth == 16) {
-            co_await toFloat32<uint16_t, false>(
-                (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
-            );
-        } else {
-            co_await toFloat32<uint8_t, false>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
-        }
-
-        auto* pixelData = resultData.channels.front().data();
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
-            [&](size_t i) {
-                for (size_t c = 0; c < 3; ++c) {
-                    const float val = (pixelData[i * 4 + c] - range.offset) * range.scale;
-                    pixelData[i * 4 + c] = ituth273::invTransfer(transfer, val);
-                }
-            },
-            priority
-        );
-        resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
-
-        co_return result;
-    }
-
-    png_bytep iccProfile = nullptr;
+    png_bytep iccProfileData = nullptr;
     png_charp iccProfileName = nullptr;
     png_uint_32 iccProfileSize = 0;
-    if (png_get_iCCP(pngPtr, infoPtr, &iccProfileName, nullptr, &iccProfile, &iccProfileSize) == PNG_INFO_iCCP) {
-        tlog::debug() << fmt::format("Found ICC color profile: {}, attempting to apply...", iccProfileName);
+    if (png_get_iCCP(pngPtr, infoPtr, &iccProfileName, nullptr, &iccProfileData, &iccProfileSize) == PNG_INFO_iCCP) {
+        tlog::debug() << fmt::format("Found ICC color profile: {}", iccProfileName);
+    }
 
-        try {
-            vector<float> floatData(imageData.size());
-            if (bitDepth == 16) {
-                co_await toFloat32((uint16_t*)imageData.data(), numChannels, floatData.data(), numChannels, size, hasAlpha, priority);
-            } else {
-                co_await toFloat32(imageData.data(), numChannels, floatData.data(), numChannels, size, hasAlpha, priority);
+    png_uint_32 numFrames = png_get_num_frames(pngPtr, infoPtr);
+    const bool isAnimated = numFrames > 1;
+    if (isAnimated) {
+        tlog::debug() << fmt::format("Image is an animated PNG with {} frames", numFrames);
+    }
+
+    const auto numPixels = static_cast<size_t>(size.x()) * size.y();
+    const auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
+    const auto numBytesPerPixel = numBytesPerSample * numChannels;
+    const auto numSamples = numPixels * numChannels;
+
+    // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
+    vector<png_byte> pngData(numPixels * numBytesPerPixel);
+    vector<float> frameData(numSamples);
+    vector<float> iccTmpFloatData;
+    if (iccProfileData) {
+        // If we have an ICC profile, we need to convert the frame data to float first.
+        iccTmpFloatData.resize(numSamples);
+    }
+
+    // Png wants to read into a 2D array of pointers to rows, so we need to create that as well
+    vector<png_bytep> rowPointers(height);
+
+    vector<ImageData> result;
+
+    const float* prevCanvas = nullptr;
+
+    auto readFrame = [&]() -> Task<ImageData> {
+        ImageData resultData;
+        if (exifAttributes) {
+            resultData.attributes.emplace_back(exifAttributes.value());
+        }
+
+        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
+        resultData.orientation = orientation;
+        resultData.hasPremultipliedAlpha = false;
+
+        enum class EDisposeOp : png_byte { None = 0, Background = 1, Previous = 2 };
+        enum class EBlendOp : png_byte { Source = 0, Over = 1 };
+
+        Vector2i frameSize;
+        Vector2i frameOffset;
+
+        png_uint_32 frameSizeX, frameSizeY, xOffset, yOffset;
+        png_uint_16 delayNum, delayDen;
+        EDisposeOp disposeOp;
+        EBlendOp blendOp;
+
+        if (png_get_next_frame_fcTL(
+                pngPtr, infoPtr, &frameSizeX, &frameSizeY, &xOffset, &yOffset, &delayNum, &delayDen, (png_byte*)&disposeOp, (png_byte*)&blendOp
+            )) {
+            frameSize = {static_cast<int>(frameSizeX), static_cast<int>(frameSizeY)};
+            frameOffset = {static_cast<int>(xOffset), static_cast<int>(yOffset)};
+
+            tlog::debug() << fmt::format(
+                "fcTL: size={}, offset={}, dispose_op={}, blend_op={}", frameSize, frameOffset, (uint8_t)disposeOp, (uint8_t)blendOp
+            );
+        } else {
+            // If we don't have an fcTL chunk, we must be the static frame of the PNG (IDAT chunk), *not* be part of the animation (else
+            // there would have been an fcTL chunk before the IDAT chunk), and we fill the entire canvas.
+            frameSize = size;
+            frameOffset = {0, 0};
+            disposeOp = EDisposeOp::None;
+            blendOp = EBlendOp::Source;
+        }
+
+        // If our frame fills the entire canvas and is configured to overwrite the canvas (as is the case for static frames / PNGs), we can
+        // directly write onto the canvas and not worry about blending.
+        const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size && blendOp == EBlendOp::Source;
+        float* const dstData = directlyOnCanvas ? resultData.channels.front().data() : frameData.data();
+
+        const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+        const size_t numFrameSamples = numFramePixels * numChannels;
+        if (numFrameSamples > frameData.size()) {
+            tlog::warning() << fmt::format(
+                "PNG frame data is larger than allocated buffer. Allocating {} bytes instead of {} bytes.",
+                numFrameSamples * sizeof(float),
+                frameData.size() * sizeof(float)
+            );
+
+            frameData.resize(numFrameSamples);
+            if (iccProfileData) {
+                iccTmpFloatData.resize(numFrameSamples);
+            }
+        }
+
+        for (int y = 0; y < frameSize.y(); ++y) {
+            rowPointers[y] = &pngData[y * frameSize.x() * numBytesPerPixel];
+        }
+
+        png_read_image(pngPtr, rowPointers.data());
+
+        auto applyColorspace = [&]() -> Task<void> {
+            // According to https://www.w3.org/TR/png-3/#color-chunk-precendence, if a cICP chunk exists, use it to convert to sRGB. Else,
+            // if an iCCP chunk exists, use its embedded ICC color profile to convert to linear sRGB. Otherwise, check the sRGB chunk for
+            // whether the image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and chromaticity values and use
+            // them to convert to linear sRGB. And lastly (this isn't in the spec, but based on having seen a lot of PNGs), if none of these
+            // chunks are present, fall back to sRGB.
+            struct cICP {
+                png_byte colourPrimaries;
+                png_byte transferFunction;
+                png_byte matrixCoefficients;
+                png_byte videoFullRangeFlag;
+            } cicp;
+            if (png_get_cICP(
+                    pngPtr, infoPtr, &cicp.colourPrimaries, &cicp.transferFunction, &cicp.matrixCoefficients, &cicp.videoFullRangeFlag
+                ) == PNG_INFO_cICP) {
+
+                const auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
+                auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
+
+                if (!ituth273::isTransferImplemented(transfer)) {
+                    tlog::warning(
+                    ) << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
+                    transfer = ituth273::ETransferCharacteristics::SRGB;
+                }
+
+                tlog::debug() << fmt::format(
+                    "cICP: primaries={}, transfer={}, full_range={}",
+                    ituth273::toString(primaries),
+                    ituth273::toString(transfer),
+                    cicp.videoFullRangeFlag == 1 ? "yes" : "no"
+                );
+
+                const LimitedRange range = cicp.videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerPixel(bitDepth);
+
+                if (cicp.matrixCoefficients != 0) {
+                    tlog::warning() << fmt::format(
+                        "Unsupported matrix coefficients in cICP chunk: {}. PNG images only support RGB (=0). Ignoring.", cicp.matrixCoefficients
+                    );
+                }
+
+                if (bitDepth == 16) {
+                    co_await toFloat32<uint16_t, false>((uint16_t*)pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                } else {
+                    co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                }
+
+                co_await ThreadPool::global().parallelForAsync<size_t>(
+                    0,
+                    numPixels,
+                    [&](size_t i) {
+                        const float alpha = dstData[i * 4 + 3];
+                        for (size_t c = 0; c < 3; ++c) {
+                            const float val = (dstData[i * 4 + c] - range.offset) * range.scale;
+                            dstData[i * 4 + c] = ituth273::invTransfer(transfer, val) * alpha;
+                        }
+                    },
+                    priority
+                );
+                resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
+
+                resultData.hasPremultipliedAlpha = true;
+                co_return;
+            } else if (iccProfileData) {
+                try {
+                    if (bitDepth == 16) {
+                        co_await toFloat32(
+                            (uint16_t*)pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority
+                        );
+                    } else {
+                        co_await toFloat32(pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority);
+                    }
+
+                    co_await toLinearSrgbPremul(
+                        ColorProfile::fromIcc(iccProfileData, iccProfileSize),
+                        size,
+                        numColorChannels,
+                        numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
+                        EPixelFormat::F32,
+                        (uint8_t*)iccTmpFloatData.data(),
+                        dstData,
+                        priority
+                    );
+
+                    resultData.hasPremultipliedAlpha = true;
+                    co_return;
+                } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
             }
 
-            co_await toLinearSrgbPremul(
-                ColorProfile::fromIcc(iccProfile, iccProfileSize),
-                size,
-                numColorChannels,
-                numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
-                EPixelFormat::F32,
-                (uint8_t*)floatData.data(),
-                resultData.channels.front().data(),
+            int srgbIntent = 0;
+            const bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
+
+            double invGamma64 = 1.0 / 2.2;
+            const bool hasChunkGama = png_get_gAMA(pngPtr, infoPtr, &invGamma64) == PNG_INFO_gAMA;
+            const float gamma = 1.0f / (float)invGamma64;
+
+            array<double, 8> ch = {0};
+            const bool hasChunkChrm = png_get_cHRM(pngPtr, infoPtr, &ch[0], &ch[1], &ch[2], &ch[3], &ch[4], &ch[5], &ch[6], &ch[7]) ==
+                PNG_INFO_cHRM;
+
+            const bool useSrgb = hasChunkSrgb || (!hasChunkGama && !hasChunkChrm);
+            if (useSrgb) {
+                if (hasChunkSrgb) {
+                    tlog::debug() << fmt::format("Using sRGB chunk w/ rendering intent {}", srgbIntent);
+                } else {
+                    tlog::debug() << "No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
+                }
+
+                if (bitDepth == 16) {
+                    co_await toFloat32<uint16_t, true, true>((uint16_t*)pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                } else {
+                    co_await toFloat32<uint8_t, true, true>(pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                }
+
+                resultData.hasPremultipliedAlpha = true;
+                co_return;
+            }
+
+            tlog::debug() << fmt::format("Using gamma={}", invGamma64);
+            if (bitDepth == 16) {
+                co_await toFloat32<uint16_t, false>((uint16_t*)pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+            } else {
+                co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+            }
+
+            co_await ThreadPool::global().parallelForAsync<size_t>(
+                0,
+                numPixels,
+                [&](size_t i) {
+                    const float alpha = dstData[i * 4 + 3];
+                    for (int c = 0; c < 3; ++c) {
+                        dstData[i * 4 + c] = pow(dstData[i * 4 + c], gamma) * alpha;
+                    }
+                },
                 priority
             );
 
             resultData.hasPremultipliedAlpha = true;
-            co_return result;
-        } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
-    }
 
-    int srgbIntent = 0;
-    const bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
+            if (hasChunkChrm) {
+                array<Vector2f, 4> chroma = {
+                    {
+                     {(float)ch[2], (float)ch[3]}, // red
+                        {(float)ch[4], (float)ch[5]}, // green
+                        {(float)ch[6], (float)ch[7]}, // blue
+                        {(float)ch[0], (float)ch[1]}, // white
+                    }
+                };
+                resultData.toRec709 = chromaToRec709Matrix(chroma);
 
-    double invGamma64 = 1.0 / 2.2;
-    const bool hasChunkGama = png_get_gAMA(pngPtr, infoPtr, &invGamma64) == PNG_INFO_gAMA;
-    const float gamma = 1.0f / (float)invGamma64;
-
-    array<double, 8> ch = {0};
-    const bool hasChunkChrm = png_get_cHRM(pngPtr, infoPtr, &ch[0], &ch[1], &ch[2], &ch[3], &ch[4], &ch[5], &ch[6], &ch[7]) == PNG_INFO_cHRM;
-
-    const bool useSrgb = hasChunkSrgb || (!hasChunkGama && !hasChunkChrm);
-    if (useSrgb) {
-        if (hasChunkSrgb) {
-            tlog::debug() << fmt::format("Using sRGB chunk w/ rendering intent {}", srgbIntent);
-        } else {
-            tlog::debug() << "No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
-        }
-
-        if (bitDepth == 16) {
-            co_await toFloat32<uint16_t, true>(
-                (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
-            );
-        } else {
-            co_await toFloat32<uint8_t, true>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
-        }
-
-        co_return result;
-    }
-
-    tlog::debug() << fmt::format("Using gamma={}", invGamma64);
-    if (bitDepth == 16) {
-        co_await toFloat32<uint16_t, false>(
-            (uint16_t*)imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
-        );
-    } else {
-        co_await toFloat32<uint8_t, false>(imageData.data(), numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority);
-    }
-
-    auto* pixelData = resultData.channels.front().data();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
-        numPixels,
-        [&](size_t i) {
-            for (int c = 0; c < 3; ++c) {
-                pixelData[i * 4 + c] = pow(pixelData[i * 4 + c], gamma);
-            }
-        },
-        priority
-    );
-
-    if (hasChunkChrm) {
-        array<Vector2f, 4> chroma = {
-            {
-             {(float)ch[2], (float)ch[3]}, // red
-                {(float)ch[4], (float)ch[5]}, // green
-                {(float)ch[6], (float)ch[7]}, // blue
-                {(float)ch[0], (float)ch[1]}, // white
+                tlog::debug() << fmt::format("cHRM: primaries={}", chroma);
             }
         };
-        resultData.toRec709 = chromaToRec709Matrix(chroma);
 
-        tlog::debug() << fmt::format("cHRM: primaries={}", chroma);
+        co_await applyColorspace();
+
+        if (!directlyOnCanvas) {
+            tlog::debug() << "Blending frame onto previous canvas";
+
+            co_await ThreadPool::global().parallelForAsync<int>(
+                0,
+                size.y(),
+                [&](int y) {
+                    Vector2i framePos;
+                    framePos.y() = y - frameOffset.y();
+                    for (int x = 0; x < size.x(); ++x) {
+                        const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;
+                        framePos.x() = x - frameOffset.x();
+
+                        bool isInFrame = Box2i{frameSize}.contains(framePos);
+
+                        for (int c = 0; c < numChannels; ++c) {
+                            const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
+                            float val;
+
+                            // The background (if no previous canvas is set) is defined as transparent black per the spec.
+                            const float bg = prevCanvas ? prevCanvas[canvasSampleIdx] : 0.0f;
+                            if (isInFrame) {
+                                const size_t framePixelIdx = (size_t)framePos.y() * frameSize.x() + (size_t)framePos.x();
+                                const size_t frameSampleIdx = framePixelIdx * numChannels + c;
+                                const size_t frameAlphaIdx = framePixelIdx * numChannels + 3;
+
+                                if (blendOp == EBlendOp::Source) {
+                                    val = dstData[frameSampleIdx];
+                                } else {
+                                    val = dstData[frameSampleIdx] + bg * (1.0f - dstData[frameAlphaIdx]);
+                                }
+                            } else {
+                                val = bg;
+                            }
+
+                            resultData.channels.front().data()[canvasSampleIdx] = val;
+                        }
+                    }
+                },
+                priority
+            );
+        }
+
+        // Depending on the dispose operation, the next frame will be blended either onto the current frame (none), onto no frame at all
+        // (background), or the previous frame (previous).
+        switch (disposeOp) {
+            case EDisposeOp::None: prevCanvas = resultData.channels.front().data(); break;
+            case EDisposeOp::Background: prevCanvas = nullptr; break;
+            case EDisposeOp::Previous: break; // Previous frame is already set as the previous canvas
+            default: throw ImageLoadError{fmt::format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};
+        }
+
+        co_return resultData;
+    };
+
+    for (png_uint_32 i = 0; i < numFrames; ++i) {
+        if (isAnimated) {
+            png_read_frame_head(pngPtr, infoPtr);
+            tlog::debug() << fmt::format("Reading frame {}/{}", i + 1, numFrames);
+        }
+
+        result.emplace_back(co_await readFrame());
+        if (isAnimated) {
+            result.back().partName = fmt::format("frames.{}", i);
+        }
     }
 
     co_return result;
