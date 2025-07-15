@@ -869,6 +869,25 @@ void BackgroundImagesLoader::checkDirectoriesForNewFilesAndLoadThose() {
     }
 }
 
+optional<ImageAddition> BackgroundImagesLoader::tryPop() {
+    const lock_guard lock{mPendingLoadedImagesMutex};
+    return mLoadedImages.tryPop();
+}
+
+optional<nanogui::Vector2i> BackgroundImagesLoader::firstImageSize() const {
+    const lock_guard lock{mPendingLoadedImagesMutex};
+    if (mLoadedImages.empty()) {
+        return nullopt;
+    }
+
+    const ImageAddition& firstImage = mLoadedImages.front();
+    if (firstImage.images.empty()) {
+        return nullopt;
+    }
+
+    return firstImage.images.front()->size();
+}
+
 bool BackgroundImagesLoader::publishSortedLoads() {
     const lock_guard lock{mPendingLoadedImagesMutex};
     bool pushed = false;
@@ -891,6 +910,11 @@ bool BackgroundImagesLoader::publishSortedLoads() {
     }
 
     return pushed;
+}
+
+bool BackgroundImagesLoader::hasPendingLoads() const {
+    const lock_guard lock{mPendingLoadedImagesMutex};
+    return mLoadCounter != mUnsortedLoadCounter;
 }
 
 } // namespace tev

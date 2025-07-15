@@ -44,6 +44,7 @@ namespace tev {
 class ImageViewer : public nanogui::Screen {
 public:
     ImageViewer(
+        const nanogui::Vector2i& size,
         const std::shared_ptr<BackgroundImagesLoader>& imagesLoader,
         const std::shared_ptr<Ipc>& ipc,
         bool maximize,
@@ -288,6 +289,7 @@ private:
     int mDidFitToImage = 0;
 
     nanogui::Vector2i mMaxSize = {8192, 8192};
+    bool mInitialized = false;
 };
 
 } // namespace tev

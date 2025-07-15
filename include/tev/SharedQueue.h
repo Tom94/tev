@@ -71,6 +71,12 @@ public:
         return result;
     }
 
+    // Only call while holding the mutex!
+    const T& front() const {
+        std::unique_lock lock{mMutex};
+        return mRawQueue.front();
+    }
+
 private:
     std::deque<T> mRawQueue;
     mutable std::mutex mMutex;

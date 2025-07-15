@@ -26,13 +26,21 @@
             darwin.apple_sdk.frameworks.Cocoa
             darwin.apple_sdk.frameworks.OpenGL
           ] else [
+            pkg-config
             libGL
             perl
+            # X11 libraries
             xorg.libX11
             xorg.libXcursor
             xorg.libXi
             xorg.libXinerama
             xorg.libXrandr
+            # Wayland libraries
+            libxkbcommon
+            libffi
+            wayland
+            wayland-protocols
+            wayland-scanner
           ];
 
         # Common build inputs shared between dev shell and build
@@ -77,6 +85,10 @@
               binutils
             ]
           );
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
+            wayland
+            libxkbcommon
+          ]);
         };
 
         apps.default = flake-utils.lib.mkApp {

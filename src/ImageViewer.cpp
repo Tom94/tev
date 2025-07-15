@@ -46,14 +46,15 @@ static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
-    const shared_ptr<BackgroundImagesLoader>& imagesLoader, const shared_ptr<Ipc>& ipc, bool maximize, bool showUi, bool floatBuffer, bool /*supportsHdr*/
+    const Vector2i& size,
+    const shared_ptr<BackgroundImagesLoader>& imagesLoader,
+    const shared_ptr<Ipc>& ipc,
+    bool maximize,
+    bool showUi,
+    bool floatBuffer,
+    bool /*supportsHdr*/
 ) :
-    nanogui::Screen{
-        nanogui::Vector2i{1024, 799},
-        "tev", true, maximize, false, true, true, floatBuffer
-},
-    mImagesLoader{imagesLoader},
-    mIpc{ipc} {
+    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
 
     if (floatBuffer && !m_float_buffer) {
         tlog::warning() << "Failed to create floating point frame buffer.";
@@ -497,11 +498,13 @@ ImageViewer::ImageViewer(
     selectReference(nullptr);
 
     if (!maximize) {
-        this->set_size(nanogui::Vector2i(1024, 800));
+        // mDidFitToImage is only used when starting out maximized and wanting to fit the window to the image size after *unmaximizing*.
         mDidFitToImage = 3;
     }
 
     updateLayout();
+
+    mInitialized = true;
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
@@ -1039,6 +1042,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
 void ImageViewer::focusWindow() { glfwFocusWindow(m_glfw_window); }
 
 void ImageViewer::draw_contents() {
+    if (!mInitialized) {
+        return;
+    }
+
     // HACK HACK HACK: on Windows, when restoring a window from maximization, the old window size is restored _several times_, necessitating
     // a repeated resize to the actually desired window size.
     if (mDidFitToImage < 3 && !isMaximized()) {

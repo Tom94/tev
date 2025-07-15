@@ -577,8 +577,21 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
+    nanogui::Vector2i size = {1024, 800};
+    if (imageFiles && !maximize) {
+        // Wait until the first image is loaded to determine the size of the window.
+        while (imagesLoader->hasPendingLoads()) {
+            if (auto sizeOpt = imagesLoader->firstImageSize()) {
+                size = *sizeOpt;
+                break;
+            }
+
+            this_thread::sleep_for(1ms);
+        }
+    }
+
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better not try.
-    sImageViewer = new ImageViewer{imagesLoader, ipc, maximize, !hideUiFlag, capability10bit || capabilityEdr, capabilityEdr};
+    sImageViewer = new ImageViewer{size, imagesLoader, ipc, maximize, !hideUiFlag, capability10bit || capabilityEdr, capabilityEdr};
     imageViewerIsReady = true;
 
     sImageViewer->draw_all();

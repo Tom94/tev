@@ -308,10 +308,11 @@ public:
     void enqueue(const fs::path& path, std::string_view channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
     void checkDirectoriesForNewFilesAndLoadThose();
 
-    std::optional<ImageAddition> tryPop() { return mLoadedImages.tryPop(); }
+    std::optional<ImageAddition> tryPop();
+    std::optional<nanogui::Vector2i> firstImageSize() const;
 
     bool publishSortedLoads();
-    bool hasPendingLoads() const { return mLoadCounter != mUnsortedLoadCounter; }
+    bool hasPendingLoads() const;
 
     bool recursiveDirectories() const { return mRecursiveDirectories; }
     void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
@@ -326,7 +327,7 @@ private:
     SharedQueue<ImageAddition> mLoadedImages;
 
     std::priority_queue<ImageAddition, std::vector<ImageAddition>, ImageAddition::Comparator> mPendingLoadedImages;
-    std::mutex mPendingLoadedImagesMutex;
+    mutable std::mutex mPendingLoadedImagesMutex;
 
     std::atomic<int> mLoadCounter{0};
     std::atomic<int> mUnsortedLoadCounter{0};
