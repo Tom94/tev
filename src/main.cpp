@@ -582,7 +582,7 @@ static int mainFunc(span<const string> arguments) {
         // Wait until the first image is loaded to determine the size of the window.
         while (imagesLoader->hasPendingLoads()) {
             if (auto sizeOpt = imagesLoader->firstImageSize()) {
-                size = *sizeOpt;
+                size = nanogui::max(*sizeOpt, size);
                 break;
             }
 

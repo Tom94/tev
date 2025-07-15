@@ -27,6 +27,10 @@ project(
 )
 set(TEV_VERSION "${CMAKE_PROJECT_VERSION}")
 
+if (APPLE)
+    enable_language(OBJC)
+endif()
+
 if (NOT TEV_DEPLOY)
     set(TEV_VERSION "${TEV_VERSION}dev")
 endif()
