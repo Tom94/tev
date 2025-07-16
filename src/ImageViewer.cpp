@@ -1747,12 +1747,27 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
     }
 
     // For sanity, don't make us larger than 8192x8192 to ensure that we don't break any texture size limitations of the user's GPU.
-    targetSize = min(targetSize, mMaxSize);
+    auto maxSize = mMaxSize;
+
+#ifdef _WIN32
+    int padding = 2;
+    maxSize.x() -= 2 * padding;
+    maxSize.y() -= 2 * padding;
+#endif
+
+    targetSize = min(targetSize, maxSize);
 
     auto sizeDiff = targetSize - m_size;
 
     set_size(targetSize);
     move_window(-nanogui::Vector2i{sizeDiff.x() / 2, sizeDiff.y() / 2});
+
+#ifdef _WIN32
+    Vector2i pos;
+    glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
+    pos = nanogui::min(nanogui::max(pos, Vector2i{padding}), mMaxSize - targetSize - Vector2i{padding});
+    glfwSetWindowPos(m_glfw_window, pos.x(), pos.y());
+#endif
 
     if (autoFitToScreen() && mCurrentImage) {
         mImageCanvas->fitImageToScreen(*mCurrentImage);
