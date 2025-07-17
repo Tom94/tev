@@ -83,6 +83,7 @@
               gcc
               gdb
               binutils
+              mesa-demos # for glxinfo, eglinfo
             ]
           );
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
