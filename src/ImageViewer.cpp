@@ -104,7 +104,8 @@ ImageViewer::ImageViewer(
     mSidebarLayout = new Widget{tmp};
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr, pixel_ratio()};
+    mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr};
+    mImageCanvas->setPixelRatio(pixel_ratio());
 
     // Tonemapping sectionim
     {
@@ -503,6 +504,13 @@ ImageViewer::ImageViewer(
     updateLayout();
 
     mInitialized = true;
+}
+
+bool ImageViewer::resize_event(const Vector2i& size) {
+    mImageCanvas->setPixelRatio(pixel_ratio());
+    requestLayoutUpdate();
+
+    return Screen::resize_event(size);
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {

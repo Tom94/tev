@@ -36,8 +36,7 @@ using namespace std;
 
 namespace tev {
 
-ImageCanvas::ImageCanvas(Widget* parent, bool supportsHdr, float pixelRatio) :
-    Canvas{parent, 1, false, false, false}, mSupportsHdr{supportsHdr}, mPixelRatio{pixelRatio} {
+ImageCanvas::ImageCanvas(Widget* parent, bool supportsHdr) : Canvas{parent, 1, false, false, false}, mSupportsHdr{supportsHdr} {
     mShader.reset(new UberShader{render_pass()});
     set_draw_border(false);
 }
