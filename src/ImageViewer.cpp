@@ -51,16 +51,14 @@ ImageViewer::ImageViewer(
     const shared_ptr<Ipc>& ipc,
     bool maximize,
     bool showUi,
-    bool floatBuffer,
-    bool /*supportsHdr*/
+    bool floatBuffer
 ) :
     nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
 
-    if (floatBuffer && !m_float_buffer) {
-        tlog::warning() << "Failed to create floating point frame buffer.";
-    }
-
     mSupportsHdr = m_float_buffer;
+    if (mSupportsHdr) {
+        tlog::success() << "Launching with HDR display support.";
+    }
 
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();

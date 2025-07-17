@@ -49,8 +49,7 @@ public:
         const std::shared_ptr<Ipc>& ipc,
         bool maximize,
         bool showUi,
-        bool floatBuffer,
-        bool supportsHdr
+        bool floatBuffer
     );
 
     bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
