@@ -57,7 +57,7 @@ ImageViewer::ImageViewer(
 
     mSupportsHdr = m_float_buffer;
     if (mSupportsHdr) {
-        tlog::success() << "Launching with HDR display support.";
+        tlog::success() << "Obtained floating point frame buffer. Will display HDR if operating system and display support it.";
     }
 
     // At this point we no longer need the standalone console (if it exists).
