@@ -202,8 +202,8 @@ inline float invTransfer(const ETransferCharacteristics transfer, float val) {
             return std::copysign(bt709ToLinear(std::abs(val)), val);
         case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
             return bt1361ExtendedToLinear(val);
-        case ETransferCharacteristics::BT470M: return std::pow(val, 2.2f);
-        case ETransferCharacteristics::BT470BG: return std::pow(val, 2.8f);
+        case ETransferCharacteristics::BT470M: return std::pow(std::max(val, 0.0f), 2.2f);
+        case ETransferCharacteristics::BT470BG: return std::pow(std::max(val, 0.0f), 2.8f);
         case ETransferCharacteristics::SMPTE240: return smpteSt240ToLinear(val);
         case ETransferCharacteristics::Linear: return val;
         case ETransferCharacteristics::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;
