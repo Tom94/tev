@@ -42,7 +42,7 @@ struct CanvasStatistics {
 
 class ImageCanvas : public nanogui::Canvas {
 public:
-    ImageCanvas(nanogui::Widget* parent, bool supportsHdr, float pixelRatio);
+    ImageCanvas(nanogui::Widget* parent, bool supportsHdr);
 
     bool scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) override;
 
@@ -116,6 +116,9 @@ public:
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
     void purgeCanvasStatistics(int imageId);
+
+    float pixelRatio() const { return mPixelRatio; }
+    void setPixelRatio(float ratio) { mPixelRatio = ratio; }
 
 private:
     static std::vector<Channel> channelsFromImages(

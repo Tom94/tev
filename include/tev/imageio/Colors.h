@@ -179,7 +179,7 @@ inline float pqToLinear(float val) {
 
     const float tmp = std::pow(std::max(val, 0.0f), invm2);
     const float resultCdm2 = 10000.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-5f), invm1);
-    return resultCdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
+    return resultCdm2 / 203.0f; // Convert to linear sRGB units where SDR white is 1.0
 }
 
 inline float smpteSt428ToLinear(float val) { return std::pow(val, 2.6f) * (52.37f / 48.0f); }
@@ -189,7 +189,7 @@ inline float hlgToLinear(float val) {
     constexpr float b = 0.28466892f;
     constexpr float c = 0.55991073f;
     const float resultCdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
-    return resultCdm2 / 80.0f; // Convert to linear sRGB units where SDR white (1.0) is 80 cd/m^2
+    return resultCdm2 / 203.0f; // Convert to linear sRGB units where SDR white is 1.0
 }
 
 inline float invTransfer(const ETransferCharacteristics transfer, float val) {
@@ -202,8 +202,8 @@ inline float invTransfer(const ETransferCharacteristics transfer, float val) {
             return std::copysign(bt709ToLinear(std::abs(val)), val);
         case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
             return bt1361ExtendedToLinear(val);
-        case ETransferCharacteristics::BT470M: return std::pow(val, 2.2f);
-        case ETransferCharacteristics::BT470BG: return std::pow(val, 2.8f);
+        case ETransferCharacteristics::BT470M: return std::pow(std::max(val, 0.0f), 2.2f);
+        case ETransferCharacteristics::BT470BG: return std::pow(std::max(val, 0.0f), 2.8f);
         case ETransferCharacteristics::SMPTE240: return smpteSt240ToLinear(val);
         case ETransferCharacteristics::Linear: return val;
         case ETransferCharacteristics::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;

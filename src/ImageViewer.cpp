@@ -51,16 +51,14 @@ ImageViewer::ImageViewer(
     const shared_ptr<Ipc>& ipc,
     bool maximize,
     bool showUi,
-    bool floatBuffer,
-    bool /*supportsHdr*/
+    bool floatBuffer
 ) :
     nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
 
-    if (floatBuffer && !m_float_buffer) {
-        tlog::warning() << "Failed to create floating point frame buffer.";
-    }
-
     mSupportsHdr = m_float_buffer;
+    if (mSupportsHdr) {
+        tlog::success() << "Obtained floating point frame buffer. Will display HDR if operating system and display support it.";
+    }
 
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
@@ -106,7 +104,8 @@ ImageViewer::ImageViewer(
     mSidebarLayout = new Widget{tmp};
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr, pixel_ratio()};
+    mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr};
+    mImageCanvas->setPixelRatio(pixel_ratio());
 
     // Tonemapping sectionim
     {
@@ -505,6 +504,13 @@ ImageViewer::ImageViewer(
     updateLayout();
 
     mInitialized = true;
+}
+
+bool ImageViewer::resize_event(const Vector2i& size) {
+    mImageCanvas->setPixelRatio(pixel_ratio());
+    requestLayoutUpdate();
+
+    return Screen::resize_event(size);
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {

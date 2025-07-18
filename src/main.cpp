@@ -554,15 +554,6 @@ static int mainFunc(span<const string> arguments) {
     glfwSetOpenedFilenamesCallback([](const char* imageFile) { sImageViewer->imagesLoader().enqueue(toPath(imageFile), "", false); });
 #endif
 
-    auto [capability10bit, capabilityEdr] = nanogui::test_10bit_edr_support();
-    if (get(ldrFlag)) {
-        capability10bit = false;
-        capabilityEdr = false;
-    }
-
-    tlog::info() << "Launching with " << (capability10bit ? 10 : 8) << " bits of color and " << (capabilityEdr ? "HDR" : "LDR")
-                 << " display support.";
-
     // Do what the maximize flag tells us---if it exists---and maximize if we have images otherwise.
     bool maximize = imageFiles;
     if (maximizeFlagOn) {
@@ -591,7 +582,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better not try.
-    sImageViewer = new ImageViewer{size, imagesLoader, ipc, maximize, !hideUiFlag, capability10bit || capabilityEdr, capabilityEdr};
+    sImageViewer = new ImageViewer{size, imagesLoader, ipc, maximize, !hideUiFlag, !get(ldrFlag)};
     imageViewerIsReady = true;
 
     sImageViewer->draw_all();
