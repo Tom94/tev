@@ -25,7 +25,7 @@ using namespace std;
 
 namespace tev {
 
-UberShader::UberShader(RenderPass* renderPass) {
+UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
     try {
 #if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
 #   if defined(NANOGUI_USE_OPENGL)
@@ -93,7 +93,6 @@ UberShader::UberShader(RenderPass* renderPass) {
             uniform float offset;
             uniform float gamma;
             uniform bool clipToLdr;
-            uniform bool useDither;
             uniform int tonemap;
             uniform int metric;
 
@@ -183,10 +182,6 @@ UberShader::UberShader(RenderPass* renderPass) {
             }
 
             vec4 dither(vec4 color) {
-                if (!useDither) {
-                    return color;
-                }
-
                 color.rgb += texture2D(ditherMatrix, fract(ditherUv)).r;
                 return color;
             }
@@ -362,11 +357,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 float2 referenceUv;
             };
 
-            float4 dither(float4 color, texture2d<float, access::sample> ditherMatrix, sampler ditherMatrixSampler, float2 ditherUv, bool useDither) {
-                if (!useDither) {
-                    return color;
-                }
-
+            float4 dither(float4 color, texture2d<float, access::sample> ditherMatrix, sampler ditherMatrixSampler, float2 ditherUv) {
                 color.rgb += ditherMatrix.sample(ditherMatrixSampler, fract(ditherUv)).r;
                 return color;
             }
@@ -387,7 +378,6 @@ UberShader::UberShader(RenderPass* renderPass) {
                 const constant float& offset,
                 const constant float& gamma,
                 const constant bool& clipToLdr,
-                const constant bool& useDither,
                 const constant int& tonemap,
                 const constant int& metric,
                 const constant float2& cropMin,
@@ -400,7 +390,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                 float3 checker = int(floor(vert.checkerUv.x) + floor(vert.checkerUv.y)) % 2 == 0 ? darkGray : lightGray;
                 checker = bgColor.rgb * bgColor.a + checker * (1.0f - bgColor.a);
                 if (!hasImage) {
-                    return dither(float4(checker, 1.0f), ditherMatrix, ditherMatrix_sampler, vert.ditherUv, useDither);
+                    return dither(float4(checker, 1.0f), ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
                 }
 
                 float cropAlpha = vert.imageUv.x < cropMin.x || vert.imageUv.x > cropMax.x || vert.imageUv.y < cropMin.y || vert.imageUv.y > cropMax.y ? 0.3f : 1.0f;
@@ -421,7 +411,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                         1.0f
                     );
                     color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
-                    return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv, useDither);
+                    return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
                 }
 
                 float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv);
@@ -442,7 +432,7 @@ UberShader::UberShader(RenderPass* renderPass) {
                     1.0f
                 );
                 color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
-                return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv, useDither);
+                return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
             })";
 #endif
 
@@ -482,23 +472,24 @@ UberShader::UberShader(RenderPass* renderPass) {
     mDitherMatrix = new Texture{
         Texture::PixelFormat::R,
         Texture::ComponentFormat::Float32,
-        Vector2i{Image::DITHER_MATRIX_SIZE},
+        Vector2i{nanogui::DITHER_MATRIX_SIZE},
         Texture::InterpolationMode::Nearest,
-        Texture::InterpolationMode::Nearest
+        Texture::InterpolationMode::Nearest,
+        Texture::WrapMode::Repeat,
     };
-    mDitherMatrix->upload((uint8_t*)Image::ditherMatrix().data());
+
+    mDitherMatrix->upload((uint8_t*)nanogui::ditherMatrix(ditherScale).data());
 }
 
 UberShader::~UberShader() {}
 
-void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize, bool useDither) {
-    draw(pixelSize, checkerSize, useDither, nullptr, Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, false, ETonemap::SRGB, std::nullopt);
+void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
+    draw(pixelSize, checkerSize, nullptr, Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, false, ETonemap::SRGB, std::nullopt);
 }
 
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    bool useDither,
     Texture* textureImage,
     const Matrix3f& transformImage,
     float exposure,
@@ -511,7 +502,6 @@ void UberShader::draw(
     draw(
         pixelSize,
         checkerSize,
-        useDither,
         textureImage,
         transformImage,
         nullptr,
@@ -529,7 +519,6 @@ void UberShader::draw(
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    bool useDither,
     Texture* textureImage,
     const Matrix3f& transformImage,
     Texture* textureReference,
@@ -569,9 +558,8 @@ void UberShader::draw(
         mShader->set_uniform("cropMax", Vector2f{std::numeric_limits<float>::infinity()});
     }
 
-    mShader->set_uniform("useDither", useDither);
-    mShader->set_uniform("ditherSize", static_cast<float>(Image::DITHER_MATRIX_SIZE));
-    mShader->set_texture("ditherMatrix", mDitherMatrix.get());
+    mShader->set_uniform("ditherSize", static_cast<float>(nanogui::DITHER_MATRIX_SIZE));
+    mShader->set_texture("ditherMatrix", mDitherMatrix);
 
     mShader->begin();
     mShader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, true);

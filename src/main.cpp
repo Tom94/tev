@@ -525,7 +525,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     // Init nanogui application
-    nanogui::init();
+    nanogui::init(!get(ldrFlag));
 
     ScopeGuard nanoguiShutdownGuard{[&]() {
     // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our

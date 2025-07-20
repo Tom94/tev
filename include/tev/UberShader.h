@@ -30,17 +30,16 @@ namespace tev {
 
 class UberShader {
 public:
-    UberShader(nanogui::RenderPass* renderPass);
+    UberShader(nanogui::RenderPass* renderPass, float ditherScale);
     virtual ~UberShader();
 
     // Draws just a checkerboard
-    void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize, bool dither);
+    void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
 
     // Draws an image
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
-        bool dither,
         nanogui::Texture* textureImage,
         const nanogui::Matrix3f& transformImage,
         float exposure,
@@ -55,7 +54,6 @@ public:
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
-        bool dither,
         nanogui::Texture* textureImage,
         const nanogui::Matrix3f& transformImage,
         nanogui::Texture* textureReference,

@@ -212,6 +212,17 @@ Matrix4f toMatrix4(const Matrix3f& mat) {
     return result;
 }
 
+Matrix3f toMatrix3(const Matrix4f& mat) {
+    Matrix3f result;
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            result.m[m][n] = mat.m[m][n];
+        }
+    }
+
+    return result;
+}
+
 class GlobalCmsContext {
 public:
     GlobalCmsContext() {
@@ -424,6 +435,24 @@ Task<void> toLinearSrgbPremul(
     );
 }
 
+array<Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries) {
+    if (wpPrimaries == 10) {
+        // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
+        return adobeChroma();
+    }
+
+    return ituth273::chroma(ituth273::fromWpPrimaries(wpPrimaries));
+}
+
+string_view wpPrimariesToString(int wpPrimaries) {
+    if (wpPrimaries == 10) {
+        // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
+        return "adobe_rgb";
+    }
+
+    return ituth273::toString(ituth273::fromWpPrimaries(wpPrimaries));
+}
+
 // Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
 namespace ituth273 {
 
@@ -538,6 +567,22 @@ string_view toString(const ETransferCharacteristics transfer) {
     return "invalid";
 }
 
+EColorPrimaries fromWpPrimaries(int wpPrimaries) {
+    switch (wpPrimaries) {
+        case 1: return ituth273::EColorPrimaries::BT709;
+        case 2: return ituth273::EColorPrimaries::BT470M;
+        case 3: return ituth273::EColorPrimaries::BT470BG;
+        case 4: return ituth273::EColorPrimaries::SMPTE170M;
+        case 5: return ituth273::EColorPrimaries::Film;
+        case 6: return ituth273::EColorPrimaries::BT2020;
+        case 7: return ituth273::EColorPrimaries::SMPTE428;
+        case 8: return ituth273::EColorPrimaries::SMPTE431;
+        case 9: return ituth273::EColorPrimaries::SMPTE432;
+    }
+
+    throw std::invalid_argument{"Unknown wp color primaries: " + std::to_string(wpPrimaries)};
+}
+
 bool isTransferImplemented(const ETransferCharacteristics transfer) {
     switch (transfer) {
         case ETransferCharacteristics::BT709:
@@ -560,6 +605,26 @@ bool isTransferImplemented(const ETransferCharacteristics transfer) {
     }
 
     return false;
+}
+
+ETransferCharacteristics fromWpTransfer(int wpTransfer) {
+    switch (wpTransfer) {
+        case 1: return ETransferCharacteristics::BT709;
+        case 2: return ETransferCharacteristics::BT470M;
+        case 3: return ETransferCharacteristics::BT470BG;
+        case 4: return ETransferCharacteristics::SMPTE240;
+        case 5: return ETransferCharacteristics::Linear;
+        case 6: return ETransferCharacteristics::Log100;
+        case 7: return ETransferCharacteristics::Log100Sqrt10;
+        case 8: return ETransferCharacteristics::IEC61966;
+        case 9: return ETransferCharacteristics::SRGB;
+        case 10: return ETransferCharacteristics::SRGB; // TODO: handle the fact that this is the extended SRGB variant
+        case 11: return ETransferCharacteristics::PQ;
+        case 12: return ETransferCharacteristics::SMPTE428;
+        case 13: return ETransferCharacteristics::HLG;
+    }
+
+    throw std::invalid_argument{"Unknown transfer characteristics from color manager: " + std::to_string(wpTransfer)};
 }
 
 } // namespace ituth273

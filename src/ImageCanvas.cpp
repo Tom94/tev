@@ -36,8 +36,16 @@ using namespace std;
 
 namespace tev {
 
-ImageCanvas::ImageCanvas(Widget* parent, bool supportsHdr) : Canvas{parent, 1, false, false, false}, mSupportsHdr{supportsHdr} {
-    mShader.reset(new UberShader{render_pass()});
+ImageCanvas::ImageCanvas(Widget* parent) : Canvas{parent, 1, false, false, false} {
+    // If we are rendering to a float buffer (which is the case if the screen has a float back buffer, or if the screen performs color
+    // management), we don't need to dither here. The screen will do it. Otherwise, we are rendering directly to an integer buffer and we
+    // *should* dither to avoid banding artifacts.
+    auto* screen = this->screen();
+    const float ditherScale = (screen->has_float_buffer() || screen->applies_color_management()) ?
+        0.0f :
+        (1.0f / (1u << screen->bits_per_sample()));
+
+    mShader.reset(new UberShader{render_pass(), ditherScale});
     set_draw_border(false);
 }
 
@@ -72,7 +80,7 @@ void ImageCanvas::draw_contents() {
     Image* image = (mReference && viewReferenceOnly) ? mReference.get() : mImage.get();
 
     if (!image) {
-        mShader->draw(2.0f * inverse(Vector2f{m_size}) / mPixelRatio, Vector2f{20.0f}, !mSupportsHdr);
+        mShader->draw(2.0f * inverse(Vector2f{m_size}) / mPixelRatio, Vector2f{20.0f});
         return;
     }
 
@@ -85,7 +93,6 @@ void ImageCanvas::draw_contents() {
         mShader->draw(
             2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
             Vector2f{20.0f},
-            !mSupportsHdr,
             image->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
             // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in
             // [0, 1]-space.
@@ -103,7 +110,6 @@ void ImageCanvas::draw_contents() {
     mShader->draw(
         2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
         Vector2f{20.0f},
-        !mSupportsHdr,
         mImage->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in [0,
         // 1]-space.

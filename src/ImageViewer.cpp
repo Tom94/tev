@@ -17,6 +17,7 @@
  */
 
 #include <tev/ImageViewer.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageSaver.h>
 
 #include <clip.h>
@@ -46,19 +47,24 @@ static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
 ImageViewer::ImageViewer(
-    const Vector2i& size,
-    const shared_ptr<BackgroundImagesLoader>& imagesLoader,
-    const shared_ptr<Ipc>& ipc,
-    bool maximize,
-    bool showUi,
-    bool floatBuffer
+    const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, const shared_ptr<Ipc>& ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
     nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
 
-    mSupportsHdr = m_float_buffer;
-    if (mSupportsHdr) {
-        tlog::success() << "Obtained floating point frame buffer. Will display HDR if operating system and display support it.";
-    }
+    // Make sure we correctly convert colors to the screen's primaries.
+    auto displayChroma = chromaFromWpPrimaries(this->display_primaries());
+    this->set_display_color_matrix(inverse(toMatrix3(chromaToRec709Matrix(displayChroma))));
+
+    auto tf = ituth273::fromWpTransfer(this->display_transfer_function());
+    mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
+
+    tlog::info() << fmt::format("Obtained {} bit {} point frame buffer with primaries={} and transfer={}.{}",
+        this->bits_per_sample(),
+        m_float_buffer ? "float" : "fixed",
+        wpPrimariesToString(this->display_primaries()),
+        ituth273::toString(tf),
+        mSupportsHdr ? " HDR display is supported." : " HDR is *not* supported."
+    );
 
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
@@ -104,7 +110,7 @@ ImageViewer::ImageViewer(
     mSidebarLayout = new Widget{tmp};
     mSidebarLayout->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    mImageCanvas = new ImageCanvas{horizontalScreenSplit, mSupportsHdr};
+    mImageCanvas = new ImageCanvas{horizontalScreenSplit};
     mImageCanvas->setPixelRatio(pixel_ratio());
 
     // Tonemapping sectionim
