@@ -45,6 +45,7 @@ std::array<nanogui::Vector2f, 4> bt2100Chroma();
 nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
 
 nanogui::Matrix4f toMatrix4(const nanogui::Matrix3f& mat);
+nanogui::Matrix3f toMatrix3(const nanogui::Matrix4f& mat);
 
 enum class EAlphaKind {
     // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
@@ -100,6 +101,9 @@ Task<void> toLinearSrgbPremul(
     int priority
 );
 
+std::array<nanogui::Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries);
+std::string_view wpPrimariesToString(int wpPrimaties);
+
 // Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
 namespace ituth273 {
 enum class EColorPrimaries : uint8_t {
@@ -119,6 +123,8 @@ enum class EColorPrimaries : uint8_t {
 
 std::string_view toString(const EColorPrimaries primaries);
 std::array<nanogui::Vector2f, 4> chroma(const EColorPrimaries primaries);
+
+EColorPrimaries fromWpPrimaries(int wpPrimaries);
 
 enum class ETransferCharacteristics : uint8_t {
     BT709 = 1, // Also BT1361
@@ -142,6 +148,8 @@ enum class ETransferCharacteristics : uint8_t {
 
 std::string_view toString(const ETransferCharacteristics transfer);
 bool isTransferImplemented(const ETransferCharacteristics transfer);
+
+ETransferCharacteristics fromWpTransfer(int wpTransfer);
 
 inline float bt709ToLinear(float val) {
     constexpr float beta = 0.018053968510807f;

@@ -42,7 +42,7 @@ struct CanvasStatistics {
 
 class ImageCanvas : public nanogui::Canvas {
 public:
-    ImageCanvas(nanogui::Widget* parent, bool supportsHdr);
+    ImageCanvas(nanogui::Widget* parent);
 
     bool scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) override;
 
