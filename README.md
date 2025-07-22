@@ -3,9 +3,8 @@
 Image viewer and comparison tool for graphics people.
 
 - __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
-- __Accurate:__ understands ICC color profiles and HDR. Displays everything in linear sRGB/Rec.709.
+- __Accurate:__ understands HDR and color profiles (ICC, CICP, etc.). Displays HDR on all operating systems.
 - __Versatile:__ supports many [file formats](#file-formats), histograms, pixel-peeping, tonemaps, error metrics, etc.
-- __HDR:__ displays true HDR on Windows, macOS, and Linux (Wayland only).
 
 ![Screenshot](resources/screenshot.png)
 _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
