@@ -1,5 +1,5 @@
 {
-  description = "tev — The EXR Viewer";
+  description = "tev — The EDR Viewer";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

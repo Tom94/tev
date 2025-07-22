@@ -1,6 +1,6 @@
-# tev — The EXR Viewer &nbsp;&nbsp; ![](https://github.com/tom94/tev/workflows/CI/badge.svg)
+# tev — The EDR Viewer &nbsp;&nbsp; ![](https://github.com/tom94/tev/workflows/CI/badge.svg)
 
-Image viewer and comparison tool for graphics people.
+High dynamic range (HDR) image viewer for graphics people.
 
 - __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
 - __Accurate:__ understands HDR and color profiles (ICC, CICP, etc.). Displays HDR on all operating systems.

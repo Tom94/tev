@@ -1,4 +1,4 @@
-# tev -- the EXR viewer
+# tev -- the EDR viewer
 #
 # Copyright (C) 2025 Thomas Müller <contact@tom94.net>
 #

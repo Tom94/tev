@@ -1,5 +1,5 @@
 /*
- * tev -- the EXR viewer
+ * tev -- the EDR viewer
  *
  * Copyright (C) 2025 Thomas Müller <contact@tom94.net>
  *
@@ -153,7 +153,7 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
 
 static int mainFunc(span<const string> arguments) {
     ArgumentParser parser{
-        "tev — The EXR Viewer\n"
+        "tev — The EDR Viewer\n"
         "version " TEV_VERSION
         "\n"
         "Inspection tool for images with high dynamic range",
@@ -385,7 +385,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (versionFlag) {
-        tlog::none() << "tev — The EXR Viewer\nversion " TEV_VERSION;
+        tlog::none() << "tev — The EDR Viewer\nversion " TEV_VERSION;
         return 0;
     }
 

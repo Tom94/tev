@@ -1,5 +1,5 @@
 /*
- * tev -- the EXR viewer
+ * tev -- the EDR viewer
  *
  * Copyright (C) 2025 Thomas Müller <contact@tom94.net>
  *
@@ -205,7 +205,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
 
     addSpacer(about, 5);
 
-    addText(about, "tev — The EXR Viewer", "sans-bold", 46);
+    addText(about, "tev — The EDR Viewer", "sans-bold", 46);
     addText(about, "version " TEV_VERSION, "sans", 26);
 
     addSpacer(about, 20);
