@@ -51,17 +51,328 @@ ImageViewer::ImageViewer(
 ) :
     nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
 
-    // Make sure we correctly convert colors to the screen's primaries.
-    auto displayChroma = chromaFromWpPrimaries(this->display_primaries());
-    this->set_display_color_matrix(inverse(toMatrix3(chromaToRec709Matrix(displayChroma))));
+    // If nanogui wants to apply color management, we need to actually provide a shader that converts color spaces.
+    // nanogui only provides the necessary plumbing, defaulting to a passthrough shader that users need to actually implement.
+#if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
+    if (m_wants_color_management) {
+        mDitherMatrix = new Texture{
+            Texture::PixelFormat::R,
+            Texture::ComponentFormat::Float32,
+            Vector2i{nanogui::DITHER_MATRIX_SIZE},
+            Texture::InterpolationMode::Nearest,
+            Texture::InterpolationMode::Nearest,
+            Texture::WrapMode::Repeat,
+        };
 
-    auto tf = ituth273::fromWpTransfer(this->display_transfer_function());
+        const float ditherScale = has_float_buffer() ? 0.0f : (1.0f / (1u << bits_per_sample()));
+        auto ditherMatrix = nanogui::ditherMatrix(ditherScale);
+        mDitherMatrix->upload((uint8_t*)ditherMatrix.data());
+
+#if defined(NANOGUI_USE_OPENGL)
+        std::string preamble = "#version 110\n";
+#elif defined(NANOGUI_USE_GLES)
+        std::string preamble = "#version 100\nprecision highp float; precision highp sampler2D;\n";
+#endif
+        auto vertexShader = preamble + R"glsl(
+            uniform vec2 ditherScale;
+
+            attribute vec2 position;
+            varying vec2 imageUv;
+            varying vec2 ditherUv;
+
+            void main() {
+                vec2 pos = position * 0.5 + 0.5; // Convert from [-1, 1] to [0, 1]
+                imageUv = pos;
+                ditherUv = pos * ditherScale;
+
+                gl_Position = vec4(position, 1.0, 1.0);
+            }
+        )glsl";
+        auto fragmentShader = preamble + R"glsl(
+            varying vec2 imageUv;
+            varying vec2 ditherUv;
+
+            uniform sampler2D framebufferTexture;
+            uniform sampler2D ditherMatrix;
+
+            uniform float displaySDRLevel;
+            uniform int outTransferFunction;
+            uniform mat3 displayColorMatrix;
+            uniform bool clipToLdr;
+
+            #define CM_TRANSFER_FUNCTION_BT1886     1
+            #define CM_TRANSFER_FUNCTION_GAMMA22    2
+            #define CM_TRANSFER_FUNCTION_GAMMA28    3
+            #define CM_TRANSFER_FUNCTION_ST240      4
+            #define CM_TRANSFER_FUNCTION_EXT_LINEAR 5
+            #define CM_TRANSFER_FUNCTION_LOG_100    6
+            #define CM_TRANSFER_FUNCTION_LOG_316    7
+            #define CM_TRANSFER_FUNCTION_XVYCC      8
+            #define CM_TRANSFER_FUNCTION_SRGB       9
+            #define CM_TRANSFER_FUNCTION_EXT_SRGB   10
+            #define CM_TRANSFER_FUNCTION_ST2084_PQ  11
+            #define CM_TRANSFER_FUNCTION_ST428      12
+            #define CM_TRANSFER_FUNCTION_HLG        13
+
+            #define SRGB_POW 2.4
+            #define SRGB_CUT 0.0031308
+            #define SRGB_SCALE 12.92
+            #define SRGB_ALPHA 1.055
+
+            #define BT1886_POW (1.0 / 0.45)
+            #define BT1886_CUT 0.018053968510807
+            #define BT1886_SCALE 4.5
+            #define BT1886_ALPHA (1.0 + 5.5 * BT1886_CUT)
+
+            // See http://car.france3.mars.free.fr/HD/INA-%2026%20jan%2006/SMPTE%20normes%20et%20confs/s240m.pdf
+            #define ST240_POW (1.0 / 0.45)
+            #define ST240_CUT 0.0228
+            #define ST240_SCALE 4.0
+            #define ST240_ALPHA 1.1115
+
+            #define ST428_POW 2.6
+            #define ST428_SCALE (52.37 / 48.0)
+
+            #define PQ_M1 0.1593017578125
+            #define PQ_M2 78.84375
+            #define PQ_INV_M1 (1.0 / PQ_M1)
+            #define PQ_INV_M2 (1.0 / PQ_M2)
+            #define PQ_C1 0.8359375
+            #define PQ_C2 18.8515625
+            #define PQ_C3 18.6875
+
+            #define HLG_D_CUT (1.0 / 12.0)
+            #define HLG_E_CUT 0.5
+            #define HLG_A 0.17883277
+            #define HLG_B 0.28466892
+            #define HLG_C 0.55991073
+
+            #define SDR_MIN_LUMINANCE 0.2
+            #define SDR_MAX_LUMINANCE 80.0
+            #define HDR_MIN_LUMINANCE 0.005
+            #define HDR_MAX_LUMINANCE 10000.0
+            #define HLG_MAX_LUMINANCE 1000.0
+
+            #define M_E 2.718281828459045
+
+            vec3 mixb(vec3 a, vec3 b, bvec3 mask) {
+                return mix(a, b, vec3(mask));
+            }
+
+            // The primary source for these transfer functions is https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.1361-0-199802-W!!PDF-E.pdf
+            // Outputs are assumed to have 1 == SDR White which is different for each transfer function.
+            vec3 tfInvPQ(vec3 color) {
+                vec3 E = pow(max(color.rgb, vec3(0.0)), vec3(PQ_INV_M2));
+                return pow(
+                    (max(E - PQ_C1, vec3(0.0))) / max(PQ_C2 - PQ_C3 * E, vec3(1e-5)),
+                    vec3(PQ_INV_M1)
+                ) * 10000.0 / 203.0;
+            }
+
+            vec3 tfInvHLG(vec3 color) {
+                bvec3 isLow = lessThanEqual(color.rgb, vec3(HLG_E_CUT));
+                vec3 lo = color.rgb * color.rgb / 3.0;
+                vec3 hi = (exp((color.rgb - HLG_C) / HLG_A) + HLG_B) / 12.0;
+                return mixb(hi, lo, isLow) * 1000.0 / 203.0;
+            }
+
+            // Many transfer functions (including sRGB) follow the same pattern: a linear
+            // segment for small values and a power function for larger values. The
+            // following function implements this pattern from which sRGB, BT.1886, and
+            // others can be derived by plugging in the right constants.
+            vec3 tfInvLinPow(vec3 color, float gamma, float thres, float scale, float alpha) {
+                bvec3 isLow = lessThanEqual(color.rgb, vec3(thres * scale));
+                vec3 lo = color.rgb / scale;
+                vec3 hi = pow((color.rgb + alpha - 1.0) / alpha, vec3(gamma));
+                return mixb(hi, lo, isLow);
+            }
+
+            vec3 tfInvSRGB(vec3 color) {
+                return tfInvLinPow(color, SRGB_POW, SRGB_CUT, SRGB_SCALE, SRGB_ALPHA);
+            }
+
+            vec3 tfInvExtSRGB(vec3 color) {
+                // EXT sRGB is the sRGB transfer function mirrored around 0.
+                return sign(color) * tfInvSRGB(abs(color));
+            }
+
+            vec3 tfInvBT1886(vec3 color) {
+                return tfInvLinPow(color, BT1886_POW, BT1886_CUT, BT1886_SCALE, BT1886_ALPHA);
+            }
+
+            vec3 tfInvXVYCC(vec3 color) {
+                // The inverse transfer function for XVYCC is the BT1886 transfer function mirrored around 0,
+                // same as what EXT sRGB is to sRGB.
+                return sign(color) * tfInvBT1886(abs(color));
+            }
+
+            vec3 tfInvST240(vec3 color) {
+                return tfInvLinPow(color, ST240_POW, ST240_CUT, ST240_SCALE, ST240_ALPHA);
+            }
+
+            // Forward transfer functions corresponding to the inverse functions above.
+            // Inputs are assumed to have 1 == 80 nits!
+            vec3 tfPQ(vec3 color) {
+                color *= 80.0 / 10000.0;
+                vec3 E = pow(max(color.rgb, vec3(0.0)), vec3(PQ_M1));
+                return pow(
+                    (vec3(PQ_C1) + PQ_C2 * E) / max(vec3(1.0) + PQ_C3 * E, vec3(1e-5)),
+                    vec3(PQ_M2)
+                );
+            }
+
+            vec3 tfHLG(vec3 color) {
+                color *= 80.0 / 1000.0;
+                bvec3 isLow = lessThanEqual(color.rgb, vec3(HLG_D_CUT));
+                vec3 lo = sqrt(max(color.rgb, vec3(0.0)) * 3.0);
+                vec3 hi = HLG_A * log(max(12.0 * color.rgb - HLG_B, vec3(0.0001))) + HLG_C;
+                return mixb(hi, lo, isLow);
+            }
+
+            vec3 tfLinPow(vec3 color, float gamma, float thres, float scale, float alpha) {
+                bvec3 isLow = lessThanEqual(color.rgb, vec3(thres));
+                vec3 lo = color.rgb * scale;
+                vec3 hi = pow(color.rgb, vec3(1.0 / gamma)) * alpha - (alpha - 1.0);
+                return mixb(hi, lo, isLow);
+            }
+
+            vec3 tfSRGB(vec3 color) {
+                return tfLinPow(color, SRGB_POW, SRGB_CUT, SRGB_SCALE, SRGB_ALPHA);
+            }
+
+            vec3 tfExtSRGB(vec3 color) {
+                // EXT sRGB is the sRGB transfer function mirrored around 0.
+                return sign(color) * tfSRGB(abs(color));
+            }
+
+            vec3 tfBT1886(vec3 color) {
+                return tfLinPow(color, BT1886_POW, BT1886_CUT, BT1886_SCALE, BT1886_ALPHA);
+            }
+
+            vec3 tfXVYCC(vec3 color) {
+                // The transfer function for XVYCC is the BT1886 transfer function mirrored around 0,
+                // same as what EXT sRGB is to sRGB.
+                return sign(color) * tfBT1886(abs(color));
+            }
+
+            vec3 tfST240(vec3 color) {
+                return tfLinPow(color, ST240_POW, ST240_CUT, ST240_SCALE, ST240_ALPHA);
+            }
+
+            vec3 toLinearRGB(vec3 color, int tf) {
+                if (tf == CM_TRANSFER_FUNCTION_EXT_LINEAR) {
+                    return color;
+                } else if (tf == CM_TRANSFER_FUNCTION_ST2084_PQ) {
+                    return tfInvPQ(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_GAMMA22) {
+                    return pow(max(color, vec3(0.0)), vec3(2.2));
+                } else if (tf == CM_TRANSFER_FUNCTION_GAMMA28) {
+                    return pow(max(color, vec3(0.0)), vec3(2.8));
+                } else if (tf == CM_TRANSFER_FUNCTION_HLG) {
+                    return tfInvHLG(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_EXT_SRGB) {
+                    return tfInvExtSRGB(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_BT1886) {
+                    return tfInvBT1886(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_ST240) {
+                    return tfInvST240(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_LOG_100) {
+                    return mixb(exp((color - 1.0) * 2.0 * log(10.0)), vec3(0.0), lessThanEqual(color, vec3(0.0)));
+                } else if (tf == CM_TRANSFER_FUNCTION_LOG_316) {
+                    return mixb(exp((color - 1.0) * 2.5 * log(10.0)), vec3(0.0), lessThanEqual(color, vec3(0.0)));
+                } else if (tf == CM_TRANSFER_FUNCTION_XVYCC) {
+                    return tfInvXVYCC(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_ST428) {
+                    return pow(max(color, vec3(0.0)), vec3(ST428_POW)) * ST428_SCALE;
+                } else if (tf == CM_TRANSFER_FUNCTION_SRGB) {
+                    return tfInvSRGB(color);
+                } else {
+                    return tfInvSRGB(color);
+                }
+            }
+
+            vec3 fromLinearRGB(vec3 color, int tf) {
+                if (tf == CM_TRANSFER_FUNCTION_EXT_LINEAR) {
+                    return color;
+                } else if (tf == CM_TRANSFER_FUNCTION_ST2084_PQ) {
+                    return tfPQ(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_GAMMA22) {
+                    return pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
+                } else if (tf == CM_TRANSFER_FUNCTION_GAMMA28) {
+                    return pow(max(color, vec3(0.0)), vec3(1.0 / 2.8));
+                } else if (tf == CM_TRANSFER_FUNCTION_HLG) {
+                    return tfHLG(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_EXT_SRGB) {
+                    return tfExtSRGB(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_BT1886) {
+                    return tfBT1886(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_ST240) {
+                    return tfST240(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_LOG_100) {
+                    return mixb(1.0 + log(color) / log(10.0) / 2.0, vec3(0.0), lessThanEqual(color, vec3(0.01)));
+                } else if (tf == CM_TRANSFER_FUNCTION_LOG_316) {
+                    return mixb(1.0 + log(color) / log(10.0) / 2.5, vec3(0.0), lessThanEqual(color, vec3(sqrt(10.0) / 1000.0)));
+                } else if (tf == CM_TRANSFER_FUNCTION_XVYCC) {
+                    return tfXVYCC(color);
+                } else if (tf == CM_TRANSFER_FUNCTION_ST428) {
+                    return pow(max(color, vec3(0.0)) / ST428_SCALE, vec3(1.0 / ST428_POW));
+                } else if (tf == CM_TRANSFER_FUNCTION_SRGB) {
+                    return tfSRGB(color);
+                } else {
+                    return tfSRGB(color);
+                }
+            }
+
+            vec3 dither(vec3 color) {
+                return color + texture2D(ditherMatrix, fract(ditherUv)).r;
+            }
+
+            void main() {
+                vec4 color = texture2D(framebufferTexture, imageUv);
+                color = vec4(
+                    fromLinearRGB(
+                        displayColorMatrix * (toLinearRGB(color.rgb, CM_TRANSFER_FUNCTION_EXT_SRGB) * displaySDRLevel / 80.0),
+                        outTransferFunction
+                    ),
+                    color.a
+                );
+
+                color.rgb = dither(color.rgb);
+                if (clipToLdr) {
+                    color = clamp(color, vec4(0.0), vec4(1.0));
+                }
+
+                gl_FragColor = color;
+            }
+        )glsl";
+
+        try {
+            m_cm_shader = new Shader(nullptr, "color_management", vertexShader, fragmentShader);
+        } catch (const std::runtime_error& e) {
+            fprintf(stderr, "Error creating color management shader: %s\n", e.what());
+        }
+
+        uint32_t indices[3 * 2] = {0, 1, 2, 2, 3, 0};
+        float positions[2 * 4] = {-1.f, -1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
+
+        m_cm_shader->set_buffer("indices", VariableType::UInt32, {3 * 2}, indices);
+        m_cm_shader->set_buffer("position", VariableType::Float32, {4, 2}, positions);
+        m_cm_shader->set_texture("ditherMatrix", mDitherMatrix);
+
+        const auto displayChroma = chromaFromWpPrimaries(m_display_primaries);
+        mDisplayColorMatrix = inverse(toMatrix3(chromaToRec709Matrix(displayChroma)));
+        m_cm_shader->set_uniform("displayColorMatrix", mDisplayColorMatrix);
+    }
+#endif
+
+    auto tf = ituth273::fromWpTransfer(m_display_transfer_function);
     mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
 
-    tlog::info() << fmt::format("Obtained {} bit {} point frame buffer with primaries={} and transfer={}.{}",
+    tlog::info() << fmt::format(
+        "Obtained {} bit {} point frame buffer with primaries={} and transfer={}.{}",
         this->bits_per_sample(),
         m_float_buffer ? "float" : "fixed",
-        wpPrimariesToString(this->display_primaries()),
+        wpPrimariesToString(m_display_primaries),
         ituth273::toString(tf),
         mSupportsHdr ? " HDR display is supported." : " HDR is *not* supported."
     );
@@ -1056,6 +1367,18 @@ void ImageViewer::focusWindow() { glfwFocusWindow(m_glfw_window); }
 void ImageViewer::draw_contents() {
     if (!mInitialized) {
         return;
+    }
+
+    // Color management
+    if (m_cm_shader) {
+        m_cm_shader->set_uniform("displaySDRLevel", m_display_sdr_level);
+        m_cm_shader->set_uniform("outTransferFunction", m_display_transfer_function);
+        m_cm_shader->set_uniform("displayColorMatrix", mDisplayColorMatrix);
+
+        m_cm_shader->set_uniform("clipToLdr", !m_float_buffer);
+
+        m_cm_shader->set_uniform("ditherScale", (1.0f / DITHER_MATRIX_SIZE) * Vector2f(m_fbsize[0], m_fbsize[1]));
+        m_cm_shader->set_texture("ditherMatrix", mDitherMatrix);
     }
 
     // HACK HACK HACK: on Windows, when restoring a window from maximization, the old window size is restored _several times_, necessitating

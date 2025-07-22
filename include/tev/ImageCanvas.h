@@ -145,7 +145,6 @@ private:
     nanogui::Matrix3f textureToNanogui(const Image* image);
     nanogui::Matrix3f displayWindowToNanogui(const Image* image);
 
-    bool mSupportsHdr = false;
     float mPixelRatio = 1;
     float mExposure = 0;
     float mOffset = 0;

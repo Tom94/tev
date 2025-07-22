@@ -291,6 +291,10 @@ private:
 
     nanogui::Vector2i mMaxSize = {8192, 8192};
     bool mInitialized = false;
+
+    // Color management
+    nanogui::ref<nanogui::Texture> mDitherMatrix;
+    nanogui::Matrix3f mDisplayColorMatrix = nanogui::Matrix3f(1.0f);
 };
 
 } // namespace tev
