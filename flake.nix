@@ -41,6 +41,8 @@
             wayland
             wayland-protocols
             wayland-scanner
+            # Other tev dependencies
+            lcms2
           ];
 
         # Common build inputs shared between dev shell and build
