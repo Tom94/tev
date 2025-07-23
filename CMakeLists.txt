@@ -182,7 +182,7 @@ if (MSVC)
     list(APPEND TEV_SOURCES resources/windows/tev.manifest)
     list(APPEND TEV_SOURCES include/tev/imageio/DdsImageLoader.h src/imageio/DdsImageLoader.cpp)
 elseif (APPLE)
-    list(APPEND TEV_SOURCES resources/macos/icon.icns scripts/mac-run-tev.sh)
+    list(APPEND TEV_SOURCES resources/macos/icon.icns)
 endif()
 if (TEV_USE_LIBHEIF)
     list(APPEND TEV_SOURCES include/tev/imageio/HeifImageLoader.h src/imageio/HeifImageLoader.cpp)
@@ -197,7 +197,6 @@ add_executable(tev ${TEV_SOURCES})
 if (APPLE)
     set(RESOURCE_FILES
         resources/macos/icon.icns
-        scripts/mac-run-tev.sh
     )
 
     set_target_properties(tev PROPERTIES
@@ -292,8 +291,22 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 
 if (APPLE)
-    install(TARGETS tev BUNDLE DESTINATION "/Applications")
-    install(SCRIPT scripts/mac-post-install.cmake)
+    if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT OR CMAKE_INSTALL_PREFIX STREQUAL "")
+        set(CMAKE_INSTALL_PREFIX "" CACHE PATH "" FORCE)
+        install(CODE "
+execute_process(COMMAND rm -f /usr/local/bin/tev)
+execute_process(COMMAND ln -s /Applications/tev.app/Contents/MacOS/tev /usr/local/bin/tev)
+        ")
+    else()
+        install(CODE "
+execute_process(COMMAND mkdir -p \"${CMAKE_INSTALL_PREFIX}/bin\")
+execute_process(COMMAND rm -f \"${CMAKE_INSTALL_PREFIX}/bin/tev\")
+execute_process(COMMAND ln -s \"${CMAKE_INSTALL_PREFIX}/Applications/tev.app/Contents/MacOS/tev\" \"${CMAKE_INSTALL_PREFIX}/bin/tev\")
+        ")
+    endif()
+
+    install(TARGETS tev BUNDLE DESTINATION "${CMAKE_INSTALL_PREFIX}/Applications")
+
     set(CPACK_GENERATOR "DragNDrop")
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
