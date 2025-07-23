@@ -247,6 +247,7 @@ set(UHDR_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(UHDR_BUILD_TESTS OFF CACHE BOOL " " FORCE)
 set(UHDR_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(libultrahdr EXCLUDE_FROM_ALL)
+add_dependencies(core ${JPEGTURBO_TARGET_NAME})
 add_dependencies(uhdr ${JPEGTURBO_TARGET_NAME})
 
 # Compile libwebp
