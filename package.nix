@@ -1,7 +1,6 @@
 { lib
 , stdenv
 , cmake
-, darwin
 , fetchFromGitHub
 , lcms2
 , libGL
@@ -16,7 +15,6 @@
 , wrapGAppsHook3
 , xorg
 , zenity
-,
 }:
 
 stdenv.mkDerivation rec {
@@ -65,11 +63,6 @@ stdenv.mkDerivation rec {
       wayland-scanner
       libxkbcommon
       libffi
-    ]
-    ++ lib.optionals stdenv.isDarwin [
-      darwin.apple_sdk.frameworks.Cocoa
-      darwin.apple_sdk.frameworks.Metal
-      darwin.apple_sdk.frameworks.OpenGL
     ];
 
   dontWrapGApps = true; # We also need zenity (see below)
@@ -83,16 +76,18 @@ stdenv.mkDerivation rec {
     wrapProgram $out/bin/tev \
       "''${gappsWrapperArgs[@]}" \
       --prefix PATH ":" "${zenity}/bin" \
-      --prefix LD_LIBRARY_PATH ":" "${lib.makeLibraryPath [
-        wayland
-        libxkbcommon
-        libGL
-        xorg.libX11
-        xorg.libXcursor
-        xorg.libXi
-        xorg.libXinerama
-        xorg.libXrandr
-      ]}"
+      --prefix LD_LIBRARY_PATH ":" "${
+        lib.makeLibraryPath [
+          wayland
+          libxkbcommon
+          libGL
+          xorg.libX11
+          xorg.libXcursor
+          xorg.libXi
+          xorg.libXinerama
+          xorg.libXrandr
+        ]
+      }"
   '';
 
   env.CXXFLAGS = "-include cstdint";
