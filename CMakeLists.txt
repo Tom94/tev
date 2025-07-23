@@ -22,7 +22,7 @@ cmake_minimum_required(VERSION 3.13)
 project(
     tev
     VERSION 2.3
-    DESCRIPTION "High dynamic range (HDR) image comparison tool for graphics people. With an emphasis on OpenEXR images."
+    DESCRIPTION "High dynamic range (HDR) image viewer for people who care about colors."
     LANGUAGES C CXX
 )
 set(TEV_VERSION "${CMAKE_PROJECT_VERSION}")
@@ -284,8 +284,8 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
 endif()
 
 set(CPACK_PACKAGE_VENDOR "Tom94 (Thomas Müller)")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Image viewer and comparison tool for graphics people.")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://tom94.net")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "High dynamic range (HDR) image viewer for people who care about colors.")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/tom94/tev")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")

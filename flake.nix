@@ -10,100 +10,22 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-
-        # Extract version from CMakeLists.txt
-        version = with builtins;
-          let
-            cmakeContents = readFile ./CMakeLists.txt;
-            versionMatch = match ".*VERSION[[:space:]]+([^[:space:]]+).*" cmakeContents;
-          in
-          if versionMatch == null then throw "Could not find version in CMakeLists.txt"
-          else head versionMatch;
-
-        # Common dependencies shared between dev shell and build
-        commonDeps = with pkgs; [
-          # Other tev dependencies
-          lcms2
-        ] ++
-        (if stdenv.isDarwin then [
-          darwin.apple_sdk.frameworks.Cocoa
-          darwin.apple_sdk.frameworks.Metal
-          darwin.apple_sdk.frameworks.OpenGL
-        ] else [
-          libGL
-          # X11 libraries
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXi
-          xorg.libXinerama
-          xorg.libXrandr
-          # Wayland libraries
-          libxkbcommon
-          libffi
-          wayland
-          wayland-protocols
-          wayland-scanner
-        ]);
-
-        # Common build inputs shared between dev shell and build
-        commonBuildInputs = with pkgs; [
-          cmake
-          perl
-          pkg-config
-        ];
-
-        tev = pkgs.stdenv.mkDerivation {
-          pname = "tev";
-          inherit version;
-
-          src = ./.;
-
-          nativeBuildInputs = commonBuildInputs ++ (with pkgs; [ wrapGAppsHook ]);
-          buildInputs = commonDeps;
-
-          cmakeFlags = [
-            "-DCMAKE_BUILD_TYPE=Release"
-            "-DTEV_DEPLOY=ON"
-          ];
-
-          postFixup = pkgs.lib.optionalString (!pkgs.stdenv.isDarwin) ''
-            wrapProgram $out/bin/tev \
-              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath (with pkgs; [
-                wayland
-                libxkbcommon
-                libGL
-                xorg.libX11
-                xorg.libXcursor
-                xorg.libXi
-                xorg.libXinerama
-                xorg.libXrandr
-              ])}
-          '';
-
-          meta = with pkgs.lib; {
-            description = "High dynamic range (HDR) image comparison tool for graphics people";
-            homepage = "https://github.com/Tom94/tev";
-            license = licenses.gpl3;
-            platforms = platforms.unix;
-            maintainers = [ ];
-          };
-        };
+        package = pkgs.callPackage ./package.nix { };
       in
       {
         packages = {
-          default = tev;
-          tev = tev;
+          default = package;
+          tev = package;
         };
 
-        devShell = pkgs.mkShell {
-          buildInputs = commonDeps ++ commonBuildInputs ++ (with pkgs;
-            if stdenv.isDarwin then [ ] else [
-              gcc
-              gdb
-              binutils
-              mesa-demos # for glxinfo, eglinfo
-            ]
-          );
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [ package ];
+          buildInputs = with pkgs; if stdenv.isDarwin then [ ] else [
+            gcc
+            gdb
+            binutils
+            mesa-demos # for glxinfo, eglinfo
+          ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
             wayland
             libxkbcommon
@@ -111,7 +33,7 @@
         };
 
         apps.default = flake-utils.lib.mkApp {
-          drv = tev;
+          drv = package;
         };
       }
     );

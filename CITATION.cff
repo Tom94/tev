@@ -10,10 +10,10 @@ authors:
     family-names: Müller
 repository-code: 'https://github.com/Tom94/tev'
 abstract: >-
-  High dynamic range (HDR) image comparison tool for graphics people.
-  tev allows viewing images through various tonemapping operators and
-  inspecting the values of individual pixels. To compare images, tev
-  can rapidly flip between them and visualize various error metrics.
+  High dynamic range (HDR) image viewer for people who care about colors. It is
+  - Lightning fast: starts up instantly, loads hundreds of images in seconds.
+  - Accurate: understands color profiles and displays HDR.
+  - Versatile: supports many formats, histograms, pixel peeping, tonemaps, etc.
 keywords:
   - 'image, rendering, hdr, ldr, exr, openexr, comparison, screenshot'
 license: GPL-3.0-only
