@@ -65,7 +65,7 @@
           meta = with pkgs.lib; {
             description = "High dynamic range (HDR) image comparison tool for graphics people";
             homepage = "https://github.com/Tom94/tev";
-            license = licenses.bsd3;
+            license = licenses.gpl3;
             platforms = platforms.unix;
             maintainers = [ ];
           };
