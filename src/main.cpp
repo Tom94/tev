@@ -554,8 +554,7 @@ static int mainFunc(span<const string> arguments) {
     glfwSetOpenedFilenamesCallback([](const char* imageFile) { sImageViewer->imagesLoader().enqueue(toPath(imageFile), "", false); });
 #endif
 
-    // Do what the maximize flag tells us---if it exists---and maximize if we have images otherwise.
-    bool maximize = imageFiles;
+    bool maximize = false;
     if (maximizeFlagOn) {
         maximize = true;
     }
@@ -569,7 +568,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     nanogui::Vector2i size = {1024, 800};
-    if (imageFiles && !maximize) {
+    if (!maximize) {
         // Wait until the first image is loaded to determine the size of the window.
         while (imagesLoader->hasPendingLoads()) {
             if (auto sizeOpt = imagesLoader->firstImageSize()) {
