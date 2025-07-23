@@ -56,13 +56,27 @@
 
           src = ./.;
 
-          nativeBuildInputs = commonBuildInputs;
+          nativeBuildInputs = commonBuildInputs ++ (with pkgs; [ wrapGAppsHook ]);
           buildInputs = commonDeps;
 
           cmakeFlags = [
             "-DCMAKE_BUILD_TYPE=Release"
             "-DTEV_DEPLOY=ON"
           ];
+
+          postFixup = pkgs.lib.optionalString (!pkgs.stdenv.isDarwin) ''
+            wrapProgram $out/bin/tev \
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath (with pkgs; [
+                wayland
+                libxkbcommon
+                libGL
+                xorg.libX11
+                xorg.libXcursor
+                xorg.libXi
+                xorg.libXinerama
+                xorg.libXrandr
+              ])}
+          '';
 
           meta = with pkgs.lib; {
             description = "High dynamic range (HDR) image comparison tool for graphics people";
