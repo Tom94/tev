@@ -379,7 +379,7 @@ Task<void> toLinearSrgbPremul(
         TYPE_RGBA_FLT,
         // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
         // following rendering intent.
-        INTENT_RELATIVE_COLORIMETRIC,
+        INTENT_ABSOLUTE_COLORIMETRIC,
         alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
     );
 
