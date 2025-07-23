@@ -21,33 +21,35 @@
           else head versionMatch;
 
         # Common dependencies shared between dev shell and build
-        commonDeps = with pkgs;
-          if stdenv.isDarwin then [
-            darwin.apple_sdk.frameworks.Cocoa
-            darwin.apple_sdk.frameworks.OpenGL
-          ] else [
-            pkg-config
-            libGL
-            perl
-            # X11 libraries
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXi
-            xorg.libXinerama
-            xorg.libXrandr
-            # Wayland libraries
-            libxkbcommon
-            libffi
-            wayland
-            wayland-protocols
-            wayland-scanner
-            # Other tev dependencies
-            lcms2
-          ];
+        commonDeps = with pkgs; [
+          # Other tev dependencies
+          lcms2
+        ] ++
+        (if stdenv.isDarwin then [
+          darwin.apple_sdk.frameworks.Cocoa
+          darwin.apple_sdk.frameworks.Metal
+          darwin.apple_sdk.frameworks.OpenGL
+        ] else [
+          libGL
+          # X11 libraries
+          xorg.libX11
+          xorg.libXcursor
+          xorg.libXi
+          xorg.libXinerama
+          xorg.libXrandr
+          # Wayland libraries
+          libxkbcommon
+          libffi
+          wayland
+          wayland-protocols
+          wayland-scanner
+        ]);
 
         # Common build inputs shared between dev shell and build
         commonBuildInputs = with pkgs; [
           cmake
+          perl
+          pkg-config
         ];
 
         tev = pkgs.stdenv.mkDerivation {
