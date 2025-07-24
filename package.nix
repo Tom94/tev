@@ -19,7 +19,7 @@
 
 stdenv.mkDerivation rec {
   # Content to be used if in nixpkgs
-  # version = "2.3";
+  # version = "2.3.1";
   # src = fetchFromGitHub {
   #   owner = "Tom94";
   #   repo = "tev";
@@ -32,7 +32,7 @@ stdenv.mkDerivation rec {
   version = with builtins;
     let
       cmakeContents = readFile ./CMakeLists.txt;
-      versionMatch = match ".*VERSION[[:space:]]+([0-9]+\\.[0-9]+).*" cmakeContents;
+      versionMatch = match ".*VERSION[[:space:]]+([0-9]+\\.[0-9]+\\.[0-9]+).*" cmakeContents;
     in
     if versionMatch == null then throw "Could not find version in CMakeLists.txt"
     else head versionMatch;
