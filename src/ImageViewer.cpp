@@ -211,7 +211,7 @@ ImageViewer::ImageViewer(
             }
 
             // Forward transfer functions corresponding to the inverse functions above.
-            // Inputs are assumed to have 1 == 80 nits!
+            // Inputs are assumed to have 1 == 80 nits with a scale factor pre-applied to adjust for SDR white!
             vec3 tfPQ(vec3 color) {
                 color *= 80.0 / 10000.0;
                 vec3 E = pow(max(color.rgb, vec3(0.0)), vec3(PQ_M1));
@@ -1371,7 +1371,8 @@ void ImageViewer::draw_contents() {
 
     // Color management
     if (m_cm_shader) {
-        m_cm_shader->set_uniform("displaySDRLevel", m_display_sdr_level);
+        float displaySdrLevel = m_display_sdr_level_override ? m_display_sdr_level_override.value() : glfwGetWindowSdrWhiteLevel(m_glfw_window);
+        m_cm_shader->set_uniform("displaySDRLevel", displaySdrLevel);
         m_cm_shader->set_uniform("outTransferFunction", m_display_transfer_function);
         m_cm_shader->set_uniform("displayColorMatrix", mDisplayColorMatrix);
 
