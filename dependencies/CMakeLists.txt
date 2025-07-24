@@ -281,6 +281,12 @@ set(tiff-contrib OFF CACHE BOOL " " FORCE)
 set(tiff-docs OFF CACHE BOOL " " FORCE)
 set(tiff-deprecated OFF CACHE BOOL " " FORCE)
 set(tiff-install OFF CACHE BOOL " " FORCE)
+# Disable lzma, webp, and zstd support in libtiff as we don't need them.
+set(libdeflate OFF CACHE BOOL " " FORCE)
+set(jbig OFF CACHE BOOL " " FORCE)
+set(lerc OFF CACHE BOOL " " FORCE)
+set(lzma OFF CACHE BOOL " " FORCE)
+set(zstd OFF CACHE BOOL " " FORCE)
 set(HAVE_JPEGTURBO_DUAL_MODE_8_12 TRUE CACHE BOOL " " FORCE)
 add_subdirectory(libtiff EXCLUDE_FROM_ALL)
 
