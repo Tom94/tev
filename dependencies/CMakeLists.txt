@@ -270,6 +270,9 @@ set(WEBP_NEAR_LOSSLESS ON CACHE BOOL " " FORCE)
 set(WEBP_ENABLE_SWAP_16BIT_CSP ON CACHE BOOL " " FORCE)
 add_subdirectory(libwebp EXCLUDE_FROM_ALL)
 
+set(WebP_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libwebp/src)
+get_target_property(WebP_LIBRARY webpdecoder IMPORTED_LOCATION)
+
 # Compile libtiff
 set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(tiff-tools OFF CACHE BOOL " " FORCE)
