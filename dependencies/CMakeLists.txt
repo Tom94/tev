@@ -271,24 +271,11 @@ set(WEBP_ENABLE_SWAP_16BIT_CSP ON CACHE BOOL " " FORCE)
 add_subdirectory(libwebp EXCLUDE_FROM_ALL)
 
 set(WebP_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libwebp/src)
-get_target_property(WebP_LIBRARY webpdecoder IMPORTED_LOCATION)
-
-# Compile libtiff
-set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-set(tiff-tools OFF CACHE BOOL " " FORCE)
-set(tiff-tests OFF CACHE BOOL " " FORCE)
-set(tiff-contrib OFF CACHE BOOL " " FORCE)
-set(tiff-docs OFF CACHE BOOL " " FORCE)
-set(tiff-deprecated OFF CACHE BOOL " " FORCE)
-set(tiff-install OFF CACHE BOOL " " FORCE)
-# Disable lzma, webp, and zstd support in libtiff as we don't need them.
-set(libdeflate OFF CACHE BOOL " " FORCE)
-set(jbig OFF CACHE BOOL " " FORCE)
-set(lerc OFF CACHE BOOL " " FORCE)
-set(lzma OFF CACHE BOOL " " FORCE)
-set(zstd OFF CACHE BOOL " " FORCE)
-set(HAVE_JPEGTURBO_DUAL_MODE_8_12 TRUE CACHE BOOL " " FORCE)
-add_subdirectory(libtiff EXCLUDE_FROM_ALL)
+set(WebP_LIBRARY webpdecoder)
+add_library(webp_wrapper INTERFACE)
+target_link_libraries(webp_wrapper INTERFACE webpdecoder)
+target_include_directories(webp_wrapper INTERFACE ${WebP_INCLUDE_DIR})
+add_library(WebP::webp ALIAS webp_wrapper)
 
 # Compile OpenEXR
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
@@ -298,6 +285,13 @@ add_subdirectory(Imath)
 set(LIBDEFLATE_BUILD_SHARED_LIB OFF CACHE BOOL " " FORCE)
 set(LIBDEFLATE_BUILD_GZIP OFF CACHE BOOL " " FORCE)
 add_subdirectory(libdeflate EXCLUDE_FROM_ALL)
+
+set(Deflate_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libdeflate)
+set(Deflate_LIBRARY libdeflate_static)
+add_library(deflate_wrapper INTERFACE)
+target_link_libraries(deflate_wrapper INTERFACE libdeflate_static)
+target_include_directories(deflate_wrapper INTERFACE ${Deflate_INCLUDE_DIR})
+add_library(Deflate::Deflate ALIAS deflate_wrapper)
 
 set(OPENEXR_FORCE_INTERNAL_DEFLATE ON CACHE BOOL " " FORCE)
 set(EXR_DEFLATE_LIB libdeflate::libdeflate_static)
@@ -313,6 +307,22 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # Fix compilation on Linux when code security checks are enabled
     target_compile_definitions(OpenEXRCore PRIVATE _GNU_SOURCE)
 endif()
+
+# Compile libtiff
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(tiff-tools OFF CACHE BOOL " " FORCE)
+set(tiff-tests OFF CACHE BOOL " " FORCE)
+set(tiff-contrib OFF CACHE BOOL " " FORCE)
+set(tiff-docs OFF CACHE BOOL " " FORCE)
+set(tiff-deprecated OFF CACHE BOOL " " FORCE)
+set(tiff-install OFF CACHE BOOL " " FORCE)
+# Disable lzma, webp, and zstd support in libtiff as we don't need them.
+set(jbig OFF CACHE BOOL " " FORCE)
+set(lerc OFF CACHE BOOL " " FORCE)
+set(lzma OFF CACHE BOOL " " FORCE)
+set(zstd OFF CACHE BOOL " " FORCE)
+set(HAVE_JPEGTURBO_DUAL_MODE_8_12 TRUE CACHE BOOL " " FORCE)
+add_subdirectory(libtiff EXCLUDE_FROM_ALL)
 
 # Compile clip
 set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
