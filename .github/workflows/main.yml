@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
     env:
       build_dir: "build"
       config: "Release"
@@ -42,7 +42,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: Linux executable
+          name: Linux executable (${{ matrix.os }})
           path: ${{ env.build_dir }}/tev.appimage
 
   build_macos:
