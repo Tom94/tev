@@ -7,6 +7,7 @@
 , libGL
 , libffi
 , libxkbcommon
+, nasm
 , perl
 , pkg-config
 , wayland
@@ -55,6 +56,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     cmake
+    nasm
     perl
     pkg-config
     wrapGAppsHook3

@@ -121,7 +121,7 @@ All that is required for building __tev__ is [CMake](https://cmake.org/) and a C
 
 Most Linux distributions additionally require _xorg_, _wayland_, _gl_, and _zenity_. On Ubuntu/Debian simply call
 ```sh
-$ apt-get install cmake xorg-dev libglu1-mesa-dev zenity zlib1g-dev libwayland-dev wayland-protocols libxkbcommon-dev libffi-dev
+$ apt-get install cmake libffi-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev nasm wayland-protocols xorg-dev zenity zlib1g-dev
 ```
 
 Once all dependencies are installed, begin by cloning this repository and all its submodules using the following command:
