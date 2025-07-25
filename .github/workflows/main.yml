@@ -75,7 +75,14 @@ jobs:
 
   build_windows:
     name: Build on Windows
-    runs-on: windows-2022
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - windows-2022
+          # CMake is currently borked on the ARM runner, detecting AMD64. Disable for now.
+          # https://github.com/orgs/community/discussions/155713#discussioncomment-12991583
+          # - windows-11-arm
     env:
       build_dir: "build"
       config: "Release"
@@ -99,11 +106,11 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: Windows executable
+          name: Windows executable (${{ matrix.os }})
           path: ${{ env.build_dir }}/${{ env.config }}/tev.exe
       - name: Upload installer
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: Windows installer
+          name: Windows installer (${{ matrix.os }})
           path: ${{ env.build_dir }}/tev-installer.msi
