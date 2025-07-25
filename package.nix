@@ -1,10 +1,10 @@
 { lib
 , stdenv
 , cmake
+, darwin
 , fetchFromGitHub
 , lcms2
 , libGL
-, libX11
 , libffi
 , libxkbcommon
 , perl
@@ -15,17 +15,19 @@
 , wrapGAppsHook3
 , xorg
 , zenity
+,
 }:
 
 stdenv.mkDerivation rec {
-  # Content to be used if in nixpkgs
-  # version = "2.3.1";
+  pname = "tev";
+  # version = "2.3.2";
+
   # src = fetchFromGitHub {
   #   owner = "Tom94";
   #   repo = "tev";
-  #   rev = "v${version}";
+  #   tag = "v${version}";
   #   fetchSubmodules = true;
-  #   hash = "sha256-wEvFeY7b9Au8ltg7X8EaPuifaDKKYOuDyhXK6gGf7Wo=";
+  #   hash = "sha256-RRGE/gEWaSwvbytmtR5fLAke8QqIeuYJQzwC++Z1bgc=";
   # };
 
   # Extract version from CMakeLists.txt
@@ -39,7 +41,17 @@ stdenv.mkDerivation rec {
 
   src = ./.;
 
-  pname = "tev";
+  postPatch =
+    let
+      waylandLibPath = lib.makeLibraryPath [ wayland ];
+    in
+    ''
+      substituteInPlace ./dependencies/nanogui/ext/glfw/src/wl_init.c \
+        --replace-fail "libwayland-client.so" "${waylandLibPath}/libwayland-client.so" \
+        --replace-fail "libwayland-cursor.so" "${waylandLibPath}/libwayland-cursor.so" \
+        --replace-fail "libwayland-egl.so" "${waylandLibPath}/libwayland-egl.so" \
+        --replace-fail "libxkbcommon.so" "${lib.makeLibraryPath [ libxkbcommon ]}/libxkbcommon.so"
+    '';
 
   nativeBuildInputs = [
     cmake
@@ -48,22 +60,21 @@ stdenv.mkDerivation rec {
     wrapGAppsHook3
   ];
 
-  buildInputs =
-    [
-      lcms2
-    ]
-    ++ lib.optionals stdenv.isLinux [
-      libX11
-      xorg.libXrandr
-      xorg.libXinerama
-      xorg.libXcursor
-      xorg.libXi
-      wayland
-      wayland-protocols
-      wayland-scanner
-      libxkbcommon
-      libffi
-    ];
+  buildInputs = [
+    lcms2
+  ]
+  ++ lib.optionals stdenv.isLinux [
+    libffi
+    libxkbcommon
+    wayland
+    wayland-protocols
+    wayland-scanner
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXi
+    xorg.libXinerama
+    xorg.libXrandr
+  ];
 
   dontWrapGApps = true; # We also need zenity (see below)
 
@@ -75,19 +86,7 @@ stdenv.mkDerivation rec {
   postInstall = lib.optionalString stdenv.isLinux ''
     wrapProgram $out/bin/tev \
       "''${gappsWrapperArgs[@]}" \
-      --prefix PATH ":" "${zenity}/bin" \
-      --prefix LD_LIBRARY_PATH ":" "${
-        lib.makeLibraryPath [
-          wayland
-          libxkbcommon
-          libGL
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXi
-          xorg.libXinerama
-          xorg.libXrandr
-        ]
-      }"
+      --prefix PATH ":" "${zenity}/bin"
   '';
 
   env.CXXFLAGS = "-include cstdint";
@@ -104,7 +103,7 @@ stdenv.mkDerivation rec {
     changelog = "https://github.com/Tom94/tev/releases/tag/v${version}";
     homepage = "https://github.com/Tom94/tev";
     license = lib.licenses.gpl3;
-    maintainers = with lib.maintainers; [ ];
+    maintainers = with lib.maintainers; [ tom94 ];
     platforms = lib.platforms.unix;
   };
 }
