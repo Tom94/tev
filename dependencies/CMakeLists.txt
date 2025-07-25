@@ -164,13 +164,31 @@ if (TEV_SUPPORT_AVIF)
     endif()
     set(AOM_LIBRARY ${AOM_LIB_PREFIX}${AOM_LIB})
 
+    find_program(NASM_EXECUTABLE nasm)
+    if (NASM_EXECUTABLE)
+        message(STATUS "NASM found, some decoders will be faster")
+    endif()
+
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+        set(AOM_TARGET_CPU "arm64")
+    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|ARM)$")
+        set(AOM_TARGET_CPU "arm")
+    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$" AND NASM_EXECUTABLE)
+        set(AOM_TARGET_CPU "x86_64")
+    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86|i386|i486|i586|i686|x86)$" AND NASM_EXECUTABLE)
+        set(AOM_TARGET_CPU "x86")
+    else()
+        set(AOM_TARGET_CPU "generic")
+    endif()
+    message(STATUS "AOM target CPU: ${AOM_TARGET_CPU}, CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
+
     ExternalProject_Add(${AOM_TARGET_NAME}
         PREFIX ${AOM_PREFIX_DIR}
         SOURCE_DIR ${AOM_SOURCE_DIR}
         BINARY_DIR ${AOM_BINARY_DIR}
         BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target aom
         CMAKE_ARGS
-            -DAOM_TARGET_CPU=generic
+            -DAOM_TARGET_CPU=${AOM_TARGET_CPU}
             -DBUILD_SHARED_LIBS=0
             -DENABLE_DOCS=0
             -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
