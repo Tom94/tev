@@ -68,11 +68,11 @@ ImageViewer::ImageViewer(
         auto ditherMatrix = nanogui::ditherMatrix(ditherScale);
         mDitherMatrix->upload((uint8_t*)ditherMatrix.data());
 
-#if defined(NANOGUI_USE_OPENGL)
+#    if defined(NANOGUI_USE_OPENGL)
         std::string preamble = "#version 110\n";
-#elif defined(NANOGUI_USE_GLES)
+#    elif defined(NANOGUI_USE_GLES)
         std::string preamble = "#version 100\nprecision highp float; precision highp sampler2D;\n";
-#endif
+#    endif
         auto vertexShader = preamble + R"glsl(
             uniform vec2 ditherScale;
 
@@ -95,10 +95,13 @@ ImageViewer::ImageViewer(
             uniform sampler2D framebufferTexture;
             uniform sampler2D ditherMatrix;
 
-            uniform float displaySDRLevel;
+            uniform float displaySdrWhiteLevel;
+            uniform float minLuminance;
+            uniform float maxLuminance;
+
             uniform int outTransferFunction;
             uniform mat3 displayColorMatrix;
-            uniform bool clipToLdr;
+            uniform bool clipToUnitInterval;
 
             #define CM_TRANSFER_FUNCTION_BT1886     1
             #define CM_TRANSFER_FUNCTION_GAMMA22    2
@@ -147,12 +150,6 @@ ImageViewer::ImageViewer(
             #define HLG_B 0.28466892
             #define HLG_C 0.55991073
 
-            #define SDR_MIN_LUMINANCE 0.2
-            #define SDR_MAX_LUMINANCE 80.0
-            #define HDR_MIN_LUMINANCE 0.005
-            #define HDR_MAX_LUMINANCE 10000.0
-            #define HLG_MAX_LUMINANCE 1000.0
-
             #define M_E 2.718281828459045
 
             vec3 mixb(vec3 a, vec3 b, bvec3 mask) {
@@ -166,14 +163,14 @@ ImageViewer::ImageViewer(
                 return pow(
                     (max(E - PQ_C1, vec3(0.0))) / max(PQ_C2 - PQ_C3 * E, vec3(1e-5)),
                     vec3(PQ_INV_M1)
-                ) * 10000.0 / 203.0;
+                );
             }
 
             vec3 tfInvHLG(vec3 color) {
                 bvec3 isLow = lessThanEqual(color.rgb, vec3(HLG_E_CUT));
                 vec3 lo = color.rgb * color.rgb / 3.0;
                 vec3 hi = (exp((color.rgb - HLG_C) / HLG_A) + HLG_B) / 12.0;
-                return mixb(hi, lo, isLow) * 1000.0 / 203.0;
+                return mixb(hi, lo, isLow);
             }
 
             // Many transfer functions (including sRGB) follow the same pattern: a linear
@@ -213,7 +210,6 @@ ImageViewer::ImageViewer(
             // Forward transfer functions corresponding to the inverse functions above.
             // Inputs are assumed to have 1 == 80 nits with a scale factor pre-applied to adjust for SDR white!
             vec3 tfPQ(vec3 color) {
-                color *= 80.0 / 10000.0;
                 vec3 E = pow(max(color.rgb, vec3(0.0)), vec3(PQ_M1));
                 return pow(
                     (vec3(PQ_C1) + PQ_C2 * E) / max(vec3(1.0) + PQ_C3 * E, vec3(1e-5)),
@@ -222,7 +218,6 @@ ImageViewer::ImageViewer(
             }
 
             vec3 tfHLG(vec3 color) {
-                color *= 80.0 / 1000.0;
                 bvec3 isLow = lessThanEqual(color.rgb, vec3(HLG_D_CUT));
                 vec3 lo = sqrt(max(color.rgb, vec3(0.0)) * 3.0);
                 vec3 hi = HLG_A * log(max(12.0 * color.rgb - HLG_B, vec3(0.0001))) + HLG_C;
@@ -323,22 +318,38 @@ ImageViewer::ImageViewer(
                 }
             }
 
+            float transferWhiteLevel(int tf) {
+                if (tf == CM_TRANSFER_FUNCTION_ST2084_PQ) {
+                    return 10000.0;
+                } else if (tf == CM_TRANSFER_FUNCTION_HLG) {
+                    return 1000.0;
+                } else if (tf == CM_TRANSFER_FUNCTION_BT1886) {
+                    return 100.0;
+                } else {
+                    return 80.0;
+                }
+            }
+
             vec3 dither(vec3 color) {
                 return color + texture2D(ditherMatrix, fract(ditherUv)).r;
             }
 
             void main() {
                 vec4 color = texture2D(framebufferTexture, imageUv);
-                color = vec4(
-                    fromLinearRGB(
-                        displayColorMatrix * (toLinearRGB(color.rgb, CM_TRANSFER_FUNCTION_EXT_SRGB) * displaySDRLevel / 80.0),
-                        outTransferFunction
-                    ),
-                    color.a
-                );
 
-                color.rgb = dither(color.rgb);
-                if (clipToLdr) {
+                // tev handles colors in linear sRGB with a scale that assumes SDR white corresponds to a value of 1. Hence, to convert to
+                // absolute nits in the display's color space, we need to multiply by the SDR white level of the display, as well as its
+                // color transform.
+                vec3 nits = displayColorMatrix * (displaySdrWhiteLevel * toLinearRGB(color.rgb, CM_TRANSFER_FUNCTION_EXT_SRGB));
+
+                // Some displays perform strange tonemapping when provided with values outside of their luminance range. Make sure we don't
+                // let this happen -- we strongly prefer hard clipping because we want the displayable colors to be preserved.
+                if (maxLuminance > 0.0) {
+                    nits = clamp(nits, vec3(minLuminance), vec3(maxLuminance));
+                }
+
+                color.rgb = dither(fromLinearRGB(nits / transferWhiteLevel(outTransferFunction), outTransferFunction));
+                if (clipToUnitInterval) {
                     color = clamp(color, vec4(0.0), vec4(1.0));
                 }
 
@@ -348,9 +359,7 @@ ImageViewer::ImageViewer(
 
         try {
             m_cm_shader = new Shader(nullptr, "color_management", vertexShader, fragmentShader);
-        } catch (const std::runtime_error& e) {
-            fprintf(stderr, "Error creating color management shader: %s\n", e.what());
-        }
+        } catch (const std::runtime_error& e) { fprintf(stderr, "Error creating color management shader: %s\n", e.what()); }
 
         uint32_t indices[3 * 2] = {0, 1, 2, 2, 3, 0};
         float positions[2 * 4] = {-1.f, -1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
@@ -358,21 +367,17 @@ ImageViewer::ImageViewer(
         m_cm_shader->set_buffer("indices", VariableType::UInt32, {3 * 2}, indices);
         m_cm_shader->set_buffer("position", VariableType::Float32, {4, 2}, positions);
         m_cm_shader->set_texture("ditherMatrix", mDitherMatrix);
-
-        const auto displayChroma = chromaFromWpPrimaries(m_display_primaries);
-        mDisplayColorMatrix = inverse(toMatrix3(chromaToRec709Matrix(displayChroma)));
-        m_cm_shader->set_uniform("displayColorMatrix", mDisplayColorMatrix);
     }
 #endif
 
-    auto tf = ituth273::fromWpTransfer(m_display_transfer_function);
+    auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
     mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
 
     tlog::info() << fmt::format(
         "Obtained {} bit {} point frame buffer with primaries={} and transfer={}.{}",
         this->bits_per_sample(),
         m_float_buffer ? "float" : "fixed",
-        wpPrimariesToString(m_display_primaries),
+        wpPrimariesToString(glfwGetWindowPrimaries(m_glfw_window)),
         ituth273::toString(tf),
         mSupportsHdr ? " HDR display is supported." : " HDR is *not* supported."
     );
@@ -1371,12 +1376,19 @@ void ImageViewer::draw_contents() {
 
     // Color management
     if (m_cm_shader) {
-        float displaySdrLevel = m_display_sdr_level_override ? m_display_sdr_level_override.value() : glfwGetWindowSdrWhiteLevel(m_glfw_window);
-        m_cm_shader->set_uniform("displaySDRLevel", displaySdrLevel);
-        m_cm_shader->set_uniform("outTransferFunction", m_display_transfer_function);
-        m_cm_shader->set_uniform("displayColorMatrix", mDisplayColorMatrix);
+        float displaySdrWhiteLevel = m_display_sdr_white_level_override ? m_display_sdr_white_level_override.value() :
+                                                                          glfwGetWindowSdrWhiteLevel(m_glfw_window);
+        m_cm_shader->set_uniform("displaySdrWhiteLevel", displaySdrWhiteLevel);
+        m_cm_shader->set_uniform("outTransferFunction", (int)glfwGetWindowTransfer(m_glfw_window));
 
-        m_cm_shader->set_uniform("clipToLdr", !m_float_buffer);
+        const auto displayChroma = chromaFromWpPrimaries(glfwGetWindowPrimaries(m_glfw_window));
+        const auto displayColorMatrix = inverse(toMatrix3(chromaToRec709Matrix(displayChroma)));
+        m_cm_shader->set_uniform("displayColorMatrix", displayColorMatrix);
+
+        m_cm_shader->set_uniform("minLuminance", glfwGetWindowMinLuminance(m_glfw_window));
+        m_cm_shader->set_uniform("maxLuminance", glfwGetWindowMaxLuminance(m_glfw_window));
+
+        m_cm_shader->set_uniform("clipToUnitInterval", !m_float_buffer);
 
         m_cm_shader->set_uniform("ditherScale", (1.0f / DITHER_MATRIX_SIZE) * Vector2f(m_fbsize[0], m_fbsize[1]));
         m_cm_shader->set_texture("ditherMatrix", mDitherMatrix);

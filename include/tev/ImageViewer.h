@@ -294,7 +294,6 @@ private:
 
     // Color management
     nanogui::ref<nanogui::Texture> mDitherMatrix;
-    nanogui::Matrix3f mDisplayColorMatrix = nanogui::Matrix3f(1.0f);
 };
 
 } // namespace tev
