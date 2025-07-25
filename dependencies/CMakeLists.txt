@@ -62,107 +62,6 @@ if (WIN32)
     add_subdirectory(DirectXTex)
 endif()
 
-# Compile aom (dependency of libheif, which follows)
-if (TEV_SUPPORT_AVIF)
-    set(AOM_TARGET_NAME aom)
-    set(AOM_PREFIX_DIR ${CMAKE_CURRENT_BINARY_DIR}/${AOM_TARGET_NAME})
-    set(AOM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/aom)
-    set(AOM_BINARY_DIR ${AOM_PREFIX_DIR}/src/${AOM_TARGET_NAME}-build)
-    set(AOM_INCLUDE_DIR ${AOM_SOURCE_DIR})
-    set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX})
-    if(IS_MULTI)
-        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/$<CONFIG>/)
-    else()
-        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/)
-    endif()
-    set(AOM_LIBRARY ${AOM_LIB_PREFIX}${AOM_LIB})
-
-    ExternalProject_Add(${AOM_TARGET_NAME}
-        PREFIX ${AOM_PREFIX_DIR}
-        SOURCE_DIR ${AOM_SOURCE_DIR}
-        BINARY_DIR ${AOM_BINARY_DIR}
-        BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target aom
-        CMAKE_ARGS
-            -DAOM_TARGET_CPU=generic
-            -DBUILD_SHARED_LIBS=0
-            -DENABLE_DOCS=0
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
-            -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
-        BUILD_BYPRODUCTS ${AOM_LIBRARY}
-        INSTALL_COMMAND ""
-    )
-endif()
-
-# Compile libde265 (dependency of libheif, which follows)
-if (TEV_SUPPORT_HEIC)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(ENABLE_SDL OFF CACHE BOOL " " FORCE)
-    add_subdirectory(libde265 EXCLUDE_FROM_ALL)
-
-    set(LIBDE265_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libde265" CACHE PATH " " FORCE)
-    set(LIBDE265_LIBRARY de265)
-endif()
-
-# Compile JPEG XL library
-if (TEV_SUPPORT_JXL)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_FUZZERS OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_VIEWERS OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_TOOLS OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_EXAMPLES OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_BENCHMARK OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_PLUGINS OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_SKCMS OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL " " FORCE)
-    set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL " " FORCE)
-
-    add_subdirectory(libjxl EXCLUDE_FROM_ALL)
-endif()
-
-# Compile libheif
-if (TEV_USE_LIBHEIF)
-    # General build config
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
-    set(WITH_EXAMPLES OFF CACHE BOOL " " FORCE)
-    set(WITH_FUZZERS OFF CACHE BOOL " " FORCE)
-    set(WITH_GDK_PIXBUF OFF CACHE BOOL " " FORCE)
-    set(WITH_INSTALL OFF CACHE BOOL " " FORCE)
-
-    # Codecs
-    set(WITH_LIBDE265 ${TEV_SUPPORT_HEIC})
-    set(WITH_X265 OFF CACHE BOOL " " FORCE)
-    set(WITH_OpenH264_ENCODER OFF CACHE BOOL " " FORCE)
-    set(WITH_OpenH264_DECODER OFF CACHE BOOL " " FORCE)
-
-    set(WITH_AOM_ENCODER OFF CACHE BOOL " " FORCE)
-    set(WITH_AOM_DECODER ${TEV_SUPPORT_AVIF} CACHE BOOL " " FORCE)
-
-    # TODO: Also consider adding JPEG2000 support via libheif.
-
-    # libsharpyuv is not needed for us, because we're not interested in converting from RGB to YUV. tev is primarily an image viewer that
-    # goes from YUV to RGB upon loading images, where libsharpyuv does nothing. See https://www.ctrl.blog/entry/webp-sharp-yuv.html for more
-    # info.
-    set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
-
-    add_subdirectory(libheif EXCLUDE_FROM_ALL)
-    target_include_directories(heif INTERFACE
-        ${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api
-        ${CMAKE_CURRENT_BINARY_DIR}/libheif
-    )
-
-    if (TEV_SUPPORT_AVIF)
-        add_dependencies(heif ${AOM_TARGET_NAME})
-        target_include_directories(heif PRIVATE ${AOM_BINARY_DIR})
-    endif()
-
-    if (TEV_SUPPORT_HEIC)
-        target_include_directories(heif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/libde265)
-    endif()
-endif()
-
 # Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
 # comes with lcms2.
 file(GLOB LCMS_SRCS
@@ -249,6 +148,110 @@ set(UHDR_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
 add_subdirectory(libultrahdr EXCLUDE_FROM_ALL)
 add_dependencies(core ${JPEGTURBO_TARGET_NAME})
 add_dependencies(uhdr ${JPEGTURBO_TARGET_NAME})
+
+# Compile aom (dependency of libheif, which follows)
+if (TEV_SUPPORT_AVIF)
+    set(AOM_TARGET_NAME aom)
+    set(AOM_PREFIX_DIR ${CMAKE_CURRENT_BINARY_DIR}/${AOM_TARGET_NAME})
+    set(AOM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/aom)
+    set(AOM_BINARY_DIR ${AOM_PREFIX_DIR}/src/${AOM_TARGET_NAME}-build)
+    set(AOM_INCLUDE_DIR ${AOM_SOURCE_DIR})
+    set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX})
+    if(IS_MULTI)
+        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/$<CONFIG>/)
+    else()
+        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/)
+    endif()
+    set(AOM_LIBRARY ${AOM_LIB_PREFIX}${AOM_LIB})
+
+    ExternalProject_Add(${AOM_TARGET_NAME}
+        PREFIX ${AOM_PREFIX_DIR}
+        SOURCE_DIR ${AOM_SOURCE_DIR}
+        BINARY_DIR ${AOM_BINARY_DIR}
+        BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target aom
+        CMAKE_ARGS
+            -DAOM_TARGET_CPU=generic
+            -DBUILD_SHARED_LIBS=0
+            -DENABLE_DOCS=0
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
+            -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
+        BUILD_BYPRODUCTS ${AOM_LIBRARY}
+        INSTALL_COMMAND ""
+    )
+endif()
+
+# Compile libde265 (dependency of libheif, which follows)
+if (TEV_SUPPORT_HEIC)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(ENABLE_SDL OFF CACHE BOOL " " FORCE)
+    add_subdirectory(libde265 EXCLUDE_FROM_ALL)
+
+    set(LIBDE265_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libde265" CACHE PATH " " FORCE)
+    set(LIBDE265_LIBRARY de265)
+endif()
+
+# Compile JPEG XL library
+if (TEV_SUPPORT_JXL)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_FUZZERS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_VIEWERS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_TOOLS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_EXAMPLES OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_BENCHMARK OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_PLUGINS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_SKCMS OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL " " FORCE)
+
+    add_subdirectory(libjxl EXCLUDE_FROM_ALL)
+endif()
+
+# Compile libheif
+if (TEV_USE_LIBHEIF)
+    # General build config
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
+    set(WITH_EXAMPLES OFF CACHE BOOL " " FORCE)
+    set(WITH_FUZZERS OFF CACHE BOOL " " FORCE)
+    set(WITH_GDK_PIXBUF OFF CACHE BOOL " " FORCE)
+    set(WITH_INSTALL OFF CACHE BOOL " " FORCE)
+
+    # Codecs
+    set(WITH_LIBDE265 ${TEV_SUPPORT_HEIC})
+    set(WITH_X265 OFF CACHE BOOL " " FORCE)
+    set(WITH_OpenH264_ENCODER OFF CACHE BOOL " " FORCE)
+    set(WITH_OpenH264_DECODER OFF CACHE BOOL " " FORCE)
+
+    set(WITH_AOM_ENCODER OFF CACHE BOOL " " FORCE)
+    set(WITH_AOM_DECODER ${TEV_SUPPORT_AVIF} CACHE BOOL " " FORCE)
+
+    set(WITH_JPEG_DECODER ON CACHE BOOL " " FORCE)
+
+    # libsharpyuv is not needed for us, because we're not interested in converting from RGB to YUV. tev is primarily an image viewer that
+    # goes from YUV to RGB upon loading images, where libsharpyuv does nothing. See https://www.ctrl.blog/entry/webp-sharp-yuv.html for more
+    # info.
+    set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
+
+    add_subdirectory(libheif EXCLUDE_FROM_ALL)
+    target_include_directories(heif INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api
+        ${CMAKE_CURRENT_BINARY_DIR}/libheif
+    )
+
+    add_dependencies(heif ${JPEGTURBO_TARGET_NAME})
+    target_include_directories(heif PRIVATE "${JPEG_INCLUDE_DIRS}")
+
+    if (TEV_SUPPORT_AVIF)
+        add_dependencies(heif ${AOM_TARGET_NAME})
+        target_include_directories(heif PRIVATE ${AOM_BINARY_DIR})
+    endif()
+
+    if (TEV_SUPPORT_HEIC)
+        target_include_directories(heif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/libde265)
+    endif()
+endif()
 
 # Compile libwebp
 set(WEBP_LINK_STATIC ON CACHE BOOL " " FORCE)
