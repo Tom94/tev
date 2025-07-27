@@ -42,10 +42,6 @@
 	path = dependencies/fmt
 	url = https://github.com/fmtlib/fmt
 	shallow = true
-[submodule "scripts/create-dmg"]
-	path = scripts/create-dmg
-	url = https://github.com/create-dmg/create-dmg
-	shallow = true
 [submodule "dependencies/libdeflate"]
 	path = dependencies/libdeflate
 	url = https://github.com/ebiggers/libdeflate
