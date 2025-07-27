@@ -2257,15 +2257,26 @@ void ImageViewer::saveImageDialog() {
     focusWindow();
 }
 
+bool checkCopyPasteCommand(bool copy) {
+    string_view command = glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip" : (copy ? "wl-copy" : "wl-paste");
+    string_view copyPackage = glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip" : "wl-clipboard";
+
+    if (!commandExists(command)) {
+        tlog::error() << fmt::format("{} command not found. Install {} to copy to clipboard.", command, copyPackage);
+        return false;
+    }
+
+    return true;
+}
+
 bool ImageViewer::copyImageCanvasToClipboard() const {
     auto imageSize = mImageCanvas->imageDataSize();
     if (imageSize.x() == 0 || imageSize.y() == 0) {
         return false;
     }
 
-    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-        if (!commandExists("wl-copy")) {
-            tlog::error() << "wl-copy command not found. Install wl-clipboard to copy to clipboard.";
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
+        if (!checkCopyPasteCommand(true)) {
             return false;
         }
 
@@ -2281,7 +2292,10 @@ bool ImageViewer::copyImageCanvasToClipboard() const {
         }
 
         try {
-            execw("wl-copy --type image/png", pngData.str());
+            execw(
+                glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -selection clipboard -i -t image/png" : "wl-copy --type image/png",
+                pngData.str()
+            );
         } catch (const runtime_error& e) {
             tlog::error() << fmt::format("Failed to copy image data to clipboard: {}", e.what());
             return true;
@@ -2321,14 +2335,16 @@ bool ImageViewer::copyImageNameToClipboard() const {
         return false;
     }
 
-    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-        if (!commandExists("wl-copy")) {
-            tlog::error() << "wl-copy command not found. Install wl-clipboard to copy to clipboard.";
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
+        if (!checkCopyPasteCommand(true)) {
             return false;
         }
 
         try {
-            execw("wl-copy --type text/plain", mCurrentImage->name());
+            execw(
+                glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -selection clipboard -i -t text/plain" : "wl-copy --type text/plain",
+                mCurrentImage->name()
+            );
         } catch (const runtime_error& e) {
             tlog::error() << fmt::format("Failed to copy image data to clipboard: {}", e.what());
             return false;
@@ -2346,15 +2362,18 @@ bool ImageViewer::copyImageNameToClipboard() const {
 
 bool ImageViewer::pasteImagesFromClipboard() {
     stringstream imageStream;
-    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-        if (!commandExists("wl-paste")) {
-            tlog::error() << "wl-paste command not found. Install wl-clipboard to paste from clipboard.";
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
+        if (!checkCopyPasteCommand(false)) {
             return false;
         }
 
         try {
-            vector<char> imageTypesData = execr("wl-paste --list-types");
+            vector<char> imageTypesData =
+                execr(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -selection clipboard -o -t TARGETS" : "wl-paste --list-types");
+
             string imageTypes = string(imageTypesData.data(), imageTypesData.size());
+            tlog::debug() << fmt::format("Clipboard image types: {}", imageTypes);
+
             set<string_view> imageTypesSet;
             for (const auto& type : split(imageTypes, "\n")) {
                 imageTypesSet.insert(type);
@@ -2373,7 +2392,11 @@ bool ImageViewer::pasteImagesFromClipboard() {
                 return false;
             }
 
-            vector<char> imageData = execr(fmt::format("wl-paste --type {}", selectedType));
+            vector<char> imageData = execr(
+                glfwGetPlatform() == GLFW_PLATFORM_X11 ? fmt::format("xclip -selection clipboard -o -t {}", selectedType) :
+                                                         fmt::format("wl-paste --type {}", selectedType)
+            );
+
             if (imageData.empty()) {
                 tlog::error() << "Failed to paste image from clipboard.";
                 return false;
