@@ -26,19 +26,19 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: 1# https://github.com/AppImage/AppImageKit/wiki/FUSE#docker
     steps:
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake gcc-10 g++-10 libglu1-mesa-dev xorg-dev zenity zlib1g-dev libwayland-dev wayland-protocols libxkbcommon-dev libffi-dev nasm
+        run: sudo apt-get update && sudo apt-get install -y cmake gcc-10 g++-10 libglu1-mesa-dev xorg-dev zenity zlib1g-dev libwayland-dev wayland-protocols libxkbcommon-dev libffi-dev nasm ninja-build
       - uses: actions/checkout@v1
         with:
           submodules: recursive
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
+        run: cmake . -B ${{ env.build_dir }} -GNinja -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target all --verbose -j
       - name: Package
         working-directory: ${{ env.build_dir }}
-        run: cmake --build . --target package --verbose
-      - name: Upload AppImage
+        run: cmake --build . --config ${{ env.config }} --target package --verbose
+      - name: Upload executable
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
@@ -58,20 +58,26 @@ jobs:
           - arch: arm64
             # The latest macos runners use arm machines. Picking runners like this avoids fringe issues with cross-compilation.
             os: macos-latest
+    env:
+      build_dir: "build"
+      config: "Release"
     steps:
       - uses: actions/checkout@v1
         with:
           submodules: recursive
       - name: Install dependencies
         run: brew install nasm
+      - name: CMake
+        run: cmake . -B ${{ env.build_dir }} -GNinja -DCMAKE_BUILD_TYPE=${{ env.config }} -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
-        run: scripts/create-dmg.sh -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}"
-      - name: Upload arm64 .dmg
+        working-directory: ${{ env.build_dir }}
+        run: cmake --build . --config ${{ env.config }} --target all --verbose -j
+      - name: Upload executable
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: macOS installer (${{ matrix.arch }})
-          path: tev.dmg
+          name: macOS executable (${{ matrix.arch }})
+          path: ${{ env.build_dir }}/tev.app
 
   build_windows:
     name: Build on Windows
@@ -95,7 +101,7 @@ jobs:
           choco install nasm
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
+        run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
