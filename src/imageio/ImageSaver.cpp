@@ -36,13 +36,13 @@ namespace tev {
 const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
     auto makeSavers = [] {
         vector<unique_ptr<ImageSaver>> imageSavers;
-        imageSavers.emplace_back(new ExrImageSaver());
-        imageSavers.emplace_back(new QoiImageSaver());
+        imageSavers.emplace_back(make_unique<ExrImageSaver>());
+        imageSavers.emplace_back(make_unique<QoiImageSaver>());
 #ifdef TEV_SUPPORT_JXL
-        imageSavers.emplace_back(new JxlImageSaver());
+        imageSavers.emplace_back(make_unique<JxlImageSaver>());
 #endif
-        imageSavers.emplace_back(new StbiHdrImageSaver());
-        imageSavers.emplace_back(new StbiLdrImageSaver());
+        imageSavers.emplace_back(make_unique<StbiHdrImageSaver>());
+        imageSavers.emplace_back(make_unique<StbiLdrImageSaver>());
         return imageSavers;
     };
 

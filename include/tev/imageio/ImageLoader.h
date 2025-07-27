@@ -29,6 +29,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace tev {
 
@@ -119,6 +120,9 @@ public:
     virtual std::string name() const = 0;
 
     static const std::vector<std::unique_ptr<ImageLoader>>& getLoaders();
+
+    // Returns a list of all supported mime types, sorted by decoding preference.
+    static const std::vector<std::string_view>& supportedMimeTypes();
 
     static std::vector<Channel>
         makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const nanogui::Vector2i& size, std::string_view namePrefix = "");

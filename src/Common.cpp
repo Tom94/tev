@@ -29,11 +29,13 @@
 #include <regex>
 
 #ifdef _WIN32
-#   include <Shlobj.h>
+#    include <Shlobj.h>
 #else
-#   include <cstring>
-#   include <pwd.h>
-#   include <unistd.h>
+#    include <cstring>
+#    include <fcntl.h>
+#    include <pwd.h>
+#    include <sys/wait.h>
+#    include <unistd.h>
 #endif
 
 using namespace nanogui;
@@ -283,6 +285,100 @@ void toggleConsole() {
     // running in a foreign console, then we should leave it be.
     if (GetCurrentProcessId() == consoleProcessId) {
         ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
+    }
+#endif
+}
+
+bool commandExists(string_view cmd) {
+#if defined(_WIN32)
+    throw runtime_error{"Executing commands is not supported on Windows."};
+#else
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process - redirect both stdout and stderr
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull != -1) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+
+        execlp("which", "which", string{cmd}.c_str(), nullptr);
+        _exit(127); // exec failed
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+        return WEXITSTATUS(status) == 0;
+    }
+
+     // Fork failed, assume command exists just in case
+    return true;
+#endif
+}
+
+vector<char> execr(string_view cmd) {
+    if (cmd.empty()) {
+        throw runtime_error{"Command is empty."};
+    }
+
+#if defined(_WIN32)
+    throw runtime_error{"Executing commands is not supported on Windows."};
+#else
+    FILE* pipe = popen(string{cmd}.c_str(), "r");
+    if (!pipe) {
+        throw runtime_error{fmt::format("Failed to execute command: {}", cmd)};
+    }
+
+    // Read in chunks of 4096 bytes, doubling the buffer size if we run out of space.
+    static const size_t bufferSize = 4096;
+    std::vector<char> data(bufferSize);
+    size_t totalBytesRead = 0;
+    size_t bytesRead = 0;
+    do {
+        bytesRead = fread(data.data() + totalBytesRead, sizeof(char), bufferSize, pipe);
+        totalBytesRead += bytesRead;
+
+        if (totalBytesRead + bufferSize > data.size()) {
+            data.resize(data.size() * 2);
+        }
+    } while (bytesRead > 0);
+    data.resize(totalBytesRead);
+
+    int exitCode = pclose(pipe);
+    if (exitCode == -1) {
+        throw runtime_error{fmt::format("Failed to close command pipe: {}", cmd)};
+    }
+
+    return data;
+#endif
+}
+
+void execw(string_view cmd, span<const char> input) {
+    if (cmd.empty()) {
+        throw runtime_error{"Command is empty."};
+    }
+
+#if defined(_WIN32)
+    throw runtime_error{"Executing commands is not supported on Windows."};
+#else
+    FILE* pipe = popen(string{cmd}.c_str(), "w");
+    if (!pipe) {
+        throw runtime_error{fmt::format("Failed to execute command: {}", cmd)};
+    }
+
+    if (fwrite(input.data(), sizeof(char), input.size(), pipe) < input.size()) {
+        pclose(pipe);
+        throw runtime_error{fmt::format("Failed to write input to command pipe: {}", cmd)};
+    }
+
+    if (fflush(pipe) != 0) {
+        pclose(pipe);
+        throw runtime_error{fmt::format("Failed to flush command pipe: {}", cmd)};
+    }
+
+    int exitCode = pclose(pipe);
+    if (exitCode == -1) {
+        throw runtime_error{fmt::format("Failed to close command pipe: {}", cmd)};
     }
 #endif
 }
