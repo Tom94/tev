@@ -30,13 +30,13 @@
 #include <tev/imageio/WebpImageLoader.h>
 
 #ifdef _WIN32
-#   include <tev/imageio/DdsImageLoader.h>
+#    include <tev/imageio/DdsImageLoader.h>
 #endif
 #ifdef TEV_USE_LIBHEIF
-#   include <tev/imageio/HeifImageLoader.h>
+#    include <tev/imageio/HeifImageLoader.h>
 #endif
 #ifdef TEV_SUPPORT_JXL
-#   include <tev/imageio/JxlImageLoader.h>
+#    include <tev/imageio/JxlImageLoader.h>
 #endif
 
 using namespace nanogui;
@@ -74,6 +74,32 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 
     static const vector imageLoaders = makeLoaders();
     return imageLoaders;
+}
+
+const vector<string_view>& ImageLoader::supportedMimeTypes() {
+    static const vector<string_view> mimeTypes = {
+        "image/png",
+        "image/webp",
+        "image/jpeg",
+        "image/tiff",
+        "image/gif",
+        "image/tga",
+        "image/bmp",
+#ifdef TEV_SUPPORT_AVIF
+        "image/avif",
+#endif
+#ifdef TEV_SUPPORT_HEIC
+        "image/heic",
+#endif
+#ifdef _WIN32
+        "image/x-dds",
+#endif
+        "image/x-adobe-dng",
+        "image/x-exr",
+        "image/x-portable-anymap",
+    };
+
+    return mimeTypes;
 }
 
 vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, string_view namePrefix) {

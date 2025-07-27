@@ -30,6 +30,7 @@
 #include <cmath>
 #include <filesystem>
 #include <functional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -486,6 +487,11 @@ std::string errorString(int errorId);
 fs::path homeDirectory();
 
 void toggleConsole();
+
+bool commandExists(std::string_view cmd);
+
+std::vector<char> execr(std::string_view cmd);
+void execw(std::string_view cmd, std::span<const char> input);
 
 bool shuttingDown();
 void setShuttingDown();

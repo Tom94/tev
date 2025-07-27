@@ -177,6 +177,10 @@ public:
     BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
     Ipc& ipc() const { return *mIpc; }
 
+    bool copyImageCanvasToClipboard() const;
+    bool copyImageNameToClipboard() const;
+    bool pasteImagesFromClipboard();
+
 private:
     void updateFilter();
     void updateLayout();
