@@ -121,35 +121,24 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const floa
 
     JxlEncoderCloseInput(encoder.get());
 
-    // Encode the image into `compressed`, which starts out reasonably sized and will be doubled in size each time the encoder requests more
-    // space. The buffer will be trimmed again at the very end.
-    vector<uint8_t> compressed(64 * 1024);
-    size_t availableOut = compressed.size();
-    uint8_t* nextOut = compressed.data();
-
-    JxlEncoderStatus processResult = JXL_ENC_NEED_MORE_OUTPUT;
-    while (processResult == JXL_ENC_NEED_MORE_OUTPUT) {
-        processResult = JxlEncoderProcessOutput(encoder.get(), &nextOut, &availableOut);
-
-        if (processResult == JXL_ENC_NEED_MORE_OUTPUT) {
-            // We need to enlarge the buffer
-            size_t offset = nextOut - compressed.data();
-            compressed.resize(compressed.size() * 2);
-            nextOut = compressed.data() + offset;
-            availableOut = compressed.size() - offset;
+    // Encode the image and write it to file in 1mb chunks
+    vector<uint8_t> compressed(1024 * 1024);
+    while (true) {
+        uint8_t* nextOut = compressed.data();
+        size_t availableOut = compressed.size();
+        JxlEncoderStatus processResult = JxlEncoderProcessOutput(encoder.get(), &nextOut, &availableOut);
+        if (processResult == JXL_ENC_ERROR) {
+            throw ImageSaveError{fmt::format("Failed to process output: {}.", (size_t)JxlEncoderGetError(encoder.get()))};
         }
-    }
 
-    if (processResult != JXL_ENC_SUCCESS) {
-        throw ImageSaveError{"Failed to encode."};
-    }
+        oStream.write(reinterpret_cast<const char*>(compressed.data()), compressed.size() - availableOut);
+        if (!oStream) {
+            throw ImageSaveError{fmt::format("Failed to write data to {}.", toString(path))};
+        }
 
-    // Trim the output buffer to the actual size
-    compressed.resize(compressed.size() - availableOut);
-
-    oStream.write(reinterpret_cast<const char*>(compressed.data()), compressed.size());
-    if (!oStream) {
-        throw ImageSaveError{fmt::format("Failed to write data to {}.", toString(path))};
+        if (processResult == JXL_ENC_SUCCESS) {
+            break; // Encoding is done
+        }
     }
 }
 
