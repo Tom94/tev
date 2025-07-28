@@ -177,9 +177,11 @@ public:
     BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
     Ipc& ipc() const { return *mIpc; }
 
-    bool copyImageCanvasToClipboard() const;
-    bool copyImageNameToClipboard() const;
-    bool pasteImagesFromClipboard();
+    void copyImageCanvasToClipboard() const;
+    void copyImageNameToClipboard() const;
+    void pasteImagesFromClipboard();
+
+    void showErrorDialog(std::string_view message);
 
 private:
     void updateFilter();
