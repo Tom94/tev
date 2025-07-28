@@ -25,12 +25,15 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <iostream>
 #include <map>
 #include <regex>
 
 #ifdef _WIN32
 #    include <Shlobj.h>
 #else
+#    include <pstream.h>
+
 #    include <cstring>
 #    include <fcntl.h>
 #    include <pwd.h>
@@ -316,7 +319,7 @@ bool commandExists(string_view cmd) {
 #endif
 }
 
-vector<char> execr(string_view cmd) {
+unique_ptr<istream> execr(string_view cmd) {
     if (cmd.empty()) {
         throw runtime_error{"Command is empty."};
     }
@@ -324,36 +327,11 @@ vector<char> execr(string_view cmd) {
 #if defined(_WIN32)
     throw runtime_error{"Executing commands is not supported on Windows."};
 #else
-    FILE* pipe = popen(string{cmd}.c_str(), "r");
-    if (!pipe) {
-        throw runtime_error{fmt::format("Failed to execute command: {}", cmd)};
-    }
-
-    // Read in chunks of 4096 bytes, doubling the buffer size if we run out of space.
-    static const size_t bufferSize = 4096;
-    std::vector<char> data(bufferSize);
-    size_t totalBytesRead = 0;
-    size_t bytesRead = 0;
-    do {
-        bytesRead = fread(data.data() + totalBytesRead, sizeof(char), bufferSize, pipe);
-        totalBytesRead += bytesRead;
-
-        if (totalBytesRead + bufferSize > data.size()) {
-            data.resize(data.size() * 2);
-        }
-    } while (bytesRead > 0);
-    data.resize(totalBytesRead);
-
-    int exitCode = pclose(pipe);
-    if (exitCode == -1) {
-        throw runtime_error{fmt::format("Failed to close command pipe: {}", cmd)};
-    }
-
-    return data;
+    return make_unique<redi::ipstream>(string{cmd}, redi::pstream::pstdout);
 #endif
 }
 
-void execw(string_view cmd, span<const char> input) {
+unique_ptr<ostream> execw(string_view cmd) {
     if (cmd.empty()) {
         throw runtime_error{"Command is empty."};
     }
@@ -361,25 +339,7 @@ void execw(string_view cmd, span<const char> input) {
 #if defined(_WIN32)
     throw runtime_error{"Executing commands is not supported on Windows."};
 #else
-    FILE* pipe = popen(string{cmd}.c_str(), "w");
-    if (!pipe) {
-        throw runtime_error{fmt::format("Failed to execute command: {}", cmd)};
-    }
-
-    if (fwrite(input.data(), sizeof(char), input.size(), pipe) < input.size()) {
-        pclose(pipe);
-        throw runtime_error{fmt::format("Failed to write input to command pipe: {}", cmd)};
-    }
-
-    if (fflush(pipe) != 0) {
-        pclose(pipe);
-        throw runtime_error{fmt::format("Failed to flush command pipe: {}", cmd)};
-    }
-
-    int exitCode = pclose(pipe);
-    if (exitCode == -1) {
-        throw runtime_error{fmt::format("Failed to close command pipe: {}", cmd)};
-    }
+    return make_unique<redi::opstream>(string{cmd}, redi::pstream::pstdin);
 #endif
 }
 
