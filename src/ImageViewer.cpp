@@ -2402,7 +2402,7 @@ bool ImageViewer::pasteImagesFromClipboard() {
                 return false;
             }
 
-            imageStream << string(imageData.data(), imageData.size());
+            imageStream.write(imageData.data(), imageData.size());
         } catch (const runtime_error& e) {
             tlog::error() << fmt::format("Failed to paste image from clipboard: {}", e.what());
             return false;
@@ -2419,8 +2419,9 @@ bool ImageViewer::pasteImagesFromClipboard() {
             return false;
         }
 
-        imageStream << "clip" << string(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec))
-                    << string(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
+        imageStream << "clip";
+        imageStream.write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
+        imageStream.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
     }
 
     tlog::info() << "Loading image from clipboard...";
