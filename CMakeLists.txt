@@ -216,6 +216,7 @@ target_include_directories(tev PRIVATE
     # Header-only dependencies whose include path cannot be inherited from link targets
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/args
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/fmt/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/pstreams
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/qoi
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinylogger
