@@ -2293,7 +2293,7 @@ bool ImageViewer::copyImageCanvasToClipboard() const {
 
         try {
             execw(
-                glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -selection clipboard -i -t image/png" : "wl-copy --type image/png",
+                glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -i -t image/png" : "wl-copy --type image/png",
                 pngData.str()
             );
         } catch (const runtime_error& e) {
@@ -2342,7 +2342,7 @@ bool ImageViewer::copyImageNameToClipboard() const {
 
         try {
             execw(
-                glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -selection clipboard -i -t text/plain" : "wl-copy --type text/plain",
+                glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -i -t text/plain" : "wl-copy --type text/plain",
                 mCurrentImage->name()
             );
         } catch (const runtime_error& e) {
@@ -2369,7 +2369,7 @@ bool ImageViewer::pasteImagesFromClipboard() {
 
         try {
             vector<char> imageTypesData =
-                execr(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -selection clipboard -o -t TARGETS" : "wl-paste --list-types");
+                execr(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -o -t TARGETS" : "wl-paste --list-types");
 
             string imageTypes = string(imageTypesData.data(), imageTypesData.size());
             tlog::debug() << fmt::format("Clipboard image types: {}", imageTypes);
@@ -2393,7 +2393,7 @@ bool ImageViewer::pasteImagesFromClipboard() {
             }
 
             vector<char> imageData = execr(
-                glfwGetPlatform() == GLFW_PLATFORM_X11 ? fmt::format("xclip -selection clipboard -o -t {}", selectedType) :
+                glfwGetPlatform() == GLFW_PLATFORM_X11 ? fmt::format("xclip -sel c -o -t {}", selectedType) :
                                                          fmt::format("wl-paste --type {}", selectedType)
             );
 
