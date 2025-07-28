@@ -93,6 +93,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
 #endif
 #ifdef _WIN32
         "image/x-dds",
+        "image/x-direct-draw-surface",
 #endif
         "image/x-adobe-dng",
         "image/x-exr",

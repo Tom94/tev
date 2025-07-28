@@ -2185,30 +2185,36 @@ void ImageViewer::updateImageInfoWindow() {
 void ImageViewer::openImageDialog() {
     vector<string> paths = file_dialog(
         {
-    // HDR formats
+            {"apng", "Animated PNG image"                },
 #ifdef TEV_SUPPORT_AVIF
-            {"avif", "AV1 Image File"                   },
+            {"avif", "AV1 Image File"                    },
 #endif
-            {"exr",  "OpenEXR image"                    },
-            {"hdr",  "HDR image"                        },
+            {"bmp",  "Bitmap image"                      },
+#ifdef _WIN32
+            {"dds",  "DirectDraw Surface image"          },
+#endif
+            {"dng",  "Digital Negative image"            },
+            {"exr",  "OpenEXR image"                     },
+            {"gif",  "Graphics Interchange Format image" },
+            {"hdr",  "HDR image"                         },
 #ifdef TEV_SUPPORT_HEIC
-            {"heic", "High Efficiency Image Container"  },
+            {"heic", "High Efficiency Image Container"   },
 #endif
-            {"pfm",  "Portable Float Map image"         },
-            // LDR formats
-            {"bmp",  "Bitmap image"                     },
-            {"gif",  "Graphics Interchange Format image"},
-            {"jpg",  "JPEG image"                       },
-            {"jpeg", "JPEG image"                       },
-            {"jxl",  "JPEG-XL image"                    },
-            {"pic",  "PIC image"                        },
-            {"pgm",  "Portable GrayMap image"           },
-            {"png",  "Portable Network Graphics image"  },
-            {"pnm",  "Portable AnyMap image"            },
-            {"ppm",  "Portable PixMap image"            },
-            {"psd",  "PSD image"                        },
-            {"qoi",  "Quite OK Image format"            },
-            {"tga",  "Truevision TGA image"             },
+            {"jpeg", "JPEG image"                        },
+            {"jpg",  "JPEG image"                        },
+            {"jxl",  "JPEG-XL image"                     },
+            {"pfm",  "Portable Float Map image"          },
+            {"pgm",  "Portable GrayMap image"            },
+            {"pic",  "PIC image"                         },
+            {"png",  "Portable Network Graphics image"   },
+            {"pnm",  "Portable AnyMap image"             },
+            {"ppm",  "Portable PixMap image"             },
+            {"psd",  "PSD image"                         },
+            {"qoi",  "Quite OK Image format"             },
+            {"tga",  "Truevision TGA image"              },
+            {"tiff", "Tag Image File Format image"       },
+            {"tif",  "Tag Image File Format image"       },
+            {"webp", "WebP image"                        },
     },
         false,
         true
