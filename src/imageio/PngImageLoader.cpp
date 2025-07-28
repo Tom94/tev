@@ -57,8 +57,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     png_set_read_fn(pngPtr, &iStream, [](png_structp png_ptr, png_bytep data, png_size_t length) {
         auto stream = reinterpret_cast<istream*>(png_get_io_ptr(png_ptr));
-        stream->read(reinterpret_cast<char*>(data), length);
-        if (stream->gcount() != static_cast<std::streamsize>(length)) {
+        size_t totalRead = 0;
+        while (stream && totalRead < length) {
+            stream->read(reinterpret_cast<char*>(data) + totalRead, length - totalRead);
+            totalRead += stream->gcount();
+        }
+
+        if (totalRead < length) {
             png_error(png_ptr, "Read error");
         }
     });

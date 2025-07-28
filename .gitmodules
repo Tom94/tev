@@ -90,3 +90,7 @@
 	path = dependencies/libwebp
 	url = https://chromium.googlesource.com/webm/libwebp
 	shallow = true
+[submodule "dependencies/pstreams"]
+	path = dependencies/pstreams
+	url = https://github.com/jwakely/pstreams
+    shallow = true
