@@ -239,6 +239,6 @@ struct LimitedRange {
     static constexpr LimitedRange full() { return {1.0f, 0.0f}; }
 };
 
-LimitedRange limitedRangeForBitsPerPixel(int bitsPerPixel);
+LimitedRange limitedRangeForBitsPerSample(int bitsPerSample);
 
 } // namespace tev

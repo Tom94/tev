@@ -298,7 +298,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     cicp.videoFullRangeFlag == 1 ? "yes" : "no"
                 );
 
-                const LimitedRange range = cicp.videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerPixel(bitDepth);
+                const LimitedRange range = cicp.videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(bitDepth);
 
                 if (cicp.matrixCoefficients != 0) {
                     tlog::warning() << fmt::format(

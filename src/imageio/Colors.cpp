@@ -629,14 +629,14 @@ ETransferCharacteristics fromWpTransfer(int wpTransfer) {
 
 } // namespace ituth273
 
-LimitedRange limitedRangeForBitsPerPixel(int bitsPerPixel) {
-    switch (bitsPerPixel) {
+LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {
+    switch (bitsPerSample) {
         case 8: return {255.0f / 219.0f, 16.0f / 255.0f};
         case 10: return {1023.0f / 876.0f, 64.0f / 1023.0f};
         case 12: return {4095.0f / 3504.0f, 256.0f / 4095.0f};
     }
 
-    tlog::warning() << fmt::format("Unsupported bits per pixel {} with limited range flag.", bitsPerPixel);
+    tlog::warning() << fmt::format("Unsupported bits per sample {} with limited range flag.", bitsPerSample);
     return {1.0f, 0.0f};
 }
 

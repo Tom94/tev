@@ -1288,7 +1288,6 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
     if (iccProfileData && iccProfileSize > 0) {
         try {
-            // Convert using ICC profile
             co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc((uint8_t*)iccProfileData, iccProfileSize),
                 size,
