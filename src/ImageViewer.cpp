@@ -327,6 +327,8 @@ ImageViewer::ImageViewer(
                     return 1000.0;
                 } else if (tf == CM_TRANSFER_FUNCTION_BT1886) {
                     return 100.0;
+                } else if (tf == CM_TRANSFER_FUNCTION_XVYCC) {
+                    return 100.0;
                 } else {
                     return 80.0;
                 }

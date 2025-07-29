@@ -155,7 +155,8 @@ inline float bt709ToLinear(float val) {
     constexpr float beta = 0.018053968510807f;
     constexpr float alpha = 1.0f + 5.5f * beta;
     constexpr float thres = 4.5f * beta;
-    return val <= thres ? (val / 4.5f) : std::pow((val + alpha - 1.0f) / alpha, 1.0f / 0.45f);
+    const float result = val <= thres ? (val / 4.5f) : std::pow((val + alpha - 1.0f) / alpha, 1.0f / 0.45f);
+    return (100.0f / 80.0f) * result; // Convert to linear sRGB units where SDR white is 1.0
 }
 
 // From https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.1361-0-199802-W!!PDF-E.pdf, generalized to the more precise constants from the
@@ -166,13 +167,16 @@ inline float bt1361ExtendedToLinear(float val) {
     constexpr float thres = 4.5f * beta;
     constexpr float negThres = -thres / 4.0f;
 
+    float result;
     if (val < negThres) {
-        return -std::pow((-val * 4.0f + alpha - 1.0f) / alpha, 1.0f / 0.45f) / 4.0f;
+        result = -std::pow((-val * 4.0f + alpha - 1.0f) / alpha, 1.0f / 0.45f) / 4.0f;
     } else if (val <= thres) {
-        return val / 4.5f;
+        result = val / 4.5f;
     } else {
-        return std::pow((val + alpha - 1.0f) / alpha, 1.0f / 0.45f);
+        result = std::pow((val + alpha - 1.0f) / alpha, 1.0f / 0.45f);
     }
+
+    return (100.0f / 80.0f) * result; // Convert to linear sRGB units where SDR white is 1.0
 }
 
 // From http://car.france3.mars.free.fr/HD/INA-%2026%20jan%2006/SMPTE%20normes%20et%20confs/s240m.pdf
