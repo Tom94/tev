@@ -85,6 +85,9 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         }
     }
 
+    const int numChannels = 4;
+    const int numColorChannels = 3;
+
     const uint32_t width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
     const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
     array<float, 4> bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -102,7 +105,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 co_await toLinearSrgbPremul(
                     ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size()),
                     {1, 1},
-                    3,
+                    numColorChannels,
                     EAlphaKind::Straight,
                     EPixelFormat::F32,
                     (uint8_t*)tmp.data(),
@@ -118,9 +121,6 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     }
 
     const Vector2i size{(int)width, (int)height};
-
-    const int numChannels = 4;
-    const int numColorChannels = 3;
 
     vector<ImageData> result;
 
