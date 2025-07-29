@@ -31,14 +31,16 @@ if (APPLE)
     enable_language(OBJC)
 endif()
 
-if (NOT TEV_DEPLOY)
-    set(TEV_VERSION "${TEV_VERSION}dev")
+if (TEV_DEPLOY)
+    set(TEV_VERSION_DEV "${TEV_VERSION}")
+else()
+    set(TEV_VERSION_DEV "${TEV_VERSION}dev")
 endif()
 
 if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TEV_VERSION_ARCH "${TEV_VERSION} (64 bit)")
+    set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (64 bit)")
 elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
-    set(TEV_VERSION_ARCH "${TEV_VERSION} (32 bit)")
+    set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (32 bit)")
 endif()
 
 option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
@@ -201,12 +203,20 @@ if (APPLE)
         resources/macos/icon.icns
     )
 
+    if (CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(MACOSX_BUNDLE_MIN_OS_VERSION
+            "<key>LSMinimumSystemVersion</key>\n    <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>"
+        )
+    else()
+        set(MACOSX_BUNDLE_MIN_OS_VERSION "")
+    endif()
+
     set_target_properties(tev PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist"
-        MACOSX_BUNDLE_BUNDLE_VERSION ${TEV_VERSION_ARCH}
+        MACOSX_BUNDLE_BUNDLE_VERSION ${TEV_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${TEV_VERSION}
-        MACOSX_BUNDLE_LONG_VERSION_STRING ${TEV_VERSION_ARCH}
+        MACOSX_BUNDLE_MIN_OS_VERSION "${MACOSX_BUNDLE_MIN_OS_VERSION}"
         RESOURCE "${RESOURCE_FILES}"
     )
 endif()
