@@ -133,11 +133,11 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool h
             channels.emplace_back(name, size, data, c, 4);
         }
     } else {
-        channels.emplace_back("L", size, data, 0, 4);
+        channels.emplace_back(fmt::format("{}L", namePrefix), size, data, 0, 4);
     }
 
     if (hasAlpha) {
-        channels.emplace_back("A", size, data, 3, 4);
+        channels.emplace_back(fmt::format("{}A", namePrefix), size, data, 3, 4);
     }
 
     return channels;

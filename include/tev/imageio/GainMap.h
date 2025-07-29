@@ -22,11 +22,15 @@
 #include <tev/Image.h>
 #include <tev/Task.h>
 
+#include <nanogui/vector.h>
+
 class AppleMakerNote;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote* amn);
+// Applies an Apple gain map to the given image. Both the image and the gainmap are expected to be in linear space, have RGBA interleaved
+// layout, and have the same size.
+Task<void> applyAppleGainMap(float* __restrict image, const float* __restrict gainMap, const nanogui::Vector2i& size, int priority, const AppleMakerNote* amn);
 
 }
 

@@ -106,13 +106,42 @@ Task<vector<ImageData>>
 
         ImageData resultData;
 
-        bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
-        int numChannels = hasAlpha ? 4 : 3;
-        resultData.hasPremultipliedAlpha = numChannels == 4 && heif_image_handle_is_premultiplied_alpha(imgHandle);
+        heif_colorspace preferredColorspace = heif_colorspace_undefined;
+        heif_chroma preferredChroma = heif_chroma_undefined;
+        if (auto error = heif_image_handle_get_preferred_decoding_colorspace(imgHandle, &preferredColorspace, &preferredChroma);
+            error.code != heif_error_Ok) {
+            throw ImageLoadError{fmt::format("Failed to get preferred decoding colorspace: {}", error.message)};
+        }
+
+        const bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
+
+        bool isMonochrome = preferredColorspace == heif_colorspace_monochrome;
+        if (isMonochrome != (preferredChroma == heif_chroma_monochrome)) {
+            throw ImageLoadError{"Monochrome colorspace and chroma mismatch."};
+        }
+
+        if (hasAlpha) {
+            // We could handle monochrome images with an alpha channel ourselves, but our life becomes easier if we let libheif convert
+            // these to RGBA for us.
+            isMonochrome = false;
+        }
+
+        const int numChannels = (isMonochrome ? 1 : 3) + (hasAlpha ? 1 : 0);
+        resultData.hasPremultipliedAlpha = hasAlpha && heif_image_handle_is_premultiplied_alpha(imgHandle);
 
         const bool is_little_endian = std::endian::native == std::endian::little;
-        auto format = numChannels == 4 ? (is_little_endian ? heif_chroma_interleaved_RRGGBBAA_LE : heif_chroma_interleaved_RRGGBBAA_BE) :
-                                         (is_little_endian ? heif_chroma_interleaved_RRGGBB_LE : heif_chroma_interleaved_RRGGBB_BE);
+
+        heif_chroma decodingChroma = heif_chroma_undefined;
+        switch (numChannels) {
+            case 1: decodingChroma = heif_chroma_monochrome; break;
+            case 2: throw ImageLoadError{"Heif images with 2 channels are not supported."};
+            case 3: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBB_LE : heif_chroma_interleaved_RRGGBB_BE; break;
+            case 4: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBBAA_LE : heif_chroma_interleaved_RRGGBBAA_BE; break;
+            default: throw ImageLoadError{"Unsupported number of channels."};
+        }
+
+        // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
+        const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
 
         Vector2i size = {heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
 
@@ -120,26 +149,41 @@ Task<vector<ImageData>>
             throw ImageLoadError{"Image has zero pixels."};
         }
 
-        heif_image* img;
-        if (auto error = heif_decode_image(imgHandle, &img, heif_colorspace_RGB, format, nullptr); error.code != heif_error_Ok) {
+        heif_image* img = nullptr;
+        if (auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, nullptr); error.code != heif_error_Ok) {
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
         ScopeGuard imgGuard{[img] { heif_image_release(img); }};
 
-        const int bitsPerPixel = heif_image_get_bits_per_pixel_range(img, heif_channel_interleaved);
-        const float channelScale = 1.0f / float((1 << bitsPerPixel) - 1);
+        const heif_channel channelType = isMonochrome ? heif_channel_Y : heif_channel_interleaved;
 
-        int bytesPerRow;
-        const uint8_t* data = heif_image_get_plane_readonly(img, heif_channel_interleaved, &bytesPerRow);
+        const int bitDepth = heif_image_get_bits_per_pixel(img, channelType) / numChannels;
+        if (bitDepth != 8 && bitDepth != 16) {
+            throw ImageLoadError{fmt::format("Unsupported HEIF bit depth: {}", bitDepth)};
+        }
+
+        const int bitsPerSample = heif_image_get_bits_per_pixel_range(img, channelType);
+        const float channelScale = 1.0f / float((1 << bitsPerSample) - 1);
+
+        if (bitsPerSample > bitDepth) {
+            throw ImageLoadError{fmt::format("Image has {} bits per sample, but expected at most {} bits.", bitsPerSample, bitDepth)};
+        }
+
+        int bytesPerRow = 0;
+        const uint8_t* data = heif_image_get_plane_readonly(img, channelType, &bytesPerRow);
         if (!data) {
             throw ImageLoadError{"Faild to get image data."};
+        }
+
+        if (bytesPerRow % (bitDepth / 8) != 0) {
+            throw ImageLoadError{"Row size not a multiple of sample size."};
         }
 
         resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, namePrefix);
 
         auto tryIccTransform = [&](const vector<uint8_t>& iccProfile) -> Task<void> {
-            size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
+            const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
             if (profileSize == 0) {
                 throw ImageLoadError{"No ICC color profile found."};
             }
@@ -153,19 +197,29 @@ Task<vector<ImageData>>
                 throw ImageLoadError{fmt::format("Failed to read ICC profile: {}", error.message)};
             }
 
-            if (bytesPerRow % sizeof(uint16_t) != 0) {
-                throw ImageLoadError{"Row size not a multiple of sample size."};
-            }
-
             vector<float> dataF32((size_t)size.x() * size.y() * numChannels);
-            co_await toFloat32(
-                (const uint16_t*)data, numChannels, dataF32.data(), numChannels, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t)
-            );
+            if (bitDepth == 16) {
+                co_await toFloat32(
+                    (const uint16_t*)data,
+                    numChannels,
+                    dataF32.data(),
+                    numChannels,
+                    size,
+                    hasAlpha,
+                    priority,
+                    channelScale,
+                    bytesPerRow / sizeof(uint16_t)
+                );
+            } else {
+                co_await toFloat32<uint8_t>(
+                    data, numChannels, dataF32.data(), numChannels, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t)
+                );
+            }
 
             co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(profileData.data(), profileData.size()),
                 size,
-                3,
+                numChannels,
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)dataF32.data(),
@@ -201,7 +255,39 @@ Task<vector<ImageData>>
                 tlog::warning() << "Failed to read NCLX color profile: " << error.message;
             }
 
-            co_await toFloat32<uint16_t, true>(
+            if (bitDepth == 16) {
+                co_await toFloat32<uint16_t, true>(
+                    (const uint16_t*)data,
+                    numChannels,
+                    resultData.channels.front().data(),
+                    4,
+                    size,
+                    hasAlpha,
+                    priority,
+                    channelScale,
+                    bytesPerRow / sizeof(uint16_t)
+                );
+            } else {
+                co_await toFloat32<uint8_t, true>(
+                    (const uint8_t*)data,
+                    numChannels,
+                    resultData.channels.front().data(),
+                    4,
+                    size,
+                    hasAlpha,
+                    priority,
+                    channelScale,
+                    bytesPerRow / sizeof(uint8_t)
+                );
+            }
+
+            co_return resultData;
+        }
+
+        ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+
+        if (bitDepth == 16) {
+            co_await toFloat32(
                 (const uint16_t*)data,
                 numChannels,
                 resultData.channels.front().data(),
@@ -212,27 +298,15 @@ Task<vector<ImageData>>
                 channelScale,
                 bytesPerRow / sizeof(uint16_t)
             );
-
-            co_return resultData;
+        } else {
+            co_await toFloat32(
+                data, numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t)
+            );
         }
-
-        ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
-
-        co_await toFloat32<uint16_t, false>(
-            (const uint16_t*)data,
-            numChannels,
-            resultData.channels.front().data(),
-            4,
-            size,
-            hasAlpha,
-            priority,
-            channelScale,
-            bytesPerRow / sizeof(uint16_t)
-        );
 
         LimitedRange range = LimitedRange::full();
         if (nclx->full_range_flag == 0) {
-            range = limitedRangeForBitsPerPixel(bitsPerPixel);
+            range = limitedRangeForBitsPerSample(bitsPerSample);
         }
 
         auto cicpTransfer = static_cast<ituth273::ETransferCharacteristics>(nclx->transfer_characteristics);
@@ -402,11 +476,12 @@ Task<vector<ImageData>>
                     tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
                 }
 
+                if (auxImgData.channels.size() > 1) {
+                    tlog::warning() << "Gain map has multiple channels. Applying only the first channel.";
+                }
+
                 co_await applyAppleGainMap(
-                    result.front(), // primary image
-                    auxImgData,
-                    priority,
-                    amn.get()
+                    mainImage.channels.front().data(), auxImgData.channels.front().data(), mainImage.channels.front().size(), priority, amn.get()
                 );
             }
 
