@@ -1154,16 +1154,22 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         } else if (key == GLFW_KEY_Q && (modifiers & SYSTEM_COMMAND_MOD)) {
             set_visible(false);
             return true;
-        } else if (mCurrentImage && key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
+        } else if (key == GLFW_KEY_C && (modifiers & SYSTEM_COMMAND_MOD)) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                copyImageNameToClipboard();
+                try {
+                    copyImageNameToClipboard();
+                } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to copy image name to clipboard: {}", e.what())); }
             } else {
-                copyImageCanvasToClipboard();
+                try {
+                    copyImageCanvasToClipboard();
+                } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to copy image to clipboard: {}", e.what())); }
             }
 
             return true;
         } else if (key == GLFW_KEY_V && (modifiers & SYSTEM_COMMAND_MOD)) {
-            pasteImagesFromClipboard();
+            try {
+                pasteImagesFromClipboard();
+            } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to paste image from clipboard: {}", e.what())); }
             return true;
         }
     }
@@ -2185,30 +2191,36 @@ void ImageViewer::updateImageInfoWindow() {
 void ImageViewer::openImageDialog() {
     vector<string> paths = file_dialog(
         {
-    // HDR formats
+            {"apng", "Animated PNG image"               },
 #ifdef TEV_SUPPORT_AVIF
             {"avif", "AV1 Image File"                   },
 #endif
+            {"bmp",  "Bitmap image"                     },
+#ifdef _WIN32
+            {"dds",  "DirectDraw Surface image"         },
+#endif
+            {"dng",  "Digital Negative image"           },
             {"exr",  "OpenEXR image"                    },
+            {"gif",  "Graphics Interchange Format image"},
             {"hdr",  "HDR image"                        },
 #ifdef TEV_SUPPORT_HEIC
             {"heic", "High Efficiency Image Container"  },
 #endif
-            {"pfm",  "Portable Float Map image"         },
-            // LDR formats
-            {"bmp",  "Bitmap image"                     },
-            {"gif",  "Graphics Interchange Format image"},
-            {"jpg",  "JPEG image"                       },
             {"jpeg", "JPEG image"                       },
+            {"jpg",  "JPEG image"                       },
             {"jxl",  "JPEG-XL image"                    },
-            {"pic",  "PIC image"                        },
+            {"pfm",  "Portable Float Map image"         },
             {"pgm",  "Portable GrayMap image"           },
+            {"pic",  "PIC image"                        },
             {"png",  "Portable Network Graphics image"  },
             {"pnm",  "Portable AnyMap image"            },
             {"ppm",  "Portable PixMap image"            },
             {"psd",  "PSD image"                        },
             {"qoi",  "Quite OK Image format"            },
             {"tga",  "Truevision TGA image"             },
+            {"tiff", "Tag Image File Format image"      },
+            {"tif",  "Tag Image File Format image"      },
+            {"webp", "WebP image"                       },
     },
         false,
         true
@@ -2257,28 +2269,27 @@ void ImageViewer::saveImageDialog() {
     focusWindow();
 }
 
-bool checkCopyPasteCommand(bool copy) {
+void throwIfNoCopyPasteCommand(bool copy) {
     string_view command = glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip" : (copy ? "wl-copy" : "wl-paste");
     string_view copyPackage = glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip" : "wl-clipboard";
 
     if (!commandExists(command)) {
-        tlog::error() << fmt::format("{} command not found. Install {} to copy to clipboard.", command, copyPackage);
-        return false;
+        throw std::runtime_error{fmt::format("{} command not found. Install {} to copy to clipboard.", command, copyPackage)};
     }
-
-    return true;
 }
 
-bool ImageViewer::copyImageCanvasToClipboard() const {
+void ImageViewer::copyImageCanvasToClipboard() const {
+    if (!mCurrentImage) {
+        throw std::runtime_error{"No image selected for copy."};
+    }
+
     auto imageSize = mImageCanvas->imageDataSize();
     if (imageSize.x() == 0 || imageSize.y() == 0) {
-        return false;
+        throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
-        if (!checkCopyPasteCommand(true)) {
-            return false;
-        }
+        throwIfNoCopyPasteCommand(true);
 
         auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
         auto pngImageSaver = make_unique<StbiLdrImageSaver>();
@@ -2287,8 +2298,7 @@ bool ImageViewer::copyImageCanvasToClipboard() const {
         try {
             pngImageSaver->save(*stream, "clipboard.png", imageData, imageSize, 4);
         } catch (const ImageSaveError& e) {
-            tlog::error() << "Failed to save image data to clipboard in PNG format.";
-            return true;
+            throw std::runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())};
         }
     } else {
         clip::image_spec imageMetadata;
@@ -2310,90 +2320,73 @@ bool ImageViewer::copyImageCanvasToClipboard() const {
         clip::image image(imageData.data(), imageMetadata);
 
         if (!clip::set_image(image)) {
-            tlog::error() << "Failed to copy image to clipboard.";
-            return true;
+            throw std::runtime_error{"clip::set_image failed."};
         }
     }
 
     tlog::success() << "Image copied to clipboard.";
-    return true;
 }
 
-bool ImageViewer::copyImageNameToClipboard() const {
+void ImageViewer::copyImageNameToClipboard() const {
     if (!mCurrentImage) {
-        tlog::error() << "No image selected to copy its name to clipboard.";
-        return false;
+        throw std::runtime_error{"No image selected for copy."};
     }
 
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
-        if (!checkCopyPasteCommand(true)) {
-            return false;
-        }
+        throwIfNoCopyPasteCommand(true);
 
         auto stream = execw(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -i -t text/plain" : "wl-copy --type text/plain");
         (*stream) << mCurrentImage->name();
     } else {
         if (!clip::set_text(string{mCurrentImage->name()})) {
-            tlog::error() << "Failed to copy image path to clipboard.";
-            return false;
+            throw std::runtime_error{"clip::set_text failed."};
         }
     }
 
     tlog::success() << "Image path copied to clipboard.";
-    return true;
 }
 
-bool ImageViewer::pasteImagesFromClipboard() {
+void ImageViewer::pasteImagesFromClipboard() {
     unique_ptr<istream> imageStream;
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
-        if (!checkCopyPasteCommand(false)) {
-            return false;
+        throwIfNoCopyPasteCommand(false);
+
+        auto typesStream = execr(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -o -t TARGETS" : "wl-paste --list-types");
+        string imageTypes(std::istreambuf_iterator<char>(*typesStream), {});
+        set<string_view> imageTypesSet;
+        for (const auto& line : split(imageTypes, "\n")) {
+            if (line.empty()) {
+                continue;
+            }
+
+            tlog::debug() << fmt::format("Clipboard image type: {}", line);
+            imageTypesSet.insert(line);
         }
 
-        try {
-            auto typesStream = execr(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -o -t TARGETS" : "wl-paste --list-types");
-            string imageTypes(std::istreambuf_iterator<char>(*typesStream), {});
-            set<string_view> imageTypesSet;
-            for (const auto& line : split(imageTypes, "\n")) {
-                if (line.empty()) {
-                    continue;
-                }
-
-                tlog::debug() << fmt::format("Clipboard image type: {}", line);
-                imageTypesSet.insert(line);
+        string selectedType = "";
+        for (const auto& type : ImageLoader::supportedMimeTypes()) {
+            if (imageTypesSet.contains(type)) {
+                selectedType = type;
+                break;
             }
-
-            string selectedType = "";
-            for (const auto& type : ImageLoader::supportedMimeTypes()) {
-                if (imageTypesSet.contains(type)) {
-                    selectedType = type;
-                    break;
-                }
-            }
-
-            if (selectedType.empty()) {
-                tlog::error() << "No supported image types found in clipboard.";
-                return false;
-            }
-
-            imageStream = execr(
-                glfwGetPlatform() == GLFW_PLATFORM_X11 ? fmt::format("xclip -sel c -o -t {}", selectedType) :
-                                                         fmt::format("wl-paste --type {}", selectedType)
-            );
-        } catch (const runtime_error& e) {
-            tlog::error() << fmt::format("Failed to paste image from clipboard: {}", e.what());
-            return false;
         }
+
+        if (selectedType.empty()) {
+            throw std::runtime_error{"No image data found in clipboard."};
+        }
+
+        imageStream = execr(
+            glfwGetPlatform() == GLFW_PLATFORM_X11 ? fmt::format("xclip -sel c -o -t {}", selectedType) :
+                                                     fmt::format("wl-paste --type {}", selectedType)
+        );
     } else {
         if (!clip::has(clip::image_format())) {
-            tlog::error() << "No image data found in clipboard.";
-            return false;
+            throw std::runtime_error{"No image data found in clipboard."};
         }
 
         clip::image clipImage;
         if (!clip::get_image(clipImage)) {
-            tlog::error() << "Failed to paste image from clipboard.";
-            return false;
+            throw std::runtime_error{"clip::get_image failed."};
         }
 
         auto ss = make_unique<stringstream>();
@@ -2411,14 +2404,17 @@ bool ImageViewer::pasteImagesFromClipboard() {
     const auto images = imagesLoadTask.get();
 
     if (images.empty()) {
-        tlog::error() << "Failed to load image from clipboard data.";
+        throw std::runtime_error{"Failed to load image from clipboard data."};
     } else {
         for (auto& image : images) {
             addImage(image, true);
         }
     }
+}
 
-    return true;
+void ImageViewer::showErrorDialog(string_view message) {
+    tlog::error() << message;
+    new MessageDialog(this, MessageDialog::Type::Warning, "Error", string{message});
 }
 
 void ImageViewer::updateFilter() {
