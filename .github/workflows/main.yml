@@ -72,12 +72,15 @@ jobs:
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target all --verbose -j
+      - name: Zip app
+        working-directory: ${{ env.build_dir }}
+        run: zip -r tev.app.zip tev.app
       - name: Upload executable
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: macOS executable (${{ matrix.arch }})
-          path: ${{ env.build_dir }}/tev.app
+          path: ${{ env.build_dir }}/tev.app.zip
 
   build_windows:
     name: Build on Windows
