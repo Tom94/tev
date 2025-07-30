@@ -28,13 +28,13 @@ namespace tev {
 UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
     try {
 #if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
-#   if defined(NANOGUI_USE_OPENGL)
+#    if defined(NANOGUI_USE_OPENGL)
         std::string preamble = R"(#version 110)";
-#   elif defined(NANOGUI_USE_GLES)
+#    elif defined(NANOGUI_USE_GLES)
         std::string preamble =
             R"(#version 100
         precision highp float;)";
-#   endif
+#    endif
         auto vertexShader = preamble +
             R"glsl(
             uniform vec2 pixelSize;
@@ -85,6 +85,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
             uniform sampler2D reference;
             uniform bool hasReference;
+
+            uniform bool hasAlpha;
+            uniform int numColorChannels;
 
             uniform sampler2D colormap;
             uniform sampler2D ditherMatrix;
@@ -175,6 +178,20 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
             vec4 sample(sampler2D sampler, vec2 uv) {
                 vec4 color = texture2D(sampler, uv);
+
+                // Move alpha to end if not already there and duplicate first channel in monochromatic images.
+                if (hasAlpha) {
+                    if (numColorChannels == 1) {
+                        color = color.rrrg;
+                    } else if (numColorChannels == 2) {
+                        color = vec4(color.r, color.g, 0.0, color.b);
+                    }
+                } else {
+                    if (numColorChannels == 1) {
+                        color = vec4(color.r, color.r, color.r, 1.0);
+                    }
+                }
+
                 if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
                     color = vec4(0.0);
                 }
@@ -341,11 +358,26 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return float3(0.0f);
             }
 
-            float4 sample(texture2d<float, access::sample> texture, sampler textureSampler, float2 uv) {
+            float4 sample(texture2d<float, access::sample> texture, sampler textureSampler, float2 uv, bool hasAlpha, int numColorChannels) {
                 float4 color = texture.sample(textureSampler, uv);
+
+                // Move alpha to end if not already there and duplicate first channel in monochromatic images.
+                if (hasAlpha) {
+                    if (numColorChannels == 1) {
+                        color = color.rrrg;
+                    } else if (numColorChannels == 2) {
+                        color = float4(color.r, color.g, 0.0f, color.b);
+                    }
+                } else {
+                    if (numColorChannels == 1) {
+                        color = float4(color.r, color.r, color.r, 1.0f);
+                    }
+                }
+
                 if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f) {
                     return float4(0.0f);
                 }
+
                 return color;
             }
 
@@ -374,6 +406,8 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 sampler ditherMatrix_sampler,
                 const constant bool& hasImage,
                 const constant bool& hasReference,
+                const constant bool& hasAlpha,
+                const constant int& numColorChannels,
                 const constant float& exposure,
                 const constant float& offset,
                 const constant float& gamma,
@@ -395,7 +429,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
                 float cropAlpha = vert.imageUv.x < cropMin.x || vert.imageUv.x > cropMax.x || vert.imageUv.y < cropMin.y || vert.imageUv.y > cropMax.y ? 0.3f : 1.0f;
 
-                float4 imageVal = sample(image, image_sampler, vert.imageUv);
+                float4 imageVal = sample(image, image_sampler, vert.imageUv, hasAlpha, numColorChannels);
                 imageVal.a *= cropAlpha;
                 if (!hasReference) {
                     float4 color = float4(
@@ -414,7 +448,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
                 }
 
-                float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv);
+                float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv, hasAlpha, numColorChannels);
                 referenceVal.a *= cropAlpha;
 
                 float3 difference = imageVal.rgb - referenceVal.rgb;
@@ -483,46 +517,16 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
 UberShader::~UberShader() {}
 
-void UberShader::draw(const Vector2f& pixelSize, const Vector2f& checkerSize) {
-    draw(pixelSize, checkerSize, nullptr, Matrix3f{0.0f}, 0.0f, 0.0f, 0.0f, false, ETonemap::SRGB, std::nullopt);
-}
-
 void UberShader::draw(
     const Vector2f& pixelSize,
     const Vector2f& checkerSize,
-    Texture* textureImage,
+    Image* image,
     const Matrix3f& transformImage,
-    float exposure,
-    float offset,
-    float gamma,
-    bool clipToLdr,
-    ETonemap tonemap,
-    const std::optional<Box2i>& crop
-) {
-    draw(
-        pixelSize,
-        checkerSize,
-        textureImage,
-        transformImage,
-        nullptr,
-        Matrix3f{0.0f},
-        exposure,
-        offset,
-        gamma,
-        clipToLdr,
-        tonemap,
-        EMetric::Error,
-        crop
-    );
-}
-
-void UberShader::draw(
-    const Vector2f& pixelSize,
-    const Vector2f& checkerSize,
-    Texture* textureImage,
-    const Matrix3f& transformImage,
-    Texture* textureReference,
+    Image* reference,
     const Matrix3f& transformReference,
+    string_view requestedChannelGroup,
+    EInterpolationMode minFilter,
+    EInterpolationMode magFilter,
     float exposure,
     float offset,
     float gamma,
@@ -531,24 +535,25 @@ void UberShader::draw(
     EMetric metric,
     const std::optional<Box2i>& crop
 ) {
-    bool hasImage = textureImage;
-    if (!hasImage) {
-        // Just to have _some_ valid texture to bind. Will be ignored.
-        textureImage = mColorMap.get();
-    }
+    // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
+    // values (0 for colors, 1 for alpha).
+    const vector<string> channels = image ? image->channelsInGroup(requestedChannelGroup) : vector<string>{};
+    Texture* const textureImage = image ? image->texture(channels, minFilter, magFilter) : mColorMap.get();
+    Texture* const textureReference = reference ? reference->texture(channels, minFilter, magFilter) : textureImage;
 
-    bool hasReference = textureReference;
-    if (!hasReference) {
-        // Just to have _some_ valid texture to bind. Will be ignored.
-        textureReference = textureImage;
-    }
+    const bool hasAlpha = channels.size() > 1 && Channel::isAlpha(channels.back()); // Only count A as alpha if it isn't the only channel.
+    const int numColorChannels = channels.size() - (hasAlpha ? 1 : 0);
 
     bindCheckerboardData(pixelSize, checkerSize);
     bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
 
-    mShader->set_uniform("hasImage", hasImage);
-    mShader->set_uniform("hasReference", hasReference);
+    mShader->set_uniform("hasImage", (bool)image);
+    mShader->set_uniform("hasReference", (bool)reference);
+
+    mShader->set_uniform("hasAlpha", hasAlpha);
+    mShader->set_uniform("numColorChannels", numColorChannels);
+
     mShader->set_uniform("clipToLdr", clipToLdr);
     if (crop.has_value()) {
         mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
