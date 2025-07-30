@@ -306,7 +306,11 @@ string Image::shortName() const {
     return result;
 }
 
-bool Image::isInterleavedRgba(span<const string> channelNames) const {
+bool Image::isInterleaved(span<const string> channelNames, size_t desiredStride) const {
+    if (desiredStride < channelNames.size()) {
+        throw runtime_error{"Desired stride must be at least the number of channels."};
+    }
+
     // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
     // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
     const float* interleavedData = nullptr;
@@ -320,12 +324,22 @@ bool Image::isInterleavedRgba(span<const string> channelNames) const {
             interleavedData = chan->data();
         }
 
-        if (interleavedData != chan->data() - i || chan->stride() != 4) {
+        if (interleavedData != chan->data() - i || chan->stride() != desiredStride) {
             return false;
         }
     }
 
     return interleavedData;
+}
+
+static size_t numChannelsInPixelFormat(Texture::PixelFormat pixelFormat) {
+    switch (pixelFormat) {
+        case Texture::PixelFormat::R: return 1;
+        case Texture::PixelFormat::RA: return 2;
+        case Texture::PixelFormat::RGB: return 3;
+        case Texture::PixelFormat::RGBA: return 4;
+        default: throw runtime_error{"Unsupported pixel format for texture."};
+    }
 }
 
 Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
@@ -355,12 +369,20 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         }
     };
 
+    Texture::PixelFormat pixelFormat;
+    switch (channelNames.size()) {
+        case 1: pixelFormat = Texture::PixelFormat::R; break;
+        case 2: pixelFormat = Texture::PixelFormat::RA; break;
+        case 3: pixelFormat = Texture::PixelFormat::RGB; break;
+        case 4: pixelFormat = Texture::PixelFormat::RGBA; break;
+        default: throw runtime_error{"Unsupported number of channels for texture."};
+    }
+
     mTextures.emplace(
         lookup,
         ImageTexture{
             new Texture{
-                        Texture::PixelFormat::RGBA,
-                        Texture::ComponentFormat::Float32,
+                        pixelFormat, Texture::ComponentFormat::Float32,
                         {size().x(), size().y()},
                         toNanogui(minFilter),
                         toNanogui(magFilter),
@@ -373,7 +395,17 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     );
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
-    bool directUpload = isInterleavedRgba(channelNames);
+    const size_t numTextureChannels = numChannelsInPixelFormat(texture->pixel_format());
+
+    // Important: num channels can be *larger* than the number of channels in the image here!
+    // This is because some graphics APIs, like metal, only have power-of-two channel counts: 1, 2, 4
+    if (numTextureChannels < channelNames.size()) {
+        throw runtime_error{fmt::format(
+            "Image has {} channels, but texture requires at least {} channels. (Image: {}, Texture: {})", channelNames.size(), numTextureChannels, mName, lookup
+        )};
+    }
+
+    bool directUpload = isInterleaved(channelNames, numTextureChannels);
 
     tlog::debug() << fmt::format(
         "Uploading texture: direct={} filter={}-{} img={}:{}",
@@ -398,31 +430,31 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
             tlog::debug() << fmt::format("Indirect upload took {:.03}s", duration.count());
         }};
 
-        auto numPixels = this->numPixels();
-        vector<float> data = vector<float>(numPixels * 4);
+        const auto numPixels = this->numPixels();
+        vector<float> data = vector<float>(numPixels * numTextureChannels);
 
         vector<Task<void>> tasks;
-        for (size_t i = 0; i < 4; ++i) {
-            float defaultVal = i == 3 ? 1 : 0;
-            if (i < channelNames.size()) {
-                const auto* chan = channel(channelNames[i]);
-                if (!chan) {
-                    tasks.emplace_back(
-                        ThreadPool::global().parallelForAsync<size_t>(
-                            0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, numeric_limits<int>::max()
-                        )
-                    );
-                } else {
-                    tasks.emplace_back(
-                        ThreadPool::global().parallelForAsync<size_t>(
-                            0, numPixels, [chan, &data, i](size_t j) { data[j * 4 + i] = chan->at(j); }, numeric_limits<int>::max()
-                        )
-                    );
-                }
+        for (size_t i = 0; i < numTextureChannels; ++i) {
+            const Channel* chan = i < channelNames.size() ? channel(channelNames[i]) : nullptr;
+            const bool isAlpha = i == 3 || (chan && Channel::isAlpha(chan->name()));
+            const float defaultVal = isAlpha ? 1.0f : 0.0f;
+
+            if (!chan) {
+                tasks.emplace_back(
+                    ThreadPool::global().parallelForAsync<size_t>(
+                        0,
+                        numPixels,
+                        [&data, defaultVal, numTextureChannels, i](size_t j) { data[j * numTextureChannels + i] = defaultVal; },
+                        numeric_limits<int>::max()
+                    )
+                );
             } else {
                 tasks.emplace_back(
                     ThreadPool::global().parallelForAsync<size_t>(
-                        0, numPixels, [&data, defaultVal, i](size_t j) { data[j * 4 + i] = defaultVal; }, numeric_limits<int>::max()
+                        0,
+                        numPixels,
+                        [chan, &data, numTextureChannels, i](size_t j) { data[j * numTextureChannels + i] = chan->at(j); },
+                        numeric_limits<int>::max()
                     )
                 );
             }
@@ -472,7 +504,7 @@ void Image::decomposeChannelGroup(string_view groupName) {
         mChannelGroups.insert(
             mChannelGroups.begin() + (++groupPos),
             ChannelGroup{
-                channel, {channel, channel, channel}
+                channel, {channel}
         }
         );
     }
@@ -533,11 +565,6 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
         }
 
         if (!groupChannels.empty()) {
-            if (groupChannels.size() == 1) {
-                groupChannels.emplace_back(groupChannels.front());
-                groupChannels.emplace_back(groupChannels.front());
-            }
-
             if (hasAlpha) {
                 groupChannels.emplace_back(alphaChannelName);
             }
@@ -548,14 +575,14 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
 
     for (const auto& name : allChannels) {
         if (hasAlpha) {
-            result.emplace_back(createChannelGroup(layerName, vector<string>{name, name, name, alphaChannelName}));
+            result.emplace_back(createChannelGroup(layerName, vector<string>{name, alphaChannelName}));
         } else {
-            result.emplace_back(createChannelGroup(layerName, vector<string>{name, name, name}));
+            result.emplace_back(createChannelGroup(layerName, vector<string>{name}));
         }
     }
 
     if (hasAlpha && result.empty()) {
-        result.emplace_back(createChannelGroup(layerName, vector<string>{alphaChannelName, alphaChannelName, alphaChannelName}));
+        result.emplace_back(createChannelGroup(layerName, vector<string>{alphaChannelName}));
     }
 
     TEV_ASSERT(!result.empty(), "Images with no channels should never exist.");
@@ -586,25 +613,24 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
         }
 
         const auto numPixels = (size_t)width * height;
-        vector<float> textureData(numPixels * 4);
+        const size_t numTextureChannels = numChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
+        vector<float> textureData(numPixels * numTextureChannels);
 
-        // Populate data for sub-region of the texture to be updated
-        for (size_t i = 0; i < 4; ++i) {
-            if (i < imageTexture.channels.size()) {
-                const auto& localChannelName = imageTexture.channels[i];
-                const auto* localChan = channel(localChannelName);
-                TEV_ASSERT(localChan, "Channel to be updated must exist");
+        for (size_t i = 0; i < numTextureChannels; ++i) {
+            const Channel* chan = i < imageTexture.channels.size() ? channel(imageTexture.channels[i]) : nullptr;
+            const bool isAlpha = i == 3 || (chan && Channel::isAlpha(chan->name()));
+            const float defaultVal = isAlpha ? 1.0f : 0.0f;
 
+            if (chan) {
                 for (int posY = 0; posY < height; ++posY) {
                     for (int posX = 0; posX < width; ++posX) {
                         size_t tileIdx = posX + posY * (size_t)width;
-                        textureData[tileIdx * 4 + i] = localChan->at({x + posX, y + posY});
+                        textureData[tileIdx * numTextureChannels + i] = chan->at({x + posX, y + posY});
                     }
                 }
             } else {
-                float val = i == 3 ? 1 : 0;
                 for (size_t j = 0; j < numPixels; ++j) {
-                    textureData[j * 4 + i] = val;
+                    textureData[j * numTextureChannels + i] = defaultVal;
                 }
             }
         }
