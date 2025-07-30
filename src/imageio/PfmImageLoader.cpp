@@ -63,7 +63,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32);
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {

@@ -79,45 +79,27 @@ void ImageCanvas::draw_contents() {
 
     Image* image = (mReference && viewReferenceOnly) ? mReference.get() : mImage.get();
 
-    if (!image) {
-        mShader->draw(2.0f * inverse(Vector2f{m_size}) / mPixelRatio, Vector2f{20.0f});
-        return;
-    }
-
     optional<Box2i> imageSpaceCrop = nullopt;
-    if (mCrop.has_value()) {
+    if (image && mCrop.has_value()) {
         imageSpaceCrop = mCrop.value().translate(image->displayWindow().min - image->dataWindow().min);
     }
 
-    if (!mReference || viewImageOnly || image == mReference.get()) {
-        mShader->draw(
-            2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
-            Vector2f{20.0f},
-            image->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
-            // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in
-            // [0, 1]-space.
-            inverse(transform(image)),
-            mExposure,
-            mOffset,
-            mGamma,
-            mClipToLdr,
-            mTonemap,
-            imageSpaceCrop
-        );
-        return;
-    }
+    viewImageOnly |= !mReference || image == mReference.get();
+
+    Image* reference = (viewImageOnly || !mReference || image == mReference.get()) ? nullptr : mReference.get();
 
     mShader->draw(
         2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
         Vector2f{20.0f},
-        mImage->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
+        image,
         // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in [0,
         // 1]-space.
         inverse(transform(mImage.get())),
-        // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
-        // values (0 for colors, 1 for alpha).
-        mReference->texture(mImage->channelsInGroup(mRequestedChannelGroup), mMinFilter, mMagFilter),
+        reference,
         inverse(transform(mReference.get())),
+        mRequestedChannelGroup,
+        mMinFilter,
+        mMagFilter,
         mExposure,
         mOffset,
         mGamma,
@@ -156,7 +138,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 
         vector<Color> colors;
         for (const auto& channel : channels) {
-            colors.emplace_back(Channel::color(channel));
+            colors.emplace_back(Channel::color(channel, true));
         }
 
         float fontSize = pixelSize.x() / 6;
@@ -862,7 +844,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     vector<Channel> result;
     auto channelNames = image->channelsInGroup(requestedChannelGroup);
     for (size_t i = 0; i < channelNames.size(); ++i) {
-        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
+        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size(), EPixelFormat::F32);
     }
 
     const auto channels = image->channels(channelNames);
@@ -948,9 +930,15 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     auto result = make_shared<CanvasStatistics>();
 
     size_t nChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
+    result->histogramColors.resize(nChannels);
 
     for (size_t i = 0; i < nChannels; ++i) {
+        string rgba[] = {"R", "G", "B", "A"};
+        string colorName = nChannels == 1 ? "L" : rgba[min(i, (size_t)3)];
+        result->histogramColors[i] = Channel::color(colorName, false);
+
         const auto& channel = flattened[i];
+
         for (int y = region.min.y(); y < region.max.y(); ++y) {
             for (int x = region.min.x(); x < region.max.x(); ++x) {
                 auto v = channel.at({x, y});

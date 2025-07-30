@@ -19,12 +19,14 @@
 #pragma once
 
 #include <tev/Box.h>
+#include <tev/Image.h>
 
 #include <nanogui/shader.h>
 #include <nanogui/texture.h>
 #include <nanogui/vector.h>
 
 #include <optional>
+#include <string_view>
 
 namespace tev {
 
@@ -33,31 +35,16 @@ public:
     UberShader(nanogui::RenderPass* renderPass, float ditherScale);
     virtual ~UberShader();
 
-    // Draws just a checkerboard
-    void draw(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
-
-    // Draws an image
     void draw(
         const nanogui::Vector2f& pixelSize,
         const nanogui::Vector2f& checkerSize,
-        nanogui::Texture* textureImage,
+        Image* textureImage,
         const nanogui::Matrix3f& transformImage,
-        float exposure,
-        float offset,
-        float gamma,
-        bool clipToLdr,
-        ETonemap tonemap,
-        const std::optional<Box2i>& crop
-    );
-
-    // Draws a difference between a reference and an image
-    void draw(
-        const nanogui::Vector2f& pixelSize,
-        const nanogui::Vector2f& checkerSize,
-        nanogui::Texture* textureImage,
-        const nanogui::Matrix3f& transformImage,
-        nanogui::Texture* textureReference,
+        Image* textureReference,
         const nanogui::Matrix3f& transformReference,
+        std::string_view requestedChannelGroup,
+        EInterpolationMode minFilter,
+        EInterpolationMode magFilter,
         float exposure,
         float offset,
         float gamma,

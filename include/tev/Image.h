@@ -147,7 +147,7 @@ public:
         return result;
     }
 
-    bool isInterleavedRgba(std::span<const std::string> channelNames) const;
+    bool isInterleaved(std::span<const std::string> channelNames, size_t desiredStride) const;
 
     nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
 

@@ -85,7 +85,8 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
         ImageData& resultData = result[frameIdx];
 
-        resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size);
+        // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
+        resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, isHdr ? EPixelFormat::F32 : EPixelFormat::F16);
         resultData.hasPremultipliedAlpha = false;
         if (numFrames > 1) {
             resultData.partName = fmt::format("frames.{}", frameIdx);

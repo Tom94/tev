@@ -1093,8 +1093,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
     // Local scope to prevent use-after-move
     {
-        auto rgbaChannels = ImageLoader::makeRgbaInterleavedChannels(numRgbaChannels, hasAlpha, size);
-        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size);
+        const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
+        auto rgbaChannels = ImageLoader::makeRgbaInterleavedChannels(numRgbaChannels, hasAlpha, size, desiredPixelFormat);
+        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, desiredPixelFormat);
 
         resultData.channels.insert(resultData.channels.end(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end()));
         resultData.channels.insert(

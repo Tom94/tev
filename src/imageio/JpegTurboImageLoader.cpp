@@ -167,7 +167,9 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         resultData.attributes.emplace_back(exifAttributes.value());
     }
 
-    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size);
+    // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily fits
+    // into F16.
+    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F16);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
     resultData.hasPremultipliedAlpha = true;

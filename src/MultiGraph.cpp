@@ -58,14 +58,6 @@ void MultiGraph::draw(NVGcontext* ctx) {
     nvgFill(ctx);
 
     if (mValues.size() >= 2) {
-        array<Color, 3> colors = {
-            {
-             Color{255, 0, 0, 200},
-             Color{0, 255, 0, 200},
-             Color{0, 0, 255, 200},
-             }
-        };
-
         nvgSave(ctx);
 
         // Additive blending
@@ -84,7 +76,7 @@ void MultiGraph::draw(NVGcontext* ctx) {
                 nvgLineTo(ctx, vx, vy);
             }
 
-            auto color = i < colors.size() ? colors[i] : mForegroundColor;
+            auto color = i < mColors.size() ? mColors[i] : mForegroundColor;
             nvgLineTo(ctx, m_pos.x() + m_size.x(), m_pos.y() + m_size.y());
             nvgFillColor(ctx, color);
             nvgFill(ctx);

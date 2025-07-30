@@ -181,10 +181,12 @@ Task<vector<ImageData>>
             throw ImageLoadError{"Row size not a multiple of sample size."};
         }
 
+        // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
+        // such values after conversion to linear space.
         if (numChannels == 1) {
-            resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size);
+            resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size, EPixelFormat::F16);
         } else {
-            resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, namePrefix);
+            resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F16);
         }
 
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
@@ -438,8 +440,14 @@ Task<vector<ImageData>>
 
         ImageData scaledResultData;
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
-        scaledResultData.channels =
-            makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, namePrefix);
+
+        if (numChannels == 1) {
+            scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize, EPixelFormat::F16);
+        } else {
+            scaledResultData.channels = makeRgbaInterleavedChannels(
+                numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, EPixelFormat::F16, namePrefix
+            );
+        }
 
         co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
         resultData = std::move(scaledResultData);
@@ -496,6 +504,8 @@ Task<vector<ImageData>>
             }
 
             if (retainAuxLayer) {
+                // TODO:Handle the case where the auxiliary image has different color space, attributes, alpha premultiplication, etc.
+                // as the main image. Simply copying and attaching the channels is not sufficient in that case.
                 mainImage.channels.insert(
                     mainImage.channels.end(),
                     std::make_move_iterator(auxImgData.channels.begin()),
