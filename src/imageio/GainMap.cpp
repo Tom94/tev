@@ -25,7 +25,10 @@ using namespace std;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(float* __restrict image, const float* __restrict gainMap, const Vector2i& size, int priority, const AppleMakerNote* amn) {
+Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote* amn) {
+    auto size = image.channels[0].size();
+    TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
+
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
 
     // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
@@ -55,13 +58,35 @@ Task<void> applyAppleGainMap(float* __restrict image, const float* __restrict ga
     float headroom = pow(2.0f, max(stops, 0.0f));
     tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
 
+    const int numImageChannels = image.channels.size();
+    const int numGainMapChannels = gainMap.channels.size();
+
+    int alphaChannelIndex = -1;
+    for (int c = 0; c < numImageChannels; ++c) {
+        bool isAlpha = Channel::isAlpha(image.channels[c].name());
+        if (isAlpha) {
+            if (alphaChannelIndex != -1) {
+                tlog::warning(
+                ) << fmt::format("Image has multiple alpha channels, using the first one: {}", image.channels[alphaChannelIndex].name());
+                continue;
+            }
+
+            alphaChannelIndex = c;
+        }
+    }
+
     const size_t numPixels = (size_t)size.x() * size.y();
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
         [&](size_t i) {
-            for (int c = 0; c < 3; ++c) {
-                image[i * 4 + c] *= (1.0f + (headroom - 1.0f) * gainMap[i * 4]);
+            for (int c = 0; c < numImageChannels; ++c) {
+                if (c == alphaChannelIndex) {
+                    continue;
+                }
+
+                const int gainmapChannel = min(c, numGainMapChannels - 1);
+                image.channels[c].at(i) *= (1.0f + (headroom - 1.0f) * gainMap.channels[gainmapChannel].at(i));
             }
         },
         priority

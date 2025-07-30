@@ -126,7 +126,8 @@ Task<vector<ImageData>>
             isMonochrome = false;
         }
 
-        const int numChannels = (isMonochrome ? 1 : 3) + (hasAlpha ? 1 : 0);
+        const int numColorChannels = isMonochrome ? 1 : 3;
+        const int numChannels = numColorChannels + (hasAlpha ? 1 : 0);
         resultData.hasPremultipliedAlpha = hasAlpha && heif_image_handle_is_premultiplied_alpha(imgHandle);
 
         const bool is_little_endian = std::endian::native == std::endian::little;
@@ -180,7 +181,13 @@ Task<vector<ImageData>>
             throw ImageLoadError{"Row size not a multiple of sample size."};
         }
 
-        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, namePrefix);
+        if (numChannels == 1) {
+            resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size);
+        } else {
+            resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, namePrefix);
+        }
+
+        const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
 
         auto tryIccTransform = [&](const vector<uint8_t>& iccProfile) -> Task<void> {
             const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
@@ -224,6 +231,7 @@ Task<vector<ImageData>>
                 EPixelFormat::F32,
                 (uint8_t*)dataF32.data(),
                 resultData.channels.front().data(),
+                numInterleavedChannels,
                 priority
             );
 
@@ -260,7 +268,7 @@ Task<vector<ImageData>>
                     (const uint16_t*)data,
                     numChannels,
                     resultData.channels.front().data(),
-                    4,
+                    numInterleavedChannels,
                     size,
                     hasAlpha,
                     priority,
@@ -272,7 +280,7 @@ Task<vector<ImageData>>
                     (const uint8_t*)data,
                     numChannels,
                     resultData.channels.front().data(),
-                    4,
+                    numInterleavedChannels,
                     size,
                     hasAlpha,
                     priority,
@@ -291,7 +299,7 @@ Task<vector<ImageData>>
                 (const uint16_t*)data,
                 numChannels,
                 resultData.channels.front().data(),
-                4,
+                numInterleavedChannels,
                 size,
                 hasAlpha,
                 priority,
@@ -300,7 +308,15 @@ Task<vector<ImageData>>
             );
         } else {
             co_await toFloat32(
-                data, numChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t)
+                data,
+                numChannels,
+                resultData.channels.front().data(),
+                numInterleavedChannels,
+                size,
+                hasAlpha,
+                priority,
+                channelScale,
+                bytesPerRow / sizeof(uint8_t)
             );
         }
 
@@ -334,9 +350,9 @@ Task<vector<ImageData>>
                 const float factor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                 const float invFactor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? alpha : 1.0f;
 
-                for (size_t c = 0; c < 3; ++c) {
-                    const float val = (pixelData[i * 4 + c] - range.offset) * range.scale;
-                    pixelData[i * 4 + c] = invFactor * ituth273::invTransfer(cicpTransfer, factor * val);
+                for (int c = 0; c < numColorChannels; ++c) {
+                    const float val = (pixelData[i * numInterleavedChannels + c] - range.offset) * range.scale;
+                    pixelData[i * numInterleavedChannels + c] = invFactor * ituth273::invTransfer(cicpTransfer, factor * val);
                 }
             },
             priority
@@ -418,7 +434,7 @@ Task<vector<ImageData>>
             co_return;
         }
 
-        int numChannels = (int)resultData.channels.size();
+        const int numChannels = (int)resultData.channels.size();
 
         ImageData scaledResultData;
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
@@ -476,13 +492,7 @@ Task<vector<ImageData>>
                     tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
                 }
 
-                if (auxImgData.channels.size() > 1) {
-                    tlog::warning() << "Gain map has multiple channels. Applying only the first channel.";
-                }
-
-                co_await applyAppleGainMap(
-                    mainImage.channels.front().data(), auxImgData.channels.front().data(), mainImage.channels.front().size(), priority, amn.get()
-                );
+                co_await applyAppleGainMap(mainImage, auxImgData, priority, amn.get());
             }
 
             if (retainAuxLayer) {

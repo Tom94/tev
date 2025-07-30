@@ -1296,6 +1296,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                 EPixelFormat::F32,
                 (uint8_t*)floatRgbaData.data(),
                 resultData.channels.front().data(),
+                4,
                 priority
             );
 

@@ -234,6 +234,11 @@ public:
 
 class CmsContext {
 public:
+    CmsContext(const CmsContext&) = delete;
+    CmsContext& operator=(const CmsContext&) = delete;
+    CmsContext(CmsContext&&) = delete;
+    CmsContext& operator=(CmsContext&&) = delete;
+
     static const CmsContext& threadLocal() {
         static thread_local CmsContext threadCtx;
         return threadCtx;
@@ -242,6 +247,7 @@ public:
     cmsContext get() const { return mCtx; }
 
     cmsHPROFILE rec709Profile() const { return mRec709Profile; }
+    cmsHPROFILE grayProfile() const { return mGrayProfile; }
 
 private:
     CmsContext() {
@@ -266,9 +272,19 @@ private:
         if (!mRec709Profile) {
             throw runtime_error{"Failed to create Rec.709 color profile."};
         }
+
+        cmsToneCurve* grayCurve = cmsBuildGamma(mCtx, 1.0f);
+        mGrayProfile = cmsCreateGrayProfileTHR(mCtx, &D65, grayCurve);
+        if (!mGrayProfile) {
+            throw runtime_error{"Failed to create gray color profile."};
+        }
     }
 
     ~CmsContext() {
+        if (mGrayProfile) {
+            cmsCloseProfile(mGrayProfile);
+        }
+
         if (mRec709Profile) {
             cmsCloseProfile(mRec709Profile);
         }
@@ -280,6 +296,7 @@ private:
 
     cmsContext mCtx = nullptr;
     cmsHPROFILE mRec709Profile = nullptr;
+    cmsHPROFILE mGrayProfile = nullptr;
 };
 
 ColorProfile::~ColorProfile() {
@@ -305,6 +322,7 @@ Task<void> toLinearSrgbPremul(
     EPixelFormat pixelFormat,
     uint8_t* __restrict src,
     float* __restrict rgbaDst,
+    int numChannelsOut,
     int priority
 ) {
     if (!profile.isValid()) {
@@ -323,23 +341,23 @@ Task<void> toLinearSrgbPremul(
     int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
     cmsUInt32Number type = CHANNELS_SH(numColorChannels);
 
-    size_t bytesPerPixel = 0;
+    size_t bytesPerSample = 0;
     switch (pixelFormat) {
         case EPixelFormat::U8:
             type |= BYTES_SH(1);
-            bytesPerPixel = 1;
+            bytesPerSample = 1;
             break;
         case EPixelFormat::U16:
             type |= BYTES_SH(2);
-            bytesPerPixel = 2;
+            bytesPerSample = 2;
             break;
         case EPixelFormat::F16:
             type |= BYTES_SH(2) | FLOAT_SH(1);
-            bytesPerPixel = 2;
+            bytesPerSample = 2;
             break;
         case EPixelFormat::F32:
             type |= BYTES_SH(4) | FLOAT_SH(1);
-            bytesPerPixel = 4;
+            bytesPerSample = 4;
             break;
         default: throw runtime_error{"Unsupported pixel format."};
     }
@@ -369,14 +387,23 @@ Task<void> toLinearSrgbPremul(
         type |= COLORSPACE_SH(PT_RGB);
     }
 
+    cmsUInt32Number typeOut = 0;
+    switch (numChannelsOut) {
+        case 1: typeOut = TYPE_GRAY_FLT; break;
+        case 2: typeOut = TYPE_GRAYA_FLT; break;
+        case 3: typeOut = TYPE_RGB_FLT; break;
+        case 4: typeOut = TYPE_RGBA_FLT; break;
+        default: throw runtime_error{"Invalid number of output channels."};
+    }
+
     cmsHTRANSFORM transform = cmsCreateTransformTHR(
         CmsContext::threadLocal().get(),
         profile.get(),
         type,
-        CmsContext::threadLocal().rec709Profile(),
+        numColorChannels == 1 ? CmsContext::threadLocal().grayProfile() : CmsContext::threadLocal().rec709Profile(),
         // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
         // if we set this as the output type.
-        TYPE_RGBA_FLT,
+        typeOut,
         // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
         // following rendering intent.
         INTENT_ABSOLUTE_COLORIMETRIC,
@@ -387,13 +414,14 @@ Task<void> toLinearSrgbPremul(
         throw runtime_error{"Failed to create color transform to Rec.709."};
     }
 
-    const size_t nSamplesPerRow = size.x() * numChannels;
+    const size_t nSrcSamplesPerRow = size.x() * numChannels;
+    const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         size.y(),
         [&](size_t y) {
-            size_t srcOffset = y * nSamplesPerRow * bytesPerPixel;
-            size_t dstOffset = y * (size_t)size.x() * 4;
+            size_t srcOffset = y * nSrcSamplesPerRow * bytesPerSample;
+            size_t dstOffset = y * nDstSamplesPerRow;
 
             uint8_t* __restrict srcPtr = &src[srcOffset];
             float* __restrict dstPtr = &rgbaDst[dstOffset];
@@ -402,10 +430,10 @@ Task<void> toLinearSrgbPremul(
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
                     const size_t baseIdx = x * numChannels;
-                    const float alpha = *(float*)&srcPtr[(baseIdx + numColorChannels) * bytesPerPixel];
+                    const float alpha = *(float*)&srcPtr[(baseIdx + numColorChannels) * bytesPerSample];
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
                     for (int c = 0; c < numChannels - 1; ++c) {
-                        *(float*)&srcPtr[(baseIdx + c) * bytesPerPixel] *= factor;
+                        *(float*)&srcPtr[(baseIdx + c) * bytesPerSample] *= factor;
                     }
                 }
             }
@@ -419,13 +447,14 @@ Task<void> toLinearSrgbPremul(
             // also should not re-multiply those.
             if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = x * 4;
-                    float factor = dstPtr[baseIdx + 3];
+                    const size_t baseIdx = x * numChannelsOut;
+
+                    float factor = dstPtr[baseIdx + numChannelsOut - 1];
                     if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
                         factor = 1.0f;
                     }
 
-                    for (int c = 0; c < 3; ++c) {
+                    for (int c = 0; c < numChannelsOut - 1; ++c) {
                         dstPtr[baseIdx + c] *= factor;
                     }
                 }

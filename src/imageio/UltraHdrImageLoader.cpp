@@ -170,6 +170,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
                 EPixelFormat::F32,
                 (uint8_t*)imageData.channels.front().data(),
                 channels.front().data(),
+                4,
                 priority
             );
 

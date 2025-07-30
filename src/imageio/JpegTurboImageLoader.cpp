@@ -186,6 +186,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                 EPixelFormat::F32,
                 (uint8_t*)floatData.data(),
                 resultData.channels.front().data(),
+                4,
                 priority
             );
 

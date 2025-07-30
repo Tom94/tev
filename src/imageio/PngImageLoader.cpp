@@ -346,6 +346,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         EPixelFormat::F32,
                         (uint8_t*)iccTmpFloatData.data(),
                         dstData,
+                        4,
                         priority
                     );
 

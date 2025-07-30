@@ -110,6 +110,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     EPixelFormat::F32,
                     (uint8_t*)tmp.data(),
                     bgColor.data(),
+                    4,
                     priority
                 );
             } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
@@ -186,6 +187,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         EPixelFormat::F32,
                         (uint8_t*)iccTmpFloatData.data(),
                         frameData.data(),
+                        4,
                         priority
                     );
                 } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }

@@ -72,6 +72,18 @@ public:
     ColorProfile(void* profile) : mProfile{profile} {}
     ~ColorProfile();
 
+    ColorProfile(const ColorProfile&) = delete;
+    ColorProfile& operator=(const ColorProfile&) = delete;
+
+    ColorProfile(ColorProfile&& other) noexcept {
+        std::swap(mProfile, other.mProfile);
+    }
+
+    ColorProfile& operator=(ColorProfile&& other) noexcept {
+        std::swap(mProfile, other.mProfile);
+        return *this;
+    }
+
     static ColorProfile fromIcc(const uint8_t* iccProfile, size_t iccProfileSize);
     static ColorProfile srgb();
     static ColorProfile linearSrgb();
@@ -98,6 +110,7 @@ Task<void> toLinearSrgbPremul(
     EPixelFormat pixelFormat,
     uint8_t* __restrict src,
     float* __restrict rgbaDst,
+    int numChannelsOut,
     int priority
 );
 
