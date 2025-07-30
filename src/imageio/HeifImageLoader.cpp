@@ -438,8 +438,13 @@ Task<vector<ImageData>>
 
         ImageData scaledResultData;
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
-        scaledResultData.channels =
-            makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, namePrefix);
+
+        if (numChannels == 1) {
+            scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize);
+        } else {
+            scaledResultData.channels =
+                makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, namePrefix);
+        }
 
         co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
         resultData = std::move(scaledResultData);
