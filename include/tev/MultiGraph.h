@@ -55,6 +55,9 @@ public:
     std::span<const float> values() const { return mValues; }
     void setValues(std::span<const float> values) { mValues = {values.begin(), values.end()}; }
 
+    std::span<nanogui::Color> colors() { return mColors; }
+    void setColors(std::span<const nanogui::Color> colors) { mColors = {colors.begin(), colors.end()}; }
+
     void setNChannels(int nChannels) { mNChannels = nChannels; }
 
     virtual nanogui::Vector2i preferred_size(NVGcontext* ctx) const override;
@@ -72,6 +75,7 @@ protected:
     std::string mCaption, mHeader, mFooter;
     nanogui::Color mBackgroundColor, mForegroundColor, mTextColor;
     std::vector<float> mValues;
+    std::vector<nanogui::Color> mColors;
     int mNChannels = 1;
     float mMinimum = 0, mMean = 0, mMaximum = 0;
     int mZeroBin = 0;

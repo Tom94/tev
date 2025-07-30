@@ -1458,6 +1458,7 @@ void ImageViewer::draw_contents() {
         if (lazyCanvasStatistics->isReady()) {
             auto statistics = lazyCanvasStatistics->get();
             mHistogram->setNChannels(statistics->nChannels);
+            mHistogram->setColors(statistics->histogramColors);
             mHistogram->setValues(statistics->histogram);
             mHistogram->setMinimum(statistics->minimum);
             mHistogram->setMean(statistics->mean);
@@ -1478,6 +1479,7 @@ void ImageViewer::draw_contents() {
         }
     } else {
         mHistogram->setNChannels(1);
+        mHistogram->setColors({{1.0f, 1.0f, 1.0f}});
         mHistogram->setValues({{0.0f}});
         mHistogram->setMinimum(0);
         mHistogram->setMean(0);

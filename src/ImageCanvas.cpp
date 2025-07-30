@@ -930,9 +930,15 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     auto result = make_shared<CanvasStatistics>();
 
     size_t nChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
+    result->histogramColors.resize(nChannels);
 
     for (size_t i = 0; i < nChannels; ++i) {
+        string rgba[] = {"R", "G", "B", "A"};
+        string colorName = nChannels == 1 ? "L" : rgba[min(i, (size_t)3)];
+        result->histogramColors[i] = Channel::color(colorName, false);
+
         const auto& channel = flattened[i];
+
         for (int y = region.min.y(); y < region.max.y(); ++y) {
             for (int x = region.min.x(); x < region.max.x(); ++x) {
                 auto v = channel.at({x, y});
