@@ -438,8 +438,13 @@ Task<vector<ImageData>>
 
         ImageData scaledResultData;
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
-        scaledResultData.channels =
-            makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, namePrefix);
+
+        if (numChannels == 1) {
+            scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize);
+        } else {
+            scaledResultData.channels =
+                makeRgbaInterleavedChannels(numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, namePrefix);
+        }
 
         co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
         resultData = std::move(scaledResultData);
@@ -496,6 +501,8 @@ Task<vector<ImageData>>
             }
 
             if (retainAuxLayer) {
+                // TODO:Handle the case where the auxiliary image has different color space, attributes, alpha premultiplication, etc.
+                // as the main image. Simply copying and attaching the channels is not sufficient in that case.
                 mainImage.channels.insert(
                     mainImage.channels.end(),
                     std::make_move_iterator(auxImgData.channels.begin()),
