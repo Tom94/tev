@@ -138,7 +138,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 
         vector<Color> colors;
         for (const auto& channel : channels) {
-            colors.emplace_back(Channel::color(channel));
+            colors.emplace_back(Channel::color(channel, true));
         }
 
         float fontSize = pixelSize.x() / 6;

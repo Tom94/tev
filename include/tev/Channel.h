@@ -39,7 +39,7 @@ public:
     static bool isTopmost(std::string_view fullChannel);
     static bool isAlpha(std::string_view fullChannel);
 
-    static nanogui::Color color(std::string_view fullChannel);
+    static nanogui::Color color(std::string_view fullChannel, bool pastel);
 
     Channel(
         std::string_view name,
