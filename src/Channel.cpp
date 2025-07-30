@@ -43,15 +43,25 @@ bool Channel::isTopmost(string_view channel) { return tail(channel) == channel; 
 
 bool Channel::isAlpha(string_view channel) { return toLower(tail(channel)) == "a"; }
 
-Color Channel::color(string_view channel) {
+Color Channel::color(string_view channel, bool pastel) {
     auto lowerChannel = toLower(tail(channel));
 
-    if (channel == "r") {
-        return Color(0.8f, 0.2f, 0.2f, 1.0f);
-    } else if (channel == "g") {
-        return Color(0.2f, 0.8f, 0.2f, 1.0f);
-    } else if (channel == "b") {
-        return Color(0.2f, 0.3f, 1.0f, 1.0f);
+    if (pastel) {
+        if (lowerChannel == "r") {
+            return Color(0.8f, 0.2f, 0.2f, 1.0f);
+        } else if (lowerChannel == "g") {
+            return Color(0.2f, 0.8f, 0.2f, 1.0f);
+        } else if (lowerChannel == "b") {
+            return Color(0.2f, 0.3f, 1.0f, 1.0f);
+        }
+    } else {
+        if (lowerChannel == "r") {
+            return Color(1.0f, 0.0f, 0.0f, 1.0f);
+        } else if (lowerChannel == "g") {
+            return Color(0.0f, 1.0f, 0.0f, 1.0f);
+        } else if (lowerChannel == "b") {
+            return Color(0.0f, 0.0f, 1.0f, 1.0f);
+        }
     }
 
     return Color(1.0f, 1.0f);
