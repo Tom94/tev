@@ -44,6 +44,7 @@ public:
     Channel(
         std::string_view name,
         const nanogui::Vector2i& size,
+        EPixelFormat desiredPixelFormat,
         std::shared_ptr<std::vector<float>> data = nullptr,
         size_t dataOffset = 0,
         size_t dataStride = 1
@@ -119,9 +120,17 @@ public:
 
     std::shared_ptr<std::vector<float>>& dataBuf() { return mData; }
 
+    void setDesiredPixelFormat(EPixelFormat format) { mDesiredPixelFormat = format; }
+    EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
+
 private:
     std::string mName;
     nanogui::Vector2i mSize;
+
+    // tev defaults to storing images in fp32 for maximum precision. However, many images only require fp16 to be displayed as good as
+    // losslessly. For such images, loaders can set this to F16 to save memory.
+    EPixelFormat mDesiredPixelFormat = EPixelFormat::F32;
+
     std::shared_ptr<std::vector<float>> mData;
     size_t mDataOffset;
     size_t mDataStride;

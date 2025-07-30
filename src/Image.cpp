@@ -21,6 +21,8 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/ImageLoader.h>
 
+#include <half.h>
+
 #include <GLFW/glfw3.h>
 
 #include <chrono>
@@ -342,6 +344,45 @@ static size_t numChannelsInPixelFormat(Texture::PixelFormat pixelFormat) {
     }
 }
 
+static size_t bitsPerSampleInComponentFormat(Texture::ComponentFormat componentFormat) {
+    switch (componentFormat) {
+        case Texture::ComponentFormat::Float16: return 16;
+        case Texture::ComponentFormat::Float32: return 32;
+        default: throw runtime_error{"Unsupported component format for texture."};
+    }
+}
+
+template <typename T>
+Task<void> prepareTextureChannel(
+    T* data, const Channel* chan, const Vector2i& pos, const Vector2i& size, size_t channelIdx, size_t numTextureChannels
+) {
+    const bool isAlpha = channelIdx == 3 || (chan && Channel::isAlpha(chan->name()));
+    const T defaultVal = isAlpha ? (T)1.0f : (T)0.0f;
+
+    vector<Task<void>> tasks;
+    if (chan) {
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            size.y(),
+            [chan, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
+                for (int x = 0; x < width; ++x) {
+                    size_t tileIdx = x + y * (size_t)width;
+                    data[tileIdx * numTextureChannels + channelIdx] = chan->at({pos.x() + x, pos.y() + y});
+                }
+            },
+            numeric_limits<int>::max()
+        );
+    } else {
+        const size_t numPixels = (size_t)size.x() * size.y();
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            numPixels,
+            [&data, defaultVal, numTextureChannels, channelIdx](size_t j) { data[j * numTextureChannels + channelIdx] = defaultVal; },
+            numeric_limits<int>::max()
+        );
+    }
+}
+
 Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
     if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
         tlog::error() << fmt::format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
@@ -378,11 +419,20 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         default: throw runtime_error{"Unsupported number of channels for texture."};
     }
 
+    Texture::ComponentFormat componentFormat = Texture::ComponentFormat::Float16;
+    for (const auto& chanName : channelNames) {
+        const Channel* chan = channel(chanName);
+        if (chan && chan->desiredPixelFormat() == EPixelFormat::F32) {
+            componentFormat = Texture::ComponentFormat::Float32;
+            break; // No need to check further, we already have a channel that requires F32.
+        }
+    }
+
     mTextures.emplace(
         lookup,
         ImageTexture{
             new Texture{
-                        pixelFormat, Texture::ComponentFormat::Float32,
+                        pixelFormat, componentFormat,
                         {size().x(), size().y()},
                         toNanogui(minFilter),
                         toNanogui(magFilter),
@@ -393,23 +443,30 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
             false,
     }
     );
+
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
     const size_t numTextureChannels = numChannelsInPixelFormat(texture->pixel_format());
+    const size_t bitsPerSample = bitsPerSampleInComponentFormat(texture->component_format());
 
     // Important: num channels can be *larger* than the number of channels in the image here!
     // This is because some graphics APIs, like metal, only have power-of-two channel counts: 1, 2, 4
     if (numTextureChannels < channelNames.size()) {
         throw runtime_error{fmt::format(
-            "Image has {} channels, but texture requires at least {} channels. (Image: {}, Texture: {})", channelNames.size(), numTextureChannels, mName, lookup
+            "Image has {} channels, but texture requires at least {} channels. (Image: {}, Texture: {})",
+            channelNames.size(),
+            numTextureChannels,
+            mName,
+            lookup
         )};
     }
 
-    bool directUpload = isInterleaved(channelNames, numTextureChannels);
+    bool directUpload = isInterleaved(channelNames, numTextureChannels) && texture->component_format() == Texture::ComponentFormat::Float32;
 
     tlog::debug() << fmt::format(
-        "Uploading texture: direct={} filter={}-{} img={}:{}",
+        "Uploading texture: direct={} bps={} filter={}-{} img={}:{}",
         directUpload,
+        bitsPerSample,
         tev::toString(minFilter),
         tev::toString(magFilter),
         mName,
@@ -431,37 +488,25 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         }};
 
         const auto numPixels = this->numPixels();
-        vector<float> data = vector<float>(numPixels * numTextureChannels);
+        const auto size = this->size();
+        vector<uint8_t> data(numPixels * numTextureChannels * (bitsPerSample / 8));
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
             const Channel* chan = i < channelNames.size() ? channel(channelNames[i]) : nullptr;
-            const bool isAlpha = i == 3 || (chan && Channel::isAlpha(chan->name()));
-            const float defaultVal = isAlpha ? 1.0f : 0.0f;
-
-            if (!chan) {
-                tasks.emplace_back(
-                    ThreadPool::global().parallelForAsync<size_t>(
-                        0,
-                        numPixels,
-                        [&data, defaultVal, numTextureChannels, i](size_t j) { data[j * numTextureChannels + i] = defaultVal; },
-                        numeric_limits<int>::max()
-                    )
-                );
-            } else {
-                tasks.emplace_back(
-                    ThreadPool::global().parallelForAsync<size_t>(
-                        0,
-                        numPixels,
-                        [chan, &data, numTextureChannels, i](size_t j) { data[j * numTextureChannels + i] = chan->at(j); },
-                        numeric_limits<int>::max()
-                    )
-                );
+            switch (texture->component_format()) {
+                case Texture::ComponentFormat::Float16:
+                    tasks.emplace_back(prepareTextureChannel((half*)data.data(), chan, {0, 0}, size, i, numTextureChannels));
+                    break;
+                case Texture::ComponentFormat::Float32:
+                    tasks.emplace_back(prepareTextureChannel((float*)data.data(), chan, {0, 0}, size, i, numTextureChannels));
+                    break;
+                default: throw runtime_error{"Unsupported component format for texture."};
             }
         }
 
         waitAll<Task<void>>(tasks);
-        texture->upload((uint8_t*)data.data());
+        texture->upload(data.data());
     }
 
     if (minFilter == EInterpolationMode::Trilinear) {
@@ -501,12 +546,7 @@ void Image::decomposeChannelGroup(string_view groupName) {
 
     auto groupPos = distance(mChannelGroups.begin(), group);
     for (const auto& channel : channels) {
-        mChannelGroups.insert(
-            mChannelGroups.begin() + (++groupPos),
-            ChannelGroup{
-                channel, {channel}
-        }
-        );
+        mChannelGroups.insert(mChannelGroups.begin() + (++groupPos), ChannelGroup{channel, {channel}});
     }
 
     // Duplicates may have appeared here. (E.g. when trying to decompose a single channel or when single-color channels appear multiple
@@ -614,28 +654,26 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
 
         const auto numPixels = (size_t)width * height;
         const size_t numTextureChannels = numChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
-        vector<float> textureData(numPixels * numTextureChannels);
+        const size_t bitsPerSample = bitsPerSampleInComponentFormat(imageTexture.nanoguiTexture->component_format());
+        vector<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
 
+        vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
             const Channel* chan = i < imageTexture.channels.size() ? channel(imageTexture.channels[i]) : nullptr;
-            const bool isAlpha = i == 3 || (chan && Channel::isAlpha(chan->name()));
-            const float defaultVal = isAlpha ? 1.0f : 0.0f;
-
-            if (chan) {
-                for (int posY = 0; posY < height; ++posY) {
-                    for (int posX = 0; posX < width; ++posX) {
-                        size_t tileIdx = posX + posY * (size_t)width;
-                        textureData[tileIdx * numTextureChannels + i] = chan->at({x + posX, y + posY});
-                    }
-                }
-            } else {
-                for (size_t j = 0; j < numPixels; ++j) {
-                    textureData[j * numTextureChannels + i] = defaultVal;
-                }
+            switch (imageTexture.nanoguiTexture->component_format()) {
+                case Texture::ComponentFormat::Float16:
+                    tasks.emplace_back(prepareTextureChannel((half*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels));
+                    break;
+                case Texture::ComponentFormat::Float32:
+                    tasks.emplace_back(prepareTextureChannel((float*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels)
+                    );
+                    break;
+                default: throw runtime_error{"Unsupported component format for texture."};
             }
         }
 
-        imageTexture.nanoguiTexture->upload_sub_region((uint8_t*)textureData.data(), {x, y}, {width, height});
+        waitAll<Task<void>>(tasks);
+        imageTexture.nanoguiTexture->upload_sub_region(textureData.data(), {x, y}, {width, height});
         imageTexture.mipmapDirty = true;
     }
 }

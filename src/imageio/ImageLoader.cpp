@@ -103,7 +103,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
     return mimeTypes;
 }
 
-vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, string_view namePrefix) {
+vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat desiredPixelFormat, string_view namePrefix) {
     vector<Channel> channels;
     if (numChannels > 4) {
         throw ImageLoadError{"Image has too many RGBA channels."};
@@ -130,23 +130,23 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool h
             string name = fmt::format("{}{}", namePrefix, (c < (int)channelNames.size() ? channelNames[c] : to_string(c)));
 
             // We assume that the channels are interleaved.
-            channels.emplace_back(name, size, data, c, 4);
+            channels.emplace_back(name, size, desiredPixelFormat, data, c, 4);
         }
     } else {
-        channels.emplace_back(fmt::format("{}L", namePrefix), size, data, 0, 4);
+        channels.emplace_back(fmt::format("{}L", namePrefix), size, desiredPixelFormat, data, 0, 4);
     }
 
     if (hasAlpha) {
-        channels.emplace_back(fmt::format("{}A", namePrefix), size, data, 3, 4);
+        channels.emplace_back(fmt::format("{}A", namePrefix), size, desiredPixelFormat, data, 3, 4);
     }
 
     return channels;
 }
 
-vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, string_view namePrefix) {
+vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, EPixelFormat desiredPixelFormat, string_view namePrefix) {
     vector<Channel> channels;
     for (int c = 0; c < numChannels; ++c) {
-        channels.emplace_back(fmt::format("{}{}", namePrefix, to_string(c)), size);
+        channels.emplace_back(fmt::format("{}{}", namePrefix, to_string(c)), size, desiredPixelFormat);
     }
 
     return channels;

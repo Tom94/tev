@@ -257,10 +257,11 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 tlog::debug() << fmt::format(
-                    "Image size: {}x{}, channels: {}, alpha bits: {}, premultiplied alpha: {}, animation: {}",
+                    "Image size={}x{} channels={} bits_per_sample={} alpha_bits={} alpha_premultiplied={} have_animation={}",
                     info.xsize,
                     info.ysize,
                     info.num_color_channels,
+                    info.bits_per_sample,
                     info.alpha_bits,
                     info.alpha_premultiplied,
                     info.have_animation
@@ -346,6 +347,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 struct ExtraChannelInfo {
                     string name;
                     vector<float> data;
+                    uint32_t bitsPerSample = 0; // bits per sample of the channel
                     uint32_t dimShift = 0; // number of power of 2 stops the channel is downsampled
                     bool active = false;
                 };
@@ -362,6 +364,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         throw ImageLoadError{fmt::format("Failed to get extra channel {}'s info.", i)};
                     }
 
+                    extraChannel.bitsPerSample = extraChannelInfo.bits_per_sample;
                     extraChannel.dimShift = extraChannelInfo.dim_shift;
                     if (extraChannelInfo.name_length == 0) {
                         extraChannel.name = fmt::format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
@@ -380,7 +383,13 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         continue;
                     }
 
-                    tlog::debug() << fmt::format("Loading extra channel {}: {}, dim shift: {}", i, extraChannel.name, extraChannel.dimShift);
+                    tlog::debug() << fmt::format(
+                        "Loading extra channel #{}: name={} bits_per_sample={} dim_shift={}",
+                        i,
+                        extraChannel.name,
+                        extraChannel.bitsPerSample,
+                        extraChannel.dimShift
+                    );
 
                     if (JXL_DEC_SUCCESS != JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, i)) {
                         throw ImageLoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
@@ -404,7 +413,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
-                data.channels = makeRgbaInterleavedChannels(numColorChannels, info.alpha_bits, size);
+                data.channels = makeRgbaInterleavedChannels(
+                    numColorChannels, info.alpha_bits, size, info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
+                );
                 data.hasPremultipliedAlpha = info.alpha_premultiplied;
                 if (info.have_animation) {
                     data.partName = frameName;
@@ -511,7 +522,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     }
 
                     // Resize the channel to the image size
-                    auto& channel = data.channels.emplace_back(Channel{extraChannel.name, size});
+                    auto& channel = data.channels.emplace_back(
+                        Channel{extraChannel.name, size, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16}
+                    );
                     co_await ThreadPool::global().parallelForAsync<size_t>(
                         0,
                         size.y(),

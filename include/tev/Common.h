@@ -566,6 +566,13 @@ inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogu
     return pos;
 }
 
+enum class EPixelFormat {
+    U8,
+    U16,
+    F16,
+    F32,
+};
+
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
 void redrawWindow();

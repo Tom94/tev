@@ -844,7 +844,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     vector<Channel> result;
     auto channelNames = image->channelsInGroup(requestedChannelGroup);
     for (size_t i = 0; i < channelNames.size(); ++i) {
-        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size());
+        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size(), EPixelFormat::F32);
     }
 
     const auto channels = image->channels(channelNames);

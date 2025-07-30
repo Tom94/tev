@@ -60,13 +60,6 @@ enum class EAlphaKind {
     None,
 };
 
-enum class EPixelFormat {
-    U8,
-    U16,
-    F16,
-    F32,
-};
-
 class ColorProfile {
 public:
     ColorProfile(void* profile) : mProfile{profile} {}

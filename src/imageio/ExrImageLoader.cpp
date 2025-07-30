@@ -420,6 +420,8 @@ public:
 
     const Vector2i& size() const { return mSize; }
 
+    EPixelFormat desiredPixelFormat() const { return mImfChannel.type == Imf::HALF ? EPixelFormat::F16 : EPixelFormat::F32; }
+
 private:
     int bytesPerPixel() const {
         switch (mImfChannel.type) {
@@ -567,7 +569,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             auto& rawChannel = rawChannels.at(i);
             auto& data = result.at(rawChannel.partId());
             channelMapping.emplace_back(data.channels.size());
-            data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size()});
+            data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size(), rawChannel.desiredPixelFormat()});
         }
 
         vector<Task<void>> tasks;

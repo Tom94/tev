@@ -207,7 +207,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             resultData.attributes.emplace_back(exifAttributes.value());
         }
 
-        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size);
+        // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
+        // such values after conversion to linear space.
+        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F16);
         resultData.orientation = orientation;
         resultData.hasPremultipliedAlpha = false;
 

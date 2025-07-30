@@ -67,8 +67,8 @@ Color Channel::color(string_view channel, bool pastel) {
     return Color(1.0f, 1.0f);
 }
 
-Channel::Channel(string_view name, const nanogui::Vector2i& size, shared_ptr<vector<float>> data, size_t dataOffset, size_t dataStride) :
-    mName{name}, mSize{size} {
+Channel::Channel(string_view name, const nanogui::Vector2i& size, EPixelFormat desiredPixelFormat, shared_ptr<vector<float>> data, size_t dataOffset, size_t dataStride) :
+    mName{name}, mSize{size}, mDesiredPixelFormat{desiredPixelFormat} {
     if (data) {
         mData = data;
         mDataOffset = dataOffset;

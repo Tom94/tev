@@ -138,13 +138,12 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
     // Ultra HDR always outputs 4 channels (RGBA), even though alpha is always 1.
     const int numChannels = 4;
-    imageData.channels = makeRgbaInterleavedChannels(numChannels, true, size);
+
+    // Ultra HDR gives us at most F16 data. See https://github.com/google/libultrahdr?tab=readme-ov-file#decoding-api-outline
+    imageData.channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F16);
 
     // JPEG always has alpha == 1 in which case there's no distinction between premultiplied and straight alpha
     imageData.hasPremultipliedAlpha = true;
-
-    size_t numPixels = (size_t)size.x() * size.y();
-    vector<float> src(numPixels * numChannels);
 
     auto data = reinterpret_cast<const half*>(image->planes[UHDR_PLANE_PACKED]);
     size_t samplesPerRow = image->stride[UHDR_PLANE_PACKED] * numChannels;
@@ -160,7 +159,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     if (iccProfile && iccProfile->data && iccProfile->data_sz > 14) {
         tlog::warning() << "Found ICC color profile. Attempting to apply... " << iccProfile->data_sz;
 
-        auto channels = makeRgbaInterleavedChannels(numChannels, true, size);
+        auto channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F16);
         try {
             co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),
