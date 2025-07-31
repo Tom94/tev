@@ -1037,6 +1037,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_F && (modifiers & SYSTEM_COMMAND_MOD)) {
             mFilter->request_focus();
+            mFilter->select_all();
             return true;
         } else if (key == GLFW_KEY_F || (key == GLFW_KEY_9 && (modifiers & SYSTEM_COMMAND_MOD))) {
             if (mCurrentImage) {
