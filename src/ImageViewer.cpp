@@ -2200,57 +2200,78 @@ void ImageViewer::updateImageInfoWindow() {
 }
 
 void ImageViewer::openImageDialog() {
-    try {
-        vector<pair<string, string>> filters = {
-            {"Animated PNG image",                "apng"    },
-#ifdef TEV_SUPPORT_AVIF
-            {"AV1 Image File",                    "avif"    },
-#endif
-            {"Bitmap image",                      "bmp"     },
-#ifdef _WIN32
-            {"DirectDraw Surface image",          "dds"     },
-#endif
-            {"Digital Negative image",            "dng"     },
-            {"OpenEXR image",                     "exr"     },
-            {"Graphics Interchange Format image", "gif"     },
-            {"HDR image",                         "hdr"     },
-#ifdef TEV_SUPPORT_HEIC
-            {"High Efficiency Image Container",   "heic"    },
-#endif
-            {"JPEG image",                        "jpeg,jpg"},
-            {"JPEG-XL image",                     "jxl"     },
-            {"Portable Float Map image",          "pfm"     },
-            {"Portable GrayMap image",            "pgm"     },
-            {"PIC image",                         "pic"     },
-            {"Portable Network Graphics image",   "png"     },
-            {"Portable AnyMap image",             "pnm"     },
-            {"Portable PixMap image",             "ppm"     },
-            {"PSD image",                         "psd"     },
-            {"Quite OK Image format",             "qoi"     },
-            {"Truevision TGA image",              "tga"     },
-            {"Tag Image File Format image",       "tiff,tif"},
-            {"WebP image",                        "webp"    },
-        };
-
-        vector<string_view> allImages;
-        for (const auto& filter : filters) {
-            allImages.push_back(filter.second);
-        }
-
-        filters.emplace(filters.begin(), pair<string, string>{"All images", join(allImages, ",")});
-        auto paths = mFileDialog.openFileDialog(filters);
-
-        for (size_t i = 0; i < paths.size(); ++i) {
-            const bool shallSelect = i == paths.size() - 1;
-            mImagesLoader->enqueue(paths[i], "", shallSelect);
-        }
-    } catch (const std::runtime_error& e) {
-        showErrorDialog(fmt::format("Failed to open image: {}", e.what()));
+    if (mFileDialogThread) {
+        tlog::warning() << "File dialog already running.";
         return;
     }
 
-    // Make sure we gain focus after seleting a file to be loaded.
-    focusWindow();
+    auto runDialog = [this]() {
+        auto threadGuard = ScopeGuard{[this]() {
+            scheduleToUiThread([this]() {
+                focusWindow();
+                if (mFileDialogThread && mFileDialogThread->joinable()) {
+                    mFileDialogThread->join();
+                }
+
+                mFileDialogThread = nullptr;
+            });
+        }};
+
+        try {
+            vector<pair<string, string>> filters = {
+                {"Animated PNG image",                "apng"    },
+#ifdef TEV_SUPPORT_AVIF
+                {"AV1 Image File",                    "avif"    },
+#endif
+                {"Bitmap image",                      "bmp"     },
+#ifdef _WIN32
+                {"DirectDraw Surface image",          "dds"     },
+#endif
+                {"Digital Negative image",            "dng"     },
+                {"OpenEXR image",                     "exr"     },
+                {"Graphics Interchange Format image", "gif"     },
+                {"HDR image",                         "hdr"     },
+#ifdef TEV_SUPPORT_HEIC
+                {"High Efficiency Image Container",   "heic"    },
+#endif
+                {"JPEG image",                        "jpeg,jpg"},
+                {"JPEG-XL image",                     "jxl"     },
+                {"Portable Float Map image",          "pfm"     },
+                {"Portable GrayMap image",            "pgm"     },
+                {"PIC image",                         "pic"     },
+                {"Portable Network Graphics image",   "png"     },
+                {"Portable AnyMap image",             "pnm"     },
+                {"Portable PixMap image",             "ppm"     },
+                {"PSD image",                         "psd"     },
+                {"Quite OK Image format",             "qoi"     },
+                {"Truevision TGA image",              "tga"     },
+                {"Tag Image File Format image",       "tiff,tif"},
+                {"WebP image",                        "webp"    },
+            };
+
+            vector<string_view> allImages;
+            for (const auto& filter : filters) {
+                allImages.push_back(filter.second);
+            }
+
+            filters.emplace(filters.begin(), pair<string, string>{"All images", join(allImages, ",")});
+            auto paths = mFileDialog.openFileDialog(filters);
+
+            for (size_t i = 0; i < paths.size(); ++i) {
+                const bool shallSelect = i == paths.size() - 1;
+                mImagesLoader->enqueue(paths[i], "", shallSelect);
+            }
+        } catch (const std::runtime_error& e) {
+            const auto error = fmt::format("File dialog: {}", e.what());
+            scheduleToUiThread([this, error]() { showErrorDialog(error); });
+        }
+    };
+
+#if defined(__APPLE__) || defined(_WIN32)
+    runDialog();
+#else
+    mFileDialogThread = make_unique<thread>(runDialog);
+#endif
 }
 
 void ImageViewer::saveImageDialog() {
@@ -2258,28 +2279,55 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    try {
-        const auto path = mFileDialog.saveFileDialog({
-            {"OpenEXR image",                   "exr"     },
-            {"HDR image",                       "hdr"     },
-            {"Bitmap Image File",               "bmp"     },
-            {"JPEG image",                      "jpg,jpeg"},
-            {"JPEG-XL image",                   "jxl"     },
-            {"Portable Network Graphics image", "png"     },
-            {"Quite OK Image format",           "qoi"     },
-            {"Truevision TGA image",            "tga"     },
-        });
-
-        if (!path.empty()) {
-            mImageCanvas->saveImage(path);
-        }
-    } catch (const ImageSaveError& e) {
-        showErrorDialog(fmt::format("Failed to save image: {}", e.what()));
+    if (mFileDialogThread) {
+        tlog::warning() << "File dialog already running.";
         return;
     }
 
-    // Make sure we gain focus after selecting a file to be loaded.
-    focusWindow();
+    auto runDialog = [this]() {
+        auto threadGuard = ScopeGuard{[this]() {
+            scheduleToUiThread([this]() {
+                focusWindow();
+                if (mFileDialogThread && mFileDialogThread->joinable()) {
+                    mFileDialogThread->join();
+                }
+
+                mFileDialogThread = nullptr;
+            });
+        }};
+
+        try {
+            const auto path = mFileDialog.saveFileDialog({
+                {"OpenEXR image",                   "exr"     },
+                {"HDR image",                       "hdr"     },
+                {"Bitmap Image File",               "bmp"     },
+                {"JPEG image",                      "jpg,jpeg"},
+                {"JPEG-XL image",                   "jxl"     },
+                {"Portable Network Graphics image", "png"     },
+                {"Quite OK Image format",           "qoi"     },
+                {"Truevision TGA image",            "tga"     },
+            });
+
+            if (path.empty()) {
+                return;
+            }
+
+            scheduleToUiThread([this, path]() {
+                try {
+                    mImageCanvas->saveImage(path);
+                } catch (const ImageSaveError& e) { showErrorDialog(fmt::format("Failed to save image: {}", e.what())); }
+            });
+        } catch (const runtime_error& e) {
+            const auto error = fmt::format("Save dialog: {}", e.what());
+            scheduleToUiThread([this, error]() { showErrorDialog(error); });
+        }
+    };
+
+#if defined(__APPLE__) || defined(_WIN32)
+    runDialog();
+#else
+    mFileDialogThread = make_unique<thread>(runDialog);
+#endif
 }
 
 void throwIfNoCopyPasteCommand(bool copy) {

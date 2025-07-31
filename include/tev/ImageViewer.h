@@ -300,6 +300,7 @@ private:
     bool mInitialized = false;
 
     FileDialog mFileDialog;
+    std::unique_ptr<std::thread> mFileDialogThread;
 
     // Color management
     nanogui::ref<nanogui::Texture> mDitherMatrix;
