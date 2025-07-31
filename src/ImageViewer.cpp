@@ -2337,17 +2337,7 @@ void ImageViewer::copyImageNameToClipboard() const {
         throw std::runtime_error{"No image selected for copy."};
     }
 
-    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
-        throwIfNoCopyPasteCommand(true);
-
-        auto stream = execw(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -i -t text/plain" : "wl-copy --type text/plain");
-        (*stream) << mCurrentImage->name();
-    } else {
-        if (!clip::set_text(string{mCurrentImage->name()})) {
-            throw std::runtime_error{"clip::set_text failed."};
-        }
-    }
-
+    glfwSetClipboardString(m_glfw_window, string{mCurrentImage->name()}.c_str());
     tlog::success() << "Image path copied to clipboard.";
 }
 
