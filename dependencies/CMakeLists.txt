@@ -354,3 +354,11 @@ set(CLIP_X11_WITH_PNG OFF CACHE BOOL " " FORCE)
 add_subdirectory(clip)
 target_include_directories(clip INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/clip)
 
+# Compile nativefiledialog-extended
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(NFD_INSTALL OFF CACHE BOOL " " FORCE)
+set(NFD_PORTAL ON CACHE BOOL " " FORCE)
+set(NFD_APPEND_EXTENSION ON CACHE BOOL " " FORCE)
+set(NFD_CASE_SENSITIVE_FILTER ON CACHE BOOL " " FORCE)
+add_subdirectory(nativefiledialog-extended)
+

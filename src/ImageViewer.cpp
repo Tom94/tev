@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/FileDialog.h>
 #include <tev/ImageViewer.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
@@ -51,7 +52,10 @@ static const float CROP_MIN_SIZE = 3;
 ImageViewer::ImageViewer(
     const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, const shared_ptr<Ipc>& ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
-    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
+    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer},
+    mImagesLoader{imagesLoader},
+    mIpc{ipc},
+    mFileDialog{m_glfw_window} {
 
     // If nanogui wants to apply color management, we need to actually provide a shader that converts color spaces.
     // nanogui only provides the necessary plumbing, defaulting to a passthrough shader that users need to actually implement.
@@ -1480,7 +1484,9 @@ void ImageViewer::draw_contents() {
         }
     } else {
         mHistogram->setNChannels(1);
-        mHistogram->setColors({{1.0f, 1.0f, 1.0f}});
+        mHistogram->setColors({
+            {1.0f, 1.0f, 1.0f}
+        });
         mHistogram->setValues({{0.0f}});
         mHistogram->setMinimum(0);
         mHistogram->setMean(0);
@@ -2194,46 +2200,53 @@ void ImageViewer::updateImageInfoWindow() {
 }
 
 void ImageViewer::openImageDialog() {
-    vector<string> paths = file_dialog(
-        {
-            {"apng", "Animated PNG image"               },
+    try {
+        vector<pair<string, string>> filters = {
+            {"Animated PNG image",                "apng"    },
 #ifdef TEV_SUPPORT_AVIF
-            {"avif", "AV1 Image File"                   },
+            {"AV1 Image File",                    "avif"    },
 #endif
-            {"bmp",  "Bitmap image"                     },
+            {"Bitmap image",                      "bmp"     },
 #ifdef _WIN32
-            {"dds",  "DirectDraw Surface image"         },
+            {"DirectDraw Surface image",          "dds"     },
 #endif
-            {"dng",  "Digital Negative image"           },
-            {"exr",  "OpenEXR image"                    },
-            {"gif",  "Graphics Interchange Format image"},
-            {"hdr",  "HDR image"                        },
+            {"Digital Negative image",            "dng"     },
+            {"OpenEXR image",                     "exr"     },
+            {"Graphics Interchange Format image", "gif"     },
+            {"HDR image",                         "hdr"     },
 #ifdef TEV_SUPPORT_HEIC
-            {"heic", "High Efficiency Image Container"  },
+            {"High Efficiency Image Container",   "heic"    },
 #endif
-            {"jpeg", "JPEG image"                       },
-            {"jpg",  "JPEG image"                       },
-            {"jxl",  "JPEG-XL image"                    },
-            {"pfm",  "Portable Float Map image"         },
-            {"pgm",  "Portable GrayMap image"           },
-            {"pic",  "PIC image"                        },
-            {"png",  "Portable Network Graphics image"  },
-            {"pnm",  "Portable AnyMap image"            },
-            {"ppm",  "Portable PixMap image"            },
-            {"psd",  "PSD image"                        },
-            {"qoi",  "Quite OK Image format"            },
-            {"tga",  "Truevision TGA image"             },
-            {"tiff", "Tag Image File Format image"      },
-            {"tif",  "Tag Image File Format image"      },
-            {"webp", "WebP image"                       },
-    },
-        false,
-        true
-    );
+            {"JPEG image",                        "jpeg,jpg"},
+            {"JPEG-XL image",                     "jxl"     },
+            {"Portable Float Map image",          "pfm"     },
+            {"Portable GrayMap image",            "pgm"     },
+            {"PIC image",                         "pic"     },
+            {"Portable Network Graphics image",   "png"     },
+            {"Portable AnyMap image",             "pnm"     },
+            {"Portable PixMap image",             "ppm"     },
+            {"PSD image",                         "psd"     },
+            {"Quite OK Image format",             "qoi"     },
+            {"Truevision TGA image",              "tga"     },
+            {"Tag Image File Format image",       "tiff,tif"},
+            {"WebP image",                        "webp"    },
+        };
 
-    for (size_t i = 0; i < paths.size(); ++i) {
-        bool shallSelect = i == paths.size() - 1;
-        mImagesLoader->enqueue(toPath(paths[i]), "", shallSelect);
+        vector<string_view> allImages;
+        for (const auto& filter : filters) {
+            allImages.push_back(filter.second);
+        }
+
+        filters.emplace(filters.begin(), pair<string, string>{"All images", join(allImages, ",")});
+        auto paths = mFileDialog.openFileDialog(filters);
+
+        for (size_t i = 0; i < paths.size(); ++i) {
+            const bool shallSelect = i == paths.size() - 1;
+            mImagesLoader->enqueue(paths[i], "", shallSelect);
+        }
+    } catch (const std::runtime_error& e) {
+        showErrorDialog(fmt::format("Failed to open image: {}", e.what()));
+        return;
     }
 
     // Make sure we gain focus after seleting a file to be loaded.
@@ -2245,29 +2258,24 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    fs::path path = toPath(file_dialog(
-        {
-            {"exr",  "OpenEXR image"                  },
-            {"hdr",  "HDR image"                      },
-            {"bmp",  "Bitmap Image File"              },
-            {"jpg",  "JPEG image"                     },
-            {"jpeg", "JPEG image"                     },
-            {"jxl",  "JPEG-XL image"                  },
-            {"png",  "Portable Network Graphics image"},
-            {"qoi",  "Quite OK Image format"          },
-            {"tga",  "Truevision TGA image"           },
-    },
-        true
-    ));
-
-    if (path.empty()) {
-        return;
-    }
-
     try {
-        mImageCanvas->saveImage(path);
+        const auto path = mFileDialog.saveFileDialog({
+            {"OpenEXR image",                   "exr"     },
+            {"HDR image",                       "hdr"     },
+            {"Bitmap Image File",               "bmp"     },
+            {"JPEG image",                      "jpg,jpeg"},
+            {"JPEG-XL image",                   "jxl"     },
+            {"Portable Network Graphics image", "png"     },
+            {"Quite OK Image format",           "qoi"     },
+            {"Truevision TGA image",            "tga"     },
+        });
+
+        if (!path.empty()) {
+            mImageCanvas->saveImage(path);
+        }
     } catch (const ImageSaveError& e) {
-        new MessageDialog(this, MessageDialog::Type::Warning, "Error", fmt::format("Failed to save image: {}", e.what()));
+        showErrorDialog(fmt::format("Failed to save image: {}", e.what()));
+        return;
     }
 
     // Make sure we gain focus after selecting a file to be loaded.
