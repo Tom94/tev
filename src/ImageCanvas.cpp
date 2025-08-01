@@ -737,6 +737,14 @@ std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) c
 }
 
 void ImageCanvas::saveImage(const fs::path& path) const {
+    if (path.empty()) {
+        throw ImageSaveError{"You must specify a file name to save the image."};
+    }
+
+    if (path.extension().empty()) {
+        throw ImageSaveError{"You must specify a file extension or select one from the dropdown to save the image."};
+    }
+
     Vector2i imageSize = imageDataSize();
     if (imageSize.x() == 0 || imageSize.y() == 0) {
         throw ImageSaveError{"Can not save image with zero pixels."};

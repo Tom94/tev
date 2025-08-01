@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <tev/FileDialog.h>
 #include <tev/HelpWindow.h>
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
@@ -297,6 +298,9 @@ private:
 
     nanogui::Vector2i mMaxSize = {8192, 8192};
     bool mInitialized = false;
+
+    FileDialog mFileDialog;
+    std::unique_ptr<std::thread> mFileDialogThread;
 
     // Color management
     nanogui::ref<nanogui::Texture> mDitherMatrix;

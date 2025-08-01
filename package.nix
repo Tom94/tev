@@ -1,7 +1,7 @@
 { lib
 , stdenv
 , cmake
-, darwin
+, dbus
 , fetchFromGitHub
 , lcms2
 , libGL
@@ -13,9 +13,7 @@
 , wayland
 , wayland-protocols
 , wayland-scanner
-, wrapGAppsHook3
 , xorg
-, zenity
 ,
 }:
 
@@ -42,7 +40,7 @@ stdenv.mkDerivation rec {
 
   src = ./.;
 
-  postPatch =
+  postPatch = lib.optionalString stdenv.hostPlatform.isLinux (
     let
       waylandLibPath = lib.makeLibraryPath [ wayland ];
     in
@@ -52,21 +50,23 @@ stdenv.mkDerivation rec {
         --replace-fail "libwayland-cursor.so" "${waylandLibPath}/libwayland-cursor.so" \
         --replace-fail "libwayland-egl.so" "${waylandLibPath}/libwayland-egl.so" \
         --replace-fail "libxkbcommon.so" "${lib.makeLibraryPath [ libxkbcommon ]}/libxkbcommon.so"
-    '';
+    ''
+  );
 
   nativeBuildInputs = [
     cmake
     nasm
     perl
     pkg-config
-    wrapGAppsHook3
   ];
 
   buildInputs = [
     lcms2
   ]
-  ++ lib.optionals stdenv.isLinux [
+  ++ lib.optionals stdenv.hostPlatform.isLinux [
+    dbus
     libffi
+    libGL
     libxkbcommon
     wayland
     wayland-protocols
@@ -78,20 +78,9 @@ stdenv.mkDerivation rec {
     xorg.libXrandr
   ];
 
-  dontWrapGApps = true; # We also need zenity (see below)
-
   cmakeFlags = [
-    "-DCMAKE_BUILD_TYPE=Release"
     "-DTEV_DEPLOY=1"
   ];
-
-  postInstall = lib.optionalString stdenv.isLinux ''
-    wrapProgram $out/bin/tev \
-      "''${gappsWrapperArgs[@]}" \
-      --prefix PATH ":" "${zenity}/bin"
-  '';
-
-  env.CXXFLAGS = "-include cstdint";
 
   meta = {
     description = "High dynamic range (HDR) image viewer for people who care about colors";
