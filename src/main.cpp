@@ -580,6 +580,11 @@ static int mainFunc(span<const string> arguments) {
         }
     }
 
+    // Ensure we do not initialize the window larger than the maximum system-supported texture size or larger than 8192x8192 as a separate
+    // safeguard.
+    size = nanogui::min(size, nanogui::Vector2i{maxTextureSize()});
+    size = nanogui::min(size, nanogui::Vector2i{8192, 8192});
+
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better not try.
     sImageViewer = new ImageViewer{size, imagesLoader, ipc, maximize, !hideUiFlag, !get(ldrFlag)};
     imageViewerIsReady = true;
