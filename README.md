@@ -146,7 +146,7 @@ $ cpack --config build/CPackConfig.cmake
 
 ## File Formats
 
-- __EXR__ (via [OpenEXR](https://github.com/wjakob/openexr))
+- __EXR__ (via [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr))
 - __Ultra HDR JPEG__ (e.g. pictures from newer Android phones; via [libultrahdr](https://github.com/google/libultrahdr))
 - __JPEG XL__ (via [libjxl](https://github.com/libjxl/libjxl). Shoutout to [Johnathon Selstad](https://github.com/zalo) for adding support!)
     - Supports both lossy and lossless compression with full HDR capabilities
