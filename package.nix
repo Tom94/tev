@@ -42,14 +42,14 @@ stdenv.mkDerivation rec {
 
   postPatch = lib.optionalString stdenv.hostPlatform.isLinux (
     let
-      waylandLibPath = lib.makeLibraryPath [ wayland ];
+      waylandLibPath = "${lib.getLib wayland}/lib";
     in
     ''
       substituteInPlace ./dependencies/nanogui/ext/glfw/src/wl_init.c \
         --replace-fail "libwayland-client.so" "${waylandLibPath}/libwayland-client.so" \
         --replace-fail "libwayland-cursor.so" "${waylandLibPath}/libwayland-cursor.so" \
         --replace-fail "libwayland-egl.so" "${waylandLibPath}/libwayland-egl.so" \
-        --replace-fail "libxkbcommon.so" "${lib.makeLibraryPath [ libxkbcommon ]}/libxkbcommon.so"
+        --replace-fail "libxkbcommon.so" "${lib.getLib libxkbcommon}/lib/libxkbcommon.so"
     ''
   );
 
