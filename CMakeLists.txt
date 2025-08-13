@@ -179,6 +179,7 @@ set(TEV_SOURCES
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp
     include/tev/VectorGraphics.h src/VectorGraphics.cpp
+    include/tev/WaylandClipboard.h src/WaylandClipboard.cpp
 
     src/main.cpp
 )
@@ -227,7 +228,6 @@ target_include_directories(tev PRIVATE
     # Header-only dependencies whose include path cannot be inherited from link targets
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/args
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/fmt/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/pstreams
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/qoi
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinylogger

@@ -350,9 +350,11 @@ add_subdirectory(libtiff EXCLUDE_FROM_ALL)
 # Compile clip
 set(CLIP_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(CLIP_TESTS OFF CACHE BOOL " " FORCE)
-set(CLIP_X11_WITH_PNG OFF CACHE BOOL " " FORCE)
+set(CLIP_X11_WITH_PNG ON CACHE BOOL " " FORCE)
+set(CLIP_X11_PNG_LIBRARY png_static CACHE STRING " " FORCE)
 add_subdirectory(clip)
 target_include_directories(clip INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/clip)
+target_compile_definitions(clip PRIVATE -DHAVE_PNG_H)
 
 # Compile nativefiledialog-extended
 set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)

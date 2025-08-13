@@ -32,8 +32,6 @@
 #ifdef _WIN32
 #    include <Shlobj.h>
 #else
-#    include <pstream.h>
-
 #    include <cstring>
 #    include <fcntl.h>
 #    include <pwd.h>
@@ -289,61 +287,6 @@ void toggleConsole() {
     if (GetCurrentProcessId() == consoleProcessId) {
         ShowWindow(console, IsWindowVisible(console) ? SW_HIDE : SW_SHOW);
     }
-#endif
-}
-
-bool commandExists(string_view cmd) {
-#if defined(_WIN32)
-    throw runtime_error{"Executing commands is not supported on Windows."};
-#else
-    pid_t pid = fork();
-    if (pid == 0) {
-        // Child process - redirect both stdout and stderr
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull != -1) {
-            dup2(devnull, STDOUT_FILENO);
-            dup2(devnull, STDERR_FILENO);
-            close(devnull);
-        }
-
-        execlp("which", "which", string{cmd}.c_str(), nullptr);
-        _exit(127); // exec failed
-    } else if (pid > 0) {
-        int status;
-        waitpid(pid, &status, 0);
-        return WEXITSTATUS(status) == 0;
-    }
-
-     // Fork failed, assume command exists just in case
-    return true;
-#endif
-}
-
-unique_ptr<istream> execr(string_view cmd) {
-    if (cmd.empty()) {
-        throw runtime_error{"Command is empty."};
-    }
-
-#if defined(_WIN32)
-    throw runtime_error{"Executing commands is not supported on Windows."};
-#else
-    // Write all output into a stringstream to ensure it's seekable.
-    auto result = make_unique<stringstream>();
-    auto pstream = redi::ipstream(string{cmd}, redi::pstream::pstdout);
-    (*result) << pstream.rdbuf();
-    return result;
-#endif
-}
-
-unique_ptr<ostream> execw(string_view cmd) {
-    if (cmd.empty()) {
-        throw runtime_error{"Command is empty."};
-    }
-
-#if defined(_WIN32)
-    throw runtime_error{"Executing commands is not supported on Windows."};
-#else
-    return make_unique<redi::opstream>(string{cmd}, redi::pstream::pstdin);
 #endif
 }
 
