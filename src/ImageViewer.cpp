@@ -18,6 +18,7 @@
 
 #include <tev/FileDialog.h>
 #include <tev/ImageViewer.h>
+#include <tev/WaylandClipboard.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/ImageSaver.h>
@@ -1174,9 +1175,18 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
 
             return true;
         } else if (key == GLFW_KEY_V && (modifiers & SYSTEM_COMMAND_MOD)) {
-            try {
-                pasteImagesFromClipboard();
-            } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to paste image from clipboard: {}", e.what())); }
+            if (modifiers & GLFW_MOD_SHIFT) {
+                const char* clipboardString = glfwGetClipboardString(m_glfw_window);
+                if (clipboardString) {
+                    tlog::warning(
+                    ) << fmt::format("Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString);
+                }
+            } else {
+                try {
+                    pasteImagesFromClipboard();
+                } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to paste image from clipboard: {}", e.what())); }
+            }
+
             return true;
         }
     }
@@ -2330,15 +2340,6 @@ void ImageViewer::saveImageDialog() {
 #endif
 }
 
-void throwIfNoCopyPasteCommand(bool copy) {
-    string_view command = glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip" : (copy ? "wl-copy" : "wl-paste");
-    string_view copyPackage = glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip" : "wl-clipboard";
-
-    if (!commandExists(command)) {
-        throw std::runtime_error{fmt::format("{} command not found. Install {} to copy to clipboard.", command, copyPackage)};
-    }
-}
-
 void ImageViewer::copyImageCanvasToClipboard() const {
     if (!mCurrentImage) {
         throw std::runtime_error{"No image selected for copy."};
@@ -2349,41 +2350,53 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
-    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
-        throwIfNoCopyPasteCommand(true);
+#if defined(__APPLE__) or defined(_WIN32)
+    clip::image_spec imageMetadata;
+    imageMetadata.width = imageSize.x();
+    imageMetadata.height = imageSize.y();
+    imageMetadata.bits_per_pixel = 32;
+    imageMetadata.bytes_per_row = imageMetadata.bits_per_pixel / 8 * imageMetadata.width;
 
-        auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
-        auto pngImageSaver = make_unique<StbiLdrImageSaver>();
+    imageMetadata.red_mask = 0x000000ff;
+    imageMetadata.green_mask = 0x0000ff00;
+    imageMetadata.blue_mask = 0x00ff0000;
+    imageMetadata.alpha_mask = 0xff000000;
+    imageMetadata.red_shift = 0;
+    imageMetadata.green_shift = 8;
+    imageMetadata.blue_shift = 16;
+    imageMetadata.alpha_shift = 24;
 
-        auto stream = execw(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -i -t image/png" : "wl-copy --type image/png");
-        try {
-            pngImageSaver->save(*stream, "clipboard.png", imageData, imageSize, 4);
-        } catch (const ImageSaveError& e) {
-            throw std::runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())};
+    auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
+    clip::image image(imageData.data(), imageMetadata);
+
+    if (!clip::set_image(image)) {
+        throw std::runtime_error{"clip::set_image failed."};
+    }
+#else
+    auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
+    auto pngImageSaver = make_unique<StbiLdrImageSaver>();
+
+    stringstream pngData;
+    try {
+        pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4);
+    } catch (const ImageSaveError& e) {
+        throw std::runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())};
+    }
+
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+        waylandSetClipboardPngImage(pngData.view().data(), pngData.view().size());
+    } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
+        clip::lock l;
+        if (!l.locked()) {
+            throw std::runtime_error{"Failed to lock clipboard."};
         }
-    } else {
-        clip::image_spec imageMetadata;
-        imageMetadata.width = imageSize.x();
-        imageMetadata.height = imageSize.y();
-        imageMetadata.bits_per_pixel = 32;
-        imageMetadata.bytes_per_row = imageMetadata.bits_per_pixel / 8 * imageMetadata.width;
 
-        imageMetadata.red_mask = 0x000000ff;
-        imageMetadata.green_mask = 0x0000ff00;
-        imageMetadata.blue_mask = 0x00ff0000;
-        imageMetadata.alpha_mask = 0xff000000;
-        imageMetadata.red_shift = 0;
-        imageMetadata.green_shift = 8;
-        imageMetadata.blue_shift = 16;
-        imageMetadata.alpha_shift = 24;
-
-        auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
-        clip::image image(imageData.data(), imageMetadata);
-
-        if (!clip::set_image(image)) {
-            throw std::runtime_error{"clip::set_image failed."};
+        l.clear();
+        if (!l.set_data(clip::image_format(), pngData.view().data(), pngData.view().size())) {
+            throw std::runtime_error{"Failed to set image data to clipboard."};
         }
     }
+#endif
 
     tlog::success() << "Image copied to clipboard.";
 }
@@ -2398,58 +2411,45 @@ void ImageViewer::copyImageNameToClipboard() const {
 }
 
 void ImageViewer::pasteImagesFromClipboard() {
-    unique_ptr<istream> imageStream;
-    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND || glfwGetPlatform() == GLFW_PLATFORM_X11) {
-        throwIfNoCopyPasteCommand(false);
-
-        auto typesStream = execr(glfwGetPlatform() == GLFW_PLATFORM_X11 ? "xclip -sel c -o -t TARGETS" : "wl-paste --list-types");
-        string imageTypes(std::istreambuf_iterator<char>(*typesStream), {});
-        set<string_view> imageTypesSet;
-        for (const auto& line : split(imageTypes, "\n")) {
-            if (line.empty()) {
-                continue;
-            }
-
-            tlog::debug() << fmt::format("Clipboard image type: {}", line);
-            imageTypesSet.insert(line);
-        }
-
-        string selectedType = "";
-        for (const auto& type : ImageLoader::supportedMimeTypes()) {
-            if (imageTypesSet.contains(type)) {
-                selectedType = type;
-                break;
-            }
-        }
-
-        if (selectedType.empty()) {
+    stringstream imageStream;
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+        size_t size = 0;
+        const char* data = waylandGetClipboardPngImage(&size);
+        if (data == nullptr || size == 0) {
             throw std::runtime_error{"No image data found in clipboard."};
         }
 
-        imageStream = execr(
-            glfwGetPlatform() == GLFW_PLATFORM_X11 ? fmt::format("xclip -sel c -o -t {}", selectedType) :
-                                                     fmt::format("wl-paste --type {}", selectedType)
-        );
+        imageStream.write(data, size);
+    } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
+        clip::lock l;
+        if (!l.locked()) {
+            throw std::runtime_error{"Failed to lock clipboard."};
+        }
+
+        clip::format f = clip::image_format();
+        if (!l.is_convertible(f)) {
+            throw std::runtime_error{"Clipboard does not contain image data."};
+        }
+
+        size_t len = l.get_data_length(f);
+        string data(len, '\0');
+        l.get_data(f, data.data(), len);
+
+        imageStream.write(data.data(), data.size());
     } else {
-        if (!clip::has(clip::image_format())) {
-            throw std::runtime_error{"No image data found in clipboard."};
-        }
-
         clip::image clipImage;
         if (!clip::get_image(clipImage)) {
-            throw std::runtime_error{"clip::get_image failed."};
+            throw std::runtime_error{"No image data found in clipboard."};
         }
 
-        auto ss = make_unique<stringstream>();
-        (*ss) << "clip";
-        ss->write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
-        ss->write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
-        imageStream = std::move(ss);
+        imageStream << "clip";
+        imageStream.write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
+        imageStream.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
     }
 
     tlog::info() << "Loading image from clipboard...";
     auto imagesLoadTask = tryLoadImage(
-        fmt::format("clipboard ({})", ++mClipboardIndex), *imageStream, "", mImagesLoader->applyGainmaps(), mImagesLoader->groupChannels()
+        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->applyGainmaps(), mImagesLoader->groupChannels()
     );
 
     const auto images = imagesLoadTask.get();

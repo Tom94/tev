@@ -488,11 +488,6 @@ fs::path homeDirectory();
 
 void toggleConsole();
 
-bool commandExists(std::string_view cmd);
-
-std::unique_ptr<std::istream> execr(std::string_view cmd);
-std::unique_ptr<std::ostream> execw(std::string_view cmd);
-
 bool shuttingDown();
 void setShuttingDown();
 
