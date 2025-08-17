@@ -567,7 +567,7 @@ l_decode_success:
             throw ImageLoadError{"Failed to get box type."};
         }
 
-        if (type == "Exif"s) {
+        if (toLower(string{type, 4}) == "exif"s) {
             tlog::debug() << "Found EXIF metadata. Attempting to load...";
 
             // 1 KiB should be enough for most exif data. If not, we'll dynamically resize as we keep decoding. We can't get the precise
