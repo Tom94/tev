@@ -1145,12 +1145,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         tile.rowSize = TIFFScanlineSize64(tif);
         tile.count = TIFFNumberOfStrips(tif);
 
-        // Strips are just tiles with the same width as the image
+        // Strips are just tiles with the same width as the image and variable height.
         tile.width = size.x();
-        if (!TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &tile.height)) {
-            tlog::warning() << "Failed to read rows per strip; assuming image height.";
-            tile.height = size.y();
-        }
+        tile.height = tile.size / tile.rowSize;
 
         tile.numX = 1;
         tile.numY = (size.y() + tile.height - 1) / tile.height;
@@ -1161,7 +1158,14 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     }
 
     if (tile.count != tile.numX * tile.numY * numPlanes) {
-        throw ImageLoadError{"Number of tiles/strips does not match expected dimensions."};
+        throw ImageLoadError{fmt::format(
+            "Number of tiles/strips does not match expected dimensions. Expected {}x{}x{}={} tiles, got {}.",
+            tile.numX,
+            tile.numY,
+            numPlanes,
+            tile.numX * tile.numY * numPlanes,
+            tile.count
+        )};
     }
 
     tlog::debug() << fmt::format(
