@@ -1193,6 +1193,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     for (size_t i = 0; i < tile.count; ++i) {
         uint8_t* const td = tileData.data() + tile.size * i;
         if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
+            for (auto&& task : decodeTasks) {
+                co_await task;
+            }
+
             throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
         }
 
