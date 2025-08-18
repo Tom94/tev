@@ -323,7 +323,7 @@ Task<void> postprocessLinearRawDng(
     uint32_t numRead = 0;
 
     // 1. Map colors via linearization table if it exists
-    if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
+    if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &numRead, &linTable)) {
         tlog::debug() << "Found linearization table; applying...";
 
         const float scale = 1.0f / 65535.0f;
