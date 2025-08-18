@@ -1153,6 +1153,14 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         tile.numY = (size.y() + tile.height - 1) / tile.height;
     }
 
+    // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory to
+    // fit all data.
+    tile.size = max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / 8);
+
+    tlog::debug() << fmt::format(
+        "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
+    );
+
     if (planar == PLANARCONFIG_SEPARATE && tile.count % samplesPerPixel != 0) {
         throw ImageLoadError{"Number of tiles/strips is not a multiple of samples per pixel."};
     }
@@ -1167,10 +1175,6 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
             tile.count
         )};
     }
-
-    tlog::debug() << fmt::format(
-        "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
-    );
 
     vector<uint8_t> tileData(tile.size * tile.count);
 
