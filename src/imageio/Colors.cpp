@@ -19,6 +19,7 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 
 #include <nanogui/vector.h>
 
@@ -167,6 +168,34 @@ array<Vector2f, 4> bt2020Chroma() {
 
 array<Vector2f, 4> bt2100Chroma() {
     return bt2020Chroma(); // BT.2100 uses the same primaries as BT.2020
+}
+
+nanogui::Vector2f xy(EExifLightSource lightSource) {
+    switch (lightSource) {
+        case EExifLightSource::Unknown: return {0.0f, 0.0f};
+        case EExifLightSource::Daylight: return {0.31292, 0.32933};
+        case EExifLightSource::Fluorescent: return {0.37417, 0.37281};
+        case EExifLightSource::TungstenIncandescent: return {0.44758, 0.40745};
+        case EExifLightSource::Flash: return {0.0f, 0.0f};
+        case EExifLightSource::FineWeather: return {0.0f, 0.0f};
+        case EExifLightSource::Cloudy: return {0.0f, 0.0f};
+        case EExifLightSource::Shade: return {0.0f, 0.0f};
+        case EExifLightSource::DaylightFluorescent: return {0.31310, 0.33710};
+        case EExifLightSource::DayWhiteFluorescent: return {0.31379, 0.34531};
+        case EExifLightSource::CoolWhiteFluorescent: return {0.37208, 0.37529};
+        case EExifLightSource::WhiteFluorescent: return {0.40910, 0.39430};
+        case EExifLightSource::WarmWhiteFluorescent: return {0.44018, 0.40329};
+        case EExifLightSource::StandardLightA: return {0.44758f, 0.40745f};
+        case EExifLightSource::StandardLightB: return {0.34842, 0.35161};
+        case EExifLightSource::StandardLightC: return whiteC();
+        case EExifLightSource::D55: return {0.33242, 0.34743};
+        case EExifLightSource::D65: return whiteD65();
+        case EExifLightSource::D75: return {0.29902, 0.31485};
+        case EExifLightSource::D50: return {0.34567, 0.35850};
+        case EExifLightSource::ISOStudioTungsten: return {0.430944089109761f, 0.403585442674295f};
+        case EExifLightSource::Other: return {0.0f, 0.0f};
+        default: throw invalid_argument{"Invalid EExifLightSource value."};
+    }
 }
 
 // Adapted from LittleCMS's AdaptToXYZD50 function

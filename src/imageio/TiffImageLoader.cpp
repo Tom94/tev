@@ -278,7 +278,7 @@ void unpackBits(
 
 Task<void> postprocessLinearRawDng(
     TIFF* tif,
-    const uint16_t bitsPerSample,
+    const uint16_t dataBitsPerSample,
     const uint16_t samplesPerPixel,
     const int numColorChannels,
     const int numRgbaChannels,
@@ -321,13 +321,14 @@ Task<void> postprocessLinearRawDng(
 
     // Utility var that we'll reuse whenever reading a variable TIFF array
     uint32_t numRead = 0;
+    const size_t maxVal = (1ull << dataBitsPerSample) - 1;
+    const float scale = 1.0f / maxVal;
 
     // 1. Map colors via linearization table if it exists
-    if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &linTable)) {
+    if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &numRead, &linTable)) {
         tlog::debug() << "Found linearization table; applying...";
 
-        const float scale = 1.0f / 65535.0f;
-        const size_t maxIdx = (1ull << bitsPerSample) - 1;
+        const size_t maxIdx = numRead - 1;
 
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
@@ -339,7 +340,7 @@ Task<void> postprocessLinearRawDng(
                         float val = floatRgbaData[i * numRgbaChannels + c];
 
                         // Lerp the transfer function
-                        size_t idx = clamp((size_t)(val * maxIdx), (size_t)0, maxIdx - 1);
+                        size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
                         float w = val * maxIdx - idx;
                         floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
                     }
@@ -371,9 +372,9 @@ Task<void> postprocessLinearRawDng(
                         throw ImageLoadError{"Invalid number of black level pixels."};
                     }
 
-                    const float scale = 1.0f / 65535.0f;
                     for (size_t i = 0; i < blackLevel.size(); ++i) {
                         blackLevel[i] = blackLevelShort[i] * scale;
+                        tlog::debug() << fmt::format("Black short level[{}] = {}", i, blackLevel[i]);
                     }
                 } else {
                     throw ImageLoadError{"Failed to read short black level data."};
@@ -385,9 +386,9 @@ Task<void> postprocessLinearRawDng(
                         throw ImageLoadError{"Invalid number of black level pixels."};
                     }
 
-                    const double scale = 1.0 / (uint32_t)0xFFFFFFFF;
                     for (size_t i = 0; i < blackLevel.size(); ++i) {
                         blackLevel[i] = blackLevelLong[i] * scale;
+                        tlog::debug() << fmt::format("Black long level[{}] = {}", i, blackLevel[i]);
                     }
                 } else {
                     throw ImageLoadError{"Failed to read short black level data."};
@@ -401,6 +402,7 @@ Task<void> postprocessLinearRawDng(
 
                     for (size_t i = 0; i < blackLevel.size(); ++i) {
                         blackLevel[i] = blackLevelFloat[i];
+                        tlog::debug() << fmt::format("Black rational level[{}] = {}", i, blackLevel[i]);
                     }
                 } else {
                     throw ImageLoadError{"Failed to read short black level data."};
@@ -472,8 +474,6 @@ Task<void> postprocessLinearRawDng(
     // 3. Rescale to 0-1 range per white level
     vector<float> whiteLevel(samplesPerPixel, 1.0f);
     if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_WHITELEVEL, TIFFDataType::TIFF_ANY)) {
-        const float scale = 1.0f / ((1ull << bitsPerSample) - 1);
-
         switch (TIFFFieldDataType(field)) {
             case TIFF_SHORT:
                 if (uint16_t* whiteLevelShort; TIFFGetField(tif, TIFFTAG_WHITELEVEL, &numRead, &whiteLevelShort)) {
@@ -531,19 +531,21 @@ Task<void> postprocessLinearRawDng(
     }
 
     // 4. Clipping: the docs recommend clipping to 1 from above but to keep sub-zero values intact. We will, however, completely skip
-    // clipping just in case there's HDR data in there. We can revisit this decision if we encounter an image that looks wrong without this
-    // clipping.
-    // const size_t numPixels = (size_t)size.x() * size.y();
-    // co_await ThreadPool::global().parallelForAsync<size_t>(
-    //     0,
-    //     numPixels,
-    //     [&](size_t i) {
-    //         for (int c = 0; c < numColorChannels; ++c) {
-    //             floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
-    //         }
-    //     },
-    //     priority
-    // );
+    // clipping just in case there's HDR data in there. Per DNG 1.7, this can be the case, so we err on the safe side.
+    const bool clipToOne = false;
+    if (clipToOne) {
+        const size_t numPixels = (size_t)size.x() * size.y();
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            [&](size_t i) {
+                for (int c = 0; c < numColorChannels; ++c) {
+                    floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
+                }
+            },
+            priority
+        );
+    }
 
     // 5. Apply camera to XYZ matrix
     if (samplesPerPixel != 3) {
@@ -555,7 +557,20 @@ Task<void> postprocessLinearRawDng(
     TIFFSetDirectory(tif, 0);
     ScopeGuard guard{[&]() { TIFFSetDirectory(tif, prevIdf); }};
 
-    const auto readCameraToXyz = [&](int CCTAG, int CMTAG) {
+    Vector3f analogBalance{1.0f};
+    if (float* abt; TIFFGetField(tif, TIFFTAG_ANALOGBALANCE, &numRead, &abt)) {
+        if (numRead != samplesPerPixel) {
+            throw ImageLoadError{"Invalid number of analog balance pixels."};
+        }
+
+        for (size_t i = 0; i < numRead; ++i) {
+            analogBalance[i] = abt[i];
+        }
+
+        tlog::debug() << fmt::format("Analog balance: {}", analogBalance);
+    }
+
+    const auto readCameraToXyz = [&](int CCTAG, int CMTAG, int CALTAG) {
         Matrix3f colorMatrix{1.0f};
         if (float* cmt; TIFFGetField(tif, CMTAG, &numRead, &cmt)) {
             if (numRead != (uint32_t)samplesPerPixel * samplesPerPixel) {
@@ -588,44 +603,46 @@ Task<void> postprocessLinearRawDng(
             tlog::debug() << fmt::format("Found camera calibration matrix: {}", colorMatrix);
         }
 
-        const auto xyzToCamera = cameraCalibration * colorMatrix;
-        return optional<Matrix3f>{inverse(xyzToCamera)};
+        Matrix3f chromaticAdaptation{1.0f};
+
+        // From preliminary tests, it seems that the color matrix from the DNG file is usually already adapted to D50, so we don't
+        // need to apply any extra chromatic adaptation. However, the commented out code below shows how to adapt to D50 based on DNG
+        // illuminant data if needed.
+        const bool adaptToD50 = false;
+        if (adaptToD50) {
+            if (uint16_t illu; TIFFGetField(tif, CALTAG, &illu)) {
+                EExifLightSource illuminant = static_cast<EExifLightSource>(illu);
+                tlog::debug() << fmt::format("Found illuminant={}/{}", toString(illuminant), illu);
+
+                const auto whitePoint = xy(illuminant);
+                if (whitePoint.x() > 0.0f && whitePoint.y() > 0.0f) {
+                    tlog::debug() << fmt::format("Adapting known illuminant with CIE1931 xy={} to D50", whitePoint);
+                    chromaticAdaptation = adaptToXYZD50Bradford(whitePoint);
+                } else {
+                    tlog::warning() << fmt::format("Unknown illuminant");
+                }
+            }
+        }
+
+        const auto xyzToCamera = Matrix3f::scale(analogBalance) * cameraCalibration * colorMatrix;
+        return optional<Matrix3f>{chromaticAdaptation * inverse(xyzToCamera)};
     };
 
-    const array<pair<uint16_t, uint16_t>, 3> camTags = {
+    const array<tuple<uint16_t, uint16_t, uint16_t>, 3> camTags = {
         {
-         {TIFFTAG_CAMERACALIBRATION3, TIFFTAG_COLORMATRIX3},
-         {TIFFTAG_CAMERACALIBRATION2, TIFFTAG_COLORMATRIX2},
-         {TIFFTAG_CAMERACALIBRATION1, TIFFTAG_COLORMATRIX1},
+         {TIFFTAG_CAMERACALIBRATION3, TIFFTAG_COLORMATRIX3, TIFFTAG_CALIBRATIONILLUMINANT3},
+         {TIFFTAG_CAMERACALIBRATION2, TIFFTAG_COLORMATRIX2, TIFFTAG_CALIBRATIONILLUMINANT2},
+         {TIFFTAG_CAMERACALIBRATION1, TIFFTAG_COLORMATRIX1, TIFFTAG_CALIBRATIONILLUMINANT1},
          }
     };
-
-    Vector3f analogBalance{1.0f};
-    if (float* abt; TIFFGetField(tif, TIFFTAG_ANALOGBALANCE, &numRead, &abt)) {
-        if (numRead != samplesPerPixel) {
-            throw ImageLoadError{"Invalid number of analog balance pixels."};
-        }
-
-        for (size_t i = 0; i < numRead; ++i) {
-            analogBalance[i] = abt[i];
-        }
-
-        tlog::debug() << fmt::format("Analog balance: {}", analogBalance);
-    }
-
-    // D65 white point
-    // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3127f, 0.3290f});
-    // D50 white point -- produces ~identity ca matrix as expected
-    // const auto chromaticAdaptation = adaptToXYZD50Bradford({0.3457f, 0.5385});
-    const auto chromaticAdaptation = Matrix3f{1.0f};
 
     // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
     // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
     // (aka RIMM space) in which we will apply the camera profile.
-    auto toRimm = xyzToChromaMatrix(proPhotoChroma()) * toMatrix4(Matrix3f::scale(analogBalance) * chromaticAdaptation);
+    auto toRimm = xyzToChromaMatrix(proPhotoChroma());
     for (size_t i = 0; i < camTags.size(); ++i) {
-        if (const auto camToXyz = readCameraToXyz(camTags[i].first, camTags[i].second)) {
-            tlog::debug() << fmt::format("Applying resulting camToXyz matrix {}", camToXyz.value());
+        if (const auto camToXyz = readCameraToXyz(get<0>(camTags[i]), get<1>(camTags[i]), get<2>(camTags[i]))) {
+            tlog::debug() << fmt::format("Applying camToXyz matrix #{}: {}", camTags.size() - i, camToXyz.value());
             toRimm = toRimm * toMatrix4(camToXyz.value());
             break;
         }
@@ -670,6 +687,52 @@ Task<void> postprocessLinearRawDng(
         isHdr = pdr->dynamicRange == 1;
     }
 
+    float exposureScale = 1.0f;
+    if (float baselineExposure; TIFFGetField(tif, TIFFTAG_BASELINEEXPOSURE, &baselineExposure)) {
+        exposureScale *= exp2f(baselineExposure);
+    }
+
+    if (float baselineExposureOffset; TIFFGetField(tif, TIFFTAG_BASELINEEXPOSUREOFFSET, &baselineExposureOffset)) {
+        exposureScale *= exp2f(baselineExposureOffset);
+    }
+
+    if (exposureScale != 1.0f) {
+        tlog::debug() << fmt::format("Applying exposure scale: {}", exposureScale);
+        co_await ThreadPool::global().parallelForAsync<int>(
+            activeArea.min.y(),
+            activeArea.max.y(),
+            [&](int y) {
+                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                    size_t i = (size_t)y * size.x() + x;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        floatRgbaData[i * numRgbaChannels + c] *= exposureScale;
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    // At this point, we have the image in linear ProPhoto RGB space. This is most faithful to the readings from the sensor, but the camera
+    // may have embedded a (potentially user-chosen) color profile that, per the DNG spec, can be used as a starting point for further user
+    // editing. Since tev isn't a photo editor, we don't apply the profile by default, but below is a partial implementation that can apply
+    // certain DNG-compatible profiles if needed.
+    const bool applyCameraProfile = false;
+    if (!applyCameraProfile) {
+        co_return;
+    }
+
+    {
+        // Temporarily switch back to the raw's IFD to read gain table map, if present.
+        TIFFSetDirectory(tif, prevIdf);
+        ScopeGuard guard2{[&]() { TIFFSetDirectory(tif, 0); }};
+
+        uint32_t numReadGainTableMap = 0;
+        if (const uint8_t* gainTableMap; TIFFGetField(tif, TIFFTAG_PROFILEGAINTABLEMAP, &numReadGainTableMap, &gainTableMap)) {
+            tlog::warning() << "Found gain table map, but not implemented yet. Color profile may look wrong.";
+        }
+    }
+
     if (isHdr) {
         tlog::debug() << "Encoding DNG HDR before applying profile";
         co_await ThreadPool::global().parallelForAsync<int>(
@@ -700,7 +763,7 @@ Task<void> postprocessLinearRawDng(
         tlog::debug() << fmt::format("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
-        tlog::warning() << "Found hue/sat/val map, but not implemented yet. Image may look wrong.";
+        tlog::warning() << "Found hue/sat/val map, but not implemented yet. Color profile may look wrong.";
     }
 
     if (const float* tonecurve; TIFFGetField(tif, TIFFTAG_PROFILETONECURVE, &numRead, &tonecurve)) {
@@ -770,7 +833,7 @@ Task<void> postprocessLinearRawDng(
 Task<void> postprocessRgb(
     TIFF* tif,
     const uint16_t photometric,
-    const uint16_t bitsPerSample,
+    const uint16_t dataBitsPerSample,
     const int numColorChannels,
     const int numRgbaChannels,
     span<float> floatRgbaData,
@@ -798,13 +861,13 @@ Task<void> postprocessRgb(
 
     if (uint16_t* transferFunction[3];
         TIFFGetField(tif, TIFFTAG_TRANSFERFUNCTION, &transferFunction[0], &transferFunction[1], &transferFunction[2])) {
-        // In TIFF, transfer functions are stored as bitsPerSample**2 values in the range [0, 65535] per color channel. The transfer
+        // In TIFF, transfer functions are stored as 2**bitsPerSample values in the range [0, 65535] per color channel. The transfer
         // function is a linear interpolation between these values.
         tlog::debug() << "Found custom transfer function; applying...";
 
         const float scale = 1.0f / 65535.0f;
 
-        const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : bitsPerSample;
+        const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : dataBitsPerSample;
         const size_t maxIdx = (1ull << bps) - 1;
 
         const size_t numPixels = (size_t)size.x() * size.y();
@@ -889,6 +952,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         throw ImageLoadError{"Failed to read bits per sample."};
     }
 
+    uint16_t tiffInternalBitsPerSample = bitsPerSample;
+
     uint16_t samplesPerPixel;
     if (!TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLESPERPIXEL, &samplesPerPixel)) {
         throw ImageLoadError{"Failed to read samples per pixel."};
@@ -948,16 +1013,6 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
 
-    if (photometric == PHOTOMETRIC_YCBCR && compression == COMPRESSION_JPEG) {
-        tlog::debug() << "Converting JPEG YCbCr to RGB.";
-
-        if (!TIFFSetField(tif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB)) {
-            throw ImageLoadError{"Failed to set JPEG color mode."};
-        }
-
-        photometric = PHOTOMETRIC_RGB;
-    }
-
     if (compression == COMPRESSION_PIXARLOG) {
         tlog::debug() << "Converting PIXAR log data to RGB float.";
 
@@ -967,6 +1022,35 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
         bitsPerSample = 32;
         sampleFormat = SAMPLEFORMAT_IEEEFP;
+    }
+
+    uint16_t dataBitsPerSample = bitsPerSample;
+
+    if (compression == COMPRESSION_JPEG) {
+        // For JPEG decoding, we need to pretend to have more bits per sample than is in the data for the JPEG decoder to work correctly.
+        // This is largely fine for the following decoding steps, but we will later need to pass `dataBitsPerSample` to postprocessing for
+        // scaling purposes.
+        if (bitsPerSample <= 8) {
+            bitsPerSample = 8;
+        } else if (bitsPerSample <= 12) {
+            bitsPerSample = 12;
+        } else if (bitsPerSample <= 16) {
+            bitsPerSample = 16;
+        }
+
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, bitsPerSample);
+
+        if (photometric == PHOTOMETRIC_YCBCR) {
+            tlog::debug() << "Converting JPEG YCbCr to RGB.";
+
+            photometric = PHOTOMETRIC_RGB;
+        }
+
+        // Always set the JPEG color mode, even if it already is RGB, to retrigger libtiff's internal tile size calcs after bitsPerSample
+        // changed.
+        if (!TIFFSetField(tif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB)) {
+            throw ImageLoadError{"Failed to set JPEG color mode."};
+        }
     }
 
     // DNG-specific photometric interpretations. See https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
@@ -1004,8 +1088,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     }
 
     tlog::debug() << fmt::format(
-        "TIFF info: size={}, bps={}, spp={}, photometric={}, planar={}, sampleFormat={}, compression={}",
+        "TIFF info: size={}, bps={}/{}/{}, spp={}, photometric={}, planar={}, sampleFormat={}, compression={}",
         size,
+        tiffInternalBitsPerSample,
+        dataBitsPerSample,
         bitsPerSample,
         samplesPerPixel,
         photometric,
@@ -1145,28 +1231,36 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         tile.rowSize = TIFFScanlineSize64(tif);
         tile.count = TIFFNumberOfStrips(tif);
 
-        // Strips are just tiles with the same width as the image
+        // Strips are just tiles with the same width as the image and variable height.
         tile.width = size.x();
-        if (!TIFFGetField(tif, TIFFTAG_ROWSPERSTRIP, &tile.height)) {
-            tlog::warning() << "Failed to read rows per strip; assuming image height.";
-            tile.height = size.y();
-        }
+        tile.height = tile.size / tile.rowSize;
 
         tile.numX = 1;
         tile.numY = (size.y() + tile.height - 1) / tile.height;
     }
+
+    // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory to
+    // fit all data.
+    tile.size = max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
+
+    tlog::debug() << fmt::format(
+        "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
+    );
 
     if (planar == PLANARCONFIG_SEPARATE && tile.count % samplesPerPixel != 0) {
         throw ImageLoadError{"Number of tiles/strips is not a multiple of samples per pixel."};
     }
 
     if (tile.count != tile.numX * tile.numY * numPlanes) {
-        throw ImageLoadError{"Number of tiles/strips does not match expected dimensions."};
+        throw ImageLoadError{fmt::format(
+            "Number of tiles/strips does not match expected dimensions. Expected {}x{}x{}={} tiles, got {}.",
+            tile.numX,
+            tile.numY,
+            numPlanes,
+            tile.numX * tile.numY * numPlanes,
+            tile.count
+        )};
     }
-
-    tlog::debug() << fmt::format(
-        "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
-    );
 
     vector<uint8_t> tileData(tile.size * tile.count);
 
@@ -1184,7 +1278,12 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     vector<uint32_t> imageData((size_t)size.x() * size.y() * samplesPerPixel);
     for (size_t i = 0; i < tile.count; ++i) {
         uint8_t* const td = tileData.data() + tile.size * i;
+
         if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
+            for (auto&& task : decodeTasks) {
+                co_await task;
+            }
+
             throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
         }
 
@@ -1255,7 +1354,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         }
         case SAMPLEFORMAT_INT: {
             kind = ETiffKind::I32;
-            intConversionScale = 1.0f / ((1ull << (bitsPerSample - 1)) - 1);
+            intConversionScale = 1.0f / ((1ull << (dataBitsPerSample - 1)) - 1);
             break;
         }
         case SAMPLEFORMAT_UINT: {
@@ -1265,7 +1364,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                 kind = ETiffKind::U32;
             }
 
-            intConversionScale = 1.0f / ((1ull << bitsPerSample) - 1);
+            intConversionScale = 1.0f / ((1ull << dataBitsPerSample) - 1);
             break;
         }
         default: throw ImageLoadError{"Unsupported sample format."};
@@ -1315,13 +1414,13 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         }
 
         co_await postprocessLinearRawDng(
-            tif, bitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
+            tif, dataBitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
         resultData.toRec709 = xyzToRec709Matrix();
     } else if (photometric <= PHOTOMETRIC_PALETTE) {
-        co_await postprocessRgb(tif, photometric, bitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
+        co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
     } else {
         // Other photometric interpretations do not need a transfer
     }
@@ -1440,6 +1539,11 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
             if (exifAttributes) {
                 data.attributes.emplace_back(exifAttributes.value());
+            }
+
+            // Propagate orientation from the main image to sub-images if loading a DNG
+            if (isDng && result.size() >= 2) {
+                data.orientation = result.at(result.size() - 2).orientation;
             }
         } catch (const ImageLoadError& e) { tlog::warning() << fmt::format("Failed to load {}: {}", name, e.what()); }
     };

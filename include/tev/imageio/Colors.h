@@ -20,6 +20,7 @@
 
 #include <tev/Common.h>
 #include <tev/Task.h>
+#include <tev/imageio/Exif.h>
 
 #include <nanogui/vector.h>
 
@@ -41,6 +42,8 @@ std::array<nanogui::Vector2f, 4> displayP3Chroma();
 std::array<nanogui::Vector2f, 4> dciP3Chroma();
 std::array<nanogui::Vector2f, 4> bt2020Chroma();
 std::array<nanogui::Vector2f, 4> bt2100Chroma();
+
+nanogui::Vector2f xy(EExifLightSource lightSource);
 
 nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
 
@@ -68,9 +71,7 @@ public:
     ColorProfile(const ColorProfile&) = delete;
     ColorProfile& operator=(const ColorProfile&) = delete;
 
-    ColorProfile(ColorProfile&& other) noexcept {
-        std::swap(mProfile, other.mProfile);
-    }
+    ColorProfile(ColorProfile&& other) noexcept { std::swap(mProfile, other.mProfile); }
 
     ColorProfile& operator=(ColorProfile&& other) noexcept {
         std::swap(mProfile, other.mProfile);

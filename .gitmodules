@@ -84,7 +84,7 @@
 	shallow = true
 [submodule "dependencies/libtiff"]
 	path = dependencies/libtiff
-	url = https://gitlab.com/libtiff/libtiff
+	url = https://github.com/tom94/libtiff
 	shallow = true
 [submodule "dependencies/libwebp"]
 	path = dependencies/libwebp
