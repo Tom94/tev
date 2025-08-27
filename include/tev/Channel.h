@@ -23,6 +23,8 @@
 
 #include <nanogui/vector.h>
 
+#include <half.h>
+
 #include <span>
 #include <string>
 #include <vector>
@@ -44,26 +46,15 @@ public:
     Channel(
         std::string_view name,
         const nanogui::Vector2i& size,
-        EPixelFormat desiredPixelFormat,
-        std::shared_ptr<std::vector<float>> data = nullptr,
+        EPixelFormat format,
+        EPixelFormat desiredFormat,
+        std::shared_ptr<std::vector<uint8_t>> data = nullptr,
         size_t dataOffset = 0,
         size_t dataStride = 1
     );
 
     std::string_view name() const { return mName; }
     void setName(std::string_view name) { mName = name; }
-
-    float eval(nanogui::Vector2i index) const {
-        if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {
-            return 0;
-        }
-
-        return at(index.x() + (size_t)index.y() * (size_t)mSize.x());
-    }
-
-    float& at(nanogui::Vector2i index) { return at(index.x() + index.y() * (size_t)mSize.x()); }
-
-    float at(nanogui::Vector2i index) const { return at(index.x() + index.y() * (size_t)mSize.x()); }
 
     size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
@@ -93,45 +84,95 @@ public:
     }
 
     Task<void> divideByAsync(const Channel& other, int priority);
-
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
     void setZero() {
+        const size_t nBytesPerPixel = nBytes(mPixelFormat);
         if (mDataStride == 1) {
-            memset(data(), 0, numPixels() * sizeof(float));
+            std::memset(data(), 0, numPixels() * nBytesPerPixel);
         } else {
             const size_t nPixels = numPixels();
             for (size_t i = 0; i < nPixels; ++i) {
-                at(i) = 0.0f;
+                std::memset(data() + i * mDataStride, 0, nBytesPerPixel);
             }
         }
     }
 
     void updateTile(int x, int y, int width, int height, std::span<const float> newData);
 
-    float& at(size_t index) { return data()[index * mDataStride]; }
+    float at(nanogui::Vector2i index) const { return at(index.x() + index.y() * (size_t)mSize.x()); }
+    float at(size_t index) const {
+        switch (mPixelFormat) {
+            case EPixelFormat::U8: return *dataAt(index);
+            case EPixelFormat::U16: return *(const uint16_t*)dataAt(index);
+            case EPixelFormat::F16: return *(const half*)dataAt(index);
+            case EPixelFormat::F32: return *(const float*)dataAt(index);
+        }
 
-    float at(size_t index) const { return data()[index * mDataStride]; }
+        return 0;
+    }
 
-    float* data() const { return mData->data() + mDataOffset; }
+    void setAt(nanogui::Vector2i index, float value) { setAt(index.x() + index.y() * (size_t)mSize.x(), value); }
+    void setAt(size_t index, float value) {
+        switch (mPixelFormat) {
+            case EPixelFormat::U8: *dataAt(index) = (uint8_t)value; break;
+            case EPixelFormat::U16: *(uint16_t*)dataAt(index) = (uint16_t)value; break;
+            case EPixelFormat::F16: *(half*)dataAt(index) = (half)value; break;
+            case EPixelFormat::F32: *(float*)dataAt(index) = value; break;
+        }
+    }
 
+    float eval(nanogui::Vector2i index) const {
+        if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {
+            return 0;
+        }
+
+        return at(index.x() + (size_t)index.y() * (size_t)mSize.x());
+    }
+
+    uint8_t* data() const { return mData->data() + mDataOffset; }
+    uint8_t* dataAt(size_t index) const { return data() + index * mDataStride; }
+
+    float* floatData() const {
+        if (mPixelFormat != EPixelFormat::F32) {
+            throw std::runtime_error{"Channel is not in F32 format."};
+        }
+
+        return (float*)data();
+    }
+
+    half* halfData() const {
+        if (mPixelFormat != EPixelFormat::F16) {
+            throw std::runtime_error{"Channel is not in F16 format."};
+        }
+
+        return (half*)data();
+    }
+
+    void setOffset(size_t offset) { mDataOffset = offset; }
     size_t offset() const { return mDataOffset; }
+
+    void setStride(size_t stride) { mDataStride = stride; }
     size_t stride() const { return mDataStride; }
 
-    std::shared_ptr<std::vector<float>>& dataBuf() { return mData; }
+    std::shared_ptr<std::vector<uint8_t>>& dataBuf() { return mData; }
 
-    void setDesiredPixelFormat(EPixelFormat format) { mDesiredPixelFormat = format; }
     EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
+
+    void setPixelFormat(EPixelFormat format) { mPixelFormat = format; }
+    EPixelFormat pixelFormat() const { return mPixelFormat; }
 
 private:
     std::string mName;
     nanogui::Vector2i mSize;
 
+    EPixelFormat mPixelFormat = EPixelFormat::F32;
+
     // tev defaults to storing images in fp32 for maximum precision. However, many images only require fp16 to be displayed as good as
     // losslessly. For such images, loaders can set this to F16 to save memory.
     EPixelFormat mDesiredPixelFormat = EPixelFormat::F32;
 
-    std::shared_ptr<std::vector<float>> mData;
+    std::shared_ptr<std::vector<uint8_t>> mData;
     size_t mDataOffset;
     size_t mDataStride;
 };

@@ -63,7 +63,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F32);
 
     auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
@@ -105,7 +105,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     }
 
                     // Flip image vertically due to PFM format
-                    resultData.channels[c].at({x, size.y() - (int)y - 1}) = scale * val;
+                    resultData.channels[c].setAt({x, size.y() - (int)y - 1}, scale * val);
                 }
             }
         },

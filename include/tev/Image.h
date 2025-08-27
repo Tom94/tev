@@ -74,6 +74,7 @@ struct ImageData {
     std::vector<std::string> channelsInLayer(std::string_view layerName) const;
 
     Task<void> convertToRec709(int priority);
+    Task<void> convertToDesiredPixelFormat(int priority);
 
     void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);
 
@@ -147,7 +148,7 @@ public:
         return result;
     }
 
-    bool isInterleaved(std::span<const std::string> channelNames, size_t desiredStride) const;
+    bool isInterleaved(std::span<const std::string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const;
 
     nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
 
@@ -229,47 +230,8 @@ private:
 };
 
 // Modifies `data` and returns the new size of the data after reorientation.
-template <typename T>
-Task<nanogui::Vector2i> orientToTopLeft(std::vector<T>& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
-    if (orientation == EOrientation::TopLeft) {
-        co_return size;
-    }
-
-    bool swapAxes = orientation >= EOrientation::LeftTop;
-    size = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
-    nanogui::Vector2i otherSize = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
-
-    const size_t numPixels = (size_t)size.x() * size.y();
-    if (numPixels == 0) {
-        co_return size;
-    } else if (data.size() % numPixels != 0) {
-        throw ImageModifyError{"Image data size is not a multiple of the number of pixels."};
-    }
-
-    const size_t numSamplesPerPixel = data.size() / numPixels;
-
-    std::vector<T> reorientedData(data.size());
-    co_await ThreadPool::global().parallelForAsync<int>(
-        0,
-        size.y(),
-        [&](int y) {
-            for (int x = 0; x < size.x(); ++x) {
-                const size_t i = y * (size_t)size.x() + x;
-
-                const auto other = applyOrientation(orientation, nanogui::Vector2i{x, y}, size);
-                const size_t j = other.y() * (size_t)otherSize.x() + other.x();
-
-                for (size_t s = 0; s < numSamplesPerPixel; ++s) {
-                    reorientedData[i * numSamplesPerPixel + s] = data[j * numSamplesPerPixel + s];
-                }
-            }
-        },
-        priority
-    );
-
-    std::swap(data, reorientedData);
-    co_return size;
-}
+Task<nanogui::Vector2i>
+    orientToTopLeft(EPixelFormat format, std::vector<uint8_t>& data, nanogui::Vector2i size, EOrientation orientation, int priority);
 
 Task<std::vector<std::shared_ptr<Image>>>
     tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);

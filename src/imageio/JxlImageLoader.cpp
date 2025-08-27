@@ -414,8 +414,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
                 data.channels = makeRgbaInterleavedChannels(
-                    numColorChannels, info.alpha_bits, size, info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
+                    numColorChannels, info.alpha_bits, size, EPixelFormat::F32, info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
                 );
+
                 data.hasPremultipliedAlpha = info.alpha_premultiplied;
                 if (info.have_animation) {
                     data.partName = frameName;
@@ -434,7 +435,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                                               EAlphaKind::None,
                             EPixelFormat::F32,
                             (uint8_t*)colorData.data(),
-                            data.channels.front().data(),
+                            data.channels.front().floatData(),
                             4,
                             priority
                         );
@@ -448,7 +449,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
                     co_await toFloat32(
-                        (float*)colorData.data(), numColorChannels, data.channels.front().data(), 4, size, info.alpha_bits, priority
+                        (float*)colorData.data(), numColorChannels, data.channels.front().floatData(), 4, size, info.alpha_bits, priority
                     );
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
@@ -487,7 +488,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
                         }
 
-                        auto* pixelData = data.channels.front().data();
+                        auto* pixelData = data.channels.front().floatData();
                         const size_t numPixels = size.x() * (size_t)size.y();
                         co_await ThreadPool::global().parallelForAsync<size_t>(
                             0,
@@ -523,7 +524,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     // Resize the channel to the image size
                     auto& channel = data.channels.emplace_back(
-                        Channel{extraChannel.name, size, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16}
+                        Channel{extraChannel.name, size, EPixelFormat::F32, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16}
                     );
                     co_await ThreadPool::global().parallelForAsync<size_t>(
                         0,
@@ -531,7 +532,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         [&](size_t y) {
                             size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
                             for (int x = 0; x < size.x(); ++x) {
-                                channel.at({x, (int)y}) = extraChannel.data[srcOffset + (x >> extraChannel.dimShift)];
+                                channel.setAt({x, (int)y}, extraChannel.data[srcOffset + (x >> extraChannel.dimShift)]);
                             }
                         },
                         priority

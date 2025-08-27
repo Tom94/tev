@@ -457,6 +457,19 @@ enum class EPixelFormat {
     F32,
 };
 
+std::string toString(EPixelFormat format);
+
+inline size_t nBytes(EPixelFormat format) {
+    switch (format) {
+        case EPixelFormat::U8: return 1;
+        case EPixelFormat::U16: return 2;
+        case EPixelFormat::F16: return 2;
+        case EPixelFormat::F32: return 4;
+    }
+
+    return 0;
+}
+
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
 void redrawWindow();

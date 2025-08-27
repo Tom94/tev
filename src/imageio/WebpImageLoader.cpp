@@ -155,7 +155,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             }
 
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
-            resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F16);
+            resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16);
             resultData.hasPremultipliedAlpha = false;
             resultData.partName = fmt::format("frames.{}", frameIdx);
 
@@ -200,7 +200,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             // If we did not dispose the previous canvas, we need to blend the current frame onto it. Otherwise, blend onto background. The
             // first frame is always disposed.
-            const float* prevCanvas = result.size() > 1 ? result.at(result.size() - 2).channels.front().data() : nullptr;
+            const float* prevCanvas = result.size() > 1 ? result.at(result.size() - 2).channels.front().floatData() : nullptr;
             bool useBg = disposed || prevCanvas == nullptr;
             disposed = iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND;
 
@@ -235,7 +235,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                                 val = bg;
                             }
 
-                            resultData.channels.front().data()[canvasSampleIdx] = val;
+                            resultData.channels.front().floatData()[canvasSampleIdx] = val;
                         }
                     }
                 },

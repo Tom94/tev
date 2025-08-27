@@ -86,7 +86,9 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
         ImageData& resultData = result[frameIdx];
 
         // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
-        resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, isHdr ? EPixelFormat::F32 : EPixelFormat::F16);
+        resultData.channels = makeRgbaInterleavedChannels(
+            numChannels, numChannels == 4, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16
+        );
         resultData.hasPremultipliedAlpha = false;
         if (numFrames > 1) {
             resultData.partName = fmt::format("frames.{}", frameIdx);
@@ -94,11 +96,11 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
         auto numPixels = (size_t)size.x() * size.y();
         if (isHdr) {
-            co_await toFloat32((float*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority);
+            co_await toFloat32((float*)data, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority);
             data = (float*)data + numPixels * numChannels;
         } else {
             co_await toFloat32<uint8_t, true>(
-                (uint8_t*)data, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+                (uint8_t*)data, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
             );
             data = (uint8_t*)data + numPixels * numChannels;
         }

@@ -1180,8 +1180,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     // Local scope to prevent use-after-move
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
-        auto rgbaChannels = ImageLoader::makeRgbaInterleavedChannels(numRgbaChannels, hasAlpha, size, desiredPixelFormat);
-        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, desiredPixelFormat);
+        auto rgbaChannels = ImageLoader::makeRgbaInterleavedChannels(numRgbaChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat);
+        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat);
 
         resultData.channels.insert(resultData.channels.end(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end()));
         resultData.channels.insert(
@@ -1375,7 +1375,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     // Convert all the extra channels to float and store them in the result data. No further processing needed.
     for (int c = numChannels - numExtraChannels + (hasAlpha ? 1 : 0); c < numChannels; ++c) {
         co_await tiffDataToFloat32<false>(
-            kind, nullptr, imageData.data() + c, numChannels, resultData.channels[c].data(), 1, size, false, priority, intConversionScale, flipWhiteAndBlack
+            kind, nullptr, imageData.data() + c, numChannels, resultData.channels[c].floatData(), 1, size, false, priority, intConversionScale, flipWhiteAndBlack
         );
     }
 
@@ -1395,7 +1395,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                 hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)floatRgbaData.data(),
-                resultData.channels.front().data(),
+                resultData.channels.front().floatData(),
                 4,
                 priority
             );
@@ -1426,7 +1426,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     }
 
     co_await toFloat32<float, false>(
-        (const float*)floatRgbaData.data(), numRgbaChannels, resultData.channels.front().data(), 4, size, hasAlpha, priority
+        (const float*)floatRgbaData.data(), numRgbaChannels, resultData.channels.front().floatData(), 4, size, hasAlpha, priority
     );
 
     co_return resultData;

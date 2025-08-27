@@ -39,6 +39,8 @@
 #    include <tev/imageio/JxlImageLoader.h>
 #endif
 
+#include <half.h>
+
 using namespace nanogui;
 using namespace std;
 
@@ -103,7 +105,9 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
     return mimeTypes;
 }
 
-vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat desiredPixelFormat, string_view namePrefix) {
+vector<Channel> ImageLoader::makeRgbaInterleavedChannels(
+    int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view namePrefix
+) {
     vector<Channel> channels;
     if (numChannels > 4) {
         throw ImageLoadError{"Image has too many RGBA channels."};
@@ -114,14 +118,25 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool h
         throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
-    size_t numPixels = (size_t)size.x() * size.y();
-    shared_ptr<vector<float>> data = make_shared<vector<float>>(numPixels * 4);
+    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numBytesPerSample = nBytes(format);
+    shared_ptr<vector<uint8_t>> data = make_shared<vector<uint8_t>>(numBytesPerSample * numPixels * 4);
 
-    // Initialize pattern [0,0,0,1] efficiently using 128-bit writes
-    float* ptr = data->data();
-    const float pattern[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-    for (size_t i = 0; i < numPixels; ++i) {
-        memcpy(ptr + i * 4, pattern, 16);
+    // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
+    auto init = [numPixels](auto* ptr) {
+        using float_t = std::remove_pointer_t<decltype(ptr)>;
+        const float_t pattern[4] = {(float_t)0.0, (float_t)0.0, (float_t)0.0, (float_t)1.0};
+        for (size_t i = 0; i < numPixels; ++i) {
+            memcpy(ptr + i * 4, pattern, sizeof(float_t) * 4);
+        }
+    };
+
+    if (format == EPixelFormat::F32) {
+        init((float*)data->data());
+    } else if (format == EPixelFormat::F16) {
+        init((half*)data->data());
+    } else {
+        throw ImageLoadError{"Unsupported pixel format."};
     }
 
     if (numColorChannels > 1) {
@@ -130,23 +145,25 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(int numChannels, bool h
             string name = fmt::format("{}{}", namePrefix, (c < (int)channelNames.size() ? channelNames[c] : to_string(c)));
 
             // We assume that the channels are interleaved.
-            channels.emplace_back(name, size, desiredPixelFormat, data, c, 4);
+            channels.emplace_back(name, size, format, desiredFormat, data, c * numBytesPerSample, 4 * numBytesPerSample);
         }
     } else {
-        channels.emplace_back(fmt::format("{}L", namePrefix), size, desiredPixelFormat, data, 0, 4);
+        channels.emplace_back(fmt::format("{}L", namePrefix), size, format, desiredFormat, data, 0, 4 * numBytesPerSample);
     }
 
     if (hasAlpha) {
-        channels.emplace_back(fmt::format("{}A", namePrefix), size, desiredPixelFormat, data, 3, 4);
+        channels.emplace_back(fmt::format("{}A", namePrefix), size, format, desiredFormat, data, 3 * numBytesPerSample, 4 * numBytesPerSample);
     }
 
     return channels;
 }
 
-vector<Channel> ImageLoader::makeNChannels(int numChannels, const Vector2i& size, EPixelFormat desiredPixelFormat, string_view namePrefix) {
+vector<Channel> ImageLoader::makeNChannels(
+    int numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view namePrefix
+) {
     vector<Channel> channels;
     for (int c = 0; c < numChannels; ++c) {
-        channels.emplace_back(fmt::format("{}{}", namePrefix, to_string(c)), size, desiredPixelFormat);
+        channels.emplace_back(fmt::format("{}{}", namePrefix, to_string(c)), size, format, desiredFormat);
     }
 
     return channels;
@@ -206,7 +223,7 @@ Task<void> ImageLoader::resizeChannelsAsync(const vector<Channel>& srcChannels, 
                     const float p10 = srcChannels[c].at(srcIdx10);
                     const float p11 = srcChannels[c].at(srcIdx11);
 
-                    dstChannels[c].at(dstIdx) = w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11;
+                    dstChannels[c].setAt(dstIdx, w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11);
                 }
             }
         },

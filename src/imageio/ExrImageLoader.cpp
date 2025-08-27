@@ -397,8 +397,7 @@ public:
             channel.size().y(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.at({x, y}
-                    ) = data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled];
+                    channel.setAt({x, y}, data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled]);
                 }
             },
             priority
@@ -569,7 +568,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             auto& rawChannel = rawChannels.at(i);
             auto& data = result.at(rawChannel.partId());
             channelMapping.emplace_back(data.channels.size());
-            data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size(), rawChannel.desiredPixelFormat()});
+            data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size(), EPixelFormat::F32, rawChannel.desiredPixelFormat()});
         }
 
         vector<Task<void>> tasks;

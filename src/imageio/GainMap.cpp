@@ -86,7 +86,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
                 }
 
                 const int gainmapChannel = min(c, numGainMapChannels - 1);
-                image.channels[c].at(i) *= (1.0f + (headroom - 1.0f) * gainMap.channels[gainmapChannel].at(i));
+                image.channels[c].setAt(i, image.channels[c].at(i) * (1.0f + (headroom - 1.0f) * gainMap.channels[gainmapChannel].at(i)));
             }
         },
         priority

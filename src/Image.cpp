@@ -28,6 +28,7 @@
 #include <chrono>
 #include <fstream>
 #include <istream>
+#include <map>
 #include <unordered_set>
 #include <vector>
 
@@ -79,10 +80,10 @@ Task<void> ImageData::convertToRec709(int priority) {
                 0,
                 r->numPixels(),
                 [r, g, b, this](size_t i) {
-                    auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
-                    r->at(i) = rgb.x();
-                    g->at(i) = rgb.y();
-                    b->at(i) = rgb.z();
+                    const auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
+                    r->setAt(i, rgb.x());
+                    g->setAt(i, rgb.y());
+                    b->setAt(i, rgb.z());
                 },
                 priority
             )
@@ -95,6 +96,93 @@ Task<void> ImageData::convertToRec709(int priority) {
 
     // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
     toRec709 = Matrix4f{1.0f};
+}
+
+Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
+    // All channels sharing the same data buffer must be converted together to avoid multiple conversions of the same data.
+    multimap<shared_ptr<vector<uint8_t>>, Channel*> channelsByData;
+    for (auto& c : channels) {
+        channelsByData.emplace(c.dataBuf(), &c);
+    }
+
+    for (auto it = channelsByData.begin(); it != channelsByData.end();) {
+        const auto rangeEnd = channelsByData.upper_bound(it->first);
+
+        vector<Channel*> channelsToConvert;
+        const Channel* firstChannel = it->second;
+        const EPixelFormat targetFormat = firstChannel->desiredPixelFormat();
+        const EPixelFormat sourceFormat = firstChannel->pixelFormat();
+
+        bool canConvert = true;
+        for (auto it2 = it; it2 != rangeEnd; ++it2) {
+            const Channel* c = it2->second;
+            if (c->pixelFormat() != sourceFormat || c->desiredPixelFormat() != targetFormat) {
+                canConvert = false;
+
+                tlog::warning() << fmt::format(
+                    "Channels sharing the same data buffer must have the same source and target pixel format. ({}: {} -> {}, {}: {} -> {})",
+                    firstChannel->name(),
+                    toString(sourceFormat),
+                    toString(targetFormat),
+                    c->name(),
+                    toString(c->pixelFormat()),
+                    toString(c->desiredPixelFormat())
+                );
+            }
+        }
+
+        if (!canConvert || sourceFormat == targetFormat) {
+            it = rangeEnd;
+            continue;
+        }
+
+        shared_ptr<vector<uint8_t>> data = it->first;
+
+        const size_t nSamples = data->size() / nBytes(sourceFormat);
+        vector<uint8_t> convertedData(nSamples * nBytes(targetFormat));
+
+        const uint8_t* const src = data->data();
+        uint8_t* const dst = convertedData.data();
+
+        const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
+            co_await ThreadPool::global().parallelForAsync<size_t>(
+                0,
+                nSamples,
+                [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; },
+                priority
+            );
+        };
+
+        const auto typedSrcConvert = [targetFormat, dst, &typedConvert](const auto* typedSrc) -> Task<void> {
+            switch (targetFormat) {
+                case EPixelFormat::U8: co_await typedConvert(typedSrc, (uint8_t*)dst); break;
+                case EPixelFormat::U16: co_await typedConvert(typedSrc, (uint16_t*)dst); break;
+                case EPixelFormat::F16: co_await typedConvert(typedSrc, (half*)dst); break;
+                case EPixelFormat::F32: co_await typedConvert(typedSrc, (float*)dst); break;
+            }
+        };
+
+        switch (sourceFormat) {
+            case EPixelFormat::U8: co_await typedSrcConvert((const uint8_t*)src); break;
+            case EPixelFormat::U16: co_await typedSrcConvert((const uint16_t*)src); break;
+            case EPixelFormat::F16: co_await typedSrcConvert((const half*)src); break;
+            case EPixelFormat::F32: co_await typedSrcConvert((const float*)src); break;
+        }
+
+        for (auto it2 = it; it2 != rangeEnd; ++it2) {
+            Channel* c = it2->second;
+            c->setPixelFormat(targetFormat);
+            c->setOffset(c->offset() / nBytes(sourceFormat) * nBytes(targetFormat));
+            c->setStride(c->stride() / nBytes(sourceFormat) * nBytes(targetFormat));
+        }
+
+        *data = std::move(convertedData);
+
+        tlog::debug(
+        ) << fmt::format("Converted {} channels from {} to {}.", distance(it, rangeEnd), toString(sourceFormat), toString(targetFormat));
+
+        it = rangeEnd;
+    }
 }
 
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
@@ -150,11 +238,11 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     bool swapAxes = orientation >= EOrientation::LeftTop;
 
     struct DataDesc {
-        shared_ptr<vector<float>> data;
+        shared_ptr<vector<uint8_t>> data;
         Vector2i size;
 
         struct Hash {
-            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<vector<float>>>()(interval.data); }
+            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<vector<uint8_t>>>()(interval.data); }
         };
 
         bool operator==(const DataDesc& other) const { return data == other.data && size == other.size; }
@@ -173,7 +261,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     }
 
     for (auto& c : channelData) {
-        co_await tev::orientToTopLeft<float>(*c.data, c.size, orientation, priority);
+        co_await tev::orientToTopLeft(EPixelFormat::F32, *c.data, c.size, orientation, priority);
     }
 
     if (dataWindow.isValid()) {
@@ -254,6 +342,8 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     co_await convertToRec709(taskPriority);
 
+    co_await convertToDesiredPixelFormat(taskPriority);
+
     TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
     TEV_ASSERT(toRec709 == Matrix4f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 }
@@ -308,14 +398,14 @@ string Image::shortName() const {
     return result;
 }
 
-bool Image::isInterleaved(span<const string> channelNames, size_t desiredStride) const {
+bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const {
     if (desiredStride < channelNames.size()) {
         throw runtime_error{"Desired stride must be at least the number of channels."};
     }
 
     // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
     // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
-    const float* interleavedData = nullptr;
+    const uint8_t* interleavedData = nullptr;
     for (size_t i = 0; i < channelNames.size(); ++i) {
         const auto* chan = channel(channelNames[i]);
         if (!chan) {
@@ -326,7 +416,7 @@ bool Image::isInterleaved(span<const string> channelNames, size_t desiredStride)
             interleavedData = chan->data();
         }
 
-        if (interleavedData != chan->data() - i || chan->stride() != desiredStride) {
+        if (interleavedData != chan->data() - i * desiredBytesPerSample || chan->stride() != desiredStride) {
             return false;
         }
     }
@@ -389,8 +479,8 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         return nullptr;
     }
 
-    string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
-    auto iter = mTextures.find(lookup);
+    const string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
+    const auto iter = mTextures.find(lookup);
     if (iter != end(mTextures)) {
         auto& texture = iter->second;
         if (texture.mipmapDirty && minFilter == EInterpolationMode::Trilinear) {
@@ -415,6 +505,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         case 1: pixelFormat = Texture::PixelFormat::R; break;
         case 2: pixelFormat = Texture::PixelFormat::RA; break;
         case 3: pixelFormat = Texture::PixelFormat::RGB; break;
+        // case 3: pixelFormat = Texture::PixelFormat::RGBA; break; // Uncomment for faster GPU uploads at the cost of memory
         case 4: pixelFormat = Texture::PixelFormat::RGBA; break;
         default: throw runtime_error{"Unsupported number of channels for texture."};
     }
@@ -461,7 +552,8 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         )};
     }
 
-    bool directUpload = isInterleaved(channelNames, numTextureChannels) && texture->component_format() == Texture::ComponentFormat::Float32;
+    const size_t bytesPerSample = bitsPerSample / 8;
+    const bool directUpload = isInterleaved(channelNames, bytesPerSample, numTextureChannels * bytesPerSample);
 
     tlog::debug() << fmt::format(
         "Uploading texture: direct={} bps={} filter={}-{} img={}:{}",
@@ -728,6 +820,50 @@ string Image::toString() const {
 
     sstream << join(localLayers, "\n");
     return sstream.str();
+}
+
+// Modifies `data` and returns the new size of the data after reorientation.
+Task<nanogui::Vector2i>
+    orientToTopLeft(EPixelFormat format, std::vector<uint8_t>& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
+    if (orientation == EOrientation::TopLeft) {
+        co_return size;
+    }
+
+    bool swapAxes = orientation >= EOrientation::LeftTop;
+    size = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
+    nanogui::Vector2i otherSize = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
+
+    const size_t numBytesPerSample = nBytes(format);
+    const size_t numPixels = (size_t)size.x() * size.y();
+
+    if (numPixels == 0) {
+        co_return size;
+    } else if (data.size() % (numPixels * numBytesPerSample) != 0) {
+        throw ImageModifyError{"Image data size is not a multiple of the number of pixels."};
+    }
+
+    const size_t numSamplesPerPixel = data.size() / numPixels / numBytesPerSample;
+    const size_t numBytesPerPixel = numSamplesPerPixel * numBytesPerSample;
+
+    std::vector<uint8_t> reorientedData(data.size());
+    co_await ThreadPool::global().parallelForAsync<int>(
+        0,
+        size.y(),
+        [&](int y) {
+            for (int x = 0; x < size.x(); ++x) {
+                const size_t i = y * (size_t)size.x() + x;
+
+                const auto other = applyOrientation(orientation, nanogui::Vector2i{x, y}, size);
+                const size_t j = other.y() * (size_t)otherSize.x() + other.x();
+
+                std::memcpy(&reorientedData[i * numBytesPerPixel], &data[j * numBytesPerPixel], numBytesPerPixel);
+            }
+        },
+        priority
+    );
+
+    std::swap(data, reorientedData);
+    co_return size;
 }
 
 Task<vector<shared_ptr<Image>>>

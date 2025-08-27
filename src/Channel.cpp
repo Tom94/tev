@@ -67,16 +67,24 @@ Color Channel::color(string_view channel, bool pastel) {
     return Color(1.0f, 1.0f);
 }
 
-Channel::Channel(string_view name, const nanogui::Vector2i& size, EPixelFormat desiredPixelFormat, shared_ptr<vector<float>> data, size_t dataOffset, size_t dataStride) :
-    mName{name}, mSize{size}, mDesiredPixelFormat{desiredPixelFormat} {
+Channel::Channel(
+    string_view name,
+    const nanogui::Vector2i& size,
+    EPixelFormat format,
+    EPixelFormat desiredFormat,
+    shared_ptr<vector<uint8_t>> data,
+    size_t dataOffset,
+    size_t dataStride
+) :
+    mName{name}, mSize{size}, mPixelFormat{format}, mDesiredPixelFormat{desiredFormat} {
     if (data) {
         mData = data;
         mDataOffset = dataOffset;
         mDataStride = dataStride;
     } else {
-        mData = make_shared<vector<float>>((size_t)size.x() * size.y());
+        mData = make_shared<vector<uint8_t>>(nBytes(format) * (size_t)size.x() * size.y());
         mDataOffset = 0;
-        mDataStride = 1;
+        mDataStride = nBytes(format);
     }
 }
 
@@ -86,9 +94,9 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
         other.numPixels(),
         [&](size_t i) {
             if (other.at(i) != 0) {
-                at(i) /= other.at(i);
+                setAt(i, at(i) / other.at(i));
             } else {
-                at(i) = 0;
+                setAt(i, 0);
             }
         },
         priority
@@ -96,7 +104,7 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
-    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) { at(i) *= other.at(i); }, priority);
+    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) { setAt(i, at(i) * other.at(i)); }, priority);
 }
 
 void Channel::updateTile(int x, int y, int width, int height, span<const float> newData) {
@@ -108,7 +116,7 @@ void Channel::updateTile(int x, int y, int width, int height, span<const float> 
 
     for (int posY = 0; posY < height; ++posY) {
         for (int posX = 0; posX < width; ++posX) {
-            at({x + posX, y + posY}) = newData[posX + posY * (size_t)width];
+            setAt({x + posX, y + posY}, newData[posX + posY * (size_t)width]);
         }
     }
 }

@@ -156,7 +156,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
             EOrientation orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
 
-            size = co_await orientToTopLeft(imageData, size, orientation, priority);
+            size = co_await orientToTopLeft(EPixelFormat::U8, imageData, size, orientation, priority);
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
@@ -169,7 +169,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily fits
     // into F16.
-    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F16);
+    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
     resultData.hasPremultipliedAlpha = true;
@@ -187,7 +187,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                 EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)floatData.data(),
-                resultData.channels.front().data(),
+                resultData.channels.front().floatData(),
                 4,
                 priority
             );
@@ -196,7 +196,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    co_await toFloat32<uint8_t, true>(imageData.data(), numColorChannels, resultData.channels.front().data(), 4, size, false, priority);
+    co_await toFloat32<uint8_t, true>(imageData.data(), numColorChannels, resultData.channels.front().floatData(), 4, size, false, priority);
     co_return result;
 }
 

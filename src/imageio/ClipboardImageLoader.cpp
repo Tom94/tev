@@ -62,7 +62,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     ImageData& resultData = result.front();
 
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F16);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16);
 
     vector<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
@@ -90,11 +90,11 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
             for (int x = 0; x < size.x(); ++x) {
                 const size_t baseIdx = y * numBytesPerRow + x * numChannels;
                 for (int c = 0; c < numChannels; ++c) {
-                    unsigned char val = data[baseIdx + shifts[c]];
+                    const unsigned char val = data[baseIdx + shifts[c]];
                     if (c == alphaChannelIndex) {
-                        resultData.channels[c].at({x, y}) = val / 255.0f;
+                        resultData.channels[c].setAt({x, y}, val / 255.0f);
                     } else {
-                        resultData.channels[c].at({x, y}) = toLinear(val / 255.0f);
+                        resultData.channels[c].setAt({x, y}, toLinear(val / 255.0f));
                     }
                 }
             }
