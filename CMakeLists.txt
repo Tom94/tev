@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.13)
 
 project(
     tev
-    VERSION 2.3.2
+    VERSION 2.4.0
     DESCRIPTION "High dynamic range (HDR) image viewer for people who care about colors."
     LANGUAGES C CXX
 )
