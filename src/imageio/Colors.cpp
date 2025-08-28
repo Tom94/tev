@@ -45,11 +45,11 @@ Matrix3f toMatrix3(const float data[3][3]) {
     return result;
 }
 
-Matrix4f transpose(const Imath::M44f& mat) {
-    Matrix4f result;
-    for (int m = 0; m < 4; ++m) {
-        for (int n = 0; n < 4; ++n) {
-            // No flipping of indices needed, because Imath::M44f is row-major while Matrix4f is column-major
+Matrix3f transpose(const Imath::M44f& mat) {
+    Matrix3f result;
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            // No flipping of indices needed, because Imath::M44f is row-major while Matrix3f is column-major
             result.m[m][n] = mat.x[m][n];
         }
     }
@@ -57,7 +57,7 @@ Matrix4f transpose(const Imath::M44f& mat) {
     return result;
 }
 
-Matrix4f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) {
+Matrix3f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) {
     Imf::Chromaticities imfChroma = {
         {chroma[0].x(), chroma[0].y()},
         {chroma[1].x(), chroma[1].y()},
@@ -68,7 +68,7 @@ Matrix4f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) {
     return transpose(Imf::XYZtoRGB(imfChroma, 1));
 }
 
-Matrix4f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma) {
+Matrix3f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma) {
     Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
     Imf::Chromaticities imfChroma = {
         {chroma[0].x(), chroma[0].y()},
@@ -84,13 +84,13 @@ Matrix4f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma) {
     };
 
     if (chromaEq(imfChroma, rec709)) {
-        return Matrix4f{1.0f};
+        return Matrix3f{1.0f};
     }
 
     return transpose(Imf::RGBtoXYZ(imfChroma, 1) * Imf::XYZtoRGB(rec709, 1));
 }
 
-Matrix4f xyzToRec709Matrix() {
+Matrix3f xyzToRec709Matrix() {
     Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
     return transpose(Imf::XYZtoRGB(rec709, 1));
 }
@@ -228,28 +228,6 @@ Matrix3f adaptToXYZD50Bradford(const Vector2f& w) {
 
     const auto b = aMat * kBradford;
     return kBradfordInv * b;
-}
-
-Matrix4f toMatrix4(const Matrix3f& mat) {
-    Matrix4f result{1.0f};
-    for (int m = 0; m < 3; ++m) {
-        for (int n = 0; n < 3; ++n) {
-            result.m[m][n] = mat.m[m][n];
-        }
-    }
-
-    return result;
-}
-
-Matrix3f toMatrix3(const Matrix4f& mat) {
-    Matrix3f result;
-    for (int m = 0; m < 3; ++m) {
-        for (int n = 0; n < 3; ++n) {
-            result.m[m][n] = mat.m[m][n];
-        }
-    }
-
-    return result;
 }
 
 class GlobalCmsContext {

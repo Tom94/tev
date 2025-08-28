@@ -643,7 +643,7 @@ Task<void> postprocessLinearRawDng(
     for (size_t i = 0; i < camTags.size(); ++i) {
         if (const auto camToXyz = readCameraToXyz(get<0>(camTags[i]), get<1>(camTags[i]), get<2>(camTags[i]))) {
             tlog::debug() << fmt::format("Applying camToXyz matrix #{}: {}", camTags.size() - i, camToXyz.value());
-            toRimm = toRimm * toMatrix4(camToXyz.value());
+            toRimm = toRimm * camToXyz.value();
             break;
         }
     }

@@ -56,7 +56,7 @@ vector<string> ImageData::channelsInLayer(string_view layerName) const {
 
 Task<void> ImageData::convertToRec709(int priority) {
     // No need to do anything for identity transforms
-    if (toRec709 == Matrix4f{1.0f}) {
+    if (toRec709 == Matrix3f{1.0f}) {
         co_return;
     }
 
@@ -95,7 +95,7 @@ Task<void> ImageData::convertToRec709(int priority) {
     }
 
     // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
-    toRec709 = Matrix4f{1.0f};
+    toRec709 = Matrix3f{1.0f};
 }
 
 Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
@@ -345,7 +345,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     co_await convertToDesiredPixelFormat(taskPriority);
 
     TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
-    TEV_ASSERT(toRec709 == Matrix4f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
+    TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 }
 
 atomic<int> Image::sId(0);

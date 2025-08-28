@@ -28,12 +28,12 @@
 
 namespace tev {
 
-nanogui::Matrix4f chromaToRec709Matrix(const std::array<nanogui::Vector2f, 4>& chroma);
-nanogui::Matrix4f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
-nanogui::Matrix4f xyzToRec709Matrix();
+nanogui::Matrix3f chromaToRec709Matrix(const std::array<nanogui::Vector2f, 4>& chroma);
+nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
+nanogui::Matrix3f xyzToRec709Matrix();
 
-nanogui::Matrix4f adobeToRec709Matrix();
-nanogui::Matrix4f proPhotoToRec709Matrix();
+nanogui::Matrix3f adobeToRec709Matrix();
+nanogui::Matrix3f proPhotoToRec709Matrix();
 
 std::array<nanogui::Vector2f, 4> rec709Chroma();
 std::array<nanogui::Vector2f, 4> adobeChroma();
@@ -46,9 +46,6 @@ std::array<nanogui::Vector2f, 4> bt2100Chroma();
 nanogui::Vector2f xy(EExifLightSource lightSource);
 
 nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
-
-nanogui::Matrix4f toMatrix4(const nanogui::Matrix3f& mat);
-nanogui::Matrix3f toMatrix3(const nanogui::Matrix4f& mat);
 
 enum class EAlphaKind {
     // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
