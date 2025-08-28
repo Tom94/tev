@@ -209,31 +209,30 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         std::swap(scratchImage, convertedImage);
     }
 
-    Vector2i size = {(int)metadata.width, (int)metadata.height};
+    const Vector2i size = {(int)metadata.width, (int)metadata.height};
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32, EPixelFormat::F32);
 
-    auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw ImageLoadError{"DDS image has zero pixels."};
     }
 
-    bool isFloat = DirectX::FormatDataType(metadata.format) == DirectX::FORMAT_TYPE_FLOAT;
-
+    const bool isFloat = DirectX::FormatDataType(metadata.format) == DirectX::FORMAT_TYPE_FLOAT;
     if (isFloat || numChannels < 3) {
         // Assume that the image data is already in linear space.
         assert(!DirectX::IsSRGB(metadata.format));
         co_await toFloat32(
-            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
         );
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
         co_await toFloat32<float, true>(
-            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
         );
     }
 

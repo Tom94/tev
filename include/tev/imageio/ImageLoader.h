@@ -125,11 +125,17 @@ public:
     static const std::vector<std::string_view>& supportedMimeTypes();
 
     static std::vector<Channel> makeRgbaInterleavedChannels(
-        int numChannels, bool hasAlpha, const nanogui::Vector2i& size, EPixelFormat desiredPixelFormat, std::string_view namePrefix = ""
+        int numChannels,
+        bool hasAlpha,
+        const nanogui::Vector2i& size,
+        EPixelFormat format,
+        EPixelFormat desiredFormat,
+        std::string_view namePrefix = ""
     );
 
-    static std::vector<Channel>
-        makeNChannels(int numChannels, const nanogui::Vector2i& size, EPixelFormat desiredPixelFormat, std::string_view namePrefix = "");
+    static std::vector<Channel> makeNChannels(
+        int numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view namePrefix = ""
+    );
 
     static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
 };

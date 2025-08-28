@@ -68,16 +68,16 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     ImageData& resultData = result.front();
 
     // QOI images are 8 bit per pixel which easily fits into F16.
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F16);
+    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16);
     resultData.hasPremultipliedAlpha = false;
 
     if (desc.colorspace == QOI_LINEAR) {
         co_await toFloat32<uint8_t, false>(
-            (uint8_t*)decodedData, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
         );
     } else {
         co_await toFloat32<uint8_t, true>(
-            (uint8_t*)decodedData, numChannels, resultData.channels.front().data(), 4, size, numChannels == 4, priority
+            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
         );
     }
 

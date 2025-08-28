@@ -852,7 +852,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
     vector<Channel> result;
     auto channelNames = image->channelsInGroup(requestedChannelGroup);
     for (size_t i = 0; i < channelNames.size(); ++i) {
-        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size(), EPixelFormat::F32);
+        result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size(), EPixelFormat::F32, EPixelFormat::F32);
     }
 
     const auto channels = image->channels(channelNames);
@@ -862,7 +862,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
             image->numPixels(),
             [&](size_t j) {
                 for (size_t c = 0; c < channels.size(); ++c) {
-                    result[c].at(j) = channels[c]->at(j);
+                    result[c].setAt(j, channels[c]->at(j));
                 }
             },
             priority
@@ -888,13 +888,20 @@ vector<Channel> ImageCanvas::channelsFromImages(
 
                     if (isAlpha[c]) {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[c].at({x, y}) = 0.5f *
-                                (channel->eval({x, y}) + (referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 1.0f));
+                            result[c].setAt(
+                                {x, y},
+                                0.5f *
+                                    (channel->eval({x, y}) +
+                                     (referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 1.0f))
+                            );
                         }
                     } else {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[c].at({x, y}) = ImageCanvas::applyMetric(
-                                channel->eval({x, y}), referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 0.0f, metric
+                            result[c].setAt(
+                                {x, y},
+                                ImageCanvas::applyMetric(
+                                    channel->eval({x, y}), referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 0.0f, metric
+                                )
                             );
                         }
                     }

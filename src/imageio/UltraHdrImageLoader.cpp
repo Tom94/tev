@@ -140,7 +140,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     const int numChannels = 4;
 
     // Ultra HDR gives us at most F16 data. See https://github.com/google/libultrahdr?tab=readme-ov-file#decoding-api-outline
-    imageData.channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F16);
+    imageData.channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16);
 
     // JPEG always has alpha == 1 in which case there's no distinction between premultiplied and straight alpha
     imageData.hasPremultipliedAlpha = true;
@@ -148,7 +148,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     auto data = reinterpret_cast<const half*>(image->planes[UHDR_PLANE_PACKED]);
     size_t samplesPerRow = image->stride[UHDR_PLANE_PACKED] * numChannels;
 
-    co_await toFloat32((const half*)data, numChannels, imageData.channels.front().data(), 4, size, true, priority, 1.0f, samplesPerRow);
+    co_await toFloat32((const half*)data, numChannels, imageData.channels.front().floatData(), 4, size, true, priority, 1.0f, samplesPerRow);
 
     // Convert to Rec.709 if necessary
     tlog::debug(fmt::format("Ultra HDR image has color gamut: {}", toString(image->cg)));
@@ -159,16 +159,16 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     if (iccProfile && iccProfile->data && iccProfile->data_sz > 14) {
         tlog::warning() << "Found ICC color profile. Attempting to apply... " << iccProfile->data_sz;
 
-        auto channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F16);
+        auto channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16);
         try {
             co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),
                 size,
                 3,
                 EAlphaKind::Straight,
-                EPixelFormat::F32,
-                (uint8_t*)imageData.channels.front().data(),
-                channels.front().data(),
+                imageData.channels.front().pixelFormat(),
+                imageData.channels.front().data(),
+                channels.front().floatData(),
                 4,
                 priority
             );

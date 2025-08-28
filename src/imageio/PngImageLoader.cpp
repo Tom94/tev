@@ -209,7 +209,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
-        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F16);
+        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16);
         resultData.orientation = orientation;
         resultData.hasPremultipliedAlpha = false;
 
@@ -245,7 +245,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         // If our frame fills the entire canvas and is configured to overwrite the canvas (as is the case for static frames / PNGs), we can
         // directly write onto the canvas and not worry about blending.
         const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size && blendOp == EBlendOp::Source;
-        float* const dstData = directlyOnCanvas ? resultData.channels.front().data() : frameData.data();
+        float* const dstData = directlyOnCanvas ? resultData.channels.front().floatData() : frameData.data();
 
         const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
         const size_t numFrameSamples = numFramePixels * numChannels;
@@ -459,7 +459,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                                 val = bg;
                             }
 
-                            resultData.channels.front().data()[canvasSampleIdx] = val;
+                            resultData.channels.front().floatData()[canvasSampleIdx] = val;
                         }
                     }
                 },
@@ -470,7 +470,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         // Depending on the dispose operation, the next frame will be blended either onto the current frame (none), onto no frame at all
         // (background), or the previous frame (previous).
         switch (disposeOp) {
-            case EDisposeOp::None: prevCanvas = resultData.channels.front().data(); break;
+            case EDisposeOp::None: prevCanvas = resultData.channels.front().floatData(); break;
             case EDisposeOp::Background: prevCanvas = nullptr; break;
             case EDisposeOp::Previous: break; // Previous frame is already set as the previous canvas
             default: throw ImageLoadError{fmt::format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};

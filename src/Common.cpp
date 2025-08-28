@@ -353,4 +353,14 @@ EMetric toMetric(string_view name) {
     }
 }
 
+string toString(EPixelFormat format) {
+    switch (format) {
+        case EPixelFormat::U8: return "U8";
+        case EPixelFormat::U16: return "U16";
+        case EPixelFormat::F16: return "F16";
+        case EPixelFormat::F32: return "F32";
+        default: throw runtime_error{"Unknown pixel format."};
+    }
+}
+
 } // namespace tev

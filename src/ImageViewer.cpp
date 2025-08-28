@@ -502,6 +502,7 @@ ImageViewer::ImageViewer(
     }
 
     set_resize_callback([this](nanogui::Vector2i) { requestLayoutUpdate(); });
+    resize_callback_event(m_size.x(), m_size.y()); // Required on some OSs to get up-to-date pixel ratio
 
     selectImage(nullptr);
     selectReference(nullptr);

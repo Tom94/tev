@@ -184,9 +184,9 @@ Task<vector<ImageData>>
         // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
         if (numChannels == 1) {
-            resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size, EPixelFormat::F16);
+            resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size, EPixelFormat::F32, EPixelFormat::F16);
         } else {
-            resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F16);
+            resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16);
         }
 
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
@@ -232,7 +232,7 @@ Task<vector<ImageData>>
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)dataF32.data(),
-                resultData.channels.front().data(),
+                resultData.channels.front().floatData(),
                 numInterleavedChannels,
                 priority
             );
@@ -269,7 +269,7 @@ Task<vector<ImageData>>
                 co_await toFloat32<uint16_t, true>(
                     (const uint16_t*)data,
                     numChannels,
-                    resultData.channels.front().data(),
+                    resultData.channels.front().floatData(),
                     numInterleavedChannels,
                     size,
                     hasAlpha,
@@ -281,7 +281,7 @@ Task<vector<ImageData>>
                 co_await toFloat32<uint8_t, true>(
                     (const uint8_t*)data,
                     numChannels,
-                    resultData.channels.front().data(),
+                    resultData.channels.front().floatData(),
                     numInterleavedChannels,
                     size,
                     hasAlpha,
@@ -300,7 +300,7 @@ Task<vector<ImageData>>
             co_await toFloat32(
                 (const uint16_t*)data,
                 numChannels,
-                resultData.channels.front().data(),
+                resultData.channels.front().floatData(),
                 numInterleavedChannels,
                 size,
                 hasAlpha,
@@ -312,7 +312,7 @@ Task<vector<ImageData>>
             co_await toFloat32(
                 data,
                 numChannels,
-                resultData.channels.front().data(),
+                resultData.channels.front().floatData(),
                 numInterleavedChannels,
                 size,
                 hasAlpha,
@@ -340,7 +340,7 @@ Task<vector<ImageData>>
             cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
         }
 
-        auto* pixelData = resultData.channels.front().data();
+        auto* pixelData = resultData.channels.front().floatData();
         const size_t numPixels = size.x() * (size_t)size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
@@ -442,10 +442,10 @@ Task<vector<ImageData>>
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
 
         if (numChannels == 1) {
-            scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize, EPixelFormat::F16);
+            scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize, EPixelFormat::F32, EPixelFormat::F16);
         } else {
             scaledResultData.channels = makeRgbaInterleavedChannels(
-                numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, EPixelFormat::F16, namePrefix
+                numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, EPixelFormat::F32, EPixelFormat::F16, namePrefix
             );
         }
 
