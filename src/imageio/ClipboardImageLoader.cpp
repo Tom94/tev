@@ -83,18 +83,27 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         }
     }
 
+    float* floatData = resultData.channels.front().floatData();
     co_await ThreadPool::global().parallelForAsync(
         0,
         size.y(),
         [&](int y) {
+            size_t rowIdxIn = y * numBytesPerRow;
+            size_t rowIdxOut = y * size.x() * numChannels;
+
             for (int x = 0; x < size.x(); ++x) {
-                const size_t baseIdx = y * numBytesPerRow + x * numChannels;
-                for (int c = 0; c < numChannels; ++c) {
-                    const unsigned char val = data[baseIdx + shifts[c]];
+                float alpha = 1.0f;
+
+                const size_t baseIdxIn = rowIdxIn + x * numChannels;
+                const size_t baseIdxOut = rowIdxOut + x * numChannels;
+
+                for (int c = numChannels - 1; c >= 0; --c) {
+                    const unsigned char val = data[baseIdxIn + shifts[c]];
                     if (c == alphaChannelIndex) {
-                        resultData.channels[c].setAt({x, y}, val / 255.0f);
+                        alpha = val / 255.0f;
+                        floatData[baseIdxOut + c] = alpha;
                     } else {
-                        resultData.channels[c].setAt({x, y}, toLinear(val / 255.0f));
+                        floatData[baseIdxOut + c] = toLinear(val / 255.0f) * alpha;
                     }
                 }
             }
@@ -102,7 +111,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         priority
     );
 
-    resultData.hasPremultipliedAlpha = false;
+    resultData.hasPremultipliedAlpha = true;
 
     co_return result;
 }
