@@ -131,7 +131,19 @@ public:
     }
 
     uint8_t* data() const { return mData->data() + mDataOffset; }
+
+    uint8_t* dataAt(nanogui::Vector2i index) const { return dataAt(index.x() + index.y() * (size_t)mSize.x()); }
     uint8_t* dataAt(size_t index) const { return data() + index * mDataStride; }
+
+    template <typename T>
+    T typedDataAt(T* src, nanogui::Vector2i index) const {
+        return typedDataAt(src, index.x() + index.y() * (size_t)mSize.x());
+    }
+
+    template <typename T>
+    T typedDataAt(T* src, size_t index) const {
+        return src[index * mDataStride / sizeof(T)];
+    }
 
     float* floatData() const {
         if (mPixelFormat != EPixelFormat::F32) {

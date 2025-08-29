@@ -449,19 +449,27 @@ Task<void> prepareTextureChannel(
     const bool isAlpha = channelIdx == 3 || (chan && Channel::isAlpha(chan->name()));
     const T defaultVal = isAlpha ? (T)1.0f : (T)0.0f;
 
-    vector<Task<void>> tasks;
     if (chan) {
-        co_await ThreadPool::global().parallelForAsync<int>(
-            0,
-            size.y(),
-            [chan, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
-                for (int x = 0; x < width; ++x) {
-                    size_t tileIdx = x + y * (size_t)width;
-                    data[tileIdx * numTextureChannels + channelIdx] = chan->at({pos.x() + x, pos.y() + y});
-                }
-            },
-            numeric_limits<int>::max()
-        );
+        auto copyChannel = [&](const auto* src) -> Task<void> {
+            co_await ThreadPool::global().parallelForAsync<int>(
+                0,
+                size.y(),
+                [chan, src, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
+                    for (int x = 0; x < width; ++x) {
+                        size_t tileIdx = x + y * (size_t)width;
+                        data[tileIdx * numTextureChannels + channelIdx] = chan->typedDataAt(src, {pos.x() + x, pos.y() + y});
+                    }
+                },
+                numeric_limits<int>::max()
+            );
+        };
+
+        switch (chan->pixelFormat()) {
+            case EPixelFormat::U8: co_await copyChannel(chan->data()); break;
+            case EPixelFormat::U16: co_await copyChannel((const uint16_t*)chan->data()); break;
+            case EPixelFormat::F16: co_await copyChannel((const half*)chan->data()); break;
+            case EPixelFormat::F32: co_await copyChannel((const float*)chan->data()); break;
+        }
     } else {
         const size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<int>(
