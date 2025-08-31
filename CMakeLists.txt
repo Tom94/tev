@@ -350,6 +350,9 @@ else()
     configure_file(resources/linux/tev.desktop resources/linux/tev.desktop)
     install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications" RENAME "${TEV_LINUX_APP_ID}.desktop")
 
+    configure_file(resources/linux/tev.metainfo.xml.in resources/linux/tev.metainfo.xml)
+    install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
+
     set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
     foreach(RES IN LISTS ICON_RESOLUTIONS)
         install(FILES resources/linux/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME "${TEV_LINUX_APP_ID}.png")
