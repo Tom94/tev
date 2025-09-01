@@ -238,6 +238,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     bool swapAxes = orientation >= EOrientation::LeftTop;
 
     struct DataDesc {
+        EPixelFormat pixelFormat;
         shared_ptr<vector<uint8_t>> data;
         Vector2i size;
 
@@ -245,23 +246,21 @@ Task<void> ImageData::orientToTopLeft(int priority) {
             size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<vector<uint8_t>>>()(interval.data); }
         };
 
-        bool operator==(const DataDesc& other) const { return data == other.data && size == other.size; }
+        bool operator==(const DataDesc& other) const { return pixelFormat == other.pixelFormat && data == other.data && size == other.size; }
     };
 
     unordered_set<DataDesc, DataDesc::Hash> channelData;
     for (auto& c : channels) {
-        if (c.stride() != 1 && c.stride() != 4) {
-            throw ImageModifyError{"ImageData::orientToTopLeft: only strides 1 and 4 are supported."};
-        }
+        // TODO: ensure channel data is interleaved if multiple channels share the same data buffer
 
-        channelData.insert({c.dataBuf(), c.size()});
+        channelData.insert({c.pixelFormat(), c.dataBuf(), c.size()});
         if (swapAxes) {
             c.setSize({c.size().y(), c.size().x()});
         }
     }
 
     for (auto& c : channelData) {
-        co_await tev::orientToTopLeft(EPixelFormat::F32, *c.data, c.size, orientation, priority);
+        co_await tev::orientToTopLeft(c.pixelFormat, *c.data, c.size, orientation, priority);
     }
 
     if (dataWindow.isValid()) {
