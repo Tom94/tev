@@ -145,7 +145,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
         if (colors.size() > 4) {
             fontSize *= 4.0f / colors.size();
         }
-        float fontAlpha = min(min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
+        float fontAlpha = std::min(std::min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
 
         nvgFontSize(ctx, fontSize);
         nvgFontFace(ctx, "sans");
@@ -232,8 +232,8 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         nvgFontSize(ctx, fontSize);
         nvgTextAlign(ctx, (right ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT) | (top ? NVG_ALIGN_BOTTOM : NVG_ALIGN_TOP));
         float textWidth = nvgTextBounds(ctx, 0, 0, name.data(), name.data() + name.size(), nullptr);
-        float textAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
-        float regionAlpha = max(min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
+        float textAlpha = std::max(std::min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
+        float regionAlpha = std::max(std::min(1.0f, (((topRight.x() - topLeft.x() - textWidth - 5) / 30))), 0.0f);
 
         Color textColor = Color(190, 255);
         textColor.a() = textAlpha;
@@ -644,7 +644,7 @@ Box2i ImageCanvas::cropInImageCoords() const {
 
 void ImageCanvas::fitImageToScreen(const Image& image) {
     Vector2f nanoguiImageSize = Vector2f{image.displayWindow().size()} / mPixelRatio;
-    mTransform = Matrix3f::scale(Vector2f{min(m_size.x() / nanoguiImageSize.x(), m_size.y() / nanoguiImageSize.y())});
+    mTransform = Matrix3f::scale(Vector2f{std::min(m_size.x() / nanoguiImageSize.x(), m_size.y() / nanoguiImageSize.y())});
 }
 
 void ImageCanvas::resetTransform() { mTransform = Matrix3f::scale(Vector2f{1.0f}); }
@@ -828,6 +828,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
          p = std::move(promise)]() mutable -> Task<void> {
             co_await ThreadPool::global().enqueueCoroutine(priority);
             p.set_value(co_await computeCanvasStatistics(image, reference, requestedChannelGroup, metric, region, priority));
+            redrawWindow();
         }
     );
 
@@ -949,7 +950,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     for (size_t i = 0; i < nChannels; ++i) {
         string rgba[] = {"R", "G", "B", "A"};
-        string colorName = nChannels == 1 ? "L" : rgba[min(i, (size_t)3)];
+        string colorName = nChannels == 1 ? "L" : rgba[std::min(i, (size_t)3)];
         result->histogramColors[i] = Channel::color(colorName, false);
 
         const auto& channel = flattened[i];
@@ -962,8 +963,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                 }
 
                 mean += v;
-                maximum = max(maximum, v);
-                minimum = min(minimum, v);
+                maximum = std::max(maximum, v);
+                minimum = std::min(minimum, v);
             }
         }
     }
@@ -1046,7 +1047,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     size_t idx = tmp.size() - 10;
     nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
-    float norm = 1.0f / (max(tmp[idx], 0.1f) * 1.3f);
+    float norm = 1.0f / (std::max(tmp[idx], 0.1f) * 1.3f);
     for (size_t i = 0; i < nChannels; ++i) {
         for (size_t j = 0; j < NUM_BINS; ++j) {
             result->histogram[j + i * NUM_BINS] *= norm;

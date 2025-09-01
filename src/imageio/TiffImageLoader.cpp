@@ -125,7 +125,7 @@ Task<void> tiffDataToFloat32(
                     floatData[i * numSppOut + c] = palette[c][index] * paletteScale;
                 }
 
-                size_t numChannels = min(numSppOut, numSppIn + 2);
+                size_t numChannels = std::min(numSppOut, numSppIn + 2);
                 for (size_t c = 3; c < numChannels; ++c) {
                     floatData[i * numSppOut + c] = imageData[i * numSppIn + c - 2] * scale;
                 }
@@ -175,7 +175,7 @@ struct TiffData {
 
 static tsize_t tiffReadProc(thandle_t handle, tdata_t data, tsize_t size) {
     auto tiffData = reinterpret_cast<TiffData*>(handle);
-    size = min(size, tiffData->size - (tsize_t)tiffData->offset);
+    size = std::min(size, tiffData->size - (tsize_t)tiffData->offset);
     memcpy(data, tiffData->data + tiffData->offset, size);
     tiffData->offset += size;
     return size;
@@ -455,7 +455,7 @@ Task<void> postprocessLinearRawDng(
                         const float bl = blackLevel[blIdx * samplesPerPixel + c] + delta;
                         floatRgbaData[idx * numRgbaChannels + c] -= bl;
 
-                        maxBlackLevelY[yIdx * samplesPerPixel + c] = max(maxBlackLevelY[yIdx * samplesPerPixel + c], bl);
+                        maxBlackLevelY[yIdx * samplesPerPixel + c] = std::max(maxBlackLevelY[yIdx * samplesPerPixel + c], bl);
                     }
                 }
             },
@@ -466,7 +466,7 @@ Task<void> postprocessLinearRawDng(
         for (int y = activeArea.min.y(); y < activeArea.max.y(); ++y) {
             int yIdx = y - activeArea.min.y();
             for (int c = 0; c < numColorChannels; ++c) {
-                maxBlackLevel[c] = max(maxBlackLevel[c], maxBlackLevelY[yIdx * samplesPerPixel + c]);
+                maxBlackLevel[c] = std::max(maxBlackLevel[c], maxBlackLevelY[yIdx * samplesPerPixel + c]);
             }
         }
     }
@@ -540,7 +540,7 @@ Task<void> postprocessLinearRawDng(
             numPixels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
-                    floatRgbaData[i * numRgbaChannels + c] = min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
+                    floatRgbaData[i * numRgbaChannels + c] = std::min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
                 }
             },
             priority
@@ -1241,7 +1241,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
     // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory to
     // fit all data.
-    tile.size = max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
+    tile.size = std::max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
 
     tlog::debug() << fmt::format(
         "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
@@ -1297,10 +1297,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                     size_t tileY = planeTile / tile.numX;
 
                     int xStart = (int)tileX * tile.width;
-                    int xEnd = min((int)((tileX + 1) * tile.width), size.x());
+                    int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
 
                     int yStart = (int)tileY * tile.height;
-                    int yEnd = min((int)((tileY + 1) * tile.height), size.y());
+                    int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
 
                     co_await ThreadPool::global().parallelForAsync<int>(
                         yStart,
