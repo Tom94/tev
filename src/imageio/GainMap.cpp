@@ -55,7 +55,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
         }
     }
 
-    float headroom = pow(2.0f, max(stops, 0.0f));
+    float headroom = pow(2.0f, std::max(stops, 0.0f));
     tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
 
     const int numImageChannels = image.channels.size();
@@ -85,7 +85,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
                     continue;
                 }
 
-                const int gainmapChannel = min(c, numGainMapChannels - 1);
+                const int gainmapChannel = std::min(c, numGainMapChannels - 1);
                 image.channels[c].setAt(i, image.channels[c].at(i) * (1.0f + (headroom - 1.0f) * gainMap.channels[gainmapChannel].at(i)));
             }
         },

@@ -50,6 +50,14 @@ set(NANOGUI_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL " " FORCE)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL " " FORCE)
 set(NANOGUI_INSTALL OFF CACHE BOOL " " FORCE)
+
+# tev provides its own stb_image implementation
+set(NANOGUI_SKIP_STB_IMAGE_IMPLEMENTATION ON CACHE BOOL " " FORCE)
+
+# Pure nix-darwin environments don't have an easy pathway to install the metal compiler tools. Hence disable precompilation of metal
+# shaders. They will be compiled at runtime instead which is sufficiently fast for tev's purposes.
+set(NANOGUI_SKIP_METAL_SHADER_PRECOMPILATION ON CACHE BOOL " " FORCE)
+
 add_subdirectory(nanogui)
 
 # Compile DirectXTex (only on Windows)
@@ -62,8 +70,8 @@ if (WIN32)
     add_subdirectory(DirectXTex)
 endif()
 
-# Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also
-# comes with lcms2.
+# Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also comes
+# with lcms2.
 file(GLOB LCMS_SRCS
     Little-CMS/src/*.c Little-CMS/include/*.h
     Little-CMS/plugins/fast_float/src/*.c Little-CMS/plugins/fast_float/include/*.h
@@ -355,12 +363,4 @@ set(CLIP_X11_PNG_LIBRARY png_static CACHE STRING " " FORCE)
 add_subdirectory(clip)
 target_include_directories(clip INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/clip)
 target_compile_definitions(clip PRIVATE -DHAVE_PNG_H)
-
-# Compile nativefiledialog-extended
-set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-set(NFD_INSTALL OFF CACHE BOOL " " FORCE)
-set(NFD_PORTAL ON CACHE BOOL " " FORCE)
-set(NFD_APPEND_EXTENSION ON CACHE BOOL " " FORCE)
-set(NFD_CASE_SENSITIVE_FILTER ON CACHE BOOL " " FORCE)
-add_subdirectory(nativefiledialog-extended)
 
