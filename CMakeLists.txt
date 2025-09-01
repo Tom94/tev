@@ -43,6 +43,12 @@ elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (32 bit)")
 endif()
 
+option(TEV_LINUX_REVERSE_DNS_APP_ID OFF)
+set(TEV_LINUX_APP_ID "tev")
+if (TEV_LINUX_REVERSE_DNS_APP_ID)
+    set(TEV_LINUX_APP_ID "io.github.tom94.tev")
+endif()
+
 option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
@@ -342,11 +348,14 @@ else()
     install(TARGETS tev)
 
     configure_file(resources/linux/tev.desktop resources/linux/tev.desktop)
-    install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+    install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications" RENAME "${TEV_LINUX_APP_ID}.desktop")
+
+    configure_file(resources/linux/tev.metainfo.xml.in resources/linux/tev.metainfo.xml)
+    install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
 
     set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
     foreach(RES IN LISTS ICON_RESOLUTIONS)
-        install(FILES resources/linux/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME tev.png)
+        install(FILES resources/linux/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME "${TEV_LINUX_APP_ID}.png")
     endforeach()
 
     list(APPEND CPACK_GENERATOR External)

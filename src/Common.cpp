@@ -38,6 +38,9 @@
 #    include <sys/wait.h>
 #    include <unistd.h>
 #endif
+#if !defined(__APPLE__) and !defined(_WIN32)
+#include <sys/xattr.h>
+#endif
 
 using namespace nanogui;
 using namespace std;
@@ -78,6 +81,31 @@ string toString(const fs::path& path) {
     // Conversely to `toPath`, ensure that the returned string is utf8 encoded by requesting a std::u8string from the path object and then
     // convert _that_ string to a regular char string.
     return fromU8string(path.u8string());
+}
+
+string toDisplayString(const fs::path& path) {
+#if !defined(__APPLE__) and !defined(_WIN32)
+    // When running under Flatpak, we don't necessarily get real paths from the
+    // host system but rather files that were passed to us using the [document portal][1]
+    // (`/run/user/$UID/doc/$DOC_ID/filename`). These are not nice to show to the user.
+    // Luckily, the "real" (host) path is set as an extended attribute.
+    // [1]: https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Documents.html#org-freedesktop-portal-documents-gethostpaths
+    const char* HOST_PATH_XATTR = "user.document-portal.host-path";
+    ssize_t size_hint = getxattr(path.c_str(), HOST_PATH_XATTR, nullptr, 0);
+    if (size_hint < 0) {
+        return toString(path);
+    }
+    std::string buffer;
+    buffer.resize(size_hint);
+    ssize_t actual_size = getxattr(path.c_str(), HOST_PATH_XATTR, buffer.data(), size_hint);
+    if (actual_size < 0) {
+        return toString(path);
+    }
+    buffer.resize(actual_size);
+    return ensureUtf8(buffer);
+#else
+    return path;
+#endif
 }
 
 bool naturalCompare(string_view a, string_view b) {
