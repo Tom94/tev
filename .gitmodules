@@ -90,7 +90,3 @@
 	path = dependencies/libwebp
 	url = https://chromium.googlesource.com/webm/libwebp
 	shallow = true
-[submodule "dependencies/nativefiledialog-extended"]
-	path = dependencies/nativefiledialog-extended
-	url = https://github.com/btzy/nativefiledialog-extended
-	shallow = true

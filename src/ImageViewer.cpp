@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <tev/FileDialog.h>
 #include <tev/ImageViewer.h>
 #include <tev/WaylandClipboard.h>
 #include <tev/imageio/Colors.h>
@@ -55,8 +54,7 @@ ImageViewer::ImageViewer(
 ) :
     nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer},
     mImagesLoader{imagesLoader},
-    mIpc{ipc},
-    mFileDialog{m_glfw_window} {
+    mIpc{ipc} {
 
     auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
     mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
@@ -1926,7 +1924,7 @@ void ImageViewer::openImageDialog() {
             }
 
             filters.emplace(filters.begin(), pair<string, string>{"All images", join(allImages, ",")});
-            auto paths = mFileDialog.openFileDialog(filters);
+            auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
 
             for (size_t i = 0; i < paths.size(); ++i) {
                 const bool shallSelect = i == paths.size() - 1;
@@ -1968,7 +1966,7 @@ void ImageViewer::saveImageDialog() {
         }};
 
         try {
-            const auto path = mFileDialog.saveFileDialog({
+            const auto paths = file_dialog(this, FileDialogType::Save, {
                 {"OpenEXR image",                   "exr"     },
                 {"HDR image",                       "hdr"     },
                 {"Bitmap Image File",               "bmp"     },
@@ -1979,11 +1977,11 @@ void ImageViewer::saveImageDialog() {
                 {"Truevision TGA image",            "tga"     },
             });
 
-            if (path.empty()) {
+            if (paths.empty() || paths.front().empty()) {
                 return;
             }
 
-            scheduleToUiThread([this, path]() {
+            scheduleToUiThread([this, path=paths.front()]() {
                 try {
                     mImageCanvas->saveImage(path);
                 } catch (const ImageSaveError& e) { showErrorDialog(fmt::format("Failed to save image: {}", e.what())); }
