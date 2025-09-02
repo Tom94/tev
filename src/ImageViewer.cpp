@@ -586,8 +586,8 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
     return false;
 }
 
-bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) {
-    if (Screen::mouse_motion_event(p, rel, button, modifiers)) {
+bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui::Vector2f& rel, int button, int modifiers) {
+    if (Screen::mouse_motion_event_f(p, rel, button, modifiers)) {
         return true;
     }
 
@@ -604,12 +604,12 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
     switch (mDragType) {
         case EMouseDragType::SidebarDrag:
-            mSidebar->set_fixed_width(clamp(p.x(), SIDEBAR_MIN_WIDTH, m_size.x() - 10));
+            mSidebar->set_fixed_width(clamp(p.x(), (float)SIDEBAR_MIN_WIDTH, (float)m_size.x() - 10.0f));
             requestLayoutUpdate();
             break;
 
         case EMouseDragType::ImageDrag: {
-            nanogui::Vector2f relativeMovement = {rel};
+            Vector2f relativeMovement = rel;
             auto* glfwWindow = screen()->glfw_window();
             // There is no explicit access to the currently pressed modifier keys here, so we need to directly ask GLFW.
             if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
@@ -633,7 +633,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
         case EMouseDragType::ImageCrop: {
             Vector2i relStartMousePos = (absolute_position() + mDraggingStartPosition) - mImageCanvas->absolute_position();
-            Vector2i relMousePos = (absolute_position() + p) - mImageCanvas->absolute_position();
+            Vector2i relMousePos = (absolute_position() + Vector2i{p}) - mImageCanvas->absolute_position();
 
             // Require a minimum movement to start cropping. Since this is measured in nanogui / screen space and not image space, this does
             // not prevent the cropping of smaller image regions. Just zoom in before cropping smaller regions.
@@ -656,7 +656,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
         case EMouseDragType::ImageButtonDrag: {
             auto& buttons = mImageButtonContainer->children();
-            nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
+            nanogui::Vector2i relMousePos = (absolute_position() + Vector2i{p}) - mImageButtonContainer->absolute_position();
 
             TEV_ASSERT(mDraggedImageButtonId < buttons.size(), "Dragged image button id is out of bounds.");
             auto* draggedImgButton = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId]);
