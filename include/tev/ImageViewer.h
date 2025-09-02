@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include <tev/FileDialog.h>
 #include <tev/HelpWindow.h>
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
@@ -88,14 +87,7 @@ public:
     void reloadImagesWhoseFileChanged();
 
     void updateImage(
-        std::string_view imageName,
-        bool shallSelect,
-        std::string_view channel,
-        int x,
-        int y,
-        int width,
-        int height,
-        std::span<const float> imageData
+        std::string_view imageName, bool shallSelect, std::string_view channel, int x, int y, int width, int height, std::span<const float> imageData
     );
 
     void updateImageVectorGraphics(std::string_view imageName, bool shallSelect, bool append, std::span<const VgCommand> commands);
@@ -173,7 +165,10 @@ public:
 
     void requestLayoutUpdate() { mRequiresLayoutUpdate = true; }
 
-    template <typename T> void scheduleToUiThread(const T& fun) { mTaskQueue.push(fun); }
+    template <typename T> void scheduleToUiThread(const T& fun) {
+        mTaskQueue.push(fun);
+        redraw();
+    }
 
     BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
     Ipc& ipc() const { return *mIpc; }
@@ -299,7 +294,6 @@ private:
     nanogui::Vector2i mMaxSize = {8192, 8192};
     bool mInitialized = false;
 
-    FileDialog mFileDialog;
     std::unique_ptr<std::thread> mFileDialogThread;
 };
 
