@@ -56,7 +56,7 @@ public:
     bool resize_event(const nanogui::Vector2i& size) override;
 
     bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
-    bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;
+    bool mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui::Vector2f& rel, int button, int modifiers) override;
 
     bool drop_event(const std::vector<std::string>& filenames) override;
 
