@@ -40,6 +40,7 @@
 #include <chrono>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 
 using namespace nanogui;
 using namespace std;
@@ -708,6 +709,11 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
     }
 
     redraw();
+
+    this_thread::sleep_for(chrono::milliseconds(100));
+
+    static int count = 0;
+    printf("Key press #%d\n", ++count);
 
     int numGroups = mGroupButtonContainer->child_count();
 
