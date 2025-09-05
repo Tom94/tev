@@ -523,8 +523,6 @@ bool ImageViewer::resize_event(const Vector2i& size) {
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
-    redraw();
-
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged. This has to occur before
     // Screen::mouse_button_event as the button would absorb the event.
     if (down) {
@@ -581,17 +579,12 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
         mDragType = EMouseDragType::None;
     }
 
-    return false;
+    return true;
 }
 
 bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui::Vector2f& rel, int button, int modifiers) {
     if (Screen::mouse_motion_event_f(p, rel, button, modifiers)) {
         return true;
-    }
-
-    // Only need high refresh rate responsiveness if tev is actually in focus.
-    if (focused()) {
-        redraw();
     }
 
     bool shouldShowResizeCursor = mDragType == EMouseDragType::SidebarDrag || canDragSidebarFrom(p);
@@ -684,7 +677,7 @@ bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui
         case EMouseDragType::None: break;
     }
 
-    return false;
+    return focused();
 }
 
 bool ImageViewer::drop_event(const vector<string>& filenames) {
@@ -698,7 +691,6 @@ bool ImageViewer::drop_event(const vector<string>& filenames) {
 
     // Make sure we gain focus after dragging files into here.
     focusWindow();
-    redraw();
     return true;
 }
 
@@ -706,8 +698,6 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
     if (Screen::keyboard_event(key, scancode, action, modifiers)) {
         return true;
     }
-
-    redraw();
 
     int numGroups = mGroupButtonContainer->child_count();
 
@@ -1000,7 +990,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         }
     }
 
-    return false;
+    return true;
 }
 
 void ImageViewer::focusWindow() { glfwFocusWindow(m_glfw_window); }
@@ -1036,8 +1026,6 @@ void ImageViewer::draw_contents() {
                 selectImage(nextImage(mCurrentImage, Forward), false);
             }
         }
-
-        redraw();
     }
 
     // If watching files for changes, do so every 100ms
@@ -1755,7 +1743,6 @@ void ImageViewer::setPlayingBack(bool value) {
     mPlayButton->set_pushed(value);
     mLastPlaybackFrameTime = chrono::steady_clock::now();
     set_run_mode(value ? RunMode::VSync : RunMode::Lazy);
-    redraw();
 }
 
 bool ImageViewer::setFilter(string_view filter) {
