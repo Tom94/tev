@@ -46,6 +46,11 @@ ImageButton::ImageButton(Widget* parent, string_view caption, bool canBeReferenc
 }
 
 Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
+    // Cache the last sizing result if the ID and caption did not change. This reduces layout computation time significantly.
+    if (mLastSizingId == mId && mLastSizingCaption == mCaption) {
+        return mLastSizingResult;
+    }
+
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans-bold");
     string idString = to_string(mId);
@@ -55,7 +60,11 @@ Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.data(), mCaption.data() + mCaption.size(), nullptr);
 
-    return Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
+    mLastSizingResult = Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
+    mLastSizingId = mId;
+    mLastSizingCaption = mCaption;
+
+    return mLastSizingResult;
 }
 
 bool ImageButton::mouse_button_event(const Vector2i& p, int button, bool down, int modifiers) {
