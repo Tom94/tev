@@ -1078,6 +1078,14 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         PHOTOMETRIC_SEMANTIC,
     };
 
+    if (photometric == PHOTOMETRIC_SEPARATED) {
+        throw ImageLoadError{"Separated images (e.g. CMYK) are unsupported."};
+    }
+
+    if (photometric == PHOTOMETRIC_YCBCR) {
+        throw ImageLoadError{"YCbCr images are unsupported."};
+    }
+
     if (all_of(begin(SUPPORTED_PHOTOMETRICS), end(SUPPORTED_PHOTOMETRICS), [&](uint16_t p) { return p != photometric; })) {
         throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
     }
