@@ -85,9 +85,9 @@ Task<void> toFloat32(
                     } else {
                         float result;
                         if constexpr (SRGB_TO_LINEAR) {
-                            result = toLinear(imageData[baseIdxIn + c] * scale);
+                            result = toLinear((float)imageData[baseIdxIn + c] * scale);
                         } else {
-                            result = imageData[baseIdxIn + c] * scale;
+                            result = (float)imageData[baseIdxIn + c] * scale;
                         }
 
                         if constexpr (MULTIPLY_ALPHA) {
