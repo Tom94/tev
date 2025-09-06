@@ -1029,8 +1029,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
 
-    uint16_t dataBitsPerSample = bitsPerSample;
-
+    const uint16_t dataBitsPerSample = bitsPerSample;
     if (compression == COMPRESSION_JPEG) {
         // For JPEG decoding, we need to pretend to have more bits per sample than is in the data for the JPEG decoder to work correctly.
         // This is largely fine for the following decoding steps, but we will later need to pass `dataBitsPerSample` to postprocessing for
