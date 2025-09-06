@@ -133,7 +133,7 @@ Task<void> tiffDataToFloat32(
             priority
         );
     } else {
-        throw ImageModifyError{fmt::format("Unsupported sample format: {}", toString(kind))};
+        throw ImageLoadError{fmt::format("Unsupported sample format: {}", toString(kind))};
     }
 
     if (flipWhiteAndBlack) {
