@@ -28,7 +28,7 @@ project(
 set(TEV_VERSION "${CMAKE_PROJECT_VERSION}")
 
 if (APPLE)
-    enable_language(OBJC)
+    enable_language(OBJCXX OBJC)
 endif()
 
 if (TEV_DEPLOY)
@@ -164,7 +164,6 @@ set(TEV_SOURCES
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
-    include/tev/FileDialog.h src/FileDialog.cpp
     include/tev/HelpWindow.h src/HelpWindow.cpp
     include/tev/ImageInfoWindow.h src/ImageInfoWindow.cpp
     include/tev/Image.h src/Image.cpp
@@ -255,7 +254,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS clip exif_static jpeg-turbo nanogui nfd::nfd OpenEXR::OpenEXR png_static tiff uhdr webpdemux)
+set(TEV_LIBS clip exif_static jpeg-turbo nanogui OpenEXR::OpenEXR png_static tiff uhdr webpdemux)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()

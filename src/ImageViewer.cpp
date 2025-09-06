@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <tev/FileDialog.h>
 #include <tev/ImageViewer.h>
 #include <tev/WaylandClipboard.h>
 #include <tev/imageio/Colors.h>
@@ -55,8 +54,7 @@ ImageViewer::ImageViewer(
 ) :
     nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer},
     mImagesLoader{imagesLoader},
-    mIpc{ipc},
-    mFileDialog{m_glfw_window} {
+    mIpc{ipc} {
 
     auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
     mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
@@ -176,10 +174,10 @@ ImageViewer::ImageViewer(
         buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, mSupportsHdr ? 4 : 3, Alignment::Fill, 5, 2});
 
         auto makeButton = [&](string_view name, function<void()> callback, int icon = 0, string_view tooltip = "") {
-            auto button = new Button{buttonContainer, string{name}, icon};
+            auto button = new Button{buttonContainer, name, icon};
             button->set_font_size(15);
             button->set_callback(callback);
-            button->set_tooltip(string{tooltip});
+            button->set_tooltip(tooltip);
             return button;
         };
 
@@ -248,7 +246,7 @@ ImageViewer::ImageViewer(
         mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeTonemapButton = [&](string_view name, function<void()> callback) {
-            auto button = new Button{mTonemapButtonContainer, string{name}};
+            auto button = new Button{mTonemapButtonContainer, name};
             button->set_flags(Button::RadioButton);
             button->set_font_size(15);
             button->set_callback(callback);
@@ -285,7 +283,7 @@ ImageViewer::ImageViewer(
         mMetricButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
         auto makeMetricButton = [&](string_view name, function<void()> callback) {
-            auto button = new Button{mMetricButtonContainer, string{name}};
+            auto button = new Button{mMetricButtonContainer, name};
             button->set_flags(Button::RadioButton);
             button->set_font_size(15);
             button->set_callback(callback);
@@ -380,9 +378,9 @@ ImageViewer::ImageViewer(
             playback->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
             auto makePlaybackButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
-                auto button = new Button{playback, string{name}, icon};
+                auto button = new Button{playback, name, icon};
                 button->set_callback(callback);
-                button->set_tooltip(string{tooltip});
+                button->set_tooltip(tooltip);
                 button->set_font_size(15);
                 button->set_enabled(enabled);
                 button->set_padding({10, 10});
@@ -422,9 +420,9 @@ ImageViewer::ImageViewer(
             tools->set_layout(new GridLayout{Orientation::Horizontal, 7, Alignment::Fill, 5, 1});
 
             auto makeImageButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
-                auto button = new Button{tools, string{name}, icon};
+                auto button = new Button{tools, name, icon};
                 button->set_callback(callback);
-                button->set_tooltip(string{tooltip});
+                button->set_tooltip(tooltip);
                 button->set_font_size(15);
                 button->set_enabled(enabled);
                 button->set_padding({10, 10});
@@ -525,8 +523,6 @@ bool ImageViewer::resize_event(const Vector2i& size) {
 }
 
 bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
-    redraw();
-
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged. This has to occur before
     // Screen::mouse_button_event as the button would absorb the event.
     if (down) {
@@ -583,17 +579,12 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
         mDragType = EMouseDragType::None;
     }
 
-    return false;
+    return true;
 }
 
-bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) {
-    if (Screen::mouse_motion_event(p, rel, button, modifiers)) {
+bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui::Vector2f& rel, int button, int modifiers) {
+    if (Screen::mouse_motion_event_f(p, rel, button, modifiers)) {
         return true;
-    }
-
-    // Only need high refresh rate responsiveness if tev is actually in focus.
-    if (focused()) {
-        redraw();
     }
 
     bool shouldShowResizeCursor = mDragType == EMouseDragType::SidebarDrag || canDragSidebarFrom(p);
@@ -604,12 +595,12 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
     switch (mDragType) {
         case EMouseDragType::SidebarDrag:
-            mSidebar->set_fixed_width(clamp(p.x(), SIDEBAR_MIN_WIDTH, m_size.x() - 10));
+            mSidebar->set_fixed_width(clamp(p.x(), (float)SIDEBAR_MIN_WIDTH, (float)m_size.x() - 10.0f));
             requestLayoutUpdate();
             break;
 
         case EMouseDragType::ImageDrag: {
-            nanogui::Vector2f relativeMovement = {rel};
+            Vector2f relativeMovement = rel;
             auto* glfwWindow = screen()->glfw_window();
             // There is no explicit access to the currently pressed modifier keys here, so we need to directly ask GLFW.
             if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
@@ -633,7 +624,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
         case EMouseDragType::ImageCrop: {
             Vector2i relStartMousePos = (absolute_position() + mDraggingStartPosition) - mImageCanvas->absolute_position();
-            Vector2i relMousePos = (absolute_position() + p) - mImageCanvas->absolute_position();
+            Vector2i relMousePos = (absolute_position() + Vector2i{p}) - mImageCanvas->absolute_position();
 
             // Require a minimum movement to start cropping. Since this is measured in nanogui / screen space and not image space, this does
             // not prevent the cropping of smaller image regions. Just zoom in before cropping smaller regions.
@@ -656,7 +647,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
 
         case EMouseDragType::ImageButtonDrag: {
             auto& buttons = mImageButtonContainer->children();
-            nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
+            nanogui::Vector2i relMousePos = (absolute_position() + Vector2i{p}) - mImageButtonContainer->absolute_position();
 
             TEV_ASSERT(mDraggedImageButtonId < buttons.size(), "Dragged image button id is out of bounds.");
             auto* draggedImgButton = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId]);
@@ -686,7 +677,7 @@ bool ImageViewer::mouse_motion_event(const nanogui::Vector2i& p, const nanogui::
         case EMouseDragType::None: break;
     }
 
-    return false;
+    return focused();
 }
 
 bool ImageViewer::drop_event(const vector<string>& filenames) {
@@ -700,7 +691,6 @@ bool ImageViewer::drop_event(const vector<string>& filenames) {
 
     // Make sure we gain focus after dragging files into here.
     focusWindow();
-    redraw();
     return true;
 }
 
@@ -708,8 +698,6 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
     if (Screen::keyboard_event(key, scancode, action, modifiers)) {
         return true;
     }
-
-    redraw();
 
     int numGroups = mGroupButtonContainer->child_count();
 
@@ -1002,7 +990,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         }
     }
 
-    return false;
+    return true;
 }
 
 void ImageViewer::focusWindow() { glfwFocusWindow(m_glfw_window); }
@@ -1038,8 +1026,6 @@ void ImageViewer::draw_contents() {
                 selectImage(nextImage(mCurrentImage, Forward), false);
             }
         }
-
-        redraw();
     }
 
     // If watching files for changes, do so every 100ms
@@ -1458,7 +1444,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         return;
     }
 
-    size_t id = (size_t)max(0, imageId(image));
+    size_t id = (size_t)std::max(0, imageId(image));
 
     // Don't do anything if the image that wants to be selected is not visible.
     if (!mImageButtonContainer->child_at((int)id)->visible()) {
@@ -1494,7 +1480,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
 
     // Setting the filter again makes sure, that groups are correctly filtered.
     setFilter(mFilter->value());
-    updateLayout();
+    requestLayoutUpdate();
 
     // This will automatically fall back to the root group if the current group isn't found.
     selectGroup(mCurrentGroup);
@@ -1526,7 +1512,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
 
 void ImageViewer::selectGroup(string group) {
     // If the group does not exist, select the first group.
-    size_t id = (size_t)max(0, groupId(group));
+    size_t id = (size_t)std::max(0, groupId(group));
 
     auto& buttons = mGroupButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
@@ -1577,7 +1563,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
         return;
     }
 
-    size_t id = (size_t)max(0, imageId(image));
+    size_t id = (size_t)std::max(0, imageId(image));
 
     auto& buttons = mImageButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
@@ -1649,8 +1635,8 @@ void ImageViewer::normalizeExposureAndOffset() {
     for (const auto& channelName : channels) {
         const auto& channel = mCurrentImage->channel(channelName);
         auto [cmin, cmax, cmean] = channel->minMaxMean();
-        maximum = max(maximum, cmax);
-        minimum = min(minimum, cmin);
+        maximum = std::max(maximum, cmax);
+        minimum = std::min(minimum, cmin);
     }
 
     float factor = 1.0f / (maximum - minimum);
@@ -1756,11 +1742,11 @@ bool ImageViewer::playingBack() const { return mPlayButton->pushed(); }
 void ImageViewer::setPlayingBack(bool value) {
     mPlayButton->set_pushed(value);
     mLastPlaybackFrameTime = chrono::steady_clock::now();
-    redraw();
+    set_run_mode(value ? RunMode::VSync : RunMode::Lazy);
 }
 
 bool ImageViewer::setFilter(string_view filter) {
-    mFilter->set_value(string{filter});
+    mFilter->set_value(filter);
     mRequiresFilterUpdate = true;
     return true;
 }
@@ -1925,7 +1911,7 @@ void ImageViewer::openImageDialog() {
             }
 
             filters.emplace(filters.begin(), pair<string, string>{"All images", join(allImages, ",")});
-            auto paths = mFileDialog.openFileDialog(filters);
+            auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
 
             for (size_t i = 0; i < paths.size(); ++i) {
                 const bool shallSelect = i == paths.size() - 1;
@@ -1967,7 +1953,7 @@ void ImageViewer::saveImageDialog() {
         }};
 
         try {
-            const auto path = mFileDialog.saveFileDialog({
+            const auto paths = file_dialog(this, FileDialogType::Save, {
                 {"OpenEXR image",                   "exr"     },
                 {"HDR image",                       "hdr"     },
                 {"Bitmap Image File",               "bmp"     },
@@ -1978,11 +1964,11 @@ void ImageViewer::saveImageDialog() {
                 {"Truevision TGA image",            "tga"     },
             });
 
-            if (path.empty()) {
+            if (paths.empty() || paths.front().empty()) {
                 return;
             }
 
-            scheduleToUiThread([this, path]() {
+            scheduleToUiThread([this, path=paths.front()]() {
                 try {
                     mImageCanvas->saveImage(path);
                 } catch (const ImageSaveError& e) { showErrorDialog(fmt::format("Failed to save image: {}", e.what())); }
@@ -2125,7 +2111,7 @@ void ImageViewer::pasteImagesFromClipboard() {
 
 void ImageViewer::showErrorDialog(string_view message) {
     tlog::error() << message;
-    new MessageDialog(this, MessageDialog::Type::Warning, "Error", string{message});
+    new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
 }
 
 void ImageViewer::updateFilter() {
@@ -2372,7 +2358,7 @@ string ImageViewer::nextGroup(string_view group, EDirection direction) {
     int dir = direction == Forward ? 1 : -1;
 
     // If the group does not exist, start at index 0.
-    int startId = max(0, groupId(group));
+    int startId = std::max(0, groupId(group));
 
     int id = startId;
     do {
@@ -2404,7 +2390,7 @@ shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image, EDirect
     int dir = direction == Forward ? 1 : -1;
 
     // If the image does not exist, start at image 0.
-    int startId = max(0, imageId(image));
+    int startId = std::max(0, imageId(image));
 
     int id = startId;
     do {

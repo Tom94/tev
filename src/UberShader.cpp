@@ -25,6 +25,28 @@ using namespace std;
 
 namespace tev {
 
+static const size_t DITHER_MATRIX_SIZE = 8;
+using DitherMatrix = std::array<float, DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE>;
+
+static DitherMatrix ditherMatrix(float scale) {
+    // 8x8 Bayer dithering matrix scaled to [-0.5f, 0.5f] / 255
+    DitherMatrix mat = {
+        {0, 32, 8, 40, 2, 34, 10, 42,
+         48, 16, 56, 24, 50, 18, 58, 26,
+         12, 44, 4, 36, 14, 46, 6, 38,
+         60, 28, 52, 20, 62, 30, 54, 22,
+         3, 35, 11, 43, 1, 33, 9, 41,
+         51, 19, 59, 27, 49, 17, 57, 25,
+         15, 47, 7, 39, 13, 45, 5, 37,
+         63, 31, 55, 23, 61, 29, 53, 21}
+    };
+
+    for (size_t i = 0; i < DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE; ++i)
+        mat[i] = (mat[i] / DITHER_MATRIX_SIZE / DITHER_MATRIX_SIZE - 0.5f) * scale;
+
+    return mat;
+}
+
 enum class EShaderChannelConfig : int { R = 0, RG, RGB, RA, RGA, RGBA };
 
 UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
@@ -513,13 +535,13 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
     mDitherMatrix = new Texture{
         Texture::PixelFormat::R,
         Texture::ComponentFormat::Float32,
-        Vector2i{nanogui::DITHER_MATRIX_SIZE},
+        Vector2i{DITHER_MATRIX_SIZE},
         Texture::InterpolationMode::Nearest,
         Texture::InterpolationMode::Nearest,
         Texture::WrapMode::Repeat,
     };
 
-    mDitherMatrix->upload((uint8_t*)nanogui::ditherMatrix(ditherScale).data());
+    mDitherMatrix->upload((uint8_t*)ditherMatrix(ditherScale).data());
 }
 
 UberShader::~UberShader() {}
@@ -578,7 +600,7 @@ void UberShader::draw(
         mShader->set_uniform("cropMax", Vector2f{std::numeric_limits<float>::infinity()});
     }
 
-    mShader->set_uniform("ditherSize", static_cast<float>(nanogui::DITHER_MATRIX_SIZE));
+    mShader->set_uniform("ditherSize", static_cast<float>(DITHER_MATRIX_SIZE));
     mShader->set_texture("ditherMatrix", mDitherMatrix);
 
     mShader->begin();

@@ -106,6 +106,10 @@ private:
 
     size_t mHighlightBegin = 0;
     size_t mHighlightEnd = 0;
+
+    mutable size_t mLastSizingId = 0;
+    mutable std::string mLastSizingCaption;
+    mutable nanogui::Vector2i mLastSizingResult = {0};
 };
 
 } // namespace tev

@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include <tev/FileDialog.h>
 #include <tev/HelpWindow.h>
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
@@ -56,7 +55,7 @@ public:
     bool resize_event(const nanogui::Vector2i& size) override;
 
     bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
-    bool mouse_motion_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) override;
+    bool mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui::Vector2f& rel, int button, int modifiers) override;
 
     bool drop_event(const std::vector<std::string>& filenames) override;
 
@@ -88,14 +87,7 @@ public:
     void reloadImagesWhoseFileChanged();
 
     void updateImage(
-        std::string_view imageName,
-        bool shallSelect,
-        std::string_view channel,
-        int x,
-        int y,
-        int width,
-        int height,
-        std::span<const float> imageData
+        std::string_view imageName, bool shallSelect, std::string_view channel, int x, int y, int width, int height, std::span<const float> imageData
     );
 
     void updateImageVectorGraphics(std::string_view imageName, bool shallSelect, bool append, std::span<const VgCommand> commands);
@@ -173,7 +165,10 @@ public:
 
     void requestLayoutUpdate() { mRequiresLayoutUpdate = true; }
 
-    template <typename T> void scheduleToUiThread(const T& fun) { mTaskQueue.push(fun); }
+    template <typename T> void scheduleToUiThread(const T& fun) {
+        mTaskQueue.push(fun);
+        redraw();
+    }
 
     BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
     Ipc& ipc() const { return *mIpc; }
@@ -299,7 +294,6 @@ private:
     nanogui::Vector2i mMaxSize = {8192, 8192};
     bool mInitialized = false;
 
-    FileDialog mFileDialog;
     std::unique_ptr<std::thread> mFileDialogThread;
 };
 
