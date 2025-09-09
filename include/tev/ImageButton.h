@@ -31,33 +31,38 @@ class ImageButton : public nanogui::Widget {
 public:
     ImageButton(nanogui::Widget* parent, std::string_view caption, bool canBeReference);
 
-    nanogui::Vector2i preferred_size(NVGcontext* ctx) const override;
+    nanogui::Vector2i preferred_size_impl(NVGcontext* ctx) const override;
 
     bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
 
     void draw(NVGcontext* ctx) override;
 
     void set_theme(nanogui::Theme* theme) override {
-        nanogui::Widget::set_theme(theme);
-
-        nanogui::Theme* captionTextBoxTheme = new nanogui::Theme(*theme);
-        captionTextBoxTheme->m_text_box_font_size = m_font_size;
-        captionTextBoxTheme->m_text_color = nanogui::Color(255, 255);
-        mCaptionTextBox->set_theme(captionTextBoxTheme);
+        if (theme != m_theme) {
+            preferred_size_changed();
+            nanogui::Widget::set_theme(theme);
+            nanogui::Theme* captionTextBoxTheme = new nanogui::Theme(*theme);
+            captionTextBoxTheme->m_text_box_font_size = m_font_size;
+            captionTextBoxTheme->m_text_color = nanogui::Color(255, 255);
+            mCaptionTextBox->set_theme(captionTextBoxTheme);
+        }
     }
 
     std::string_view caption() const { return mCaption; }
 
     void setCaption(std::string_view caption) {
-        mCaption = caption;
+        if (caption != mCaption) {
+            preferred_size_changed();
+            mCaption = caption;
 
-        // Reset drawing state
-        mSizeForWhichCutoffWasComputed = {0};
-        mHighlightBegin = 0;
-        mHighlightEnd = 0;
+            // Reset drawing state
+            mSizeForWhichCutoffWasComputed = {0};
+            mHighlightBegin = 0;
+            mHighlightEnd = 0;
 
-        if (mCaptionChangeCallback) {
-            mCaptionChangeCallback();
+            if (mCaptionChangeCallback) {
+                mCaptionChangeCallback();
+            }
         }
     }
 
@@ -75,7 +80,12 @@ public:
 
     bool isSelected() const { return mIsSelected; }
 
-    void setId(size_t id) { mId = id; }
+    void setId(size_t id) {
+        if (id != mId) {
+            preferred_size_changed();
+            mId = id;
+        }
+    }
 
     size_t id() const { return mId; }
 
@@ -106,10 +116,6 @@ private:
 
     size_t mHighlightBegin = 0;
     size_t mHighlightEnd = 0;
-
-    mutable size_t mLastSizingId = 0;
-    mutable std::string mLastSizingCaption;
-    mutable nanogui::Vector2i mLastSizingResult = {0};
 };
 
 } // namespace tev

@@ -43,7 +43,7 @@ MultiGraph::MultiGraph(Widget* parent, std::string_view caption) : Widget{parent
     mTextColor = Color(240, 192);
 }
 
-Vector2i MultiGraph::preferred_size(NVGcontext*) const { return Vector2i(180, 80); }
+Vector2i MultiGraph::preferred_size_impl(NVGcontext*) const { return Vector2i(180, 80); }
 
 void MultiGraph::draw(NVGcontext* ctx) {
     Widget::draw(ctx);
