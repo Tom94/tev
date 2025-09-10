@@ -236,6 +236,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addLibrary(about, "libpng", "PNG image format library");
     addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles");
     addLibrary(about, "libtiff", "TIFF image format library");
+    addLibrary(about, "libraw", "Image format library for RAW files from digital cameras");
     addLibrary(about, "libultrahdr", "Ultra HDR JPEG image format library");
     addLibrary(about, "libwebp", "WEBP image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");

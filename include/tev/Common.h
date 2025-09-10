@@ -30,7 +30,6 @@
 #include <cmath>
 #include <filesystem>
 #include <functional>
-#include <iostream>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -91,7 +90,7 @@ template <typename T, size_t N_DIMS> struct fmt::formatter<std::array<T, N_DIMS>
             fmt::format_to(out, "{}", v[i]);
         }
 
-        return fmt::format_to(ctx.out(), "]");
+        return fmt::format_to(out, "]");
     }
 };
 
@@ -109,7 +108,7 @@ template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_D
             fmt::format_to(out, "{}", v[i]);
         }
 
-        return fmt::format_to(ctx.out(), "]");
+        return fmt::format_to(out, "]");
     }
 };
 
@@ -136,7 +135,7 @@ template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Matrix<T, N_
             fmt::format_to(out, "]");
         }
 
-        return fmt::format_to(ctx.out(), "]");
+        return fmt::format_to(out, "]");
     }
 };
 

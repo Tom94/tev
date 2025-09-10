@@ -1324,7 +1324,12 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                             [&](int y) {
                                 int y0 = y - yStart;
                                 unpackBits(
-                                    td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd + unpackedTileRowSamples * y0, unpackedTileRowSamples, handleSign
+                                    td + tile.rowSize * y0,
+                                    tile.rowSize,
+                                    bitsPerSample,
+                                    utd + unpackedTileRowSamples * y0,
+                                    unpackedTileRowSamples,
+                                    handleSign
                                 );
 
                                 if (planar == PLANARCONFIG_CONTIG) {

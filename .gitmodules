@@ -90,3 +90,11 @@
 	path = dependencies/libwebp
 	url = https://chromium.googlesource.com/webm/libwebp
 	shallow = true
+[submodule "dependencies/LibRaw"]
+	path = dependencies/LibRaw
+	url = https://github.com/LibRaw/LibRaw
+	shallow = true
+[submodule "dependencies/LibRaw-cmake"]
+	path = dependencies/LibRaw-cmake
+	url = https://github.com/LibRaw/LibRaw-cmake
+	shallow = true

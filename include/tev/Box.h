@@ -116,9 +116,10 @@ inline Box2i applyOrientation(EOrientation orientation, const Box2i& box) {
 
 } // namespace tev
 
-template <typename T, uint32_t N_DIMS> struct fmt::formatter<tev::Box<T, N_DIMS>> : fmt::formatter<std::string_view> {
-    template <typename FormatContext> auto format(const tev::Box<T, N_DIMS>& box, FormatContext& ctx) {
-        return formatter<std::string_view>::format(fmt::format("[{}, {}]", box.min, box.max), ctx);
+template <typename T, size_t N_DIMS> struct fmt::formatter<tev::Box<T, N_DIMS>> {
+    template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
+    template <class FmtContext> FmtContext::iterator format(const tev::Box<T, N_DIMS>& box, FmtContext& ctx) const {
+        return fmt::format_to(ctx.out(), "[{}, {}]", box.min, box.max);
     }
 };
 
