@@ -214,6 +214,7 @@ std::string ensureUtf8(std::string_view str);
 std::string utf16to8(std::wstring_view utf16);
 fs::path toPath(std::string_view utf8);
 std::string toString(const fs::path& path);
+std::string toDisplayString(const fs::path& path);
 
 bool naturalCompare(std::string_view a, std::string_view b);
 
