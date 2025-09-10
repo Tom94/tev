@@ -60,7 +60,7 @@ public:
 
     void setNChannels(int nChannels) { mNChannels = nChannels; }
 
-    virtual nanogui::Vector2i preferred_size(NVGcontext* ctx) const override;
+    virtual nanogui::Vector2i preferred_size_impl(NVGcontext* ctx) const override;
     virtual void draw(NVGcontext* ctx) override;
 
     void setMinimum(float minimum) { mMinimum = minimum; }

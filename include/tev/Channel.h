@@ -168,6 +168,7 @@ public:
     size_t stride() const { return mDataStride; }
 
     std::shared_ptr<std::vector<uint8_t>>& dataBuf() { return mData; }
+    const std::shared_ptr<std::vector<uint8_t>>& dataBuf() const { return mData; }
 
     EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
 

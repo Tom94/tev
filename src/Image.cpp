@@ -146,10 +146,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
 
         const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
             co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                nSamples,
-                [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; },
-                priority
+                0, nSamples, [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; }, priority
             );
         };
 
@@ -178,8 +175,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
 
         *data = std::move(convertedData);
 
-        tlog::debug(
-        ) << fmt::format("Converted {} channels from {} to {}.", distance(it, rangeEnd), toString(sourceFormat), toString(targetFormat));
+        tlog::debug()
+            << fmt::format("Converted {} channels from {} to {}.", distance(it, rangeEnd), toString(sourceFormat), toString(targetFormat));
 
         it = rangeEnd;
     }
@@ -246,7 +243,9 @@ Task<void> ImageData::orientToTopLeft(int priority) {
             size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<vector<uint8_t>>>()(interval.data); }
         };
 
-        bool operator==(const DataDesc& other) const { return pixelFormat == other.pixelFormat && data == other.data && size == other.size; }
+        bool operator==(const DataDesc& other) const {
+            return pixelFormat == other.pixelFormat && data == other.data && size == other.size;
+        }
     };
 
     unordered_set<DataDesc, DataDesc::Hash> channelData;
@@ -572,48 +571,49 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         join(channelNames, ",")
     );
 
+    using DataBufPtr = std::shared_ptr<std::vector<uint8_t>>;
+    DataBufPtr dataPtr = nullptr;
+
     // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
     if (directUpload) {
-        ScopeGuard guard{[now = chrono::system_clock::now()]() {
-            const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-            tlog::debug() << fmt::format("Direct upload took {:.03}s", duration.count());
-        }};
-
-        texture->upload((uint8_t*)channel(channelNames[0])->data());
+        const Channel* chan = channel(channelNames[0]);
+        dataPtr = chan->dataBuf();
     } else {
         ScopeGuard guard{[now = chrono::system_clock::now()]() {
             const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-            tlog::debug() << fmt::format("Indirect upload took {:.03}s", duration.count());
+            tlog::debug() << fmt::format("Upload buffer generation took {:.03}s", duration.count());
         }};
 
         const auto numPixels = this->numPixels();
         const auto size = this->size();
-        vector<uint8_t> data(numPixels * numTextureChannels * (bitsPerSample / 8));
+        dataPtr = make_shared<vector<uint8_t>>(numPixels * numTextureChannels * (bitsPerSample / 8));
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
             const Channel* chan = i < channelNames.size() ? channel(channelNames[i]) : nullptr;
             switch (texture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel((half*)data.data(), chan, {0, 0}, size, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel((half*)dataPtr->data(), chan, {0, 0}, size, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel((float*)data.data(), chan, {0, 0}, size, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel((float*)dataPtr->data(), chan, {0, 0}, size, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
         }
 
         waitAll<Task<void>>(tasks);
-        texture->upload(data.data());
     }
 
-    if (minFilter == EInterpolationMode::Trilinear) {
-        ScopeGuard guard{[now = chrono::system_clock::now()]() {
-            const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-            tlog::debug() << fmt::format("Mipmap generation took {:.03}s", duration.count());
-        }};
+    // If the backend supports it, schedule an async copy that uses DMA to
+    // copy the texture without blocking the host. The operation is part of
+    // the graphics queue and correctly ordered wrt. other display
+    // operations. On Apple M* GPUs, CPU/GPU share the same memory, so this
+    // step just converts the texture into a more suitable layout.
 
+    texture->upload_async(dataPtr->data(), [](void* p) { delete (DataBufPtr*)p; }, new DataBufPtr(dataPtr));
+
+    if (minFilter == EInterpolationMode::Trilinear) {
         texture->generate_mipmap();
     }
 
@@ -764,8 +764,7 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
                     tasks.emplace_back(prepareTextureChannel((half*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel((float*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels)
-                    );
+                    tasks.emplace_back(prepareTextureChannel((float*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
@@ -914,8 +913,8 @@ Task<vector<shared_ptr<Image>>>
                 success = true;
                 break;
             } catch (const ImageLoader::FormatNotSupported& e) {
-                tlog::debug(
-                ) << fmt::format("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
+                tlog::debug()
+                    << fmt::format("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
 
                 // Reset file cursor to beginning and try next loader.
                 iStream.clear();

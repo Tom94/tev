@@ -52,9 +52,7 @@ static const float CROP_MIN_SIZE = 3;
 ImageViewer::ImageViewer(
     const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, const shared_ptr<Ipc>& ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
-    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer},
-    mImagesLoader{imagesLoader},
-    mIpc{ipc} {
+    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
 
     auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
     mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
@@ -391,13 +389,13 @@ ImageViewer::ImageViewer(
             mPlayButton->set_flags(Button::ToggleButton);
             mPlayButton->set_change_callback([this](bool value) { setPlayingBack(value); });
 
-            mAnyImageButtons.push_back(makePlaybackButton(
-                "", false, [this] { selectImage(nthVisibleImage(0)); }, FA_FAST_BACKWARD, "Front (Home)"
-            ));
+            mAnyImageButtons.push_back(
+                makePlaybackButton("", false, [this] { selectImage(nthVisibleImage(0)); }, FA_FAST_BACKWARD, "Front (Home)")
+            );
 
-            mAnyImageButtons.push_back(makePlaybackButton(
-                "", false, [this] { selectImage(nthVisibleImage(mImages.size())); }, FA_FAST_FORWARD, "Back (End)"
-            ));
+            mAnyImageButtons.push_back(
+                makePlaybackButton("", false, [this] { selectImage(nthVisibleImage(mImages.size())); }, FA_FAST_FORWARD, "Back (End)")
+            );
 
             mFpsTextBox = new IntBox<int>{playback, 24};
             mFpsTextBox->set_default_value("24");
@@ -431,9 +429,9 @@ ImageViewer::ImageViewer(
 
             makeImageButton("", true, [this] { openImageDialog(); }, FA_FOLDER, fmt::format("Open ({}+O)", HelpWindow::COMMAND));
 
-            mCurrentImageButtons.push_back(makeImageButton(
-                "", false, [this] { saveImageDialog(); }, FA_SAVE, fmt::format("Save ({}+S)", HelpWindow::COMMAND)
-            ));
+            mCurrentImageButtons.push_back(
+                makeImageButton("", false, [this] { saveImageDialog(); }, FA_SAVE, fmt::format("Save ({}+S)", HelpWindow::COMMAND))
+            );
 
             mCurrentImageButtons.push_back(makeImageButton(
                 "", false, [this] { reloadImage(mCurrentImage); }, FA_RECYCLE, fmt::format("Reload ({}+R or F5)", HelpWindow::COMMAND)
@@ -846,8 +844,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             if (modifiers & GLFW_MOD_SHIFT) {
                 const char* clipboardString = glfwGetClipboardString(m_glfw_window);
                 if (clipboardString) {
-                    tlog::warning(
-                    ) << fmt::format("Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString);
+                    tlog::warning() << fmt::format(
+                        "Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString
+                    );
                 }
             } else {
                 try {
@@ -1875,34 +1874,34 @@ void ImageViewer::openImageDialog() {
 
         try {
             vector<pair<string, string>> filters = {
-                {"Animated PNG image",                "apng"    },
+                {"apng",     "Animated PNG image"               },
 #ifdef TEV_SUPPORT_AVIF
-                {"AV1 Image File",                    "avif"    },
+                {"avif",     "AV1 Image File"                   },
 #endif
-                {"Bitmap image",                      "bmp"     },
+                {"bmp",      "Bitmap image"                     },
 #ifdef _WIN32
-                {"DirectDraw Surface image",          "dds"     },
+                {"dds",      "DirectDraw Surface image"         },
 #endif
-                {"Digital Negative image",            "dng"     },
-                {"OpenEXR image",                     "exr"     },
-                {"Graphics Interchange Format image", "gif"     },
-                {"HDR image",                         "hdr"     },
+                {"dng",      "Digital Negative image"           },
+                {"exr",      "OpenEXR image"                    },
+                {"gif",      "Graphics Interchange Format image"},
+                {"hdr",      "HDR image"                        },
 #ifdef TEV_SUPPORT_HEIC
-                {"High Efficiency Image Container",   "heic"    },
+                {"heic",     "High Efficiency Image Container"  },
 #endif
-                {"JPEG image",                        "jpeg,jpg"},
-                {"JPEG-XL image",                     "jxl"     },
-                {"Portable Float Map image",          "pfm"     },
-                {"Portable GrayMap image",            "pgm"     },
-                {"PIC image",                         "pic"     },
-                {"Portable Network Graphics image",   "png"     },
-                {"Portable AnyMap image",             "pnm"     },
-                {"Portable PixMap image",             "ppm"     },
-                {"PSD image",                         "psd"     },
-                {"Quite OK Image format",             "qoi"     },
-                {"Truevision TGA image",              "tga"     },
-                {"Tag Image File Format image",       "tiff,tif"},
-                {"WebP image",                        "webp"    },
+                {"jpeg,jpg", "JPEG image"                       },
+                {"jxl",      "JPEG-XL image"                    },
+                {"pfm",      "Portable Float Map image"         },
+                {"pgm",      "Portable GrayMap image"           },
+                {"pic",      "PIC image"                        },
+                {"png",      "Portable Network Graphics image"  },
+                {"pnm",      "Portable AnyMap image"            },
+                {"ppm",      "Portable PixMap image"            },
+                {"psd",      "PSD image"                        },
+                {"qoi",      "Quite OK Image format"            },
+                {"tga",      "Truevision TGA image"             },
+                {"tiff,tif", "Tag Image File Format image"      },
+                {"webp",     "WebP image"                       },
             };
 
             vector<string_view> allImages;
@@ -1953,22 +1952,26 @@ void ImageViewer::saveImageDialog() {
         }};
 
         try {
-            const auto paths = file_dialog(this, FileDialogType::Save, {
-                {"OpenEXR image",                   "exr"     },
-                {"HDR image",                       "hdr"     },
-                {"Bitmap Image File",               "bmp"     },
-                {"JPEG image",                      "jpg,jpeg"},
-                {"JPEG-XL image",                   "jxl"     },
-                {"Portable Network Graphics image", "png"     },
-                {"Quite OK Image format",           "qoi"     },
-                {"Truevision TGA image",            "tga"     },
-            });
+            const auto paths = file_dialog(
+                this,
+                FileDialogType::Save,
+                {
+                    {"exr",      "OpenEXR image"                  },
+                    {"hdr",      "HDR image"                      },
+                    {"bmp",      "Bitmap Image File"              },
+                    {"jpg,jpeg", "JPEG image"                     },
+                    {"jxl",      "JPEG-XL image"                  },
+                    {"png",      "Portable Network Graphics image"},
+                    {"qoi",      "Quite OK Image format"          },
+                    {"tga",      "Truevision TGA image"           },
+            }
+            );
 
             if (paths.empty() || paths.front().empty()) {
                 return;
             }
 
-            scheduleToUiThread([this, path=paths.front()]() {
+            scheduleToUiThread([this, path = paths.front()]() {
                 try {
                     mImageCanvas->saveImage(path);
                 } catch (const ImageSaveError& e) { showErrorDialog(fmt::format("Failed to save image: {}", e.what())); }

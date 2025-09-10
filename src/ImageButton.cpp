@@ -45,10 +45,9 @@ ImageButton::ImageButton(Widget* parent, string_view caption, bool canBeReferenc
     mCaptionTextBox->set_solid_color(IMAGE_COLOR);
 }
 
-Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
-    // Cache the last sizing result if the ID and caption did not change. This reduces layout computation time significantly.
-    if (mLastSizingId == mId && mLastSizingCaption == mCaption) {
-        return mLastSizingResult;
+Vector2i ImageButton::preferred_size_impl(NVGcontext* ctx) const {
+    if (m_preferred_size_cache != Vector2i(-1)) {
+        return m_preferred_size_cache;
     }
 
     nvgFontSize(ctx, m_font_size);
@@ -60,11 +59,8 @@ Vector2i ImageButton::preferred_size(NVGcontext* ctx) const {
     nvgFontFace(ctx, "sans");
     float tw = nvgTextBounds(ctx, 0, 0, mCaption.data(), mCaption.data() + mCaption.size(), nullptr);
 
-    mLastSizingResult = Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
-    mLastSizingId = mId;
-    mLastSizingCaption = mCaption;
-
-    return mLastSizingResult;
+    m_preferred_size_cache = Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
+    return m_preferred_size_cache;
 }
 
 bool ImageButton::mouse_button_event(const Vector2i& p, int button, bool down, int modifiers) {
@@ -145,7 +141,7 @@ void ImageButton::draw(NVGcontext* ctx) {
     }
 
     const string idString = to_string(mId);
-    if (m_size.x() == preferred_size(ctx).x()) {
+    if (m_size.x() == preferred_size_impl(ctx).x()) {
         mCutoff = 0;
     } else if (m_size != mSizeForWhichCutoffWasComputed) {
         mCutoff = 0;
