@@ -68,7 +68,7 @@ jobs:
       - name: Install dependencies
         run: brew install nasm
       - name: CMake
-        run: cmake . -B ${{ env.build_dir }} -GNinja -DCMAKE_BUILD_TYPE=${{ env.config }} -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
+        run: cmake . -B ${{ env.build_dir }} -GNinja -DCMAKE_BUILD_TYPE=${{ env.config }} -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }} -DCMAKE_FIND_FRAMEWORK=LAST
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target all --verbose -j
