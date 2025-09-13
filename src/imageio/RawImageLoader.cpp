@@ -137,6 +137,9 @@ Box2i maskToBox(const int mask[4]) {
 Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, bool) const {
     LibRaw iProcessor;
 
+    iProcessor.imgdata.params.use_camera_matrix = true;
+    iProcessor.imgdata.params.use_camera_wb = true;
+
     auto librawStream = LibRawDataStream{iStream, path};
     if (int error = iProcessor.open_datastream(&librawStream); error != LIBRAW_SUCCESS) {
         throw FormatNotSupported{fmt::format("Could not open raw image: {}", libraw_strerror(error))};
