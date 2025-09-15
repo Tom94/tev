@@ -51,10 +51,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - arch: x86_64
-            # The macos-13 runner uses Intel machines, see
-            # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
-            os: macos-13
+          # Temporarily disable intel builds due to jxl compilation issues (system jxl headers for some reason being pulled in)
+          # - arch: x86_64
+          #   # The macos-13 runner uses Intel machines, see
+          #   # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+          #   os: macos-13
           - arch: arm64
             # The latest macos runners use arm machines. Picking runners like this avoids fringe issues with cross-compilation.
             os: macos-latest
