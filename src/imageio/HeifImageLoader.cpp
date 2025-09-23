@@ -228,7 +228,7 @@ Task<vector<ImageData>>
             co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(profileData.data(), profileData.size()),
                 size,
-                numChannels,
+                numColorChannels,
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)dataF32.data(),
