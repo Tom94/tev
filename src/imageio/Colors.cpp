@@ -403,11 +403,24 @@ Task<void> toLinearSrgbPremul(
         default: throw runtime_error{"Invalid number of output channels."};
     }
 
+    const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
+
+    tlog::debug() << fmt::format(
+        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x}",
+        numColorChannels,
+        (int)alphaKind,
+        (int)pixelFormat,
+        numChannels,
+        type,
+        numChannelsOut,
+        typeOut
+    );
+
     cmsHTRANSFORM transform = cmsCreateTransformTHR(
         CmsContext::threadLocal().get(),
         profile.get(),
         type,
-        numColorChannels == 1 ? CmsContext::threadLocal().grayProfile() : CmsContext::threadLocal().rec709Profile(),
+        numColorChannels == 1 && numColorChannelsOut == 1 ? CmsContext::threadLocal().grayProfile() : CmsContext::threadLocal().rec709Profile(),
         // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
         // if we set this as the output type.
         typeOut,
