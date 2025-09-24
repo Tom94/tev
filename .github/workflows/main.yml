@@ -51,11 +51,10 @@ jobs:
     strategy:
       matrix:
         include:
-          # Temporarily disable intel builds due to jxl compilation issues (system jxl headers for some reason being pulled in)
-          # - arch: x86_64
-          #   # The macos-13 runner uses Intel machines, see
-          #   # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
-          #   os: macos-13
+          - arch: x86_64
+            # The macos-13 runner uses Intel machines, see
+            # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+            os: macos-13
           - arch: arm64
             # The latest macos runners use arm machines. Picking runners like this avoids fringe issues with cross-compilation.
             os: macos-latest
@@ -68,6 +67,8 @@ jobs:
           submodules: recursive
       - name: Install dependencies
         run: brew install nasm
+      - name: Remove pre-installed dependencies that conlict with our build
+        run: brew uninstall --ignore-dependencies jpeg-xl || echo "jpeg-xl not installed, continuing"
       - name: CMake
         run: cmake . -B ${{ env.build_dir }} -GNinja -DCMAKE_BUILD_TYPE=${{ env.config }} -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build
