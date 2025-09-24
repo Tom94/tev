@@ -2,7 +2,7 @@
 <component type="desktop-application">
     <id>@TEV_LINUX_APP_ID@</id>
     <name>tev</name>
-    <summary>High dynamic range (HDR) image comparison tool</summary>
+    <summary>High dynamic range (HDR) image viewer for people who care about colors</summary>
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0-or-later</project_license>
     <developer id="io.github.Tom94">
