@@ -95,16 +95,18 @@ string toDisplayString(const fs::path& path) {
     if (size_hint < 0) {
         return toString(path);
     }
+
     std::string buffer;
     buffer.resize(size_hint);
     ssize_t actual_size = getxattr(path.c_str(), HOST_PATH_XATTR, buffer.data(), size_hint);
     if (actual_size < 0) {
         return toString(path);
     }
+
     buffer.resize(actual_size);
     return ensureUtf8(buffer);
 #else
-    return path;
+    return toString(path);
 #endif
 }
 

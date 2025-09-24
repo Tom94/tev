@@ -38,7 +38,7 @@ public:
     void draw(NVGcontext* ctx) override;
 
     void set_theme(nanogui::Theme* theme) override {
-        if (theme != m_theme) {
+        if (theme != m_theme.get()) {
             preferred_size_changed();
             nanogui::Widget::set_theme(theme);
             nanogui::Theme* captionTextBoxTheme = new nanogui::Theme(*theme);
