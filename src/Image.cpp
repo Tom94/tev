@@ -350,7 +350,7 @@ atomic<int> Image::sId(0);
 
 Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector, bool groupChannels) :
     mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? tev::toString(path) : fmt::format("{}:{}", tev::toString(path), channelSelector);
+    mName = channelSelector.empty() ? tev::toDisplayString(path) : fmt::format("{}:{}", tev::toDisplayString(path), channelSelector);
 
     if (groupChannels) {
         for (const auto& l : mData.layers) {
