@@ -357,7 +357,7 @@ ImageViewer::ImageViewer(
                     "Filters visible images and channel groups according to a supplied string. "
                     "The string must have the format 'image:group'. "
                     "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
-                    "Keyboard shortcut:\n{}+P",
+                    "Keyboard shortcut:\n{}+F",
                     HelpWindow::COMMAND
                 )
             );
