@@ -26,6 +26,15 @@
         <display_length compare="ge">768</display_length>
     </requires>
 
+    <!-- Screenshots -->
+    <screenshots>
+        <screenshot type="default">
+          <image>https://raw.githubusercontent.com/Tom94/tev/refs/heads/master/resources/linux/screenshot.png</image>
+          <caption>Two images compared in false color.</caption>
+        </screenshot>
+    </screenshots>
+
+
     <url type="homepage">https://github.com/Tom94/tev</url>
     <url type="bugtracker">https://github.com/Tom94/tev/issues</url>
     <url type="vcs-browser">https://github.com/Tom94/tev</url>
