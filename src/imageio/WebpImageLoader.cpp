@@ -134,7 +134,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numSamples = numPixels * numChannels;
     vector<float> frameData(numSamples);
     vector<float> iccTmpFloatData;
-    if (iccProfileData.empty()) {
+    if (!iccProfileData.empty()) {
         // If we don't have an ICC profile, we can use the frame data directly.
         iccTmpFloatData.resize(numSamples);
     }
