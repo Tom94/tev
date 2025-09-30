@@ -187,8 +187,8 @@ ImageViewer::ImageViewer(
             mClipToLdrButton->set_font_size(15);
             mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
             mClipToLdrButton->set_tooltip(
-                "Clips the image to [0,1] as if displayed on an LDR screen.\n\n"
-                "Shortcut: L"
+                "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
+                "Shortcut: U"
             );
             mClipToLdrButton->set_flags(Button::ToggleButton);
         }
@@ -762,6 +762,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
+            return true;
+        } else if (key == GLFW_KEY_U) {
+            mClipToLdrButton->set_pushed(!mClipToLdrButton->pushed());
+            mImageCanvas->setClipToLdr(mClipToLdrButton->pushed());
             return true;
         } else if (key == GLFW_KEY_I) {
             toggleImageInfoWindow();

@@ -107,6 +107,7 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     addRow(imageSelection, COMMAND + "+9/F", "Zoom to fit");
     addRow(imageSelection, "N", "Normalize image to [0, 1]");
     addRow(imageSelection, "R", "Reset image parameters");
+    addRow(imageSelection, "U", "Toggle clipping to [0, 1] (LDR mode)");
 
     addRow(imageSelection, "Shift+Right/Left or Shift+D/A", "Select next/previous tonemap");
 
