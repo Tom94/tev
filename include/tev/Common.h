@@ -470,6 +470,10 @@ inline size_t nBytes(EPixelFormat format) {
     return 0;
 }
 
+inline size_t nBits(EPixelFormat format) {
+    return nBytes(format) * 8;
+}
+
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
 void redrawWindow();
