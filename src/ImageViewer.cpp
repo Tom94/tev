@@ -1910,10 +1910,10 @@ void ImageViewer::openImageDialog() {
 
             vector<string_view> allImages;
             for (const auto& filter : filters) {
-                allImages.push_back(filter.second);
+                allImages.push_back(filter.first);
             }
 
-            filters.emplace(filters.begin(), pair<string, string>{"All images", join(allImages, ",")});
+            filters.emplace(filters.begin(), pair<string, string>{join(allImages, ","), "All images"});
             auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
 
             for (size_t i = 0; i < paths.size(); ++i) {
