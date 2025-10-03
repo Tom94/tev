@@ -52,12 +52,9 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            # The macos-13 runner uses Intel machines, see
-            # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
-            os: macos-13
+            os: macos-15-intel
           - arch: arm64
-            # The latest macos runners use arm machines. Picking runners like this avoids fringe issues with cross-compilation.
-            os: macos-latest
+            os: macos-15
     env:
       build_dir: "build"
       config: "Release"
