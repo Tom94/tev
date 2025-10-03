@@ -214,7 +214,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;
                         framePos.x() = x - iter.x_offset;
 
-                        bool isInFrame = Box2i{frameSize}.contains(framePos);
+                        const bool isInFrame = Box2i{frameSize}.contains(framePos);
 
                         for (int c = 0; c < numChannels; ++c) {
                             const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
