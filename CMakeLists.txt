@@ -338,7 +338,6 @@ elseif (WIN32)
 
     set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/patch.wxs")
     set(CPACK_WIX_UPGRADE_GUID "F3EC0D95-B2DC-4451-975C-CF591871E162")
-    set(CPACK_WIX_PRODUCT_GUID "F7478E0D-33A4-4F00-829B-45CE27B1D0E2")
     set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/icon.ico")
 
     configure_file(scripts/configure-winget.cmake scripts/configure-winget.cmake @ONLY)
