@@ -29,18 +29,11 @@ brew install --cask tev
 yay -S tev
 ```
 
-#### NixOS
+#### NixOS / nix-darwin
 ```nix
-# In your inputs
-inputs = {
-  ...
-  tev = { url = "https://github.com/tom94/tev"; type = "git"; submodules = true; };
-};
-
-# In your configuration
 environment.systemPackages = with pkgs; [
   ...
-  inputs.tev.packages.${system}.default
+  tev
 ];
 ```
 
