@@ -397,7 +397,9 @@ public:
             channel.size().y(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.setAt({x, y}, data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled]);
+                    channel.setAt(
+                        {x, y}, data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled]
+                    );
                 }
             },
             priority
@@ -515,52 +517,69 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             auto& part = parts.at(partIdx);
 
             ImageData& data = result.emplace_back();
+            try {
+                data.attributes.emplace_back(toAttributeNode(part.header()));
 
-            data.attributes.emplace_back(toAttributeNode(part.header()));
+                Imath::Box2i dataWindow = part.header().dataWindow();
+                Imath::Box2i displayWindow = part.header().displayWindow();
 
-            Imath::Box2i dataWindow = part.header().dataWindow();
-            Imath::Box2i displayWindow = part.header().displayWindow();
-
-            // EXR's display- and data windows have inclusive upper ends while tev's upper ends are exclusive. This allows easy conversion
-            // from window to size. Hence the +1.
-            data.dataWindow = {
-                {dataWindow.min.x,     dataWindow.min.y    },
-                {dataWindow.max.x + 1, dataWindow.max.y + 1}
-            };
-            data.displayWindow = {
-                {displayWindow.min.x,     displayWindow.min.y    },
-                {displayWindow.max.x + 1, displayWindow.max.y + 1}
-            };
-
-            if (!data.dataWindow.isValid()) {
-                throw ImageLoadError{
-                    fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)
+                // EXR's display- and data windows have inclusive upper ends while tev's upper ends are exclusive. This allows easy
+                // conversion from window to size. Hence the +1.
+                data.dataWindow = {
+                    {dataWindow.min.x,     dataWindow.min.y    },
+                    {dataWindow.max.x + 1, dataWindow.max.y + 1}
                 };
-            }
-
-            if (!data.displayWindow.isValid()) {
-                throw ImageLoadError{
-                    fmt::format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
+                data.displayWindow = {
+                    {displayWindow.min.x,     displayWindow.min.y    },
+                    {displayWindow.max.x + 1, displayWindow.max.y + 1}
                 };
-            }
 
-            part.setFrameBuffer(frameBuffers.at(partIdx));
-            part.readPixels(dataWindow.min.y, dataWindow.max.y);
+                if (!data.dataWindow.isValid()) {
+                    throw ImageLoadError{
+                        fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)
+                    };
+                }
 
-            data.hasPremultipliedAlpha = true;
-            if (part.header().hasName()) {
-                data.partName = part.header().name();
-            }
+                if (!data.displayWindow.isValid()) {
+                    throw ImageLoadError{
+                        fmt::format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
+                    };
+                }
 
-            if (Imf::hasChromaticities(part.header())) {
-                auto chroma = Imf::chromaticities(part.header());
-                data.toRec709 = chromaToRec709Matrix({
-                    {{chroma.red.x, chroma.red.y},
-                     {chroma.green.x, chroma.green.y},
-                     {chroma.blue.x, chroma.blue.y},
-                     {chroma.white.x, chroma.white.y}}
-                });
+                part.setFrameBuffer(frameBuffers.at(partIdx));
+                part.readPixels(dataWindow.min.y, dataWindow.max.y);
+
+                data.hasPremultipliedAlpha = true;
+                if (part.header().hasName()) {
+                    data.partName = part.header().name();
+                }
+
+                if (Imf::hasChromaticities(part.header())) {
+                    auto chroma = Imf::chromaticities(part.header());
+                    data.toRec709 = chromaToRec709Matrix({
+                        {{chroma.red.x, chroma.red.y},
+                         {chroma.green.x, chroma.green.y},
+                         {chroma.blue.x, chroma.blue.y},
+                         {chroma.white.x, chroma.white.y}}
+                    });
+                }
+            } catch (const Iex::BaseExc& e) {
+                tlog::warning() << "Error reading EXR part " << partIdx << ": " << e.what();
+
+                // Remove channels that belong to this part
+                rawChannels.erase(
+                    remove_if(
+                        rawChannels.begin(),
+                        rawChannels.end(),
+                        [partIdx](const RawChannel& ch) { return ch.partId() == partIdx; }
+                    ),
+                    rawChannels.end()
+                );
             }
+        }
+
+        if (rawChannels.empty()) {
+            throw ImageLoadError{"Could not read any EXR parts."};
         }
 
         vector<size_t> channelMapping;
@@ -570,6 +589,16 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             channelMapping.emplace_back(data.channels.size());
             data.channels.emplace_back(Channel{rawChannel.name(), rawChannel.size(), EPixelFormat::F32, rawChannel.desiredPixelFormat()});
         }
+
+        // Remove ImageData entries that have no channels. This can be malformed parts or parts that failed to load.
+        result.erase(
+            remove_if(
+                result.begin(),
+                result.end(),
+                [](const ImageData& data) { return data.channels.empty(); }
+            ),
+            result.end()
+        );
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < rawChannels.size(); ++i) {
