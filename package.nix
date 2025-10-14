@@ -64,21 +64,23 @@ stdenv.mkDerivation rec {
 
   buildInputs = [
     lcms2
-  ]
-  ++ lib.optionals stdenv.hostPlatform.isLinux [
-    dbus
-    libffi
-    libGL
-    libxkbcommon
-    wayland
-    wayland-protocols
-    wayland-scanner
-    xorg.libX11
-    xorg.libXcursor
-    xorg.libXi
-    xorg.libXinerama
-    xorg.libXrandr
-  ];
+  ] ++ lib.optionals stdenv.hostPlatform.isLinux (
+    [
+      dbus
+      libffi
+      libGL
+      libxkbcommon
+      wayland
+      wayland-protocols
+      wayland-scanner
+    ] ++ (with xorg; [
+      libX11
+      libXcursor
+      libXi
+      libXinerama
+      libXrandr
+    ])
+  );
 
   cmakeFlags = [
     "-DTEV_DEPLOY=1"
