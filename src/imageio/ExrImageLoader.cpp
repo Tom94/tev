@@ -568,11 +568,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
 
                 // Remove channels that belong to this part
                 rawChannels.erase(
-                    remove_if(
-                        rawChannels.begin(),
-                        rawChannels.end(),
-                        [partIdx](const RawChannel& ch) { return ch.partId() == partIdx; }
-                    ),
+                    remove_if(rawChannels.begin(), rawChannels.end(), [partIdx](const RawChannel& ch) { return ch.partId() == partIdx; }),
                     rawChannels.end()
                 );
             }
@@ -591,14 +587,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
         }
 
         // Remove ImageData entries that have no channels. This can be malformed parts or parts that failed to load.
-        result.erase(
-            remove_if(
-                result.begin(),
-                result.end(),
-                [](const ImageData& data) { return data.channels.empty(); }
-            ),
-            result.end()
-        );
+        result.erase(remove_if(result.begin(), result.end(), [](const ImageData& data) { return data.channels.empty(); }), result.end());
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < rawChannels.size(); ++i) {
@@ -606,10 +595,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             tasks.emplace_back(rawChannel.copyTo(result.at(rawChannel.partId()).channels.at(channelMapping.at(i)), priority));
         }
 
-        for (auto& task : tasks) {
-            co_await task;
-        }
-
+        co_await awaitAll(tasks);
         co_return result;
     } catch (const Iex::BaseExc& e) {
         // Translate OpenEXR errors to our own error type

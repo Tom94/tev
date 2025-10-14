@@ -20,4 +20,44 @@
 
 namespace tev {
 
+void waitAll(std::span<Task<void>> futures) {
+    std::exception_ptr eptr = {};
+
+    for (auto&& f : futures) {
+        try {
+            f.get();
+        } catch (const std::exception& e) {
+            if (eptr) {
+                tlog::error() << "Multiple exceptions in waitAll(). Rethrowing first and logging others: " << e.what();
+            } else {
+                eptr = std::current_exception();
+            }
+        }
+    }
+
+    if (eptr) {
+        std::rethrow_exception(eptr);
+    }
+}
+
+Task<void> awaitAll(std::span<Task<void>> futures) {
+    std::exception_ptr eptr = {};
+
+    for (auto&& f : futures) {
+        try {
+            co_await f;
+        } catch (const std::exception& e) {
+            if (eptr) {
+                tlog::error() << "Multiple exceptions in awaitAll(). Rethrowing first and logging others: " << e.what();
+            } else {
+                eptr = std::current_exception();
+            }
+        }
+    }
+
+    if (eptr) {
+        std::rethrow_exception(eptr);
+    }
+}
+
 }
