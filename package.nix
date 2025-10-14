@@ -8,6 +8,7 @@
 , libffi
 , libxkbcommon
 , nasm
+, ninja
 , perl
 , pkg-config
 , wayland
@@ -56,6 +57,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     cmake
     nasm
+    ninja
     perl
     pkg-config
   ];
