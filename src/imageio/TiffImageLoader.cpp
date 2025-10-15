@@ -1295,10 +1295,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         uint8_t* const td = tileData.data() + tile.size * i;
 
         if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
-            for (auto&& task : decodeTasks) {
-                co_await task;
-            }
-
+            co_await awaitAll(decodeTasks);
             throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
         }
 
@@ -1362,9 +1359,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         );
     }
 
-    for (auto&& task : decodeTasks) {
-        co_await task;
-    }
+    co_await awaitAll(decodeTasks);
 
     float intConversionScale = 1.0f;
     ETiffKind kind = ETiffKind::U32;

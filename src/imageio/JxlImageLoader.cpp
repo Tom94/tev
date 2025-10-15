@@ -190,7 +190,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         // This is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get the thread pool to cooperate
         // with the JXL API that expects a non-coroutine function here. We will offload the JxlImageLoader::load() function into a
         // wholly separate thread to avoid blocking the thread pool as a consequence.
-        waitAll<Task<void>>(tasks);
+        waitAll(tasks);
         return 0;
     };
 

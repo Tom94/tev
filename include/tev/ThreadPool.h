@@ -117,9 +117,7 @@ public:
             }(taskStart, taskEnd, body, priority, this));
         }
 
-        for (auto&& task : tasks) {
-            co_await task;
-        }
+        co_await awaitAll(tasks);
     }
 
     template <typename Int, typename F> void parallelFor(Int start, Int end, F body, int priority) {

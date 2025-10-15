@@ -1018,10 +1018,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             priority
         )
     );
-
-    for (auto& task : tasks) {
-        co_await task;
-    }
+    co_await awaitAll(tasks);
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,

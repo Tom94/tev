@@ -45,12 +45,6 @@ private:
     std::atomic<int> mCounter;
 };
 
-template <typename T> void waitAll(std::span<T> futures) {
-    for (auto&& f : futures) {
-        f.get();
-    }
-}
-
 struct DetachedTask {
     struct promise_type {
         DetachedTask get_return_object() noexcept { return {}; }
@@ -231,5 +225,8 @@ template <typename F, typename... Args> Task<void> invokeTask(F&& executor, Args
     auto exec = std::move(executor);
     co_await exec(args...);
 }
+
+void waitAll(std::span<Task<void>> futures);
+Task<void> awaitAll(std::span<Task<void>> futures);
 
 } // namespace tev

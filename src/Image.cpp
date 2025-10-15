@@ -90,9 +90,7 @@ Task<void> ImageData::convertToRec709(int priority) {
         );
     }
 
-    for (auto& task : tasks) {
-        co_await task;
-    }
+    co_await awaitAll(tasks);
 
     // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
     toRec709 = Matrix3f{1.0f};
@@ -206,9 +204,7 @@ Task<void> ImageData::multiplyAlpha(int priority) {
 
     vector<Task<void>> tasks;
     alphaOperation([&](Channel& target, const Channel& alpha) { tasks.emplace_back(target.multiplyWithAsync(alpha, priority)); });
-    for (auto& task : tasks) {
-        co_await task;
-    }
+    co_await awaitAll(tasks);
 
     hasPremultipliedAlpha = true;
 }
@@ -220,9 +216,7 @@ Task<void> ImageData::unmultiplyAlpha(int priority) {
 
     vector<Task<void>> tasks;
     alphaOperation([&](Channel& target, const Channel& alpha) { tasks.emplace_back(target.divideByAsync(alpha, priority)); });
-    for (auto& task : tasks) {
-        co_await task;
-    }
+    co_await awaitAll(tasks);
 
     hasPremultipliedAlpha = false;
 }
@@ -602,7 +596,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
             }
         }
 
-        waitAll<Task<void>>(tasks);
+        waitAll(tasks);
     }
 
     // If the backend supports it, schedule an async copy that uses DMA to
@@ -770,7 +764,7 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
             }
         }
 
-        waitAll<Task<void>>(tasks);
+        waitAll(tasks);
         imageTexture.nanoguiTexture->upload_sub_region(textureData.data(), {x, y}, {width, height});
         imageTexture.mipmapDirty = true;
     }
