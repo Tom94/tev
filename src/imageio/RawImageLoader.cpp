@@ -17,10 +17,15 @@
  */
 
 #include <tev/ThreadPool.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/RawImageLoader.h>
+
+#include <libexif/exif-data.h>
 
 #define LIBRAW_NO_WINSOCK2
 #include <libraw/libraw.h>
+
+#include <string>
 
 using namespace nanogui;
 using namespace std;
@@ -137,6 +142,72 @@ Box2i maskToBox(const int mask[4]) {
 Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, bool) const {
     LibRaw iProcessor;
 
+    struct ExifContext {
+        ExifContext() {
+            content = exif_content_new();
+            data = exif_data_new();
+            content->parent = data;
+
+            node.name = "EXIF";
+
+            AttributeNode& ifdNode = node.children.emplace_back();
+            ifdNode.name = "EXIF";
+            ifdNode.type = "IFD";
+        }
+
+        AttributeNode node;
+        ExifContent* content = nullptr;
+        ExifData* data = nullptr;
+    } exif;
+
+    auto handleExif = [](void* context, int tag, int type, int len, unsigned int ord, void* ifp, INT64 base) {
+        ExifContext& exif = *(ExifContext*)context;
+
+        ExifEntry* entry = exif_entry_new();
+        if (!entry) {
+            return;
+        }
+
+        const auto guard = ScopeGuard([&]() { exif_entry_unref(entry); });
+
+        exif_data_set_byte_order(exif.data, ord == 0x4949 ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA);
+        entry->parent = exif.content;
+        entry->tag = (ExifTag)tag;
+        entry->format = (ExifFormat)type;
+        const int sizePerComponent = exif_format_get_size(entry->format);
+
+        entry->components = len;
+
+        entry->size = len * sizePerComponent;
+        entry->data = (unsigned char*)malloc(entry->size); // Will get freed by exif_entry_unref
+
+        auto* stream = (LibRaw_abstract_datastream*)ifp;
+        stream->read(entry->data, len, sizePerComponent);
+
+        const char* name = exif_tag_get_name_in_ifd(entry->tag, ExifIfd::EXIF_IFD_EXIF);
+        if (!name) {
+            return;
+        }
+
+        const char* typeStr = exif_format_get_name(entry->format);
+        if (!typeStr) {
+            typeStr = "unknown";
+        }
+
+        char buf[256] = {0};
+        string value = exif_entry_get_value(entry, buf, sizeof(buf));
+        if (value.empty()) {
+            value = "n/a";
+        } else if (value.length() >= 255) {
+            value += "…"s;
+        }
+
+        TEV_ASSERT(!exif.node.children.empty(), "EXIF node must have at least one child");
+        exif.node.children.front().children.push_back({name, value, typeStr, {}});
+    };
+
+    iProcessor.set_exifparser_handler(handleExif, &exif);
+
     iProcessor.imgdata.params.use_camera_matrix = true;
     iProcessor.imgdata.params.use_camera_wb = true;
 
@@ -230,6 +301,10 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
         },
         priority
     );
+
+    if (!exif.node.children.empty() && !exif.node.children.front().children.empty()) {
+        resultData.attributes.emplace_back(std::move(exif.node));
+    }
 
     co_return result;
 }

@@ -291,10 +291,18 @@ public:
         mCallback = std::move(other.mCallback);
         other.mCallback = {};
     }
-    ~ScopeGuard() { mCallback(); }
+
+    ~ScopeGuard() {
+        if (mArmed) {
+            mCallback();
+        }
+    }
+
+    void disarm() { mArmed = false; }
 
 private:
     T mCallback;
+    bool mArmed = true;
 };
 
 template <typename T> T round(T value, T decimals) {
@@ -470,9 +478,7 @@ inline size_t nBytes(EPixelFormat format) {
     return 0;
 }
 
-inline size_t nBits(EPixelFormat format) {
-    return nBytes(format) * 8;
-}
+inline size_t nBits(EPixelFormat format) { return nBytes(format) * 8; }
 
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
