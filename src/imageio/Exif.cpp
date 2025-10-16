@@ -22,6 +22,8 @@
 
 #include <libexif/exif-data.h>
 
+#include <vector>
+
 using namespace std;
 
 namespace tev {
@@ -59,18 +61,19 @@ std::string toString(EExifLightSource lightSource) {
     throw invalid_argument{"Unknown EXIF light source."};
 }
 
-Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) {
-    // If data doesn't already start with fourcc, prepend
-    vector<uint8_t> newExifData;
-    if (autoPrependFourcc && (exifData.size() < 6 || memcmp(exifData.data(), Exif::FOURCC.data(), 6) != 0)) {
-        newExifData.reserve(exifData.size() + FOURCC.size());
-        newExifData.insert(newExifData.end(), FOURCC.begin(), FOURCC.end());
-        newExifData.insert(newExifData.end(), exifData.begin(), exifData.end());
-        exifData = newExifData;
-    }
+Exif::Exif() {
+    ScopeGuard guard{[this]() { reset(); }};
 
     mExif = exif_data_new();
+    if (!mExif) {
+        throw invalid_argument{"Failed to init EXIF decoder."};
+    }
+
     mExifLog = exif_log_new();
+    if (!mExifLog) {
+        throw invalid_argument{"Failed to init EXIF log."};
+    }
+
     mExifLogError = make_unique<bool>(false);
 
     exif_log_set_func(
@@ -98,9 +101,23 @@ Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) {
     );
 
     exif_data_log(mExif, mExifLog);
+}
+
+Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
+    ScopeGuard guard{[this]() { reset(); }};
+
+    // If data doesn't already start with fourcc, prepend
+    vector<uint8_t> newExifData;
+    if (autoPrependFourcc && (exifData.size() < 6 || memcmp(exifData.data(), Exif::FOURCC.data(), 6) != 0)) {
+        newExifData.reserve(exifData.size() + FOURCC.size());
+        newExifData.insert(newExifData.end(), FOURCC.begin(), FOURCC.end());
+        newExifData.insert(newExifData.end(), exifData.begin(), exifData.end());
+        exifData = newExifData;
+    }
+
     exif_data_load_data(mExif, exifData.data(), exifData.size());
 
-    if (!mExif || *mExifLogError) {
+    if (*mExifLogError) {
         throw invalid_argument{"Failed to decode EXIF data."};
     }
 
@@ -113,15 +130,21 @@ Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) {
     auto exifByteOrder = exif_data_get_byte_order(mExif);
     auto systemByteOrder = endian::native == std::endian::little ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA;
     mReverseEndianess = exifByteOrder != systemByteOrder;
+
+    guard.disarm();
 }
 
-Exif::~Exif() {
+Exif::~Exif() { reset(); }
+
+void Exif::reset() {
     if (mExifLog) {
         exif_log_unref(mExifLog);
+        mExifLog = nullptr;
     }
 
     if (mExif) {
         exif_data_unref(mExif);
+        mExif = nullptr;
     }
 }
 
@@ -157,7 +180,16 @@ AttributeNode Exif::toAttributes() const {
         for (size_t i = 0; i < content->count; ++i) {
             ExifEntry* entry = content->entries[i];
 
-            string name = exif_tag_get_name(entry->tag);
+            const char* name = exif_tag_get_name_in_ifd(entry->tag, (ExifIfd)ifd);
+            if (!name) {
+                continue;
+            }
+
+            const char* type = exif_format_get_name(entry->format);
+            if (!type) {
+                type = "unknown";
+            }
+
             char buf[256] = {0};
             string value = exif_entry_get_value(entry, buf, sizeof(buf));
             if (value.empty()) {
@@ -165,8 +197,6 @@ AttributeNode Exif::toAttributes() const {
             } else if (value.length() >= 255) {
                 value += "…"s;
             }
-
-            string type = exif_format_get_name(entry->format);
 
             ifdNode.children.push_back({name, value, type, {}});
         }

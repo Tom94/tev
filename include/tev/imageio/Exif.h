@@ -24,7 +24,6 @@
 
 #include <array>
 #include <cstdint>
-#include <vector>
 
 struct _ExifData;
 struct _ExifLog;
@@ -69,8 +68,11 @@ public:
         '\0',
     };
 
+    Exif();
     Exif(std::span<const uint8_t> exifData, bool autoPrependFourcc = true);
     ~Exif();
+
+    void reset();
 
     AppleMakerNote tryGetAppleMakerNote() const;
 
