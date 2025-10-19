@@ -27,6 +27,12 @@
         <display_length compare="ge">768</display_length>
     </requires>
 
+    <releases>
+        <release version="@TEV_VERSION@">
+            <url type="details">https://github.com/Tom94/tev/releases/tag/v@TEV_VERSION@</url>
+        </release>
+    </releases>
+
     <!-- Screenshots -->
     <screenshots>
         <screenshot type="default">
