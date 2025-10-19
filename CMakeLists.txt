@@ -352,6 +352,14 @@ else()
     configure_file(resources/linux/tev.metainfo.xml.in resources/linux/tev.metainfo.xml)
     install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
 
+    find_program(APPSTREAMCLI_EXECUTABLE appstreamcli)
+    if (APPSTREAMCLI_EXECUTABLE)
+        add_custom_command(
+            TARGET tev POST_BUILD
+            COMMAND ${APPSTREAMCLI_EXECUTABLE} validate ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml
+        )
+    endif()
+
     set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
     foreach(RES IN LISTS ICON_RESOLUTIONS)
         install(FILES resources/linux/icon-${RES}.png DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${RES}x${RES}/apps" RENAME "${TEV_LINUX_APP_ID}.png")
