@@ -56,7 +56,7 @@
 	shallow = true
 [submodule "dependencies/aom"]
 	path = dependencies/aom
-	url = https://aomedia.googlesource.com/aom
+	url = https://github.com/Tom94/aom
 	shallow = true
 [submodule "dependencies/Little-CMS"]
 	path = dependencies/Little-CMS
