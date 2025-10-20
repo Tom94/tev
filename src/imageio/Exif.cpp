@@ -101,6 +101,8 @@ Exif::Exif() {
     );
 
     exif_data_log(mExif, mExifLog);
+
+    guard.disarm();
 }
 
 Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
