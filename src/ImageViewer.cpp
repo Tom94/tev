@@ -84,7 +84,7 @@ ImageViewer::ImageViewer(
                 monitorMax = max(monitorMax, pos + size);
             }
 
-            mMaxSize = min(mMaxSize, max(monitorMax - monitorMin, nanogui::Vector2i{1024, 800}));
+            mWorkAreaSize = min(mWorkAreaSize, max(monitorMax - monitorMin, nanogui::Vector2i{1024, 800}));
         }
     }
 
@@ -1713,25 +1713,38 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
     }
 
     // For sanity, don't make us larger than 8192x8192 to ensure that we don't break any texture size limitations of the user's GPU.
-    auto maxSize = mMaxSize;
+    auto maxSize = Vector2i{8192, 8192};
+
+    if (GLFWmonitor* monitor = glfwGetWindowCurrentMonitor(m_glfw_window); monitor != nullptr) {
+        Vector2i pos, size;
+        glfwGetMonitorWorkarea(monitor, &pos.x(), &pos.y(), &size.x(), &size.y());
+        if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+            size = Vector2f{size} / pixel_ratio();
+        }
+
+        if (size != Vector2i{0, 0}) {
+            maxSize = min(maxSize, size);
+        }
+    } else {
+        maxSize = min(maxSize, mWorkAreaSize);
+    }
 
 #ifdef _WIN32
-    int padding = 2;
-    maxSize.x() -= 2 * padding;
-    maxSize.y() -= 2 * padding;
+    const Vector2i padding = {2};
+    maxSize -= 2 * padding;
 #endif
 
     targetSize = min(targetSize, maxSize);
 
-    auto sizeDiff = targetSize - m_size;
+    const auto sizeDiff = targetSize - m_size;
 
     set_size(targetSize);
-    move_window(-nanogui::Vector2i{sizeDiff.x() / 2, sizeDiff.y() / 2});
+    move_window(-sizeDiff / 2);
 
 #ifdef _WIN32
     Vector2i pos;
     glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
-    pos = nanogui::min(nanogui::max(pos, Vector2i{padding}), mMaxSize - targetSize - Vector2i{padding});
+    pos = min(max(pos, padding), maxSize - targetSize + padding);
     glfwSetWindowPos(m_glfw_window, pos.x(), pos.y());
 #endif
 

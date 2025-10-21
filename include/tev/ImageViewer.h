@@ -291,7 +291,7 @@ private:
 
     int mDidFitToImage = 0;
 
-    nanogui::Vector2i mMaxSize = {8192, 8192};
+    nanogui::Vector2i mWorkAreaSize = {8192, 8192};
     bool mInitialized = false;
 
     std::unique_ptr<std::thread> mFileDialogThread;
