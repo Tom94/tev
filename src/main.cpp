@@ -245,13 +245,13 @@ static int mainFunc(span<const string> arguments) {
     Flag maximizeFlagOn{
         parser,
         "MAXIMIZE",
-        "Maximize the window on startup. (Default if images are supplied.)",
+        "Maximize the window on startup. Default is no maximize.",
         {"max", "maximize"},
     };
     Flag maximizeFlagOff{
         parser,
         "NO MAXIMIZE",
-        "Do not maximize the window on startup. (Default if no images are supplied.)",
+        "Do not maximize the window on startup. Default is no maximize.",
         {"no-max", "no-maximize"},
     };
 
@@ -558,6 +558,7 @@ static int mainFunc(span<const string> arguments) {
     if (maximizeFlagOn) {
         maximize = true;
     }
+
     if (maximizeFlagOff) {
         maximize = false;
     }
