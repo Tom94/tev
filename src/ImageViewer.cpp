@@ -1196,7 +1196,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     // First image got added, let's select it.
     if ((index == 0 && mImages.size() == 1) || shallSelect) {
         selectImage(image);
-        if (!isMaximized()) {
+        if (!isMaximized() && !autoFitToScreen()) {
             resizeToFit(sizeToFitImage(image));
         }
     }
