@@ -1712,6 +1712,7 @@ nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
     for (const auto& image : mImages) {
         result = max(result, sizeToFitImage(image));
     }
+
     return result;
 }
 
@@ -2469,6 +2470,7 @@ void ImageViewer::updateCurrentMonitorSize() {
         // such cases (only after a current monitor was detected to give enough time for the compositor to set up the window) and
         // treat them as non-maximized always.
         if (isMaximized() && !mMaximizedLaunch) {
+            tlog::debug() << "Detected unreliable maximized state; disabling maximized detection.";
             mMaximizedUnreliable = true;
         }
 

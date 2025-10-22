@@ -587,10 +587,6 @@ static int mainFunc(span<const string> arguments) {
     sImageViewer = new ImageViewer{size, imagesLoader, ipc, maximize, !hideUiFlag, !get(ldrFlag)};
     imageViewerIsReady = true;
 
-    sImageViewer->draw_all();
-    sImageViewer->set_visible(true);
-    sImageViewer->redraw();
-
     // Apply parameter flags
     if (autoFitFlag) {
         sImageViewer->setAutoFitToScreen(true);
@@ -639,6 +635,10 @@ static int mainFunc(span<const string> arguments) {
     if (watchFlag) {
         sImageViewer->setWatchFilesForChanges(true);
     }
+
+    sImageViewer->draw_all();
+    sImageViewer->set_visible(true);
+    sImageViewer->redraw();
 
     // Refresh only every 250ms if there are no user interactions. This makes an idling tev surprisingly energy-efficient. :)
     nanogui::run(nanogui::RunMode::Lazy);
