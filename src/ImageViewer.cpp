@@ -1729,10 +1729,15 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
 
     auto maxSize = mMaxWindowSize;
 
+    const Vector2i padding = {
 #ifdef _WIN32
-    const Vector2i padding = {2};
-    maxSize -= 2 * padding;
+        2
+#else
+        0
 #endif
+    };
+
+    maxSize -= 2 * padding;
 
     targetSize = min(targetSize, maxSize);
     if (targetSize == m_size) {
@@ -1746,12 +1751,15 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
     set_size(targetSize);
     move_window(-sizeDiff / 2);
 
-#ifdef _WIN32
-    Vector2i pos;
-    glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
-    pos = min(max(pos, padding), maxSize - targetSize + padding);
-    glfwSetWindowPos(m_glfw_window, pos.x(), pos.y());
-#endif
+    // Ensure the window does not go off-screen by clamping its position. This does not work on Wayland, because Wayland does not allow
+    // windows to control their own position. On Windows, we add additional padding because, otherwise, moving the mouse to the edge of the
+    // screen does not allow the user to resize the window anymore.
+    if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
+        Vector2i pos;
+        glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
+        pos = min(max(pos, padding), maxSize - targetSize + padding);
+        glfwSetWindowPos(m_glfw_window, pos.x(), pos.y());
+    }
 
     if (autoFitToScreen() && mCurrentImage) {
         mImageCanvas->fitImageToScreen(*mCurrentImage);
