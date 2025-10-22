@@ -204,6 +204,8 @@ private:
 
     int visibleFooterHeight() { return mFooter->visible() ? mFooter->fixed_height() : 0; }
 
+    void updateCurrentMonitorSize();
+
     SharedQueue<std::function<void(void)>> mTaskQueue;
 
     bool mRequiresFilterUpdate = true;
@@ -291,8 +293,12 @@ private:
 
     int mDidFitToImage = 0;
 
-    nanogui::Vector2i mWorkAreaSize = {8192, 8192};
+    nanogui::Vector2i mMaxWindowSize = {8192, 8192};
+
     bool mInitialized = false;
+
+    bool mMaximizedLaunch = false;
+    bool mMaximizedUnreliable = false;
 
     std::unique_ptr<std::thread> mFileDialogThread;
 };

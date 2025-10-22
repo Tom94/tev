@@ -52,7 +52,10 @@ static const float CROP_MIN_SIZE = 3;
 ImageViewer::ImageViewer(
     const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, const shared_ptr<Ipc>& ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
-    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc} {
+    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer},
+    mImagesLoader{imagesLoader},
+    mIpc{ipc},
+    mMaximizedLaunch{maximize} {
 
     auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
     mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
@@ -69,7 +72,8 @@ ImageViewer::ImageViewer(
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
-    // Get monitor configuration to figure out how large the tev window may maximally become.
+    // Get monitor configuration to figure out how large the tev window may maximally become. This will later get overwritten once
+    // glfwGetWindowCurrentMonitor() works (it does not while the window is still getting constructed).
     {
         int monitorCount;
         auto** monitors = glfwGetMonitors(&monitorCount);
@@ -84,9 +88,13 @@ ImageViewer::ImageViewer(
                 monitorMax = max(monitorMax, pos + size);
             }
 
-            mWorkAreaSize = min(mWorkAreaSize, max(monitorMax - monitorMin, nanogui::Vector2i{1024, 800}));
+            mMaxWindowSize = min(mMaxWindowSize, max(monitorMax - monitorMin, nanogui::Vector2i{1024, 800}));
         }
     }
+
+    // Try to get the current monitor size right away. Better to have it early. The function will get called again before every draw to
+    // handle monitor changes as well as the case where glfwGetWindowCurrentMonitor() did not work yet.
+    updateCurrentMonitorSize();
 
     m_background = Color{0.23f, 1.0f};
 
@@ -1003,11 +1011,13 @@ void ImageViewer::draw_contents() {
         return;
     }
 
+    updateCurrentMonitorSize();
+
     // HACK HACK HACK: on Windows, when restoring a window from maximization, the old window size is restored _several times_, necessitating
     // a repeated resize to the actually desired window size.
     if (mDidFitToImage < 3 && !isMaximized()) {
-        resizeToFit(sizeToFitAllImages());
         ++mDidFitToImage;
+        resizeToFit(sizeToFitAllImages());
     }
 
     clear();
@@ -1706,28 +1716,18 @@ nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
 }
 
 void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
-    // Only increase our current size if we are larger than the current size of the window.
-    targetSize = max(m_size, targetSize);
-    if (targetSize == m_size) {
+    // On Wayland, some information like the current monitor or fractional DPI scaling is not available until some time has passed.
+    // Potentially a few frames have been rendered. Hence postpone resizing until we have a valid monitor.
+    if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND && !glfwGetWindowCurrentMonitor(m_glfw_window)) {
+        mDidFitToImage = 2;
         return;
     }
 
+    // Only increase our current size if we are larger than the current size of the window.
+    targetSize = max(m_size, targetSize);
     // For sanity, don't make us larger than 8192x8192 to ensure that we don't break any texture size limitations of the user's GPU.
-    auto maxSize = Vector2i{8192, 8192};
 
-    if (GLFWmonitor* monitor = glfwGetWindowCurrentMonitor(m_glfw_window); monitor != nullptr) {
-        Vector2i pos, size;
-        glfwGetMonitorWorkarea(monitor, &pos.x(), &pos.y(), &size.x(), &size.y());
-        if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-            size = Vector2f{size} / pixel_ratio();
-        }
-
-        if (size != Vector2i{0, 0}) {
-            maxSize = min(maxSize, size);
-        }
-    } else {
-        maxSize = min(maxSize, mWorkAreaSize);
-    }
+    auto maxSize = mMaxWindowSize;
 
 #ifdef _WIN32
     const Vector2i padding = {2};
@@ -1735,6 +1735,11 @@ void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
 #endif
 
     targetSize = min(targetSize, maxSize);
+    if (targetSize == m_size) {
+        return;
+    }
+
+    tlog::debug() << fmt::format("Resizing window to {}", targetSize);
 
     const auto sizeDiff = targetSize - m_size;
 
@@ -1796,7 +1801,7 @@ void ImageViewer::maximize() {
     }
 }
 
-bool ImageViewer::isMaximized() { return glfwGetWindowAttrib(m_glfw_window, GLFW_MAXIMIZED) != 0; }
+bool ImageViewer::isMaximized() { return !mMaximizedUnreliable && glfwGetWindowAttrib(m_glfw_window, GLFW_MAXIMIZED) != 0; }
 
 void ImageViewer::toggleMaximized() {
     if (isMaximized()) {
@@ -2440,6 +2445,36 @@ shared_ptr<Image> ImageViewer::imageByName(string_view imageName) {
         return mImages[id];
     } else {
         return nullptr;
+    }
+}
+
+void ImageViewer::updateCurrentMonitorSize() {
+    if (GLFWmonitor* monitor = glfwGetWindowCurrentMonitor(m_glfw_window)) {
+        Vector2i pos, size;
+        glfwGetMonitorWorkarea(monitor, &pos.x(), &pos.y(), &size.x(), &size.y());
+        if (size == Vector2i{0, 0}) {
+            return;
+        }
+
+        // On some systems (notably Hyprland and some other tiling window managers / compositors), windows are always flagged as
+        // maximized, even if they are technically not, to get them to play nicely with decorations. In the following, we detect
+        // such cases (only after a current monitor was detected to give enough time for the compositor to set up the window) and
+        // treat them as non-maximized always.
+        if (isMaximized() && !mMaximizedLaunch) {
+            mMaximizedUnreliable = true;
+        }
+
+        if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+            size = Vector2f{size} / pixel_ratio();
+        }
+
+        if (size == mMaxWindowSize) {
+            return;
+        }
+
+        mMaxWindowSize = size;
+
+        tlog::debug() << fmt::format("Current monitor work area size: {}", mMaxWindowSize);
     }
 }
 
