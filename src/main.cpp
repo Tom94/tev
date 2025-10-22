@@ -568,22 +568,20 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
-    nanogui::Vector2i size = {1024, 800};
+    const nanogui::Vector2i size = {1024, 800};
     if (!maximize) {
-        // Wait until the first image is loaded to determine the size of the window.
+        // Wait until the first image is loaded before creating the window such that it can size itself appropriately. We can not pass the
+        // Window a size right away, because we don't have information about the user's monitor size or DPI scaling yet, hence `size` stays
+        // unmodified. However waiting for the first image to load allows `ImageViewer` to size itself to the first image's size early
+        // enough that the user will not perceive flickering.
         while (imagesLoader->hasPendingLoads()) {
-            if (auto sizeOpt = imagesLoader->firstImageSize()) {
-                size = nanogui::max(*sizeOpt, size);
+            if (imagesLoader->firstImageSize()) {
                 break;
             }
 
             this_thread::sleep_for(1ms);
         }
     }
-
-    // Ensure we do not initialize the window too large -- it can, for instance, not be larger than the maximum texture size of the GPU.
-    // But since we do not have access to OpenGL / Metal at this point, we use a hardcoded conservative limit of 8192x8192 pixels.
-    size = nanogui::min(size, nanogui::Vector2i{8192, 8192});
 
     // sImageViewer is a raw pointer to make sure it will never get deleted. nanogui crashes upon cleanup, so we better not try.
     sImageViewer = new ImageViewer{size, imagesLoader, ipc, maximize, !hideUiFlag, !get(ldrFlag)};
