@@ -610,9 +610,9 @@ bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui
             auto* glfwWindow = screen()->glfw_window();
             // There is no explicit access to the currently pressed modifier keys here, so we need to directly ask GLFW.
             if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
-                relativeMovement /= 10;
+                relativeMovement /= 8;
             } else if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL)) {
-                relativeMovement /= std::log2(1.1f);
+                relativeMovement *= 8;
             }
 
             // If left mouse button is held, move the image with mouse movement
@@ -622,7 +622,7 @@ bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui
 
             // If middle mouse button is held, zoom in-out with up-down mouse movement
             if ((button & 4) != 0) {
-                mImageCanvas->scale(relativeMovement.y() / 10.0f, Vector2f{mDraggingStartPosition});
+                mImageCanvas->scale(relativeMovement.y() / 8.0f, Vector2f{mDraggingStartPosition});
             }
 
             break;
@@ -875,9 +875,9 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
         if (key == GLFW_KEY_KP_ADD || key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
             float scaleAmount = 1.0f;
             if (modifiers & GLFW_MOD_SHIFT) {
-                scaleAmount /= 10;
+                scaleAmount /= 8;
             } else if (modifiers & GLFW_MOD_CONTROL) {
-                scaleAmount /= std::log2(1.1f);
+                scaleAmount *= 8;
             }
 
             if (key == GLFW_KEY_KP_SUBTRACT || key == GLFW_KEY_MINUS) {
