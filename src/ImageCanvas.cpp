@@ -58,9 +58,9 @@ bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
     auto* glfwWindow = screen()->glfw_window();
     // There is no explicit access to the currently pressed modifier keys here, so we need to directly ask GLFW.
     if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) {
-        scaleAmount /= 10;
+        scaleAmount /= 8;
     } else if (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL)) {
-        scaleAmount /= std::log2(1.1f);
+        scaleAmount *= 8;
     }
 
     scale(scaleAmount, Vector2f{p});
@@ -521,7 +521,8 @@ void ImageCanvas::draw(NVGcontext* ctx) {
 void ImageCanvas::translate(const Vector2f& amount) { mTransform = Matrix3f::translate(amount) * mTransform; }
 
 void ImageCanvas::scale(float amount, const Vector2f& origin) {
-    float scaleFactor = pow(1.1f, amount);
+    static const double BASE_SCALE = sqrt(sqrt(sqrt(2.0)));
+    const float scaleFactor = (float)pow(BASE_SCALE, (double)amount);
 
     // Use the current cursor position as the origin to scale around.
     Vector2f offset = -(origin - Vector2f{position()}) + 0.5f * Vector2f{m_size};
