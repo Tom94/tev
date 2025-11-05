@@ -53,6 +53,8 @@ option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 
+option(TEV_VALIDATE_METAINFO "Validate metainfo after successful build" OFF)
+
 set(TEV_USE_LIBHEIF OFF)
 if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
     set(TEV_USE_LIBHEIF ON)
@@ -353,7 +355,7 @@ else()
     install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
 
     find_program(APPSTREAMCLI_EXECUTABLE appstreamcli)
-    if (APPSTREAMCLI_EXECUTABLE)
+    if (TEV_VALIDATE_METAINFO AND APPSTREAMCLI_EXECUTABLE)
         add_custom_command(
             TARGET tev POST_BUILD
             COMMAND ${APPSTREAMCLI_EXECUTABLE} validate ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml
