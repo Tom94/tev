@@ -351,6 +351,14 @@ static int mainFunc(span<const string> arguments) {
         {'w', "watch"},
     };
 
+    ValueFlag<float> whiteLevelFlag{
+        parser,
+        "WHITE LEVEL",
+        "Override the automatically detected display white level (for HDR displays) in nits (cd/m²). "
+        "You can set this value if you know the white level of your images and would like to display them at absolute brightness.",
+        {"white-level"},
+    };
+
     PositionalList<string> imageFiles{
         parser,
         "images",
@@ -635,6 +643,10 @@ static int mainFunc(span<const string> arguments) {
 
     if (watchFlag) {
         sImageViewer->setWatchFilesForChanges(true);
+    }
+
+    if (whiteLevelFlag) {
+        sImageViewer->setOverridingWhiteLevel(get(whiteLevelFlag));
     }
 
     sImageViewer->draw_all();

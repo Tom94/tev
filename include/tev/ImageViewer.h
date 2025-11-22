@@ -121,12 +121,13 @@ public:
     void setMagFilter(EInterpolationMode value) { mImageCanvas->setMagFilter(value); }
 
     ETonemap tonemap() const { return mImageCanvas->tonemap(); }
-
     void setTonemap(ETonemap tonemap);
 
     EMetric metric() const { return mImageCanvas->metric(); }
-
     void setMetric(EMetric metric);
+
+    std::optional<float> overridingWhiteLevel() const;
+    void setOverridingWhiteLevel(std::optional<float> value);
 
     nanogui::Vector2i sizeToFitImage(const std::shared_ptr<Image>& image);
     nanogui::Vector2i sizeToFitAllImages();
@@ -211,26 +212,26 @@ private:
     bool mRequiresFilterUpdate = true;
     bool mRequiresLayoutUpdate = true;
 
-    nanogui::Widget* mVerticalScreenSplit;
+    nanogui::Widget* mVerticalScreenSplit = nullptr;
 
-    nanogui::Widget* mSidebar;
-    nanogui::Button* mHelpButton;
-    nanogui::Widget* mSidebarLayout;
+    nanogui::Widget* mSidebar = nullptr;
+    nanogui::Button* mHelpButton = nullptr;
+    nanogui::Widget* mSidebarLayout = nullptr;
 
-    nanogui::Widget* mFooter;
+    nanogui::Widget* mFooter = nullptr;
     bool mShouldFooterBeVisible = false;
 
-    nanogui::Label* mExposureLabel;
-    nanogui::Slider* mExposureSlider;
+    nanogui::Label* mExposureLabel = nullptr;
+    nanogui::Slider* mExposureSlider = nullptr;
 
-    nanogui::Label* mOffsetLabel;
-    nanogui::Slider* mOffsetSlider;
+    nanogui::Label* mOffsetLabel = nullptr;
+    nanogui::Slider* mOffsetSlider = nullptr;
 
-    nanogui::Label* mGammaLabel;
-    nanogui::Slider* mGammaSlider;
+    nanogui::Label* mGammaLabel = nullptr;
+    nanogui::Slider* mGammaSlider = nullptr;
 
-    nanogui::Widget* mTonemapButtonContainer;
-    nanogui::Widget* mMetricButtonContainer;
+    nanogui::Widget* mTonemapButtonContainer = nullptr;
+    nanogui::Widget* mMetricButtonContainer = nullptr;
 
     std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
     std::shared_ptr<Ipc> mIpc;
@@ -240,36 +241,36 @@ private:
 
     std::vector<std::shared_ptr<Image>> mImages;
 
-    MultiGraph* mHistogram;
+    MultiGraph* mHistogram = nullptr;
     std::set<std::shared_ptr<Image>> mToBump;
 
-    nanogui::TextBox* mFilter;
-    nanogui::Button* mRegexButton;
+    nanogui::TextBox* mFilter = nullptr;
+    nanogui::Button* mRegexButton = nullptr;
 
-    nanogui::Button* mWatchFilesForChangesButton;
+    nanogui::Button* mWatchFilesForChangesButton = nullptr;
     std::chrono::steady_clock::time_point mLastFileChangesCheckTime = {};
 
-    nanogui::Button* mAutoFitToScreenButton;
+    nanogui::Button* mAutoFitToScreenButton = nullptr;
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
-    nanogui::Button* mImageInfoButton;
+    nanogui::Button* mImageInfoButton = nullptr;
     ImageInfoWindow* mImageInfoWindow = nullptr;
 
     // Buttons which require at least one image to be meaningful
     std::vector<nanogui::Button*> mAnyImageButtons;
 
-    nanogui::Button* mPlayButton;
-    nanogui::IntBox<int>* mFpsTextBox;
+    nanogui::Button* mPlayButton = nullptr;
+    nanogui::IntBox<int>* mFpsTextBox = nullptr;
     std::chrono::steady_clock::time_point mLastPlaybackFrameTime = {};
 
-    nanogui::Widget* mImageButtonContainer;
-    nanogui::Widget* mScrollContent;
-    nanogui::VScrollPanel* mImageScrollContainer;
+    nanogui::Widget* mImageButtonContainer = nullptr;
+    nanogui::Widget* mScrollContent = nullptr;
+    nanogui::VScrollPanel* mImageScrollContainer = nullptr;
 
-    ImageCanvas* mImageCanvas;
+    ImageCanvas* mImageCanvas = nullptr;
 
-    nanogui::Widget* mGroupButtonContainer;
+    nanogui::Widget* mGroupButtonContainer = nullptr;
     std::string mCurrentGroup;
 
     HelpWindow* mHelpWindow = nullptr;
@@ -288,8 +289,11 @@ private:
 
     size_t mClipboardIndex = 0;
 
+    // HDR support
     bool mSupportsHdr = false;
-    nanogui::Button* mClipToLdrButton;
+    nanogui::Button* mClipToLdrButton = nullptr;
+    nanogui::FloatBox<float>* mWhiteLevelBox = nullptr;
+    nanogui::Button* mWhiteLevelOverrideButton = nullptr;
 
     int mDidFitToImage = 0;
 

@@ -48,18 +48,16 @@ public:
         float exposure,
         float offset,
         float gamma,
+        float colorMultiplier,
         bool clipToLdr,
+        const nanogui::Color& backgroundColor,
         ETonemap tonemap,
         EMetric metric,
         const std::optional<Box2i>& crop
     );
 
-    const nanogui::Color& backgroundColor() { return mBackgroundColor; }
-
-    void setBackgroundColor(const nanogui::Color& color) { mBackgroundColor = color; }
-
 private:
-    void bindCheckerboardData(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize);
+    void bindCheckerboardData(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize, const nanogui::Color& backgroundColor);
 
     void bindImageData(
         nanogui::Texture* textureImage, const nanogui::Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap
@@ -70,8 +68,6 @@ private:
     nanogui::ref<nanogui::Shader> mShader;
     nanogui::ref<nanogui::Texture> mColorMap;
     nanogui::ref<nanogui::Texture> mDitherMatrix;
-
-    nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 };
 
 } // namespace tev

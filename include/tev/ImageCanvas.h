@@ -91,14 +91,17 @@ public:
     void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
     Box2i cropInImageCoords() const;
 
-    auto backgroundColor() { return mShader->backgroundColor(); }
-    void setBackgroundColor(const nanogui::Color& color) { mShader->setBackgroundColor(color); }
-
     void fitImageToScreen(const Image& image);
     void resetTransform();
 
+    std::optional<float> whiteLevelOverride() const { return mWhiteLevelOverride; }
+    void setWhiteLevelOverride(std::optional<float> value) { mWhiteLevelOverride = value; }
+
     bool clipToLdr() const { return mClipToLdr; }
     void setClipToLdr(bool value) { mClipToLdr = value; }
+
+    auto backgroundColor() { return mBackgroundColor; }
+    void setBackgroundColor(const nanogui::Color& color) { mBackgroundColor = color; }
 
     EInterpolationMode minFilter() const { return mMinFilter; }
     void setMinFilter(EInterpolationMode value) { mMinFilter = value; }
@@ -151,7 +154,9 @@ private:
     float mOffset = 0;
     float mGamma = 2.2f;
 
+    std::optional<float> mWhiteLevelOverride = std::nullopt;
     bool mClipToLdr = false;
+    nanogui::Color mBackgroundColor = nanogui::Color(0, 0, 0, 0);
 
     EInterpolationMode mMinFilter = EInterpolationMode::Trilinear;
     EInterpolationMode mMagFilter = EInterpolationMode::Nearest;
