@@ -259,7 +259,7 @@ ImageViewer::ImageViewer(
             return button;
         };
 
-        makeTonemapButton("sRGB", [this]() { setTonemap(ETonemap::SRGB); });
+        makeTonemapButton("None", [this]() { setTonemap(ETonemap::SRGB); });
         makeTonemapButton("Gamma", [this]() { setTonemap(ETonemap::Gamma); });
         makeTonemapButton("FC", [this]() { setTonemap(ETonemap::FalseColor); });
         makeTonemapButton("+/-", [this]() { setTonemap(ETonemap::PositiveNegative); });
@@ -267,13 +267,15 @@ ImageViewer::ImageViewer(
         setTonemap(ETonemap::SRGB);
 
         mTonemapButtonContainer->set_tooltip(
-            "Tonemap operator selection:\n\n"
+            "Tonemap selection:\n\n"
 
-            "sRGB\n"
-            "Linear to sRGB conversion\n\n"
+            "None\n"
+            "No tonemapping\n\n"
 
             "Gamma\n"
-            "Inverse power gamma correction\n\n"
+            "Gamma correction + inverse sRGB\n"
+            "Needed when displaying SDR to\n"
+            "gamma-encoded displays.\n\n"
 
             "FC\n"
             "False-color visualization\n\n"
@@ -952,10 +954,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
 
         if (key == GLFW_KEY_RIGHT || key == GLFW_KEY_D || key == GLFW_KEY_RIGHT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                setTonemap(static_cast<ETonemap>((tonemap() + 1) % NumTonemaps));
+                setTonemap(static_cast<ETonemap>(((int)tonemap() + 1) % (int)ETonemap::Count));
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (mCurrentReference) {
-                    setMetric(static_cast<EMetric>((metric() + 1) % NumMetrics));
+                    setMetric(static_cast<EMetric>(((int)metric() + 1) % (int)EMetric::Count));
                 }
             } else {
                 selectGroup(nextGroup(mCurrentGroup, Forward));
@@ -964,10 +966,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             return true;
         } else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_A || key == GLFW_KEY_LEFT_BRACKET) {
             if (modifiers & GLFW_MOD_SHIFT) {
-                setTonemap(static_cast<ETonemap>((tonemap() - 1 + NumTonemaps) % NumTonemaps));
+                setTonemap(static_cast<ETonemap>(((int)tonemap() - 1 + (int)ETonemap::Count) % (int)ETonemap::Count));
             } else if (modifiers & GLFW_MOD_CONTROL) {
                 if (mCurrentReference) {
-                    setMetric(static_cast<EMetric>((metric() - 1 + NumMetrics) % NumMetrics));
+                    setMetric(static_cast<EMetric>(((int)metric() - 1 + (int)EMetric::Count) % (int)EMetric::Count));
                 }
             } else {
                 selectGroup(nextGroup(mCurrentGroup, Backward));

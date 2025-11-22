@@ -260,11 +260,11 @@ static int mainFunc(span<const string> arguments) {
         "METRIC",
         "The metric to use when comparing two images. "
         "The available metrics are:\n"
-        "E   - Error\n"
-        "AE  - Absolute Error\n"
-        "SE  - Squared Error\n"
-        "RAE - Relative Absolute Error\n"
-        "RSE - Relative Squared Error\n"
+        "E: Error\n"
+        "AE: Absolute Error\n"
+        "SE: Squared Error\n"
+        "RAE: Relative Absolute Error\n"
+        "RSE: Relative Squared Error\n"
         "Default is E.",
         {'m', "metric"},
     };
@@ -312,13 +312,14 @@ static int mainFunc(span<const string> arguments) {
     ValueFlag<string> tonemapFlag{
         parser,
         "TONEMAP",
-        "The tonemapping algorithm to use. "
-        "The available tonemaps are:\n"
-        "sRGB   - sRGB\n"
-        "Gamma  - Gamma curve\n"
-        "FC     - False Color\n"
-        "PN     - Positive=Green, Negative=Red\n"
-        "Default is sRGB.",
+        "The tonemap to use. Available options are:\n"
+        "None: No tonemapping\n"
+        "Gamma: Gamma curve + inv. sRGB\n"
+        "       Needed when rendering SDR to\n"
+        "       gamma-encoded displays.\n"
+        "FC: False Color\n"
+        "PN: Positive=Green, Negative=Red\n"
+        "Default is None.",
         {'t', "tonemap"},
     };
 
