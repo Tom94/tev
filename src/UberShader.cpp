@@ -31,18 +31,13 @@ using DitherMatrix = std::array<float, DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE>;
 static DitherMatrix ditherMatrix(float scale) {
     // 8x8 Bayer dithering matrix scaled to [-0.5f, 0.5f] / 255
     DitherMatrix mat = {
-        {0, 32, 8, 40, 2, 34, 10, 42,
-         48, 16, 56, 24, 50, 18, 58, 26,
-         12, 44, 4, 36, 14, 46, 6, 38,
-         60, 28, 52, 20, 62, 30, 54, 22,
-         3, 35, 11, 43, 1, 33, 9, 41,
-         51, 19, 59, 27, 49, 17, 57, 25,
-         15, 47, 7, 39, 13, 45, 5, 37,
-         63, 31, 55, 23, 61, 29, 53, 21}
+        {0, 32, 8,  40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
+         3, 35, 11, 43, 1, 33, 9,  41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21}
     };
 
-    for (size_t i = 0; i < DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE; ++i)
+    for (size_t i = 0; i < DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE; ++i) {
         mat[i] = (mat[i] / DITHER_MATRIX_SIZE / DITHER_MATRIX_SIZE - 0.5f) * scale;
+    }
 
     return mat;
 }
@@ -125,6 +120,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             uniform float exposure;
             uniform float offset;
             uniform float gamma;
+            uniform float colorMultiplier;
             uniform bool clipToLdr;
             uniform int tonemap;
             uniform int metric;
@@ -247,10 +243,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 imageVal.a *= cropAlpha;
                 if (!hasReference) {
                     vec4 result = vec4(
-                        applyTonemap(applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
+                        applyTonemap(colorMultiplier * applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                         1.0
                     );
-                    result.rgb = clamp(result.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
                     return result;
                 }
 
@@ -260,16 +255,17 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
                 float alpha = (imageVal.a + referenceVal.a) * 0.5;
                 vec4 result = vec4(
-                    applyTonemap(applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
+                    applyTonemap(colorMultiplier * applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
                     1.0
                 );
 
-                result.rgb = clamp(result.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
                 return result;
             }
 
             void main() {
-                gl_FragColor = dither(computeColor());
+                vec4 color = computeColor();
+                color.rgb = clamp(color.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
+                gl_FragColor = dither(color);
             })glsl";
 #elif defined(NANOGUI_USE_METAL)
         auto vertexShader =
@@ -440,6 +436,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 const constant float& exposure,
                 const constant float& offset,
                 const constant float& gamma,
+                const constant float& colorMultiplier,
                 const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
@@ -559,7 +556,9 @@ void UberShader::draw(
     float exposure,
     float offset,
     float gamma,
+    float colorMultiplier,
     bool clipToLdr,
+    const Color& backgroundColor,
     ETonemap tonemap,
     EMetric metric,
     const std::optional<Box2i>& crop
@@ -582,7 +581,7 @@ void UberShader::draw(
         default: throw runtime_error{"Invalid number of color channels."};
     }
 
-    bindCheckerboardData(pixelSize, checkerSize);
+    bindCheckerboardData(pixelSize, checkerSize, backgroundColor);
     bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference, transformReference, metric);
 
@@ -591,7 +590,9 @@ void UberShader::draw(
 
     mShader->set_uniform("channelConfig", (int)channelConfig);
 
+    mShader->set_uniform("colorMultiplier", colorMultiplier);
     mShader->set_uniform("clipToLdr", clipToLdr);
+
     if (crop.has_value()) {
         mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
         mShader->set_uniform("cropMax", Vector2f{crop->max} / Vector2f{textureImage->size()});
@@ -608,10 +609,10 @@ void UberShader::draw(
     mShader->end();
 }
 
-void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize) {
+void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize, const Color& backgroundColor) {
     mShader->set_uniform("pixelSize", pixelSize);
     mShader->set_uniform("checkerSize", checkerSize);
-    mShader->set_uniform("bgColor", mBackgroundColor);
+    mShader->set_uniform("bgColor", backgroundColor);
 }
 
 void UberShader::bindImageData(Texture* textureImage, const Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap) {

@@ -187,33 +187,94 @@ ImageViewer::ImageViewer(
             return button;
         };
 
-        mCurrentImageButtons.push_back(makeButton("Normalize", [this]() { normalizeExposureAndOffset(); }, 0, "Shortcut: N"));
+        mCurrentImageButtons.push_back(makeButton(
+            "Norm.",
+            [this]() { normalizeExposureAndOffset(); },
+            0,
+            "Normalize image such that the smallest pixel value is displayed as 0 and the largest as 1.\n\n"
+            "Shortcut: N"
+        ));
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
 
         if (mSupportsHdr) {
-            mClipToLdrButton = new Button{buttonContainer, "LDR", 0};
-            mClipToLdrButton->set_font_size(15);
-            mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
-            mClipToLdrButton->set_tooltip(
-                "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
-                "Shortcut: U"
-            );
-            mClipToLdrButton->set_flags(Button::ToggleButton);
+            auto hdrPopupButton = new PopupButton{buttonContainer, "HDR", 0};
+            hdrPopupButton->set_font_size(15);
+            hdrPopupButton->set_chevron_icon(0);
+            hdrPopupButton->set_tooltip("HDR Settings");
+
+            // Brightness controls popup
+            {
+                auto addSpacer = [](Widget* current, int space) {
+                    auto row = new Widget{current};
+                    row->set_height(space);
+                };
+
+                auto popup = hdrPopupButton->popup();
+                popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
+
+                new Label{popup, "HDR Settings", "sans-bold", 20};
+                addSpacer(popup, 10);
+
+                mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
+                mClipToLdrButton->set_font_size(15);
+                mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
+                mClipToLdrButton->set_tooltip(
+                    "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
+                    "Shortcut: U"
+                );
+                mClipToLdrButton->set_flags(Button::ToggleButton);
+
+                addSpacer(popup, 10);
+
+                new Label{popup, "Display White Level"};
+
+                auto whiteLevelContainer = new Widget{popup};
+                whiteLevelContainer->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+
+                mWhiteLevelBox = new FloatBox<float>{whiteLevelContainer, 203.0f};
+                mWhiteLevelBox->set_default_value("203");
+                mWhiteLevelBox->set_units("nits");
+                mWhiteLevelBox->set_editable(true);
+                mWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
+                mWhiteLevelBox->set_min_max_values(0.0001, 10000);
+                mWhiteLevelBox->set_fixed_width(90);
+                mWhiteLevelBox->set_tooltip(
+                    "The display white level in nits (cd/m²). "
+                    "This value determines how bright a pixel value of 1.0 appears on the display. "
+                    "Change this value to override automatic detection of the display white level.\n\n"
+                    "**IMPORTANT**: this setting only works correctly if your system has HDR enabled *and* "
+                    "your display is configured with a reasonably well calibrated HDR mode.\n\n"
+                    "The most typical value is 203 nits, corresponding to the standardized white level "
+                    "of the PQ and HLG transfer functions. Use 203 nits to display images with such "
+                    "transfer functions at their intended brightness. "
+                    "Less typical, but also common is 80 nits, which corresponds to the standardized white level of sRGB."
+                );
+
+                mWhiteLevelOverrideButton = new Button{whiteLevelContainer, "Override", 0};
+                mWhiteLevelOverrideButton->set_font_size(15);
+                mWhiteLevelOverrideButton->set_change_callback([this](bool value) {
+                    setOverridingWhiteLevel(value ? optional<float>{mWhiteLevelBox->value()} : std::nullopt);
+                });
+
+                mWhiteLevelBox->set_callback([this](float value) { setOverridingWhiteLevel(value); });
+
+                mWhiteLevelOverrideButton->set_flags(Button::ToggleButton);
+            }
         }
 
-        auto popupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
-        popupBtn->set_font_size(15);
-        popupBtn->set_chevron_icon(0);
-        popupBtn->set_tooltip("Background Color");
+        auto bgPopupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
+        bgPopupBtn->set_font_size(15);
+        bgPopupBtn->set_chevron_icon(0);
+        bgPopupBtn->set_tooltip("Background Color");
 
         // Background color popup
         {
-            auto popup = popupBtn->popup();
+            auto popup = bgPopupBtn->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "Background Color"};
             auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
-            colorwheel->set_color(popupBtn->background_color());
+            colorwheel->set_color(bgPopupBtn->background_color());
 
             new Label{popup, "Background Alpha"};
             auto bgAlphaSlider = new Slider{popup};
@@ -414,7 +475,6 @@ ImageViewer::ImageViewer(
             mFpsTextBox->set_alignment(TextBox::Alignment::Right);
             mFpsTextBox->set_min_max_values(1, 1000);
             mFpsTextBox->set_spinnable(true);
-            mFpsTextBox->set_size(30);
 
             mAutoFitToScreenButton =
                 makePlaybackButton("", true, {}, FA_EXPAND_ARROWS_ALT, "Automatically fit image to screen upon selection.");
@@ -1011,6 +1071,11 @@ void ImageViewer::focusWindow() { glfwFocusWindow(m_glfw_window); }
 void ImageViewer::draw_contents() {
     if (!mInitialized) {
         return;
+    }
+
+    // Update SDR white level from system settings if not overridden by the user
+    if (mWhiteLevelBox && !overridingWhiteLevel()) {
+        mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
     }
 
     updateCurrentMonitorSize();
@@ -1684,6 +1749,25 @@ void ImageViewer::setMetric(EMetric metric) {
     for (size_t i = 0; i < buttons.size(); ++i) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->set_pushed((EMetric)i == metric);
+    }
+}
+
+optional<float> ImageViewer::overridingWhiteLevel() const {
+    return mWhiteLevelOverrideButton && mWhiteLevelBox && mWhiteLevelOverrideButton->pushed() ? optional<float>{mWhiteLevelBox->value()} :
+                                                                                                std::nullopt;
+}
+
+void ImageViewer::setOverridingWhiteLevel(optional<float> value) {
+    if (mWhiteLevelOverrideButton) {
+        mWhiteLevelOverrideButton->set_pushed(value.has_value());
+    }
+
+    if (mWhiteLevelBox) {
+        if (value.has_value()) {
+            mWhiteLevelBox->set_value(*value);
+        }
+
+        mImageCanvas->setWhiteLevelOverride(overridingWhiteLevel() ? optional<float>{mWhiteLevelBox->value()} : std::nullopt);
     }
 }
 
