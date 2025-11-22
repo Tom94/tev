@@ -53,7 +53,7 @@ option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 
-option(TEV_VALIDATE_METAINFO "Validate metainfo after successful build" OFF)
+option(TEV_CREATE_METAINFO "Auto-generate metainfo for flatpak release" OFF)
 
 set(TEV_USE_LIBHEIF OFF)
 if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
@@ -351,15 +351,29 @@ else()
     configure_file(resources/linux/tev.desktop resources/linux/tev.desktop)
     install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications" RENAME "${TEV_LINUX_APP_ID}.desktop")
 
-    configure_file(resources/linux/tev.metainfo.xml.in resources/linux/tev.metainfo.xml)
-    install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
-
-    find_program(APPSTREAMCLI_EXECUTABLE appstreamcli)
-    if (TEV_VALIDATE_METAINFO AND APPSTREAMCLI_EXECUTABLE)
-        add_custom_command(
-            TARGET tev POST_BUILD
-            COMMAND ${APPSTREAMCLI_EXECUTABLE} validate ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml
+    if (TEV_CREATE_METAINFO)
+        execute_process(
+            COMMAND git for-each-ref "refs/tags/v*.*" --shell --sort=-creatordate --format [=[
+                tag=%(refname:short)
+                version="${tag#v}"
+                printf '        <release version="%s" date="%s">\n            <url type="details">https://github.com/Tom94/tev/releases/tag/%s</url>\n        </release>\n' "$version" %(creatordate:short) "$tag"
+            ]=]
+            COMMAND sh
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            OUTPUT_VARIABLE TEV_METAINFO_RELEASES
         )
+
+        configure_file(resources/linux/tev.metainfo.xml.in resources/linux/tev.metainfo.xml)
+        install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
+
+        find_program(APPSTREAMCLI_EXECUTABLE appstreamcli)
+        if (APPSTREAMCLI_EXECUTABLE)
+            add_custom_command(
+                TARGET tev POST_BUILD
+                COMMAND ${APPSTREAMCLI_EXECUTABLE} validate ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml
+            )
+        endif()
     endif()
 
     set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
