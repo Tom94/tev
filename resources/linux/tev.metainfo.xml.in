@@ -2,7 +2,7 @@
 <component type="desktop-application">
     <id>@TEV_LINUX_APP_ID@</id>
     <name>tev</name>
-    <summary>High dynamic range (HDR) image viewer for people who care about colors</summary>
+    <summary>High dynamic range image viewer</summary>
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0-or-later</project_license>
     <developer id="io.github.tom94">
@@ -10,8 +10,7 @@
     </developer>
     <content_rating type="oars-1.1" />
     <description>
-    <p>High dynamic range (HDR) image viewer for people who care about colors.</p>
-    <p>It is:</p>
+    <p>High dynamic range (HDR) image viewer for people who care about colors. It is:</p>
     <ul>
         <li>Lightning fast: starts up instantly, loads hundreds of images in seconds.</li>
         <li>Accurate: understands HDR and color profiles (ICC, CICP, etc.). Displays HDR on all operating systems.</li>
