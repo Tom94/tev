@@ -28,9 +28,7 @@
     </requires>
 
     <releases>
-        <release version="@TEV_VERSION@">
-            <url type="details">https://github.com/Tom94/tev/releases/tag/v@TEV_VERSION@</url>
-        </release>
+@TEV_METAINFO_RELEASES@
     </releases>
 
     <!-- Screenshots -->
