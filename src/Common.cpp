@@ -25,7 +25,6 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
-#include <iostream>
 #include <map>
 #include <regex>
 
@@ -352,16 +351,18 @@ string toString(EInterpolationMode mode) {
 ETonemap toTonemap(string_view name) {
     // Perform matching on uppercase strings
     const auto upperName = toUpper(name);
-    if (upperName == "SRGB") {
-        return SRGB;
+    if (upperName == "NONE") {
+        return ETonemap::None;
+    } else if (upperName == "SRGB") {
+        return ETonemap::SRGB;
     } else if (upperName == "GAMMA") {
-        return Gamma;
+        return ETonemap::Gamma;
     } else if (upperName == "FALSECOLOR" || upperName == "FC") {
-        return FalseColor;
+        return ETonemap::FalseColor;
     } else if (upperName == "POSITIVENEGATIVE" || upperName == "POSNEG" || upperName == "PN" || upperName == "+-") {
-        return PositiveNegative;
+        return ETonemap::PositiveNegative;
     } else {
-        return SRGB;
+        return ETonemap::None;
     }
 }
 
@@ -369,17 +370,17 @@ EMetric toMetric(string_view name) {
     // Perform matching on uppercase strings
     const auto upperName = toUpper(name);
     if (upperName == "E") {
-        return Error;
+        return EMetric::Error;
     } else if (upperName == "AE") {
-        return AbsoluteError;
+        return EMetric::AbsoluteError;
     } else if (upperName == "SE") {
-        return SquaredError;
+        return EMetric::SquaredError;
     } else if (upperName == "RAE") {
-        return RelativeAbsoluteError;
+        return EMetric::RelativeAbsoluteError;
     } else if (upperName == "RSE") {
-        return RelativeSquaredError;
+        return EMetric::RelativeSquaredError;
     } else {
-        return Error;
+        return EMetric::Error;
     }
 }
 

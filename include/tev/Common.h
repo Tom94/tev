@@ -400,19 +400,20 @@ enum EInterpolationMode : int {
 EInterpolationMode toInterpolationMode(std::string_view name);
 std::string toString(EInterpolationMode mode);
 
-enum ETonemap : int {
+enum class ETonemap : int {
+    None = 0,
     SRGB = 0,
     Gamma,
     FalseColor,
     PositiveNegative,
 
     // This enum value should never be used directly. It facilitates looping over all members of this enum.
-    NumTonemaps,
+    Count,
 };
 
 ETonemap toTonemap(std::string_view name);
 
-enum EMetric : int {
+enum class EMetric : int {
     Error = 0,
     AbsoluteError,
     SquaredError,
@@ -420,7 +421,7 @@ enum EMetric : int {
     RelativeSquaredError,
 
     // This enum value should never be used directly. It facilitates looping over all members of this enum.
-    NumMetrics,
+    Count,
 };
 
 EMetric toMetric(std::string_view name);

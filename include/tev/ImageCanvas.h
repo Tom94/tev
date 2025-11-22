@@ -165,8 +165,8 @@ private:
 
     std::unique_ptr<UberShader> mShader;
 
-    ETonemap mTonemap = SRGB;
-    EMetric mMetric = Error;
+    ETonemap mTonemap = ETonemap::None;
+    EMetric mMetric = EMetric::Error;
     std::optional<Box2i> mCrop;
 
     std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
