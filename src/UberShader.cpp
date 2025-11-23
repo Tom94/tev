@@ -167,7 +167,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 if (linear < 0.0031308) {
                     return outSign * 12.92 * linear;
                 } else {
-                    return outSign * 1.055 * pow(linear, 0.41666) - 0.055;
+                    return outSign * (1.055 * pow(linear, 0.41666) - 0.055);
                 }
             }
 
@@ -355,7 +355,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 if (linear < 0.0031308f) {
                     return outSign * 12.92f * linear;
                 } else {
-                    return outSign * 1.055f * pow(linear, 0.41666f) - 0.055f;
+                    return outSign * (1.055f * pow(linear, 0.41666f) - 0.055f);
                 }
             }
 
