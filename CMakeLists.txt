@@ -54,6 +54,7 @@ option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 
 option(TEV_CREATE_METAINFO "Auto-generate metainfo for flatpak release" OFF)
+option(TEV_VALIDATE_METAINFO "Validate generated metainfo for flatpak release" OFF)
 
 set(TEV_USE_LIBHEIF OFF)
 if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
@@ -366,14 +367,22 @@ else()
 
         configure_file(resources/linux/tev.metainfo.xml.in resources/linux/tev.metainfo.xml)
         install(FILES ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo" RENAME "${TEV_LINUX_APP_ID}.metainfo.xml")
+    endif()
+
+    if (TEV_VALIDATE_METAINFO)
+        if (NOT TEV_CREATE_METAINFO)
+            message(FATAL_ERROR "TEV_VALIDATE_METAINFO is set but TEV_CREATE_METAINFO is not set. Cannot validate non-existing metainfo.")
+        endif()
 
         find_program(APPSTREAMCLI_EXECUTABLE appstreamcli)
-        if (APPSTREAMCLI_EXECUTABLE)
-            add_custom_command(
-                TARGET tev POST_BUILD
-                COMMAND ${APPSTREAMCLI_EXECUTABLE} validate ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml
-            )
+        if (NOT APPSTREAMCLI_EXECUTABLE)
+            message(FATAL_ERROR "appstreamcli not found -- cannot validate metainfo.")
         endif()
+
+        add_custom_command(
+            TARGET tev POST_BUILD
+            COMMAND ${APPSTREAMCLI_EXECUTABLE} validate ${CMAKE_BINARY_DIR}/resources/linux/tev.metainfo.xml
+        )
     endif()
 
     set(ICON_RESOLUTIONS "16;24;32;48;64;96;128;256;512")
