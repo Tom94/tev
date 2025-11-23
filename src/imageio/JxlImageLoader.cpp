@@ -571,30 +571,19 @@ l_decode_success:
         if (toLower(string{type, 4}) == "exif"s) {
             tlog::debug() << "Found EXIF metadata. Attempting to load...";
 
-            // 1 KiB should be enough for most exif data. If not, we'll dynamically resize as we keep decoding. We can't get the precise
-            // size ahead of time, because the decoder doesn't know how large the box will be until it has been fully decoded.
-            vector<uint8_t> exifData(1024);
+            uint64_t boxSize = 0;
+            if (JXL_DEC_SUCCESS != JxlDecoderGetBoxSizeContents(decoder.get(), &boxSize)) {
+                throw ImageLoadError{"Failed to get EXIF box size."};
+            }
+
+            vector<uint8_t> exifData(boxSize);
             if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
                 throw ImageLoadError{"Failed to set initial box buffer."};
             }
 
             status = JxlDecoderProcessInput(decoder.get());
-            while (status == JXL_DEC_BOX_NEED_MORE_OUTPUT) {
-                tlog::debug() << fmt::format("Doubling box buffer size from {} to {} bytes.", exifData.size(), exifData.size() * 2);
-                if (JXL_DEC_SUCCESS != JxlDecoderReleaseBoxBuffer(decoder.get())) {
-                    throw ImageLoadError{"Failed to release box buffer for resize."};
-                }
-
-                exifData.resize(exifData.size() * 2);
-                if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
-                    throw ImageLoadError{"Failed to set resized box buffer."};
-                }
-
-                status = JxlDecoderProcessInput(decoder.get());
-            }
-
             if (status != JXL_DEC_SUCCESS && status != JXL_DEC_BOX) {
-                throw ImageLoadError{"Failed to process box."};
+                throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
             }
 
             try {
@@ -607,7 +596,7 @@ l_decode_success:
                     offset = swapBytes(offset);
                 }
 
-                if (offset + 4 > exifData.size()) {
+                if (offset > exifData.size() - 4) {
                     throw invalid_argument{"Invalid EXIF data: offset is larger than box size."};
                 }
 
