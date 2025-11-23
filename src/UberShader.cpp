@@ -460,7 +460,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 if (!hasReference) {
                     float4 color = float4(
                         applyTonemap(
-                            applyExposureAndOffset(imageVal.rgb, exposure, offset),
+                            colorMultiplier * applyExposureAndOffset(imageVal.rgb, exposure, offset),
                             float4(checker, 1.0f - imageVal.a),
                             tonemap,
                             offset,
@@ -481,7 +481,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 float alpha = (imageVal.a + referenceVal.a) * 0.5f;
                 float4 color = float4(
                     applyTonemap(
-                        applyExposureAndOffset(applyMetric(difference, referenceVal.rgb, metric), exposure, offset),
+                        colorMultiplier * applyExposureAndOffset(applyMetric(difference, referenceVal.rgb, metric), exposure, offset),
                         float4(checker, 1.0f - alpha),
                         tonemap,
                         offset,
