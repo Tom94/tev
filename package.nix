@@ -20,7 +20,7 @@
 
 stdenv.mkDerivation rec {
   pname = "tev";
-  # version = "2.6.0";
+  # version = "2.6.1";
 
   # src = fetchFromGitHub {
   #   owner = "Tom94";
