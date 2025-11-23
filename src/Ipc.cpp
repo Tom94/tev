@@ -372,7 +372,7 @@ static int closeSocket(Ipc::socket_t socket) {
 }
 
 Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
-    mLockName = fmt::format(".tev-lock.{}", hostname);
+    mLockName = fmt::format(".tev.{}.lock", hostname);
 
     const auto parts = split(hostname, ":");
     mIp = parts.front();
