@@ -382,6 +382,7 @@ int lastSocketError();
 std::string errorString(int errorId);
 
 fs::path homeDirectory();
+fs::path runtimeDirectory();
 
 void toggleConsole();
 

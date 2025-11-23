@@ -65,6 +65,7 @@ IpcPacket::IpcPacket(const char* data, size_t length) {
     if (length <= 0) {
         throw runtime_error{"Cannot construct an IPC packet from no data."};
     }
+
     mPayload.assign(data, data + length);
 }
 
@@ -491,15 +492,18 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         CloseHandle(mInstanceMutex);
     }
 #else
-    mLockFile = homeDirectory() / mLockName;
+    mLockFile = runtimeDirectory() / mLockName;
 
     mLockFileDescriptor = open(mLockFile.string().c_str(), O_RDWR | O_CREAT, 0666);
     if (mLockFileDescriptor == -1) {
         throw runtime_error{fmt::format("Could not create lock file: {}", errorString(lastError()))};
     }
 
+    tlog::debug() << fmt::format("Lock file {} created or exists", mLockFile);
+
     mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
     if (!mIsPrimaryInstance) {
+        tlog::debug() << fmt::format("Could not acquire lock. Must be secondary instance.");
         close(mLockFileDescriptor);
     }
 #endif

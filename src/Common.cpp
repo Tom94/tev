@@ -38,7 +38,7 @@
 #    include <unistd.h>
 #endif
 #if !defined(__APPLE__) and !defined(_WIN32)
-#include <sys/xattr.h>
+#    include <sys/xattr.h>
 #endif
 
 using namespace nanogui;
@@ -302,6 +302,24 @@ fs::path homeDirectory() {
 #else
     struct passwd* pw = getpwuid(getuid());
     return pw->pw_dir;
+#endif
+}
+
+fs::path runtimeDirectory() {
+#ifdef _WIN32
+    return homeDirectory() / "AppData" / "Local" / "tev";
+#else
+    const char* xdgRuntimeDir = getenv("XDG_RUNTIME_DIR");
+    if (!xdgRuntimeDir || !*xdgRuntimeDir) {
+        return fs::path{"/tmp"};
+    }
+
+    const char* flatpakId = getenv("FLATPAK_ID");
+    if (!flatpakId || !*flatpakId) {
+        return xdgRuntimeDir;
+    }
+
+    return fs::path{xdgRuntimeDir} / "app" / flatpakId;
 #endif
 }
 
