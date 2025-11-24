@@ -651,6 +651,10 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
         throw runtime_error{"Must be the primary instance to receive from a secondary instance."};
     }
 
+    if (mSocketFd == INVALID_SOCKET) {
+        return;
+    }
+
     // Check for new connections.
     struct sockaddr_in client;
     socklen_t addrlen = sizeof(client);
