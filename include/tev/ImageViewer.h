@@ -46,7 +46,7 @@ public:
     ImageViewer(
         const nanogui::Vector2i& size,
         const std::shared_ptr<BackgroundImagesLoader>& imagesLoader,
-        const std::shared_ptr<Ipc>& ipc,
+        std::weak_ptr<Ipc> ipc,
         bool maximize,
         bool showUi,
         bool floatBuffer
@@ -172,7 +172,7 @@ public:
     }
 
     BackgroundImagesLoader& imagesLoader() const { return *mImagesLoader; }
-    Ipc& ipc() const { return *mIpc; }
+    std::weak_ptr<Ipc> ipc() const { return mIpc; }
 
     void copyImageCanvasToClipboard() const;
     void copyImageNameToClipboard() const;
@@ -234,7 +234,7 @@ private:
     nanogui::Widget* mMetricButtonContainer = nullptr;
 
     std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
-    std::shared_ptr<Ipc> mIpc;
+    std::weak_ptr<Ipc> mIpc;
 
     std::shared_ptr<Image> mCurrentImage;
     std::shared_ptr<Image> mCurrentReference;

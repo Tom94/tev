@@ -457,7 +457,7 @@ static int mainFunc(span<const string> arguments) {
 
     // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
-    thread stdinThread{[&]() {
+    thread stdinThread{[weakImagesLoader = weak_ptr<BackgroundImagesLoader>{imagesLoader}]() {
         string channelSelector;
         while (!shuttingDown()) {
             for (string line; getline(cin, line) && !shuttingDown();) {
@@ -472,7 +472,9 @@ static int mainFunc(span<const string> arguments) {
                     continue;
                 }
 
-                imagesLoader->enqueue(tev::toPath(imageFile), channelSelector, false);
+                if (auto imagesLoader = weakImagesLoader.lock(); imagesLoader) {
+                    imagesLoader->enqueue(tev::toPath(imageFile), channelSelector, false);
+                }
             }
 
             this_thread::sleep_for(10ms);

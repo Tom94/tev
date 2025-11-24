@@ -29,6 +29,8 @@
 #include <nanogui/vscrollpanel.h>
 #include <nanogui/window.h>
 
+#include <memory>
+
 using namespace nanogui;
 using namespace std;
 
@@ -46,7 +48,7 @@ string HelpWindow::ALT = "Opt";
 string HelpWindow::ALT = "Alt";
 #endif
 
-HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, function<void()> closeCallback) :
+HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, weak_ptr<Ipc> weakIpc, function<void()> closeCallback) :
     Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
@@ -175,17 +177,21 @@ HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, const Ipc& ipc, functio
     auto ipcSection = new Widget{network};
     ipcSection->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    if (ipc.isPrimaryInstance()) {
-        addRow(network, fmt::format("Listening to {}", ipc.hostname()), "Status");
-        addRow(network, to_string(ipc.nActiveConnections()), "Active connections");
-    } else if (ipc.isConnectedToPrimaryInstance()) {
-        addRow(network, fmt::format("Connected to {}", ipc.hostname()), "Status");
-    } else {
-        addRow(network, fmt::format("Failed to connect to {}", ipc.hostname()), "Status");
-    }
+    if (auto ipc = weakIpc.lock(); ipc) {
+        if (ipc->isPrimaryInstance()) {
+            addRow(network, fmt::format("Listening to {}", ipc->hostname()), "Status");
+            addRow(network, to_string(ipc->nActiveConnections()), "Active connections");
+        } else if (ipc->isConnectedToPrimaryInstance()) {
+            addRow(network, fmt::format("Connected to {}", ipc->hostname()), "Status");
+        } else {
+            addRow(network, fmt::format("Failed to connect to {}", ipc->hostname()), "Status");
+        }
 
-    addRow(network, to_string(ipc.nTotalBytesSent()), "Bytes sent");
-    addRow(network, to_string(ipc.nTotalBytesReceived()), "Bytes received");
+        addRow(network, to_string(ipc->nTotalBytesSent()), "Bytes sent");
+        addRow(network, to_string(ipc->nTotalBytesReceived()), "Bytes received");
+    } else {
+        addRow(ipcSection, "IPC is not available.", "Status");
+    }
 
     // About tab
     Widget* about = new Widget(mTabWidget);
