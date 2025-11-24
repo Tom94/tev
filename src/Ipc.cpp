@@ -385,6 +385,12 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
         }
     }
 
+    try {
+        fs::create_directories(runtimeDirectory());
+    } catch (const fs::filesystem_error& e) {
+        tlog::warning() << fmt::format("Runtime directory {} does not exist and could not be created: {}", runtimeDirectory(), e.what());
+    }
+
     mLockName = fmt::format(".tev.{}.lock", hostname);
 
     const auto parts = split(hostname, ":");
