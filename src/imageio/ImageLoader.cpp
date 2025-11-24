@@ -126,10 +126,10 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     auto init = [numPixels](auto* ptr) {
-        using float_t = std::remove_pointer_t<decltype(ptr)>;
-        const float_t pattern[4] = {(float_t)0.0, (float_t)0.0, (float_t)0.0, (float_t)1.0};
+        using ptr_float_t = std::remove_pointer_t<decltype(ptr)>;
+        const ptr_float_t pattern[4] = {(ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)1.0};
         for (size_t i = 0; i < numPixels; ++i) {
-            memcpy(ptr + i * 4, pattern, sizeof(float_t) * 4);
+            memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4);
         }
     };
 

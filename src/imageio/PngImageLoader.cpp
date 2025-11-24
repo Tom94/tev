@@ -46,8 +46,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_set_error_fn(
         pngPtr,
         nullptr,
-        [](png_structp png_ptr, png_const_charp error_msg) { throw ImageLoadError{fmt::format("PNG error: {}", error_msg)}; },
-        [](png_structp png_ptr, png_const_charp warning_msg) { tlog::warning() << fmt::format("PNG warning: {}", warning_msg); }
+        [](png_structp, png_const_charp error_msg) { throw ImageLoadError{fmt::format("PNG error: {}", error_msg)}; },
+        [](png_structp, png_const_charp warning_msg) { tlog::warning() << fmt::format("PNG warning: {}", warning_msg); }
     );
 
     infoPtr = png_create_info_struct(pngPtr);
