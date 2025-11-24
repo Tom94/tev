@@ -23,6 +23,7 @@
 
 #include <list>
 #include <span>
+#include <variant>
 #include <vector>
 
 namespace tev {
@@ -277,8 +278,6 @@ public:
     void sendToPrimaryInstance(const IpcPacket& message);
     void receiveFromSecondaryInstance(std::function<void(const IpcPacket&)> callback);
 
-    std::string ip() const { return mIp; }
-    std::string port() const { return mPort; }
     std::string hostname() const;
 
     size_t nActiveConnections() const { return mSocketConnections.size(); }
@@ -320,8 +319,16 @@ private:
 
     std::list<SocketConnection> mSocketConnections;
 
-    std::string mIp;
-    std::string mPort;
+    struct IpHost {
+        std::string ip;
+        std::string port;
+    };
+
+    struct UnixHost {
+        fs::path socketPath;
+    };
+
+    std::variant<IpHost, UnixHost> mHostInfo;
     std::string mLockName;
 
     size_t mNTotalBytesSent = 0;

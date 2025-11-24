@@ -17,10 +17,11 @@
  */
 
 #ifdef _WIN32
-#   define NOMINMAX
-#   include <Ws2tcpip.h>
-#   include <winsock2.h>
-#   undef NOMINMAX
+#    define NOMINMAX
+#    include <Ws2tcpip.h>
+#    include <afunix.h>
+#    include <winsock2.h>
+#    undef NOMINMAX
 #endif
 
 #include <tev/Common.h>
@@ -30,20 +31,24 @@
 #ifdef _WIN32
 using socklen_t = int;
 #else
-#   include <arpa/inet.h>
-#   include <cstring>
-#   ifdef EMSCRIPTEN
-#       include <fcntl.h>
-#   endif
-#   include <netdb.h>
-#   include <netinet/in.h>
-#   include <signal.h>
-#   include <sys/file.h>
-#   include <sys/socket.h>
-#   include <unistd.h>
-#   define SOCKET_ERROR (-1)
-#   define INVALID_SOCKET (-1)
+#    include <arpa/inet.h>
+#    include <cstring>
+#    ifdef EMSCRIPTEN
+#        include <fcntl.h>
+#    endif
+#    include <netdb.h>
+#    include <netinet/in.h>
+#    include <signal.h>
+#    include <sys/file.h>
+#    include <sys/socket.h>
+#    include <sys/un.h>
+#    include <unistd.h>
+#    define SOCKET_ERROR (-1)
+#    define INVALID_SOCKET (-1)
 #endif
+
+#include <filesystem>
+#include <variant>
 
 using namespace std;
 
@@ -375,8 +380,15 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
     mLockName = fmt::format(".tev.{}.lock", hostname);
 
     const auto parts = split(hostname, ":");
-    mIp = parts.front();
-    mPort = parts.back();
+    if (parts.size() == 1 || (parts.size() == 2 && parts.back() == "unix")) {
+        mHostInfo = UnixHost{.socketPath = runtimeDirectory() / fmt::format(".tev.{}.sock", parts.front())};
+    } else if (parts.size() == 2) {
+        mHostInfo = IpHost{.ip = string{parts.front()}, .port = string{parts.back()}};
+    } else {
+        throw runtime_error{fmt::format("IPC hostname must not include more than one ':' symbol but is {}.", hostname)};
+    }
+
+    tlog::debug() << fmt::format("IPC: initializing with hostname {}", this->hostname());
 
     try {
         // Networking
@@ -397,18 +409,46 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
         }
 
         // If we're not the primary instance, try to connect to it as a client
-        struct addrinfo hints = {}, *addrinfo;
-        hints.ai_family = PF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-        const int err = getaddrinfo(mIp.c_str(), mPort.c_str(), &hints, &addrinfo);
-        if (err != 0) {
-            throw runtime_error{fmt::format("getaddrinfo() failed: {}", gai_strerror(err))};
-        }
 
-        ScopeGuard addrinfoGuard{[addrinfo] { freeaddrinfo(addrinfo); }};
+        struct addrinfo addrinfo = {}, *heapaddrinfo = nullptr;
+        struct sockaddr_un unixAddr = {};
+
+        visit(
+            [&](auto&& hostInfo) {
+                using T = decay_t<decltype(hostInfo)>;
+                if constexpr (is_same_v<T, IpHost>) {
+                    addrinfo.ai_family = PF_UNSPEC;
+                    addrinfo.ai_socktype = SOCK_STREAM;
+
+                    const int err = getaddrinfo(hostInfo.ip.c_str(), hostInfo.port.c_str(), &addrinfo, &heapaddrinfo);
+                    if (err != 0) {
+                        throw runtime_error{fmt::format("getaddrinfo() failed: {}", gai_strerror(err))};
+                    }
+
+                    addrinfo = *heapaddrinfo;
+                } else if constexpr (is_same_v<T, UnixHost>) {
+                    if (!filesystem::exists(hostInfo.socketPath)) {
+                        throw runtime_error{fmt::format("Unix socket path {} does not exist.", hostInfo.socketPath)};
+                    }
+
+                    addrinfo.ai_family = AF_UNIX;
+                    addrinfo.ai_socktype = SOCK_STREAM;
+                    addrinfo.ai_addrlen = sizeof(struct sockaddr_un);
+                    addrinfo.ai_addr = (struct sockaddr*)&unixAddr;
+
+                    unixAddr.sun_family = AF_UNIX;
+                    strncpy(unixAddr.sun_path, hostInfo.socketPath.string().c_str(), sizeof(unixAddr.sun_path) - 1);
+                } else {
+                    TEV_ASSERT(false, "Non-exhaustive visitor");
+                }
+            },
+            mHostInfo
+        );
+
+        ScopeGuard addrinfoGuard{[heapaddrinfo] { freeaddrinfo(heapaddrinfo); }};
 
         mSocketFd = INVALID_SOCKET;
-        for (struct addrinfo* ptr = addrinfo; ptr; ptr = ptr->ai_next) {
+        for (struct addrinfo* ptr = &addrinfo; ptr; ptr = ptr->ai_next) {
             mSocketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
             if (mSocketFd == INVALID_SOCKET) {
                 tlog::warning() << fmt::format("socket() failed: {}", errorString(lastSocketError()));
@@ -428,7 +468,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
                 continue;
             }
 
-            tlog::success() << "Connected to primary instance " << mIp << ":" << mPort;
+            tlog::success() << fmt::format("Connected to primary instance {}", this->hostname());
             break; // success
         }
 
@@ -442,6 +482,20 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
 }
 
 Ipc::~Ipc() {
+    tlog::debug() << "Shutting down IPC.";
+
+    // Socket
+    if (mSocketFd != INVALID_SOCKET) {
+        if (closeSocket(mSocketFd) == SOCKET_ERROR) {
+            tlog::warning() << "Error closing socket listen fd " << mSocketFd << ": " << errorString(lastSocketError());
+        }
+    }
+
+    if (holds_alternative<UnixHost>(mHostInfo)) {
+        // Delete the unix socket file if it exists.
+        fs::remove(get<UnixHost>(mHostInfo).socketPath);
+    }
+
     // Lock
 #ifdef _WIN32
     if (mIsPrimaryInstance && mInstanceMutex) {
@@ -455,7 +509,7 @@ Ipc::~Ipc() {
         }
 
         // Delete the lock file if it exists.
-        unlink(mLockFile.string().c_str());
+        fs::remove(mLockFile);
     }
 #endif
 
@@ -472,9 +526,7 @@ Ipc::~Ipc() {
 #endif
 }
 
-bool Ipc::isConnectedToPrimaryInstance() const {
-    return !mIsPrimaryInstance && mSocketFd != INVALID_SOCKET;
-}
+bool Ipc::isConnectedToPrimaryInstance() const { return !mIsPrimaryInstance && mSocketFd != INVALID_SOCKET; }
 
 bool Ipc::attemptToBecomePrimaryInstance() {
 #ifdef _WIN32
@@ -521,8 +573,8 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         }
     }
 
-    // Set up primary instance network server
-    mSocketFd = socket(AF_INET, SOCK_STREAM, 0);
+    // Set up primary instance listening socket
+    mSocketFd = socket(holds_alternative<IpHost>(mHostInfo) ? AF_INET : AF_UNIX, SOCK_STREAM, 0);
     if (mSocketFd == INVALID_SOCKET) {
         throw runtime_error{fmt::format("socket() call failed: {}", errorString(lastSocketError()))};
     }
@@ -535,17 +587,40 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         throw runtime_error{fmt::format("setsockopt() call failed: {}", errorString(lastSocketError()))};
     }
 
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)atoi(mPort.c_str()));
+    struct sockaddr_in ipAddr;
+    struct sockaddr_un unixAddr;
+    struct sockaddr* addr = nullptr;
+    size_t addrLen = 0;
 
+    visit(
+        [&](auto&& hostInfo) {
+            using T = decay_t<decltype(hostInfo)>;
+            if constexpr (is_same_v<T, IpHost>) {
+                addr = (struct sockaddr*)&ipAddr;
+                addrLen = sizeof(ipAddr);
+
+                ipAddr.sin_family = AF_INET;
+                ipAddr.sin_port = htons((uint16_t)atoi(hostInfo.port.c_str()));
 #ifdef _WIN32
-    InetPton(AF_INET, mIp.c_str(), &addr.sin_addr);
+                InetPton(AF_INET, hostInfo.ip.c_str(), &ipAddr.sin_addr);
 #else
-    inet_aton(mIp.c_str(), &addr.sin_addr);
+                inet_aton(hostInfo.ip.c_str(), &ipAddr.sin_addr);
 #endif
+            } else if constexpr (is_same_v<T, UnixHost>) {
+                addr = (struct sockaddr*)&unixAddr;
+                addrLen = sizeof(unixAddr);
 
-    if (::bind(mSocketFd, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+                unixAddr.sun_family = AF_UNIX;
+                strncpy(unixAddr.sun_path, hostInfo.socketPath.string().c_str(), sizeof(unixAddr.sun_path) - 1);
+                fs::remove(hostInfo.socketPath); // remove previous socket file if it exists
+            } else {
+                TEV_ASSERT(false, "Non-exhaustive visitor");
+            }
+        },
+        mHostInfo
+    );
+
+    if (::bind(mSocketFd, addr, addrLen) == SOCKET_ERROR) {
         throw runtime_error{fmt::format("bind() call failed: {}", errorString(lastSocketError()))};
     }
 
@@ -553,7 +628,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         throw runtime_error{fmt::format("listen() call failed: {}", errorString(lastSocketError()))};
     }
 
-    tlog::success() << "Initialized IPC, listening on " << mIp << ":" << mPort;
+    tlog::success() << fmt::format("Initialized IPC, listening on {}", this->hostname());
     return true;
 }
 
@@ -607,7 +682,22 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
 }
 
 string Ipc::hostname() const {
-    return fmt::format("{}:{}", ip(), port());
+    string result = "";
+    visit(
+        [&](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, IpHost>) {
+                result = fmt::format("{}:{}", arg.ip, arg.port);
+            } else if constexpr (std::is_same_v<T, UnixHost>) {
+                result = fmt::format("{}", arg.socketPath);
+            } else {
+                TEV_ASSERT(false, "Non-exhaustive visitor");
+            }
+        },
+        mHostInfo
+    );
+
+    return result;
 }
 
 Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, string_view name) : mSocketFd{fd}, mName{name} {
