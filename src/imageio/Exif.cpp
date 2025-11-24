@@ -78,7 +78,7 @@ Exif::Exif() {
 
     exif_log_set_func(
         mExifLog,
-        [](ExifLog* log, ExifLogCode kind, const char* domain, const char* format, va_list args, void* userData) {
+        [](ExifLog*, ExifLogCode kind, const char* domain, const char* format, va_list args, void* userData) {
             bool* error = static_cast<bool*>(userData);
 
             char buf[1024];
@@ -117,7 +117,11 @@ Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
         exifData = newExifData;
     }
 
-    exif_data_load_data(mExif, exifData.data(), exifData.size());
+    if (exifData.size() > numeric_limits<unsigned int>::max()) {
+        throw invalid_argument{"EXIF data size exceeds maximum supported size."};
+    }
+
+    exif_data_load_data(mExif, exifData.data(), (unsigned int)exifData.size());
 
     if (*mExifLogError) {
         throw invalid_argument{"Failed to decode EXIF data."};

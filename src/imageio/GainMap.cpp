@@ -58,8 +58,8 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
     float headroom = pow(2.0f, std::max(stops, 0.0f));
     tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
 
-    const int numImageChannels = image.channels.size();
-    const int numGainMapChannels = gainMap.channels.size();
+    const int numImageChannels = (int)image.channels.size();
+    const int numGainMapChannels = (int)gainMap.channels.size();
 
     int alphaChannelIndex = -1;
     for (int c = 0; c < numImageChannels; ++c) {

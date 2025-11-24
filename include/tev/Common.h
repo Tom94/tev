@@ -30,9 +30,11 @@
 #include <cmath>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -382,11 +384,34 @@ int lastSocketError();
 std::string errorString(int errorId);
 
 fs::path homeDirectory();
+fs::path runtimeDirectory();
 
 void toggleConsole();
 
 bool shuttingDown();
 void setShuttingDown();
+
+struct FlatpakInfo {
+    std::string flatpakId = "";
+    std::unordered_map<std::string_view, std::unordered_map<std::string_view, std::string>> metadata;
+
+    bool hasNetworkAccess() const {
+        const auto it = metadata.find("Context");
+        if (it == metadata.end()) {
+            return false;
+        }
+
+        const auto accessIt = it->second.find("shared");
+        if (accessIt == it->second.end()) {
+            return false;
+        }
+
+        const auto parts = split(accessIt->second, ";");
+        return std::find(parts.begin(), parts.end(), "network") != parts.end();
+    }
+};
+
+const std::optional<FlatpakInfo>& flatpakInfo();
 
 enum EInterpolationMode : int {
     Nearest = 0,

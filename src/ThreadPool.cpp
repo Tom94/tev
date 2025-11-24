@@ -54,7 +54,7 @@ void ThreadPool::startThreads(size_t num) {
     for (size_t i = mThreads.size(); i < mNumThreads; ++i) {
         mThreads.emplace_back([this] {
             const auto id = this_thread::get_id();
-            tlog::debug() << "Spawning thread pool thread " << id;
+            // tlog::debug() << "Spawning thread pool thread " << id;
 
             unique_lock lock{mTaskQueueMutex};
             while (true) {
@@ -92,7 +92,7 @@ void ThreadPool::startThreads(size_t num) {
             }
 
             // Remove oneself from the thread pool. NOTE: at this point, the lock is still held, so modifying mThreads is safe.
-            tlog::debug() << "Shutting down thread pool thread " << id;
+            // tlog::debug() << "Shutting down thread pool thread " << id;
 
             const auto it = find_if(mThreads.begin(), mThreads.end(), [&id](const std::thread& t) { return t.get_id() == id; });
             TEV_ASSERT(it != mThreads.end(), "Thread not found in thread pool.");
