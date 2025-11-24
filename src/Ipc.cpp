@@ -377,18 +377,26 @@ static int closeSocket(Ipc::socket_t socket) {
 }
 
 Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
+    if (hostname.empty()) {
+        if (!flatpakInfo() || flatpakInfo()->hasNetworkAccess()) {
+            hostname = "127.0.0.1:14158";
+        } else {
+            hostname = "unix";
+        }
+    }
+
     mLockName = fmt::format(".tev.{}.lock", hostname);
 
     const auto parts = split(hostname, ":");
     if (parts.size() == 1 || (parts.size() == 2 && parts.back() == "unix")) {
         mHostInfo = UnixHost{.socketPath = runtimeDirectory() / fmt::format(".tev.{}.sock", parts.front())};
+        tlog::debug() << fmt::format("Initializing IPC on unix socket {}", this->hostname());
     } else if (parts.size() == 2) {
         mHostInfo = IpHost{.ip = string{parts.front()}, .port = string{parts.back()}};
+        tlog::debug() << fmt::format("Initializing IPC on IP host {}", this->hostname());
     } else {
         throw runtime_error{fmt::format("IPC hostname must not include more than one ':' symbol but is {}.", hostname)};
     }
-
-    tlog::debug() << fmt::format("IPC: initializing with hostname {}", this->hostname());
 
     try {
         // Networking
@@ -512,13 +520,6 @@ Ipc::~Ipc() {
         fs::remove(mLockFile);
     }
 #endif
-
-    // Networking
-    if (mSocketFd != INVALID_SOCKET) {
-        if (closeSocket(mSocketFd) == SOCKET_ERROR) {
-            tlog::warning() << "Error closing socket listen fd " << mSocketFd << ": " << errorString(lastSocketError());
-        }
-    }
 
 #ifdef _WIN32
     // FIXME: only do this when the last Ipc is destroyed

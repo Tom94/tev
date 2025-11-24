@@ -27,6 +27,7 @@
 #include <cctype>
 #include <map>
 #include <regex>
+#include <string>
 
 #ifdef _WIN32
 #    include <Shlobj.h>
@@ -314,12 +315,12 @@ fs::path runtimeDirectory() {
         return fs::path{"/tmp"};
     }
 
-    const char* flatpakId = getenv("FLATPAK_ID");
-    if (!flatpakId || !*flatpakId) {
+    const auto fpi = flatpakInfo();
+    if (!fpi) {
         return xdgRuntimeDir;
     }
 
-    return fs::path{xdgRuntimeDir} / "app" / flatpakId;
+    return fs::path{xdgRuntimeDir} / "app" / fpi->flatpakId;
 #endif
 }
 
@@ -342,6 +343,48 @@ static std::atomic<bool> sShuttingDown{false};
 bool shuttingDown() { return sShuttingDown; }
 
 void setShuttingDown() { sShuttingDown = true; }
+
+const optional<FlatpakInfo>& flatpakInfo() {
+    const auto getFlatpakInfo = []() -> optional<FlatpakInfo> {
+        const char* flatpakId = getenv("FLATPAK_ID");
+        if (!flatpakId || !*flatpakId) {
+            return nullopt;
+        }
+
+        FlatpakInfo info;
+        info.flatpakId = flatpakId;
+
+        ifstream idFile{"/.flatpak-info"};
+        if (!idFile) {
+            return info;
+        }
+
+        string line;
+        string currentSection = "";
+        while (getline(idFile, line)) {
+            if (line.empty()) {
+                continue;
+            }
+
+            if (line.front() == '[' && line.back() == ']') {
+                currentSection = line.substr(1, line.size() - 2);
+                continue;
+            }
+
+            const auto parts = split(line, "=");
+            if (parts.size() < 2) {
+                continue;
+            }
+
+            info.metadata[currentSection][parts[0]] = line.substr(parts[0].size() + 1);
+        }
+
+        return info;
+    };
+
+    static optional<FlatpakInfo> sFlatpakInfo = getFlatpakInfo();
+    return sFlatpakInfo;
+}
 
 EInterpolationMode toInterpolationMode(string_view name) {
     // Perform matching on uppercase strings

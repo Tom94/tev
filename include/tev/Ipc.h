@@ -267,7 +267,7 @@ public:
     using socket_t = int;
 #endif
 
-    Ipc(std::string_view hostname = "127.0.0.1:14158");
+    Ipc(std::string_view hostname = "");
     virtual ~Ipc();
 
     bool isPrimaryInstance() const { return mIsPrimaryInstance; }
