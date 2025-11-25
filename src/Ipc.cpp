@@ -441,9 +441,8 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
 
                     addrinfo = *heapaddrinfo;
                 } else if constexpr (is_same_v<T, UnixHost>) {
-                    if (!filesystem::exists(hostInfo.socketPath)) {
-                        throw runtime_error{fmt::format("Unix socket path {} does not exist.", hostInfo.socketPath)};
-                    }
+                    // Note: if the socket file does not exist, connect() will fail, so we do not need to separately check for its existence
+                    // here. Furthermore, on Windows, checking for the existence of a unix socket file raises an error.
 
                     addrinfo.ai_family = AF_UNIX;
                     addrinfo.ai_socktype = SOCK_STREAM;
@@ -588,37 +587,34 @@ bool Ipc::attemptToBecomePrimaryInstance() {
 
     makeSocketNonBlocking(mSocketFd);
 
-    // Avoid address in use error that occurs if we quit with a client connected.
-    int t = 1;
-    if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&t, sizeof(int)) == SOCKET_ERROR) {
-        throw runtime_error{fmt::format("setsockopt() call failed: {}", errorString(lastSocketError()))};
+    if (holds_alternative<IpHost>(mHostInfo)) {
+        // Avoid address in use error that occurs if we quit with a client connected.
+        int t = 1;
+        if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&t, sizeof(int)) == SOCKET_ERROR) {
+            throw runtime_error{fmt::format("setsockopt() call failed: {}", errorString(lastSocketError()))};
+        }
     }
 
-    struct sockaddr_in ipAddr;
-    struct sockaddr_un unixAddr;
-    struct sockaddr* addr = nullptr;
-    size_t addrLen = 0;
+    union {
+        struct sockaddr_in in;
+        struct sockaddr_un un;
+    } addr;
+    const size_t addrLen = holds_alternative<IpHost>(mHostInfo) ? sizeof(addr.in) : sizeof(addr.un);
 
     visit(
         [&](auto&& hostInfo) {
             using T = decay_t<decltype(hostInfo)>;
             if constexpr (is_same_v<T, IpHost>) {
-                addr = (struct sockaddr*)&ipAddr;
-                addrLen = sizeof(ipAddr);
-
-                ipAddr.sin_family = AF_INET;
-                ipAddr.sin_port = htons((uint16_t)atoi(hostInfo.port.c_str()));
+                addr.in.sin_family = AF_INET;
+                addr.in.sin_port = htons((uint16_t)atoi(hostInfo.port.c_str()));
 #ifdef _WIN32
-                InetPton(AF_INET, hostInfo.ip.c_str(), &ipAddr.sin_addr);
+                InetPton(AF_INET, hostInfo.ip.c_str(), &addr.in.sin_addr);
 #else
-                inet_aton(hostInfo.ip.c_str(), &ipAddr.sin_addr);
+                inet_aton(hostInfo.ip.c_str(), &addr.in.sin_addr);
 #endif
             } else if constexpr (is_same_v<T, UnixHost>) {
-                addr = (struct sockaddr*)&unixAddr;
-                addrLen = sizeof(unixAddr);
-
-                unixAddr.sun_family = AF_UNIX;
-                strncpy(unixAddr.sun_path, hostInfo.socketPath.string().c_str(), sizeof(unixAddr.sun_path) - 1);
+                addr.un.sun_family = AF_UNIX;
+                strncpy(addr.un.sun_path, hostInfo.socketPath.string().c_str(), sizeof(addr.un.sun_path) - 1);
                 fs::remove(hostInfo.socketPath); // remove previous socket file if it exists
             } else {
                 TEV_ASSERT(false, "Non-exhaustive visitor");
@@ -627,7 +623,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         mHostInfo
     );
 
-    if (::bind(mSocketFd, addr, addrLen) == SOCKET_ERROR) {
+    if (::bind(mSocketFd, (const struct sockaddr*)&addr, addrLen) == SOCKET_ERROR) {
         throw runtime_error{fmt::format("bind() call failed: {}", errorString(lastSocketError()))};
     }
 
@@ -644,7 +640,7 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
         throw runtime_error{"Must be a secondary instance to send to the primary instance."};
     }
 
-    int bytesSent = (int)send(mSocketFd, message.data(), (int)message.size(), 0 /* flags */);
+    const int bytesSent = (int)send(mSocketFd, message.data(), (int)message.size(), 0 /* flags */);
     if (bytesSent != int(message.size())) {
         throw runtime_error{fmt::format("send() failed: {}", errorString(lastSocketError()))};
     }
@@ -662,27 +658,45 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     }
 
     // Check for new connections.
-    struct sockaddr_in client;
+    union {
+        struct sockaddr_in in;
+        struct sockaddr_un un;
+    } client;
     socklen_t addrlen = sizeof(client);
-    socket_t fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
+
+    const socket_t fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
     if (fd == INVALID_SOCKET) {
-        int errorId = lastSocketError();
+        const int errorId = lastSocketError();
         if (errorId == SocketError::WouldBlock) {
             // no problem; no one is trying to connect
         } else {
             tlog::warning() << "accept() error: " << errorId << " " << errorString(errorId);
         }
     } else {
-        uint32_t ip = ntohl(client.sin_addr.s_addr);
-        uint16_t port = ntohs(client.sin_port);
-        auto name = fmt::format("{}.{}.{}.{}:{}", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
+        string name = "";
+        visit(
+            [&](auto&& hostInfo) {
+                using T = decay_t<decltype(hostInfo)>;
+                if constexpr (is_same_v<T, UnixHost>) {
+                    name = fmt::format("{}", hostInfo.socketPath);
+                } else if constexpr (is_same_v<T, IpHost>) {
+                    const uint32_t ip = ntohl(client.in.sin_addr.s_addr);
+                    const uint16_t port = ntohs(client.in.sin_port);
+                    name = fmt::format("{}.{}.{}.{}:{}", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
+                } else {
+                    TEV_ASSERT(false, "Non-exhaustive visitor");
+                }
+            },
+            mHostInfo
+        );
+
         tlog::info() << fmt::format("Client {} (#{}) connected", name, fd);
         mSocketConnections.push_back(SocketConnection{fd, name});
     }
 
     // Service existing connections.
     for (auto iter = mSocketConnections.begin(); iter != mSocketConnections.end();) {
-        auto cur = iter++;
+        const auto cur = iter++;
         mNTotalBytesReceived += cur->service(callback);
 
         // If the connection became closed, stop keeping track of it.
