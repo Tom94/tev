@@ -46,6 +46,12 @@ struct AttributeNode {
     std::vector<AttributeNode> children;
 };
 
+struct HdrMetadata {
+    float maxCLL = 0.0f;
+    float maxFALL = 0.0f;
+    float whiteLevel = 80.0f;
+};
+
 struct ImageData {
     ImageData() = default;
     ImageData(const ImageData&) = delete;
@@ -59,6 +65,8 @@ struct ImageData {
     bool hasPremultipliedAlpha = false;
     EOrientation orientation = EOrientation::TopLeft;
     std::vector<AttributeNode> attributes;
+
+    HdrMetadata hdrMetadata;
 
     Box2i dataWindow;
     Box2i displayWindow;

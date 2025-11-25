@@ -240,6 +240,15 @@ Task<vector<ImageData>>
             resultData.hasPremultipliedAlpha = true;
         };
 
+        if (heif_content_light_level cll; heif_image_handle_get_content_light_level(imgHandle, &cll) != 0) {
+            resultData.hdrMetadata.maxCLL = cll.max_content_light_level;
+            resultData.hdrMetadata.maxFALL = cll.max_pic_average_light_level;
+
+            tlog::debug() << fmt::format(
+                "Found content light level information: maxCLL={} maxFALL={}", resultData.hdrMetadata.maxCLL, resultData.hdrMetadata.maxFALL
+            );
+        }
+
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
         size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
         if (profileSize != 0) {
@@ -491,8 +500,8 @@ Task<vector<ImageData>>
 
             // If we found an apple-style gainmap, apply it to the main image.
             if (loadGainmap) {
-                tlog::debug(
-                ) << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
+                tlog::debug()
+                    << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
                 auto amn = findAppleMakerNote();
                 if (amn) {
                     tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
