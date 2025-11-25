@@ -36,6 +36,9 @@
 #include <nanogui/textbox.h>
 #include <nanogui/theme.h>
 #include <nanogui/vscrollpanel.h>
+#ifdef __APPLE__
+#    include <nanogui/metal.h>
+#endif
 
 #include <chrono>
 #include <limits>
@@ -57,16 +60,33 @@ ImageViewer::ImageViewer(
     mIpc{ipc},
     mMaximizedLaunch{maximize} {
 
-    auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
-    mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
+    const auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
+    const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
+
+#if defined(__APPLE__)
+    const auto [wideGamut, edr] = metal_10bit_edr_support();
+    mSupportsWideGamut = wideGamut;
+    mSupportsHdr = edr;
+    mSupportsAbsoluteBrightness = false;
+#else // Linux and Windows
+    const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
+
+    mSupportsWideGamut = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
+    mSupportsHdr = mSupportsWideGamut &&
+        (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
+    mSupportsWideGamut |= wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
+    mSupportsAbsoluteBrightness = mSupportsHdr;
+#endif
 
     tlog::info() << fmt::format(
-        "Obtained {} bit {} point frame buffer with primaries={} and transfer={}.{}",
+        "Obtained {} bit {} point frame buffer with primaries={} transfer={} range={}",
         this->bits_per_sample(),
         m_float_buffer ? "float" : "fixed",
-        wpPrimariesToString(glfwGetWindowPrimaries(m_glfw_window)),
+        wpPrimariesToString(wpPrimaries),
         ituth273::toString(tf),
-        mSupportsHdr ? " HDR display is supported." : " HDR is *not* supported."
+        mSupportsHdr           ? "hdr" :
+            mSupportsWideGamut ? "wide_gamut_sdr" :
+                                 "sdr"
     );
 
     // At this point we no longer need the standalone console (if it exists).
@@ -177,7 +197,7 @@ ImageViewer::ImageViewer(
     // Exposure/offset buttons
     {
         auto buttonContainer = new Widget{mSidebarLayout};
-        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, mSupportsHdr ? 4 : 3, Alignment::Fill, 5, 2});
+        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
         auto makeButton = [&](string_view name, function<void()> callback, int icon = 0, string_view tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
@@ -196,70 +216,87 @@ ImageViewer::ImageViewer(
         ));
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
 
+        auto hdrPopupButton = new PopupButton{buttonContainer, "HDR", 0};
+        hdrPopupButton->set_font_size(15);
+        hdrPopupButton->set_chevron_icon(0);
+        hdrPopupButton->set_enabled(mSupportsHdr);
+
         if (mSupportsHdr) {
-            auto hdrPopupButton = new PopupButton{buttonContainer, "HDR", 0};
-            hdrPopupButton->set_font_size(15);
-            hdrPopupButton->set_chevron_icon(0);
             hdrPopupButton->set_tooltip("HDR Settings");
+        } else {
+            hdrPopupButton->set_tooltip(
+                "Your system does not support HDR colors. "
+                "Make sure that your OS, GPU, and display support HDR and that it is enabled in your system and display settings."
+            );
+        }
 
-            // Brightness controls popup
-            {
-                auto addSpacer = [](Widget* current, int space) {
-                    auto row = new Widget{current};
-                    row->set_height(space);
-                };
+        {
+            auto addSpacer = [](Widget* current, int space) {
+                auto row = new Widget{current};
+                row->set_height(space);
+            };
 
-                auto popup = hdrPopupButton->popup();
-                popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
+            auto popup = hdrPopupButton->popup();
+            popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
-                new Label{popup, "HDR Settings", "sans-bold", 20};
-                addSpacer(popup, 10);
+            new Label{popup, "HDR Settings", "sans-bold", 20};
+            addSpacer(popup, 10);
 
-                mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
-                mClipToLdrButton->set_font_size(15);
-                mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
-                mClipToLdrButton->set_tooltip(
-                    "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
-                    "Shortcut: U"
-                );
-                mClipToLdrButton->set_flags(Button::ToggleButton);
+            mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
+            mClipToLdrButton->set_font_size(15);
+            mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
+            mClipToLdrButton->set_tooltip(
+                "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
+                "Shortcut: U"
+            );
+            mClipToLdrButton->set_flags(Button::ToggleButton);
+            mClipToLdrButton->set_enabled(mSupportsHdr);
 
-                addSpacer(popup, 10);
+            addSpacer(popup, 10);
 
-                new Label{popup, "Display White Level"};
+            new Label{popup, "Display White Level"};
 
-                auto whiteLevelContainer = new Widget{popup};
-                whiteLevelContainer->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+            auto whiteLevelContainer = new Widget{popup};
+            whiteLevelContainer->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
-                mWhiteLevelBox = new FloatBox<float>{whiteLevelContainer, 203.0f};
-                mWhiteLevelBox->set_default_value("203");
+            mWhiteLevelBox = new FloatBox<float>{whiteLevelContainer};
+            mWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
+            mWhiteLevelBox->set_min_max_values(0.0001, 10000);
+            mWhiteLevelBox->set_fixed_width(90);
+            if (mSupportsAbsoluteBrightness) {
+                mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
                 mWhiteLevelBox->set_units("nits");
-                mWhiteLevelBox->set_editable(true);
-                mWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
-                mWhiteLevelBox->set_min_max_values(0.0001, 10000);
-                mWhiteLevelBox->set_fixed_width(90);
                 mWhiteLevelBox->set_tooltip(
                     "The display white level in nits (cd/m²). "
                     "This value determines how bright a pixel value of 1.0 appears on the display. "
                     "Change this value to override automatic detection of the display white level.\n\n"
-                    "**IMPORTANT**: this setting only works correctly if your system has HDR enabled *and* "
-                    "your display is configured with a reasonably well calibrated HDR mode.\n\n"
                     "The most typical value is 203 nits, corresponding to the standardized white level "
                     "of the PQ and HLG transfer functions. Use 203 nits to display images with such "
                     "transfer functions at their intended brightness. "
                     "Less typical, but also common is 80 nits, which corresponds to the standardized white level of sRGB."
                 );
-
-                mWhiteLevelOverrideButton = new Button{whiteLevelContainer, "Override", 0};
-                mWhiteLevelOverrideButton->set_font_size(15);
-                mWhiteLevelOverrideButton->set_change_callback([this](bool value) {
-                    setOverridingWhiteLevel(value ? optional<float>{mWhiteLevelBox->value()} : std::nullopt);
-                });
-
-                mWhiteLevelBox->set_callback([this](float value) { setOverridingWhiteLevel(value); });
-
-                mWhiteLevelOverrideButton->set_flags(Button::ToggleButton);
+            } else {
+                ((TextBox*)mWhiteLevelBox)->set_value("");
+                mWhiteLevelBox->set_units("n/a");
+                mWhiteLevelBox->set_tooltip(
+                    "Your system or display does not support absolute brightness rendering. "
+                    "White level override is disabled."
+                );
             }
+
+            mWhiteLevelBox->set_editable(mSupportsAbsoluteBrightness);
+            mWhiteLevelBox->set_enabled(mSupportsAbsoluteBrightness);
+
+            mWhiteLevelOverrideButton = new Button{whiteLevelContainer, "Override", 0};
+            mWhiteLevelOverrideButton->set_font_size(15);
+            mWhiteLevelOverrideButton->set_change_callback([this](bool value) {
+                setOverridingWhiteLevel(value ? optional<float>{mWhiteLevelBox->value()} : std::nullopt);
+            });
+
+            mWhiteLevelBox->set_callback([this](float value) { setOverridingWhiteLevel(value); });
+
+            mWhiteLevelOverrideButton->set_flags(Button::ToggleButton);
+            mWhiteLevelOverrideButton->set_enabled(mSupportsAbsoluteBrightness);
         }
 
         auto bgPopupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
@@ -1074,7 +1111,7 @@ void ImageViewer::draw_contents() {
     }
 
     // Update SDR white level from system settings if not overridden by the user
-    if (mWhiteLevelBox && !overridingWhiteLevel()) {
+    if (mWhiteLevelBox && mWhiteLevelBox->enabled() && !overridingWhiteLevel()) {
         mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
     }
 
