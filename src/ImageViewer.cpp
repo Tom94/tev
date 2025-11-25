@@ -36,6 +36,9 @@
 #include <nanogui/textbox.h>
 #include <nanogui/theme.h>
 #include <nanogui/vscrollpanel.h>
+#ifdef __APPLE__
+#    include <nanogui/metal.h>
+#endif
 
 #include <chrono>
 #include <limits>
@@ -59,12 +62,19 @@ ImageViewer::ImageViewer(
 
     const auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
     const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
+
+#if defined(__APPLE__)
+    const auto edrSupport = metal_10bit_edr_support();
+    mSupportsWideColor = edrSupport.first;
+    mSupportsHdr = edrSupport.second;
+#else // Linux and Windows
     const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
 
     mSupportsWideColor = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
     mSupportsHdr = mSupportsWideColor &&
         (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
     mSupportsWideColor |= wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
+#endif
 
     tlog::info() << fmt::format(
         "Obtained {} bit {} point frame buffer with primaries={} transfer={} range={}",
@@ -72,7 +82,9 @@ ImageViewer::ImageViewer(
         m_float_buffer ? "float" : "fixed",
         wpPrimariesToString(wpPrimaries),
         ituth273::toString(tf),
-        mSupportsHdr ? "hdr" : mSupportsWideColor ? "wide_color_sdr" : "sdr"
+        mSupportsHdr           ? "hdr" :
+            mSupportsWideColor ? "wide_gamut_sdr" :
+                                 "sdr"
     );
 
     // At this point we no longer need the standalone console (if it exists).
