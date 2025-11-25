@@ -64,16 +64,18 @@ ImageViewer::ImageViewer(
     const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
 
 #if defined(__APPLE__)
-    const auto [wideColors, edr] = metal_10bit_edr_support();
-    mSupportsWideColor = wideColors;
+    const auto [wideGamut, edr] = metal_10bit_edr_support();
+    mSupportsWideGamut = wideGamut;
     mSupportsHdr = edr;
+    mSupportsAbsoluteBrightness = false;
 #else // Linux and Windows
     const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
 
-    mSupportsWideColor = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
-    mSupportsHdr = mSupportsWideColor &&
+    mSupportsWideGamut = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
+    mSupportsHdr = mSupportsWideGamut &&
         (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
-    mSupportsWideColor |= wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
+    mSupportsWideGamut |= wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
+    mSupportsAbsoluteBrightness = mSupportsHdr;
 #endif
 
     tlog::info() << fmt::format(
@@ -83,7 +85,7 @@ ImageViewer::ImageViewer(
         wpPrimariesToString(wpPrimaries),
         ituth273::toString(tf),
         mSupportsHdr           ? "hdr" :
-            mSupportsWideColor ? "wide_gamut_sdr" :
+            mSupportsWideGamut ? "wide_gamut_sdr" :
                                  "sdr"
     );
 
@@ -224,7 +226,7 @@ ImageViewer::ImageViewer(
         } else {
             hdrPopupButton->set_tooltip(
                 "Your system does not support HDR colors. "
-                "Make sure that your OS, GPU, and monitor support HDR and that it is enabled in your system and monitor settings."
+                "Make sure that your OS, GPU, and display support HDR and that it is enabled in your system and display settings."
             );
         }
 
@@ -257,25 +259,33 @@ ImageViewer::ImageViewer(
             auto whiteLevelContainer = new Widget{popup};
             whiteLevelContainer->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
 
-            mWhiteLevelBox = new FloatBox<float>{whiteLevelContainer, 203.0f};
-            mWhiteLevelBox->set_default_value("203");
-            mWhiteLevelBox->set_units("nits");
+            mWhiteLevelBox = new FloatBox<float>{whiteLevelContainer};
             mWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
             mWhiteLevelBox->set_min_max_values(0.0001, 10000);
             mWhiteLevelBox->set_fixed_width(90);
-            mWhiteLevelBox->set_tooltip(
-                "The display white level in nits (cd/m²). "
-                "This value determines how bright a pixel value of 1.0 appears on the display. "
-                "Change this value to override automatic detection of the display white level.\n\n"
-                "**IMPORTANT**: this setting only works correctly if your system has HDR enabled *and* "
-                "your display is configured with a reasonably well calibrated HDR mode.\n\n"
-                "The most typical value is 203 nits, corresponding to the standardized white level "
-                "of the PQ and HLG transfer functions. Use 203 nits to display images with such "
-                "transfer functions at their intended brightness. "
-                "Less typical, but also common is 80 nits, which corresponds to the standardized white level of sRGB."
-            );
-            mWhiteLevelBox->set_editable(mSupportsHdr);
-            mWhiteLevelBox->set_enabled(mSupportsHdr);
+            if (mSupportsAbsoluteBrightness) {
+                mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
+                mWhiteLevelBox->set_units("nits");
+                mWhiteLevelBox->set_tooltip(
+                    "The display white level in nits (cd/m²). "
+                    "This value determines how bright a pixel value of 1.0 appears on the display. "
+                    "Change this value to override automatic detection of the display white level.\n\n"
+                    "The most typical value is 203 nits, corresponding to the standardized white level "
+                    "of the PQ and HLG transfer functions. Use 203 nits to display images with such "
+                    "transfer functions at their intended brightness. "
+                    "Less typical, but also common is 80 nits, which corresponds to the standardized white level of sRGB."
+                );
+            } else {
+                ((TextBox*)mWhiteLevelBox)->set_value("");
+                mWhiteLevelBox->set_units("n/a");
+                mWhiteLevelBox->set_tooltip(
+                    "Your system or display does not support absolute brightness rendering. "
+                    "White level override is disabled."
+                );
+            }
+
+            mWhiteLevelBox->set_editable(mSupportsAbsoluteBrightness);
+            mWhiteLevelBox->set_enabled(mSupportsAbsoluteBrightness);
 
             mWhiteLevelOverrideButton = new Button{whiteLevelContainer, "Override", 0};
             mWhiteLevelOverrideButton->set_font_size(15);
@@ -286,7 +296,7 @@ ImageViewer::ImageViewer(
             mWhiteLevelBox->set_callback([this](float value) { setOverridingWhiteLevel(value); });
 
             mWhiteLevelOverrideButton->set_flags(Button::ToggleButton);
-            mWhiteLevelOverrideButton->set_enabled(mSupportsHdr);
+            mWhiteLevelOverrideButton->set_enabled(mSupportsAbsoluteBrightness);
         }
 
         auto bgPopupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
@@ -1101,7 +1111,7 @@ void ImageViewer::draw_contents() {
     }
 
     // Update SDR white level from system settings if not overridden by the user
-    if (mWhiteLevelBox && !overridingWhiteLevel()) {
+    if (mWhiteLevelBox && mWhiteLevelBox->enabled() && !overridingWhiteLevel()) {
         mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
     }
 
