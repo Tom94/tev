@@ -25,6 +25,7 @@
 #include <nanogui/vector.h>
 
 #include <array>
+#include <optional>
 
 namespace tev {
 
@@ -46,64 +47,6 @@ std::array<nanogui::Vector2f, 4> bt2100Chroma();
 nanogui::Vector2f xy(EExifLightSource lightSource);
 
 nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
-
-enum class EAlphaKind {
-    // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
-    // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
-    // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
-    // expects this kind of premultiplied alpha, so we have to support it.
-    PremultipliedNonlinear,
-    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
-    // kind of premultiplied alpha.
-    Premultiplied,
-    Straight,
-    None,
-};
-
-class ColorProfile {
-public:
-    ColorProfile(void* profile) : mProfile{profile} {}
-    ~ColorProfile();
-
-    ColorProfile(const ColorProfile&) = delete;
-    ColorProfile& operator=(const ColorProfile&) = delete;
-
-    ColorProfile(ColorProfile&& other) noexcept { std::swap(mProfile, other.mProfile); }
-
-    ColorProfile& operator=(ColorProfile&& other) noexcept {
-        std::swap(mProfile, other.mProfile);
-        return *this;
-    }
-
-    static ColorProfile fromIcc(const uint8_t* iccProfile, size_t iccProfileSize);
-    static ColorProfile srgb();
-    static ColorProfile linearSrgb();
-
-    void* get() const { return mProfile; }
-
-    bool isValid() const { return mProfile; }
-
-private:
-    void* mProfile = nullptr;
-};
-
-// Converts colors from an ICC profile to linear sRGB Rec.709 w/ premultiplied alpha.
-//
-// Note that, because we this function converts potentially larger color gamuts to sRGB, output channels may have values larger than 1 or
-// smaller than 0, even if the input was within [0, 1]. This is by design, and, on macOS, the OS translates these out-of-bounds colors
-// correctly to the gamut of the display. Other operating systems, like Windows and Linux don't do this -- it's a TODO for tev to explicitly
-// hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
-Task<void> toLinearSrgbPremul(
-    const ColorProfile& profile,
-    const nanogui::Vector2i& size,
-    int numColorChannels,
-    EAlphaKind alphaKind,
-    EPixelFormat pixelFormat,
-    uint8_t* __restrict src,
-    float* __restrict rgbaDst,
-    int numChannelsOut,
-    int priority
-);
 
 std::array<nanogui::Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries);
 std::string_view wpPrimariesToString(int wpPrimaties);
@@ -235,6 +178,73 @@ inline float invTransfer(const ETransferCharacteristics transfer, float val) {
     return val;
 }
 } // namespace ituth273
+
+enum class EAlphaKind {
+    // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
+    // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
+    // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
+    // expects this kind of premultiplied alpha, so we have to support it.
+    PremultipliedNonlinear,
+    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
+    // kind of premultiplied alpha.
+    Premultiplied,
+    Straight,
+    None,
+};
+
+class ColorProfile {
+public:
+    ColorProfile(void* profile) : mProfile{profile} {}
+    ~ColorProfile();
+
+    ColorProfile(const ColorProfile&) = delete;
+    ColorProfile& operator=(const ColorProfile&) = delete;
+
+    ColorProfile(ColorProfile&& other) noexcept { std::swap(mProfile, other.mProfile); }
+
+    ColorProfile& operator=(ColorProfile&& other) noexcept {
+        std::swap(mProfile, other.mProfile);
+        return *this;
+    }
+
+    struct CICP {
+        ituth273::EColorPrimaries primaries;
+        ituth273::ETransferCharacteristics transfer;
+        uint8_t matrixCoeffs;
+        uint8_t videoFullRangeFlag;
+    };
+
+    std::optional<CICP> getCicp() const;
+
+    static ColorProfile fromIcc(const uint8_t* iccProfile, size_t iccProfileSize);
+    static ColorProfile srgb();
+    static ColorProfile linearSrgb();
+
+    void* get() const { return mProfile; }
+
+    bool isValid() const { return mProfile; }
+
+private:
+    void* mProfile = nullptr;
+};
+
+// Converts colors from an ICC profile to linear sRGB Rec.709 w/ premultiplied alpha.
+//
+// Note that, because we this function converts potentially larger color gamuts to sRGB, output channels may have values larger than 1 or
+// smaller than 0, even if the input was within [0, 1]. This is by design, and, on macOS, the OS translates these out-of-bounds colors
+// correctly to the gamut of the display. Other operating systems, like Windows and Linux don't do this -- it's a TODO for tev to explicitly
+// hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
+Task<void> toLinearSrgbPremul(
+    const ColorProfile& profile,
+    const nanogui::Vector2i& size,
+    int numColorChannels,
+    EAlphaKind alphaKind,
+    EPixelFormat pixelFormat,
+    uint8_t* __restrict src,
+    float* __restrict rgbaDst,
+    int numChannelsOut,
+    int priority
+);
 
 struct LimitedRange {
     float scale = 1.0f; // Scale factor for limited range to full range conversion
