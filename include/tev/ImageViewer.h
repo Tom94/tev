@@ -290,6 +290,7 @@ private:
     size_t mClipboardIndex = 0;
 
     // HDR support
+    bool mSupportsWideColor = false;
     bool mSupportsHdr = false;
     nanogui::Button* mClipToLdrButton = nullptr;
     nanogui::FloatBox<float>* mWhiteLevelBox = nullptr;

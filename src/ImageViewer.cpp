@@ -57,16 +57,22 @@ ImageViewer::ImageViewer(
     mIpc{ipc},
     mMaximizedLaunch{maximize} {
 
-    auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
-    mSupportsHdr = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
+    const auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
+    const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
+    const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
+
+    mSupportsWideColor = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
+    mSupportsHdr = mSupportsWideColor &&
+        (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
+    mSupportsWideColor |= wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
 
     tlog::info() << fmt::format(
-        "Obtained {} bit {} point frame buffer with primaries={} and transfer={}.{}",
+        "Obtained {} bit {} point frame buffer with primaries={} transfer={} range={}",
         this->bits_per_sample(),
         m_float_buffer ? "float" : "fixed",
-        wpPrimariesToString(glfwGetWindowPrimaries(m_glfw_window)),
+        wpPrimariesToString(wpPrimaries),
         ituth273::toString(tf),
-        mSupportsHdr ? " HDR display is supported." : " HDR is *not* supported."
+        mSupportsHdr ? "hdr" : mSupportsWideColor ? "wide_color_sdr" : "sdr"
     );
 
     // At this point we no longer need the standalone console (if it exists).
