@@ -84,6 +84,7 @@ struct ImageData {
     std::vector<std::string> channelsInLayer(std::string_view layerName) const;
 
     Task<void> convertToRec709(int priority);
+    Task<void> deriveWhiteLevelFromMetadata(int priority);
     Task<void> convertToDesiredPixelFormat(int priority);
 
     void alphaOperation(const std::function<void(Channel&, const Channel&)>& func);

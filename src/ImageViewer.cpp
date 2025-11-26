@@ -273,7 +273,7 @@ ImageViewer::ImageViewer(
 
             if (mSupportsAbsoluteBrightness) {
                 mDisplayWhiteLevelBox->set_tooltip(
-                    "The display white level in nits (cd/m²). "
+                    "The display reference white level (aka. paper white) in nits (cd/m²). "
                     "This value determines how bright a pixel value of 1.0 appears on the display. "
                     "It follows your system settings by default.\n\n"
                     "You can customize this value to change the brightness at which images are displayed. "
@@ -320,7 +320,7 @@ ImageViewer::ImageViewer(
             mImageWhiteLevelBox->set_default_value(to_string(DEFAULT_IMAGE_WHITE_LEVEL));
             mImageWhiteLevelBox->set_units("nits");
             mImageWhiteLevelBox->set_tooltip(
-                "tev's best guess of the image's reference white level in nits (cd/m²). "
+                "tev's best guess of the image's reference white level (aka. paper white) in nits (cd/m²). "
                 "This value represents the brightness a pixel value of 1.0 is meant to represent.\n\n"
 
                 "tev usually has to guess this value for multiple reasons. "
@@ -328,7 +328,7 @@ ImageViewer::ImageViewer(
                 "Other formats are scene-referred and thus do have an absolute white level, but this information is often not stored in the file. "
                 "Sometimes, it is not even clear whether a given image format is display- or scene-referred.\n\n"
 
-                "However, when an image has unambiguous metadata, e.g. uses the PQ transfer function or contains HDR10 metadata, "
+                "However, when an image has unambiguous metadata, e.g. uses the PQ transfer function, "
                 "tev can determine the white level reliably."
             );
 

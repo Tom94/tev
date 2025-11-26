@@ -354,7 +354,9 @@ static int mainFunc(span<const string> arguments) {
     ValueFlag<string> whiteLevelFlag{
         parser,
         "WHITE LEVEL",
-        "Override the system's display white level in nits (cd/m²). Only possible on HDR systems with absolute brightness capability. "
+        "Override the system's display white level in nits (cd/m²). "
+        "Also known as \"reference white\" or \"paper white\". "
+        "Only possible on HDR systems with absolute brightness capability. "
         "You can also set the white level to 'image' to use the image's metadata white level if available.",
         {"wl", "white-level"},
     };
