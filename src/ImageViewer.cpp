@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Image.h>
 #include <tev/ImageViewer.h>
 #include <tev/WaylandClipboard.h>
 #include <tev/imageio/Colors.h>
@@ -27,6 +28,7 @@
 
 #include <nanogui/button.h>
 #include <nanogui/colorwheel.h>
+#include <nanogui/combobox.h>
 #include <nanogui/icons.h>
 #include <nanogui/label.h>
 #include <nanogui/layout.h>
@@ -256,47 +258,82 @@ ImageViewer::ImageViewer(
 
             new Label{popup, "Display White Level"};
 
-            auto whiteLevelContainer = new Widget{popup};
-            whiteLevelContainer->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 5, 2});
+            addSpacer(popup, 5);
 
-            mWhiteLevelBox = new FloatBox<float>{whiteLevelContainer};
-            mWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
-            mWhiteLevelBox->set_min_max_values(0.0001, 10000);
-            mWhiteLevelBox->set_fixed_width(90);
+            auto whiteLevelContainer = new Widget{popup};
+            whiteLevelContainer->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
+
+            mDisplayWhiteLevelBox = new FloatBox<float>{whiteLevelContainer};
+            mDisplayWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
+            mDisplayWhiteLevelBox->set_min_max_values(0.0f, 10000.0f);
+            mDisplayWhiteLevelBox->set_fixed_width(90);
+            mDisplayWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
+            mDisplayWhiteLevelBox->set_default_value(to_string(DEFAULT_IMAGE_WHITE_LEVEL));
+            mDisplayWhiteLevelBox->set_units("nits");
+
             if (mSupportsAbsoluteBrightness) {
-                mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
-                mWhiteLevelBox->set_units("nits");
-                mWhiteLevelBox->set_tooltip(
+                mDisplayWhiteLevelBox->set_tooltip(
                     "The display white level in nits (cd/m²). "
                     "This value determines how bright a pixel value of 1.0 appears on the display. "
-                    "Change this value to override automatic detection of the display white level.\n\n"
-                    "The most typical value is 203 nits, corresponding to the standardized white level "
-                    "of the PQ and HLG transfer functions. Use 203 nits to display images with such "
-                    "transfer functions at their intended brightness. "
-                    "Less typical, but also common is 80 nits, which corresponds to the standardized white level of sRGB."
+                    "It follows your system settings by default.\n\n"
+                    "You can customize this value to change the brightness at which images are displayed. "
+                    "Or you can link this value to the image white level (if known) to display images at their absolute brightness "
+                    "rather than relative to your system's brightness setting."
                 );
             } else {
-                ((TextBox*)mWhiteLevelBox)->set_value("");
-                mWhiteLevelBox->set_units("n/a");
-                mWhiteLevelBox->set_tooltip(
+                mDisplayWhiteLevelBox->set_tooltip(
                     "Your system or display does not support absolute brightness rendering. "
                     "White level override is disabled."
                 );
             }
 
-            mWhiteLevelBox->set_editable(mSupportsAbsoluteBrightness);
-            mWhiteLevelBox->set_enabled(mSupportsAbsoluteBrightness);
+            mDisplayWhiteLevelBox->set_editable(mSupportsAbsoluteBrightness);
+            mDisplayWhiteLevelBox->set_enabled(mSupportsAbsoluteBrightness);
 
-            mWhiteLevelOverrideButton = new Button{whiteLevelContainer, "Override", 0};
-            mWhiteLevelOverrideButton->set_font_size(15);
-            mWhiteLevelOverrideButton->set_change_callback([this](bool value) {
-                setOverridingWhiteLevel(value ? optional<float>{mWhiteLevelBox->value()} : std::nullopt);
+            mDisplayWhiteLevelSettingComboBox = new ComboBox{
+                whiteLevelContainer, {"System", "Custom", "Image"}
+            };
+            mDisplayWhiteLevelSettingComboBox->set_font_size(15);
+            mDisplayWhiteLevelSettingComboBox->set_fixed_width(80);
+            mDisplayWhiteLevelSettingComboBox->set_callback([this](int value) {
+                setDisplayWhiteLevelSetting(static_cast<EDisplayWhiteLevelSetting>(value));
             });
 
-            mWhiteLevelBox->set_callback([this](float value) { setOverridingWhiteLevel(value); });
+            mDisplayWhiteLevelBox->set_callback([this](float value) {
+                setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting::Custom);
+                setDisplayWhiteLevel(value);
+            });
 
-            mWhiteLevelOverrideButton->set_flags(Button::ToggleButton);
-            mWhiteLevelOverrideButton->set_enabled(mSupportsAbsoluteBrightness);
+            mDisplayWhiteLevelSettingComboBox->set_enabled(mSupportsAbsoluteBrightness);
+
+            addSpacer(popup, 10);
+
+            new Label{popup, "Best Guess Image White Level"};
+
+            addSpacer(popup, 5);
+
+            mImageWhiteLevelBox = new FloatBox<float>{popup};
+            mImageWhiteLevelBox->set_alignment(TextBox::Alignment::Right);
+            mImageWhiteLevelBox->set_min_max_values(0.0, 10000.0f);
+            mImageWhiteLevelBox->set_fixed_width(90);
+            mImageWhiteLevelBox->set_value(DEFAULT_IMAGE_WHITE_LEVEL);
+            mImageWhiteLevelBox->set_default_value(to_string(DEFAULT_IMAGE_WHITE_LEVEL));
+            mImageWhiteLevelBox->set_units("nits");
+            mImageWhiteLevelBox->set_tooltip(
+                "tev's best guess of the image's reference white level in nits (cd/m²). "
+                "This value represents the brightness a pixel value of 1.0 is meant to represent.\n\n"
+
+                "tev usually has to guess this value for multiple reasons. "
+                "Many image formats are display-referred and, as such, have no white level in (absolute) nits. "
+                "Other formats are scene-referred and thus do have an absolute white level, but this information is often not stored in the file. "
+                "Sometimes, it is not even clear whether a given image format is display- or scene-referred.\n\n"
+
+                "However, when an image has unambiguous metadata, e.g. uses the PQ transfer function or contains HDR10 metadata, "
+                "tev can determine the white level reliably."
+            );
+
+            mImageWhiteLevelBox->set_editable(false);
+            mImageWhiteLevelBox->set_enabled(false);
         }
 
         auto bgPopupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
@@ -1111,8 +1148,8 @@ void ImageViewer::draw_contents() {
     }
 
     // Update SDR white level from system settings if not overridden by the user
-    if (mWhiteLevelBox && mWhiteLevelBox->enabled() && !overridingWhiteLevel()) {
-        mWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
+    if (displayWhiteLevelSetting() == EDisplayWhiteLevelSetting::System) {
+        mDisplayWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
     }
 
     updateCurrentMonitorSize();
@@ -1557,6 +1594,8 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
             mGroupButtonContainer->remove_child_at(mGroupButtonContainer->child_count() - 1);
         }
 
+        setImageWhiteLevel(DEFAULT_IMAGE_WHITE_LEVEL);
+
         requestLayoutUpdate();
         return;
     }
@@ -1575,6 +1614,8 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
 
     mCurrentImage = image;
     mImageCanvas->setImage(mCurrentImage);
+
+    setImageWhiteLevel(mCurrentImage->whiteLevel());
 
     // Clear group buttons
     while (mGroupButtonContainer->child_count() > 0) {
@@ -1789,22 +1830,37 @@ void ImageViewer::setMetric(EMetric metric) {
     }
 }
 
-optional<float> ImageViewer::overridingWhiteLevel() const {
-    return mWhiteLevelOverrideButton && mWhiteLevelBox && mWhiteLevelOverrideButton->pushed() ? optional<float>{mWhiteLevelBox->value()} :
-                                                                                                std::nullopt;
+float ImageViewer::displayWhiteLevel() const { return mDisplayWhiteLevelBox->value(); }
+
+void ImageViewer::setDisplayWhiteLevel(float value) {
+    mDisplayWhiteLevelBox->set_value(value);
+    mImageCanvas->setWhiteLevelOverride(
+        displayWhiteLevelSetting() != EDisplayWhiteLevelSetting::System && value > 0.0f ? optional<float>{displayWhiteLevel()} : nullopt
+    );
 }
 
-void ImageViewer::setOverridingWhiteLevel(optional<float> value) {
-    if (mWhiteLevelOverrideButton) {
-        mWhiteLevelOverrideButton->set_pushed(value.has_value());
+void ImageViewer::setDisplayWhiteLevelToImageMetadata() {
+    setDisplayWhiteLevel(mCurrentImage ? mCurrentImage->whiteLevel() : DEFAULT_IMAGE_WHITE_LEVEL);
+}
+
+void ImageViewer::setImageWhiteLevel(float value) {
+    mImageWhiteLevelBox->set_value(value);
+    if (displayWhiteLevelSetting() == EDisplayWhiteLevelSetting::ImageMetadata) {
+        setDisplayWhiteLevelToImageMetadata();
     }
+}
 
-    if (mWhiteLevelBox) {
-        if (value.has_value()) {
-            mWhiteLevelBox->set_value(*value);
-        }
+ImageViewer::EDisplayWhiteLevelSetting ImageViewer::displayWhiteLevelSetting() const {
+    return static_cast<EDisplayWhiteLevelSetting>(mDisplayWhiteLevelSettingComboBox->selected_index());
+}
 
-        mImageCanvas->setWhiteLevelOverride(overridingWhiteLevel() ? optional<float>{mWhiteLevelBox->value()} : std::nullopt);
+void ImageViewer::setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting setting) {
+    mDisplayWhiteLevelSettingComboBox->set_selected_index(static_cast<int>(setting));
+
+    switch (displayWhiteLevelSetting()) {
+        case EDisplayWhiteLevelSetting::System: setDisplayWhiteLevel(glfwGetWindowSdrWhiteLevel(m_glfw_window)); break;
+        case EDisplayWhiteLevelSetting::Custom: break;
+        case EDisplayWhiteLevelSetting::ImageMetadata: setDisplayWhiteLevelToImageMetadata();
     }
 }
 

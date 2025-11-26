@@ -39,6 +39,8 @@
 
 namespace tev {
 
+static constexpr float DEFAULT_IMAGE_WHITE_LEVEL = 80.0f;
+
 struct AttributeNode {
     std::string name;
     std::string value;
@@ -49,7 +51,7 @@ struct AttributeNode {
 struct HdrMetadata {
     float maxCLL = 0.0f;
     float maxFALL = 0.0f;
-    float whiteLevel = 80.0f;
+    float whiteLevel = DEFAULT_IMAGE_WHITE_LEVEL;
 };
 
 struct ImageData {
@@ -174,8 +176,9 @@ public:
     }
 
     const Box2i& dataWindow() const { return mData.dataWindow; }
-
     const Box2i& displayWindow() const { return mData.displayWindow; }
+
+    float whiteLevel() const { return mData.hdrMetadata.whiteLevel; }
 
     nanogui::Vector2f centerDisplayOffset(const Box2i& displayWindow) const {
         return Box2f{dataWindow()}.middle() - Box2f{displayWindow}.middle();

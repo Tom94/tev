@@ -351,12 +351,12 @@ static int mainFunc(span<const string> arguments) {
         {'w', "watch"},
     };
 
-    ValueFlag<float> whiteLevelFlag{
+    ValueFlag<string> whiteLevelFlag{
         parser,
         "WHITE LEVEL",
-        "Override the automatically detected display white level (for HDR displays) in nits (cd/m²). "
-        "You can set this value if you know the white level of your images and would like to display them at absolute brightness.",
-        {"white-level"},
+        "Override the system's display white level in nits (cd/m²). Only possible on HDR systems with absolute brightness capability. "
+        "You can also set the white level to 'image' to use the image's metadata white level if available.",
+        {"wl", "white-level"},
     };
 
     PositionalList<string> imageFiles{
@@ -648,7 +648,18 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (whiteLevelFlag) {
-        sImageViewer->setOverridingWhiteLevel(get(whiteLevelFlag));
+        if (get(whiteLevelFlag) == "image") {
+            sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::ImageMetadata);
+        } else {
+            try {
+                const float whiteLevel = stof(get(whiteLevelFlag));
+                sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::Custom);
+                sImageViewer->setDisplayWhiteLevel(whiteLevel);
+            } catch (const invalid_argument&) {
+                tlog::error() << fmt::format("Invalid white level value '{}'. Must be a float or 'image'.", get(whiteLevelFlag));
+                return -4;
+            }
+        }
     }
 
     sImageViewer->draw_all();
