@@ -230,350 +230,6 @@ Matrix3f adaptToXYZD50Bradford(const Vector2f& w) {
     return kBradfordInv * b;
 }
 
-class GlobalCmsContext {
-public:
-    GlobalCmsContext() {
-        cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
-            tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
-        });
-    }
-};
-
-class CmsContext {
-public:
-    CmsContext(const CmsContext&) = delete;
-    CmsContext& operator=(const CmsContext&) = delete;
-    CmsContext(CmsContext&&) = delete;
-    CmsContext& operator=(CmsContext&&) = delete;
-
-    static const CmsContext& threadLocal() {
-        static thread_local CmsContext threadCtx;
-        return threadCtx;
-    }
-
-    cmsContext get() const { return mCtx; }
-
-    cmsHPROFILE rec709Profile() const { return mRec709Profile; }
-    cmsHPROFILE grayProfile() const { return mGrayProfile; }
-
-private:
-    CmsContext() {
-        static GlobalCmsContext globalCtx;
-
-        mCtx = cmsCreateContext(cmsFastFloatExtensions(), nullptr);
-        if (!mCtx) {
-            throw runtime_error{"Failed to create LCMS context."};
-        }
-
-        cmsCIExyY D65 = {0.3127, 0.3290, 1.0};
-        cmsCIExyYTRIPLE Rec709Primaries = {
-            {0.6400, 0.3300, 1.0},
-            {0.3000, 0.6000, 1.0},
-            {0.1500, 0.0600, 1.0}
-        };
-
-        cmsToneCurve* linearCurve[3];
-        linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(mCtx, 1.0f);
-
-        mRec709Profile = cmsCreateRGBProfileTHR(mCtx, &D65, &Rec709Primaries, linearCurve);
-        if (!mRec709Profile) {
-            throw runtime_error{"Failed to create Rec.709 color profile."};
-        }
-
-        cmsToneCurve* grayCurve = cmsBuildGamma(mCtx, 1.0f);
-        mGrayProfile = cmsCreateGrayProfileTHR(mCtx, &D65, grayCurve);
-        if (!mGrayProfile) {
-            throw runtime_error{"Failed to create gray color profile."};
-        }
-    }
-
-    ~CmsContext() {
-        if (mGrayProfile) {
-            cmsCloseProfile(mGrayProfile);
-        }
-
-        if (mRec709Profile) {
-            cmsCloseProfile(mRec709Profile);
-        }
-
-        if (mCtx) {
-            cmsDeleteContext(mCtx);
-        }
-    }
-
-    cmsContext mCtx = nullptr;
-    cmsHPROFILE mRec709Profile = nullptr;
-    cmsHPROFILE mGrayProfile = nullptr;
-};
-
-ColorProfile::~ColorProfile() {
-    if (mProfile) {
-        cmsCloseProfile(mProfile);
-    }
-}
-
-ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
-    cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(CmsContext::threadLocal().get(), iccProfile, (cmsUInt32Number)iccProfileSize);
-    if (!srcProfile) {
-        throw runtime_error{"Failed to create ICC profile from raw data."};
-    }
-
-    string desc = "<unnamed>";
-    const size_t len = cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", nullptr, 0);
-    if (len > 0) {
-        desc.resize(len);
-        cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", desc.data(), (cmsUInt32Number)desc.size());
-    }
-
-    tlog::debug() << fmt::format("Loaded ICC profile '{}'.", desc);
-
-    return srcProfile;
-}
-
-Task<void> toLinearSrgbPremul(
-    const ColorProfile& profile,
-    const Vector2i& size,
-    int numColorChannels,
-    EAlphaKind alphaKind,
-    EPixelFormat pixelFormat,
-    uint8_t* __restrict src,
-    float* __restrict rgbaDst,
-    int numChannelsOut,
-    int priority
-) {
-    const int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
-
-    if (!profile.isValid()) {
-        throw runtime_error{"Color profile must be valid."};
-    }
-
-    if (numColorChannels < 1 || numColorChannels > 4) {
-        throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
-    }
-
-    if (alphaKind == EAlphaKind::PremultipliedNonlinear && pixelFormat != EPixelFormat::F32) {
-        throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
-    }
-
-    bool validCicp = false;
-
-    ituth273::EColorPrimaries primaries = ituth273::EColorPrimaries::Unspecified;
-    ituth273::ETransferCharacteristics transfer = ituth273::ETransferCharacteristics::Unspecified;
-    int matrixCoefficients = 0; // 0 = RGB, 1 = BT.709 YCbCr, 6 = BT.601 YCbCr
-    int videoFullRangeFlag = 0; // 0 = limited range, 1 = full range
-
-    if (cmsVideoSignalType* cicp = (cmsVideoSignalType*)cmsReadTag(profile.get(), cmsSigcicpTag); cicp != nullptr) {
-        tlog::debug() << fmt::format(
-            "ICC profile has CICP tag. Attempting manual conversion.",
-            (int)cicp->ColourPrimaries,
-            (int)cicp->TransferCharacteristics,
-            (int)cicp->MatrixCoefficients,
-            (int)cicp->VideoFullRangeFlag
-        );
-
-        validCicp = true;
-
-        primaries = (ituth273::EColorPrimaries)cicp->ColourPrimaries;
-        transfer = (ituth273::ETransferCharacteristics)cicp->TransferCharacteristics;
-        matrixCoefficients = cicp->MatrixCoefficients;
-        videoFullRangeFlag = cicp->VideoFullRangeFlag;
-
-        if (!ituth273::isTransferImplemented(transfer)) {
-            tlog::warning() << fmt::format("Unsupported transfer '{}' in CICP tag. Falling back to LCMS2.", ituth273::toString(transfer));
-            validCicp = false;
-        }
-
-        if (cicp->MatrixCoefficients != 0) {
-            tlog::warning()
-                << fmt::format("Unsupported matrix coefficients in cICP chunk: {}. Falling back to LCMS2.", cicp->MatrixCoefficients);
-            validCicp = false;
-        }
-
-        if (pixelFormat != EPixelFormat::F32) {
-            tlog::warning() << "Unsupported CICP color conversion from non-F32 pixel format. Falling back to LCMS2.";
-            validCicp = false;
-        }
-    }
-
-    LimitedRange range = LimitedRange::full();
-    Matrix3f toRec709 = Matrix3f{1.0f};
-
-    if (validCicp) {
-        tlog::debug() << fmt::format(
-            "CICP: primaries={} transfer={} coeffs={} fullRange={}",
-            ituth273::toString(primaries),
-            ituth273::toString(transfer),
-            matrixCoefficients,
-            videoFullRangeFlag == 1 ? "yes" : "no"
-        );
-
-        range = videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(nBits(pixelFormat));
-        toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
-    }
-
-    // Create transform from source profile to Rec.709
-    cmsUInt32Number type = CHANNELS_SH(numColorChannels);
-
-    size_t bytesPerSample = 0;
-    switch (pixelFormat) {
-        case EPixelFormat::U8:
-            type |= BYTES_SH(1);
-            bytesPerSample = 1;
-            break;
-        case EPixelFormat::U16:
-            type |= BYTES_SH(2);
-            bytesPerSample = 2;
-            break;
-        case EPixelFormat::F16:
-            type |= BYTES_SH(2) | FLOAT_SH(1);
-            bytesPerSample = 2;
-            break;
-        case EPixelFormat::F32:
-            type |= BYTES_SH(4) | FLOAT_SH(1);
-            bytesPerSample = 4;
-            break;
-        default: throw runtime_error{"Unsupported pixel format."};
-    }
-
-    if (pixelFormat != EPixelFormat::F32) {
-        tlog::warning() << "Color conversion from non-F32 pixel format detected. This can be significantly slower than F32->F32.";
-    }
-
-    if (alphaKind != EAlphaKind::None) {
-        type |= EXTRA_SH(1);
-    }
-
-    // We expressly *don't* tell lcms2 that the alpha channel is premultiplied, because it would divide the alpha channel prior to color
-    // space conversion and inverse transfer function application. This would be bad for multiple reasons: first, EAlphaKind::Premultiplied
-    // indicated premultiplication in linear space, and second, lcms2 does not handle the case of alpha close to 0 very accurately. This is
-    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedNonlinear below rather than relying on lcms2.
-    // if (alphaKind == EAlphaKind::Premultiplied) {
-    //     type |= PREMUL_SH(1);
-    // }
-
-    // TODO: differentiate between single channel RGB and gray
-    if (numColorChannels == 1) {
-        type |= COLORSPACE_SH(PT_GRAY);
-    } else if (numColorChannels == 4) {
-        type |= COLORSPACE_SH(PT_CMYK);
-    } else {
-        type |= COLORSPACE_SH(PT_RGB);
-    }
-
-    cmsUInt32Number typeOut = 0;
-    switch (numChannelsOut) {
-        case 1: typeOut = TYPE_GRAY_FLT; break;
-        case 2: typeOut = TYPE_GRAYA_FLT; break;
-        case 3: typeOut = TYPE_RGB_FLT; break;
-        case 4: typeOut = TYPE_RGBA_FLT; break;
-        default: throw runtime_error{"Invalid number of output channels."};
-    }
-
-    const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
-
-    tlog::debug() << fmt::format(
-        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x}",
-        numColorChannels,
-        (int)alphaKind,
-        (int)pixelFormat,
-        numChannels,
-        type,
-        numChannelsOut,
-        typeOut
-    );
-
-    cmsHTRANSFORM transform = cmsCreateTransformTHR(
-        CmsContext::threadLocal().get(),
-        profile.get(),
-        type,
-        numColorChannels == 1 && numColorChannelsOut == 1 ? CmsContext::threadLocal().grayProfile() :
-                                                            CmsContext::threadLocal().rec709Profile(),
-        // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
-        // if we set this as the output type.
-        typeOut,
-        // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
-        // following rendering intent.
-        INTENT_RELATIVE_COLORIMETRIC,
-        alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
-    );
-
-    if (!transform) {
-        throw runtime_error{"Failed to create color transform to Rec.709."};
-    }
-
-    const size_t nSrcSamplesPerRow = size.x() * numChannels;
-    const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
-        size.y(),
-        [&](size_t y) {
-            size_t srcOffset = y * nSrcSamplesPerRow * bytesPerSample;
-            size_t dstOffset = y * nDstSamplesPerRow;
-
-            uint8_t* __restrict srcPtr = &src[srcOffset];
-            float* __restrict dstPtr = &rgbaDst[dstOffset];
-
-            // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
-            if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
-                for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = x * numChannels;
-                    const float alpha = *(float*)&srcPtr[(baseIdx + numColorChannels) * bytesPerSample];
-                    const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
-                    for (int c = 0; c < numChannels - 1; ++c) {
-                        *(float*)&srcPtr[(baseIdx + c) * bytesPerSample] *= factor;
-                    }
-                }
-            }
-
-            if (validCicp) {
-                for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdxSrc = x * numChannels;
-                    const size_t baseIdxDst = x * numChannelsOut;
-
-                    Vector3f color;
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        const float val = (*(float*)&srcPtr[(baseIdxSrc + c) * bytesPerSample] - range.offset) * range.scale;
-                        color[c] = ituth273::invTransfer(transfer, val);
-                    }
-
-                    color = toRec709 * color;
-
-                    for (int c = 0; c < numColorChannelsOut; ++c) {
-                        dstPtr[baseIdxDst + c] = color[c];
-                    }
-
-                    if (alphaKind != EAlphaKind::None) {
-                        dstPtr[baseIdxDst + numColorChannelsOut] = *(float*)&srcPtr[(baseIdxSrc + numColorChannels) * bytesPerSample];
-                    }
-                }
-            } else {
-                // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads. So:
-                // call cmsDoTransform for each row in parallel.
-                cmsDoTransform(transform, srcPtr, dstPtr, size.x());
-            }
-
-            // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the
-            // input image had non-linear premultiplied alpha, alpha==0 pixels were preserved as-is when converting to straight alpha, so we
-            // also should not re-multiply those.
-            if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
-                for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = x * numChannelsOut;
-
-                    float factor = dstPtr[baseIdx + numChannelsOut - 1];
-                    if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
-                        factor = 1.0f;
-                    }
-
-                    for (int c = 0; c < numChannelsOut - 1; ++c) {
-                        dstPtr[baseIdx + c] *= factor;
-                    }
-                }
-            }
-        },
-        priority
-    );
-}
-
 array<Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries) {
     if (wpPrimaries == 10) {
         // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
@@ -693,7 +349,7 @@ string_view toString(const ETransferCharacteristics transfer) {
         case ETransferCharacteristics::Linear: return "linear";
         case ETransferCharacteristics::Log100: return "log100";
         case ETransferCharacteristics::Log100Sqrt10: return "log100_sqrt10";
-        case ETransferCharacteristics::IEC61966: return "iec61966";
+        case ETransferCharacteristics::IEC61966_2_4: return "iec61966";
         case ETransferCharacteristics::BT1361Extended: return "bt1361_extended";
         case ETransferCharacteristics::SRGB: return "srgb";
         case ETransferCharacteristics::BT202010bit: return "bt2020_10bit";
@@ -728,7 +384,7 @@ bool isTransferImplemented(const ETransferCharacteristics transfer) {
         case ETransferCharacteristics::BT601:
         case ETransferCharacteristics::BT202010bit:
         case ETransferCharacteristics::BT202012bit:
-        case ETransferCharacteristics::IEC61966: // handles negative values by mirroring
+        case ETransferCharacteristics::IEC61966_2_4: // handles negative values by mirroring
         case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
         case ETransferCharacteristics::BT470M:
         case ETransferCharacteristics::BT470BG:
@@ -755,7 +411,7 @@ ETransferCharacteristics fromWpTransfer(int wpTransfer) {
         case 5: return ETransferCharacteristics::Linear;
         case 6: return ETransferCharacteristics::Log100;
         case 7: return ETransferCharacteristics::Log100Sqrt10;
-        case 8: return ETransferCharacteristics::IEC61966;
+        case 8: return ETransferCharacteristics::IEC61966_2_4;
         case 9: return ETransferCharacteristics::SRGB;
         case 10: return ETransferCharacteristics::SRGB; // TODO: handle the fact that this is the extended SRGB variant
         case 11: return ETransferCharacteristics::PQ;
@@ -767,6 +423,346 @@ ETransferCharacteristics fromWpTransfer(int wpTransfer) {
 }
 
 } // namespace ituth273
+
+class GlobalCmsContext {
+public:
+    GlobalCmsContext() {
+        cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
+            tlog::error() << fmt::format("lcms error #{}: {}", errorCode, message);
+        });
+    }
+};
+
+class CmsContext {
+public:
+    CmsContext(const CmsContext&) = delete;
+    CmsContext& operator=(const CmsContext&) = delete;
+    CmsContext(CmsContext&&) = delete;
+    CmsContext& operator=(CmsContext&&) = delete;
+
+    static const CmsContext& threadLocal() {
+        static thread_local CmsContext threadCtx;
+        return threadCtx;
+    }
+
+    cmsContext get() const { return mCtx; }
+
+    cmsHPROFILE rec709Profile() const { return mRec709Profile; }
+    cmsHPROFILE grayProfile() const { return mGrayProfile; }
+
+private:
+    CmsContext() {
+        static GlobalCmsContext globalCtx;
+
+        mCtx = cmsCreateContext(cmsFastFloatExtensions(), nullptr);
+        if (!mCtx) {
+            throw runtime_error{"Failed to create LCMS context."};
+        }
+
+        cmsCIExyY D65 = {0.3127, 0.3290, 1.0};
+        cmsCIExyYTRIPLE Rec709Primaries = {
+            {0.6400, 0.3300, 1.0},
+            {0.3000, 0.6000, 1.0},
+            {0.1500, 0.0600, 1.0}
+        };
+
+        cmsToneCurve* linearCurve[3];
+        linearCurve[0] = linearCurve[1] = linearCurve[2] = cmsBuildGamma(mCtx, 1.0f);
+
+        mRec709Profile = cmsCreateRGBProfileTHR(mCtx, &D65, &Rec709Primaries, linearCurve);
+        if (!mRec709Profile) {
+            throw runtime_error{"Failed to create Rec.709 color profile."};
+        }
+
+        cmsToneCurve* grayCurve = cmsBuildGamma(mCtx, 1.0f);
+        mGrayProfile = cmsCreateGrayProfileTHR(mCtx, &D65, grayCurve);
+        if (!mGrayProfile) {
+            throw runtime_error{"Failed to create gray color profile."};
+        }
+    }
+
+    ~CmsContext() {
+        if (mGrayProfile) {
+            cmsCloseProfile(mGrayProfile);
+        }
+
+        if (mRec709Profile) {
+            cmsCloseProfile(mRec709Profile);
+        }
+
+        if (mCtx) {
+            cmsDeleteContext(mCtx);
+        }
+    }
+
+    cmsContext mCtx = nullptr;
+    cmsHPROFILE mRec709Profile = nullptr;
+    cmsHPROFILE mGrayProfile = nullptr;
+};
+
+ColorProfile::~ColorProfile() {
+    if (mProfile) {
+        cmsCloseProfile(mProfile);
+    }
+}
+
+optional<ColorProfile::CICP> ColorProfile::getCicp() const {
+    const auto* cicp = (const cmsVideoSignalType*)cmsReadTag(get(), cmsSigcicpTag);
+    if (!cicp) {
+        return nullopt;
+    }
+
+    return ColorProfile::CICP{
+        .primaries = (ituth273::EColorPrimaries)cicp->ColourPrimaries,
+        .transfer = (ituth273::ETransferCharacteristics)cicp->TransferCharacteristics,
+        .matrixCoeffs = cicp->MatrixCoefficients,
+        .videoFullRangeFlag = cicp->VideoFullRangeFlag,
+    };
+}
+
+ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
+    cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(CmsContext::threadLocal().get(), iccProfile, (cmsUInt32Number)iccProfileSize);
+    if (!srcProfile) {
+        throw runtime_error{"Failed to create ICC profile from raw data."};
+    }
+
+    string desc = "<unnamed>";
+    const size_t len = cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", nullptr, 0);
+    if (len > 0) {
+        desc.resize(len);
+        cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", desc.data(), (cmsUInt32Number)desc.size());
+    }
+
+    tlog::debug() << fmt::format("Loaded ICC profile '{}'.", desc);
+
+    return srcProfile;
+}
+
+Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
+    const ColorProfile& profile,
+    const Vector2i& size,
+    int numColorChannels,
+    EAlphaKind alphaKind,
+    EPixelFormat pixelFormat,
+    uint8_t* __restrict src,
+    float* __restrict rgbaDst,
+    int numChannelsOut,
+    int priority
+) {
+    const int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
+
+    if (!profile.isValid()) {
+        throw runtime_error{"Color profile must be valid."};
+    }
+
+    if (numColorChannels < 1 || numColorChannels > 4) {
+        throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
+    }
+
+    if (alphaKind == EAlphaKind::PremultipliedNonlinear && pixelFormat != EPixelFormat::F32) {
+        throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
+    }
+
+    auto cicp = profile.getCicp();
+    if (cicp) {
+        tlog::debug() << fmt::format("ICC profile has CICP tag. Attempting manual conversion.");
+    }
+
+    if (cicp && !ituth273::isTransferImplemented(cicp->transfer)) {
+        tlog::warning() << fmt::format("Unsupported transfer '{}' in CICP tag. Falling back to LCMS2.", ituth273::toString(cicp->transfer));
+        cicp = nullopt;
+    }
+
+    if (cicp && cicp->matrixCoeffs != 0) {
+        tlog::warning() << fmt::format("Unsupported matrix coefficients in cICP chunk: {}. Falling back to LCMS2.", cicp->matrixCoeffs);
+        cicp = nullopt;
+    }
+
+    if (cicp && pixelFormat != EPixelFormat::F32) {
+        tlog::warning() << "Unsupported CICP color conversion from non-F32 pixel format. Falling back to LCMS2.";
+        cicp = nullopt;
+    }
+
+    LimitedRange range = LimitedRange::full();
+    Matrix3f toRec709 = Matrix3f{1.0f};
+
+    if (cicp) {
+        tlog::debug() << fmt::format(
+            "CICP: primaries={} transfer={} coeffs={} fullRange={}",
+            ituth273::toString(cicp->primaries),
+            ituth273::toString(cicp->transfer),
+            cicp->matrixCoeffs,
+            cicp->videoFullRangeFlag == 1 ? "yes" : "no"
+        );
+
+        range = cicp->videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(nBits(pixelFormat));
+        toRec709 = chromaToRec709Matrix(ituth273::chroma(cicp->primaries));
+    }
+
+    // Create transform from source profile to Rec.709
+    cmsUInt32Number type = CHANNELS_SH(numColorChannels);
+
+    size_t bytesPerSample = 0;
+    switch (pixelFormat) {
+        case EPixelFormat::U8:
+            type |= BYTES_SH(1);
+            bytesPerSample = 1;
+            break;
+        case EPixelFormat::U16:
+            type |= BYTES_SH(2);
+            bytesPerSample = 2;
+            break;
+        case EPixelFormat::F16:
+            type |= BYTES_SH(2) | FLOAT_SH(1);
+            bytesPerSample = 2;
+            break;
+        case EPixelFormat::F32:
+            type |= BYTES_SH(4) | FLOAT_SH(1);
+            bytesPerSample = 4;
+            break;
+        default: throw runtime_error{"Unsupported pixel format."};
+    }
+
+    if (pixelFormat != EPixelFormat::F32) {
+        tlog::warning() << "Color conversion from non-F32 pixel format detected. This can be significantly slower than F32->F32.";
+    }
+
+    if (alphaKind != EAlphaKind::None) {
+        type |= EXTRA_SH(1);
+    }
+
+    // We expressly *don't* tell lcms2 that the alpha channel is premultiplied, because it would divide the alpha channel prior to color
+    // space conversion and inverse transfer function application. This would be bad for multiple reasons: first, EAlphaKind::Premultiplied
+    // indicated premultiplication in linear space, and second, lcms2 does not handle the case of alpha close to 0 very accurately. This is
+    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedNonlinear below rather than relying on lcms2.
+    // if (alphaKind == EAlphaKind::Premultiplied) {
+    //     type |= PREMUL_SH(1);
+    // }
+
+    // TODO: differentiate between single channel RGB and gray
+    if (numColorChannels == 1) {
+        type |= COLORSPACE_SH(PT_GRAY);
+    } else if (numColorChannels == 4) {
+        type |= COLORSPACE_SH(PT_CMYK);
+    } else {
+        type |= COLORSPACE_SH(PT_RGB);
+    }
+
+    cmsUInt32Number typeOut = 0;
+    switch (numChannelsOut) {
+        case 1: typeOut = TYPE_GRAY_FLT; break;
+        case 2: typeOut = TYPE_GRAYA_FLT; break;
+        case 3: typeOut = TYPE_RGB_FLT; break;
+        case 4: typeOut = TYPE_RGBA_FLT; break;
+        default: throw runtime_error{"Invalid number of output channels."};
+    }
+
+    const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
+
+    tlog::debug() << fmt::format(
+        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x}",
+        numColorChannels,
+        (int)alphaKind,
+        (int)pixelFormat,
+        numChannels,
+        type,
+        numChannelsOut,
+        typeOut
+    );
+
+    cmsHTRANSFORM transform = cmsCreateTransformTHR(
+        CmsContext::threadLocal().get(),
+        profile.get(),
+        type,
+        numColorChannels == 1 && numColorChannelsOut == 1 ? CmsContext::threadLocal().grayProfile() :
+                                                            CmsContext::threadLocal().rec709Profile(),
+        // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
+        // if we set this as the output type.
+        typeOut,
+        // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
+        // following rendering intent.
+        INTENT_RELATIVE_COLORIMETRIC,
+        alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
+    );
+
+    if (!transform) {
+        throw runtime_error{"Failed to create color transform to Rec.709."};
+    }
+
+    const size_t nSrcSamplesPerRow = size.x() * numChannels;
+    const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        size.y(),
+        [&](size_t y) {
+            size_t srcOffset = y * nSrcSamplesPerRow * bytesPerSample;
+            size_t dstOffset = y * nDstSamplesPerRow;
+
+            uint8_t* __restrict srcPtr = &src[srcOffset];
+            float* __restrict dstPtr = &rgbaDst[dstOffset];
+
+            // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
+            if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
+                for (int x = 0; x < size.x(); ++x) {
+                    const size_t baseIdx = x * numChannels;
+                    const float alpha = *(float*)&srcPtr[(baseIdx + numColorChannels) * bytesPerSample];
+                    const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
+                    for (int c = 0; c < numChannels - 1; ++c) {
+                        *(float*)&srcPtr[(baseIdx + c) * bytesPerSample] *= factor;
+                    }
+                }
+            }
+
+            if (cicp) {
+                for (int x = 0; x < size.x(); ++x) {
+                    const size_t baseIdxSrc = x * numChannels;
+                    const size_t baseIdxDst = x * numChannelsOut;
+
+                    Vector3f color;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        const float val = (*(float*)&srcPtr[(baseIdxSrc + c) * bytesPerSample] - range.offset) * range.scale;
+                        color[c] = ituth273::invTransfer(cicp->transfer, val);
+                    }
+
+                    color = toRec709 * color;
+
+                    for (int c = 0; c < numColorChannelsOut; ++c) {
+                        dstPtr[baseIdxDst + c] = color[c];
+                    }
+
+                    if (alphaKind != EAlphaKind::None) {
+                        dstPtr[baseIdxDst + numColorChannelsOut] = *(float*)&srcPtr[(baseIdxSrc + numColorChannels) * bytesPerSample];
+                    }
+                }
+            } else {
+                // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
+                // So: call cmsDoTransform for each row in parallel.
+                cmsDoTransform(transform, srcPtr, dstPtr, size.x());
+            }
+
+            // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the
+            // input image had non-linear premultiplied alpha, alpha==0 pixels were preserved as-is when converting to straight alpha, so we
+            // also should not re-multiply those.
+            if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
+                for (int x = 0; x < size.x(); ++x) {
+                    const size_t baseIdx = x * numChannelsOut;
+
+                    float factor = dstPtr[baseIdx + numChannelsOut - 1];
+                    if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
+                        factor = 1.0f;
+                    }
+
+                    for (int c = 0; c < numChannelsOut - 1; ++c) {
+                        dstPtr[baseIdx + c] *= factor;
+                    }
+                }
+            }
+        },
+        priority
+    );
+
+    co_return cicp;
+}
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {
     switch (bitsPerSample) {

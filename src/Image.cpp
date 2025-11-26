@@ -29,6 +29,7 @@
 #include <fstream>
 #include <istream>
 #include <map>
+#include <numeric>
 #include <unordered_set>
 #include <vector>
 
@@ -94,6 +95,99 @@ Task<void> ImageData::convertToRec709(int priority) {
 
     // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
     toRec709 = Matrix3f{1.0f};
+}
+
+Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
+    if (toRec709 != Matrix3f{1.0f}) {
+        throw ImageModifyError{"Cannot derive white level from metadata before converting to Rec709 color space."};
+    }
+
+    if (hdrMetadata.maxCLL <= 0.0f && hdrMetadata.maxFALL <= 0.0f) {
+        co_return;
+    }
+
+    vector<Task<void>> tasks;
+
+    vector<vector<float>> totalLumPerLayerRow(layers.size());
+    vector<vector<float>> maxLumPerLayerRow(layers.size());
+
+    for (size_t i = 0; i < layers.size(); ++i) {
+        const auto& layer = layers[i];
+
+        Channel* r = nullptr;
+        Channel* g = nullptr;
+        Channel* b = nullptr;
+
+        if (!(((r = mutableChannel(layer + "R")) && (g = mutableChannel(layer + "G")) && (b = mutableChannel(layer + "B"))) ||
+              ((r = mutableChannel(layer + "r")) && (g = mutableChannel(layer + "g")) && (b = mutableChannel(layer + "b"))))) {
+            // No RGB-triplet found
+            continue;
+        }
+
+        TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
+
+        totalLumPerLayerRow[i] = vector<float>(r->size().y(), 0.0f);
+        maxLumPerLayerRow[i] = vector<float>(r->size().y(), 0.0f);
+
+        const auto s = r->size();
+        tasks.emplace_back(
+            ThreadPool::global().parallelForAsync<int>(
+                0,
+                s.y(),
+                [s, r, g, b, &totalLum = totalLumPerLayerRow[i], &maxLum = maxLumPerLayerRow[i]](int y) {
+                    for (int x = 0; x < s.x(); ++x) {
+                        // We're guaranteed to be in linear Rec709 space here, hence these coeffs.
+                        const float lum = 0.2126 * r->at({x, y}) + 0.7152 * g->at({x, y}) + 0.0722 * b->at({x, y});
+                        if (!isfinite(lum)) {
+                            continue;
+                        }
+
+                        totalLum[y] += lum;
+                        maxLum[y] = std::max(maxLum[y], lum);
+                    }
+                },
+                priority
+            )
+        );
+    }
+
+    co_await awaitAll(tasks);
+
+    for (size_t i = 0; i < layers.size(); ++i) {
+        const float avgLum = accumulate(begin(totalLumPerLayerRow[i]), end(totalLumPerLayerRow[i]), 0.0f) / numPixels();
+        const float maxLum = accumulate(begin(maxLumPerLayerRow[i]), end(maxLumPerLayerRow[i]), 0.0f, [](float a, float b) {
+            return std::max(a, b);
+        });
+
+        const float whiteLevelFromMaxCLL = hdrMetadata.maxCLL / maxLum;
+        const float whiteLevelFromMaxFALL = hdrMetadata.maxFALL / avgLum;
+
+        if (whiteLevelFromMaxCLL > 0.0f) {
+            hdrMetadata.whiteLevel = whiteLevelFromMaxCLL;
+        }
+
+        if (whiteLevelFromMaxFALL > 0.0f) {
+            hdrMetadata.whiteLevel = whiteLevelFromMaxFALL;
+        }
+
+        if (whiteLevelFromMaxFALL > 0 && whiteLevelFromMaxCLL > 0 &&
+            abs(whiteLevelFromMaxCLL - whiteLevelFromMaxFALL) / (whiteLevelFromMaxCLL + whiteLevelFromMaxFALL) > 0.01f) {
+            tlog::warning() << fmt::format(
+                "Derived white levels from maxCLL ({}->{}) and maxFALL ({}->{}) of layer '{}' differ by over 1%.",
+                hdrMetadata.maxCLL,
+                whiteLevelFromMaxCLL,
+                hdrMetadata.maxFALL,
+                whiteLevelFromMaxFALL,
+                layers[i]
+            );
+        }
+
+        tlog::debug() << fmt::format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.whiteLevel, layers[i]);
+    }
+
+    // Ensure we don't apply this multiple times.
+    hdrMetadata.maxCLL = 0.0f;
+    hdrMetadata.maxFALL = 0.0f;
 }
 
 Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
@@ -333,6 +427,12 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     }
 
     co_await convertToRec709(taskPriority);
+
+    // NOTE: Lossy compression seems to ruin reliable derivations of the white level from maxCLL values. maxFALL values should work in
+    // principle, but the only dataset I have with those is https://people.csail.mit.edu/ericchan/hdr/ where the maxFALL values seem to be
+    // incorrect. (Do not match what the PQ transfer prescribes by inconsistent amounts. I might be doing something wrong.)
+
+    // co_await deriveWhiteLevelFromMetadata(taskPriority);
 
     co_await convertToDesiredPixelFormat(taskPriority);
 

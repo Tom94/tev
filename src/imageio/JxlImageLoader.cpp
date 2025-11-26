@@ -177,7 +177,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
             TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
             tasks.emplace_back(
-                [](JxlParallelRunFunction func, void* jpegxlOpaque, uint32_t taskId, uint32_t tStart, uint32_t tEnd, int tPriority, ThreadPool* pool
+                [](
+                    JxlParallelRunFunction func, void* jpegxlOpaque, uint32_t taskId, uint32_t tStart, uint32_t tEnd, int tPriority, ThreadPool* pool
                 ) -> Task<void> {
                     co_await pool->enqueueCoroutine(tPriority);
                     for (uint32_t j = tStart; j < tEnd; ++j) {
@@ -257,14 +258,16 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 tlog::debug() << fmt::format(
-                    "Image size={}x{} channels={} bits_per_sample={} alpha_bits={} alpha_premultiplied={} have_animation={}",
+                    "Image size={}x{} channels={} bits_per_sample={}:{} alpha_bits={} alpha_premultiplied={} have_animation={} intensity_target={}",
                     info.xsize,
                     info.ysize,
                     info.num_color_channels,
                     info.bits_per_sample,
+                    info.exponent_bits_per_sample,
                     info.alpha_bits,
                     info.alpha_premultiplied,
-                    info.have_animation
+                    info.have_animation,
+                    info.intensity_target
                 );
 
                 if (info.alpha_bits && info.num_extra_channels == 0) {
@@ -322,8 +325,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     }
                 }
 
-                tlog::debug(
-                ) << fmt::format("Frame {}: duration={}, is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName);
+                tlog::debug() << fmt::format(
+                    "Frame {}: duration={}, is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName
+                );
             } break;
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
                 // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all
@@ -422,12 +426,18 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     data.partName = frameName;
                 }
 
+                if (info.intensity_target != 0 && info.intensity_target != 255) {
+                    // Some JXL files use the intensity_target field to indicate maxCLL (e.g. https://people.csail.mit.edu/ericchan/hdr/).
+                    // Values of 0 and 255 are reserved/meaningless, so ignore those.
+                    data.hdrMetadata.maxCLL = info.intensity_target;
+                }
+
                 bool colorChannelsLoaded = false;
                 if (!iccProfile.empty()) {
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        co_await toLinearSrgbPremul(
+                        const auto cicp = co_await toLinearSrgbPremul(
                             ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
                             size,
                             info.num_color_channels,
@@ -439,6 +449,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             4,
                             priority
                         );
+
+                        if (cicp) {
+                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                        }
 
                         data.hasPremultipliedAlpha = true;
 
@@ -456,7 +470,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     // decoder has already prepared the data in linear sRGB for us.
                     if (ce) {
                         tlog::debug() << fmt::format(
-                            "JxlColorEncoding: colorspace={}, primaries={}, whitepoint={}, transfer={}",
+                            "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={}",
                             jxlToString(ce->color_space),
                             jxlToString(ce->primaries),
                             jxlToString(ce->white_point),
@@ -486,6 +500,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         if (!hasGamma && !ituth273::isTransferImplemented(cicpTransfer)) {
                             tlog::warning() << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
                             cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
+                        }
+
+                        if (!hasGamma) {
+                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
                         }
 
                         auto* pixelData = data.channels.front().floatData();
@@ -524,7 +542,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     // Resize the channel to the image size
                     auto& channel = data.channels.emplace_back(
-                        Channel{extraChannel.name, size, EPixelFormat::F32, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16}
+                        Channel{
+                            extraChannel.name, size, EPixelFormat::F32, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
+                        }
                     );
                     co_await ThreadPool::global().parallelForAsync<size_t>(
                         0,

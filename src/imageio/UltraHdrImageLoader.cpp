@@ -54,6 +54,17 @@ static string toString(uhdr_color_gamut_t cg) {
     }
 }
 
+ituth273::ETransferCharacteristics toCicpTransfer(uhdr_color_transfer_t ct) {
+    switch (ct) {
+        case UHDR_CT_UNSPECIFIED: return ituth273::ETransferCharacteristics::Unspecified;
+        case UHDR_CT_LINEAR: return ituth273::ETransferCharacteristics::Linear;
+        case UHDR_CT_HLG: return ituth273::ETransferCharacteristics::HLG;
+        case UHDR_CT_PQ: return ituth273::ETransferCharacteristics::PQ;
+        case UHDR_CT_SRGB: return ituth273::ETransferCharacteristics::SRGB;
+        default: return ituth273::ETransferCharacteristics::Unspecified;
+    }
+}
+
 Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool applyGainmaps) const {
     if (!applyGainmaps) {
         throw FormatNotSupported{"Ultra HDR images must have gainmaps applied."};
@@ -161,7 +172,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
         auto channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16);
         try {
-            co_await toLinearSrgbPremul(
+            const auto cicp = co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),
                 size,
                 3,
@@ -173,6 +184,10 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
                 priority
             );
 
+            if (cicp) {
+                imageData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+            }
+
             swap(imageData.channels, channels);
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     } else {
@@ -183,6 +198,8 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
             case UHDR_CG_BT_709: break; // This is already linear sRGB / Rec.709, so no conversion needed.
             default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
         }
+
+        imageData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(toCicpTransfer(image->ct));
     }
 
     try {

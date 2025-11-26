@@ -1432,7 +1432,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
     if (iccProfileData && iccProfileSize > 0) {
         try {
-            co_await toLinearSrgbPremul(
+            const auto cicp = co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc((uint8_t*)iccProfileData, iccProfileSize),
                 size,
                 numColorChannels,
@@ -1443,6 +1443,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                 4,
                 priority
             );
+
+            if (cicp) {
+                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+            }
 
             resultData.hasPremultipliedAlpha = true;
             co_return resultData;

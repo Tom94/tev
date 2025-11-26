@@ -138,7 +138,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
-    tlog::debug() << fmt::format("PNG image info: size={}, numChannels={}, bitDepth={}, colorType={}", size, numChannels, bitDepth, colorType);
+    tlog::debug() << fmt::format("PNG image info: size={} numChannels={} bitDepth={} colorType={}", size, numChannels, bitDepth, colorType);
 
     // 16 bit channels are big endian by default, but we want little endian on little endian systems
     if (bitDepth == 16 && std::endian::little == std::endian::native) {
@@ -269,6 +269,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         png_read_image(pngPtr, rowPointers.data());
 
         auto applyColorspace = [&]() -> Task<void> {
+            if (double maxCLL, maxFALL; png_get_cLLI(pngPtr, infoPtr, &maxCLL, &maxFALL) == PNG_INFO_cLLI) {
+                tlog::info() << fmt::format("cLLI: maxCLL={} maxFALL={}", maxCLL, maxFALL);
+
+                resultData.hdrMetadata.maxCLL = static_cast<float>(maxCLL);
+                resultData.hdrMetadata.maxFALL = static_cast<float>(maxFALL);
+            }
+
             // According to https://www.w3.org/TR/png-3/#color-chunk-precendence, if a cICP chunk exists, use it to convert to sRGB. Else,
             // if an iCCP chunk exists, use its embedded ICC color profile to convert to linear sRGB. Otherwise, check the sRGB chunk for
             // whether the image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and chromaticity values and use
@@ -288,13 +295,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
 
                 if (!ituth273::isTransferImplemented(transfer)) {
-                    tlog::warning(
-                    ) << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
+                    tlog::warning()
+                        << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
                     transfer = ituth273::ETransferCharacteristics::SRGB;
                 }
 
                 tlog::debug() << fmt::format(
-                    "cICP: primaries={}, transfer={}, full_range={}",
+                    "cICP: primaries={} transfer={} full_range={}",
                     ituth273::toString(primaries),
                     ituth273::toString(transfer),
                     cicp.videoFullRangeFlag == 1 ? "yes" : "no"
@@ -327,8 +334,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     priority
                 );
                 resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
-
+                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(transfer);
                 resultData.hasPremultipliedAlpha = true;
+
                 co_return;
             } else if (iccProfileData) {
                 try {
@@ -340,7 +348,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         co_await toFloat32(pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority);
                     }
 
-                    co_await toLinearSrgbPremul(
+                    const auto cicp = co_await toLinearSrgbPremul(
                         ColorProfile::fromIcc(iccProfileData, iccProfileSize),
                         size,
                         numColorChannels,
@@ -351,6 +359,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         4,
                         priority
                     );
+
+                    if (cicp) {
+                        resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                    }
 
                     resultData.hasPremultipliedAlpha = true;
                     co_return;

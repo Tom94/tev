@@ -126,8 +126,19 @@ public:
     EMetric metric() const { return mImageCanvas->metric(); }
     void setMetric(EMetric metric);
 
-    std::optional<float> overridingWhiteLevel() const;
-    void setOverridingWhiteLevel(std::optional<float> value);
+    float displayWhiteLevel() const;
+    void setDisplayWhiteLevel(float value);
+    void setDisplayWhiteLevelToImageMetadata();
+    void setImageWhiteLevel(float value);
+
+    enum class EDisplayWhiteLevelSetting {
+        System = 0,
+        Custom = 1,
+        ImageMetadata = 2,
+    };
+
+    EDisplayWhiteLevelSetting displayWhiteLevelSetting() const;
+    void setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting value);
 
     nanogui::Vector2i sizeToFitImage(const std::shared_ptr<Image>& image);
     nanogui::Vector2i sizeToFitAllImages();
@@ -295,8 +306,11 @@ private:
     bool mSupportsAbsoluteBrightness = false;
 
     nanogui::Button* mClipToLdrButton = nullptr;
-    nanogui::FloatBox<float>* mWhiteLevelBox = nullptr;
-    nanogui::Button* mWhiteLevelOverrideButton = nullptr;
+
+    nanogui::FloatBox<float>* mDisplayWhiteLevelBox = nullptr;
+    nanogui::ComboBox* mDisplayWhiteLevelSettingComboBox = nullptr;
+
+    nanogui::FloatBox<float>* mImageWhiteLevelBox = nullptr;
 
     int mDidFitToImage = 0;
 
