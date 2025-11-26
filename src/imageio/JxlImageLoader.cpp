@@ -437,7 +437,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        co_await toLinearSrgbPremul(
+                        const auto cicp = co_await toLinearSrgbPremul(
                             ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
                             size,
                             info.num_color_channels,
@@ -449,6 +449,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             4,
                             priority
                         );
+
+                        if (cicp) {
+                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                        }
 
                         data.hasPremultipliedAlpha = true;
 
@@ -496,6 +500,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         if (!hasGamma && !ituth273::isTransferImplemented(cicpTransfer)) {
                             tlog::warning() << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
                             cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
+                        }
+
+                        if (!hasGamma) {
+                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
                         }
 
                         auto* pixelData = data.channels.front().floatData();

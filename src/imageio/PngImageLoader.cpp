@@ -295,8 +295,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
 
                 if (!ituth273::isTransferImplemented(transfer)) {
-                    tlog::warning(
-                    ) << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
+                    tlog::warning()
+                        << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
                     transfer = ituth273::ETransferCharacteristics::SRGB;
                 }
 
@@ -334,7 +334,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     priority
                 );
                 resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
-
+                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(transfer);
                 resultData.hasPremultipliedAlpha = true;
 
                 co_return;
@@ -348,7 +348,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         co_await toFloat32(pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority);
                     }
 
-                    co_await toLinearSrgbPremul(
+                    const auto cicp = co_await toLinearSrgbPremul(
                         ColorProfile::fromIcc(iccProfileData, iccProfileSize),
                         size,
                         numColorChannels,
@@ -359,6 +359,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         4,
                         priority
                     );
+
+                    if (cicp) {
+                        resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                    }
 
                     resultData.hasPremultipliedAlpha = true;
                     co_return;

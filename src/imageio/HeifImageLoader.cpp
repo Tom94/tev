@@ -225,7 +225,7 @@ Task<vector<ImageData>>
                 );
             }
 
-            co_await toLinearSrgbPremul(
+            const auto cicp = co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(profileData.data(), profileData.size()),
                 size,
                 numColorChannels,
@@ -236,6 +236,10 @@ Task<vector<ImageData>>
                 numInterleavedChannels,
                 priority
             );
+
+            if (cicp) {
+                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+            }
 
             resultData.hasPremultipliedAlpha = true;
         };
@@ -368,6 +372,8 @@ Task<vector<ImageData>>
             },
             priority
         );
+
+        resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
         // Only convert color space if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {

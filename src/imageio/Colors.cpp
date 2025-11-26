@@ -349,7 +349,7 @@ string_view toString(const ETransferCharacteristics transfer) {
         case ETransferCharacteristics::Linear: return "linear";
         case ETransferCharacteristics::Log100: return "log100";
         case ETransferCharacteristics::Log100Sqrt10: return "log100_sqrt10";
-        case ETransferCharacteristics::IEC61966: return "iec61966";
+        case ETransferCharacteristics::IEC61966_2_4: return "iec61966";
         case ETransferCharacteristics::BT1361Extended: return "bt1361_extended";
         case ETransferCharacteristics::SRGB: return "srgb";
         case ETransferCharacteristics::BT202010bit: return "bt2020_10bit";
@@ -384,7 +384,7 @@ bool isTransferImplemented(const ETransferCharacteristics transfer) {
         case ETransferCharacteristics::BT601:
         case ETransferCharacteristics::BT202010bit:
         case ETransferCharacteristics::BT202012bit:
-        case ETransferCharacteristics::IEC61966: // handles negative values by mirroring
+        case ETransferCharacteristics::IEC61966_2_4: // handles negative values by mirroring
         case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
         case ETransferCharacteristics::BT470M:
         case ETransferCharacteristics::BT470BG:
@@ -411,7 +411,7 @@ ETransferCharacteristics fromWpTransfer(int wpTransfer) {
         case 5: return ETransferCharacteristics::Linear;
         case 6: return ETransferCharacteristics::Log100;
         case 7: return ETransferCharacteristics::Log100Sqrt10;
-        case 8: return ETransferCharacteristics::IEC61966;
+        case 8: return ETransferCharacteristics::IEC61966_2_4;
         case 9: return ETransferCharacteristics::SRGB;
         case 10: return ETransferCharacteristics::SRGB; // TODO: handle the fact that this is the extended SRGB variant
         case 11: return ETransferCharacteristics::PQ;
@@ -538,7 +538,7 @@ ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileS
     return srcProfile;
 }
 
-Task<void> toLinearSrgbPremul(
+Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
     const ColorProfile& profile,
     const Vector2i& size,
     int numColorChannels,
@@ -760,6 +760,8 @@ Task<void> toLinearSrgbPremul(
         },
         priority
     );
+
+    co_return cicp;
 }
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {

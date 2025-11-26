@@ -180,7 +180,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         try {
             vector<float> floatData(imageData.size());
             co_await toFloat32(imageData.data(), numColorChannels, floatData.data(), numColorChannels, size, false, priority);
-            co_await toLinearSrgbPremul(
+            const auto cicp = co_await toLinearSrgbPremul(
                 ColorProfile::fromIcc(iccProfile, iccProfileSize),
                 size,
                 numColorChannels,
@@ -191,6 +191,10 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                 4,
                 priority
             );
+
+            if (cicp) {
+                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+            }
 
             co_return result;
         } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
