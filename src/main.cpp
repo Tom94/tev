@@ -32,6 +32,7 @@
 #    include <GLFW/glfw3native.h>
 #endif
 
+#include <charconv>
 #include <iostream>
 #include <thread>
 
@@ -56,6 +57,18 @@ void redrawWindow() {
     if (imageViewerIsReady) {
         sImageViewer->redraw();
     }
+}
+
+// Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
+template <typename T> bool fromChars(const char* begin, const char* end, T&& value) {
+    const auto result = std::from_chars(begin, end, std::forward<T>(value));
+    return result.ec == std::errc{} && result.ptr == end;
+}
+
+template <typename T> bool fromChars(string_view s, T&& value) { return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value)); }
+
+template <typename T> bool fromChars(const string& s, T&& value) {
+    return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value));
 }
 
 static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
@@ -307,6 +320,14 @@ static int mainFunc(span<const string> arguments) {
         "PLAY",
         "Play back images as a video.",
         {'p', "play"},
+    };
+
+    ValueFlag<string> sizeFlag{
+        parser,
+        "SIZE",
+        "Initial size of the tev window as <width>x<height>. "
+        "Default is 1024x800.",
+        {"size"},
     };
 
     ValueFlag<string> tonemapFlag{
@@ -581,7 +602,26 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
-    const nanogui::Vector2i size = {1024, 800};
+    nanogui::Vector2i size = {1024, 800};
+    if (sizeFlag) {
+        const string sizeString = get(sizeFlag);
+        const auto parts = split(sizeString, "x");
+        if (parts.size() != 2) {
+            tlog::error() << fmt::format("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
+            return -4;
+        }
+
+        if (!fromChars(parts[0], size.x()) || !fromChars(parts[1], size.y())) {
+            tlog::error() << fmt::format("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
+            return -4;
+        }
+
+        if (size.x() <= 0 || size.y() <= 0) {
+            tlog::error() << fmt::format("Invalid size specification '{}'. Width and height must be positive.", sizeString);
+            return -4;
+        }
+    }
+
     if (!maximize) {
         // Wait until the first image is loaded before creating the window such that it can size itself appropriately. We can not pass the
         // Window a size right away, because we don't have information about the user's monitor size or DPI scaling yet, hence `size` stays
@@ -650,7 +690,8 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (whiteLevelFlag) {
-        if (get(whiteLevelFlag) == "image") {
+        const string wlValue = get(whiteLevelFlag);
+        if (toLower(wlValue) == "image") {
             sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::ImageMetadata);
         } else {
             try {
