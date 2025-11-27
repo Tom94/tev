@@ -60,4 +60,4 @@ Task<void> awaitAll(std::span<Task<void>> futures) {
     }
 }
 
-}
+} // namespace tev

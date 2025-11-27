@@ -66,8 +66,8 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
         bool isAlpha = Channel::isAlpha(image.channels[c].name());
         if (isAlpha) {
             if (alphaChannelIndex != -1) {
-                tlog::warning(
-                ) << fmt::format("Image has multiple alpha channels, using the first one: {}", image.channels[alphaChannelIndex].name());
+                tlog::warning()
+                    << fmt::format("Image has multiple alpha channels, using the first one: {}", image.channels[alphaChannelIndex].name());
                 continue;
             }
 

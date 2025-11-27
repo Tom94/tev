@@ -29,5 +29,3 @@ namespace tev {
 Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote* amn);
 
 }
-
-

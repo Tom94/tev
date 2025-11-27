@@ -24,7 +24,7 @@
 #include <tev/imageio/StbiLdrImageSaver.h>
 
 #ifdef TEV_SUPPORT_JXL
-#include <tev/imageio/JxlImageSaver.h>
+#    include <tev/imageio/JxlImageSaver.h>
 #endif
 
 #include <vector>
