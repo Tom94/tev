@@ -19,12 +19,14 @@
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 
 #include <half.h>
 
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <istream>
@@ -108,8 +110,15 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
     vector<Task<void>> tasks;
 
-    vector<vector<float>> totalLumPerLayerRow(layers.size());
-    vector<vector<float>> maxLumPerLayerRow(layers.size());
+    vector<vector<float>> lumPerLayer(layers.size());
+
+    // This function follows the guidance from https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9508136 in that maxCLL corresponds to
+    // the 99.99th percentile luminance over the image. An additional complication is that "luminance" may be defined as the maximum RGB
+    // value (with BT.2020 primaries) in order to prevent clipping during tone mapping based on maxCLL. However, this interpretation is not
+    // condusive to deriving a white level for display (which should be actual cd/m² luminance). The following code therefore computes
+    // actual luminance, but leaves a commented-out option to compute maximum RGB BT.2020 instead.
+
+    const auto toRec2020 = inverse(chromaToRec709Matrix(ituth273::chroma(ituth273::EColorPrimaries::BT2020)));
 
     for (size_t i = 0; i < layers.size(); ++i) {
         const auto& layer = layers[i];
@@ -126,25 +135,19 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
-        totalLumPerLayerRow[i] = vector<float>(r->size().y(), 0.0f);
-        maxLumPerLayerRow[i] = vector<float>(r->size().y(), 0.0f);
+        lumPerLayer[i].resize(r->numPixels());
 
-        const auto s = r->size();
         tasks.emplace_back(
-            ThreadPool::global().parallelForAsync<int>(
+            ThreadPool::global().parallelForAsync<size_t>(
                 0,
-                s.y(),
-                [s, r, g, b, &totalLum = totalLumPerLayerRow[i], &maxLum = maxLumPerLayerRow[i]](int y) {
-                    for (int x = 0; x < s.x(); ++x) {
-                        // We're guaranteed to be in linear Rec709 space here, hence these coeffs.
-                        const float lum = 0.2126 * r->at({x, y}) + 0.7152 * g->at({x, y}) + 0.0722 * b->at({x, y});
-                        if (!isfinite(lum)) {
-                            continue;
-                        }
+                lumPerLayer[i].size(),
+                [r, g, b, &lumBuf = lumPerLayer[i], &toRec2020](size_t px) {
+                    // Optional: max RGB in BT.2020 primaries (see comment above)
+                    // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
+                    // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
 
-                        totalLum[y] += lum;
-                        maxLum[y] = std::max(maxLum[y], lum);
-                    }
+                    const float lum = 0.2126 * r->at(px) + 0.7152 * g->at(px) + 0.0722 * b->at(px);
+                    lumBuf[px] = isfinite(lum) ? lum : 0.0f;
                 },
                 priority
             )
@@ -154,10 +157,12 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
     co_await awaitAll(tasks);
 
     for (size_t i = 0; i < layers.size(); ++i) {
-        const float avgLum = accumulate(begin(totalLumPerLayerRow[i]), end(totalLumPerLayerRow[i]), 0.0f) / numPixels();
-        const float maxLum = accumulate(begin(maxLumPerLayerRow[i]), end(maxLumPerLayerRow[i]), 0.0f, [](float a, float b) {
-            return std::max(a, b);
-        });
+        // 99.99th percentile luminance per https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=9508136
+        const size_t n = (size_t)(lumPerLayer[i].size() * 0.9999);
+        nth_element(begin(lumPerLayer[i]), begin(lumPerLayer[i]) + n, end(lumPerLayer[i]));
+
+        const float maxLum = lumPerLayer[i][n];
+        const float avgLum = accumulate(begin(lumPerLayer[i]), end(lumPerLayer[i]), 0.0f) / lumPerLayer[i].size();
 
         const float whiteLevelFromMaxCLL = hdrMetadata.maxCLL / maxLum;
         const float whiteLevelFromMaxFALL = hdrMetadata.maxFALL / avgLum;
