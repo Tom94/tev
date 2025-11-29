@@ -24,6 +24,7 @@
 #include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 #include <tev/VectorGraphics.h>
+#include <tev/imageio/Colors.h>
 
 #include <nanogui/texture.h>
 
@@ -69,6 +70,24 @@ struct ImageData {
     std::vector<AttributeNode> attributes;
 
     HdrMetadata hdrMetadata;
+
+    // tev only really supports two rendering intents: relative and absolute colorimetric. The reason being that the other rendering intents
+    // (perceptual and saturation) are subjective while tev, as an image analysis tool, should be as objective as possible. The difference
+    // between relative and absolute colorimetric is that the former performs white point adaptation while the latter does not. Which of the
+    // two is more appropriate/correct depends on what the image data represents:
+    // - If the image data is display-referred (i.e. already adapted to a specific viewing condition), relative colorimetric is appropriate
+    //   because the user wants the image to remain adapted to new viewing conditions. Examples are typical SDR formats (JPEG, PNG, etc.),
+    //   as well as most HDR formats (e.g. extended PNG, HDR10 data). In tev, even camera RAW images fall under this category, because the
+    //   underlying loaders (e.g. libraw) already perform color adaptation to D65 viewing conditions. Technically, RAW files could be left
+    //   in scene-referred space, but that would break convention with other RAW viewers.
+    // - If the image data is scene-referred (i.e. representing real-world photon counts) absolute colorimetric is appropriate because the
+    //   user wants to analyze the scene-referred colors without any adaptation. Examples are EXR and PFM files that often come out of
+    //   renderers or are used in visual effects pipelines.
+    // NOTE: scene- vs. display-referred is orthogonal to the question of absolute vs. relative brightness. Some formats like HDR10 are
+    // display referred (mastered to a specific viewing condition) while representing absolute brightness levels (in cd/m²). Other
+    // display-referred formats describe relative brightness (e.g. SDR sRGB). Yet others, like OpenEXR files from renderers, are scene
+    // referred while representing relative brightness levels only unless tagged with non-standard metadata.
+    ERenderingIntent renderingIntent = ERenderingIntent::RelativeColorimetric;
 
     Box2i dataWindow;
     Box2i displayWindow;

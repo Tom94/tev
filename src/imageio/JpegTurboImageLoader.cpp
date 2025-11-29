@@ -180,8 +180,10 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         try {
             vector<float> floatData(imageData.size());
             co_await toFloat32(imageData.data(), numColorChannels, floatData.data(), numColorChannels, size, false, priority);
-            const auto cicp = co_await toLinearSrgbPremul(
-                ColorProfile::fromIcc(iccProfile, iccProfileSize),
+
+            const auto profile = ColorProfile::fromIcc(iccProfile, iccProfileSize);
+            co_await toLinearSrgbPremul(
+                profile,
                 size,
                 numColorChannels,
                 EAlphaKind::None,
@@ -192,7 +194,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                 priority
             );
 
-            if (cicp) {
+            resultData.renderingIntent = profile.renderingIntent();
+            if (const auto cicp = profile.cicp()) {
                 resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 

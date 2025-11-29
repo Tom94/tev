@@ -302,6 +302,10 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
         priority
     );
 
+    // As part of its processing, libraw adapts colors to D65 sRGB viewing conditions. Hence we're already display referred at this point
+    // and keep processing relative to the white point.
+    resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+
     if (!exif.node.children.empty() && !exif.node.children.front().children.empty()) {
         resultData.attributes.emplace_back(std::move(exif.node));
     }

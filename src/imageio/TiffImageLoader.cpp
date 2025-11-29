@@ -667,8 +667,11 @@ Task<void> postprocessLinearRawDng(
         priority
     );
 
-    // Once we're done, we want to convert from RIMM space to sRGB/Rec709
-    resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
+    // Once we're done, we want to convert from RIMM space to sRGB/Rec709. We actually have a choice here whether we want to stay in
+    // scene-referred coordinates and set downstream processing to be absolute, or to convert to display-referred coordinates right away.
+    // For now, we choose the latter (to match libraw's behavior and to tev's DNG display look closer to the JPG preview).
+    resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+    resultData.toRec709 = convertColorspaceMatrix(proPhotoChroma(), rec709Chroma(), resultData.renderingIntent);
 
     struct ProfileDynamicRange {
         uint16_t version, dynamicRange;
@@ -860,7 +863,10 @@ Task<void> postprocessRgb(
         chroma[3] = {whitePoint[0], whitePoint[1]};
     }
 
-    resultData.toRec709 = chromaToRec709Matrix(chroma);
+    // Assume the RGB TIFF image is display-referred and not scene-referred, so we'll adapt the white point. While scene-referred linear
+    // TIFF images *do* exist in the wild, there is, unfortunately, no unambiguous way to determine this from the TIFF metadata alone.
+    resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+    resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
 
     enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
 
@@ -917,9 +923,9 @@ Task<void> postprocessRgb(
         );
 
         if (pcs == EPreviewColorSpace::AdobeRGB) {
-            resultData.toRec709 = chromaToRec709Matrix(adobeChroma());
+            resultData.toRec709 = convertColorspaceMatrix(adobeChroma(), rec709Chroma(), resultData.renderingIntent);
         } else if (pcs == EPreviewColorSpace::ProPhotoRGB) {
-            resultData.toRec709 = chromaToRec709Matrix(proPhotoChroma());
+            resultData.toRec709 = convertColorspaceMatrix(proPhotoChroma(), rec709Chroma(), resultData.renderingIntent);
         }
     } else {
         // If there's no transfer function specified, the TIFF spec says to use gamma 2.2 for RGB data and no transfer (linear) for
@@ -1432,8 +1438,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
     if (iccProfileData && iccProfileSize > 0) {
         try {
-            const auto cicp = co_await toLinearSrgbPremul(
-                ColorProfile::fromIcc((uint8_t*)iccProfileData, iccProfileSize),
+            const auto profile = ColorProfile::fromIcc((uint8_t*)iccProfileData, iccProfileSize);
+            co_await toLinearSrgbPremul(
+                profile,
                 size,
                 numColorChannels,
                 hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
@@ -1444,7 +1451,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                 priority
             );
 
-            if (cicp) {
+            resultData.renderingIntent = profile.renderingIntent();
+            if (const auto cicp = profile.cicp()) {
                 resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 

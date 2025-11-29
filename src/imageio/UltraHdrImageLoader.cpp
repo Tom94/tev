@@ -172,8 +172,9 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
         auto channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16);
         try {
-            const auto cicp = co_await toLinearSrgbPremul(
-                ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14),
+            const auto profile = ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14);
+            co_await toLinearSrgbPremul(
+                profile,
                 size,
                 3,
                 EAlphaKind::Straight,
@@ -184,16 +185,24 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
                 priority
             );
 
-            if (cicp) {
+            imageData.renderingIntent = profile.renderingIntent();
+            if (const auto cicp = profile.cicp()) {
                 imageData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 
             swap(imageData.channels, channels);
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     } else {
+        // Since UltraHDR images are HDR relative to display-referred SDR content, they're display-referred as well.
+        imageData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+
         switch (image->cg) {
-            case UHDR_CG_DISPLAY_P3: imageData.toRec709 = chromaToRec709Matrix(displayP3Chroma()); break;
-            case UHDR_CG_BT_2100: imageData.toRec709 = chromaToRec709Matrix(bt2100Chroma()); break;
+            case UHDR_CG_DISPLAY_P3:
+                imageData.toRec709 = convertColorspaceMatrix(displayP3Chroma(), rec709Chroma(), imageData.renderingIntent);
+                break;
+            case UHDR_CG_BT_2100:
+                imageData.toRec709 = convertColorspaceMatrix(bt2100Chroma(), rec709Chroma(), imageData.renderingIntent);
+                break;
             case UHDR_CG_UNSPECIFIED: tlog::warning() << "Ultra HDR image has unspecified color gamut. Assuming BT.709."; break;
             case UHDR_CG_BT_709: break; // This is already linear sRGB / Rec.709, so no conversion needed.
             default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;

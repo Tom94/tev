@@ -19,7 +19,6 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
-#include <tev/imageio/Exif.h>
 
 #include <nanogui/vector.h>
 
@@ -30,6 +29,16 @@ using namespace std;
 using namespace nanogui;
 
 namespace tev {
+
+string_view toString(ERenderingIntent intent) {
+    switch (intent) {
+        case ERenderingIntent::Perceptual: return "perceptual";
+        case ERenderingIntent::RelativeColorimetric: return "relative_colorimetric";
+        case ERenderingIntent::Saturation: return "saturation";
+        case ERenderingIntent::AbsoluteColorimetric: return "absolute_colorimetric";
+        default: throw invalid_argument{"Unknown rendering intent."};
+    }
+}
 
 // This function takes matrix params in row-major order and converts them to column-major Matrix3f
 Matrix3f toMatrix3(const float data[3][3]) {
@@ -179,8 +188,8 @@ Matrix3f convertColorspaceMatrix(const std::array<Vector2f, 4>& srcChroma, const
     }
 }
 
-Matrix3f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma) {
-    return convertColorspaceMatrix(chroma, rec709Chroma(), ERenderingIntent::AbsoluteColorimetric);
+Matrix3f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma, ERenderingIntent intent) {
+    return convertColorspaceMatrix(chroma, rec709Chroma(), intent);
 }
 
 Vector2f whiteD50() { return {0.34567f, 0.35850f}; }
@@ -224,7 +233,7 @@ array<Vector2f, 4> proPhotoChroma() {
          {0.734699f, 0.265301f},
          {0.159597f, 0.840403f},
          {0.036598f, 0.000105f},
-         {0.345704f, 0.358540f},
+         whiteD50(),
          }
     };
 }
@@ -264,6 +273,35 @@ array<Vector2f, 4> bt2020Chroma() {
 
 array<Vector2f, 4> bt2100Chroma() {
     return bt2020Chroma(); // BT.2100 uses the same primaries as BT.2020
+}
+
+string_view toString(EExifLightSource lightSource) {
+    switch (lightSource) {
+        case EExifLightSource::Unknown: return "unknown";
+        case EExifLightSource::Daylight: return "daylight";
+        case EExifLightSource::Fluorescent: return "fluorescent";
+        case EExifLightSource::TungstenIncandescent: return "tungsten_incandescent";
+        case EExifLightSource::Flash: return "flash";
+        case EExifLightSource::FineWeather: return "fine_weather";
+        case EExifLightSource::Cloudy: return "cloudy";
+        case EExifLightSource::Shade: return "shade";
+        case EExifLightSource::DaylightFluorescent: return "daylight_fluorescent";
+        case EExifLightSource::DayWhiteFluorescent: return "day_white_fluorescent";
+        case EExifLightSource::CoolWhiteFluorescent: return "cool_white_fluorescent";
+        case EExifLightSource::WhiteFluorescent: return "white_fluorescent";
+        case EExifLightSource::WarmWhiteFluorescent: return "warm_white_fluorescent";
+        case EExifLightSource::StandardLightA: return "standard_a";
+        case EExifLightSource::StandardLightB: return "standard_b";
+        case EExifLightSource::StandardLightC: return "standard_c";
+        case EExifLightSource::D55: return "D55";
+        case EExifLightSource::D65: return "D65";
+        case EExifLightSource::D75: return "D75";
+        case EExifLightSource::D50: return "D50";
+        case EExifLightSource::ISOStudioTungsten: return "iso_studio_tungsten";
+        case EExifLightSource::Other: return "other";
+    }
+
+    throw invalid_argument{"Unknown EXIF light source."};
 }
 
 nanogui::Vector2f xy(EExifLightSource lightSource) {
@@ -570,7 +608,7 @@ ColorProfile::~ColorProfile() {
     }
 }
 
-optional<ColorProfile::CICP> ColorProfile::getCicp() const {
+optional<ColorProfile::CICP> ColorProfile::cicp() const {
     const auto* cicp = (const cmsVideoSignalType*)cmsReadTag(get(), cmsSigcicpTag);
     if (!cicp) {
         return nullopt;
@@ -582,6 +620,33 @@ optional<ColorProfile::CICP> ColorProfile::getCicp() const {
         .matrixCoeffs = cicp->MatrixCoefficients,
         .videoFullRangeFlag = cicp->VideoFullRangeFlag,
     };
+}
+
+ERenderingIntent ColorProfile::renderingIntent() const {
+    const auto profile = get();
+    auto intent = cmsGetHeaderRenderingIntent(profile);
+    if (intent == INTENT_PERCEPTUAL) {
+        // We *do* want to preserve whether the intent includes white point adaptation or not (i.e. whether the image is intended to contain
+        // white point relative or white point absolute colors), but we do *not* want to squish to the sRGB gamut because tev is not bound to
+        // the gamut in the first place (allows negative values and values larger than 1). Hence we treat Perceptual as Relative
+        // Colorimetric and convert to floating point values (no gamut clipping).
+        intent = INTENT_RELATIVE_COLORIMETRIC;
+    }
+
+    if (cmsIsIntentSupported(profile, intent, LCMS_USED_AS_INPUT)) {
+        return (ERenderingIntent)intent;
+    }
+
+    if (cmsIsIntentSupported(profile, INTENT_RELATIVE_COLORIMETRIC, LCMS_USED_AS_INPUT)) {
+        return ERenderingIntent::RelativeColorimetric;
+    }
+
+    if (cmsIsIntentSupported(profile, INTENT_PERCEPTUAL, LCMS_USED_AS_INPUT)) {
+        return ERenderingIntent::Perceptual;
+    }
+
+    // Last resort — profile is probably broken or unsupported type
+    return ERenderingIntent::RelativeColorimetric;
 }
 
 ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
@@ -602,7 +667,7 @@ ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileS
     return srcProfile;
 }
 
-Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
+Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     const Vector2i& size,
     int numColorChannels,
@@ -627,7 +692,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
     }
 
-    auto cicp = profile.getCicp();
+    auto cicp = profile.cicp();
     if (cicp) {
         tlog::debug() << fmt::format("ICC profile has CICP tag. Attempting manual conversion.");
     }
@@ -650,6 +715,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
     LimitedRange range = LimitedRange::full();
     Matrix3f toRec709 = Matrix3f{1.0f};
 
+    const ERenderingIntent intent = profile.renderingIntent();
     if (cicp) {
         tlog::debug() << fmt::format(
             "CICP: primaries={} transfer={} coeffs={} fullRange={}",
@@ -660,7 +726,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         );
 
         range = cicp->videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(nBits(pixelFormat));
-        toRec709 = chromaToRec709Matrix(ituth273::chroma(cicp->primaries));
+        toRec709 = convertColorspaceMatrix(ituth273::chroma(cicp->primaries), rec709Chroma(), intent);
     }
 
     // Create transform from source profile to Rec.709
@@ -723,15 +789,16 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
 
-    tlog::debug() << fmt::format(
-        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x}",
+    tlog::info() << fmt::format(
+        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
         numColorChannels,
         (int)alphaKind,
         (int)pixelFormat,
         numChannels,
         type,
         numChannelsOut,
-        typeOut
+        typeOut,
+        toString(intent)
     );
 
     cmsHTRANSFORM transform = cmsCreateTransformTHR(
@@ -743,9 +810,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
         // if we set this as the output type.
         typeOut,
-        // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
-        // following rendering intent.
-        INTENT_RELATIVE_COLORIMETRIC,
+        (cmsUInt32Number)intent,
         alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
     );
 
@@ -824,8 +889,6 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         },
         priority
     );
-
-    co_return cicp;
 }
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {

@@ -437,8 +437,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        const auto cicp = co_await toLinearSrgbPremul(
-                            ColorProfile::fromIcc(iccProfile.data(), iccProfile.size()),
+                        const auto profile = ColorProfile::fromIcc(iccProfile.data(), iccProfile.size());
+                        co_await toLinearSrgbPremul(
+                            profile,
                             size,
                             info.num_color_channels,
                             info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
@@ -450,7 +451,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             priority
                         );
 
-                        if (cicp) {
+                        data.renderingIntent = profile.renderingIntent();
+                        if (const auto cicp = profile.cicp()) {
                             data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                         }
 
@@ -469,23 +471,30 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
                     if (ce) {
-                        tlog::debug() << fmt::format(
-                            "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={}",
+                        data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
+
+                        tlog::info() << fmt::format(
+                            "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={} intent={}",
                             jxlToString(ce->color_space),
                             jxlToString(ce->primaries),
                             jxlToString(ce->white_point),
-                            jxlToString(ce->transfer_function)
+                            jxlToString(ce->transfer_function),
+                            toString(data.renderingIntent)
                         );
 
                         // Primaries are only valid for RGB data. We need to set up a conversion matrix only if we aren't already in sRGB.
                         if (ce->color_space == JXL_COLOR_SPACE_RGB) {
                             if (ce->primaries != JXL_PRIMARIES_SRGB || ce->white_point != JXL_WHITE_POINT_D65) {
-                                data.toRec709 = chromaToRec709Matrix({
-                                    {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
-                                     {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
-                                     {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
-                                     {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
-                                });
+                                data.toRec709 = convertColorspaceMatrix(
+                                    {
+                                        {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
+                                         {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
+                                         {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
+                                         {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
+                                },
+                                    rec709Chroma(),
+                                    data.renderingIntent
+                                );
                             }
                         }
 

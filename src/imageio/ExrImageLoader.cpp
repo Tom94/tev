@@ -554,14 +554,36 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
                     data.partName = part.header().name();
                 }
 
+                // OpenEXR, being linear, scene-referred, should not be falsified by white point adaptation. The test images provided at
+                // https://github.com/AcademySoftwareFoundation/openexr-images/tree/main/Chromaticities also indicate that
+                // AbsoluteColorimetric (no white point adaptation) is the intended behavior.
+                data.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
+
+                // While OpenEXR images *can* have embedded `adoptedNeutral` values, those are to be used as suggested starting points for
+                // creative color grading (e.g. as a starting point for white balance adjustments) and not as actual white points for color
+                // space conversions.
+                if (Imf::hasAdoptedNeutral(part.header())) {
+                    const auto adoptedNeutral = Imf::adoptedNeutral(part.header());
+                    tlog::debug() << fmt::format(
+                        "EXR part '{}' has adopted neutral at ({}, {}). Ignoring for color space conversion.",
+                        part.header().name(),
+                        adoptedNeutral[0],
+                        adoptedNeutral[1]
+                    );
+                }
+
                 if (Imf::hasChromaticities(part.header())) {
                     auto chroma = Imf::chromaticities(part.header());
-                    data.toRec709 = chromaToRec709Matrix({
-                        {{chroma.red.x, chroma.red.y},
-                         {chroma.green.x, chroma.green.y},
-                         {chroma.blue.x, chroma.blue.y},
-                         {chroma.white.x, chroma.white.y}}
-                    });
+                    data.toRec709 = convertColorspaceMatrix(
+                        {
+                            {{chroma.red.x, chroma.red.y},
+                             {chroma.green.x, chroma.green.y},
+                             {chroma.blue.x, chroma.blue.y},
+                             {chroma.white.x, chroma.white.y}}
+                    },
+                        rec709Chroma(),
+                        data.renderingIntent
+                    );
                 }
             } catch (const Iex::BaseExc& e) {
                 tlog::warning() << "Error reading EXR part " << partIdx << ": " << e.what();

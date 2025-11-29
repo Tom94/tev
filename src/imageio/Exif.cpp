@@ -32,35 +32,6 @@ namespace {
 ExifByteOrder byteOrder(bool reverseEndianness) { return reverseEndianness ? EXIF_BYTE_ORDER_MOTOROLA : EXIF_BYTE_ORDER_INTEL; }
 } // namespace
 
-std::string toString(EExifLightSource lightSource) {
-    switch (lightSource) {
-        case EExifLightSource::Unknown: return "unknown";
-        case EExifLightSource::Daylight: return "daylight";
-        case EExifLightSource::Fluorescent: return "fluorescent";
-        case EExifLightSource::TungstenIncandescent: return "tungsten_incandescent";
-        case EExifLightSource::Flash: return "flash";
-        case EExifLightSource::FineWeather: return "fine_weather";
-        case EExifLightSource::Cloudy: return "cloudy";
-        case EExifLightSource::Shade: return "shade";
-        case EExifLightSource::DaylightFluorescent: return "daylight_fluorescent";
-        case EExifLightSource::DayWhiteFluorescent: return "day_white_fluorescent";
-        case EExifLightSource::CoolWhiteFluorescent: return "cool_white_fluorescent";
-        case EExifLightSource::WhiteFluorescent: return "white_fluorescent";
-        case EExifLightSource::WarmWhiteFluorescent: return "warm_white_fluorescent";
-        case EExifLightSource::StandardLightA: return "standard_a";
-        case EExifLightSource::StandardLightB: return "standard_b";
-        case EExifLightSource::StandardLightC: return "standard_c";
-        case EExifLightSource::D55: return "D55";
-        case EExifLightSource::D65: return "D65";
-        case EExifLightSource::D75: return "D75";
-        case EExifLightSource::D50: return "D50";
-        case EExifLightSource::ISOStudioTungsten: return "iso_studio_tungsten";
-        case EExifLightSource::Other: return "other";
-    }
-
-    throw invalid_argument{"Unknown EXIF light source."};
-}
-
 Exif::Exif() {
     ScopeGuard guard{[this]() { reset(); }};
 
