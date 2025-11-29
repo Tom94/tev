@@ -29,12 +29,30 @@
 
 namespace tev {
 
-nanogui::Matrix3f chromaToRec709Matrix(const std::array<nanogui::Vector2f, 4>& chroma);
-nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
-nanogui::Matrix3f xyzToRec709Matrix();
+enum class ERenderingIntent {
+    Perceptual = 0,
+    RelativeColorimetric = 1,
+    Saturation = 2,
+    AbsoluteColorimetric = 3,
+};
 
-nanogui::Matrix3f adobeToRec709Matrix();
-nanogui::Matrix3f proPhotoToRec709Matrix();
+nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
+nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
+
+nanogui::Matrix3f chromaToRec709Matrix(const std::array<nanogui::Vector2f, 4>& chroma);
+
+nanogui::Vector2f whiteD50();
+nanogui::Vector2f whiteD55();
+nanogui::Vector2f whiteD65();
+nanogui::Vector2f whiteD75();
+nanogui::Vector2f whiteD93();
+
+nanogui::Vector2f whiteA();
+nanogui::Vector2f whiteB();
+nanogui::Vector2f whiteC();
+
+nanogui::Vector2f whiteCenter();
+nanogui::Vector2f whiteDci();
 
 std::array<nanogui::Vector2f, 4> rec709Chroma();
 std::array<nanogui::Vector2f, 4> adobeChroma();
@@ -45,8 +63,6 @@ std::array<nanogui::Vector2f, 4> bt2020Chroma();
 std::array<nanogui::Vector2f, 4> bt2100Chroma();
 
 nanogui::Vector2f xy(EExifLightSource lightSource);
-
-nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
 
 std::array<nanogui::Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries);
 std::string_view wpPrimariesToString(int wpPrimaties);

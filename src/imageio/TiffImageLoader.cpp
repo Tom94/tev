@@ -622,7 +622,7 @@ Task<void> postprocessLinearRawDng(
                 const auto whitePoint = xy(illuminant);
                 if (whitePoint.x() > 0.0f && whitePoint.y() > 0.0f) {
                     tlog::debug() << fmt::format("Adapting known illuminant with CIE1931 xy={} to D50", whitePoint);
-                    chromaticAdaptation = adaptToXYZD50Bradford(whitePoint);
+                    chromaticAdaptation = adaptWhiteBradford(whitePoint, whiteD50());
                 } else {
                     tlog::warning() << fmt::format("Unknown illuminant");
                 }
@@ -1466,7 +1466,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
-        resultData.toRec709 = xyzToRec709Matrix();
+        resultData.toRec709 = xyzToChromaMatrix(rec709Chroma());
     } else if (photometric <= PHOTOMETRIC_PALETTE) {
         co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
     } else {
