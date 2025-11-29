@@ -333,7 +333,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     },
                     priority
                 );
-                resultData.toRec709 = chromaToRec709Matrix(ituth273::chroma(primaries));
+
+                // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
+                resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+                resultData.toRec709 = convertColorspaceMatrix(ituth273::chroma(primaries), rec709Chroma(), resultData.renderingIntent);
                 resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(transfer);
                 resultData.hasPremultipliedAlpha = true;
 
@@ -348,8 +351,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         co_await toFloat32(pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority);
                     }
 
-                    const auto cicp = co_await toLinearSrgbPremul(
-                        ColorProfile::fromIcc(iccProfileData, iccProfileSize),
+                    const auto profile = ColorProfile::fromIcc(iccProfileData, iccProfileSize);
+                    co_await toLinearSrgbPremul(
+                        profile,
                         size,
                         numColorChannels,
                         numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
@@ -360,7 +364,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         priority
                     );
 
-                    if (cicp) {
+                    resultData.renderingIntent = profile.renderingIntent();
+                    if (const auto cicp = profile.cicp()) {
                         resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                     }
 
@@ -383,7 +388,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             const bool useSrgb = hasChunkSrgb || (!hasChunkGama && !hasChunkChrm);
             if (useSrgb) {
                 if (hasChunkSrgb) {
-                    tlog::debug() << fmt::format("Using sRGB chunk w/ rendering intent {}", srgbIntent);
+                    // NOTE: since tev represents colors in sRGB space anyway there is nothing to transform and the rendering intent makes
+                    // no difference.
+                    tlog::debug() << fmt::format("Using sRGB chunk: rendering_intent={}", srgbIntent);
+                    resultData.renderingIntent = static_cast<ERenderingIntent>(srgbIntent);
                 } else {
                     tlog::debug() << "No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
                 }
@@ -420,7 +428,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             resultData.hasPremultipliedAlpha = true;
 
             if (hasChunkChrm) {
-                array<Vector2f, 4> chroma = {
+                const array<Vector2f, 4> chroma = {
                     {
                      {(float)ch[2], (float)ch[3]}, // red
                         {(float)ch[4], (float)ch[5]}, // green
@@ -428,7 +436,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         {(float)ch[0], (float)ch[1]}, // white
                     }
                 };
-                resultData.toRec709 = chromaToRec709Matrix(chroma);
+
+                // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
+                resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+                resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
 
                 tlog::debug() << fmt::format("cHRM: primaries={}", chroma);
             }

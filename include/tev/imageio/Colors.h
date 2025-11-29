@@ -20,7 +20,6 @@
 
 #include <tev/Common.h>
 #include <tev/Task.h>
-#include <tev/imageio/Exif.h>
 
 #include <nanogui/vector.h>
 
@@ -29,12 +28,34 @@
 
 namespace tev {
 
-nanogui::Matrix3f chromaToRec709Matrix(const std::array<nanogui::Vector2f, 4>& chroma);
-nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
-nanogui::Matrix3f xyzToRec709Matrix();
+enum class ERenderingIntent {
+    Perceptual = 0,
+    RelativeColorimetric = 1,
+    Saturation = 2,
+    AbsoluteColorimetric = 3,
+};
 
-nanogui::Matrix3f adobeToRec709Matrix();
-nanogui::Matrix3f proPhotoToRec709Matrix();
+std::string_view toString(ERenderingIntent intent);
+
+nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
+nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
+
+nanogui::Matrix3f convertColorspaceMatrix(
+    const std::array<nanogui::Vector2f, 4>& srcChroma, const std::array<nanogui::Vector2f, 4>& dstChroma, ERenderingIntent intent
+);
+
+nanogui::Vector2f whiteD50();
+nanogui::Vector2f whiteD55();
+nanogui::Vector2f whiteD65();
+nanogui::Vector2f whiteD75();
+nanogui::Vector2f whiteD93();
+
+nanogui::Vector2f whiteA();
+nanogui::Vector2f whiteB();
+nanogui::Vector2f whiteC();
+
+nanogui::Vector2f whiteCenter();
+nanogui::Vector2f whiteDci();
 
 std::array<nanogui::Vector2f, 4> rec709Chroma();
 std::array<nanogui::Vector2f, 4> adobeChroma();
@@ -44,9 +65,33 @@ std::array<nanogui::Vector2f, 4> dciP3Chroma();
 std::array<nanogui::Vector2f, 4> bt2020Chroma();
 std::array<nanogui::Vector2f, 4> bt2100Chroma();
 
-nanogui::Vector2f xy(EExifLightSource lightSource);
+enum EExifLightSource : uint16_t {
+    Unknown = 0,
+    Daylight = 1,
+    Fluorescent = 2,
+    TungstenIncandescent = 3,
+    Flash = 4,
+    FineWeather = 9,
+    Cloudy = 10,
+    Shade = 11,
+    DaylightFluorescent = 12,
+    DayWhiteFluorescent = 13,
+    CoolWhiteFluorescent = 14,
+    WhiteFluorescent = 15,
+    WarmWhiteFluorescent = 16,
+    StandardLightA = 17,
+    StandardLightB = 18,
+    StandardLightC = 19,
+    D55 = 20,
+    D65 = 21,
+    D75 = 22,
+    D50 = 23,
+    ISOStudioTungsten = 24,
+    Other = 255,
+};
 
-nanogui::Matrix3f adaptToXYZD50Bradford(const nanogui::Vector2f& xy);
+std::string_view toString(EExifLightSource lightSource);
+nanogui::Vector2f xy(EExifLightSource lightSource);
 
 std::array<nanogui::Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries);
 std::string_view wpPrimariesToString(int wpPrimaties);
@@ -230,7 +275,8 @@ public:
         uint8_t videoFullRangeFlag;
     };
 
-    std::optional<CICP> getCicp() const;
+    std::optional<CICP> cicp() const;
+    ERenderingIntent renderingIntent() const;
 
     static ColorProfile fromIcc(const uint8_t* iccProfile, size_t iccProfileSize);
     static ColorProfile srgb();
@@ -250,7 +296,7 @@ private:
 // smaller than 0, even if the input was within [0, 1]. This is by design, and, on macOS, the OS translates these out-of-bounds colors
 // correctly to the gamut of the display. Other operating systems, like Windows and Linux don't do this -- it's a TODO for tev to explicitly
 // hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
-Task<std::optional<ColorProfile::CICP>> toLinearSrgbPremul(
+Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     const nanogui::Vector2i& size,
     int numColorChannels,

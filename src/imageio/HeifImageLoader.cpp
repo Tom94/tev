@@ -225,8 +225,9 @@ Task<vector<ImageData>>
                 );
             }
 
-            const auto cicp = co_await toLinearSrgbPremul(
-                ColorProfile::fromIcc(profileData.data(), profileData.size()),
+            const auto profile = ColorProfile::fromIcc(profileData.data(), profileData.size());
+            co_await toLinearSrgbPremul(
+                profile,
                 size,
                 numColorChannels,
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
@@ -237,7 +238,8 @@ Task<vector<ImageData>>
                 priority
             );
 
-            if (cicp) {
+            resultData.renderingIntent = profile.renderingIntent();
+            if (const auto cicp = profile.cicp()) {
                 resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 
@@ -386,7 +388,9 @@ Task<vector<ImageData>>
                  }
             };
 
-            resultData.toRec709 = chromaToRec709Matrix(chroma);
+            // Assume heic/avif image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
+            resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+            resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
         }
 
         co_return resultData;

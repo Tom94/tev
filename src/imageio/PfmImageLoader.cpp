@@ -112,6 +112,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         priority
     );
 
+    // Treated like EXR: scene-referred by nature. Usually corresponds to linear light, so should not get its white point adjusted.
+    resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
     resultData.hasPremultipliedAlpha = false;
 
     co_return result;

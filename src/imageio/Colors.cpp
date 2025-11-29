@@ -19,11 +19,8 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
-#include <tev/imageio/Exif.h>
 
 #include <nanogui/vector.h>
-
-#include <ImfChromaticities.h>
 
 #include <lcms2.h>
 #include <lcms2_fast_float.h>
@@ -32,6 +29,16 @@ using namespace std;
 using namespace nanogui;
 
 namespace tev {
+
+string_view toString(ERenderingIntent intent) {
+    switch (intent) {
+        case ERenderingIntent::Perceptual: return "perceptual";
+        case ERenderingIntent::RelativeColorimetric: return "relative_colorimetric";
+        case ERenderingIntent::Saturation: return "saturation";
+        case ERenderingIntent::AbsoluteColorimetric: return "absolute_colorimetric";
+        default: throw invalid_argument{"Unknown rendering intent."};
+    }
+}
 
 // This function takes matrix params in row-major order and converts them to column-major Matrix3f
 Matrix3f toMatrix3(const float data[3][3]) {
@@ -45,59 +52,157 @@ Matrix3f toMatrix3(const float data[3][3]) {
     return result;
 }
 
-Matrix3f transpose(const Imath::M44f& mat) {
-    Matrix3f result;
-    for (int m = 0; m < 3; ++m) {
-        for (int n = 0; n < 3; ++n) {
-            // No flipping of indices needed, because Imath::M44f is row-major while Matrix3f is column-major
-            result.m[m][n] = mat.x[m][n];
-        }
+// This routine was copied from OpenEXR's ImfChromaticities.cpp in accordance
+// with its BSD-3-Clause license. See the header of that file for details.
+// https://github.com/AcademySoftwareFoundation/openexr/blob/main/src/lib/OpenEXR/ImfChromaticities.cpp
+Matrix3f rgbToXyz(const std::array<Vector2f, 4>& chroma, float Y) {
+    //
+    // For an explanation of how the color conversion matrix is derived,
+    // see Roy Hall, "Illumination and Color in Computer Generated Imagery",
+    // Springer-Verlag, 1989, chapter 3, "Perceptual Response"; and
+    // Charles A. Poynton, "A Technical Introduction to Digital Video",
+    // John Wiley & Sons, 1996, chapter 7, "Color science for video".
+    //
+
+    //
+    // X and Z values of RGB value (1, 1, 1), or "white"
+    //
+
+    const Vector2f& red = chroma[0];
+    const Vector2f& green = chroma[1];
+    const Vector2f& blue = chroma[2];
+    const Vector2f& white = chroma[3];
+
+    // prevent a division that rounds to zero
+    if (std::abs(white.y()) <= 1.f && std::abs(white.x() * Y) >= std::abs(white.y()) * std::numeric_limits<float>::max()) {
+        throw std::invalid_argument("Bad chromaticities: white.y cannot be zero");
     }
 
-    return result;
+    float X = white.x() * Y / white.y();
+    float Z = (1 - white.x() - white.y()) * Y / white.y();
+
+    //
+    // Scale factors for matrix rows, compute numerators and common denominator
+    //
+
+    float d = red.x() * (blue.y() - green.y()) + blue.x() * (green.y() - red.y()) + green.x() * (red.y() - blue.y());
+
+    float SrN =
+        (X * (blue.y() - green.y()) - green.x() * (Y * (blue.y() - 1) + blue.y() * (X + Z)) +
+         blue.x() * (Y * (green.y() - 1) + green.y() * (X + Z)));
+
+    float SgN =
+        (X * (red.y() - blue.y()) + red.x() * (Y * (blue.y() - 1) + blue.y() * (X + Z)) - blue.x() * (Y * (red.y() - 1) + red.y() * (X + Z)));
+
+    float SbN =
+        (X * (green.y() - red.y()) - red.x() * (Y * (green.y() - 1) + green.y() * (X + Z)) +
+         green.x() * (Y * (red.y() - 1) + red.y() * (X + Z)));
+
+    if (std::abs(d) < 1.f &&
+        (std::abs(SrN) >= std::abs(d) * std::numeric_limits<float>::max() || std::abs(SgN) >= std::abs(d) * std::numeric_limits<float>::max() ||
+         std::abs(SbN) >= std::abs(d) * std::numeric_limits<float>::max())) {
+        // cannot generate matrix if all RGB primaries have the same y value
+        // or if they all have the an x value of zero
+        // in both cases, the primaries are colinear, which makes them unusable
+        throw std::invalid_argument("Bad chromaticities: RGBtoXYZ matrix is degenerate");
+    }
+
+    float Sr = SrN / d;
+    float Sg = SgN / d;
+    float Sb = SbN / d;
+
+    //
+    // Assemble the matrix
+    //
+
+    Matrix3f M;
+
+    M.m[0][0] = Sr * red.x();
+    M.m[0][1] = Sr * red.y();
+    M.m[0][2] = Sr * (1 - red.x() - red.y());
+
+    M.m[1][0] = Sg * green.x();
+    M.m[1][1] = Sg * green.y();
+    M.m[1][2] = Sg * (1 - green.x() - green.y());
+
+    M.m[2][0] = Sb * blue.x();
+    M.m[2][1] = Sb * blue.y();
+    M.m[2][2] = Sb * (1 - blue.x() - blue.y());
+
+    return M;
 }
 
-Matrix3f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) {
-    Imf::Chromaticities imfChroma = {
-        {chroma[0].x(), chroma[0].y()},
-        {chroma[1].x(), chroma[1].y()},
-        {chroma[2].x(), chroma[2].y()},
-        {chroma[3].x(), chroma[3].y()},
-    };
+Matrix3f xyzToRgb(const std::array<Vector2f, 4>& chroma, float Y) { return inverse(rgbToXyz(chroma, Y)); }
 
-    return transpose(Imf::XYZtoRGB(imfChroma, 1));
-}
+Matrix3f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) { return xyzToRgb(chroma, 1); }
 
-Matrix3f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma) {
-    Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
-    Imf::Chromaticities imfChroma = {
-        {chroma[0].x(), chroma[0].y()},
-        {chroma[1].x(), chroma[1].y()},
-        {chroma[2].x(), chroma[2].y()},
-        {chroma[3].x(), chroma[3].y()},
-    };
-
-    // equality comparison for Imf::Chromaticities instances
-    auto chromaEq = [](const Imf::Chromaticities& a, const Imf::Chromaticities& b) {
-        return (a.red - b.red).length2() + (a.green - b.green).length2() + (a.blue - b.blue).length2() + (a.white - b.white).length2() <
-            1e-6f;
-    };
-
-    if (chromaEq(imfChroma, rec709)) {
+// Adapted from LittleCMS's AdaptToXYZD50 function
+Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) {
+    if (srcWhite == dstWhite) {
         return Matrix3f{1.0f};
     }
 
-    return transpose(Imf::RGBtoXYZ(imfChroma, 1) * Imf::XYZtoRGB(rec709, 1));
+    const float br[3][3] = {
+        {0.8951f,  0.2664f,  -0.1614f},
+        {-0.7502f, 1.7135f,  0.0367f },
+        {0.0389f,  -0.0685f, 1.0296f },
+    };
+    const auto kBradford = toMatrix3(br);
+    const float brInv[3][3] = {
+        {0.9869929f,  -0.1470543f, 0.1599627f},
+        {0.4323053f,  0.5183603f,  0.0492912f},
+        {-0.0085287f, 0.0400428f,  0.9684867f},
+    };
+    const auto kBradfordInv = toMatrix3(brInv);
+
+    const auto xyToXYZ = [](const Vector2f& c) { return Vector3f{c.x() / c.y(), 1.0f, (1.0f - c.x() - c.y()) / c.y()}; };
+
+    const auto lmsSrc = kBradford * xyToXYZ(srcWhite);
+    const auto lmsDst = kBradford * xyToXYZ(dstWhite);
+
+    const float a[3][3] = {
+        {lmsDst[0] / lmsSrc[0], 0,                     0                    },
+        {0,                     lmsDst[1] / lmsSrc[1], 0                    },
+        {0,                     0,                     lmsDst[2] / lmsSrc[2]},
+    };
+    const auto aMat = toMatrix3(a);
+
+    const auto b = aMat * kBradford;
+    return kBradfordInv * b;
 }
 
-Matrix3f xyzToRec709Matrix() {
-    Imf::Chromaticities rec709; // default rec709 (sRGB) primaries
-    return transpose(Imf::XYZtoRGB(rec709, 1));
+Matrix3f convertColorspaceMatrix(const std::array<Vector2f, 4>& srcChroma, const std::array<Vector2f, 4>& dstChroma, ERenderingIntent intent) {
+    if (srcChroma == dstChroma) {
+        return Matrix3f{1.0f};
+    }
+
+    switch (intent) {
+        case ERenderingIntent::Saturation:
+            tlog::warning() << "Saturation rendering intent is not supported; falling back to Perceptual.";
+            [[fallthrough]];
+        case ERenderingIntent::Perceptual:
+        case ERenderingIntent::RelativeColorimetric:
+            return xyzToRgb(dstChroma, 1) * adaptWhiteBradford(srcChroma[3], dstChroma[3]) * rgbToXyz(srcChroma, 1);
+        case ERenderingIntent::AbsoluteColorimetric: return xyzToRgb(dstChroma, 1) * rgbToXyz(srcChroma, 1);
+        default: throw std::invalid_argument("Invalid rendering intent");
+    }
 }
 
+Matrix3f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma, ERenderingIntent intent) {
+    return convertColorspaceMatrix(chroma, rec709Chroma(), intent);
+}
+
+Vector2f whiteD50() { return {0.34567f, 0.35850f}; }
+Vector2f whiteD55() { return {0.33242f, 0.34743f}; }
 Vector2f whiteD65() { return {0.31271f, 0.32902f}; }
+Vector2f whiteD75() { return {0.29902f, 0.31485f}; }
+Vector2f whiteD93() { return {0.28315f, 0.29711f}; }
+
+Vector2f whiteA() { return {0.44758f, 0.40745f}; }
+Vector2f whiteB() { return {0.34842f, 0.35161f}; }
+Vector2f whiteC() { return {0.31006f, 0.31616f}; }
+
 Vector2f whiteCenter() { return {0.333333f, 0.333333f}; }
-Vector2f whiteC() { return {0.310f, 0.316f}; }
 Vector2f whiteDci() { return {0.314f, 0.351f}; }
 
 array<Vector2f, 4> rec709Chroma() {
@@ -128,7 +233,7 @@ array<Vector2f, 4> proPhotoChroma() {
          {0.734699f, 0.265301f},
          {0.159597f, 0.840403f},
          {0.036598f, 0.000105f},
-         {0.345704f, 0.358540f},
+         whiteD50(),
          }
     };
 }
@@ -170,64 +275,61 @@ array<Vector2f, 4> bt2100Chroma() {
     return bt2020Chroma(); // BT.2100 uses the same primaries as BT.2020
 }
 
+string_view toString(EExifLightSource lightSource) {
+    switch (lightSource) {
+        case EExifLightSource::Unknown: return "unknown";
+        case EExifLightSource::Daylight: return "daylight";
+        case EExifLightSource::Fluorescent: return "fluorescent";
+        case EExifLightSource::TungstenIncandescent: return "tungsten_incandescent";
+        case EExifLightSource::Flash: return "flash";
+        case EExifLightSource::FineWeather: return "fine_weather";
+        case EExifLightSource::Cloudy: return "cloudy";
+        case EExifLightSource::Shade: return "shade";
+        case EExifLightSource::DaylightFluorescent: return "daylight_fluorescent";
+        case EExifLightSource::DayWhiteFluorescent: return "day_white_fluorescent";
+        case EExifLightSource::CoolWhiteFluorescent: return "cool_white_fluorescent";
+        case EExifLightSource::WhiteFluorescent: return "white_fluorescent";
+        case EExifLightSource::WarmWhiteFluorescent: return "warm_white_fluorescent";
+        case EExifLightSource::StandardLightA: return "standard_a";
+        case EExifLightSource::StandardLightB: return "standard_b";
+        case EExifLightSource::StandardLightC: return "standard_c";
+        case EExifLightSource::D55: return "D55";
+        case EExifLightSource::D65: return "D65";
+        case EExifLightSource::D75: return "D75";
+        case EExifLightSource::D50: return "D50";
+        case EExifLightSource::ISOStudioTungsten: return "iso_studio_tungsten";
+        case EExifLightSource::Other: return "other";
+    }
+
+    throw invalid_argument{"Unknown EXIF light source."};
+}
+
 nanogui::Vector2f xy(EExifLightSource lightSource) {
     switch (lightSource) {
         case EExifLightSource::Unknown: return {0.0f, 0.0f};
-        case EExifLightSource::Daylight: return {0.31292, 0.32933};
-        case EExifLightSource::Fluorescent: return {0.37417, 0.37281};
-        case EExifLightSource::TungstenIncandescent: return {0.44758, 0.40745};
+        case EExifLightSource::Daylight: return {0.31292f, 0.32933f};
+        case EExifLightSource::Fluorescent: return {0.37417f, 0.37281f};
+        case EExifLightSource::TungstenIncandescent: return {0.44758f, 0.40745f};
         case EExifLightSource::Flash: return {0.0f, 0.0f};
         case EExifLightSource::FineWeather: return {0.0f, 0.0f};
         case EExifLightSource::Cloudy: return {0.0f, 0.0f};
         case EExifLightSource::Shade: return {0.0f, 0.0f};
-        case EExifLightSource::DaylightFluorescent: return {0.31310, 0.33710};
-        case EExifLightSource::DayWhiteFluorescent: return {0.31379, 0.34531};
-        case EExifLightSource::CoolWhiteFluorescent: return {0.37208, 0.37529};
-        case EExifLightSource::WhiteFluorescent: return {0.40910, 0.39430};
-        case EExifLightSource::WarmWhiteFluorescent: return {0.44018, 0.40329};
-        case EExifLightSource::StandardLightA: return {0.44758f, 0.40745f};
-        case EExifLightSource::StandardLightB: return {0.34842, 0.35161};
+        case EExifLightSource::DaylightFluorescent: return {0.31310f, 0.33710f};
+        case EExifLightSource::DayWhiteFluorescent: return {0.31379f, 0.34531f};
+        case EExifLightSource::CoolWhiteFluorescent: return {0.37208f, 0.37529f};
+        case EExifLightSource::WhiteFluorescent: return {0.40910f, 0.39430f};
+        case EExifLightSource::WarmWhiteFluorescent: return {0.44018f, 0.40329f};
+        case EExifLightSource::StandardLightA: return whiteA();
+        case EExifLightSource::StandardLightB: return whiteB();
         case EExifLightSource::StandardLightC: return whiteC();
-        case EExifLightSource::D55: return {0.33242, 0.34743};
+        case EExifLightSource::D55: return whiteD55();
         case EExifLightSource::D65: return whiteD65();
-        case EExifLightSource::D75: return {0.29902, 0.31485};
-        case EExifLightSource::D50: return {0.34567, 0.35850};
+        case EExifLightSource::D75: return whiteD75();
+        case EExifLightSource::D50: return whiteD50();
         case EExifLightSource::ISOStudioTungsten: return {0.430944089109761f, 0.403585442674295f};
         case EExifLightSource::Other: return {0.0f, 0.0f};
         default: throw invalid_argument{"Invalid EExifLightSource value."};
     }
-}
-
-// Adapted from LittleCMS's AdaptToXYZD50 function
-Matrix3f adaptToXYZD50Bradford(const Vector2f& w) {
-    const float br[3][3] = {
-        {0.8951f,  0.2664f,  -0.1614f},
-        {-0.7502f, 1.7135f,  0.0367f },
-        {0.0389f,  -0.0685f, 1.0296f },
-    };
-    const auto kBradford = toMatrix3(br);
-    const float brInv[3][3] = {
-        {0.9869929f,  -0.1470543f, 0.1599627f},
-        {0.4323053f,  0.5183603f,  0.0492912f},
-        {-0.0085287f, 0.0400428f,  0.9684867f},
-    };
-    const auto kBradfordInv = toMatrix3(brInv);
-
-    const Vector3f white{w.x() / w.y(), 1.0f, (1.0f - w.x() - w.y()) / w.y()};
-    const Vector3f white50{0.96422f, 1.0f, 0.82521f};
-
-    const auto lms = kBradford * white;
-    const auto lms50 = kBradford * white50;
-
-    const float a[3][3] = {
-        {lms50[0] / lms[0], 0,                 0                },
-        {0,                 lms50[1] / lms[1], 0                },
-        {0,                 0,                 lms50[2] / lms[2]},
-    };
-    const auto aMat = toMatrix3(a);
-
-    const auto b = aMat * kBradford;
-    return kBradfordInv * b;
 }
 
 array<Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries) {
@@ -506,7 +608,7 @@ ColorProfile::~ColorProfile() {
     }
 }
 
-optional<ColorProfile::CICP> ColorProfile::getCicp() const {
+optional<ColorProfile::CICP> ColorProfile::cicp() const {
     const auto* cicp = (const cmsVideoSignalType*)cmsReadTag(get(), cmsSigcicpTag);
     if (!cicp) {
         return nullopt;
@@ -518,6 +620,33 @@ optional<ColorProfile::CICP> ColorProfile::getCicp() const {
         .matrixCoeffs = cicp->MatrixCoefficients,
         .videoFullRangeFlag = cicp->VideoFullRangeFlag,
     };
+}
+
+ERenderingIntent ColorProfile::renderingIntent() const {
+    const auto profile = get();
+    auto intent = cmsGetHeaderRenderingIntent(profile);
+    if (intent == INTENT_PERCEPTUAL) {
+        // We *do* want to preserve whether the intent includes white point adaptation or not (i.e. whether the image is intended to contain
+        // white point relative or white point absolute colors), but we do *not* want to squish to the sRGB gamut because tev is not bound to
+        // the gamut in the first place (allows negative values and values larger than 1). Hence we treat Perceptual as Relative
+        // Colorimetric and convert to floating point values (no gamut clipping).
+        intent = INTENT_RELATIVE_COLORIMETRIC;
+    }
+
+    if (cmsIsIntentSupported(profile, intent, LCMS_USED_AS_INPUT)) {
+        return (ERenderingIntent)intent;
+    }
+
+    if (cmsIsIntentSupported(profile, INTENT_RELATIVE_COLORIMETRIC, LCMS_USED_AS_INPUT)) {
+        return ERenderingIntent::RelativeColorimetric;
+    }
+
+    if (cmsIsIntentSupported(profile, INTENT_PERCEPTUAL, LCMS_USED_AS_INPUT)) {
+        return ERenderingIntent::Perceptual;
+    }
+
+    // Last resort — profile is probably broken or unsupported type
+    return ERenderingIntent::RelativeColorimetric;
 }
 
 ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
@@ -538,7 +667,7 @@ ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileS
     return srcProfile;
 }
 
-Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
+Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     const Vector2i& size,
     int numColorChannels,
@@ -563,7 +692,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
     }
 
-    auto cicp = profile.getCicp();
+    auto cicp = profile.cicp();
     if (cicp) {
         tlog::debug() << fmt::format("ICC profile has CICP tag. Attempting manual conversion.");
     }
@@ -586,6 +715,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
     LimitedRange range = LimitedRange::full();
     Matrix3f toRec709 = Matrix3f{1.0f};
 
+    const ERenderingIntent intent = profile.renderingIntent();
     if (cicp) {
         tlog::debug() << fmt::format(
             "CICP: primaries={} transfer={} coeffs={} fullRange={}",
@@ -596,7 +726,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         );
 
         range = cicp->videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(nBits(pixelFormat));
-        toRec709 = chromaToRec709Matrix(ituth273::chroma(cicp->primaries));
+        toRec709 = convertColorspaceMatrix(ituth273::chroma(cicp->primaries), rec709Chroma(), intent);
     }
 
     // Create transform from source profile to Rec.709
@@ -659,15 +789,16 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
 
-    tlog::debug() << fmt::format(
-        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x}",
+    tlog::info() << fmt::format(
+        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
         numColorChannels,
         (int)alphaKind,
         (int)pixelFormat,
         numChannels,
         type,
         numChannelsOut,
-        typeOut
+        typeOut,
+        toString(intent)
     );
 
     cmsHTRANSFORM transform = cmsCreateTransformTHR(
@@ -679,9 +810,7 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
         // if we set this as the output type.
         typeOut,
-        // Since tev's intent is to inspect images, we want to be as color-accurate as possible rather than perceptually pleasing. Hence the
-        // following rendering intent.
-        INTENT_RELATIVE_COLORIMETRIC,
+        (cmsUInt32Number)intent,
         alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
     );
 
@@ -760,8 +889,6 @@ Task<optional<ColorProfile::CICP>> toLinearSrgbPremul(
         },
         priority
     );
-
-    co_return cicp;
 }
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {

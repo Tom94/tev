@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "tev/imageio/Colors.h"
 #include <tev/ThreadPool.h>
 #include <tev/imageio/StbiImageLoader.h>
 
@@ -96,9 +97,15 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
         auto numPixels = (size_t)size.x() * size.y();
         if (isHdr) {
+            // Treated like EXR: scene-referred by nature. Usually corresponds to linear light, so should not get its white point adjusted.
+            resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
+
             co_await toFloat32((float*)data, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority);
             data = (float*)data + numPixels * numChannels;
         } else {
+            // Assume sRGB-encoded LDR images are display-referred.
+            resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+
             co_await toFloat32<uint8_t, true>(
                 (uint8_t*)data, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
             );

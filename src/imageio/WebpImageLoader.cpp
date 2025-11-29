@@ -180,8 +180,10 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 try {
                     // Color space conversion from float to float is faster than u8 to float, hence we convert first.
                     co_await toFloat32(data, numChannels, iccTmpFloatData.data(), numChannels, frameSize, true, priority);
-                    const auto cicp = co_await toLinearSrgbPremul(
-                        ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size()),
+
+                    const auto profile = ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size());
+                    co_await toLinearSrgbPremul(
+                        profile,
                         frameSize,
                         numColorChannels,
                         EAlphaKind::Straight,
@@ -192,7 +194,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         priority
                     );
 
-                    if (cicp) {
+                    resultData.renderingIntent = profile.renderingIntent();
+                    if (const auto cicp = profile.cicp()) {
                         resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                     }
                 } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }

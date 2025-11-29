@@ -118,7 +118,9 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
     // condusive to deriving a white level for display (which should be actual cd/m² luminance). The following code therefore computes
     // actual luminance, but leaves a commented-out option to compute maximum RGB BT.2020 instead.
 
-    const auto toRec2020 = inverse(chromaToRec709Matrix(ituth273::chroma(ituth273::EColorPrimaries::BT2020)));
+    const auto toRec2020 = convertColorspaceMatrix(
+        rec709Chroma(), bt2020Chroma(), ERenderingIntent::AbsoluteColorimetric /* intent doesn't matter because white point is the same */
+    );
 
     for (size_t i = 0; i < layers.size(); ++i) {
         const auto& layer = layers[i];
