@@ -292,6 +292,7 @@ public:
     ScopeGuard& operator=(ScopeGuard<T>&& other) {
         mCallback = std::move(other.mCallback);
         other.mCallback = {};
+        return *this;
     }
 
     ~ScopeGuard() {
