@@ -721,11 +721,11 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
-    // At this point, we have the image in linear ProPhoto RGB space. This is most faithful to the readings from the sensor, but the camera
-    // may have embedded a (potentially user-chosen) color profile that, per the DNG spec, can be used as a starting point for further user
-    // editing. Since tev isn't a photo editor, we don't apply the profile by default, but below is a partial implementation that can apply
-    // certain DNG-compatible profiles if needed.
-    const bool applyCameraProfile = false;
+    // At this point, we have the image in linear ProPhoto RGB space. This is most faithful to the readings from the sensor *in theory*, but
+    // the camera may have embedded a (potentially user-chosen) color profile that, per the DNG spec, can be used as a starting point for
+    // further user editing. *In practice*, DNGs from some sources, e.g. iPhone, seem SDR before applying the profile and proper HDR after
+    // applying it, so we do by default.
+    const bool applyCameraProfile = true;
     if (!applyCameraProfile) {
         co_return;
     }
@@ -741,6 +741,7 @@ Task<void> postprocessLinearRawDng(
         }
     }
 
+    // Profile application has to happen in SDR space if the image is HDR
     if (isHdr) {
         tlog::debug() << "Encoding DNG HDR before applying profile";
         co_await ThreadPool::global().parallelForAsync<int>(
