@@ -229,4 +229,16 @@ template <typename F, typename... Args> Task<void> invokeTask(F&& executor, Args
 void waitAll(std::span<Task<void>> futures);
 Task<void> awaitAll(std::span<Task<void>> futures);
 
+template <typename T, typename U> Task<void> asyncScopeGuard(T&& cleanup, U&& body) {
+    std::exception_ptr exceptionPtr;
+    try {
+        co_await body();
+    } catch (...) { exceptionPtr = std::current_exception(); }
+
+    co_await cleanup();
+    if (exceptionPtr) {
+        std::rethrow_exception(exceptionPtr);
+    }
+}
+
 } // namespace tev
