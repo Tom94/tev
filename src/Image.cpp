@@ -40,6 +40,79 @@ using namespace std;
 
 namespace tev {
 
+AttributeNode HdrMetadata::toAttributes() const {
+    const auto floatToStringZeroMeansNA = [](float v) {
+        if (v <= 0.0f) {
+            return string{"n/a"};
+        } else {
+            return to_string(v);
+        }
+    };
+
+    AttributeNode root;
+    root.name = "HDR metadata";
+
+    AttributeNode& content = root.children.emplace_back();
+    content.name = "Content light level";
+    content.children.emplace_back(
+        AttributeNode{
+            .name = "Best guess white level", .value = floatToStringZeroMeansNA(bestGuessWhiteLevel), .type = "cd/m²", .children = {}
+        }
+    );
+    content.children.emplace_back(
+        AttributeNode{.name = "Max content light level", .value = floatToStringZeroMeansNA(maxCLL), .type = "cd/m²", .children = {}}
+    );
+    content.children.emplace_back(
+        AttributeNode{
+            .name = "Max frame average light level", .value = floatToStringZeroMeansNA(maxFALL), .type = "cd/m²", .children = {}
+        }
+    );
+
+    AttributeNode& masteringDisplay = root.children.emplace_back();
+    masteringDisplay.name = "Mastering display color volume";
+    masteringDisplay.children.emplace_back(
+        AttributeNode{.name = "Min luminance", .value = floatToStringZeroMeansNA(masteringMinLum), .type = "cd/m²", .children = {}}
+    );
+    masteringDisplay.children.emplace_back(
+        AttributeNode{.name = "Max luminance", .value = floatToStringZeroMeansNA(masteringMaxLum), .type = "cd/m²", .children = {}}
+    );
+
+    masteringDisplay.children.emplace_back(
+        AttributeNode{
+            .name = "Red primary",
+            .value = "(" + floatToStringZeroMeansNA(masteringChroma[0].x()) + ", " + floatToStringZeroMeansNA(masteringChroma[0].y()) + ")",
+            .type = "xy",
+            .children = {}
+        }
+    );
+    masteringDisplay.children.emplace_back(
+        AttributeNode{
+            .name = "Green primary",
+            .value = "(" + floatToStringZeroMeansNA(masteringChroma[1].x()) + ", " + floatToStringZeroMeansNA(masteringChroma[1].y()) + ")",
+            .type = "xy",
+            .children = {}
+        }
+    );
+    masteringDisplay.children.emplace_back(
+        AttributeNode{
+            .name = "Blue primary",
+            .value = "(" + floatToStringZeroMeansNA(masteringChroma[2].x()) + ", " + floatToStringZeroMeansNA(masteringChroma[2].y()) + ")",
+            .type = "xy",
+            .children = {}
+        }
+    );
+    masteringDisplay.children.emplace_back(
+        AttributeNode{
+            .name = "White point",
+            .value = "(" + floatToStringZeroMeansNA(masteringChroma[3].x()) + ", " + floatToStringZeroMeansNA(masteringChroma[3].y()) + ")",
+            .type = "xy",
+            .children = {}
+        }
+    );
+
+    return root;
+}
+
 vector<string> ImageData::channelsInLayer(string_view layerName) const {
     vector<string> result;
 
@@ -170,11 +243,11 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
         const float whiteLevelFromMaxFALL = hdrMetadata.maxFALL / avgLum;
 
         if (whiteLevelFromMaxCLL > 0.0f) {
-            hdrMetadata.whiteLevel = whiteLevelFromMaxCLL;
+            hdrMetadata.bestGuessWhiteLevel = whiteLevelFromMaxCLL;
         }
 
         if (whiteLevelFromMaxFALL > 0.0f) {
-            hdrMetadata.whiteLevel = whiteLevelFromMaxFALL;
+            hdrMetadata.bestGuessWhiteLevel = whiteLevelFromMaxFALL;
         }
 
         if (whiteLevelFromMaxFALL > 0 && whiteLevelFromMaxCLL > 0 &&
@@ -189,12 +262,8 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
             );
         }
 
-        tlog::debug() << fmt::format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.whiteLevel, layers[i]);
+        tlog::debug() << fmt::format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.bestGuessWhiteLevel, layers[i]);
     }
-
-    // Ensure we don't apply this multiple times.
-    hdrMetadata.maxCLL = 0.0f;
-    hdrMetadata.maxFALL = 0.0f;
 }
 
 Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
@@ -445,6 +514,8 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
     TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
+
+    attributes.emplace_back(hdrMetadata.toAttributes());
 }
 
 atomic<int> Image::sId(0);

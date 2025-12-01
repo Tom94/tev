@@ -187,7 +187,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
             imageData.renderingIntent = profile.renderingIntent();
             if (const auto cicp = profile.cicp()) {
-                imageData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                imageData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 
             swap(imageData.channels, channels);
@@ -208,7 +208,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
             default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
         }
 
-        imageData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(toCicpTransfer(image->ct));
+        imageData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(toCicpTransfer(image->ct));
     }
 
     try {

@@ -276,6 +276,27 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 resultData.hdrMetadata.maxFALL = static_cast<float>(maxFALL);
             }
 
+            if (double wx, wy, rx, ry, gx, gy, bx, by, maxl, minl;
+                png_get_mDCV(pngPtr, infoPtr, &wx, &wy, &rx, &ry, &gx, &gy, &bx, &by, &maxl, &minl) == PNG_INFO_mDCV) {
+                resultData.hdrMetadata.masteringChroma = {
+                    {
+                     {(float)rx, (float)ry},
+                     {(float)gx, (float)gy},
+                     {(float)bx, (float)by},
+                     {(float)wx, (float)wy},
+                     }
+                };
+                resultData.hdrMetadata.masteringMinLum = (float)minl;
+                resultData.hdrMetadata.masteringMaxLum = (float)maxl;
+
+                tlog::info() << fmt::format(
+                    "mDCV: minLum={} maxLum={} chroma={}",
+                    resultData.hdrMetadata.masteringMinLum,
+                    resultData.hdrMetadata.masteringMaxLum,
+                    resultData.hdrMetadata.masteringChroma
+                );
+            }
+
             // According to https://www.w3.org/TR/png-3/#color-chunk-precendence, if a cICP chunk exists, use it to convert to sRGB. Else,
             // if an iCCP chunk exists, use its embedded ICC color profile to convert to linear sRGB. Otherwise, check the sRGB chunk for
             // whether the image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and chromaticity values and use
@@ -337,7 +358,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
                 resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
                 resultData.toRec709 = convertColorspaceMatrix(ituth273::chroma(primaries), rec709Chroma(), resultData.renderingIntent);
-                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(transfer);
+                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(transfer);
                 resultData.hasPremultipliedAlpha = true;
 
                 co_return;
@@ -366,7 +387,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
                     resultData.renderingIntent = profile.renderingIntent();
                     if (const auto cicp = profile.cicp()) {
-                        resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                        resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                     }
 
                     resultData.hasPremultipliedAlpha = true;

@@ -32,7 +32,7 @@ namespace tev {
 
 class ImageInfoWindow : public nanogui::Window {
 public:
-    ImageInfoWindow(nanogui::Widget* parent, const std::shared_ptr<Image>& image, bool supportsHdr, std::function<void()> closeCallback);
+    ImageInfoWindow(nanogui::Widget* parent, const std::shared_ptr<Image>& image, std::function<void()> closeCallback);
 
     bool keyboard_event(int key, int scancode, int action, int modifiers) override;
 

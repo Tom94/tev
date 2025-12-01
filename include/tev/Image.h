@@ -52,7 +52,14 @@ struct AttributeNode {
 struct HdrMetadata {
     float maxCLL = 0.0f;
     float maxFALL = 0.0f;
-    float whiteLevel = DEFAULT_IMAGE_WHITE_LEVEL;
+
+    float masteringMinLum = 0.0f;
+    float masteringMaxLum = 0.0f;
+    std::array<nanogui::Vector2f, 4> masteringChroma = zeroChroma();
+
+    float bestGuessWhiteLevel = DEFAULT_IMAGE_WHITE_LEVEL;
+
+    AttributeNode toAttributes() const;
 };
 
 struct ImageData {
@@ -198,7 +205,7 @@ public:
     const Box2i& dataWindow() const { return mData.dataWindow; }
     const Box2i& displayWindow() const { return mData.displayWindow; }
 
-    float whiteLevel() const { return mData.hdrMetadata.whiteLevel; }
+    float whiteLevel() const { return mData.hdrMetadata.bestGuessWhiteLevel; }
 
     nanogui::Vector2f centerDisplayOffset(const Box2i& displayWindow) const {
         return Box2f{dataWindow()}.middle() - Box2f{displayWindow}.middle();

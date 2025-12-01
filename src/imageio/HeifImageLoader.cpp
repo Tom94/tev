@@ -144,18 +144,17 @@ Task<vector<ImageData>>
         // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
         const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
 
-        Vector2i size = {heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
-
+        const Vector2i size = {heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
         if (size.x() == 0 || size.y() == 0) {
             throw ImageLoadError{"Image has zero pixels."};
         }
 
         heif_image* img = nullptr;
-        if (auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, nullptr); error.code != heif_error_Ok) {
+        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, nullptr); error.code != heif_error_Ok) {
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
-        ScopeGuard imgGuard{[img] { heif_image_release(img); }};
+        const ScopeGuard imgGuard{[img] { heif_image_release(img); }};
 
         const heif_channel channelType = isMonochrome ? heif_channel_Y : heif_channel_interleaved;
 
@@ -240,7 +239,7 @@ Task<vector<ImageData>>
 
             resultData.renderingIntent = profile.renderingIntent();
             if (const auto cicp = profile.cicp()) {
-                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 
             resultData.hasPremultipliedAlpha = true;
@@ -255,12 +254,38 @@ Task<vector<ImageData>>
             );
         }
 
+        heif_decoded_mastering_display_colour_volume mdcv;
+        if (heif_mastering_display_colour_volume codedMdcv;
+            heif_image_handle_get_mastering_display_colour_volume(imgHandle, &codedMdcv) != 0) {
+            if (const auto error = heif_mastering_display_colour_volume_decode(&codedMdcv, &mdcv); error.code != heif_error_Ok) {
+                tlog::debug() << fmt::format("Failed to decode mastering display color volume: {}", error.message);
+            } else {
+                resultData.hdrMetadata.masteringChroma = {
+                    {
+                     {mdcv.display_primaries_x[0], mdcv.display_primaries_y[0]},
+                     {mdcv.display_primaries_x[1], mdcv.display_primaries_y[1]},
+                     {mdcv.display_primaries_x[2], mdcv.display_primaries_y[2]},
+                     {mdcv.white_point_x, mdcv.white_point_y},
+                     }
+                };
+                resultData.hdrMetadata.masteringMinLum = (float)mdcv.min_display_mastering_luminance;
+                resultData.hdrMetadata.masteringMaxLum = (float)mdcv.max_display_mastering_luminance;
+
+                tlog::debug() << fmt::format(
+                    "Found mastering display color volume: minLum={} maxLum={} chroma={}",
+                    resultData.hdrMetadata.masteringMinLum,
+                    resultData.hdrMetadata.masteringMaxLum,
+                    resultData.hdrMetadata.masteringChroma
+                );
+            }
+        }
+
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
-        size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
+        const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
         if (profileSize != 0) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
             vector<uint8_t> profileData(profileSize);
-            if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
+            if (const auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code != heif_error_Color_profile_does_not_exist) {
                     tlog::warning() << "Failed to read ICC profile: " << error.message;
                 }
@@ -275,7 +300,7 @@ Task<vector<ImageData>>
         // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
         // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
         heif_color_profile_nclx* nclx = nullptr;
-        if (auto error = heif_image_handle_get_nclx_color_profile(imgHandle, &nclx); error.code != heif_error_Ok) {
+        if (const auto error = heif_image_handle_get_nclx_color_profile(imgHandle, &nclx); error.code != heif_error_Ok) {
             if (error.code != heif_error_Color_profile_does_not_exist) {
                 tlog::warning() << "Failed to read NCLX color profile: " << error.message;
             }
@@ -309,7 +334,7 @@ Task<vector<ImageData>>
             co_return resultData;
         }
 
-        ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+        const ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
 
         if (bitDepth == 16) {
             co_await toFloat32(
@@ -355,7 +380,7 @@ Task<vector<ImageData>>
             cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
         }
 
-        auto* pixelData = resultData.channels.front().floatData();
+        auto* const pixelData = resultData.channels.front().floatData();
         const size_t numPixels = size.x() * (size_t)size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
@@ -375,22 +400,24 @@ Task<vector<ImageData>>
             priority
         );
 
-        resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
+        resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
         // Only convert color space if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
-            array<Vector2f, 4> chroma = {
-                {
-                 {nclx->color_primary_red_x, nclx->color_primary_red_y},
-                 {nclx->color_primary_green_x, nclx->color_primary_green_y},
-                 {nclx->color_primary_blue_x, nclx->color_primary_blue_y},
-                 {nclx->color_primary_white_x, nclx->color_primary_white_y},
-                 }
-            };
-
             // Assume heic/avif image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
             resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
-            resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
+            resultData.toRec709 = convertColorspaceMatrix(
+                {
+                    {
+                     {nclx->color_primary_red_x, nclx->color_primary_red_y},
+                     {nclx->color_primary_green_x, nclx->color_primary_green_y},
+                     {nclx->color_primary_blue_x, nclx->color_primary_blue_y},
+                     {nclx->color_primary_white_x, nclx->color_primary_white_y},
+                     }
+            },
+                rec709Chroma(),
+                resultData.renderingIntent
+            );
         }
 
         co_return resultData;

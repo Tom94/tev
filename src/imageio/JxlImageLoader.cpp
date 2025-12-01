@@ -453,7 +453,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                         data.renderingIntent = profile.renderingIntent();
                         if (const auto cicp = profile.cicp()) {
-                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                            data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                         }
 
                         data.hasPremultipliedAlpha = true;
@@ -506,16 +506,17 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         auto cicpTransfer = hasGamma ? ituth273::ETransferCharacteristics::Unspecified :
                                                        static_cast<ituth273::ETransferCharacteristics>(ce->transfer_function);
 
-                        if (!hasGamma && !ituth273::isTransferImplemented(cicpTransfer)) {
-                            tlog::warning() << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
-                            cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
-                        }
-
                         if (!hasGamma) {
-                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
+                            if (!ituth273::isTransferImplemented(cicpTransfer)) {
+                                tlog::warning()
+                                    << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
+                                cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
+                            }
+
+                            data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
                         }
 
-                        auto* pixelData = data.channels.front().floatData();
+                        auto* const pixelData = data.channels.front().floatData();
                         const size_t numPixels = size.x() * (size_t)size.y();
                         co_await ThreadPool::global().parallelForAsync<size_t>(
                             0,

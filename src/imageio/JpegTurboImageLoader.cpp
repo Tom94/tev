@@ -196,7 +196,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
             resultData.renderingIntent = profile.renderingIntent();
             if (const auto cicp = profile.cicp()) {
-                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 
             co_return result;

@@ -25,6 +25,8 @@
 #include <lcms2.h>
 #include <lcms2_fast_float.h>
 
+#include <algorithm>
+
 using namespace std;
 using namespace nanogui;
 
@@ -38,6 +40,12 @@ string_view toString(ERenderingIntent intent) {
         case ERenderingIntent::AbsoluteColorimetric: return "absolute_colorimetric";
         default: throw invalid_argument{"Unknown rendering intent."};
     }
+}
+
+array<Vector2f, 4> zeroChroma() {
+    array<Vector2f, 4> chroma;
+    fill(chroma.begin(), chroma.end(), Vector2f{0.0f});
+    return chroma;
 }
 
 // This function takes matrix params in row-major order and converts them to column-major Matrix3f
