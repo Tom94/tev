@@ -38,7 +38,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     }
 
     iStream.seekg(0, ios::end);
-    size_t fileSize = iStream.tellg();
+    const size_t fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
 
     vector<uint8_t> buffer(fileSize);
@@ -90,7 +90,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
     const uint32_t width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
     const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
-    array<float, 4> bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
+    Color bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
 
     if (flags & ANIMATION_FLAG) {
         const uint32_t bgColor8bit = WebPDemuxGetI(demux, WEBP_FF_BACKGROUND_COLOR);
@@ -98,7 +98,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         // Byte order: BGRA (https://developers.google.com/speed/webp/docs/riff_container#animation)
         const uint8_t* bgColorBytes = (const uint8_t*)&bgColor8bit;
 
-        bgColor = {bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
+        bgColor = Color{bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
         if (!iccProfileData.empty()) {
             try {
                 const auto tmp = bgColor;
@@ -142,12 +142,12 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
         do {
             Vector2i frameSize;
-            uint8_t* data = WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y());
+            uint8_t* const data = WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y());
             if (!data) {
                 throw ImageLoadError{"Failed to decode webp frame."};
             }
 
-            ScopeGuard dataGuard{[data] { WebPFree(data); }};
+            const ScopeGuard dataGuard{[data] { WebPFree(data); }};
 
             ImageData& resultData = result.emplace_back();
             if (exifAttributes) {
@@ -208,26 +208,24 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             // If we did not dispose the previous canvas, we need to blend the current frame onto it. Otherwise, blend onto background. The
             // first frame is always disposed.
             const float* prevCanvas = result.size() > 1 ? result.at(result.size() - 2).channels.front().floatData() : nullptr;
-            bool useBg = disposed || prevCanvas == nullptr;
+            const bool useBg = disposed || prevCanvas == nullptr;
             disposed = iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND;
 
             co_await ThreadPool::global().parallelForAsync<int>(
                 0,
                 size.y(),
                 [&](int y) {
-                    Vector2i framePos;
-                    framePos.y() = y - iter.y_offset;
                     for (int x = 0; x < size.x(); ++x) {
                         const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;
-                        framePos.x() = x - iter.x_offset;
-
+                        const Vector2i framePos = {x - iter.x_offset, y - iter.y_offset};
                         const bool isInFrame = Box2i{frameSize}.contains(framePos);
 
                         for (int c = 0; c < numChannels; ++c) {
                             const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
-                            float val;
 
                             const float bg = useBg ? bgColor[c] : prevCanvas[canvasSampleIdx];
+                            float val = bg;
+
                             if (isInFrame) {
                                 const size_t framePixelIdx = (size_t)framePos.y() * frameSize.x() + (size_t)framePos.x();
                                 const size_t frameSampleIdx = framePixelIdx * numChannels + c;
@@ -238,8 +236,6 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                                 } else {
                                     val = frameData[frameSampleIdx] + bg * (1.0f - frameData[frameAlphaIdx]);
                                 }
-                            } else {
-                                val = bg;
                             }
 
                             resultData.channels.front().floatData()[canvasSampleIdx] = val;
