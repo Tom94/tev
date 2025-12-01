@@ -170,11 +170,11 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
         const float whiteLevelFromMaxFALL = hdrMetadata.maxFALL / avgLum;
 
         if (whiteLevelFromMaxCLL > 0.0f) {
-            hdrMetadata.whiteLevel = whiteLevelFromMaxCLL;
+            hdrMetadata.bestGuessWhiteLevel = whiteLevelFromMaxCLL;
         }
 
         if (whiteLevelFromMaxFALL > 0.0f) {
-            hdrMetadata.whiteLevel = whiteLevelFromMaxFALL;
+            hdrMetadata.bestGuessWhiteLevel = whiteLevelFromMaxFALL;
         }
 
         if (whiteLevelFromMaxFALL > 0 && whiteLevelFromMaxCLL > 0 &&
@@ -189,7 +189,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
             );
         }
 
-        tlog::debug() << fmt::format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.whiteLevel, layers[i]);
+        tlog::debug() << fmt::format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.bestGuessWhiteLevel, layers[i]);
     }
 
     // Ensure we don't apply this multiple times.

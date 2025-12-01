@@ -1454,7 +1454,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
             resultData.renderingIntent = profile.renderingIntent();
             if (const auto cicp = profile.cicp()) {
-                resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
             }
 
             resultData.hasPremultipliedAlpha = true;

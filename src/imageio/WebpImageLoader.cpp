@@ -196,7 +196,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
                     resultData.renderingIntent = profile.renderingIntent();
                     if (const auto cicp = profile.cicp()) {
-                        resultData.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                        resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                     }
                 } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {

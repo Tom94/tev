@@ -453,7 +453,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                         data.renderingIntent = profile.renderingIntent();
                         if (const auto cicp = profile.cicp()) {
-                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
+                            data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
                         }
 
                         data.hasPremultipliedAlpha = true;
@@ -512,7 +512,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         }
 
                         if (!hasGamma) {
-                            data.hdrMetadata.whiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
+                            data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
                         }
 
                         auto* pixelData = data.channels.front().floatData();
