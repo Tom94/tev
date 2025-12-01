@@ -2016,7 +2016,7 @@ void ImageViewer::toggleHelpWindow() {
         mHelpWindow = nullptr;
         mHelpButton->set_pushed(false);
     } else {
-        mHelpWindow = new HelpWindow{this, mSupportsHdr, ipc(), [this] { toggleHelpWindow(); }};
+        mHelpWindow = new HelpWindow{this, ipc(), [this] { toggleHelpWindow(); }};
         mHelpWindow->center();
         mHelpWindow->request_focus();
         mHelpButton->set_pushed(true);
@@ -2033,7 +2033,7 @@ void ImageViewer::toggleImageInfoWindow() {
         mImageInfoButton->set_pushed(false);
     } else {
         if (mCurrentImage) {
-            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
+            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, [this] { toggleImageInfoWindow(); }};
             mImageInfoWindow->center();
             mImageInfoWindow->request_focus();
 
@@ -2051,7 +2051,7 @@ void ImageViewer::updateImageInfoWindow() {
         mImageInfoWindow->dispose();
 
         if (mCurrentImage) {
-            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, mSupportsHdr, [this] { toggleImageInfoWindow(); }};
+            mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, [this] { toggleImageInfoWindow(); }};
             mImageInfoWindow->set_position(pos);
             mImageInfoWindow->set_size(size);
             mImageInfoWindow->request_focus();

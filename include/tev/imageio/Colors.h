@@ -37,6 +37,8 @@ enum class ERenderingIntent {
 
 std::string_view toString(ERenderingIntent intent);
 
+std::array<nanogui::Vector2f, 4> zeroChroma();
+
 nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
 nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
 

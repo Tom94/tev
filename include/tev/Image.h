@@ -55,9 +55,11 @@ struct HdrMetadata {
 
     float masteringMinLum = 0.0f;
     float masteringMaxLum = 0.0f;
-    std::array<nanogui::Vector2f, 4> masteringChroma = {}; // r,g,b,wp
+    std::array<nanogui::Vector2f, 4> masteringChroma = zeroChroma();
 
     float bestGuessWhiteLevel = DEFAULT_IMAGE_WHITE_LEVEL;
+
+    AttributeNode toAttributes() const;
 };
 
 struct ImageData {

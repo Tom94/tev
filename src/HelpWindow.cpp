@@ -48,7 +48,7 @@ string HelpWindow::ALT = "Opt";
 string HelpWindow::ALT = "Alt";
 #endif
 
-HelpWindow::HelpWindow(Widget* parent, bool supportsHdr, weak_ptr<Ipc> weakIpc, function<void()> closeCallback) :
+HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> closeCallback) :
     Window{parent, "Help"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{button_panel(), "", FA_TIMES};

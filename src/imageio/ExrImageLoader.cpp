@@ -110,7 +110,7 @@ static bool isExrImage(istream& iStream) {
 AttributeNode createVec2fNode(string_view name, const Imath::V2f& value) {
     AttributeNode node;
     node.name = name;
-    node.type = "vec2f";
+    node.type = "v2f";
     node.value = fmt::format("({}, {})", value[0], value[1]);
     return node;
 }
@@ -118,7 +118,7 @@ AttributeNode createVec2fNode(string_view name, const Imath::V2f& value) {
 AttributeNode createVec2iNode(string_view name, const Imath::V2i& value) {
     AttributeNode node;
     node.name = name;
-    node.type = "vec2i";
+    node.type = "v2i";
     node.value = fmt::format("({}, {})", value[0], value[1]);
     return node;
 }

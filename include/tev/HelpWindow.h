@@ -32,7 +32,7 @@ namespace tev {
 
 class HelpWindow : public nanogui::Window {
 public:
-    HelpWindow(nanogui::Widget* parent, bool supportsHdr, std::weak_ptr<Ipc> ipc, std::function<void()> closeCallback);
+    HelpWindow(nanogui::Widget* parent, std::weak_ptr<Ipc> ipc, std::function<void()> closeCallback);
 
     bool keyboard_event(int key, int scancode, int action, int modifiers) override;
 
