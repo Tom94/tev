@@ -20,15 +20,6 @@
 
 stdenv.mkDerivation rec {
   pname = "tev";
-  # version = "2.6.2";
-
-  # src = fetchFromGitHub {
-  #   owner = "Tom94";
-  #   repo = "tev";
-  #   tag = "v${version}";
-  #   fetchSubmodules = true;
-  #   hash = "sha256-RRGE/gEWaSwvbytmtR5fLAke8QqIeuYJQzwC++Z1bgc=";
-  # };
 
   # Extract version from CMakeLists.txt
   version = with builtins;
