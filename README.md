@@ -18,23 +18,14 @@ Download __tev__ for
 
 Or install __tev__ via package managers:
 
-#### macOS
+- [AUR](https://aur.archlinux.org/packages/tev): `yay -S tev`
+- [brew](https://formulae.brew.sh/cask/tev): `brew install --cask tev`
+- [flathub](https://flathub.org/en/apps/io.github.tom94.tev): `flatpak install flathub io.github.tom94.tev`
+- [scoop](https://scoop.sh/#/apps?q=tev&id=a2ccab649627072fcfa357924d93478e0f1f3f16): `scoop install extras/tev`
+- [nix](https://mynixos.com/nixpkgs/package/tev):
 
-```bash
-brew install --cask tev
-```
-
-#### Arch Linux (Arch User Repository)
-```bash
-yay -S tev
-```
-
-#### NixOS / nix-darwin
 ```nix
-environment.systemPackages = with pkgs; [
-  ...
-  tev
-];
+environment.systemPackages = with pkgs; [ tev ];
 ```
 
 #### Install from source
