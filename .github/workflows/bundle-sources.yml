@@ -1,0 +1,28 @@
+name: Bundle Sources
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  bundle-sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Build archive
+        run: |
+          git archive -o sources.tar HEAD && \
+          git submodule --quiet foreach 'cd $toplevel; tar -rf sources.tar $sm_path' && \
+          gzip --fast sources.tar
+      - name: Upload archive
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v5
+        with:
+          name: Sources
+          path: sources.tar.gz
