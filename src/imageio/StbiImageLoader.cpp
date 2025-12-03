@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tev/imageio/Colors.h"
 #include <tev/ThreadPool.h>
 #include <tev/imageio/StbiImageLoader.h>
 
