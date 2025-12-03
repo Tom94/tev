@@ -797,7 +797,7 @@ Task<void> toLinearSrgbPremul(
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
 
-    tlog::info() << fmt::format(
+    tlog::debug() << fmt::format(
         "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
         numColorChannels,
         (int)alphaKind,

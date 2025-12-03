@@ -473,7 +473,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     if (ce) {
                         data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
 
-                        tlog::info() << fmt::format(
+                        tlog::debug() << fmt::format(
                             "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={} intent={}",
                             jxlToString(ce->color_space),
                             jxlToString(ce->primaries),
