@@ -797,7 +797,7 @@ Task<void> toLinearSrgbPremul(
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
 
-    tlog::info() << fmt::format(
+    tlog::debug() << fmt::format(
         "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
         numColorChannels,
         (int)alphaKind,
@@ -857,12 +857,10 @@ Task<void> toLinearSrgbPremul(
 
                     Vector3f color;
                     for (int c = 0; c < numColorChannels; ++c) {
-                        const float val = (*(float*)&srcPtr[(baseIdxSrc + c) * bytesPerSample] - range.offset) * range.scale;
-                        color[c] = ituth273::invTransfer(cicp->transfer, val);
+                        color[c] = (*(float*)&srcPtr[(baseIdxSrc + c) * bytesPerSample] - range.offset) * range.scale;
                     }
 
-                    color = toRec709 * color;
-
+                    color = toRec709 * ituth273::invTransfer(cicp->transfer, color);
                     for (int c = 0; c < numColorChannelsOut; ++c) {
                         dstPtr[baseIdxDst + c] = color[c];
                     }

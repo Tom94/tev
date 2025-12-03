@@ -347,9 +347,14 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     numPixels,
                     [&](size_t i) {
                         const float alpha = dstData[i * 4 + 3];
-                        for (size_t c = 0; c < 3; ++c) {
-                            const float val = (dstData[i * 4 + c] - range.offset) * range.scale;
-                            dstData[i * 4 + c] = ituth273::invTransfer(transfer, val) * alpha;
+                        Vector3f color;
+                        for (int c = 0; c < 3; ++c) {
+                            color[c] = (dstData[i * 4 + c] - range.offset) * range.scale;
+                        }
+
+                        color = ituth273::invTransfer(transfer, color) * alpha;
+                        for (int c = 0; c < 3; ++c) {
+                            dstData[i * 4 + c] = color[c];
                         }
                     },
                     priority

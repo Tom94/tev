@@ -191,9 +191,9 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
     // condusive to deriving a white level for display (which should be actual cd/m² luminance). The following code therefore computes
     // actual luminance, but leaves a commented-out option to compute maximum RGB BT.2020 instead.
 
-    const auto toRec2020 = convertColorspaceMatrix(
-        rec709Chroma(), bt2020Chroma(), ERenderingIntent::AbsoluteColorimetric /* intent doesn't matter because white point is the same */
-    );
+    // const auto toRec2020 = convertColorspaceMatrix(
+    //     rec709Chroma(), bt2020Chroma(), ERenderingIntent::AbsoluteColorimetric /* intent doesn't matter because white point is the same */
+    // );
 
     for (size_t i = 0; i < layers.size(); ++i) {
         const auto& layer = layers[i];
@@ -216,7 +216,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
             ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 lumPerLayer[i].size(),
-                [r, g, b, &lumBuf = lumPerLayer[i], &toRec2020](size_t px) {
+                [r, g, b, &lumBuf = lumPerLayer[i]/*, &toRec2020*/](size_t px) {
                     // Optional: max RGB in BT.2020 primaries (see comment above)
                     // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
                     // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
