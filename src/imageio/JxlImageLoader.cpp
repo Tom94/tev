@@ -529,13 +529,19 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                                 const float factor = info.alpha_premultiplied && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                                 const float invFactor = info.alpha_premultiplied && alpha > 0.0001f ? alpha : 1.0f;
 
+                                Vector3f color;
                                 for (size_t c = 0; c < 3; ++c) {
-                                    const float val = pixelData[i * 4 + c];
-                                    if (hasGamma) {
-                                        pixelData[i * 4 + c] = invFactor * std::pow(factor * val, 1.0f / (float)ce->gamma);
-                                    } else {
-                                        pixelData[i * 4 + c] = invFactor * ituth273::invTransfer(cicpTransfer, factor * val);
-                                    }
+                                    color[c] = pixelData[i * 4 + c];
+                                }
+
+                                if (hasGamma) {
+                                    color = pow(color * factor, 1.0f / (float)ce->gamma) * invFactor;
+                                } else {
+                                    color = ituth273::invTransfer(cicpTransfer, color * factor) * invFactor;
+                                }
+
+                                for (size_t c = 0; c < 3; ++c) {
+                                    pixelData[i * 4 + c] = color[c];
                                 }
                             },
                             priority

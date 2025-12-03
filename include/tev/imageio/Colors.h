@@ -183,21 +183,34 @@ inline float pqToLinear(float val) {
     constexpr float invm2 = 32.0f / 2523.0f;
 
     const float tmp = std::pow(std::max(val, 0.0f), invm2);
-    const float resultCdm2 = 10000.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-5f), invm1);
-    return resultCdm2 / 203.0f; // Convert to linear sRGB units where SDR white is 1.0
+    return 10000.0f / 203.0f * std::pow(std::max(tmp - c1, 0.0f) / std::max(c2 - c3 * tmp, 1e-5f), invm1);
 }
 
 inline float smpteSt428ToLinear(float val) { return std::pow(val, 2.6f) * (52.37f / 48.0f); }
 
-inline float hlgToLinear(float val) {
-    constexpr float a = 0.17883277f;
-    constexpr float b = 0.28466892f;
-    constexpr float c = 0.55991073f;
-    const float resultCdm2 = 1000.0f * (val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f));
-    return resultCdm2 / 203.0f; // Convert to linear sRGB units where SDR white is 1.0
+inline nanogui::Vector3f hlgToLinear(const nanogui::Vector3f& val) {
+    const auto invOetf = [](const float val) {
+        constexpr float a = 0.17883277f;
+        constexpr float b = 0.28466892f;
+        constexpr float c = 0.55991073f;
+        return val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - c) / a) + b) / 12.0f);
+    };
+
+    const auto ootf = [](const nanogui::Vector3f& val) {
+        // TODO: make these params configurable
+        constexpr float Lw = 1000.0; // display peak brightness in cd/m² (nits)
+        constexpr float gain = Lw; // can technically be adjusted, but usually set to Lw
+        const float gamma = 1.2f + 0.42f * std::log10(Lw / 1000.0f);
+
+        // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
+        const float lum = 0.2627f * val.x() + 0.6780f * val.y() + 0.0593f * val.z();
+        return gain * pow(lum, gamma - 1.0f) * val;
+    };
+
+    return ootf({invOetf(val.x()), invOetf(val.y()), invOetf(val.z())}) / 203.0f; // Convert to linear sRGB units where SDR white is 1.0
 }
 
-inline float invTransfer(const ETransferCharacteristics transfer, float val) {
+inline float invTransferComponent(const ETransferCharacteristics transfer, float val) noexcept {
     switch (transfer) {
         case ETransferCharacteristics::BT709:
         case ETransferCharacteristics::BT601:
@@ -216,12 +229,24 @@ inline float invTransfer(const ETransferCharacteristics transfer, float val) {
         case ETransferCharacteristics::SRGB: return toLinear(val);
         case ETransferCharacteristics::PQ: return pqToLinear(val);
         case ETransferCharacteristics::SMPTE428: return smpteSt428ToLinear(val);
-        case ETransferCharacteristics::HLG: return hlgToLinear(val);
+        case ETransferCharacteristics::HLG: return val; // Should be handled by invTransfer below
         case ETransferCharacteristics::Unspecified: return val; // Default to linear if unspecified
     }
 
     // Other transfer functions are not implemented. Default to linear.
     return val;
+}
+
+inline nanogui::Vector3f invTransfer(const ETransferCharacteristics transfer, const nanogui::Vector3f& val) noexcept {
+    if (transfer == ETransferCharacteristics::HLG) {
+        return hlgToLinear(val);
+    } else {
+        return {
+            invTransferComponent(transfer, val.x()),
+            invTransferComponent(transfer, val.y()),
+            invTransferComponent(transfer, val.z()),
+        };
+    }
 }
 
 inline float bestGuessReferenceWhiteLevel(const ETransferCharacteristics transfer) {

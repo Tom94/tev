@@ -53,7 +53,7 @@ public:
 
     void translate(const nanogui::Vector2f& amount);
     void scale(float amount, const nanogui::Vector2f& origin);
-    float scale() const { return nanogui::extractScale(mTransform); }
+    float scale() const { return extractScale(mTransform); }
 
     void setExposure(float exposure) { mExposure = exposure; }
     void setOffset(float offset) { mOffset = offset; }

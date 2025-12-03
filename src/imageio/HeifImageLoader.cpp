@@ -392,9 +392,14 @@ Task<vector<ImageData>>
                 const float factor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                 const float invFactor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? alpha : 1.0f;
 
+                Vector3f color;
                 for (int c = 0; c < numColorChannels; ++c) {
-                    const float val = (pixelData[i * numInterleavedChannels + c] - range.offset) * range.scale;
-                    pixelData[i * numInterleavedChannels + c] = invFactor * ituth273::invTransfer(cicpTransfer, factor * val);
+                    color[c] = (pixelData[i * numInterleavedChannels + c] - range.offset) * range.scale;
+                }
+
+                color = ituth273::invTransfer(cicpTransfer, color * factor) * invFactor;
+                for (int c = 0; c < numColorChannels; ++c) {
+                    pixelData[i * numInterleavedChannels + c] = color[c];
                 }
             },
             priority

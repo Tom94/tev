@@ -141,11 +141,8 @@ template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Matrix<T, N_
     }
 };
 
-struct NVGcontext;
-
-namespace nanogui {
-inline Matrix2f extract2x2(const Matrix3f& mat) {
-    Matrix2f result;
+inline nanogui::Matrix2f extract2x2(const nanogui::Matrix3f& mat) {
+    nanogui::Matrix2f result;
     result.m[0][0] = mat.m[0][0];
     result.m[0][1] = mat.m[0][1];
     result.m[1][0] = mat.m[1][0];
@@ -154,11 +151,66 @@ inline Matrix2f extract2x2(const Matrix3f& mat) {
     return result;
 }
 
-inline float extractScale(const Matrix3f& mat) {
+inline float extractScale(const nanogui::Matrix3f& mat) {
     float det = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
     return std::sqrt(det);
 }
-} // namespace nanogui
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> abs(const nanogui::Array<float, N_DIMS>& v) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = std::abs(v[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> exp(const nanogui::Array<float, N_DIMS>& v) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = std::exp(v[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> log(const nanogui::Array<float, N_DIMS>& v) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = std::log(v[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> max(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = std::max(a[i], b[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> min(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = std::min(a[i], b[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> pow(const nanogui::Array<float, N_DIMS>& v, float exponent) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = std::pow(v[i], exponent);
+    }
+
+    return result;
+}
+
+struct NVGcontext;
 
 namespace tev {
 
