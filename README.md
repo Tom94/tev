@@ -28,12 +28,10 @@ Or install __tev__ via package managers:
 environment.systemPackages = with pkgs; [ tev ];
 ```
 
-#### Install from source
-
 Or build and install __tev__ from source. See the [building tev](#building-tev) section below for details. TL;DR:
 ```sh
 $ git clone --recursive https://github.com/Tom94/tev
-$ cmake . -B build
+$ cmake . -B build -DCMAKE_BUILD_TYPE=Release
 $ cmake --build build --config Release -j
 $ cmake --install build
 ```
@@ -115,7 +113,7 @@ $ git clone --recursive https://github.com/Tom94/tev
 
 Then, use [CMake](https://cmake.org/) as follows:
 ```sh
-$ cmake . -B build
+$ cmake . -B build -DCMAKE_BUILD_TYPE=Release
 $ cmake --build build --config Release -j
 ```
 
