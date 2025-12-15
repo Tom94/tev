@@ -414,21 +414,27 @@ void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string_view text
 
 int maxTextureSize();
 
-inline float toSRGB(float linear, float gamma = 2.4f) {
-    static const float a = 0.055f;
-    if (linear <= 0.0031308f) {
-        return 12.92f * linear;
+inline float toSRGB(float val, float gamma = 2.4f) {
+    static constexpr float a = 0.055f;
+    static constexpr float threshold = 0.0031308f;
+
+    const float absVal = std::abs(val);
+    if (val <= threshold) {
+        return 12.92f * val;
     } else {
-        return (1.0f + a) * std::pow(linear, 1.0f / gamma) - a;
+        return std::copysign((1.0f + a) * std::pow(absVal, 1.0f / gamma) - a, val);
     }
 }
 
-inline float toLinear(float sRGB, float gamma = 2.4f) {
-    static const float a = 0.055f;
-    if (sRGB <= 0.04045f) {
-        return sRGB / 12.92f;
+inline float toLinear(float val, float gamma = 2.4f) {
+    static constexpr float a = 0.055f;
+    static constexpr float threshold = 0.04045f;
+
+    const float absVal = std::abs(val);
+    if (absVal <= threshold) {
+        return val / 12.92f;
     } else {
-        return std::pow((sRGB + a) / (1.0f + a), gamma);
+        return std::copysign(std::pow((absVal + a) / (1.0f + a), gamma), val);
     }
 }
 
