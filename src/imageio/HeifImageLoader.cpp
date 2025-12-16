@@ -23,6 +23,7 @@
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <nanogui/vector.h>
 
@@ -434,36 +435,51 @@ Task<vector<ImageData>>
     ImageData& mainImage = result.front();
 
     unique_ptr<Exif> exif;
-    try {
-        int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(handle, "Exif");
-        if (numMetadataBlocks > 0) {
-            tlog::debug() << "Found " << numMetadataBlocks << " EXIF metadata block(s). Attempting to decode...";
+    const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(handle, nullptr);
+    vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
 
-            vector<heif_item_id> metadataIDs(numMetadataBlocks);
-            heif_image_handle_get_list_of_metadata_block_IDs(handle, "Exif", metadataIDs.data(), numMetadataBlocks);
+    if (numMetadataBlocks > 0) {
+        tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
+    }
 
-            for (int i = 0; i < numMetadataBlocks; ++i) {
-                size_t exifSize = heif_image_handle_get_metadata_size(handle, metadataIDs[i]);
-                if (exifSize <= 4) {
-                    tlog::warning() << "Failed to get size of EXIF data.";
-                    continue;
-                }
+    heif_image_handle_get_list_of_metadata_block_IDs(handle, nullptr, metadataIDs.data(), numMetadataBlocks);
+    for (heif_item_id id : metadataIDs) {
+        const string_view type = heif_image_handle_get_metadata_type(handle, id);
+        const string_view contentType = heif_image_handle_get_metadata_content_type(handle, id);
+        const size_t size = heif_image_handle_get_metadata_size(handle, id);
 
-                vector<uint8_t> exifData(exifSize);
-                if (auto error = heif_image_handle_get_metadata(handle, metadataIDs[i], exifData.data()); error.code != heif_error_Ok) {
-                    tlog::warning() << "Failed to read EXIF data: " << error.message;
-                    continue;
-                }
-
-                // The first four elements are the length and not strictly part of the exif data.
-                exifData.erase(exifData.begin(), exifData.begin() + 4);
-                exif = make_unique<Exif>(exifData);
-            }
+        if (size <= 4) {
+            tlog::warning() << "Failed to get size of metadata.";
+            continue;
         }
-    } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 
-    if (exif) {
-        mainImage.attributes.emplace_back(exif->toAttributes());
+        vector<uint8_t> metadata(size);
+        if (const auto error = heif_image_handle_get_metadata(handle, id, metadata.data()); error.code != heif_error_Ok) {
+            tlog::warning() << "Failed to read metadata: " << error.message;
+            continue;
+        }
+
+        if (type == "Exif") {
+            // The first four bytes are the length of the exif data and not strictly part of the exif data.
+            metadata.erase(metadata.begin(), metadata.begin() + 4);
+            tlog::debug() << fmt::format("Found EXIF data of size {} bytes", metadata.size());
+
+            try {
+                exif = make_unique<Exif>(metadata);
+                mainImage.attributes.emplace_back(exif->toAttributes());
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+        } else if (contentType == "application/rdf+xml") {
+            tlog::debug() << fmt::format("Found XMP data of size {} bytes", metadata.size());
+
+            try {
+                Xmp xmp{
+                    string_view{(const char*)metadata.data(), metadata.size()}
+                };
+                mainImage.attributes.emplace_back(xmp.attributes());
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+        } else {
+            tlog::debug() << fmt::format("Skipping unknown metadata block of type '{}/{}' ({} bytes).", type, contentType, size);
+        }
     }
 
     auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
