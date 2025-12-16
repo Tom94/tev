@@ -98,3 +98,6 @@
 	path = dependencies/LibRaw-cmake
 	url = https://github.com/LibRaw/LibRaw-cmake
 	shallow = true
+[submodule "dependencies/xmp"]
+	path = dependencies/xmp
+	url = https://github.com/tom94/xmp
