@@ -139,7 +139,7 @@ bool naturalCompare(string_view a, string_view b) {
     return a.size() - i < b.size() - j;
 }
 
-vector<string_view> split(string_view text, string_view delim) {
+vector<string_view> split(string_view text, string_view delim, bool inclusive) {
     vector<string_view> result;
     size_t begin = 0;
     while (true) {
@@ -148,7 +148,7 @@ vector<string_view> split(string_view text, string_view delim) {
             result.emplace_back(text.substr(begin));
             break;
         } else {
-            result.emplace_back(text.substr(begin, end - begin));
+            result.emplace_back(text.substr(begin, end + (inclusive ? 1 : 0) - begin));
             begin = end + 1;
         }
     }

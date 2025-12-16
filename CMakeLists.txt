@@ -169,6 +169,7 @@ set(TEV_SOURCES
     include/tev/imageio/TiffImageLoader.h src/imageio/TiffImageLoader.cpp
     include/tev/imageio/UltraHdrImageLoader.h src/imageio/UltraHdrImageLoader.cpp
     include/tev/imageio/WebpImageLoader.h src/imageio/WebpImageLoader.cpp
+    include/tev/imageio/Xmp.h src/imageio/Xmp.cpp
 
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp

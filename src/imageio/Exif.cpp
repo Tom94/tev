@@ -22,6 +22,7 @@
 
 #include <libexif/exif-data.h>
 
+#include <span>
 #include <vector>
 
 using namespace std;
@@ -131,7 +132,7 @@ AppleMakerNote Exif::tryGetAppleMakerNote() const {
 }
 
 EOrientation Exif::getOrientation() const {
-    ExifEntry* orientationEntry = exif_content_get_entry(mExif->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
+    const ExifEntry* orientationEntry = exif_content_get_entry(mExif->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
     if (!orientationEntry) {
         return EOrientation::None;
     }

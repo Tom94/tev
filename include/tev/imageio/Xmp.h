@@ -20,46 +20,21 @@
 
 #include <tev/Common.h>
 #include <tev/Image.h>
-#include <tev/imageio/AppleMakerNote.h>
 
-#include <array>
-#include <cstdint>
-#include <span>
-
-struct _ExifData;
-struct _ExifLog;
+#include <string_view>
 
 namespace tev {
 
-class Exif {
+class Xmp {
 public:
-    static constexpr std::array<uint8_t, 6> FOURCC = {
-        'E',
-        'x',
-        'i',
-        'f',
-        '\0',
-        '\0',
-    };
+    Xmp(std::string_view xmpData);
 
-    Exif();
-    Exif(std::span<const uint8_t> exifData, bool autoPrependFourcc = true);
-    ~Exif();
-
-    void reset();
-
-    AppleMakerNote tryGetAppleMakerNote() const;
-
-    EOrientation getOrientation() const;
-
-    AttributeNode toAttributes() const;
+    EOrientation orientation() const { return mOrientation; }
+    const AttributeNode& attributes() const { return mAttributes; }
 
 private:
-    bool mReverseEndianess = false;
-
-    _ExifData* mExif = nullptr;
-    _ExifLog* mExifLog = nullptr;
-    std::unique_ptr<bool> mExifLogError = nullptr;
+    AttributeNode mAttributes;
+    EOrientation mOrientation = EOrientation::None;
 };
 
 } // namespace tev
