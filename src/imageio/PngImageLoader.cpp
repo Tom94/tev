@@ -20,6 +20,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/PngImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <png.h>
 
@@ -160,8 +161,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         try {
             const auto exif = Exif(exifData);
             attributes.emplace_back(exif.toAttributes());
-            orientation = exif.getOrientation();
-            tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+
+            const auto exifOrientation = exif.getOrientation();
+            if (exifOrientation != EOrientation::None) {
+                orientation = exifOrientation;
+                tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+            }
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
@@ -173,7 +178,23 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         for (int i = 0; i < numText; ++i) {
             // See https://www.w3.org/TR/png-3/#11keywords
             if (strcmp("XML:com.adobe.xmp", textPtr[i].key) == 0) {
-                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}. Ignoring.", strlen(textPtr[i].text));
+                const size_t len = strlen(textPtr[i].text);
+                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}.", len);
+
+                try {
+                    const auto xmp = Xmp{
+                        string_view{textPtr[i].text, len}
+                    };
+
+                    attributes.emplace_back(xmp.attributes());
+                    orientation = xmp.orientation();
+                    const auto xmpOrientation = xmp.orientation();
+                    if (xmpOrientation != EOrientation::None) {
+                        orientation = xmpOrientation;
+                        tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
+                    }
+                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+
                 continue;
             }
 
