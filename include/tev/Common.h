@@ -405,6 +405,8 @@ std::vector<std::string_view> split(std::string_view text, std::string_view deli
 std::string toLower(std::string_view str);
 std::string toUpper(std::string_view str);
 
+std::string_view trim(std::string_view s);
+
 bool matchesFuzzy(std::string_view text, std::string_view filter, size_t* matchedPartId = nullptr);
 bool matchesRegex(std::string_view text, std::string_view filter);
 inline bool matchesFuzzyOrRegex(std::string_view text, std::string_view filter, bool isRegex) {

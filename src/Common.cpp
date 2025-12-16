@@ -168,6 +168,16 @@ string toUpper(string_view str) {
     return result;
 }
 
+string_view trim(string_view s) {
+    const char* ws = " \t\n\r\f\v";
+    s.remove_prefix(std::min(s.find_first_not_of(ws), s.size()));
+    if (!s.empty()) {
+        s.remove_suffix(s.size() - s.find_last_not_of(ws) - 1);
+    }
+
+    return s;
+}
+
 bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
     if (matchedPartId) {
         // Default value of 0. Is returned when the filter is empty, when there is no match, or when the filter is a regex.
