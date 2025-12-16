@@ -145,7 +145,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         png_set_swap(pngPtr);
     }
 
-    optional<AttributeNode> exifAttributes;
+    vector<AttributeNode> attributes;
 
     png_uint_32 exifDataSize = 0;
     png_bytep exifDataRaw = nullptr;
@@ -159,10 +159,44 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         try {
             const auto exif = Exif(exifData);
-            exifAttributes = exif.toAttributes();
+            attributes.emplace_back(exif.toAttributes());
             orientation = exif.getOrientation();
             tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+    }
+
+    png_textp textPtr = nullptr;
+    if (const int numText = png_get_text(pngPtr, infoPtr, &textPtr, nullptr); numText > 0) {
+        tlog::debug() << fmt::format("Found {} text chunks in PNG metadata", numText);
+
+        vector<AttributeNode> textEntries;
+        for (int i = 0; i < numText; ++i) {
+            // See https://www.w3.org/TR/png-3/#11keywords
+            if (strcmp("XML:com.adobe.xmp", textPtr[i].key) == 0) {
+                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}. Ignoring.", strlen(textPtr[i].text));
+                continue;
+            }
+
+            textEntries.emplace_back(AttributeNode{.name = textPtr[i].key, .value = textPtr[i].text, .type = "string", .children = {}});
+
+            // tlog::debug() << fmt::format("  {}: {}", textPtr[i].key, textPtr[i].text);
+        }
+
+        if (!textEntries.empty()) {
+            attributes.emplace_back(
+                AttributeNode{
+                    .name = "PNG",
+                    .value = "",
+                    .type = "",
+                    .children = {AttributeNode{
+                        .name = "Text chunks",
+                        .value = "",
+                        .type = "",
+                        .children = std::move(textEntries),
+                    }},
+                }
+            );
+        }
     }
 
     const bool hasAlpha = numChannels > numColorChannels;
@@ -203,9 +237,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     auto readFrame = [&]() -> Task<ImageData> {
         ImageData resultData;
-        if (exifAttributes) {
-            resultData.attributes.emplace_back(exifAttributes.value());
-        }
+        resultData.attributes = std::move(attributes);
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
