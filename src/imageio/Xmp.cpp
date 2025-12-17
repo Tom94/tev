@@ -69,10 +69,14 @@ Xmp::Xmp(string_view xmpData) {
         SXMPMeta meta;
         meta.ParseFromBuffer(xmpData.data(), xmpData.size());
 
+        // tlog::debug() << xmpData;
+
         SXMPIterator iter{meta};
         string schema, path, value;
 
         while (iter.Next(&schema, &path, &value)) {
+            // tlog::debug() << fmt::format("{} | {} | {}", schema, path, value);
+
             if (value.empty()) {
                 continue;
             }

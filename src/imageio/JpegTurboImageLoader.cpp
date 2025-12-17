@@ -21,6 +21,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <jpeglib.h>
 
@@ -33,14 +34,10 @@ namespace {
 // Taken from jpegdecoderhelper in libultrahdr per their Apache 2.0 license and shortened.
 // https://github.com/google/libultrahdr/blob/6db3a83ee2b1f79850f3f597172289808dc6a331/lib/src/jpegdecoderhelper.cpp#L125
 void jpeg_extract_marker_payload(
-    const j_decompress_ptr cinfo,
-    const uint32_t marker_code,
-    const uint8_t* marker_fourcc_code,
-    const uint32_t fourcc_length,
-    std::vector<JOCTET>& destination
+    const j_decompress_ptr cinfo, const uint32_t markerCode, span<const uint8_t> ns, std::vector<uint8_t>& destination
 ) {
     for (jpeg_marker_struct* marker = cinfo->marker_list; marker; marker = marker->next) {
-        if (marker->marker == marker_code && marker->data_length > fourcc_length && !memcmp(marker->data, marker_fourcc_code, fourcc_length)) {
+        if (marker->marker == markerCode && marker->data_length > ns.size() && !memcmp(marker->data, ns.data(), ns.size())) {
             destination.resize(marker->data_length);
             memcpy(static_cast<void*>(destination.data()), marker->data, marker->data_length);
             return;
@@ -91,8 +88,12 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         throw ImageLoadError{"Failed to read JPEG header."};
     }
 
-    std::vector<JOCTET> exifData;
-    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, Exif::FOURCC.data(), Exif::FOURCC.size(), exifData);
+    vector<uint8_t> exifData;
+    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, Exif::FOURCC, exifData);
+
+    vector<uint8_t> xmpData;
+    static constexpr string_view xmpNs = "http://ns.adobe.com/xap/1.0/";
+    jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, {(const uint8_t*)xmpNs.data(), xmpNs.size()}, xmpData);
 
     // Try to extract an ICC profile for correct color space conversion
     JOCTET* iccProfile = nullptr;
@@ -143,7 +144,10 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     jpeg_finish_decompress(&cinfo);
 
-    optional<AttributeNode> exifAttributes;
+    vector<ImageData> result(1);
+    ImageData& resultData = result.front();
+
+    EOrientation orientation = EOrientation::None;
 
     // Try to extract EXIF data for correct orientation
     if (!exifData.empty()) {
@@ -151,20 +155,37 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
         try {
             const auto exif = Exif{exifData};
-            exifAttributes = exif.toAttributes();
+            resultData.attributes.emplace_back(exif.toAttributes());
 
-            EOrientation orientation = exif.getOrientation();
-            tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+            const EOrientation exifOrientation = exif.getOrientation();
+            if (exifOrientation != EOrientation::None) {
+                orientation = exifOrientation;
+                tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+            }
 
             size = co_await orientToTopLeft(EPixelFormat::U8, imageData, size, orientation, priority);
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
     }
 
-    vector<ImageData> result(1);
-    ImageData& resultData = result.front();
+    // Same with XMP data. (The +1 is to skip null termination.)
+    if (xmpData.size() > xmpNs.size() + 1) {
+        const string_view xmpDataView = string_view{(const char*)xmpData.data(), xmpData.size()}.substr(xmpNs.size() + 1);
+        tlog::debug() << fmt::format("Found XMP data of size {} bytes", xmpDataView.size());
 
-    if (exifAttributes) {
-        resultData.attributes.emplace_back(exifAttributes.value());
+        try {
+            const auto xmp = Xmp{xmpDataView};
+            resultData.attributes.emplace_back(xmp.attributes());
+
+            const EOrientation xmpOrientation = xmp.orientation();
+            if (xmpOrientation != EOrientation::None) {
+                orientation = xmpOrientation;
+                tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
+            }
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+    }
+
+    if (orientation != EOrientation::None) {
+        size = co_await orientToTopLeft(EPixelFormat::U8, imageData, size, orientation, priority);
     }
 
     // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily fits

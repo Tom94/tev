@@ -160,7 +160,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
         ExifData* data = nullptr;
     } exif;
 
-    auto handleExif = [](void* context, int tag, int type, int len, unsigned int ord, void* ifp, INT64 base) {
+    const auto handleExif = [](void* context, int tag, int type, int len, unsigned int ord, void* ifp, INT64 base) {
         ExifContext& exif = *(ExifContext*)context;
 
         ExifEntry* entry = exif_entry_new();
@@ -212,15 +212,15 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     iProcessor.imgdata.params.use_camera_wb = true;
 
     auto librawStream = LibRawDataStream{iStream, path};
-    if (int error = iProcessor.open_datastream(&librawStream); error != LIBRAW_SUCCESS) {
+    if (const int error = iProcessor.open_datastream(&librawStream); error != LIBRAW_SUCCESS) {
         throw FormatNotSupported{fmt::format("Could not open raw image: {}", libraw_strerror(error))};
     }
 
-    if (int error = iProcessor.unpack(); error != LIBRAW_SUCCESS) {
+    if (const int error = iProcessor.unpack(); error != LIBRAW_SUCCESS) {
         throw ImageLoadError{fmt::format("Could not unpack raw image: {}", libraw_strerror(error))};
     }
 
-    if (int error = iProcessor.dcraw_process(); error != LIBRAW_SUCCESS) {
+    if (const int error = iProcessor.dcraw_process(); error != LIBRAW_SUCCESS) {
         throw ImageLoadError{fmt::format("Could not process raw image: {}", libraw_strerror(error))};
     }
 
@@ -235,8 +235,9 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
         {0, 0},
         size
     };
+
     for (int i = 0; i < 8; i++) {
-        Box2i box = maskToBox(iProcessor.imgdata.sizes.mask[i]);
+        const Box2i box = maskToBox(iProcessor.imgdata.sizes.mask[i]);
         tlog::debug() << fmt::format("mask[{}] = [{}, {}]", i, box.min, box.max);
 
         if (!box.isValid() || box.area() == 0) {
@@ -247,7 +248,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     }
 
     for (int i = 0; i < 2; i++) {
-        Box2i box = cropToBox(iProcessor.imgdata.sizes.raw_inset_crops[i]);
+        const Box2i box = cropToBox(iProcessor.imgdata.sizes.raw_inset_crops[i]);
         tlog::debug() << fmt::format("raw_inset_crops[{}] = [{}, {}]", i, box.min, box.max);
 
         if (!box.isValid() || box.area() == 0) {
