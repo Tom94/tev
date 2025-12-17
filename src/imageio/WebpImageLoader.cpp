@@ -21,6 +21,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/WebpImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <webp/decode.h>
 #include <webp/demux.h>
@@ -69,19 +70,34 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         }
     }
 
-    optional<AttributeNode> exifAttributes;
+    vector<AttributeNode> attributes;
     if (flags & EXIF_FLAG) {
         if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunkIter)) {
             ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
 
             try {
-                vector<uint8_t> exifData(chunkIter.chunk.bytes, chunkIter.chunk.bytes + chunkIter.chunk.size);
-
-                auto exif = Exif(exifData);
-                exifAttributes = exif.toAttributes();
+                auto exif = Exif{
+                    {chunkIter.chunk.bytes, chunkIter.chunk.size}
+                };
+                attributes.emplace_back(exif.toAttributes());
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get EXIF chunk from webp image, despite flag being set.";
+        }
+    }
+
+    if (flags & XMP_FLAG) {
+        if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunkIter)) {
+            ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
+
+            try {
+                auto xmp = Xmp{
+                    string_view{(const char*)chunkIter.chunk.bytes, chunkIter.chunk.size}
+                };
+                attributes.emplace_back(xmp.attributes());
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+        } else {
+            tlog::warning() << "Failed to get XMP chunk from webp image, despite flag being set.";
         }
     }
 
@@ -150,9 +166,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             const ScopeGuard dataGuard{[data] { WebPFree(data); }};
 
             ImageData& resultData = result.emplace_back();
-            if (exifAttributes) {
-                resultData.attributes.emplace_back(exifAttributes.value());
-            }
+            resultData.attributes = std::move(attributes);
 
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
             resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16);
