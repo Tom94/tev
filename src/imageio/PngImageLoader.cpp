@@ -146,6 +146,31 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         png_set_swap(pngPtr);
     }
 
+    AttributeNode pngAttributes{
+        .name = "PNG",
+        .value = "",
+        .type = "",
+        .children = {},
+    };
+
+    if (png_timep time; png_get_tIME(pngPtr, infoPtr, &time) == PNG_INFO_tIME) {
+        pngAttributes.children.emplace_back(
+            AttributeNode{
+                .name = "tIME chunk",
+                .value = "",
+                .type = "",
+                .children = {AttributeNode{
+                    .name = "Last modified",
+                    .value = fmt::format(
+                        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", time->year, time->month, time->day, time->hour, time->minute, time->second
+                    ),
+                    .type = "UTC timestamp",
+                    .children = {},
+                }}
+            }
+        );
+    }
+
     vector<AttributeNode> attributes;
 
     EOrientation orientation = EOrientation::TopLeft;
@@ -245,20 +270,19 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         if (!textEntries.empty()) {
-            attributes.emplace_back(
+            pngAttributes.children.emplace_back(
                 AttributeNode{
-                    .name = "PNG",
+                    .name = "Text chunks",
                     .value = "",
                     .type = "",
-                    .children = {AttributeNode{
-                        .name = "Text chunks",
-                        .value = "",
-                        .type = "",
-                        .children = std::move(textEntries),
-                    }},
+                    .children = std::move(textEntries),
                 }
             );
         }
+    }
+
+    if (!pngAttributes.children.empty()) {
+        attributes.emplace_back(std::move(pngAttributes));
     }
 
     const bool hasAlpha = numChannels > numColorChannels;

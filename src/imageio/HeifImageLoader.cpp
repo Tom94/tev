@@ -482,7 +482,7 @@ Task<vector<ImageData>>
         }
     }
 
-    auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
+    const auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
         if (!exif) {
             tlog::warning() << "No EXIF metadata found.";
             return nullptr;
@@ -497,7 +497,7 @@ Task<vector<ImageData>>
         return nullptr;
     };
 
-    auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view namePrefix) -> Task<void> {
+    const auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view namePrefix) -> Task<void> {
         Vector2i size = resultData.channels.front().size();
         if (size == targetSize) {
             co_return;
@@ -521,7 +521,7 @@ Task<vector<ImageData>>
     };
 
     // Read auxiliary images
-    int num_aux = heif_image_handle_get_number_of_auxiliary_images(handle, 0);
+    const int num_aux = heif_image_handle_get_number_of_auxiliary_images(handle, 0);
     if (num_aux > 0) {
         tlog::debug() << "Found " << num_aux << " auxiliary image(s)";
 
