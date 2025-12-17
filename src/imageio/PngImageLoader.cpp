@@ -171,6 +171,29 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         );
     }
 
+    int unit = 0;
+    if (png_uint_32 resX, resY; png_get_pHYs_dpi(pngPtr, infoPtr, &resX, &resY, &unit) == PNG_INFO_pHYs) {
+        pngAttributes.children.emplace_back(
+            AttributeNode{
+                .name = "pHYs chunk",
+                .value = "",
+                .type = "",
+                .children = {
+                             AttributeNode{
+                        .name = "Pixel density X",
+                        .value = fmt::format("{}", resX),
+                        .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
+                        .children = {},
+                    }, AttributeNode{
+                        .name = "Pixel density Y",
+                        .value = fmt::format("{}", resY),
+                        .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
+                        .children = {},
+                    }, }
+        }
+        );
+    }
+
     vector<AttributeNode> attributes;
 
     EOrientation orientation = EOrientation::TopLeft;
