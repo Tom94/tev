@@ -148,18 +148,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     vector<AttributeNode> attributes;
 
-    png_uint_32 exifDataSize = 0;
-    png_bytep exifDataRaw = nullptr;
-    png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
-
     EOrientation orientation = EOrientation::TopLeft;
-    if (exifDataRaw) {
-        std::vector<uint8_t> exifData(exifDataRaw, exifDataRaw + exifDataSize);
-
-        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
-
+    const auto handleExifData = [&](span<const uint8_t> data) {
         try {
-            const auto exif = Exif(exifData);
+            const auto exif = Exif{data};
             attributes.emplace_back(exif.toAttributes());
 
             const auto exifOrientation = exif.getOrientation();
@@ -168,6 +160,15 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
             }
         } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+    };
+
+    png_uint_32 exifDataSize = 0;
+    png_bytep exifDataRaw = nullptr;
+    png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
+
+    if (exifDataRaw) {
+        tlog::debug() << fmt::format("Found EXIF data chunk of size {} bytes", exifDataSize);
+        handleExifData({exifDataRaw, exifDataSize});
     }
 
     png_textp textPtr = nullptr;
@@ -176,11 +177,15 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         vector<AttributeNode> textEntries;
         for (int i = 0; i < numText; ++i) {
-            // See https://www.w3.org/TR/png-3/#11keywords
-            if (strcmp("XML:com.adobe.xmp", textPtr[i].key) == 0) {
-                const size_t len = strlen(textPtr[i].text);
-                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}.", len);
+            const size_t len = strlen(textPtr[i].text);
+            string_view key = textPtr[i].key;
 
+            // PNG can contain XMP metadata in one of its text chunks. Officially, the key is "XML:com.adobe.xmp", see
+            // https://www.w3.org/TR/png-3/#11keywords, but before standardization some software used "Raw profile type xmp". Furthermore,
+            // EXIF data should be stored in a separate eXIf chunk, but, again, historically some software stored it in text chunks (in hex
+            // encoded form) with keys like "Raw profile type exif" or "Raw profile type APP1".
+            if (key == "XML:com.adobe.xmp" || key == "Raw profile type xmp") {
+                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}.", len);
                 try {
                     const auto xmp = Xmp{
                         string_view{textPtr[i].text, len}
@@ -194,13 +199,49 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
                     }
                 } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+                continue;
+            } else if (key == "Raw profile type exif" || key == "Raw profile type APP1" || key == "Raw profile type app1") {
+                tlog::debug() << fmt::format("Found EXIF metadata of size {} in text chunk '{}'.", len, key);
 
+                istringstream is{
+                    string{textPtr[i].text, len}
+                };
+                string magic;
+                size_t payloadLen;
+                is >> magic >> payloadLen;
+
+                if (!is || magic != "exif" || payloadLen == 0) {
+                    tlog::warning() << "EXIF text chunk has invalid format.";
+                    continue;
+                }
+
+                vector<uint8_t> exifDataBuffer;
+
+                string line;
+                while (getline(is, line)) {
+                    for (size_t i = 0; i < line.size(); i += 2) {
+                        const char a = line[i], b = line[i + 1];
+                        exifDataBuffer.emplace_back(
+                            ((a >= 'a'     ? (a - 'a' + 10) :
+                                  a >= 'A' ? (a - 'A' + 10) :
+                                             (a - '0'))
+                             << 4) |
+                            (b >= 'a'     ? (b - 'a' + 10) :
+                                 b >= 'A' ? (b - 'A' + 10) :
+                                            (b - '0'))
+                        );
+                    }
+                }
+
+                if (exifDataBuffer.size() != payloadLen) {
+                    tlog::warning() << fmt::format("EXIF text chunk has mismatched payload length {}!={}.", exifDataBuffer.size(), payloadLen);
+                }
+
+                handleExifData(exifDataBuffer);
                 continue;
             }
 
-            textEntries.emplace_back(AttributeNode{.name = textPtr[i].key, .value = textPtr[i].text, .type = "string", .children = {}});
-
-            // tlog::debug() << fmt::format("  {}: {}", textPtr[i].key, textPtr[i].text);
+            textEntries.emplace_back(AttributeNode{.name = string{key}, .value = textPtr[i].text, .type = "string", .children = {}});
         }
 
         if (!textEntries.empty()) {
