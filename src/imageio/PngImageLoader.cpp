@@ -299,7 +299,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     auto readFrame = [&]() -> Task<ImageData> {
         ImageData resultData;
-        resultData.attributes = std::move(attributes);
+        resultData.attributes = attributes;
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.

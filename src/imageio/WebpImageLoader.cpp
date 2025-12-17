@@ -166,7 +166,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             const ScopeGuard dataGuard{[data] { WebPFree(data); }};
 
             ImageData& resultData = result.emplace_back();
-            resultData.attributes = std::move(attributes);
+            resultData.attributes = attributes;
 
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
             resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16);
