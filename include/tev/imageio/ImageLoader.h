@@ -18,8 +18,8 @@
 
 #pragma once
 
-#include "tev/Common.h"
 #include <tev/Channel.h>
+#include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
 

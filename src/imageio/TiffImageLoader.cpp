@@ -21,6 +21,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/TiffImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <half.h>
 #include <tiffio.h>
@@ -1216,6 +1217,21 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
     if (TIFFGetField(tif, TIFFTAG_ICCPROFILE, &iccProfileSize, &iccProfileData) && iccProfileSize > 0 && iccProfileData) {
         tlog::debug() << fmt::format("Found ICC color profile of size {} bytes", iccProfileSize);
+    }
+
+    // Read XMP metadata if available
+    uint32_t xmpDataSize = 0;
+    const char* xmpData = nullptr;
+
+    if (TIFFGetField(tif, TIFFTAG_XMLPACKET, &xmpDataSize, &xmpData) && xmpDataSize > 0 && xmpData) {
+        tlog::debug() << fmt::format("Found XMP metadata of size {} bytes", xmpDataSize);
+        try {
+            const Xmp xmp{
+                string_view{xmpData, xmpDataSize}
+            };
+
+            resultData.attributes.emplace_back(xmp.attributes());
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse XMP data: {}", e.what()); }
     }
 
     // TIFF images are either broken into strips (original format) or tiles (starting with TIFF 6.0). In practice, strips are just tiles

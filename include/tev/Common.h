@@ -399,10 +399,13 @@ template <typename T> std::string join(const T& components, std::string_view del
     return s.str();
 }
 
-std::vector<std::string_view> split(std::string_view text, std::string_view delim);
+// If `inclusive` is true, trailing delimiters are included in the resulting parts.
+std::vector<std::string_view> split(std::string_view text, std::string_view delim, bool inclusive = false);
 
 std::string toLower(std::string_view str);
 std::string toUpper(std::string_view str);
+
+std::string_view trim(std::string_view s);
 
 bool matchesFuzzy(std::string_view text, std::string_view filter, size_t* matchedPartId = nullptr);
 bool matchesRegex(std::string_view text, std::string_view filter);

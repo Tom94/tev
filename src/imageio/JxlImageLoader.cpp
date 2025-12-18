@@ -21,6 +21,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/JxlImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
@@ -604,48 +605,65 @@ l_decode_success:
             throw ImageLoadError{"Failed to get box type."};
         }
 
-        if (toLower(string{type, 4}) == "exif"s) {
-            tlog::debug() << "Found EXIF metadata. Attempting to load...";
+        const auto boxTypeStr = toUpper(trim(string_view{type, 4}));
+        if (boxTypeStr != "EXIF" && boxTypeStr != "XML") {
+            continue;
+        }
 
-            uint64_t boxSize = 0;
-            if (JXL_DEC_SUCCESS != JxlDecoderGetBoxSizeContents(decoder.get(), &boxSize)) {
-                throw ImageLoadError{"Failed to get EXIF box size."};
-            }
+        tlog::debug() << fmt::format("Found metadata box of type {}.", boxTypeStr);
 
-            vector<uint8_t> exifData(boxSize);
-            if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), exifData.data(), exifData.size())) {
-                throw ImageLoadError{"Failed to set initial box buffer."};
-            }
+        uint64_t boxSize = 0;
+        if (JXL_DEC_SUCCESS != JxlDecoderGetBoxSizeContents(decoder.get(), &boxSize)) {
+            throw ImageLoadError{"Failed to get metadata box size."};
+        }
 
-            status = JxlDecoderProcessInput(decoder.get());
-            if (status != JXL_DEC_SUCCESS && status != JXL_DEC_BOX) {
-                throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
-            }
+        vector<uint8_t> metadata(boxSize);
+        if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), metadata.data(), metadata.size())) {
+            throw ImageLoadError{"Failed to set initial box buffer."};
+        }
 
+        status = JxlDecoderProcessInput(decoder.get());
+        if (status != JXL_DEC_SUCCESS && status != JXL_DEC_BOX) {
+            throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
+        }
+
+        if (boxTypeStr == "XML") {
             try {
-                if (exifData.size() < 4) {
+                const Xmp xmp{
+                    string_view{(const char*)metadata.data(), metadata.size()}
+                };
+
+                for (auto&& data : result) {
+                    data.attributes.emplace_back(xmp.attributes());
+                }
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse XMP data: {}", e.what()); }
+        } else if (boxTypeStr == "EXIF") {
+            try {
+                if (metadata.size() < 4) {
                     throw invalid_argument{"Invalid EXIF data: box size is smaller than 4 bytes."};
                 }
 
-                uint32_t offset = *(uint32_t*)exifData.data();
+                uint32_t offset = *(uint32_t*)metadata.data();
                 if (endian::native != endian::big) {
                     offset = swapBytes(offset);
                 }
 
-                if (offset > exifData.size() - 4) {
+                if (offset > metadata.size() - 4) {
                     throw invalid_argument{"Invalid EXIF data: offset is larger than box size."};
                 }
 
                 tlog::debug() << fmt::format("EXIF data offset: {}", offset);
-                exifData.erase(exifData.begin(), exifData.begin() + 4 + offset);
+                metadata.erase(metadata.begin(), metadata.begin() + 4 + offset);
 
-                auto exif = Exif{exifData};
-                auto exifAttributes = exif.toAttributes();
+                const auto exif = Exif{metadata};
+                const auto exifAttributes = exif.toAttributes();
 
                 for (auto&& data : result) {
                     data.attributes.emplace_back(exifAttributes);
                 }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse exif data: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse EXIF data: {}", e.what()); }
+        } else {
+            tlog::warning() << fmt::format("Unhandled box type: {}", boxTypeStr);
         }
     }
 

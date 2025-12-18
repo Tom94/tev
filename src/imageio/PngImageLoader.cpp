@@ -20,6 +20,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/PngImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <png.h>
 
@@ -117,14 +118,14 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     if (png_get_valid(pngPtr, infoPtr, PNG_INFO_tRNS)) {
-        tlog::debug() << "Image has transparency channel. Converting to alpha channel.";
+        tlog::debug() << "PNG has tRNS chunk. Converting to alpha channel.";
 
         png_set_tRNS_to_alpha(pngPtr); // Convert transparency to alpha channel
         if (numColorChannels != numChannels) {
-            throw ImageLoadError{"Image has transparency channel but already has an alpha channel."};
+            tlog::warning() << "PNG has tRNS chunk but already has an alpha channel.";
         }
 
-        numChannels += 1;
+        numChannels = numColorChannels + 1;
     }
 
     if (numColorChannels == 0 || numChannels == 0) {
@@ -145,24 +146,166 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         png_set_swap(pngPtr);
     }
 
-    optional<AttributeNode> exifAttributes;
+    AttributeNode pngAttributes{
+        .name = "PNG",
+        .value = "",
+        .type = "",
+        .children = {},
+    };
+
+    if (png_timep time; png_get_tIME(pngPtr, infoPtr, &time) == PNG_INFO_tIME) {
+        pngAttributes.children.emplace_back(
+            AttributeNode{
+                .name = "tIME chunk",
+                .value = "",
+                .type = "",
+                .children = {AttributeNode{
+                    .name = "Last modified",
+                    .value = fmt::format(
+                        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", time->year, time->month, time->day, time->hour, time->minute, time->second
+                    ),
+                    .type = "UTC timestamp",
+                    .children = {},
+                }}
+            }
+        );
+    }
+
+    int unit = 0;
+    if (png_uint_32 resX, resY; png_get_pHYs_dpi(pngPtr, infoPtr, &resX, &resY, &unit) == PNG_INFO_pHYs) {
+        pngAttributes.children.emplace_back(
+            AttributeNode{
+                .name = "pHYs chunk",
+                .value = "",
+                .type = "",
+                .children = {
+                             AttributeNode{
+                        .name = "Pixel density X",
+                        .value = fmt::format("{}", resX),
+                        .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
+                        .children = {},
+                    }, AttributeNode{
+                        .name = "Pixel density Y",
+                        .value = fmt::format("{}", resY),
+                        .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
+                        .children = {},
+                    }, }
+        }
+        );
+    }
+
+    vector<AttributeNode> attributes;
+
+    EOrientation orientation = EOrientation::TopLeft;
+    const auto handleExifData = [&](span<const uint8_t> data) {
+        try {
+            const auto exif = Exif{data};
+            attributes.emplace_back(exif.toAttributes());
+
+            const auto exifOrientation = exif.getOrientation();
+            if (exifOrientation != EOrientation::None) {
+                orientation = exifOrientation;
+                tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+            }
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+    };
 
     png_uint_32 exifDataSize = 0;
     png_bytep exifDataRaw = nullptr;
     png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
 
-    EOrientation orientation = EOrientation::TopLeft;
     if (exifDataRaw) {
-        std::vector<uint8_t> exifData(exifDataRaw, exifDataRaw + exifDataSize);
+        tlog::debug() << fmt::format("Found EXIF data chunk of size {} bytes", exifDataSize);
+        handleExifData({exifDataRaw, exifDataSize});
+    }
 
-        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
+    png_textp textPtr = nullptr;
+    if (const int numText = png_get_text(pngPtr, infoPtr, &textPtr, nullptr); numText > 0) {
+        tlog::debug() << fmt::format("Found {} text chunks in PNG metadata", numText);
 
-        try {
-            const auto exif = Exif(exifData);
-            exifAttributes = exif.toAttributes();
-            orientation = exif.getOrientation();
-            tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
-        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+        vector<AttributeNode> textEntries;
+        for (int i = 0; i < numText; ++i) {
+            const size_t len = strlen(textPtr[i].text);
+            string_view key = textPtr[i].key;
+
+            // PNG can contain XMP metadata in one of its text chunks. Officially, the key is "XML:com.adobe.xmp", see
+            // https://www.w3.org/TR/png-3/#11keywords, but before standardization some software used "Raw profile type xmp". Furthermore,
+            // EXIF data should be stored in a separate eXIf chunk, but, again, historically some software stored it in text chunks (in hex
+            // encoded form) with keys like "Raw profile type exif" or "Raw profile type APP1".
+            if (key == "XML:com.adobe.xmp" || key == "Raw profile type xmp") {
+                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}.", len);
+                try {
+                    const auto xmp = Xmp{
+                        string_view{textPtr[i].text, len}
+                    };
+
+                    attributes.emplace_back(xmp.attributes());
+                    orientation = xmp.orientation();
+                    const auto xmpOrientation = xmp.orientation();
+                    if (xmpOrientation != EOrientation::None) {
+                        orientation = xmpOrientation;
+                        tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
+                    }
+                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+                continue;
+            } else if (key == "Raw profile type exif" || key == "Raw profile type APP1" || key == "Raw profile type app1") {
+                tlog::debug() << fmt::format("Found EXIF metadata of size {} in text chunk '{}'.", len, key);
+
+                istringstream is{
+                    string{textPtr[i].text, len}
+                };
+                string magic;
+                size_t payloadLen;
+                is >> magic >> payloadLen;
+
+                if (!is || magic != "exif" || payloadLen == 0) {
+                    tlog::warning() << "EXIF text chunk has invalid format.";
+                    continue;
+                }
+
+                vector<uint8_t> exifDataBuffer;
+
+                string line;
+                while (getline(is, line)) {
+                    for (size_t i = 0; i < line.size(); i += 2) {
+                        const char a = line[i], b = line[i + 1];
+                        exifDataBuffer.emplace_back(
+                            ((a >= 'a'     ? (a - 'a' + 10) :
+                                  a >= 'A' ? (a - 'A' + 10) :
+                                             (a - '0'))
+                             << 4) |
+                            (b >= 'a'     ? (b - 'a' + 10) :
+                                 b >= 'A' ? (b - 'A' + 10) :
+                                            (b - '0'))
+                        );
+                    }
+                }
+
+                if (exifDataBuffer.size() != payloadLen) {
+                    tlog::warning() << fmt::format("EXIF text chunk has mismatched payload length {}!={}.", exifDataBuffer.size(), payloadLen);
+                }
+
+                handleExifData(exifDataBuffer);
+                continue;
+            }
+
+            textEntries.emplace_back(AttributeNode{.name = string{key}, .value = textPtr[i].text, .type = "string", .children = {}});
+        }
+
+        if (!textEntries.empty()) {
+            pngAttributes.children.emplace_back(
+                AttributeNode{
+                    .name = "Text chunks",
+                    .value = "",
+                    .type = "",
+                    .children = std::move(textEntries),
+                }
+            );
+        }
+    }
+
+    if (!pngAttributes.children.empty()) {
+        attributes.emplace_back(std::move(pngAttributes));
     }
 
     const bool hasAlpha = numChannels > numColorChannels;
@@ -203,9 +346,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     auto readFrame = [&]() -> Task<ImageData> {
         ImageData resultData;
-        if (exifAttributes) {
-            resultData.attributes.emplace_back(exifAttributes.value());
-        }
+        resultData.attributes = attributes;
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.

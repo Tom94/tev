@@ -41,13 +41,13 @@ void addRows(Widget* current, const AttributeNode& node, int indentation) {
     spacer->set_fixed_width(indentation * 8);
 
     auto nameWidget = new Label{row, node.name, "sans-bold"};
-    nameWidget->set_fixed_width(160 - indentation * 8);
+    nameWidget->set_fixed_width(180 - indentation * 8);
 
     auto valueWidget = new Label{row, node.value, "sans"};
     valueWidget->set_fixed_width(320);
 
     auto typeWidget = new Label{row, node.type, "sans"};
-    typeWidget->set_fixed_width(160);
+    typeWidget->set_fixed_width(140);
 
     for (const auto& it : node.children) {
         addRows(current, it, indentation + 1);

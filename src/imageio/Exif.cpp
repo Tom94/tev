@@ -22,6 +22,7 @@
 
 #include <libexif/exif-data.h>
 
+#include <span>
 #include <vector>
 
 using namespace std;
@@ -126,12 +127,12 @@ void Exif::reset() {
 }
 
 AppleMakerNote Exif::tryGetAppleMakerNote() const {
-    ExifEntry* makerNote = exif_data_get_entry(mExif, EXIF_TAG_MAKER_NOTE);
-    return AppleMakerNote(makerNote->data, makerNote->size);
+    const ExifEntry* makerNote = exif_data_get_entry(mExif, EXIF_TAG_MAKER_NOTE);
+    return AppleMakerNote{makerNote->data, makerNote->size};
 }
 
 EOrientation Exif::getOrientation() const {
-    ExifEntry* orientationEntry = exif_content_get_entry(mExif->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
+    const ExifEntry* orientationEntry = exif_content_get_entry(mExif->ifd[EXIF_IFD_0], EXIF_TAG_ORIENTATION);
     if (!orientationEntry) {
         return EOrientation::None;
     }
@@ -144,7 +145,7 @@ AttributeNode Exif::toAttributes() const {
     result.name = "EXIF";
 
     for (int ifd = EXIF_IFD_0; ifd < EXIF_IFD_COUNT; ++ifd) {
-        ExifContent* content = mExif->ifd[ifd];
+        const ExifContent* content = mExif->ifd[ifd];
         if (content->count == 0) {
             continue;
         }
@@ -156,7 +157,6 @@ AttributeNode Exif::toAttributes() const {
 
         for (size_t i = 0; i < content->count; ++i) {
             ExifEntry* entry = content->entries[i];
-
             const char* name = exif_tag_get_name_in_ifd(entry->tag, (ExifIfd)ifd);
             if (!name) {
                 continue;
