@@ -118,14 +118,14 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     if (png_get_valid(pngPtr, infoPtr, PNG_INFO_tRNS)) {
-        tlog::debug() << "Image has transparency channel. Converting to alpha channel.";
+        tlog::debug() << "PNG has tRNS chunk. Converting to alpha channel.";
 
         png_set_tRNS_to_alpha(pngPtr); // Convert transparency to alpha channel
         if (numColorChannels != numChannels) {
-            throw ImageLoadError{"Image has transparency channel but already has an alpha channel."};
+            tlog::warning() << "PNG has tRNS chunk but already has an alpha channel.";
         }
 
-        numChannels += 1;
+        numChannels = numColorChannels + 1;
     }
 
     if (numColorChannels == 0 || numChannels == 0) {
