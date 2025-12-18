@@ -25,6 +25,7 @@
 #include <nanogui/window.h>
 
 #include <string>
+#include <string_view>
 
 #include <tev/Image.h>
 
@@ -38,6 +39,30 @@ public:
 
     static std::string COMMAND;
     static std::string ALT;
+
+    std::string_view currentTabName() const {
+        return mTabWidget && mTabWidget->tab_count() > 0 ? mTabWidget->tab_caption(mTabWidget->selected_id()) : std::string_view{};
+    }
+
+    bool selectTabWithName(const std::string_view name) {
+        if (mTabWidget) {
+            for (int i = 0; i < mTabWidget->tab_count(); ++i) {
+                if (mTabWidget->tab_caption(mTabWidget->tab_id(i)) == name) {
+                    mTabWidget->set_selected_index(i);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    float currentScroll() const { return mScrollPanel ? mScrollPanel->scroll() : 0.0f; }
+    void setScroll(const float scroll) {
+        if (mScrollPanel) {
+            mScrollPanel->set_scroll(scroll);
+        }
+    }
 
 private:
     std::function<void()> mCloseCallback;

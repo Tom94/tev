@@ -2046,14 +2046,20 @@ void ImageViewer::toggleImageInfoWindow() {
 
 void ImageViewer::updateImageInfoWindow() {
     if (mImageInfoWindow) {
-        auto pos = mImageInfoWindow->position();
-        auto size = mImageInfoWindow->size();
+        const auto pos = mImageInfoWindow->position();
+        const auto size = mImageInfoWindow->size();
+        const string tabName = string{mImageInfoWindow->currentTabName()};
+        const float scroll = mImageInfoWindow->currentScroll();
         mImageInfoWindow->dispose();
 
         if (mCurrentImage) {
             mImageInfoWindow = new ImageInfoWindow{this, mCurrentImage, [this] { toggleImageInfoWindow(); }};
             mImageInfoWindow->set_position(pos);
             mImageInfoWindow->set_size(size);
+            if (mImageInfoWindow->selectTabWithName(tabName)) {
+                mImageInfoWindow->setScroll(scroll);
+            }
+
             mImageInfoWindow->request_focus();
 
             mImageInfoButton->set_pushed(true);
