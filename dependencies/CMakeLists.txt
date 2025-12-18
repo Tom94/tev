@@ -371,5 +371,13 @@ set(LCMS2_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include" CACHE PAT
 set(LCMS2_LIBRARIES lcms2-tev CACHE STRING " " FORCE)
 add_subdirectory(LibRaw-cmake)
 
-# Compile xmp
+# Compile expat (xml parser) and then xmp which depends on it
+set(EXPAT_BUILD_DOCS OFF CACHE BOOL " " FORCE)
+set(EXPAT_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
+set(EXPAT_BUILD_PKGCONFIG OFF CACHE BOOL " " FORCE)
+set(EXPAT_BUILD_TESTS OFF CACHE BOOL " " FORCE)
+set(EXPAT_BUILD_TOOLS OFF CACHE BOOL " " FORCE)
+set(EXPAT_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
+set(EXPAT_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+add_subdirectory(libexpat/expat EXCLUDE_FROM_ALL)
 add_subdirectory(xmp EXCLUDE_FROM_ALL)
