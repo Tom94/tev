@@ -106,6 +106,11 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             #define CHANNEL_CONFIG_RGA  4
             #define CHANNEL_CONFIG_RGBA 5
 
+            #define SRGB_POW 2.4
+            #define SRGB_CUT 0.0031308
+            #define SRGB_SCALE 12.92
+            #define SRGB_ALPHA 1.055
+
             uniform sampler2D image;
             uniform bool hasImage;
 
@@ -149,33 +154,35 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return texture2D(colormap, vec2(v, 0.5)).rgb;
             }
 
-            float linear(float sRGB) {
-                float outSign = sign(sRGB);
-                sRGB = abs(sRGB);
-
-                if (sRGB <= 0.04045) {
-                    return outSign * sRGB / 12.92;
-                } else {
-                    return outSign * pow((sRGB + 0.055) / 1.055, 2.4);
-                }
+            vec3 mixb(vec3 a, vec3 b, bvec3 mask) {
+                return mix(a, b, vec3(mask));
             }
 
-            float sRGB(float linear) {
-                float outSign = sign(linear);
-                linear = abs(linear);
+            vec3 invLinPow(vec3 color, float gamma, float thres, float scale, float alpha) {
+                bvec3 isLow = lessThanEqual(color.rgb, vec3(thres * scale));
+                vec3 lo = color.rgb / scale;
+                vec3 hi = pow((color.rgb + alpha - 1.0) / alpha, vec3(gamma));
+                return mixb(hi, lo, isLow);
+            }
 
-                if (linear < 0.0031308) {
-                    return outSign * 12.92 * linear;
-                } else {
-                    return outSign * (1.055 * pow(linear, 0.41666) - 0.055);
-                }
+            vec3 linear(vec3 color) {
+                return sign(color) * invLinPow(abs(color), SRGB_POW, SRGB_CUT, SRGB_SCALE, SRGB_ALPHA);
+            }
+
+            vec3 linPow(vec3 color, float gamma, float thres, float scale, float alpha) {
+                bvec3 isLow = lessThanEqual(color.rgb, vec3(thres));
+                vec3 lo = color.rgb * scale;
+                vec3 hi = pow(color.rgb, vec3(1.0 / gamma)) * alpha - (alpha - 1.0);
+                return mixb(hi, lo, isLow);
+            }
+
+            vec3 srgb(vec3 color) {
+                return sign(color) * linPow(abs(color), SRGB_POW, SRGB_CUT, SRGB_SCALE, SRGB_ALPHA);
             }
 
             vec3 applyTonemap(vec3 col, vec4 background) {
                 if (tonemap == SRGB) {
-                    col = col +
-                        (vec3(linear(background.r), linear(background.g), linear(background.b)) - offset) * background.a;
-                    return vec3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
+                    return srgb(col + (linear(background.rgb)) - offset) * background.a);
                 } else if (tonemap == GAMMA) {
                     col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
                     return sign(col) * pow(abs(col), vec3(1.0 / gamma));
@@ -184,6 +191,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 } else if (tonemap == POS_NEG) {
                     return vec3(-average(min(col, vec3(0.0))) * 2.0, average(max(col, vec3(0.0))) * 2.0, 0.0) + background.rgb * background.a;
                 }
+
                 return vec3(0.0);
             }
 
@@ -199,6 +207,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 } else if (metric == RELATIVE_SQUARED_ERROR) {
                     return col * col / (reference * reference + vec3(0.01));
                 }
+
                 return vec3(0.0);
             }
 
@@ -337,34 +346,28 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return colormap.sample(colormapSampler, float2(v, 0.5f)).rgb;
             }
 
-            float linear(float sRGB) {
-                float outSign = sign(sRGB);
-                sRGB = abs(sRGB);
-
-                if (sRGB <= 0.04045f) {
-                    return outSign * sRGB / 12.92f;
-                } else {
-                    return outSign * pow((sRGB + 0.055f) / 1.055f, 2.4f);
-                }
+            float3 linear(float3 val) {
+                const float3 absVal = abs(val);
+                return select(
+                    copysign(pow((absVal + 0.055f) / 1.055f, 2.4f), val),
+                    val / 12.92f,
+                    absVal <= 0.04045f
+                );
             }
 
-            float sRGB(float linear) {
-                float outSign = sign(linear);
-                linear = abs(linear);
-
-                if (linear < 0.0031308f) {
-                    return outSign * 12.92f * linear;
-                } else {
-                    return outSign * (1.055f * pow(linear, 0.41666f) - 0.055f);
-                }
+            float3 srgb(float3 val) {
+                const float3 absVal = abs(val);
+                return select(
+                    copysign(1.055f * pow(absVal, 0.41666f) - 0.055f, val),
+                    12.92f * val,
+                    absVal <= 0.0031308f
+                );
             }
 
             float3 applyTonemap(float3 col, float4 background, int tonemap, float offset, float gamma, texture2d<float, access::sample> colormap, sampler colormapSampler) {
                 switch (tonemap) {
                     case SRGB:
-                        col = col +
-                            (float3(linear(background.r), linear(background.g), linear(background.b)) - offset) * background.a;
-                        return float3(sRGB(col.r), sRGB(col.g), sRGB(col.b));
+                        return srgb(col + (linear(background.rgb) - offset) * background.a);
                     case GAMMA:
                         col = col + (pow(background.rgb, float3(gamma)) - offset) * background.a;
                         return sign(col) * pow(abs(col), float3(1.0 / gamma));
@@ -374,6 +377,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     case POS_NEG:
                         return float3(-average(min(col, float3(0.0f))) * 2.0f, average(max(col, float3(0.0f))) * 2.0f, 0.0f) + background.rgb * background.a;
                 }
+
                 return float3(0.0f);
             }
 
@@ -385,6 +389,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     case RELATIVE_ABSOLUTE_ERROR: return abs(col) / (reference + float3(0.01f));
                     case RELATIVE_SQUARED_ERROR:  return col * col / (reference * reference + float3(0.01f));
                 }
+
                 return float3(0.0f);
             }
 
