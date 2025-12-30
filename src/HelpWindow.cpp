@@ -118,6 +118,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 
     addRow(imageSelection, "B (hold)", "Draw a border around the image");
     addRow(imageSelection, "Shift+Ctrl (hold)", "Display raw bytes on pixels when zoomed-in");
+    addRow(imageSelection, "Alt (hold)", "Display tonemapped values on pixels when zoomed-in");
 #ifdef __APPLE__
     addRow(imageSelection, "Enter", "Rename the image");
 #else

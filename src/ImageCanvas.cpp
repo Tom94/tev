@@ -156,6 +156,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
         auto* glfwWindow = screen()->glfw_window();
         bool shiftAndControlHeld = (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_SHIFT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_SHIFT)) &&
             (glfwGetKey(glfwWindow, GLFW_KEY_LEFT_CONTROL) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_CONTROL));
+        bool altHeld = glfwGetKey(glfwWindow, GLFW_KEY_LEFT_ALT) || glfwGetKey(glfwWindow, GLFW_KEY_RIGHT_ALT);
 
         Vector2i cur;
         vector<float> values;
@@ -167,11 +168,12 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                 TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
 
                 for (size_t i = 0; i < colors.size(); ++i) {
+                    float value = values[i];
+                    float tonemappedValue = Channel::tail(channels[i]) == "A" ? value : toSRGB(value);
                     string str;
                     Vector2f pos;
 
                     if (shiftAndControlHeld) {
-                        float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
                         unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
                         str = fmt::format("{:02X}", discretizedValue);
 
@@ -180,7 +182,10 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                             (float)m_pos.y() + nano.y(),
                         };
                     } else {
-                        str = std::abs(values[i]) > 100000 ? fmt::format("{:6g}", values[i]) : fmt::format("{:.5f}", values[i]);
+                        if (altHeld) {
+                            value = tonemappedValue;
+                        }
+                        str = std::abs(value) > 100000 ? fmt::format("{:6g}", value) : fmt::format("{:.5f}", value);
 
                         pos = Vector2f{
                             (float)m_pos.x() + nano.x(),
