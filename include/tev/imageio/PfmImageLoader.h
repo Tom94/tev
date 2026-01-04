@@ -30,7 +30,7 @@ public:
     Task<std::vector<ImageData>>
         load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, bool applyGainmaps) const override;
 
-    std::string name() const override { return "PFM"; }
+    std::string name() const override { return "PFM/PAM"; }
 };
 
 } // namespace tev

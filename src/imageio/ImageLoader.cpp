@@ -102,6 +102,11 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/x-adobe-dng",
         "image/x-exr",
         "image/x-portable-anymap",
+        "image/x-portable-arbitrarymap",
+        "image/x-portable-bitmap",
+        "image/x-portable-floatmap",
+        "image/x-portable-graymap",
+        "image/x-portable-pixmap",
     };
 
     return mimeTypes;
