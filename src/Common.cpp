@@ -168,14 +168,23 @@ string toUpper(string_view str) {
     return result;
 }
 
-string_view trim(string_view s) {
+string_view trimLeft(string_view s) {
     const char* ws = " \t\n\r\f\v";
     s.remove_prefix(std::min(s.find_first_not_of(ws), s.size()));
+    return s;
+}
+
+string_view trimRight(string_view s) {
+    const char* ws = " \t\n\r\f\v";
     if (!s.empty()) {
         s.remove_suffix(s.size() - s.find_last_not_of(ws) - 1);
     }
 
     return s;
+}
+
+string_view trim(string_view s) {
+    return trimRight(trimLeft(s));
 }
 
 bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
