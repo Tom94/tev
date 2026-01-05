@@ -39,9 +39,10 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
 
     iStream.clear();
     iStream.seekg(0, iStream.end);
-    size_t dataSize = iStream.tellg();
+    const auto dataSize = iStream.tellg();
     iStream.seekg(0, iStream.beg);
-    vector<char> data(dataSize);
+
+    HeapArray<char> data(dataSize);
     iStream.read(data.data(), dataSize);
 
     qoi_desc desc;
