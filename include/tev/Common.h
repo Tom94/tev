@@ -401,6 +401,7 @@ template <typename T> std::string join(const T& components, std::string_view del
 
 // If `inclusive` is true, trailing delimiters are included in the resulting parts.
 std::vector<std::string_view> split(std::string_view text, std::string_view delim, bool inclusive = false);
+std::vector<std::string_view> splitWhitespace(std::string_view text, bool inclusive = false);
 
 std::string toLower(std::string_view str);
 std::string toUpper(std::string_view str);
