@@ -39,10 +39,10 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     }
 
     iStream.seekg(0, ios::end);
-    const size_t fileSize = iStream.tellg();
+    const auto fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
 
-    vector<uint8_t> buffer(fileSize);
+    HeapArray<uint8_t> buffer(fileSize);
     iStream.read((char*)buffer.data(), fileSize);
 
     WebPData data = {buffer.data(), buffer.size()};
@@ -57,13 +57,14 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
     WebPChunkIterator chunkIter;
 
-    vector<uint8_t> iccProfileData;
+    HeapArray<uint8_t> iccProfileData;
     if (flags & ICCP_FLAG) {
         if (WebPDemuxGetChunk(demux, "ICCP", 1, &chunkIter)) {
             ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
             try {
                 tlog::debug() << "Found ICC color profile.";
-                iccProfileData.assign(chunkIter.chunk.bytes, chunkIter.chunk.bytes + chunkIter.chunk.size);
+                iccProfileData = HeapArray<uint8_t>(chunkIter.chunk.size);
+                memcpy(iccProfileData.data(), chunkIter.chunk.bytes, chunkIter.chunk.size);
             } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to create ICC color profile: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get ICCP chunk from webp image, despite flag being set.";
@@ -115,7 +116,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         const uint8_t* bgColorBytes = (const uint8_t*)&bgColor8bit;
 
         bgColor = Color{bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
-        if (!iccProfileData.empty()) {
+        if (iccProfileData) {
             try {
                 const auto tmp = bgColor;
                 co_await toLinearSrgbPremul(
@@ -148,11 +149,12 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     // Conservatively allocate enough space such that any frame can be decoded into it.
     const size_t numPixels = (size_t)size.x() * size.y();
     const size_t numSamples = numPixels * numChannels;
-    vector<float> frameData(numSamples);
-    vector<float> iccTmpFloatData;
-    if (!iccProfileData.empty()) {
+    HeapArray<float> frameData(numSamples);
+    HeapArray<float> iccTmpFloatData;
+
+    if (iccProfileData) {
         // If we don't have an ICC profile, we can use the frame data directly.
-        iccTmpFloatData.resize(numSamples);
+        iccTmpFloatData = HeapArray<float>(numSamples);
     }
 
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
@@ -184,13 +186,13 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     frameData.size() * sizeof(float)
                 );
 
-                frameData.resize(numFrameSamples);
-                if (!iccProfileData.empty()) {
-                    iccTmpFloatData.resize(numFrameSamples);
+                frameData = HeapArray<float>(numFrameSamples);
+                if (iccProfileData) {
+                    iccTmpFloatData = HeapArray<float>(numFrameSamples);
                 }
             }
 
-            if (!iccProfileData.empty()) {
+            if (iccProfileData) {
                 try {
                     // Color space conversion from float to float is faster than u8 to float, hence we convert first.
                     co_await toFloat32(data, numChannels, iccTmpFloatData.data(), numChannels, frameSize, true, priority);

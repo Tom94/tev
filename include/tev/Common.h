@@ -363,10 +363,12 @@ private:
 template <typename T>
 class HeapArray {
 public:
+    HeapArray() : mBuf{nullptr}, mSize{0} {}
     HeapArray(size_t size) : mBuf{std::make_unique<T[]>(size)}, mSize{size} {}
     HeapArray(HeapArray&& other) = default;
     HeapArray& operator=(HeapArray&& other) = default;
 
+    operator bool() const { return mBuf != nullptr; }
     T& operator[](size_t idx) { return mBuf[idx]; }
 
     T* data() { return mBuf.get(); }
