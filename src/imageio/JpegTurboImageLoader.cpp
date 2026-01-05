@@ -130,7 +130,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     // Allocate memory for image data
     auto numPixels = static_cast<size_t>(size.x()) * size.y();
     auto numBytesPerPixel = numColorChannels;
-    vector<uint8_t> imageData(numPixels * numBytesPerPixel);
+    Channel::Data imageData(numPixels * numBytesPerPixel);
 
     // Create row pointers for libjpeg and then read image
     vector<JSAMPROW> rowPointers(size.y());

@@ -360,6 +360,25 @@ private:
     bool mArmed = true;
 };
 
+template <typename T>
+class HeapArray {
+public:
+    HeapArray(size_t size) : mBuf{std::make_unique<T[]>(size)}, mSize{size} {}
+    HeapArray(HeapArray&& other) = default;
+    HeapArray& operator=(HeapArray&& other) = default;
+
+    T& operator[](size_t idx) { return mBuf[idx]; }
+
+    T* data() { return mBuf.get(); }
+    const T* data() const { return mBuf.get(); }
+
+    size_t size() const { return mSize; }
+
+private:
+    std::unique_ptr<T[]> mBuf;
+    size_t mSize;
+};
+
 template <typename T> T round(T value, T decimals) {
     auto precision = std::pow(static_cast<T>(10), decimals);
     return std::round(value * precision) / precision;

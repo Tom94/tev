@@ -269,7 +269,7 @@ private:
 
 // Modifies `data` and returns the new size of the data after reorientation.
 Task<nanogui::Vector2i>
-    orientToTopLeft(EPixelFormat format, std::vector<uint8_t>& data, nanogui::Vector2i size, EOrientation orientation, int priority);
+    orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority);
 
 Task<std::vector<std::shared_ptr<Image>>>
     tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);

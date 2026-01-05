@@ -25,14 +25,16 @@
 
 #include <half.h>
 
+#include <memory>
 #include <span>
 #include <string>
-#include <vector>
 
 namespace tev {
 
 class Channel {
 public:
+    using Data = HeapArray<uint8_t>;
+
     static std::pair<std::string_view, std::string_view> split(std::string_view fullChannel);
 
     static std::string_view tail(std::string_view fullChannel);
@@ -48,7 +50,7 @@ public:
         const nanogui::Vector2i& size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
-        std::shared_ptr<std::vector<uint8_t>> data = nullptr,
+        std::shared_ptr<Data> data = nullptr,
         size_t dataOffset = 0,
         size_t dataStride = 1
     );
@@ -163,8 +165,8 @@ public:
     void setStride(size_t stride) { mDataStride = stride; }
     size_t stride() const { return mDataStride; }
 
-    std::shared_ptr<std::vector<uint8_t>>& dataBuf() { return mData; }
-    const std::shared_ptr<std::vector<uint8_t>>& dataBuf() const { return mData; }
+    std::shared_ptr<Data>& dataBuf() { return mData; }
+    const std::shared_ptr<Data>& dataBuf() const { return mData; }
 
     EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
 
@@ -181,7 +183,7 @@ private:
     // losslessly. For such images, loaders can set this to F16 to save memory.
     EPixelFormat mDesiredPixelFormat = EPixelFormat::F32;
 
-    std::shared_ptr<std::vector<uint8_t>> mData;
+    std::shared_ptr<Data> mData;
     size_t mDataOffset;
     size_t mDataStride;
 };

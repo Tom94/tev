@@ -127,7 +127,7 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(
 
     const size_t numPixels = (size_t)size.x() * size.y();
     const size_t numBytesPerSample = nBytes(format);
-    shared_ptr<vector<uint8_t>> data = make_shared<vector<uint8_t>>(numBytesPerSample * numPixels * 4);
+    auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * 4);
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     auto init = [numPixels](auto* ptr) {
