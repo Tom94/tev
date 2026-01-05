@@ -23,7 +23,6 @@
 #include <libexif/exif-data.h>
 
 #include <span>
-#include <vector>
 
 using namespace std;
 
@@ -81,11 +80,11 @@ Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
     ScopeGuard guard{[this]() { reset(); }};
 
     // If data doesn't already start with fourcc, prepend
-    vector<uint8_t> newExifData;
+    HeapArray<uint8_t> newExifData;
     if (autoPrependFourcc && (exifData.size() < 6 || memcmp(exifData.data(), Exif::FOURCC.data(), 6) != 0)) {
-        newExifData.reserve(exifData.size() + FOURCC.size());
-        newExifData.insert(newExifData.end(), FOURCC.begin(), FOURCC.end());
-        newExifData.insert(newExifData.end(), exifData.begin(), exifData.end());
+        newExifData = HeapArray<uint8_t>{exifData.size() + FOURCC.size()};
+        memcpy(newExifData.data(), FOURCC.data(), FOURCC.size());
+        memcpy(newExifData.data() + FOURCC.size(), exifData.data(), exifData.size());
         exifData = newExifData;
     }
 
