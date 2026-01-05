@@ -369,7 +369,7 @@ public:
     RawChannel(size_t partId, string_view name, string_view imfName, Imf::Channel imfChannel, const Vector2i& size) :
         mPartId{partId}, mName{name}, mImfName{imfName}, mImfChannel{imfChannel}, mSize{size} {}
 
-    void resize() { mData.resize((size_t)mSize.x() * mSize.y() * bytesPerPixel()); }
+    void resize() { mData = HeapArray<char>{(size_t)mSize.x() * mSize.y() * bytesPerPixel()}; }
 
     void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
         int width = dw.max.x - dw.min.x + 1;
@@ -438,7 +438,7 @@ private:
     string mImfName;
     Imf::Channel mImfChannel;
     Vector2i mSize;
-    vector<char> mData;
+    HeapArray<char> mData;
 };
 
 Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool) const {
