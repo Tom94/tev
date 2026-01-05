@@ -371,6 +371,7 @@ public:
 
     operator bool() const { return mBuf != nullptr; }
     T& operator[](size_t idx) { return mBuf[idx]; }
+    const T& operator[](size_t idx) const { return mBuf[idx]; }
 
     T* data() { return mBuf.get(); }
     const T* data() const { return mBuf.get(); }

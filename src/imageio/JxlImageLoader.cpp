@@ -30,6 +30,7 @@
 #include <jxl/thread_parallel_runner_cxx.h>
 
 #include <istream>
+#include <span>
 #include <vector>
 
 using namespace nanogui;
@@ -133,18 +134,13 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw FormatNotSupported{"File is not a JPEG XL image."};
     }
 
-    // Read entire file into memory
     iStream.seekg(0, ios::end);
-    size_t fileSize = iStream.tellg();
+    const auto fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
 
-    vector<uint8_t> fileData(fileSize);
+    HeapArray<uint8_t> fileData(fileSize);
     iStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
-    if (!iStream || static_cast<size_t>(iStream.gcount()) != fileSize) {
-        throw ImageLoadError{"Failed to read file data."};
-    }
 
-    // Set up jxl decoder
     auto decoder = JxlDecoderMake(nullptr);
     if (!decoder) {
         throw ImageLoadError{"Failed to create decoder."};
@@ -171,7 +167,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
             return initResult;
         }
 
-        std::vector<Task<void>> tasks;
+        vector<Task<void>> tasks;
         for (uint32_t i = 0; i < nTasks; ++i) {
             const uint32_t taskStart = startRange + (range * i / nTasks);
             const uint32_t taskEnd = startRange + (range * (i + 1) / nTasks);
@@ -231,13 +227,13 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
-    vector<float> colorData;
+    HeapArray<float> colorData;
+    HeapArray<uint8_t> iccProfile;
 
     size_t frameCount = 0;
     string frameName;
 
     vector<ImageData> result;
-    vector<uint8_t> iccProfile;
 
     optional<JxlColorEncoding> ce = nullopt;
 
@@ -285,7 +281,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 // we do not support yet.
                 const auto target = JXL_COLOR_PROFILE_TARGET_DATA;
                 if (JxlColorEncoding localCe; JXL_DEC_SUCCESS == JxlDecoderGetColorAsEncodedProfile(decoder.get(), target, &localCe)) {
-                    iccProfile.clear();
+                    iccProfile = {};
                     if (localCe.color_space == JXL_COLOR_SPACE_XYB) {
                         ce = nullopt;
                         JxlColorEncodingSetToLinearSRGB(&ce.value(), false /* XYB is never grayscale */);
@@ -303,7 +299,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         throw ImageLoadError{"Failed to get ICC profile size from image."};
                     }
 
-                    iccProfile.resize(size);
+                    iccProfile = HeapArray<uint8_t>{size};
                     if (JXL_DEC_SUCCESS != JxlDecoderGetColorAsICCProfile(decoder.get(), target, iccProfile.data(), size)) {
                         throw ImageLoadError{"Failed to get ICC profile from image."};
                     }
@@ -344,14 +340,14 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw ImageLoadError{"Failed to get output buffer size."};
                 }
 
-                colorData.resize(bufferSize / sizeof(float));
+                colorData = HeapArray<float>{bufferSize / sizeof(float)};
                 if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, colorData.data(), bufferSize)) {
                     throw ImageLoadError{"Failed to set output buffer."};
                 }
 
                 struct ExtraChannelInfo {
                     string name;
-                    vector<float> data;
+                    HeapArray<float> data;
                     uint32_t bitsPerSample = 0; // bits per sample of the channel
                     uint32_t dimShift = 0; // number of power of 2 stops the channel is downsampled
                     bool active = false;
@@ -400,7 +396,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         throw ImageLoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
                     }
 
-                    extraChannel.data.resize(bufferSize / sizeof(float));
+                    extraChannel.data = HeapArray<float>{bufferSize / sizeof(float)};
                     if (JXL_DEC_SUCCESS !=
                         JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, i)) {
                         throw ImageLoadError{fmt::format("Failed to set extra channel {}'s buffer.", i)};
@@ -434,7 +430,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 bool colorChannelsLoaded = false;
-                if (!iccProfile.empty()) {
+                if (iccProfile) {
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
@@ -617,7 +613,7 @@ l_decode_success:
             throw ImageLoadError{"Failed to get metadata box size."};
         }
 
-        vector<uint8_t> metadata(boxSize);
+        HeapArray<uint8_t> metadata(boxSize);
         if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), metadata.data(), metadata.size())) {
             throw ImageLoadError{"Failed to set initial box buffer."};
         }
@@ -653,9 +649,8 @@ l_decode_success:
                 }
 
                 tlog::debug() << fmt::format("EXIF data offset: {}", offset);
-                metadata.erase(metadata.begin(), metadata.begin() + 4 + offset);
 
-                const auto exif = Exif{metadata};
+                const auto exif = Exif{span<uint8_t>{metadata}.subspan(4 + offset)};
                 const auto exifAttributes = exif.toAttributes();
 
                 for (auto&& data : result) {
