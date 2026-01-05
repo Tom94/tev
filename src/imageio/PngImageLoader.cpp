@@ -329,16 +329,16 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     const auto numSamples = numPixels * numChannels;
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
-    vector<png_byte> pngData(numPixels * numBytesPerPixel);
-    vector<float> frameData(numSamples);
-    vector<float> iccTmpFloatData;
+    HeapArray<png_byte> pngData(numPixels * numBytesPerPixel);
+    HeapArray<float> frameData(numSamples);
+    HeapArray<float> iccTmpFloatData;
     if (iccProfileData) {
         // If we have an ICC profile, we need to convert the frame data to float first.
-        iccTmpFloatData.resize(numSamples);
+        iccTmpFloatData = HeapArray<float>(numSamples);
     }
 
     // Png wants to read into a 2D array of pointers to rows, so we need to create that as well
-    vector<png_bytep> rowPointers(height);
+    HeapArray<png_bytep> rowPointers(height);
 
     vector<ImageData> result;
 
@@ -397,9 +397,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 frameData.size() * sizeof(float)
             );
 
-            frameData.resize(numFrameSamples);
+            frameData = HeapArray<float>(numFrameSamples);
             if (iccProfileData) {
-                iccTmpFloatData.resize(numFrameSamples);
+                iccTmpFloatData = HeapArray<float>(numFrameSamples);
             }
         }
 
