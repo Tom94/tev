@@ -65,6 +65,8 @@ public:
 
     void draw_contents() override;
 
+    void updateColorCapabilities(bool shallPrint);
+
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
 
@@ -300,11 +302,8 @@ private:
 
     size_t mClipboardIndex = 0;
 
-    // HDR support
-    bool mSupportsWideGamut = false;
-    bool mSupportsHdr = false;
-    bool mSupportsAbsoluteBrightness = false;
-
+    // HDR UI elements support
+    nanogui::PopupButton* mHdrPopupButton = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
 
     nanogui::FloatBox<float>* mDisplayWhiteLevelBox = nullptr;
@@ -312,6 +311,7 @@ private:
 
     nanogui::FloatBox<float>* mImageWhiteLevelBox = nullptr;
 
+    // Misc state tracking variables
     int mDidFitToImage = 0;
 
     nanogui::Vector2i mMaxWindowSize = {8192, 8192};

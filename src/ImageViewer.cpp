@@ -62,35 +62,6 @@ ImageViewer::ImageViewer(
     mIpc{ipc},
     mMaximizedLaunch{maximize} {
 
-    const auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
-    const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
-
-#if defined(__APPLE__)
-    const auto [wideGamut, edr] = metal_10bit_edr_support();
-    mSupportsWideGamut = wideGamut;
-    mSupportsHdr = edr;
-    mSupportsAbsoluteBrightness = false;
-#else // Linux and Windows
-    const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
-
-    mSupportsWideGamut = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ || tf == ituth273::ETransferCharacteristics::HLG;
-    mSupportsHdr = mSupportsWideGamut &&
-        (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
-    mSupportsWideGamut |= wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
-    mSupportsAbsoluteBrightness = mSupportsHdr;
-#endif
-
-    tlog::info() << fmt::format(
-        "Obtained {} bit {} point frame buffer with primaries={} transfer={} range={}",
-        this->bits_per_sample(),
-        m_float_buffer ? "float" : "fixed",
-        wpPrimariesToString(wpPrimaries),
-        ituth273::toString(tf),
-        mSupportsHdr           ? "hdr" :
-            mSupportsWideGamut ? "wide_gamut_sdr" :
-                                 "sdr"
-    );
-
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -218,19 +189,9 @@ ImageViewer::ImageViewer(
         ));
         makeButton("Reset", [this]() { resetImage(); }, 0, "Shortcut: R");
 
-        auto hdrPopupButton = new PopupButton{buttonContainer, "HDR", 0};
-        hdrPopupButton->set_font_size(15);
-        hdrPopupButton->set_chevron_icon(0);
-        hdrPopupButton->set_enabled(mSupportsHdr);
-
-        if (mSupportsHdr) {
-            hdrPopupButton->set_tooltip("HDR Settings");
-        } else {
-            hdrPopupButton->set_tooltip(
-                "Your system does not support HDR colors. "
-                "Make sure that your OS, GPU, and display support HDR and that it is enabled in your system and display settings."
-            );
-        }
+        mHdrPopupButton = new PopupButton{buttonContainer, "HDR", 0};
+        mHdrPopupButton->set_font_size(15);
+        mHdrPopupButton->set_chevron_icon(0);
 
         {
             auto addSpacer = [](Widget* current, int space) {
@@ -238,7 +199,7 @@ ImageViewer::ImageViewer(
                 row->set_height(space);
             };
 
-            auto popup = hdrPopupButton->popup();
+            auto popup = mHdrPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "HDR Settings", "sans-bold", 20};
@@ -252,7 +213,6 @@ ImageViewer::ImageViewer(
                 "Shortcut: U"
             );
             mClipToLdrButton->set_flags(Button::ToggleButton);
-            mClipToLdrButton->set_enabled(mSupportsHdr);
 
             addSpacer(popup, 10);
 
@@ -271,25 +231,6 @@ ImageViewer::ImageViewer(
             mDisplayWhiteLevelBox->set_default_value(to_string(DEFAULT_IMAGE_WHITE_LEVEL));
             mDisplayWhiteLevelBox->set_units("nits");
 
-            if (mSupportsAbsoluteBrightness) {
-                mDisplayWhiteLevelBox->set_tooltip(
-                    "The display reference white level (aka. paper white) in nits (cd/m²). "
-                    "This value determines how bright a pixel value of 1.0 appears on the display. "
-                    "It follows your system settings by default.\n\n"
-                    "You can customize this value to change the brightness at which images are displayed. "
-                    "Or you can link this value to the image white level (if known) to display images at their absolute brightness "
-                    "rather than relative to your system's brightness setting."
-                );
-            } else {
-                mDisplayWhiteLevelBox->set_tooltip(
-                    "Your system or display does not support absolute brightness rendering. "
-                    "White level override is disabled."
-                );
-            }
-
-            mDisplayWhiteLevelBox->set_editable(mSupportsAbsoluteBrightness);
-            mDisplayWhiteLevelBox->set_enabled(mSupportsAbsoluteBrightness);
-
             mDisplayWhiteLevelSettingComboBox = new ComboBox{
                 whiteLevelContainer, {"System", "Custom", "Image"}
             };
@@ -303,8 +244,6 @@ ImageViewer::ImageViewer(
                 setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting::Custom);
                 setDisplayWhiteLevel(value);
             });
-
-            mDisplayWhiteLevelSettingComboBox->set_enabled(mSupportsAbsoluteBrightness);
 
             addSpacer(popup, 10);
 
@@ -652,6 +591,7 @@ ImageViewer::ImageViewer(
         mDidFitToImage = 3;
     }
 
+    updateColorCapabilities(true);
     updateLayout();
 
     mInitialized = true;
@@ -1147,6 +1087,8 @@ void ImageViewer::draw_contents() {
         return;
     }
 
+    updateColorCapabilities(false);
+
     // Update SDR white level from system settings if not overridden by the user
     if (displayWhiteLevelSetting() == EDisplayWhiteLevelSetting::System) {
         mDisplayWhiteLevelBox->set_value(glfwGetWindowSdrWhiteLevel(m_glfw_window));
@@ -1304,6 +1246,72 @@ void ImageViewer::draw_contents() {
         mHistogram->setZero(0);
         mHistogram->set_tooltip(fmt::format("{}", histogramTooltipBase));
     }
+}
+
+void ImageViewer::updateColorCapabilities(bool shallPrint) {
+    const auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
+    const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
+
+#if defined(__APPLE__)
+    const auto [supportsWideGamut, supportsHdr] = metal_10bit_edr_support();
+    const bool supportsAbsoluteBrightness = false;
+#else // Linux and Windows
+    const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
+
+    const bool supportsExtendedRange = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ ||
+        tf == ituth273::ETransferCharacteristics::HLG;
+    const bool supportsHdr = supportsExtendedRange &&
+        (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
+    const bool supportsWideGamut = supportsExtendedRange || wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
+    const bool supportsAbsoluteBrightness = supportsHdr;
+#endif
+
+    if (shallPrint) {
+        tlog::info() << fmt::format(
+            "Obtained {} bit {} point frame buffer with primaries={} transfer={} range={}",
+            this->bits_per_sample(),
+            m_float_buffer ? "floating" : "fixed",
+            wpPrimariesToString(wpPrimaries),
+            ituth273::toString(tf),
+            supportsHdr           ? "hdr" :
+                supportsWideGamut ? "wide_gamut_sdr" :
+                                    "sdr"
+        );
+    }
+
+    // Update UI elements accordingly
+    mHdrPopupButton->set_enabled(supportsHdr);
+    if (supportsHdr) {
+        mHdrPopupButton->set_tooltip("HDR Settings");
+    } else {
+        mHdrPopupButton->set_tooltip(
+            "Your system does not support HDR colors. "
+            "Make sure that your OS, GPU, and display support HDR and that it is enabled in your system and display settings."
+        );
+    }
+
+    mClipToLdrButton->set_enabled(supportsHdr);
+
+    if (supportsAbsoluteBrightness) {
+        mDisplayWhiteLevelBox->set_tooltip(
+            "The display reference white level (aka. paper white) in nits (cd/m²). "
+            "This value determines how bright a pixel value of 1.0 appears on the display. "
+            "It follows your system settings by default.\n\n"
+            "You can customize this value to change the brightness at which images are displayed. "
+            "Or you can link this value to the image white level (if known) to display images at their absolute brightness "
+            "rather than relative to your system's brightness setting."
+        );
+    } else {
+        mDisplayWhiteLevelBox->set_tooltip(
+            "Your system or display does not support absolute brightness rendering. "
+            "White level override is disabled."
+        );
+    }
+
+    mDisplayWhiteLevelBox->set_editable(supportsAbsoluteBrightness);
+    mDisplayWhiteLevelBox->set_enabled(supportsAbsoluteBrightness);
+
+    mDisplayWhiteLevelSettingComboBox->set_enabled(supportsAbsoluteBrightness);
 }
 
 void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallSelect) {
