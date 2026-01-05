@@ -71,7 +71,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     }
 
     iStream.seekg(0, ios_base::end);
-    int64_t fileSize = iStream.tellg();
+    const int64_t fileSize = iStream.tellg();
     iStream.clear();
     iStream.seekg(0);
 
@@ -79,14 +79,15 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         throw FormatNotSupported{"File is too small."};
     }
 
-    vector<char> buffer(fileSize);
+    HeapArray<char> buffer(fileSize);
     iStream.read(buffer.data(), 3);
 
     if ((uint8_t)buffer[0] != 0xFF || (uint8_t)buffer[1] != 0xD8 || (uint8_t)buffer[2] != 0xFF) {
         throw FormatNotSupported{"File is not a JPEG."};
     }
 
-    iStream.read(buffer.data() + 3, fileSize - 3);
+    const int64_t remainingSize = fileSize - 3;
+    iStream.read(buffer.data() + 3, remainingSize);
 
     auto decoder = uhdr_create_decoder();
     if (!decoder) {
