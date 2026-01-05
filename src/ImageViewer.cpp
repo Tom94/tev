@@ -2090,34 +2090,31 @@ void ImageViewer::openImageDialog() {
 
         try {
             vector<pair<string, string>> filters = {
-                {"apng",     "Animated PNG image"               },
+                {"apng",                    "Animated PNG image"               },
 #ifdef TEV_SUPPORT_AVIF
-                {"avif",     "AV1 Image File"                   },
+                {"avif",                    "AV1 Image File"                   },
 #endif
-                {"bmp",      "Bitmap image"                     },
+                {"bmp",                     "Bitmap image"                     },
 #ifdef _WIN32
-                {"dds",      "DirectDraw Surface image"         },
+                {"dds",                     "DirectDraw Surface image"         },
 #endif
-                {"dng",      "Digital Negative image"           },
-                {"exr",      "OpenEXR image"                    },
-                {"gif",      "Graphics Interchange Format image"},
-                {"hdr",      "HDR image"                        },
+                {"dng",                     "Digital Negative image"           },
+                {"exr",                     "OpenEXR image"                    },
+                {"gif",                     "Graphics Interchange Format image"},
+                {"hdr",                     "HDR image"                        },
 #ifdef TEV_SUPPORT_HEIC
-                {"heic",     "High Efficiency Image Container"  },
+                {"heic",                    "High Efficiency Image Container"  },
 #endif
-                {"jpeg,jpg", "JPEG image"                       },
-                {"jxl",      "JPEG-XL image"                    },
-                {"pfm",      "Portable Float Map image"         },
-                {"pgm",      "Portable GrayMap image"           },
-                {"pic",      "PIC image"                        },
-                {"png",      "Portable Network Graphics image"  },
-                {"pnm",      "Portable AnyMap image"            },
-                {"ppm",      "Portable PixMap image"            },
-                {"psd",      "PSD image"                        },
-                {"qoi",      "Quite OK Image format"            },
-                {"tga",      "Truevision TGA image"             },
-                {"tiff,tif", "Tag Image File Format image"      },
-                {"webp",     "WebP image"                       },
+                {"jpeg,jpg",                "JPEG image"                       },
+                {"jxl",                     "JPEG-XL image"                    },
+                {"pam,pbm,pfm,pgm,pnm,ppm", "Portable *Map image"              },
+                {"pic",                     "PIC image"                        },
+                {"png",                     "Portable Network Graphics image"  },
+                {"psd",                     "PSD image"                        },
+                {"qoi",                     "Quite OK Image format"            },
+                {"tga",                     "Truevision TGA image"             },
+                {"tiff,tif",                "Tag Image File Format image"      },
+                {"webp",                    "WebP image"                       },
             };
 
             vector<string_view> allImages;

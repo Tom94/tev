@@ -139,6 +139,8 @@ bool naturalCompare(string_view a, string_view b) {
     return a.size() - i < b.size() - j;
 }
 
+static constexpr string_view ws = " \t\n\r\f\v";
+
 vector<string_view> split(string_view text, string_view delim, bool inclusive) {
     vector<string_view> result;
     size_t begin = 0;
@@ -156,6 +158,10 @@ vector<string_view> split(string_view text, string_view delim, bool inclusive) {
     return result;
 }
 
+vector<string_view> splitWhitespace(string_view s, bool inclusive) {
+    return split(s, ws, inclusive);
+}
+
 string toLower(string_view str) {
     string result{str};
     transform(begin(result), end(result), begin(result), [](unsigned char c) { return (char)tolower(c); });
@@ -168,14 +174,21 @@ string toUpper(string_view str) {
     return result;
 }
 
-string_view trim(string_view s) {
-    const char* ws = " \t\n\r\f\v";
+string_view trimLeft(string_view s) {
     s.remove_prefix(std::min(s.find_first_not_of(ws), s.size()));
+    return s;
+}
+
+string_view trimRight(string_view s) {
     if (!s.empty()) {
         s.remove_suffix(s.size() - s.find_last_not_of(ws) - 1);
     }
 
     return s;
+}
+
+string_view trim(string_view s) {
+    return trimRight(trimLeft(s));
 }
 
 bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
