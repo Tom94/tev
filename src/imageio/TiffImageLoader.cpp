@@ -1297,7 +1297,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
         )};
     }
 
-    vector<uint8_t> tileData(tile.size * tile.count);
+    HeapArray<uint8_t> tileData(tile.size * tile.count);
 
     const size_t numTilesPerPlane = tile.count / numPlanes;
     // We'll unpack the bits into 32-bit or 64-bit unsigned integers first, then convert to float. This simplifies the bit unpacking
@@ -1305,7 +1305,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
     const size_t unpackedTileRowSamples = tile.width * samplesPerPixel / numPlanes;
     const size_t unpackedTileSize = tile.height * unpackedTileRowSamples * unpackedBitsPerSample / 8;
-    vector<uint8_t> unpackedTile(unpackedTileSize * tile.count);
+    HeapArray<uint8_t> unpackedTile(unpackedTileSize * tile.count);
 
     const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
 
@@ -1313,7 +1313,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
 
     // Read tiled/striped data. Unfortunately, libtiff doesn't support reading all tiles/strips in parallel, so we have to do that
     // sequentially.
-    vector<uint8_t> imageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
+    HeapArray<uint8_t> imageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
     for (size_t i = 0; i < tile.count; ++i) {
         uint8_t* const td = tileData.data() + tile.size * i;
 
@@ -1437,7 +1437,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     }
 
     // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion
-    vector<float> floatRgbaData(size.x() * (size_t)size.y() * numRgbaChannels);
+    HeapArray<float> floatRgbaData(size.x() * (size_t)size.y() * numRgbaChannels);
     co_await tiffDataToFloat32<false>(
         kind,
         palette,
@@ -1533,7 +1533,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     const size_t fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
 
-    vector<uint8_t> buffer(fileSize + sizeof(Exif::FOURCC));
+    HeapArray<uint8_t> buffer(fileSize + sizeof(Exif::FOURCC));
     copy(Exif::FOURCC.begin(), Exif::FOURCC.end(), buffer.data());
     iStream.read((char*)buffer.data() + sizeof(Exif::FOURCC), fileSize);
 

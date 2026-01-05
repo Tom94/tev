@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -375,6 +376,9 @@ public:
     const T* data() const { return mBuf.get(); }
 
     size_t size() const { return mSize; }
+
+    operator std::span<const T>() const { return std::span<const T>{mBuf.get(), mSize}; }
+    operator std::span<T>() { return std::span<T>{mBuf.get(), mSize}; }
 
 private:
     std::unique_ptr<T[]> mBuf;
