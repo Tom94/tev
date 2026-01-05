@@ -191,13 +191,13 @@ Task<vector<ImageData>>
 
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
 
-        auto tryIccTransform = [&](const vector<uint8_t>& iccProfile) -> Task<void> {
+        auto tryIccTransform = [&](const HeapArray<uint8_t>& iccProfile) -> Task<void> {
             const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
             if (profileSize == 0) {
                 throw ImageLoadError{"No ICC color profile found."};
             }
 
-            vector<uint8_t> profileData(profileSize);
+            HeapArray<uint8_t> profileData(profileSize);
             if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code == heif_error_Color_profile_does_not_exist) {
                     throw ImageLoadError{"ICC color profile does not exist."};
@@ -206,7 +206,7 @@ Task<vector<ImageData>>
                 throw ImageLoadError{fmt::format("Failed to read ICC profile: {}", error.message)};
             }
 
-            vector<float> dataF32((size_t)size.x() * size.y() * numChannels);
+            HeapArray<float> dataF32((size_t)size.x() * size.y() * numChannels);
             if (bitDepth == 16) {
                 co_await toFloat32(
                     (const uint16_t*)data,
@@ -285,7 +285,7 @@ Task<vector<ImageData>>
         const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
         if (profileSize != 0) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
-            vector<uint8_t> profileData(profileSize);
+            HeapArray<uint8_t> profileData(profileSize);
             if (const auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code != heif_error_Color_profile_does_not_exist) {
                     tlog::warning() << "Failed to read ICC profile: " << error.message;
@@ -453,19 +453,18 @@ Task<vector<ImageData>>
             continue;
         }
 
-        vector<uint8_t> metadata(size);
+        HeapArray<uint8_t> metadata(size);
         if (const auto error = heif_image_handle_get_metadata(handle, id, metadata.data()); error.code != heif_error_Ok) {
             tlog::warning() << "Failed to read metadata: " << error.message;
             continue;
         }
 
         if (type == "Exif") {
-            // The first four bytes are the length of the exif data and not strictly part of the exif data.
-            metadata.erase(metadata.begin(), metadata.begin() + 4);
             tlog::debug() << fmt::format("Found EXIF data of size {} bytes", metadata.size());
 
             try {
-                exif = make_unique<Exif>(metadata);
+                // The first four bytes are the length of the exif data and not strictly part of the exif data.
+                exif = make_unique<Exif>(span<uint8_t>{metadata}.subspan(4));
                 mainImage.attributes.emplace_back(exif->toAttributes());
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
         } else if (contentType == "application/rdf+xml") {
