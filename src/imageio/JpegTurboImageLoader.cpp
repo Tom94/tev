@@ -33,9 +33,7 @@ namespace tev {
 namespace {
 // Taken from jpegdecoderhelper in libultrahdr per their Apache 2.0 license and shortened.
 // https://github.com/google/libultrahdr/blob/6db3a83ee2b1f79850f3f597172289808dc6a331/lib/src/jpegdecoderhelper.cpp#L125
-void jpeg_extract_marker_payload(
-    const j_decompress_ptr cinfo, const uint32_t markerCode, span<const uint8_t> ns, HeapArray<uint8_t>& destination
-) {
+void jpeg_extract_marker_payload(const j_decompress_ptr cinfo, const uint32_t markerCode, span<const uint8_t> ns, HeapArray<uint8_t>& destination) {
     for (jpeg_marker_struct* marker = cinfo->marker_list; marker; marker = marker->next) {
         if (marker->marker == markerCode && marker->data_length > ns.size() && !memcmp(marker->data, ns.data(), ns.size())) {
             destination = HeapArray<uint8_t>{marker->data_length};
@@ -190,7 +188,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily fits
     // into F16.
-    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16);
+    resultData.channels =
+        co_await makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
     resultData.hasPremultipliedAlpha = true;

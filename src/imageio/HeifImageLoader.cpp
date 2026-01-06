@@ -186,7 +186,9 @@ Task<vector<ImageData>>
         if (numChannels == 1) {
             resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size, EPixelFormat::F32, EPixelFormat::F16);
         } else {
-            resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16);
+            resultData.channels = co_await makeRgbaInterleavedChannels(
+                numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, namePrefix, priority
+            );
         }
 
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
@@ -510,8 +512,8 @@ Task<vector<ImageData>>
         if (numChannels == 1) {
             scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize, EPixelFormat::F32, EPixelFormat::F16);
         } else {
-            scaledResultData.channels = makeRgbaInterleavedChannels(
-                numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, EPixelFormat::F32, EPixelFormat::F16, namePrefix
+            scaledResultData.channels = co_await makeRgbaInterleavedChannels(
+                numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, EPixelFormat::F32, EPixelFormat::F16, namePrefix, priority
             );
         }
 

@@ -414,8 +414,14 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 Vector2i size{(int)info.xsize, (int)info.ysize};
 
-                data.channels = makeRgbaInterleavedChannels(
-                    numColorChannels, info.alpha_bits, size, EPixelFormat::F32, info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
+                data.channels = co_await makeRgbaInterleavedChannels(
+                    numColorChannels,
+                    info.alpha_bits,
+                    size,
+                    EPixelFormat::F32,
+                    info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16,
+                    "",
+                    priority
                 );
 
                 data.hasPremultipliedAlpha = info.alpha_premultiplied;

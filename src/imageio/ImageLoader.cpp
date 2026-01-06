@@ -112,8 +112,8 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
     return mimeTypes;
 }
 
-vector<Channel> ImageLoader::makeRgbaInterleavedChannels(
-    int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view namePrefix
+Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
+    int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view namePrefix, int priority
 ) {
     vector<Channel> channels;
     if (numChannels > 4) {
@@ -130,18 +130,18 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(
     auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * 4);
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
-    auto init = [numPixels](auto* ptr) {
+    const auto init = [numPixels](auto* ptr) -> Task<void> {
         using ptr_float_t = std::remove_pointer_t<decltype(ptr)>;
         const ptr_float_t pattern[4] = {(ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)1.0};
-        for (size_t i = 0; i < numPixels; ++i) {
-            memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4);
-        }
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0, numPixels, [&](const size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, numeric_limits<int>::max()
+        );
     };
 
     if (format == EPixelFormat::F32) {
-        init((float*)data->data());
+        co_await init((float*)data->data());
     } else if (format == EPixelFormat::F16) {
-        init((half*)data->data());
+        co_await init((half*)data->data());
     } else {
         throw ImageLoadError{"Unsupported pixel format."};
     }
@@ -162,7 +162,7 @@ vector<Channel> ImageLoader::makeRgbaInterleavedChannels(
         channels.emplace_back(fmt::format("{}A", namePrefix), size, format, desiredFormat, data, 3 * numBytesPerSample, 4 * numBytesPerSample);
     }
 
-    return channels;
+    co_return channels;
 }
 
 vector<Channel> ImageLoader::makeNChannels(
