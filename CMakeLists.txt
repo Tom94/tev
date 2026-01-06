@@ -236,6 +236,7 @@ endif()
 target_include_directories(tev PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     # Header-only dependencies whose include path cannot be inherited from link targets
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/args
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/fmt/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/qoi

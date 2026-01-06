@@ -21,6 +21,9 @@
 #include <tev/Common.h>
 #include <tev/Task.h>
 
+#include <concurrentqueue/concurrentqueue.h> // Needs to be included before lightweightsemaphore.h
+#include <concurrentqueue/lightweightsemaphore.h>
+
 #include <atomic>
 #include <functional>
 #include <future>
@@ -41,24 +44,34 @@ public:
         return pool;
     }
 
-    template <class F> auto enqueueTask(F&& f, int priority) {
+    template <class F> auto enqueueTask(F&& f, int priority, bool stopToken = false) {
         using return_type = std::invoke_result_t<decltype(f)>;
 
         const auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
         auto res = task->get_future();
 
-        {
-            const std::lock_guard<std::mutex> lock{mTaskQueueMutex};
-
-            if (!mShuttingDown) {
-                mTaskQueue.push({priority, [task]() { (*task)(); }});
-                ++mNumTasksInSystem;
-            }
+        if (mShuttingDown) {
+            return res;
         }
 
-        mWorkerCondition.notify_one();
+        {
+            const std::scoped_lock lock{mTaskQueueMutex};
+            mTaskQueue.push({
+                .fun = [task]() { (*task)(); },
+                .priority = priority,
+                .stopToken = stopToken,
+            });
+        }
+
+        ++mNumTasksInSystem;
+        mTaskQueueSemaphore.signal();
+
         return res;
     }
+
+    // auto enqueueStopToken() {
+    //     return enqueueTask([]() {}, std::numeric_limits<int>::max(), true);
+    // }
 
     inline auto enqueueCoroutine(int priority) noexcept {
         class Awaiter {
@@ -97,24 +110,35 @@ public:
 
     void waitUntilFinished();
     void waitUntilFinishedFor(const std::chrono::microseconds Duration);
-    void flushQueue();
 
     template <typename Int, typename F> Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
-        Int range = end - start;
-        Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, range});
+        Int minChunkSize = 32 * 1024;
+        if (std::is_same_v<Int, int>) {
+            minChunkSize = 32;
+        }
+
+        const Int range = end - start;
+        const Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, (range + minChunkSize - 1) / minChunkSize});
 
         std::vector<Task<void>> tasks;
-        for (Int i = 0; i < nTasks; ++i) {
-            Int taskStart = start + (range * i / nTasks);
-            Int taskEnd = start + (range * (i + 1) / nTasks);
-            TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
-            tasks.emplace_back([](Int tStart, Int tEnd, F tBody, int tPriority, ThreadPool* pool) -> Task<void> {
-                co_await pool->enqueueCoroutine(tPriority);
-                for (Int j = tStart; j < tEnd; ++j) {
-                    tBody(j);
-                }
-            }(taskStart, taskEnd, body, priority, this));
+        {
+            // The task queue is already thread-safe due to the lock in enqueueTask, but we can optimize a bit by locking only once for all
+            // tasks.
+            const std::scoped_lock lock{mTaskQueueMutex};
+
+            for (Int i = 0; i < nTasks; ++i) {
+                Int taskStart = start + (range * i / nTasks);
+                Int taskEnd = start + (range * (i + 1) / nTasks);
+                TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
+
+                tasks.emplace_back([](Int tStart, Int tEnd, F& tBody, int tPriority, ThreadPool* pool) -> Task<void> {
+                    co_await pool->enqueueCoroutine(tPriority);
+                    for (Int j = tStart; j < tEnd; ++j) {
+                        tBody(j);
+                    }
+                }(taskStart, taskEnd, body, priority, this));
+            }
         }
 
         co_await awaitAll(tasks);
@@ -127,15 +151,15 @@ public:
     size_t numThreads() const { return mNumThreads; }
 
 private:
-    size_t mNumThreads = 0;
     bool mShuttingDown = false;
 
     const size_t mHardwareConcurrency = std::thread::hardware_concurrency();
     std::vector<std::thread> mThreads;
 
     struct QueuedTask {
-        int priority;
         std::function<void()> fun;
+        int priority;
+        bool stopToken;
 
         struct Comparator {
             bool operator()(const QueuedTask& a, const QueuedTask& b) { return a.priority < b.priority; }
@@ -143,10 +167,12 @@ private:
     };
 
     std::priority_queue<QueuedTask, std::vector<QueuedTask>, QueuedTask::Comparator> mTaskQueue;
-    std::mutex mTaskQueueMutex;
-    std::condition_variable mWorkerCondition;
-    std::condition_variable mSystemBusyCondition;
+    std::recursive_mutex mTaskQueueMutex;
+    moodycamel::LightweightSemaphore mTaskQueueSemaphore;
 
+    std::recursive_mutex mThreadsMutex;
+
+    std::atomic<size_t> mNumThreads = 0;
     std::atomic<size_t> mNumTasksInSystem;
 };
 
