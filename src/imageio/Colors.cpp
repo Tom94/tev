@@ -452,8 +452,8 @@ string_view toString(const ETransferCharacteristics transfer) {
     switch (transfer) {
         case ETransferCharacteristics::BT709: return "bt709";
         case ETransferCharacteristics::Unspecified: return "unspecified";
-        case ETransferCharacteristics::BT470M: return "bt470m";
-        case ETransferCharacteristics::BT470BG: return "bt470bg";
+        case ETransferCharacteristics::Gamma22: return "gamma22";
+        case ETransferCharacteristics::Gamma28: return "gamma28";
         case ETransferCharacteristics::BT601: return "bt601";
         case ETransferCharacteristics::SMPTE240: return "smpte240";
         case ETransferCharacteristics::Linear: return "linear";
@@ -496,8 +496,8 @@ bool isTransferImplemented(const ETransferCharacteristics transfer) {
         case ETransferCharacteristics::BT202012bit:
         case ETransferCharacteristics::IEC61966_2_4: // handles negative values by mirroring
         case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
-        case ETransferCharacteristics::BT470M:
-        case ETransferCharacteristics::BT470BG:
+        case ETransferCharacteristics::Gamma22:
+        case ETransferCharacteristics::Gamma28:
         case ETransferCharacteristics::SMPTE240:
         case ETransferCharacteristics::Linear:
         case ETransferCharacteristics::Log100:
@@ -515,8 +515,8 @@ bool isTransferImplemented(const ETransferCharacteristics transfer) {
 ETransferCharacteristics fromWpTransfer(int wpTransfer) {
     switch (wpTransfer) {
         case 1: return ETransferCharacteristics::BT709;
-        case 2: return ETransferCharacteristics::BT470M;
-        case 3: return ETransferCharacteristics::BT470BG;
+        case 2: return ETransferCharacteristics::Gamma22;
+        case 3: return ETransferCharacteristics::Gamma28;
         case 4: return ETransferCharacteristics::SMPTE240;
         case 5: return ETransferCharacteristics::Linear;
         case 6: return ETransferCharacteristics::Log100;

@@ -28,6 +28,7 @@
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
 #include <tev/VectorGraphics.h>
+#include <tev/imageio/Colors.h>
 
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
@@ -36,6 +37,7 @@
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -65,7 +67,7 @@ public:
 
     void draw_contents() override;
 
-    void updateColorCapabilities(bool shallPrint);
+    void updateColorCapabilities();
 
     void insertImage(std::shared_ptr<Image> image, size_t index, bool shallSelect = false);
     void moveImageInList(size_t oldIndex, size_t newIndex);
@@ -303,6 +305,18 @@ private:
     size_t mClipboardIndex = 0;
 
     // HDR UI elements support
+    struct ColorSpace {
+        ituth273::ETransferCharacteristics transfer;
+        uint32_t primaries;
+        float maxLuminance;
+
+        bool operator==(const ColorSpace& other) const {
+            return transfer == other.transfer && primaries == other.primaries && maxLuminance == other.maxLuminance;
+        }
+    };
+
+    std::optional<ColorSpace> mCurrentColorSpace;
+
     nanogui::PopupButton* mHdrPopupButton = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
 

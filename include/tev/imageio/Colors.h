@@ -123,8 +123,8 @@ EColorPrimaries fromWpPrimaries(int wpPrimaries);
 enum class ETransferCharacteristics : uint8_t {
     BT709 = 1, // Also BT1361
     Unspecified = 2,
-    BT470M = 4,
-    BT470BG = 5,
+    Gamma22 = 4,
+    Gamma28 = 5,
     BT601 = 6, // Also BT1358, BT1700, SMPTE ST 170
     SMPTE240 = 7,
     Linear = 8,
@@ -220,8 +220,8 @@ inline float invTransferComponent(const ETransferCharacteristics transfer, float
             return std::copysign(bt709ToLinear(std::abs(val)), val);
         case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
             return bt1361ExtendedToLinear(val);
-        case ETransferCharacteristics::BT470M: return std::pow(std::max(val, 0.0f), 2.2f);
-        case ETransferCharacteristics::BT470BG: return std::pow(std::max(val, 0.0f), 2.8f);
+        case ETransferCharacteristics::Gamma22: return std::pow(std::max(val, 0.0f), 2.2f);
+        case ETransferCharacteristics::Gamma28: return std::pow(std::max(val, 0.0f), 2.8f);
         case ETransferCharacteristics::SMPTE240: return smpteSt240ToLinear(val);
         case ETransferCharacteristics::Linear: return val;
         case ETransferCharacteristics::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;

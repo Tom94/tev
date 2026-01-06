@@ -588,7 +588,7 @@ ImageViewer::ImageViewer(
         mDidFitToImage = 3;
     }
 
-    updateColorCapabilities(true);
+    updateColorCapabilities();
     updateLayout();
 
     mInitialized = true;
@@ -1084,7 +1084,7 @@ void ImageViewer::draw_contents() {
         return;
     }
 
-    updateColorCapabilities(false);
+    updateColorCapabilities();
 
     // Update SDR white level from system settings if not overridden by the user
     if (displayWhiteLevelSetting() == EDisplayWhiteLevelSetting::System) {
@@ -1245,36 +1245,43 @@ void ImageViewer::draw_contents() {
     }
 }
 
-void ImageViewer::updateColorCapabilities(bool shallPrint) {
-    const auto tf = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window));
-    const auto wpPrimaries = glfwGetWindowPrimaries(m_glfw_window);
+void ImageViewer::updateColorCapabilities() {
+    const auto prevColorSpace = mCurrentColorSpace;
+    mCurrentColorSpace = ColorSpace{
+        .transfer = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window)),
+        .primaries = glfwGetWindowPrimaries(m_glfw_window),
+        .maxLuminance = glfwGetWindowMaxLuminance(m_glfw_window),
+    };
+
+    if (mCurrentColorSpace == prevColorSpace) {
+        return;
+    }
+
+    const auto& cs = *mCurrentColorSpace;
 
 #if defined(__APPLE__)
     const auto [supportsWideGamut, supportsHdr] = metal_10bit_edr_support();
     const bool supportsAbsoluteBrightness = false;
 #else // Linux and Windows
-    const float maxLum = glfwGetWindowMaxLuminance(m_glfw_window);
-
-    const bool supportsExtendedRange = m_float_buffer || tf == ituth273::ETransferCharacteristics::PQ ||
-        tf == ituth273::ETransferCharacteristics::HLG;
+    const bool supportsExtendedRange = m_float_buffer || cs.transfer == ituth273::ETransferCharacteristics::PQ ||
+        cs.transfer == ituth273::ETransferCharacteristics::HLG;
     const bool supportsHdr = supportsExtendedRange &&
-        (maxLum > 80.0f || maxLum == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
-    const bool supportsWideGamut = supportsExtendedRange || wpPrimaries != 1; // Non-sRGB primaries imply wide color support.
+        (cs.maxLuminance > 80.0f || cs.maxLuminance == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
+    const bool supportsWideGamut = supportsExtendedRange || cs.primaries != 1; // Non-sRGB primaries imply wide color support.
     const bool supportsAbsoluteBrightness = supportsHdr;
 #endif
 
-    if (shallPrint) {
-        tlog::info() << fmt::format(
-            "Obtained {} bit {} point frame buffer with primaries={} transfer={} range={}",
-            this->bits_per_sample(),
-            m_float_buffer ? "floating" : "fixed",
-            wpPrimariesToString(wpPrimaries),
-            ituth273::toString(tf),
-            supportsHdr           ? "hdr" :
-                supportsWideGamut ? "wide_gamut_sdr" :
-                                    "sdr"
-        );
-    }
+    tlog::info() << fmt::format(
+        "{} {} bit {} point frame buffer with primaries={} transfer={} range={}",
+        prevColorSpace ? "Switched to" : "Initialized",
+        this->bits_per_sample(),
+        m_float_buffer ? "floating" : "fixed",
+        wpPrimariesToString(cs.primaries),
+        ituth273::toString(cs.transfer),
+        supportsHdr           ? "hdr" :
+            supportsWideGamut ? "wide_gamut_sdr" :
+                                "sdr"
+    );
 
     // Update UI elements accordingly
     mHdrPopupButton->set_enabled(supportsHdr);
