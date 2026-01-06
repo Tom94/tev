@@ -317,12 +317,12 @@ string errorString(int errorId) {
 
 fs::path homeDirectory() {
 #ifdef _WIN32
-    char path[MAX_PATH];
-    if (SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, 0, path) != S_OK) {
+    wchar_t path[MAX_PATH];
+    if (SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, path) != S_OK) {
         return "";
     }
 
-    return path;
+    return utf16to8(path);
 #else
     struct passwd* pw = getpwuid(getuid());
     return pw->pw_dir;
