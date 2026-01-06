@@ -599,6 +599,8 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         struct sockaddr_in in;
         struct sockaddr_un un;
     } addr;
+    memset(&addr, 0, sizeof(addr));
+
     const size_t addrLen = holds_alternative<IpHost>(mHostInfo) ? sizeof(addr.in) : sizeof(addr.un);
 
     visit(
@@ -662,6 +664,8 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
         struct sockaddr_in in;
         struct sockaddr_un un;
     } client;
+    memset(&client, 0, sizeof(client));
+
     socklen_t addrlen = sizeof(client);
 
     const socket_t fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
