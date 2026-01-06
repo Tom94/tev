@@ -130,11 +130,11 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * 4);
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
-    const auto init = [numPixels](auto* ptr) -> Task<void> {
+    const auto init = [numPixels, priority](auto* ptr) -> Task<void> {
         using ptr_float_t = std::remove_pointer_t<decltype(ptr)>;
         const ptr_float_t pattern[4] = {(ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)1.0};
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numPixels, [&](const size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, numeric_limits<int>::max()
+            0, numPixels, [pattern, ptr](size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, priority
         );
     };
 
