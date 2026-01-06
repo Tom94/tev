@@ -72,7 +72,7 @@ Channel::Channel(
     const nanogui::Vector2i& size,
     EPixelFormat format,
     EPixelFormat desiredFormat,
-    shared_ptr<vector<uint8_t>> data,
+    shared_ptr<Channel::Data> data,
     size_t dataOffset,
     size_t dataStride
 ) :
@@ -82,7 +82,7 @@ Channel::Channel(
         mDataOffset = dataOffset;
         mDataStride = dataStride;
     } else {
-        mData = make_shared<vector<uint8_t>>(nBytes(format) * (size_t)size.x() * size.y());
+        mData = make_shared<Channel::Data>(nBytes(format) * (size_t)size.x() * size.y());
         mDataOffset = 0;
         mDataStride = nBytes(format);
     }

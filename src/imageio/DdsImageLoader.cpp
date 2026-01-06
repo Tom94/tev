@@ -153,14 +153,15 @@ static int getDxgiChannelCount(DXGI_FORMAT fmt) {
 
 Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
     iStream.seekg(0, iStream.end);
-    size_t dataSize = iStream.tellg();
+    const size_t dataSize = iStream.tellg();
     if (dataSize < 4) {
         throw FormatNotSupported{"File is too small."};
     }
 
     iStream.clear();
     iStream.seekg(0);
-    vector<char> data(dataSize);
+
+    HeapArray<char> data{dataSize};
     iStream.read(data.data(), 4);
     if (data[0] != 'D' || data[1] != 'D' || data[2] != 'S' || data[3] != ' ') {
         throw FormatNotSupported{"File is not a DDS file."};
@@ -214,8 +215,9 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    resultData.channels =
-        makeRgbaInterleavedChannels(numChannels, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32, EPixelFormat::F32);
+    resultData.channels = co_await makeRgbaInterleavedChannels(
+        numChannels, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32, EPixelFormat::F32, "", priority
+    );
 
     const auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {

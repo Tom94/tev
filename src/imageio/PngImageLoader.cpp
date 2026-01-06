@@ -329,16 +329,16 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     const auto numSamples = numPixels * numChannels;
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
-    vector<png_byte> pngData(numPixels * numBytesPerPixel);
-    vector<float> frameData(numSamples);
-    vector<float> iccTmpFloatData;
+    HeapArray<png_byte> pngData(numPixels * numBytesPerPixel);
+    HeapArray<float> frameData(numSamples);
+    HeapArray<float> iccTmpFloatData;
     if (iccProfileData) {
         // If we have an ICC profile, we need to convert the frame data to float first.
-        iccTmpFloatData.resize(numSamples);
+        iccTmpFloatData = HeapArray<float>(numSamples);
     }
 
     // Png wants to read into a 2D array of pointers to rows, so we need to create that as well
-    vector<png_bytep> rowPointers(height);
+    HeapArray<png_bytep> rowPointers(height);
 
     vector<ImageData> result;
 
@@ -350,7 +350,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
-        resultData.channels = makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16);
+        resultData.channels =
+            co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
         resultData.orientation = orientation;
         resultData.hasPremultipliedAlpha = false;
 
@@ -397,9 +398,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 frameData.size() * sizeof(float)
             );
 
-            frameData.resize(numFrameSamples);
+            frameData = HeapArray<float>(numFrameSamples);
             if (iccProfileData) {
-                iccTmpFloatData.resize(numFrameSamples);
+                iccTmpFloatData = HeapArray<float>(numFrameSamples);
             }
         }
 

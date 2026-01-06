@@ -124,13 +124,14 @@ public:
     // Returns a list of all supported mime types, sorted by decoding preference.
     static const std::vector<std::string_view>& supportedMimeTypes();
 
-    static std::vector<Channel> makeRgbaInterleavedChannels(
+    static Task<std::vector<Channel>> makeRgbaInterleavedChannels(
         int numChannels,
         bool hasAlpha,
         const nanogui::Vector2i& size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
-        std::string_view namePrefix = ""
+        std::string_view namePrefix,
+        int priority
     );
 
     static std::vector<Channel> makeNChannels(

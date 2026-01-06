@@ -268,7 +268,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
 Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
     // All channels sharing the same data buffer must be converted together to avoid multiple conversions of the same data.
-    multimap<shared_ptr<vector<uint8_t>>, Channel*> channelsByData;
+    multimap<shared_ptr<Channel::Data>, Channel*> channelsByData;
     for (auto& c : channels) {
         channelsByData.emplace(c.dataBuf(), &c);
     }
@@ -304,10 +304,10 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             continue;
         }
 
-        shared_ptr<vector<uint8_t>> data = it->first;
+        shared_ptr<Channel::Data> data = it->first;
 
         const size_t nSamples = data->size() / nBytes(sourceFormat);
-        vector<uint8_t> convertedData(nSamples * nBytes(targetFormat));
+        Channel::Data convertedData(nSamples * nBytes(targetFormat));
 
         const uint8_t* const src = data->data();
         uint8_t* const dst = convertedData.data();
@@ -400,11 +400,11 @@ Task<void> ImageData::orientToTopLeft(int priority) {
 
     struct DataDesc {
         EPixelFormat pixelFormat;
-        shared_ptr<vector<uint8_t>> data;
+        shared_ptr<Channel::Data> data;
         Vector2i size;
 
         struct Hash {
-            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<vector<uint8_t>>>()(interval.data); }
+            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<Channel::Data>>()(interval.data); }
         };
 
         bool operator==(const DataDesc& other) const {
@@ -743,7 +743,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         join(channelNames, ",")
     );
 
-    using DataBufPtr = std::shared_ptr<std::vector<uint8_t>>;
+    using DataBufPtr = std::shared_ptr<Channel::Data>;
     DataBufPtr dataPtr = nullptr;
 
     // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
@@ -758,7 +758,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
         const auto numPixels = this->numPixels();
         const auto size = this->size();
-        dataPtr = make_shared<vector<uint8_t>>(numPixels * numTextureChannels * (bitsPerSample / 8));
+        dataPtr = make_shared<Channel::Data>(numPixels * numTextureChannels * (bitsPerSample / 8));
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
@@ -926,7 +926,7 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
         const auto numPixels = (size_t)width * height;
         const size_t numTextureChannels = numChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
         const size_t bitsPerSample = bitsPerSampleInComponentFormat(imageTexture.nanoguiTexture->component_format());
-        vector<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
+        HeapArray<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
@@ -1002,7 +1002,7 @@ string Image::toString() const {
 
 // Modifies `data` and returns the new size of the data after reorientation.
 Task<nanogui::Vector2i>
-    orientToTopLeft(EPixelFormat format, std::vector<uint8_t>& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
+    orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
     if (orientation == EOrientation::TopLeft) {
         co_return size;
     }
@@ -1023,7 +1023,7 @@ Task<nanogui::Vector2i>
     const size_t numSamplesPerPixel = data.size() / numPixels / numBytesPerSample;
     const size_t numBytesPerPixel = numSamplesPerPixel * numBytesPerSample;
 
-    std::vector<uint8_t> reorientedData(data.size());
+    Channel::Data reorientedData(data.size());
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),

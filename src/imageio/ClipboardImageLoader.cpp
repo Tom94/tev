@@ -62,9 +62,9 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     ImageData& resultData = result.front();
 
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
-    resultData.channels = makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16);
+    resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
-    vector<char> data(numBytes);
+    HeapArray<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
     if (iStream.gcount() < (streamsize)numBytes) {
         throw ImageLoadError{fmt::format("Insufficient bytes to read image data ({} vs {}).", iStream.gcount(), numBytes)};

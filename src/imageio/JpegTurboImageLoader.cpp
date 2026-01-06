@@ -33,12 +33,10 @@ namespace tev {
 namespace {
 // Taken from jpegdecoderhelper in libultrahdr per their Apache 2.0 license and shortened.
 // https://github.com/google/libultrahdr/blob/6db3a83ee2b1f79850f3f597172289808dc6a331/lib/src/jpegdecoderhelper.cpp#L125
-void jpeg_extract_marker_payload(
-    const j_decompress_ptr cinfo, const uint32_t markerCode, span<const uint8_t> ns, std::vector<uint8_t>& destination
-) {
+void jpeg_extract_marker_payload(const j_decompress_ptr cinfo, const uint32_t markerCode, span<const uint8_t> ns, HeapArray<uint8_t>& destination) {
     for (jpeg_marker_struct* marker = cinfo->marker_list; marker; marker = marker->next) {
         if (marker->marker == markerCode && marker->data_length > ns.size() && !memcmp(marker->data, ns.data(), ns.size())) {
-            destination.resize(marker->data_length);
+            destination = HeapArray<uint8_t>{marker->data_length};
             memcpy(static_cast<void*>(destination.data()), marker->data, marker->data_length);
             return;
         }
@@ -88,10 +86,10 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         throw ImageLoadError{"Failed to read JPEG header."};
     }
 
-    vector<uint8_t> exifData;
+    HeapArray<uint8_t> exifData;
     jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, Exif::FOURCC, exifData);
 
-    vector<uint8_t> xmpData;
+    HeapArray<uint8_t> xmpData;
     static constexpr string_view xmpNs = "http://ns.adobe.com/xap/1.0/";
     jpeg_extract_marker_payload(&cinfo, JPEG_APP0 + 1, {(const uint8_t*)xmpNs.data(), xmpNs.size()}, xmpData);
 
@@ -130,10 +128,10 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     // Allocate memory for image data
     auto numPixels = static_cast<size_t>(size.x()) * size.y();
     auto numBytesPerPixel = numColorChannels;
-    vector<uint8_t> imageData(numPixels * numBytesPerPixel);
+    Channel::Data imageData(numPixels * numBytesPerPixel);
 
     // Create row pointers for libjpeg and then read image
-    vector<JSAMPROW> rowPointers(size.y());
+    HeapArray<JSAMPROW> rowPointers(size.y());
     for (int y = 0; y < size.y(); ++y) {
         rowPointers[y] = &imageData[y * size.x() * numBytesPerPixel];
     }
@@ -150,7 +148,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     EOrientation orientation = EOrientation::None;
 
     // Try to extract EXIF data for correct orientation
-    if (!exifData.empty()) {
+    if (exifData) {
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", exifData.size());
 
         try {
@@ -190,7 +188,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily fits
     // into F16.
-    resultData.channels = makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16);
+    resultData.channels =
+        co_await makeRgbaInterleavedChannels(numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
     // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
     resultData.hasPremultipliedAlpha = true;
@@ -199,7 +198,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     // and convert it to linear space via inverse sRGB transfer function.
     if (iccProfile) {
         try {
-            vector<float> floatData(imageData.size());
+            HeapArray<float> floatData(imageData.size());
             co_await toFloat32(imageData.data(), numColorChannels, floatData.data(), numColorChannels, size, false, priority);
 
             const auto profile = ColorProfile::fromIcc(iccProfile, iccProfileSize);

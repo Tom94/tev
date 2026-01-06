@@ -112,8 +112,8 @@ public:
     // The following functions return four values per pixel in RGBA order. The number of pixels is given by `imageDataSize()`. If the canvas
     // does not currently hold an image, or no channels are displayed, then zero pixels are returned.
     nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
-    std::vector<float> getHdrImageData(bool divideAlpha, int priority) const;
-    std::vector<char> getLdrImageData(bool divideAlpha, int priority) const;
+    HeapArray<float> getHdrImageData(bool divideAlpha, int priority) const;
+    HeapArray<char> getLdrImageData(bool divideAlpha, int priority) const;
 
     void saveImage(const fs::path& filename) const;
 

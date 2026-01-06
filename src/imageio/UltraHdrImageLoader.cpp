@@ -71,7 +71,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     }
 
     iStream.seekg(0, ios_base::end);
-    int64_t fileSize = iStream.tellg();
+    const int64_t fileSize = iStream.tellg();
     iStream.clear();
     iStream.seekg(0);
 
@@ -79,14 +79,15 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         throw FormatNotSupported{"File is too small."};
     }
 
-    vector<char> buffer(fileSize);
+    HeapArray<char> buffer(fileSize);
     iStream.read(buffer.data(), 3);
 
     if ((uint8_t)buffer[0] != 0xFF || (uint8_t)buffer[1] != 0xD8 || (uint8_t)buffer[2] != 0xFF) {
         throw FormatNotSupported{"File is not a JPEG."};
     }
 
-    iStream.read(buffer.data() + 3, fileSize - 3);
+    const int64_t remainingSize = fileSize - 3;
+    iStream.read(buffer.data() + 3, remainingSize);
 
     auto decoder = uhdr_create_decoder();
     if (!decoder) {
@@ -151,7 +152,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     const int numChannels = 4;
 
     // Ultra HDR gives us at most F16 data. See https://github.com/google/libultrahdr?tab=readme-ov-file#decoding-api-outline
-    imageData.channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16);
+    imageData.channels = co_await makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
     // JPEG always has alpha == 1 in which case there's no distinction between premultiplied and straight alpha
     imageData.hasPremultipliedAlpha = true;
@@ -170,7 +171,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
     if (iccProfile && iccProfile->data && iccProfile->data_sz > 14) {
         tlog::warning() << "Found ICC color profile. Attempting to apply... " << iccProfile->data_sz;
 
-        auto channels = makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16);
+        auto channels = co_await makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
         try {
             const auto profile = ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14);
             co_await toLinearSrgbPremul(

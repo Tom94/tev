@@ -26,7 +26,7 @@ using namespace std;
 namespace tev {
 
 Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote* amn) {
-    auto size = image.channels[0].size();
+    const auto size = image.channels[0].size();
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
 
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
@@ -55,7 +55,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
         }
     }
 
-    float headroom = pow(2.0f, std::max(stops, 0.0f));
+    const float headroom = pow(2.0f, std::max(stops, 0.0f));
     tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
 
     const int numImageChannels = (int)image.channels.size();

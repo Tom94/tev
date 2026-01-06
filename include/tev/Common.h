@@ -31,6 +31,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -358,6 +359,31 @@ public:
 private:
     T mCallback;
     bool mArmed = true;
+};
+
+template <typename T>
+class HeapArray {
+public:
+    HeapArray() : mBuf{nullptr}, mSize{0} {}
+    HeapArray(size_t size) : mBuf{std::make_unique<T[]>(size)}, mSize{size} {}
+    HeapArray(HeapArray&& other) = default;
+    HeapArray& operator=(HeapArray&& other) = default;
+
+    operator bool() const { return mBuf != nullptr; }
+    T& operator[](size_t idx) { return mBuf[idx]; }
+    const T& operator[](size_t idx) const { return mBuf[idx]; }
+
+    T* data() { return mBuf.get(); }
+    const T* data() const { return mBuf.get(); }
+
+    size_t size() const { return mSize; }
+
+    operator std::span<const T>() const { return std::span<const T>{mBuf.get(), mSize}; }
+    operator std::span<T>() { return std::span<T>{mBuf.get(), mSize}; }
+
+private:
+    std::unique_ptr<T[]> mBuf;
+    size_t mSize;
 };
 
 template <typename T> T round(T value, T decimals) {
