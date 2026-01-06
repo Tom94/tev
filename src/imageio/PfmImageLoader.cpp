@@ -330,9 +330,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         const size_t numInterleavedChannels = numChannels == 1 ? 1 : 4;
         const bool hasAlpha = numChannels == 2 || numChannels == 4;
-        resultData.channels = numInterleavedChannels == 1 ?
-            makeNChannels(numChannels, size, EPixelFormat::F32, desiredFormat) :
-            co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, "", priority);
+        if (numInterleavedChannels == 1) {
+            resultData.channels = makeNChannels(numChannels, size, EPixelFormat::F32, desiredFormat);
+        } else {
+            resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, "", priority);
+        }
 
         const auto numSamplesPerRow = (size_t)size.x() * numChannels;
         const auto numSamples = numSamplesPerRow * size.y();
