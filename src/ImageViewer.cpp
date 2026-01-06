@@ -57,10 +57,7 @@ static const float CROP_MIN_SIZE = 3;
 ImageViewer::ImageViewer(
     const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, weak_ptr<Ipc> ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
-    nanogui::Screen{size, "tev", true, maximize, false, true, true, floatBuffer},
-    mImagesLoader{imagesLoader},
-    mIpc{ipc},
-    mMaximizedLaunch{maximize} {
+    Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc}, mMaximizedLaunch{maximize} {
 
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
@@ -71,17 +68,17 @@ ImageViewer::ImageViewer(
         int monitorCount;
         auto** monitors = glfwGetMonitors(&monitorCount);
         if (monitors && monitorCount > 0) {
-            nanogui::Vector2i monitorMin{numeric_limits<int>::max(), numeric_limits<int>::max()},
+            Vector2i monitorMin{numeric_limits<int>::max(), numeric_limits<int>::max()},
                 monitorMax{numeric_limits<int>::min(), numeric_limits<int>::min()};
 
             for (int i = 0; i < monitorCount; ++i) {
-                nanogui::Vector2i pos, size;
+                Vector2i pos, size;
                 glfwGetMonitorWorkarea(monitors[i], &pos.x(), &pos.y(), &size.x(), &size.y());
                 monitorMin = min(monitorMin, pos);
                 monitorMax = max(monitorMax, pos + size);
             }
 
-            mMaxWindowSize = min(mMaxWindowSize, max(monitorMax - monitorMin, nanogui::Vector2i{1024, 800}));
+            mMaxWindowSize = min(mMaxWindowSize, max(monitorMax - monitorMin, Vector2i{1024, 800}));
         }
     }
 
@@ -580,7 +577,7 @@ ImageViewer::ImageViewer(
         mFooter->set_visible(false);
     }
 
-    set_resize_callback([this](nanogui::Vector2i) { requestLayoutUpdate(); });
+    set_resize_callback([this](Vector2i) { requestLayoutUpdate(); });
     resize_callback_event(m_size.x(), m_size.y()); // Required on some OSs to get up-to-date pixel ratio
 
     selectImage(nullptr);
@@ -604,14 +601,14 @@ bool ImageViewer::resize_event(const Vector2i& size) {
     return Screen::resize_event(size);
 }
 
-bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
+bool ImageViewer::mouse_button_event(const Vector2i& p, int button, bool down, int modifiers) {
     // Check if the user performed mousedown on an imagebutton so we can mark it as being dragged. This has to occur before
     // Screen::mouse_button_event as the button would absorb the event.
     if (down) {
         if (mImageScrollContainer->contains(p - mSidebarLayout->parent()->position())) {
             auto& buttons = mImageButtonContainer->children();
 
-            nanogui::Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
+            Vector2i relMousePos = (absolute_position() + p) - mImageButtonContainer->absolute_position();
 
             for (size_t i = 0; i < buttons.size(); ++i) {
                 const auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
@@ -664,7 +661,7 @@ bool ImageViewer::mouse_button_event(const nanogui::Vector2i& p, int button, boo
     return true;
 }
 
-bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui::Vector2f& rel, int button, int modifiers) {
+bool ImageViewer::mouse_motion_event_f(const Vector2f& p, const Vector2f& rel, int button, int modifiers) {
     if (Screen::mouse_motion_event_f(p, rel, button, modifiers)) {
         return true;
     }
@@ -729,7 +726,7 @@ bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui
 
         case EMouseDragType::ImageButtonDrag: {
             auto& buttons = mImageButtonContainer->children();
-            nanogui::Vector2i relMousePos = (absolute_position() + Vector2i{p}) - mImageButtonContainer->absolute_position();
+            Vector2i relMousePos = (absolute_position() + Vector2i{p}) - mImageButtonContainer->absolute_position();
 
             TEV_ASSERT(mDraggedImageButtonId < buttons.size(), "Dragged image button id is out of bounds.");
             auto* draggedImgButton = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId]);
@@ -740,7 +737,7 @@ bool ImageViewer::mouse_motion_event_f(const nanogui::Vector2f& p, const nanogui
 
                 auto* imgButton = dynamic_cast<ImageButton*>(buttons[i]);
                 if (imgButton->visible() && imgButton->contains(relMousePos)) {
-                    nanogui::Vector2i pos = imgButton->position();
+                    Vector2i pos = imgButton->position();
                     pos.y() += ((int)draggedImgButton->id() - (int)imgButton->id()) * imgButton->size().y();
                     imgButton->set_position(pos);
                     imgButton->mouse_enter_event(relMousePos, false);
@@ -960,7 +957,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
                 scaleAmount = -scaleAmount;
             }
 
-            nanogui::Vector2f origin = nanogui::Vector2f{mImageCanvas->position()} + nanogui::Vector2f{mImageCanvas->size()} * 0.5f;
+            Vector2f origin = Vector2f{mImageCanvas->position()} + Vector2f{mImageCanvas->size()} * 0.5f;
 
             mImageCanvas->scale(scaleAmount, {origin.x(), origin.y()});
             return true;
@@ -1192,7 +1189,7 @@ void ImageViewer::draw_contents() {
     }
 
     if (mRequiresLayoutUpdate) {
-        nanogui::Vector2i oldDraggedImageButtonPos{0, 0};
+        Vector2i oldDraggedImageButtonPos{0, 0};
         auto& buttons = mImageButtonContainer->children();
         if (mDragType == EMouseDragType::ImageButtonDrag) {
             oldDraggedImageButtonPos = dynamic_cast<ImageButton*>(buttons[mDraggedImageButtonId])->position();
@@ -1700,7 +1697,7 @@ void ImageViewer::selectGroup(string group) {
     // Ensure the currently active group button is always fully on-screen
     if (activeGroupButton) {
         mGroupButtonContainer->set_position(
-            nanogui::Vector2i{
+            Vector2i{
                 clamp(
                     mGroupButtonContainer->position().x(),
                     -activeGroupButton->position().x(),
@@ -1872,15 +1869,15 @@ void ImageViewer::setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting setting)
     }
 }
 
-nanogui::Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
+Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
     if (!image) {
         return m_size;
     }
 
-    nanogui::Vector2i requiredSize{image->displaySize().x(), image->displaySize().y()};
+    Vector2i requiredSize{image->displaySize().x(), image->displaySize().y()};
 
     // Convert from image pixel coordinates to nanogui coordinates.
-    requiredSize = nanogui::Vector2i{nanogui::Vector2f{requiredSize} / pixel_ratio()};
+    requiredSize = Vector2i{Vector2f{requiredSize} / pixel_ratio()};
 
     // Take into account the size of the UI.
     if (mSidebar->visible()) {
@@ -1894,8 +1891,8 @@ nanogui::Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
     return requiredSize;
 }
 
-nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
-    nanogui::Vector2i result = m_size;
+Vector2i ImageViewer::sizeToFitAllImages() {
+    Vector2i result = m_size;
     for (const auto& image : mImages) {
         result = max(result, sizeToFitImage(image));
     }
@@ -1903,7 +1900,7 @@ nanogui::Vector2i ImageViewer::sizeToFitAllImages() {
     return result;
 }
 
-void ImageViewer::resizeToFit(nanogui::Vector2i targetSize) {
+void ImageViewer::resizeToFit(Vector2i targetSize) {
     // On Wayland, some information like the current monitor or fractional DPI scaling is not available until some time has passed.
     // Potentially a few frames have been rendered. Hence postpone resizing until we have a valid monitor.
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND && !glfwGetWindowCurrentMonitor(m_glfw_window)) {
@@ -2465,7 +2462,7 @@ void ImageViewer::updateFilter() {
 void ImageViewer::updateLayout() {
     int sidebarWidth = visibleSidebarWidth();
     int footerHeight = visibleFooterHeight();
-    mImageCanvas->set_fixed_size(m_size - nanogui::Vector2i{sidebarWidth, footerHeight});
+    mImageCanvas->set_fixed_size(m_size - Vector2i{sidebarWidth, footerHeight});
     mSidebar->set_fixed_height(m_size.y() - footerHeight);
 
     mVerticalScreenSplit->set_fixed_size(m_size);
@@ -2480,7 +2477,7 @@ void ImageViewer::updateLayout() {
     perform_layout();
 
     mSidebarLayout->set_fixed_width(mSidebarLayout->parent()->width());
-    mHelpButton->set_position(nanogui::Vector2i{mSidebarLayout->fixed_width() - 38, 5});
+    mHelpButton->set_position(Vector2i{mSidebarLayout->fixed_width() - 38, 5});
     mFilter->set_fixed_width(mSidebarLayout->fixed_width() - 50);
     perform_layout();
 
@@ -2504,15 +2501,16 @@ void ImageViewer::updateTitle() {
 
         caption = fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
 
-        auto rel = mouse_pos() - mImageCanvas->position();
-        vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
-        nanogui::Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
+        const auto rel = mouse_pos() - mImageCanvas->position();
+        const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
+        const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
         TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
         string valuesString;
         for (size_t i = 0; i < channelTails.size(); ++i) {
             valuesString += fmt::format("{:.2f},", values[i]);
         }
+
         valuesString.pop_back();
         valuesString += " / 0x";
         for (size_t i = 0; i < channelTails.size(); ++i) {

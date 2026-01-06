@@ -652,7 +652,7 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
 
 void ImageCanvas::resetTransform() { mTransform = Matrix3f::scale(Vector2f{1.0f}); }
 
-std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
+HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
     if (!mImage) {
         return {};
     }
@@ -662,12 +662,12 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
         return {};
     }
 
-    auto imageRegion = cropInImageCoords();
-    size_t numPixels = (size_t)imageRegion.area();
-    int nChannelsToSave = std::min((int)channels.size(), 4);
+    const auto imageRegion = cropInImageCoords();
+    const size_t numPixels = (size_t)imageRegion.area();
+    const int nChannelsToSave = std::min((int)channels.size(), 4);
 
     // Flatten image into vector
-    std::vector<float> result(4 * numPixels, 0);
+    HeapArray<float> result{4 * numPixels};
 
     ThreadPool::global().parallelFor(
         imageRegion.min.y(),
@@ -675,22 +675,15 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
         [nChannelsToSave, &channels, &result, &imageRegion](int y) {
             int yresult = y - imageRegion.min.y();
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
-                for (int c = 0; c < nChannelsToSave; ++c) {
-                    const auto& channel = channels[c];
-                    int xresult = x - imageRegion.min.x();
-                    result[(yresult * imageRegion.size().x() + xresult) * 4 + c] = channel.at({x, y});
+                for (int c = 0; c < 4; ++c) {
+                    const float val = c < nChannelsToSave ? channels[c].at({x, y}) : c == 3 ? 1.0f : 0.0f;
+                    const int xresult = x - imageRegion.min.x();
+                    result[(yresult * imageRegion.size().x() + xresult) * 4 + c] = val;
                 }
             }
         },
         priority
     );
-
-    // Manually set alpha channel to 1 if the image does not have one.
-    if (nChannelsToSave < 4) {
-        for (size_t i = 0; i < numPixels; ++i) {
-            result[i * 4 + 3] = 1;
-        }
-    }
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
@@ -711,26 +704,26 @@ std::vector<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) 
     return result;
 }
 
-std::vector<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
+HeapArray<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
     // getHdrImageData always returns four floats per pixel (RGBA).
-    auto floatData = getHdrImageData(divideAlpha, priority);
-    std::vector<char> result(floatData.size());
+    const auto floatData = getHdrImageData(divideAlpha, priority);
+    HeapArray<char> result(floatData.size());
 
     ThreadPool::global().parallelFor<size_t>(
         0,
         floatData.size() / 4,
-        [&](size_t i) {
-            size_t start = 4 * i;
-            Vector3f value = applyTonemap({
+        [&](const size_t i) {
+            const size_t start = 4 * i;
+            const Vector3f rgb = applyTonemap({
                 applyExposureAndOffset(floatData[start]),
                 applyExposureAndOffset(floatData[start + 1]),
                 applyExposureAndOffset(floatData[start + 2]),
             });
-            for (int j = 0; j < 3; ++j) {
-                floatData[start + j] = value[j];
-            }
+
+            const Vector4f rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), floatData[start + 3]};
+
             for (int j = 0; j < 4; ++j) {
-                result[start + j] = (char)(floatData[start + j] * 255 + 0.5f);
+                result[start + j] = (char)(rgba[j] * 255 + 0.5f);
             }
         },
         priority
@@ -946,9 +939,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    auto result = make_shared<CanvasStatistics>();
+    const auto result = make_shared<CanvasStatistics>();
 
-    size_t nChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
+    const size_t nChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
     result->histogramColors.resize(nChannels);
 
     for (size_t i = 0; i < nChannels; ++i) {
@@ -972,7 +965,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    size_t totalNumPixels = nChannels * region.area();
+    const size_t totalNumPixels = nChannels * region.area();
     result->mean = totalNumPixels > 0 ? (float)(mean / totalNumPixels) : 0;
     result->maximum = maximum;
     result->minimum = minimum;
@@ -984,33 +977,38 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     // We're going to draw our histogram in log space.
     static const float addition = 0.001f;
     static const float smallest = log(addition);
-    auto symmetricLog = [](float val) { return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest); };
-    auto symmetricLogInverse = [](float val) { return val > 0 ? (exp(val + smallest) - addition) : -(exp(-val + smallest) - addition); };
 
-    float minLog = symmetricLog(minimum);
-    float diffLog = symmetricLog(maximum) - minLog;
+    const auto symmetricLog = [](const float val) { return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest); };
+    const auto symmetricLogInverse = [](const float val) {
+        return val > 0 ? (exp(val + smallest) - addition) : -(exp(-val + smallest) - addition);
+    };
 
-    auto valToBin = [&](float val) { return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, (int)NUM_BINS - 1); };
+    const float minLog = symmetricLog(minimum);
+    const float diffLog = symmetricLog(maximum) - minLog;
+
+    const auto valToBin = [&](const float val) {
+        return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, (int)NUM_BINS - 1);
+    };
 
     result->histogramZero = valToBin(0);
 
-    auto binToVal = [&](float val) { return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog); };
+    const auto binToVal = [&](const float val) { return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog); };
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
     if (nChannels == 0) {
         co_return result;
     }
 
-    auto regionSize = region.size();
-    size_t numPixels = region.area();
-    std::vector<int> indices(numPixels * nChannels);
+    const auto regionSize = region.size();
+    const size_t numPixels = region.area();
+    HeapArray<int> indices(numPixels * nChannels);
 
     vector<Task<void>> tasks;
     tasks.emplace_back(
         ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
-            [&](size_t j) {
+            [&](const size_t j) {
                 int x = (int)(j % regionSize.x()) + region.min.x();
                 int y = (int)(j / regionSize.x()) + region.min.y();
                 for (size_t c = 0; c < nChannels; ++c) {
@@ -1044,10 +1042,10 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     // Normalize the histogram according to the 10th-largest element to avoid a couple spikes ruining the entire graph.
     auto tmp = result->histogram;
-    size_t idx = tmp.size() - 10;
+    const size_t idx = tmp.size() - 10;
     nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
-    float norm = 1.0f / (std::max(tmp[idx], 0.1f) * 1.3f);
+    const float norm = 1.0f / (std::max(tmp[idx], 0.1f) * 1.3f);
     for (size_t i = 0; i < nChannels; ++i) {
         for (size_t j = 0; j < NUM_BINS; ++j) {
             result->histogram[j + i * NUM_BINS] *= norm;
