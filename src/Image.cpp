@@ -926,7 +926,7 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
         const auto numPixels = (size_t)width * height;
         const size_t numTextureChannels = numChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
         const size_t bitsPerSample = bitsPerSampleInComponentFormat(imageTexture.nanoguiTexture->component_format());
-        vector<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
+        HeapArray<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {

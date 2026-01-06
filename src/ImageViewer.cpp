@@ -2212,7 +2212,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw std::runtime_error{"No image selected for copy."};
     }
 
-    auto imageSize = mImageCanvas->imageDataSize();
+    const auto imageSize = mImageCanvas->imageDataSize();
     if (imageSize.x() == 0 || imageSize.y() == 0) {
         throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
@@ -2233,15 +2233,15 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     imageMetadata.blue_shift = 16;
     imageMetadata.alpha_shift = 24;
 
-    auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
+    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
     clip::image image(imageData.data(), imageMetadata);
 
     if (!clip::set_image(image)) {
         throw std::runtime_error{"clip::set_image failed."};
     }
 #else
-    auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
-    auto pngImageSaver = make_unique<StbiLdrImageSaver>();
+    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
+    const auto pngImageSaver = make_unique<StbiLdrImageSaver>();
 
     stringstream pngData;
     try {

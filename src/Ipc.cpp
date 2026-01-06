@@ -109,7 +109,7 @@ void IpcPacket::setUpdateImage(
         throw runtime_error{"UpdateImage IPC packet must have a non-zero channel count."};
     }
 
-    int32_t nChannels = (int32_t)channelDescs.size();
+    const int32_t nChannels = (int32_t)channelDescs.size();
     vector<string> channelNames(nChannels);
     vector<int64_t> channelOffsets(nChannels);
     vector<int64_t> channelStrides(nChannels);
@@ -130,7 +130,7 @@ void IpcPacket::setUpdateImage(
     payload << channelOffsets;
     payload << channelStrides;
 
-    size_t nPixels = width * height;
+    const size_t nPixels = width * height;
 
     size_t stridedImageDataSize = 0;
     for (int32_t c = 0; c < nChannels; ++c) {
@@ -196,7 +196,7 @@ IpcPacketOpenImage IpcPacket::interpretAsOpenImage() const {
         return result;
     }
 
-    size_t colonPos = imageString.find_last_of(":");
+    const size_t colonPos = imageString.find_last_of(":");
     if (colonPos == string::npos ||
         // windows path of the form X:/* or X:\*
         (colonPos == 1 && imageString.length() >= 3 && (imageString[2] == '\\' || imageString[2] == '/'))) {
@@ -266,7 +266,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     result.channelStrides.resize(result.nChannels, 1);
 
     payload >> result.x >> result.y >> result.width >> result.height;
-    size_t nPixels = (size_t)result.width * result.height;
+    const size_t nPixels = (size_t)result.width * result.height;
 
     if (type >= EType::UpdateImageV3) {
         // custom offset/stride support
