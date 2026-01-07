@@ -796,11 +796,16 @@ Task<void> toLinearSrgbPremul(
     }
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
+    const size_t numPixels = (size_t)size.x() * size.y();
 
     cmsHTRANSFORM transform = nullptr;
     if (!cicp) {
+        // LCMS's fast float optimizations require a certain degree of precomputation which can be harmful for small images that would
+        // convert quickly anyway. We'll disable optimizations arbitrarily for images with fewer than 512x512 pixels.
+        const bool optimize = numPixels >= 512 * 512;
+
         tlog::debug() << fmt::format(
-            "Creating LCMS color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
+            "Creating LCMS color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={} optimize={}",
             numColorChannels,
             (int)alphaKind,
             (int)pixelFormat,
@@ -808,7 +813,8 @@ Task<void> toLinearSrgbPremul(
             type,
             numChannelsOut,
             typeOut,
-            toString(intent)
+            toString(intent),
+            optimize
         );
 
         transform = cmsCreateTransformTHR(
@@ -821,7 +827,7 @@ Task<void> toLinearSrgbPremul(
             // error if we set this as the output type.
             typeOut,
             (cmsUInt32Number)intent,
-            cmsFLAGS_HIGHRESPRECALC | (alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0)
+            (optimize ? cmsFLAGS_HIGHRESPRECALC : cmsFLAGS_NOOPTIMIZE) | (alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0)
         );
 
         if (!transform) {
@@ -832,7 +838,7 @@ Task<void> toLinearSrgbPremul(
     const size_t nSrcSamplesPerRow = size.x() * numChannels;
     const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
 
-    const size_t numSamples = (size_t)size.x() * size.y() * numChannels;
+    const size_t numSamples = numPixels * numChannels;
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         size.y(),
