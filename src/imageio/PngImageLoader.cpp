@@ -487,6 +487,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_await ThreadPool::global().parallelForAsync<size_t>(
                     0,
                     numPixels,
+                    numSamples,
                     [&](size_t i) {
                         const float alpha = dstData[i * 4 + 3];
                         Vector3f color;
@@ -584,6 +585,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             co_await ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 numPixels,
+                numSamples,
                 [&](size_t i) {
                     const float alpha = dstData[i * 4 + 3];
                     for (int c = 0; c < 3; ++c) {
@@ -621,6 +623,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             co_await ThreadPool::global().parallelForAsync<int>(
                 0,
                 size.y(),
+                numSamples,
                 [&](int y) {
                     Vector2i framePos;
                     framePos.y() = y - frameOffset.y();

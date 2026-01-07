@@ -524,6 +524,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         co_await ThreadPool::global().parallelForAsync<size_t>(
                             0,
                             numPixels,
+                            numPixels * 4,
                             [&](size_t i) {
                                 // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
                                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
@@ -565,9 +566,12 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             extraChannel.name, size, EPixelFormat::F32, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
                         }
                     );
+
+                    const size_t numPixels = (size_t)size.x() * size.y();
                     co_await ThreadPool::global().parallelForAsync<size_t>(
                         0,
                         size.y(),
+                        numPixels,
                         [&](size_t y) {
                             size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
                             for (int x = 0; x < size.x(); ++x) {

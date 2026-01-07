@@ -296,6 +296,7 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
     ThreadPool::global().parallelFor<size_t>(
         0,
         nPixels,
+        nPixels * result.nChannels,
         [&](size_t px) {
             for (int32_t c = 0; c < result.nChannels; ++c) {
                 result.imageData[c][px] = stridedImageData[result.channelOffsets[c] + px * result.channelStrides[c]];

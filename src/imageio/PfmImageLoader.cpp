@@ -333,7 +333,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         if (numInterleavedChannels == 1) {
             resultData.channels = makeNChannels(numChannels, size, EPixelFormat::F32, desiredFormat);
         } else {
-            resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, "", priority);
+            resultData.channels =
+                co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, "", priority);
         }
 
         const auto numSamplesPerRow = (size_t)size.x() * numChannels;
@@ -394,6 +395,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             co_await ThreadPool::global().parallelForAsync(
                 0,
                 size.y(),
+                numSamples,
                 [&](int y) {
                     for (int x = 0; x < size.x(); ++x) {
                         const int baseIdx = (y * size.x() + x) * numChannels;
@@ -416,7 +418,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             if (bitsPerChannel == 32) {
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0, numSamples, [&](size_t i) { ((uint32_t*)data)[i] = swapBytes(((uint32_t*)data)[i]); }, priority
+                        0, numSamples, numSamples, [&](size_t i) { ((uint32_t*)data)[i] = swapBytes(((uint32_t*)data)[i]); }, priority
                     );
                 }
 
@@ -426,7 +428,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             } else if (bitsPerChannel == 16) {
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0, numSamples, [&](size_t i) { ((uint16_t*)data)[i] = swapBytes(((uint16_t*)data)[i]); }, priority
+                        0, numSamples, numSamples, [&](size_t i) { ((uint16_t*)data)[i] = swapBytes(((uint16_t*)data)[i]); }, priority
                     );
                 }
 
@@ -441,6 +443,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 co_await ThreadPool::global().parallelForAsync(
                     0,
                     size.y(),
+                    numSamples,
                     [&](const int y) {
                         const size_t baseByteIdx = numBytesPerRow * y;
 

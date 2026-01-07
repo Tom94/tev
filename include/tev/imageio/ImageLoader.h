@@ -66,10 +66,13 @@ Task<void> toFloat32(
         numSamplesPerRowOut = numSamplesPerPixelOut * size.x();
     }
 
-    size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, numSamplesPerPixelOut);
+    const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, numSamplesPerPixelOut);
+    const size_t numPixels = (size_t)size.x() * size.y();
+
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
+        numPixels * numSamplesPerPixel,
         [&](int y) {
             size_t rowIdxIn = y * numSamplesPerRowIn;
             size_t rowIdxOut = y * numSamplesPerRowOut;

@@ -92,6 +92,7 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         other.numPixels(),
+        other.numPixels(),
         [&](size_t i) {
             if (other.at(i) != 0) {
                 setAt(i, at(i) / other.at(i));
@@ -104,7 +105,9 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
-    co_await ThreadPool::global().parallelForAsync<size_t>(0, other.numPixels(), [&](size_t i) { setAt(i, at(i) * other.at(i)); }, priority);
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0, other.numPixels(), other.numPixels(), [&](size_t i) { setAt(i, at(i) * other.at(i)); }, priority
+    );
 }
 
 void Channel::updateTile(int x, int y, int width, int height, span<const float> newData) {

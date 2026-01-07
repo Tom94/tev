@@ -672,6 +672,7 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
     ThreadPool::global().parallelFor(
         imageRegion.min.y(),
         imageRegion.max.y(),
+        numPixels * 4,
         [nChannelsToSave, &channels, &result, &imageRegion](int y) {
             int yresult = y - imageRegion.min.y();
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
@@ -690,6 +691,7 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
         ThreadPool::global().parallelFor(
             (size_t)0,
             numPixels,
+            numPixels * 4,
             [&result](size_t j) {
                 float alpha = result[j * 4 + 3];
                 float factor = alpha == 0 ? 0 : 1 / alpha;
@@ -712,6 +714,7 @@ HeapArray<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) con
     ThreadPool::global().parallelFor<size_t>(
         0,
         floatData.size() / 4,
+        floatData.size(),
         [&](const size_t i) {
             const size_t start = 4 * i;
             const Vector3f rgb = applyTonemap({
@@ -857,6 +860,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         ThreadPool::global().parallelFor<size_t>(
             0,
             image->numPixels(),
+            image->numPixels() * channels.size(),
             [&](size_t j) {
                 for (size_t c = 0; c < channels.size(); ++c) {
                     result[c].setAt(j, channels[c]->at(j));
@@ -878,6 +882,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         ThreadPool::global().parallelFor<int>(
             0,
             size.y(),
+            image->numPixels() * channels.size(),
             [&](int y) {
                 for (size_t c = 0; c < channels.size(); ++c) {
                     const auto* channel = channels[c];
@@ -1008,6 +1013,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * nChannels,
             [&](const size_t j) {
                 int x = (int)(j % regionSize.x()) + region.min.x();
                 int y = (int)(j / regionSize.x()) + region.min.y();
@@ -1024,6 +1030,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         nChannels,
+        numPixels * nChannels,
         [&](size_t c) {
             for (size_t j = 0; j < numPixels; ++j) {
                 int x = (int)(j % regionSize.x()) + region.min.x();

@@ -42,14 +42,14 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         throw ImageLoadError{fmt::format("Insufficient bytes to read image spec ({} vs {}).", iStream.gcount(), sizeof(clip::image_spec))};
     }
 
-    Vector2i size{(int)spec.width, (int)spec.height};
+    const Vector2i size{(int)spec.width, (int)spec.height};
 
-    auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw ImageLoadError{"Image has zero pixels."};
     }
 
-    auto numChannels = (int)(spec.bits_per_pixel / 8);
+    const auto numChannels = (int)(spec.bits_per_pixel / 8);
     if (numChannels > 4) {
         throw ImageLoadError{"Image has too many channels."};
     }
@@ -62,7 +62,8 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
     ImageData& resultData = result.front();
 
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
-    resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
+    resultData.channels =
+        co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
     HeapArray<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
@@ -83,10 +84,11 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         }
     }
 
-    float* floatData = resultData.channels.front().floatData();
+    float* const floatData = resultData.channels.front().floatData();
     co_await ThreadPool::global().parallelForAsync(
         0,
         size.y(),
+        numPixels * numChannels,
         [&](int y) {
             size_t rowIdxIn = y * numBytesPerRow;
             size_t rowIdxOut = y * size.x() * numChannels;

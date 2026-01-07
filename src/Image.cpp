@@ -55,17 +55,13 @@ AttributeNode HdrMetadata::toAttributes() const {
     AttributeNode& content = root.children.emplace_back();
     content.name = "Content light level";
     content.children.emplace_back(
-        AttributeNode{
-            .name = "Best guess white level", .value = floatToStringZeroMeansNA(bestGuessWhiteLevel), .type = "cd/m²", .children = {}
-        }
+        AttributeNode{.name = "Best guess white level", .value = floatToStringZeroMeansNA(bestGuessWhiteLevel), .type = "cd/m²", .children = {}}
     );
     content.children.emplace_back(
         AttributeNode{.name = "Max content light level", .value = floatToStringZeroMeansNA(maxCLL), .type = "cd/m²", .children = {}}
     );
     content.children.emplace_back(
-        AttributeNode{
-            .name = "Max frame average light level", .value = floatToStringZeroMeansNA(maxFALL), .type = "cd/m²", .children = {}
-        }
+        AttributeNode{.name = "Max frame average light level", .value = floatToStringZeroMeansNA(maxFALL), .type = "cd/m²", .children = {}}
     );
 
     AttributeNode& masteringDisplay = root.children.emplace_back();
@@ -155,6 +151,7 @@ Task<void> ImageData::convertToRec709(int priority) {
             ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 r->numPixels(),
+                r->numPixels() * 3,
                 [r, g, b, this](size_t i) {
                     const auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
                     r->setAt(i, rgb.x());
@@ -216,7 +213,8 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
             ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 lumPerLayer[i].size(),
-                [r, g, b, &lumBuf = lumPerLayer[i]/*, &toRec2020*/](size_t px) {
+                lumPerLayer[i].size(),
+                [r, g, b, &lumBuf = lumPerLayer[i] /*, &toRec2020*/](size_t px) {
                     // Optional: max RGB in BT.2020 primaries (see comment above)
                     // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
                     // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
@@ -314,7 +312,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
 
         const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
             co_await ThreadPool::global().parallelForAsync<size_t>(
-                0, nSamples, [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; }, priority
+                0, nSamples, nSamples, [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; }, priority
             );
         };
 
@@ -618,12 +616,14 @@ Task<void> prepareTextureChannel(
 ) {
     const bool isAlpha = channelIdx == 3 || (chan && Channel::isAlpha(chan->name()));
     const T defaultVal = isAlpha ? (T)1.0f : (T)0.0f;
+    const size_t numPixels = (size_t)size.x() * size.y();
 
     if (chan) {
         auto copyChannel = [&](const auto* src) -> Task<void> {
             co_await ThreadPool::global().parallelForAsync<int>(
                 0,
                 size.y(),
+                numPixels,
                 [chan, src, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
                     for (int x = 0; x < width; ++x) {
                         size_t tileIdx = x + y * (size_t)width;
@@ -641,9 +641,9 @@ Task<void> prepareTextureChannel(
             case EPixelFormat::F32: co_await copyChannel((const float*)chan->data()); break;
         }
     } else {
-        const size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
+            numPixels,
             numPixels,
             [&data, defaultVal, numTextureChannels, channelIdx](size_t j) { data[j * numTextureChannels + channelIdx] = defaultVal; },
             numeric_limits<int>::max()
@@ -1027,6 +1027,7 @@ Task<nanogui::Vector2i>
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
+        numPixels,
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
                 const size_t i = y * (size_t)size.x() + x;

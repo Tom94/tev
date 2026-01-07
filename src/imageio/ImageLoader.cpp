@@ -134,7 +134,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
         using ptr_float_t = std::remove_pointer_t<decltype(ptr)>;
         const ptr_float_t pattern[4] = {(ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)1.0};
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numPixels, [pattern, ptr](size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, priority
+            0, numPixels, numPixels, [pattern, ptr](size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, priority
         );
     };
 
@@ -191,9 +191,11 @@ Task<void> ImageLoader::resizeChannelsAsync(const vector<Channel>& srcChannels, 
         TEV_ASSERT(dstChannels[i].size() == targetSize, "Destination channels' size must match.");
     }
 
+    const size_t numSamples = (size_t)targetSize.x() * targetSize.y() * numChannels;
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         targetSize.y(),
+        numSamples,
         [&](int dstY) {
             const float scaleX = (float)size.x() / targetSize.x();
             const float scaleY = (float)size.y() / targetSize.y();

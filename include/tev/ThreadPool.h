@@ -111,14 +111,21 @@ public:
     void waitUntilFinished();
     void waitUntilFinishedFor(const std::chrono::microseconds Duration);
 
-    template <typename Int, typename F> Task<void> parallelForAsync(Int start, Int end, F body, int priority) {
-        Int minChunkSize = 32 * 1024;
-        if (std::is_same_v<Int, int>) {
-            minChunkSize = 32;
-        }
+    template <typename Int, typename F>
+    Task<void> parallelForAsync(
+        Int start,
+        Int end,
+        // In ~number of samples (== pixels * channels) processed with a few operations (e.g. toSrgb, color transform, alpha mult/div) each.
+        // If the per-sample cost is particularly high, an arbitrary factor can be applied to increase this value.
+        size_t approxCost,
+        F body,
+        int priority
+    ) {
+        const size_t targetCostPerTask = 64 * 1024;
+        const size_t maxNTasks = (approxCost + targetCostPerTask - 1) / targetCostPerTask;
 
         const Int range = end - start;
-        const Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, (range + minChunkSize - 1) / minChunkSize});
+        const Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, (Int)maxNTasks, range});
 
         std::vector<Task<void>> tasks;
 
@@ -144,8 +151,8 @@ public:
         co_await awaitAll(tasks);
     }
 
-    template <typename Int, typename F> void parallelFor(Int start, Int end, F body, int priority) {
-        parallelForAsync(start, end, body, priority).get();
+    template <typename Int, typename F> void parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
+        parallelForAsync(start, end, approxCost, body, priority).get();
     }
 
     size_t numThreads() const { return mNumThreads; }
