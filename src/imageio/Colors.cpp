@@ -797,33 +797,36 @@ Task<void> toLinearSrgbPremul(
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
 
-    tlog::debug() << fmt::format(
-        "Creating color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
-        numColorChannels,
-        (int)alphaKind,
-        (int)pixelFormat,
-        numChannels,
-        type,
-        numChannelsOut,
-        typeOut,
-        toString(intent)
-    );
+    cmsHTRANSFORM transform = nullptr;
+    if (!cicp) {
+        tlog::debug() << fmt::format(
+            "Creating LCMS color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={}",
+            numColorChannels,
+            (int)alphaKind,
+            (int)pixelFormat,
+            numChannels,
+            type,
+            numChannelsOut,
+            typeOut,
+            toString(intent)
+        );
 
-    cmsHTRANSFORM transform = cmsCreateTransformTHR(
-        CmsContext::threadLocal().get(),
-        profile.get(),
-        type,
-        numColorChannels == 1 && numColorChannelsOut == 1 ? CmsContext::threadLocal().grayProfile() :
-                                                            CmsContext::threadLocal().rec709Profile(),
-        // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an error
-        // if we set this as the output type.
-        typeOut,
-        (cmsUInt32Number)intent,
-        alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0
-    );
+        transform = cmsCreateTransformTHR(
+            CmsContext::threadLocal().get(),
+            profile.get(),
+            type,
+            numColorChannels == 1 && numColorChannelsOut == 1 ? CmsContext::threadLocal().grayProfile() :
+                                                                CmsContext::threadLocal().rec709Profile(),
+            // Always output in straight alpha. We would prefer to have the transform output in premultiplied alpha, but lcms2 throws an
+            // error if we set this as the output type.
+            typeOut,
+            (cmsUInt32Number)intent,
+            cmsFLAGS_HIGHRESPRECALC | (alphaKind != EAlphaKind::None ? cmsFLAGS_COPY_ALPHA : 0)
+        );
 
-    if (!transform) {
-        throw runtime_error{"Failed to create color transform to Rec.709."};
+        if (!transform) {
+            throw runtime_error{"Failed to create color transform to Rec.709."};
+        }
     }
 
     const size_t nSrcSamplesPerRow = size.x() * numChannels;
