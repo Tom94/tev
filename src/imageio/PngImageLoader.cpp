@@ -358,6 +358,23 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         enum class EDisposeOp : png_byte { None = 0, Background = 1, Previous = 2 };
         enum class EBlendOp : png_byte { Source = 0, Over = 1 };
 
+        const auto disposeOpToString = [](EDisposeOp op) {
+            switch (op) {
+                case EDisposeOp::None: return "none";
+                case EDisposeOp::Background: return "background";
+                case EDisposeOp::Previous: return "previous";
+                default: return "invalid";
+            }
+        };
+
+        const auto blendOpToString = [](EBlendOp op) {
+            switch (op) {
+                case EBlendOp::Source: return "source";
+                case EBlendOp::Over: return "over";
+                default: return "invalid";
+            }
+        };
+
         Vector2i frameSize;
         Vector2i frameOffset;
 
@@ -373,7 +390,11 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             frameOffset = {static_cast<int>(xOffset), static_cast<int>(yOffset)};
 
             tlog::debug() << fmt::format(
-                "fcTL: size={}, offset={}, dispose_op={}, blend_op={}", frameSize, frameOffset, (uint8_t)disposeOp, (uint8_t)blendOp
+                "fcTL: size={}, offset={}, dispose_op={}, blend_op={}",
+                frameSize,
+                frameOffset,
+                disposeOpToString(disposeOp),
+                blendOpToString(blendOp)
             );
         } else {
             // If we don't have an fcTL chunk, we must be the static frame of the PNG (IDAT chunk), *not* be part of the animation (else
