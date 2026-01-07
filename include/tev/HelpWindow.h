@@ -43,6 +43,7 @@ private:
     std::function<void()> mCloseCallback;
     nanogui::TabWidget* mTabWidget = nullptr;
     nanogui::VScrollPanel* mScrollPanel = nullptr;
+    nanogui::VScrollPanel* mAboutScrollPanel = nullptr;
 };
 
 } // namespace tev

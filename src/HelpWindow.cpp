@@ -55,11 +55,13 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     closeButton->set_callback(mCloseCallback);
 
     static const int WINDOW_WIDTH = 640;
+    static const int WINDOW_HEIGHT = 640;
 
     set_layout(new GroupLayout{});
     set_fixed_width(WINDOW_WIDTH);
 
     mTabWidget = new TabWidget{this};
+    mTabWidget->set_fixed_height(WINDOW_HEIGHT);
 
     // Keybindings tab
     Widget* tmp = new Widget(mTabWidget);
@@ -194,10 +196,13 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     }
 
     // About tab
-    Widget* about = new Widget(mTabWidget);
+    tmp = new Widget(mTabWidget);
+    mAboutScrollPanel = new VScrollPanel{tmp};
+    mTabWidget->append_tab("About", tmp);
+
+    Widget* about = new Widget(mAboutScrollPanel);
     about->set_layout(new GroupLayout{});
-    mTabWidget->append_tab("About", about);
-    about->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
+    // about->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
     auto addLibrary = [](Widget* current, string name, string desc) {
         auto row = new Widget{current};
@@ -227,12 +232,19 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "aom", "AV1 video codec library");
 #endif
     addLibrary(about, "clip", "Cross-platform clipboard library");
+    addLibrary(about, "concurrentqueue", "Cross-platform lightweight semaphore");
+#ifdef _WIN32
+    addLibrary(about, "DirectXTex", "DirectX texture processing library");
+#endif
     addLibrary(about, "{fmt}", "Fast & safe formatting library");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
     addLibrary(about, "GLFW", "OpenGL desktop development library");
 #ifdef TEV_SUPPORT_HEIC
     addLibrary(about, "libde265", "Open h.265 video codec library");
 #endif
+    addLibrary(about, "libdeflate", "DEFLATE/zlib/gzip compression library");
+    addLibrary(about, "libexif", "EXIF metadata parsing library");
+    addLibrary(about, "libexpat", "XML parsing library");
 #ifdef TEV_SUPPORT_JXL
     addLibrary(about, "libjpeg-turbo", "Fast JPEG image format library");
     addLibrary(about, "libjxl", "JPEG XL image format library");
@@ -249,14 +261,18 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");
     addLibrary(about, "OpenEXR", "EXR image file format");
-    addLibrary(about, "qoi", "File format for fast, lossless image compression");
+    addLibrary(about, "qoi", "QOI image format library");
     addLibrary(about, "stb_image(_write)", "Single-header library for loading and writing images");
     addLibrary(about, "tinylogger", "Minimal pretty-logging library");
     addLibrary(about, "UTF8-CPP", "Lightweight UTF-8 string manipulation library");
+    addLibrary(about, "XMP-Toolkit-SDK", "XMP metadata parsing library");
+    addLibrary(about, "zlib", "zlib compression library");
 
     // Make the keybindings page as big as is needed to fit the about tab
     perform_layout(screen()->nvg_context());
-    mScrollPanel->set_fixed_height(about->height() + 12);
+    mAboutScrollPanel->set_fixed_height(WINDOW_HEIGHT - 30);
+    mAboutScrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
+    mScrollPanel->set_fixed_height(WINDOW_HEIGHT - 30);
     mScrollPanel->set_fixed_width(WINDOW_WIDTH - 40);
 
     mTabWidget->set_selected_id(0);

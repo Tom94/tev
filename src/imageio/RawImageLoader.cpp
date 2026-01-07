@@ -286,9 +286,11 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     // resultData.displayWindow = displayWindow; // This seems to be wrong
 
     const auto* imgData = iProcessor.imgdata.image;
+    const size_t numPixels = (size_t)size.x() * size.y();
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
+        numPixels * numChannels,
         [&](int y) {
             for (int x = 0; x < size.x(); x++) {
                 const size_t i = (size_t)y * size.x() + x;

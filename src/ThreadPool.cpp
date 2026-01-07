@@ -31,8 +31,8 @@ ThreadPool::ThreadPool(size_t maxNumThreads, bool force) {
         maxNumThreads = min((size_t)thread::hardware_concurrency(), maxNumThreads);
     }
 
-    startThreads(maxNumThreads);
     mNumTasksInSystem.store(0);
+    startThreads(maxNumThreads);
 }
 
 ThreadPool::~ThreadPool() {
@@ -45,7 +45,7 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::startThreads(size_t num) {
-    const lock_guard lock{mTaskQueueMutex};
+    const scoped_lock lock{mThreadsMutex};
     if (mShuttingDown) {
         return;
     }
@@ -56,40 +56,27 @@ void ThreadPool::startThreads(size_t num) {
             const auto id = this_thread::get_id();
             // tlog::debug() << "Spawning thread pool thread " << id;
 
-            unique_lock lock{mTaskQueueMutex};
             while (true) {
-                if (!lock) {
-                    lock.lock();
-                }
-
-                // look for a work item
-                while (mThreads.size() <= mNumThreads && mTaskQueue.empty()) {
-                    // if there are none wait for notification
-                    mWorkerCondition.wait(lock);
-                }
-
-                if (mThreads.size() > mNumThreads) {
-                    break;
-                }
-
-                const function<void()> task{std::move(mTaskQueue.top().fun)};
-                mTaskQueue.pop();
-
-                // Unlock the lock, so we can process the task without blocking other threads
-                lock.unlock();
-
-                task();
+                QueuedTask task = {};
+                while (!mTaskQueueSemaphore.wait()) {}
 
                 {
-                    const unique_lock localLock{mTaskQueueMutex};
+                    const scoped_lock taskQueueLock{mTaskQueueMutex};
+                    TEV_ASSERT(!mTaskQueue.empty(), "Task queue was empty after semaphore wait.");
 
-                    mNumTasksInSystem--;
+                    task = std::move(mTaskQueue.top());
+                    mTaskQueue.pop();
+                }
 
-                    if (mNumTasksInSystem == 0) {
-                        mSystemBusyCondition.notify_all();
-                    }
+                task.fun();
+                mNumTasksInSystem--;
+
+                if (task.stopToken) {
+                    break;
                 }
             }
+
+            const scoped_lock threadsLock{mThreadsMutex};
 
             // Remove oneself from the thread pool. NOTE: at this point, the lock is still held, so modifying mThreads is safe.
             // tlog::debug() << "Shutting down thread pool thread " << id;
@@ -107,59 +94,27 @@ void ThreadPool::startThreads(size_t num) {
 }
 
 void ThreadPool::shutdownThreads(size_t num) {
-    {
-        const lock_guard lock{mTaskQueueMutex};
-
-        const auto numToClose = min(num, mNumThreads);
-        mNumThreads -= numToClose;
+    mNumThreads -= num;
+    for (size_t i = 0; i < num; ++i) {
+        enqueueStopToken();
     }
-
-    // Wake up all the threads to have them quit
-    mWorkerCondition.notify_all();
 }
 
 void ThreadPool::shutdown() {
-    {
-        const lock_guard lock{mTaskQueueMutex};
-
-        mNumThreads = 0;
-        mShuttingDown = true;
-    }
-
-    // Wake up all the threads to have them quit
-    mWorkerCondition.notify_all();
+    shutdownThreads(mNumThreads);
+    mShuttingDown = true;
 }
 
 void ThreadPool::waitUntilFinished() {
-    unique_lock lock{mTaskQueueMutex};
-
-    if (mNumTasksInSystem == 0) {
-        return;
+    while (mThreads.size() > 0 && mNumTasksInSystem > 0) {
+        this_thread::sleep_for(1ms);
     }
-
-    mSystemBusyCondition.wait(lock);
 }
 
-void ThreadPool::waitUntilFinishedFor(const chrono::microseconds Duration) {
-    unique_lock lock{mTaskQueueMutex};
-
-    if (mNumTasksInSystem == 0) {
-        return;
-    }
-
-    mSystemBusyCondition.wait_for(lock, Duration);
-}
-
-void ThreadPool::flushQueue() {
-    const lock_guard lock{mTaskQueueMutex};
-
-    mNumTasksInSystem -= mTaskQueue.size();
-    while (!mTaskQueue.empty()) {
-        mTaskQueue.pop();
-    }
-
-    if (mNumTasksInSystem == 0) {
-        mSystemBusyCondition.notify_all();
+void ThreadPool::waitUntilFinishedFor(const chrono::microseconds duration) {
+    const auto now = chrono::steady_clock::now();
+    while (mThreads.size() > 0 && mNumTasksInSystem > 0 && chrono::steady_clock::now() - now < duration) {
+        this_thread::sleep_for(1ms);
     }
 }
 

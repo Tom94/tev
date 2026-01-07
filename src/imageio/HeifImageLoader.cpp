@@ -388,6 +388,7 @@ Task<vector<ImageData>>
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numInterleavedChannels,
             [&](size_t i) {
                 // HEIF/AVIF unfortunately tends to have the alpha channel premultiplied in non-linear space (after application of the
                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.

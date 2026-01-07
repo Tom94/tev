@@ -828,9 +828,12 @@ Task<void> toLinearSrgbPremul(
 
     const size_t nSrcSamplesPerRow = size.x() * numChannels;
     const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
+
+    const size_t numSamples = (size_t)size.x() * size.y() * numChannels;
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         size.y(),
+        numSamples * 4, // arbitrary factor to reflect increased cost of color conversion
         [&](size_t y) {
             size_t srcOffset = y * nSrcSamplesPerRow * bytesPerSample;
             size_t dstOffset = y * nDstSamplesPerRow;

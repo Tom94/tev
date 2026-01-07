@@ -74,7 +74,7 @@ Task<void> tiffDataToFloat32(
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numSamples, [&](size_t i) { *(float*)&imageData[i] = *(half*)&imageData[i]; }, priority
+            0, numSamples, numSamples, [&](size_t i) { *(float*)&imageData[i] = *(half*)&imageData[i]; }, priority
         );
 
         kind = ETiffKind::F32;
@@ -82,6 +82,7 @@ Task<void> tiffDataToFloat32(
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
+            numSamples,
             numSamples,
             [&](size_t i) {
                 uint32_t packed = imageData[i];
@@ -123,6 +124,7 @@ Task<void> tiffDataToFloat32(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numSppOut,
             [&](size_t i) {
                 const uint32_t index = imageData[i * numSppIn];
                 const float paletteScale = 1.0f / 65535.0f;
@@ -146,6 +148,7 @@ Task<void> tiffDataToFloat32(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numSppOut,
             [&](size_t i) {
                 for (size_t c = 0; c < numSppOut; ++c) {
                     floatData[i * numSppOut + c] = 1.0f - floatData[i * numSppOut + c];
@@ -298,6 +301,7 @@ Task<void> postprocessLinearRawDng(
 
     Vector2i size = resultData.size();
     Box2i activeArea = {Vector2i(0, 0), size};
+
     if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_ACTIVEAREA, TIFF_ANY)) {
         tlog::debug() << "Found active area data; applying...";
         switch (TIFFFieldDataType(field)) {
@@ -323,6 +327,8 @@ Task<void> postprocessLinearRawDng(
         resultData.displayWindow = activeArea;
     }
 
+    const size_t activePixels = (size_t)activeArea.area();
+
     tlog::debug() << fmt::format("Active area: min={} max={}", activeArea.min, activeArea.max);
 
     // Utility var that we'll reuse whenever reading a variable TIFF array
@@ -339,6 +345,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
+            activePixels * numColorChannels,
             [&](int y) {
                 for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
                     size_t i = (size_t)y * size.x() + x;
@@ -446,6 +453,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
+            activePixels * numColorChannels,
             [&](const int y) {
                 int yIdx = y - activeArea.min.y();
 
@@ -527,6 +535,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numColorChannels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
                     floatRgbaData[i * numRgbaChannels + c] *= channelScale[c];
@@ -544,6 +553,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numColorChannels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
                     floatRgbaData[i * numRgbaChannels + c] = std::min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
@@ -659,6 +669,7 @@ Task<void> postprocessLinearRawDng(
     co_await ThreadPool::global().parallelForAsync<int>(
         activeArea.min.y(),
         activeArea.max.y(),
+        activePixels * numColorChannels,
         [&](int y) {
             for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
                 size_t i = (size_t)y * size.x() + x;
@@ -710,6 +721,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
+            activePixels * numColorChannels,
             [&](int y) {
                 for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
                     size_t i = (size_t)y * size.x() + x;
@@ -748,6 +760,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
+            activePixels * numColorChannels,
             [&](const int y) {
                 for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
                     const size_t i = (size_t)y * size.x() + x;
@@ -808,6 +821,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
+            activePixels * numColorChannels * 16, // arbitrary factor to estimate pw linear cost
             [&](int y) {
                 for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
                     size_t i = (size_t)y * size.x() + x;
@@ -826,6 +840,7 @@ Task<void> postprocessLinearRawDng(
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
+            activePixels * numColorChannels,
             [&](const int y) {
                 for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
                     const size_t i = (size_t)y * size.x() + x;
@@ -887,6 +902,7 @@ Task<void> postprocessRgb(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numColorChannels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
                     float val = floatRgbaData[i * numRgbaChannels + c];
@@ -915,6 +931,7 @@ Task<void> postprocessRgb(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numColorChannels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
                     float v = floatRgbaData[i * numRgbaChannels + c];
@@ -939,6 +956,7 @@ Task<void> postprocessRgb(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
+            numPixels * numColorChannels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
@@ -1329,20 +1347,23 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
                 [&, i, td]() -> Task<void> {
                     uint8_t* const utd = unpackedTile.data() + unpackedTileSize * i;
 
-                    size_t planeTile = i % numTilesPerPlane;
-                    size_t tileX = planeTile % tile.numX;
-                    size_t tileY = planeTile / tile.numX;
+                    const size_t planeTile = i % numTilesPerPlane;
+                    const size_t tileX = planeTile % tile.numX;
+                    const size_t tileY = planeTile / tile.numX;
 
-                    int xStart = (int)tileX * tile.width;
-                    int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
+                    const int xStart = (int)tileX * tile.width;
+                    const int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
 
-                    int yStart = (int)tileY * tile.height;
-                    int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+                    const int yStart = (int)tileY * tile.height;
+                    const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+
+                    const size_t numPixels = (size_t)tile.width * tile.height;
 
                     auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
                         co_await ThreadPool::global().parallelForAsync<int>(
                             yStart,
                             yEnd,
+                            numPixels * samplesPerPixel / numPlanes,
                             [&](int y) {
                                 int y0 = y - yStart;
                                 unpackBits(

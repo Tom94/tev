@@ -230,6 +230,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             co_await ThreadPool::global().parallelForAsync<int>(
                 0,
                 size.y(),
+                numSamples,
                 [&](int y) {
                     for (int x = 0; x < size.x(); ++x) {
                         const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;

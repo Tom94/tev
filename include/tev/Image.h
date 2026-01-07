@@ -34,6 +34,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <span>
 #include <string>
 #include <vector>

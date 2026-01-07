@@ -79,6 +79,7 @@ Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int pri
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
+        numPixels * numImageChannels,
         [&](size_t i) {
             for (int c = 0; c < numImageChannels; ++c) {
                 if (c == alphaChannelIndex) {

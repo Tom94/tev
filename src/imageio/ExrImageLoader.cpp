@@ -395,6 +395,7 @@ public:
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
             channel.size().y(),
+            channel.numPixels(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
                     channel.setAt(
@@ -420,6 +421,7 @@ public:
     string_view name() const { return mName; }
 
     const Vector2i& size() const { return mSize; }
+    size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
     EPixelFormat desiredPixelFormat() const { return mImfChannel.type == Imf::HALF ? EPixelFormat::F16 : EPixelFormat::F32; }
 
@@ -503,7 +505,14 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
             throw ImageLoadError{fmt::format("No channels match '{}'.", channelSelector)};
         }
 
-        co_await ThreadPool::global().parallelForAsync(0, (int)rawChannels.size(), [&](int i) { rawChannels.at(i).resize(); }, priority);
+        size_t totalNumPixels = 0;
+        for (auto& rawChannel : rawChannels) {
+            totalNumPixels += rawChannel.numPixels();
+        }
+
+        co_await ThreadPool::global().parallelForAsync(
+            0, (int)rawChannels.size(), totalNumPixels, [&](int i) { rawChannels.at(i).resize(); }, priority
+        );
 
         for (auto& rawChannel : rawChannels) {
             size_t partId = rawChannel.partId();

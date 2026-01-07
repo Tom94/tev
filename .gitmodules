@@ -101,6 +101,12 @@
 [submodule "dependencies/xmp"]
 	path = dependencies/xmp
 	url = https://github.com/tom94/xmp
+	shallow = true
 [submodule "dependencies/libexpat"]
 	path = dependencies/libexpat
 	url = https://github.com/libexpat/libexpat
+	shallow = true
+[submodule "dependencies/concurrentqueue"]
+	path = dependencies/concurrentqueue
+	url = https://github.com/cameron314/concurrentqueue
+	shallow = true
