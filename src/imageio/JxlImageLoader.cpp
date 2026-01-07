@@ -26,6 +26,7 @@
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
 #include <jxl/encode.h>
+#include <jxl/resizable_parallel_runner.h>
 #include <jxl/thread_parallel_runner.h>
 #include <jxl/thread_parallel_runner_cxx.h>
 
@@ -148,49 +149,61 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
     struct RunnerData {
         int priority;
-    } runnerData{priority};
-
-    const auto jxlRunParallel = [](void* runnerOpaque,
-                                   void* jpegxlOpaque,
-                                   JxlParallelRunInit init,
-                                   JxlParallelRunFunction func,
-                                   uint32_t startRange,
-                                   uint32_t endRange) {
-        const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
-        static const uint32_t hardwareConcurrency = std::thread::hardware_concurrency();
-
-        const uint32_t range = endRange - startRange;
-        const uint32_t nTasks = std::min({(uint32_t)ThreadPool::global().numThreads(), hardwareConcurrency, range});
-
-        const auto initResult = init(jpegxlOpaque, nTasks);
-        if (initResult != 0) {
-            return initResult;
-        }
-
-        vector<Task<void>> tasks;
-        for (uint32_t i = 0; i < nTasks; ++i) {
-            const uint32_t taskStart = startRange + (range * i / nTasks);
-            const uint32_t taskEnd = startRange + (range * (i + 1) / nTasks);
-            TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
-
-            tasks.emplace_back(
-                [](
-                    JxlParallelRunFunction func, void* jpegxlOpaque, uint32_t taskId, uint32_t tStart, uint32_t tEnd, int tPriority, ThreadPool* pool
-                ) -> Task<void> {
-                    co_await pool->enqueueCoroutine(tPriority);
-                    for (uint32_t j = tStart; j < tEnd; ++j) {
-                        func(jpegxlOpaque, j, taskId);
-                    }
-                }(func, jpegxlOpaque, i, taskStart, taskEnd, runnerData->priority, &ThreadPool::global())
-            );
-        }
-
-        // This is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get the thread pool to cooperate
-        // with the JXL API that expects a non-coroutine function here. We will offload the JxlImageLoader::load() function into a
-        // wholly separate thread to avoid blocking the thread pool as a consequence.
-        waitAll(tasks);
-        return 0;
+        uint32_t jxlSuggestedNumThreads;
+    } runnerData{
+        .priority = priority,
+        .jxlSuggestedNumThreads = thread::hardware_concurrency(),
     };
+
+    const auto jxlRunParallel =
+        [](void* runnerOpaque, void* jpegxlOpaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t startRange, uint32_t endRange) {
+            const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+            static const uint32_t hardwareConcurrency = thread::hardware_concurrency();
+
+            const uint32_t range = endRange - startRange;
+            const uint32_t nTasks =
+                std::min({(uint32_t)ThreadPool::global().numThreads(), hardwareConcurrency, range, runnerData->jxlSuggestedNumThreads});
+
+            const auto initResult = init(jpegxlOpaque, nTasks);
+            if (initResult != 0) {
+                return initResult;
+            }
+
+            vector<Task<void>> tasks;
+
+            {
+                // The task queue is already thread-safe due to the lock in enqueueTask, but we can optimize a bit by locking only once for
+                // all tasks.
+                std::scoped_lock lock{ThreadPool::global().taskQueueMutex()};
+
+                for (uint32_t i = 0; i < nTasks; ++i) {
+                    const uint32_t taskStart = startRange + (range * i / nTasks);
+                    const uint32_t taskEnd = startRange + (range * (i + 1) / nTasks);
+                    TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
+
+                    tasks.emplace_back(
+                        [](JxlParallelRunFunction func,
+                           void* jpegxlOpaque,
+                           uint32_t taskId,
+                           uint32_t tStart,
+                           uint32_t tEnd,
+                           int tPriority,
+                           ThreadPool* pool) -> Task<void> {
+                            co_await pool->enqueueCoroutine(tPriority);
+                            for (uint32_t j = tStart; j < tEnd; ++j) {
+                                func(jpegxlOpaque, j, taskId);
+                            }
+                        }(func, jpegxlOpaque, i, taskStart, taskEnd, runnerData->priority, &ThreadPool::global())
+                    );
+                }
+            }
+
+            // This is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get the thread pool to cooperate
+            // with the JXL API that expects a non-coroutine function here. We will offload the JxlImageLoader::load() function into a
+            // wholly separate thread to avoid blocking the thread pool as a consequence.
+            waitAll(tasks);
+            return 0;
+        };
 
     // Since we allow the JXL decoder to run in our coroutine thread pool, despite being not a coroutine itself and thus having to wait on
     // each task's completion, we need to offload the governing code (i.e. this function) to a separate thread to avoid stalling the
@@ -266,6 +279,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     info.have_animation,
                     info.intensity_target
                 );
+
+                runnerData.jxlSuggestedNumThreads = std::max(JxlResizableParallelRunnerSuggestThreads(info.xsize, info.ysize), (uint32_t)1);
 
                 if (info.alpha_bits && info.num_extra_channels == 0) {
                     throw ImageLoadError{"Image has alpha channel, but no extra channels."};
@@ -412,7 +427,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                 ImageData& data = result.emplace_back();
 
-                Vector2i size{(int)info.xsize, (int)info.ysize};
+                const Vector2i size{(int)info.xsize, (int)info.ysize};
 
                 data.channels = co_await makeRgbaInterleavedChannels(
                     numColorChannels,

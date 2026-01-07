@@ -68,11 +68,9 @@ void ThreadPool::startThreads(size_t num) {
                     mTaskQueue.pop();
                 }
 
-                if (task.fun) {
-                    task.fun();
-                }
-
+                task.fun();
                 mNumTasksInSystem--;
+
                 if (task.stopToken) {
                     break;
                 }
@@ -98,7 +96,7 @@ void ThreadPool::startThreads(size_t num) {
 void ThreadPool::shutdownThreads(size_t num) {
     mNumThreads -= num;
     for (size_t i = 0; i < num; ++i) {
-        enqueueTask([]() {}, std::numeric_limits<int>::max(), true);
+        enqueueStopToken();
     }
 }
 
