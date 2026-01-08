@@ -198,7 +198,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                     Vector2f pos;
 
                     if (shiftAndControlHeld) {
-                        const unsigned char discretizedValue = (char)(values[i] * 255 + 0.5f);
+                        const unsigned char discretizedValue = (char)(clamp(values[i], 0.0f, 1.0f) * 255 + 0.5f);
                         str = fmt::format("{:02X}", discretizedValue);
                         pos = Vector2f{
                             m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,

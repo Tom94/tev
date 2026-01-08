@@ -2730,8 +2730,8 @@ void ImageViewer::updateTitle() {
         valuesString.pop_back();
         valuesString += " / 0x";
         for (size_t i = 0; i < channelTails.size(); ++i) {
-            float tonemappedValue = channelTails[i] == "A" ? values[i] : toSRGB(values[i]);
-            unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
+            const float srgbValue = channelTails[i] == "A" ? values[i] : toSRGB(values[i]);
+            unsigned char discretizedValue = (char)(clamp(srgbValue, 0.0f, 1.0f) * 255 + 0.5f);
             valuesString += fmt::format("{:02X}", discretizedValue);
         }
 
