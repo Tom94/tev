@@ -521,14 +521,14 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             tlog::debug() << fmt::format("gamma={}", ce->gamma);
                         }
 
-                        auto cicpTransfer = hasGamma ? ituth273::ETransferCharacteristics::Unspecified :
-                                                       static_cast<ituth273::ETransferCharacteristics>(ce->transfer_function);
+                        auto cicpTransfer = hasGamma ? ituth273::ETransfer::Unspecified :
+                                                       static_cast<ituth273::ETransfer>(ce->transfer_function);
 
                         if (!hasGamma) {
                             if (!ituth273::isTransferImplemented(cicpTransfer)) {
                                 tlog::warning()
                                     << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
-                                cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
+                                cicpTransfer = ituth273::ETransfer::SRGB;
                             }
 
                             data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);

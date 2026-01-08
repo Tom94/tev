@@ -28,6 +28,9 @@
 
 namespace tev {
 
+// R, G, B, W
+using chroma_t = std::array<nanogui::Vector2f, 4>;
+
 enum class ERenderingIntent {
     Perceptual = 0,
     RelativeColorimetric = 1,
@@ -37,13 +40,13 @@ enum class ERenderingIntent {
 
 std::string_view toString(ERenderingIntent intent);
 
-std::array<nanogui::Vector2f, 4> zeroChroma();
+chroma_t zeroChroma();
 
-nanogui::Matrix3f xyzToChromaMatrix(const std::array<nanogui::Vector2f, 4>& chroma);
+nanogui::Matrix3f xyzToChromaMatrix(const chroma_t& chroma);
 nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
 
 nanogui::Matrix3f convertColorspaceMatrix(
-    const std::array<nanogui::Vector2f, 4>& srcChroma, const std::array<nanogui::Vector2f, 4>& dstChroma, ERenderingIntent intent
+    const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent
 );
 
 nanogui::Vector2f whiteD50();
@@ -59,13 +62,13 @@ nanogui::Vector2f whiteC();
 nanogui::Vector2f whiteCenter();
 nanogui::Vector2f whiteDci();
 
-std::array<nanogui::Vector2f, 4> rec709Chroma();
-std::array<nanogui::Vector2f, 4> adobeChroma();
-std::array<nanogui::Vector2f, 4> proPhotoChroma();
-std::array<nanogui::Vector2f, 4> displayP3Chroma();
-std::array<nanogui::Vector2f, 4> dciP3Chroma();
-std::array<nanogui::Vector2f, 4> bt2020Chroma();
-std::array<nanogui::Vector2f, 4> bt2100Chroma();
+chroma_t rec709Chroma();
+chroma_t adobeChroma();
+chroma_t proPhotoChroma();
+chroma_t displayP3Chroma();
+chroma_t dciP3Chroma();
+chroma_t bt2020Chroma();
+chroma_t bt2100Chroma();
 
 enum EExifLightSource : uint16_t {
     Unknown = 0,
@@ -95,8 +98,21 @@ enum EExifLightSource : uint16_t {
 std::string_view toString(EExifLightSource lightSource);
 nanogui::Vector2f xy(EExifLightSource lightSource);
 
-std::array<nanogui::Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries);
-std::string_view wpPrimariesToString(int wpPrimaties);
+enum class EWpPrimaries : int {
+    SRGB = 1, // BT709
+    PALM = 2, // BT470
+    PAL = 3, // BT601
+    NTSC = 4, // BT601
+    Film = 5,
+    BT2020 = 6,
+    CIE1931XYZ = 7, // SMPTE428
+    DCIP3 = 8, // SMPTE431
+    DisplayP3 = 9, // SMPTE432
+    AdobeRGB = 10, // ISO 12640-4
+};
+
+chroma_t chroma(EWpPrimaries wpPrimaries);
+std::string_view toString(EWpPrimaries wpPrimaties);
 
 // Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
 namespace ituth273 {
@@ -104,9 +120,9 @@ enum class EColorPrimaries : uint8_t {
     BT709 = 1,
     Unspecified = 2,
     BT470M = 4,
-    BT470BG = 5,
-    SMPTE170M = 6,
-    SMPTE240M = 7,
+    BT470BG = 5, // BT601 pal
+    SMPTE170M = 6, // BT601 ntsc
+    SMPTE240M = 7, // functionally same as SMPTE170M
     Film = 8,
     BT2020 = 9, // Same as BT2100
     SMPTE428 = 10,
@@ -116,11 +132,11 @@ enum class EColorPrimaries : uint8_t {
 };
 
 std::string_view toString(const EColorPrimaries primaries);
-std::array<nanogui::Vector2f, 4> chroma(const EColorPrimaries primaries);
+chroma_t chroma(const EColorPrimaries primaries);
 
-EColorPrimaries fromWpPrimaries(int wpPrimaries);
+EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries);
 
-enum class ETransferCharacteristics : uint8_t {
+enum class ETransfer : uint8_t {
     BT709 = 1, // Also BT1361
     Unspecified = 2,
     Gamma22 = 4,
@@ -140,10 +156,10 @@ enum class ETransferCharacteristics : uint8_t {
     HLG = 18, // Hybrid Log-Gamma
 };
 
-std::string_view toString(const ETransferCharacteristics transfer);
-bool isTransferImplemented(const ETransferCharacteristics transfer);
+std::string_view toString(const ETransfer transfer);
+bool isTransferImplemented(const ETransfer transfer);
 
-ETransferCharacteristics fromWpTransfer(int wpTransfer);
+ETransfer fromWpTransfer(int wpTransfer);
 
 inline float bt709ToLinear(float val) {
     constexpr float beta = 0.018053968510807f;
@@ -210,35 +226,35 @@ inline nanogui::Vector3f hlgToLinear(const nanogui::Vector3f& val) {
     return ootf({invOetf(val.x()), invOetf(val.y()), invOetf(val.z())}) / 203.0f; // Convert to linear sRGB units where SDR white is 1.0
 }
 
-inline float invTransferComponent(const ETransferCharacteristics transfer, float val) noexcept {
+inline float invTransferComponent(const ETransfer transfer, float val) noexcept {
     switch (transfer) {
-        case ETransferCharacteristics::BT709:
-        case ETransferCharacteristics::BT601:
-        case ETransferCharacteristics::BT202010bit:
-        case ETransferCharacteristics::BT202012bit: return bt709ToLinear(val);
-        case ETransferCharacteristics::IEC61966_2_4: // handles negative values by mirroring
+        case ETransfer::BT709:
+        case ETransfer::BT601:
+        case ETransfer::BT202010bit:
+        case ETransfer::BT202012bit: return bt709ToLinear(val);
+        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
             return std::copysign(bt709ToLinear(std::abs(val)), val);
-        case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
+        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
             return bt1361ExtendedToLinear(val);
-        case ETransferCharacteristics::Gamma22: return std::pow(std::max(val, 0.0f), 2.2f);
-        case ETransferCharacteristics::Gamma28: return std::pow(std::max(val, 0.0f), 2.8f);
-        case ETransferCharacteristics::SMPTE240: return smpteSt240ToLinear(val);
-        case ETransferCharacteristics::Linear: return val;
-        case ETransferCharacteristics::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;
-        case ETransferCharacteristics::Log100Sqrt10: return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f;
-        case ETransferCharacteristics::SRGB: return toLinear(val);
-        case ETransferCharacteristics::PQ: return pqToLinear(val);
-        case ETransferCharacteristics::SMPTE428: return smpteSt428ToLinear(val);
-        case ETransferCharacteristics::HLG: return val; // Should be handled by invTransfer below
-        case ETransferCharacteristics::Unspecified: return val; // Default to linear if unspecified
+        case ETransfer::Gamma22: return std::pow(std::max(val, 0.0f), 2.2f);
+        case ETransfer::Gamma28: return std::pow(std::max(val, 0.0f), 2.8f);
+        case ETransfer::SMPTE240: return smpteSt240ToLinear(val);
+        case ETransfer::Linear: return val;
+        case ETransfer::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;
+        case ETransfer::Log100Sqrt10: return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f;
+        case ETransfer::SRGB: return toLinear(val);
+        case ETransfer::PQ: return pqToLinear(val);
+        case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
+        case ETransfer::HLG: return val; // Should be handled by invTransfer below
+        case ETransfer::Unspecified: return val; // Default to linear if unspecified
     }
 
     // Other transfer functions are not implemented. Default to linear.
     return val;
 }
 
-inline nanogui::Vector3f invTransfer(const ETransferCharacteristics transfer, const nanogui::Vector3f& val) noexcept {
-    if (transfer == ETransferCharacteristics::HLG) {
+inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
+    if (transfer == ETransfer::HLG) {
         return hlgToLinear(val);
     } else {
         return {
@@ -249,18 +265,18 @@ inline nanogui::Vector3f invTransfer(const ETransferCharacteristics transfer, co
     }
 }
 
-inline float bestGuessReferenceWhiteLevel(const ETransferCharacteristics transfer) {
+inline float bestGuessReferenceWhiteLevel(const ETransfer transfer) {
     switch (transfer) {
-        case ETransferCharacteristics::PQ:
-        case ETransferCharacteristics::HLG: return 203.0f;
+        case ETransfer::PQ:
+        case ETransfer::HLG: return 203.0f;
 
-        case ETransferCharacteristics::BT709: // 100 nits by convention, see e.g.
+        case ETransfer::BT709: // 100 nits by convention, see e.g.
                                               // https://partnerhelp.netflixstudios.com/hc/en-us/articles/360000591787-Color-Critical-Display-Calibration-Guidelines
-        case ETransferCharacteristics::BT601: // same as BT709 in practice
-        case ETransferCharacteristics::BT1361Extended: // Extends BT709 and inherits conventions.
-        case ETransferCharacteristics::IEC61966_2_4: // xvYCC proposed by sony. Extends BT709 and inherits conventions.
-        case ETransferCharacteristics::BT202010bit: // SMPTE ST 2080-1 specifies 100 nits for SDR white
-        case ETransferCharacteristics::BT202012bit: return 100.0f;
+        case ETransfer::BT601: // same as BT709 in practice
+        case ETransfer::BT1361Extended: // Extends BT709 and inherits conventions.
+        case ETransfer::IEC61966_2_4: // xvYCC proposed by sony. Extends BT709 and inherits conventions.
+        case ETransfer::BT202010bit: // SMPTE ST 2080-1 specifies 100 nits for SDR white
+        case ETransfer::BT202012bit: return 100.0f;
 
         default: return 80.0f;
     }
@@ -297,7 +313,7 @@ public:
 
     struct CICP {
         ituth273::EColorPrimaries primaries;
-        ituth273::ETransferCharacteristics transfer;
+        ituth273::ETransfer transfer;
         uint8_t matrixCoeffs;
         uint8_t videoFullRangeFlag;
     };

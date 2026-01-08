@@ -195,6 +195,12 @@ public:
 
     void showErrorDialog(std::string_view message);
 
+    void setInspectionChroma(const chroma_t& chroma);
+    chroma_t inspectionChroma() const;
+
+    void setInspectionTransfer(ituth273::ETransfer transfer);
+    ituth273::ETransfer inspectionTransfer() const;
+
 private:
     void updateFilter();
     void updateLayout();
@@ -306,8 +312,8 @@ private:
 
     // HDR UI elements support
     struct ColorSpace {
-        ituth273::ETransferCharacteristics transfer;
-        uint32_t primaries;
+        ituth273::ETransfer transfer;
+        EWpPrimaries primaries;
         float maxLuminance;
 
         bool operator==(const ColorSpace& other) const {
@@ -315,8 +321,14 @@ private:
         }
     };
 
-    std::optional<ColorSpace> mCurrentColorSpace;
+    std::optional<ColorSpace> mSystemColorSpace;
 
+    nanogui::ComboBox* mInspectionPrimariesComboBox = nullptr;
+    std::vector<nanogui::FloatBox<float>*> mInspectionPrimariesBoxes;
+    nanogui::ComboBox* mInspectionTransferComboBox = nullptr;
+    nanogui::Button* mInspectionAdaptWhitePointButton = nullptr;
+
+    nanogui::PopupButton* mColorsPopupButton = nullptr;
     nanogui::PopupButton* mHdrPopupButton = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
 

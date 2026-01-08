@@ -867,7 +867,7 @@ Task<void> postprocessRgb(
 ) {
     const Vector2i size = resultData.size();
 
-    array<Vector2f, 4> chroma = rec709Chroma();
+    chroma_t chroma = rec709Chroma();
     if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries)) {
         tlog::debug() << "Found custom primaries; applying...";
         chroma[0] = {primaries[0], primaries[1]};

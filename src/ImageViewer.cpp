@@ -54,6 +54,38 @@ namespace tev {
 static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
+static const vector<pair<EWpPrimaries, string_view>> PRIMARIES = {
+    {EWpPrimaries::SRGB,       "sRGB"        },
+    {EWpPrimaries::BT2020,     "BT.2020"     },
+    {EWpPrimaries::DCIP3,      "DCI P3"      },
+    {EWpPrimaries::DisplayP3,  "Display P3"  },
+    {EWpPrimaries::AdobeRGB,   "Adobe RGB"   },
+    {EWpPrimaries::NTSC,       "NTSC"        },
+    {EWpPrimaries::PAL,        "PAL"         },
+    {EWpPrimaries::PALM,       "PAL-M"       },
+    {EWpPrimaries::Film,       "Generic Film"},
+    {EWpPrimaries::CIE1931XYZ, "CIE 1931 XYZ"},
+};
+
+static const vector<pair<ituth273::ETransfer, string_view>> TRANSFERS = {
+    {ituth273::ETransfer::Linear,         "Linear"          },
+    {ituth273::ETransfer::SRGB,           "sRGB"            },
+    {ituth273::ETransfer::PQ,             "PQ"              },
+    {ituth273::ETransfer::HLG,            "HLG"             },
+    {ituth273::ETransfer::Gamma22,        "Gamma 2.2"       },
+    {ituth273::ETransfer::Gamma28,        "Gamma 2.8"       },
+    {ituth273::ETransfer::Log100,         "Log100"          },
+    {ituth273::ETransfer::Log100Sqrt10,   "Log100 Sqrt10"   },
+    {ituth273::ETransfer::BT709,          "BT.709"          },
+    {ituth273::ETransfer::BT601,          "BT.601"          },
+    {ituth273::ETransfer::BT202010bit,    "BT.2020 10-bit"  },
+    {ituth273::ETransfer::BT202012bit,    "BT.2020 12-bit"  },
+    {ituth273::ETransfer::BT1361Extended, "BT.1361 Extended"},
+    {ituth273::ETransfer::SMPTE240,       "SMPTE 240M"      },
+    {ituth273::ETransfer::SMPTE428,       "SMPTE ST 428-1"  },
+    {ituth273::ETransfer::IEC61966_2_4,   "IEC 61966-2-4"   },
+};
+
 ImageViewer::ImageViewer(
     const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, weak_ptr<Ipc> ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
@@ -190,12 +222,12 @@ ImageViewer::ImageViewer(
         mHdrPopupButton->set_font_size(15);
         mHdrPopupButton->set_chevron_icon(0);
 
-        {
-            auto addSpacer = [](Widget* current, int space) {
-                auto row = new Widget{current};
-                row->set_height(space);
-            };
+        auto addSpacer = [](Widget* current, int space) {
+            auto row = new Widget{current};
+            row->set_height(space);
+        };
 
+        {
             auto popup = mHdrPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
@@ -203,7 +235,7 @@ ImageViewer::ImageViewer(
             addSpacer(popup, 10);
 
             mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
-            mClipToLdrButton->set_font_size(15);
+            mClipToLdrButton->set_font_size(16);
             mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
             mClipToLdrButton->set_tooltip(
                 "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
@@ -272,19 +304,105 @@ ImageViewer::ImageViewer(
             mImageWhiteLevelBox->set_enabled(false);
         }
 
-        auto bgPopupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
-        bgPopupBtn->set_font_size(15);
-        bgPopupBtn->set_chevron_icon(0);
-        bgPopupBtn->set_tooltip("Background Color");
+        mColorsPopupButton = new PopupButton{buttonContainer, "Colors"};
+        mColorsPopupButton->set_font_size(15);
+        mColorsPopupButton->set_chevron_icon(0);
+        mColorsPopupButton->set_tooltip("Color Settings");
 
-        // Background color popup
+        // Color settings popup
         {
-            auto popup = bgPopupBtn->popup();
+            auto popup = mColorsPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
+            popup->set_fixed_width(200);
 
-            new Label{popup, "Background Color"};
+            auto label = new Label{popup, "Inspection Color Space", "sans-bold", 20};
+            label->set_tooltip(
+                "The color space used for pixel inspection, i.e. the pixel values shown on hover, when zooming in, and in the histogram.\n\n"
+                "IMPORTANT: this setting does NOT affect the appearance of the image shown on screen. "
+                "The image is always displayed in correct colors; tev negotiates the correct display color space with the operating system automatically."
+            );
+
+            addSpacer(popup, 10);
+
+            auto dropdowns = new Widget{popup};
+            dropdowns->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
+
+            new Label{dropdowns, "Transfer"};
+            new Label{dropdowns, "Primaries"};
+
+            vector<string> transferNames;
+            for (const auto& t : TRANSFERS) {
+                transferNames.emplace_back(t.second);
+            }
+
+            mInspectionTransferComboBox = new ComboBox{dropdowns, transferNames};
+            mInspectionTransferComboBox->set_font_size(16);
+
+            vector<string> primariesNames;
+            for (const auto& p : PRIMARIES) {
+                primariesNames.emplace_back(p.second);
+            }
+
+            primariesNames.emplace_back("Custom");
+
+            mInspectionPrimariesComboBox = new ComboBox{dropdowns, primariesNames};
+            mInspectionPrimariesComboBox->set_font_size(16);
+
+            const auto makeChromaBox = [this](Widget* parent, size_t idx) {
+                auto box = new FloatBox<float>{parent};
+                box->set_editable(true);
+                box->set_enabled(true);
+                box->set_value_increment(0.0001f);
+                box->number_format("%.04f");
+
+                box->set_callback([this, idx](float val) {
+                    TEV_ASSERT(idx < 8, "Invalid chromaticity index");
+
+                    chroma_t chr = inspectionChroma();
+                    chr[idx / 2][idx % 2] = val;
+                    setInspectionChroma(chr);
+                });
+
+                return box;
+            };
+
+            addSpacer(popup, 10);
+
+            const array<string_view, 4> labels = {"Red xy", "Green xy", "Blue xy", "White xy"};
+            for (size_t i = 0; i < labels.size(); ++i) {
+                new Label{popup, labels[i]};
+                auto xy = new Widget{popup};
+                xy->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
+                mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 0));
+                mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 1));
+                addSpacer(popup, 3);
+            }
+
+            mInspectionPrimariesComboBox->set_callback([this](int value) {
+                if ((size_t)value >= PRIMARIES.size()) {
+                    // When the user selects "Custom", we do not change the current chromaticities.
+                    return;
+                }
+
+                setInspectionChroma(chroma(PRIMARIES[value].first));
+            });
+
+            setInspectionChroma(chroma(EWpPrimaries::SRGB));
+            setInspectionTransfer(ituth273::ETransfer::Linear);
+
+            mInspectionAdaptWhitePointButton = new Button{popup, "Adapt White Point"};
+            mInspectionAdaptWhitePointButton->set_font_size(16);
+            mInspectionAdaptWhitePointButton->set_flags(Button::ToggleButton);
+            mInspectionAdaptWhitePointButton->set_tooltip(
+                "Adapt from tev's internal D65 illuminant to the white point of the inspection color space using Bradford's algorithm. "
+                "Enabling this feature is equivalent to a \"relative colorimetric\" color space conversion. Disabled is \"absolute colorimetric\"."
+            );
+
+            addSpacer(popup, 20);
+
+            new Label{popup, "Background Color", "sans-bold", 20};
             auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
-            colorwheel->set_color(bgPopupBtn->background_color());
+            colorwheel->set_color(mColorsPopupButton->background_color());
 
             new Label{popup, "Background Alpha"};
             auto bgAlphaSlider = new Slider{popup};
@@ -1246,28 +1364,28 @@ void ImageViewer::draw_contents() {
 }
 
 void ImageViewer::updateColorCapabilities() {
-    const auto prevColorSpace = mCurrentColorSpace;
-    mCurrentColorSpace = ColorSpace{
+    const auto prevColorSpace = mSystemColorSpace;
+    mSystemColorSpace = ColorSpace{
         .transfer = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window)),
-        .primaries = glfwGetWindowPrimaries(m_glfw_window),
+        .primaries = static_cast<EWpPrimaries>(glfwGetWindowPrimaries(m_glfw_window)),
         .maxLuminance = glfwGetWindowMaxLuminance(m_glfw_window),
     };
 
-    if (mCurrentColorSpace == prevColorSpace) {
+    if (mSystemColorSpace == prevColorSpace) {
         return;
     }
 
-    const auto& cs = *mCurrentColorSpace;
+    const auto& cs = *mSystemColorSpace;
 
 #if defined(__APPLE__)
     const auto [supportsWideGamut, supportsHdr] = metal_10bit_edr_support();
     const bool supportsAbsoluteBrightness = false;
 #else // Linux and Windows
-    const bool supportsExtendedRange = m_float_buffer || cs.transfer == ituth273::ETransferCharacteristics::PQ ||
-        cs.transfer == ituth273::ETransferCharacteristics::HLG;
+    const bool supportsExtendedRange = m_float_buffer || cs.transfer == ituth273::ETransfer::PQ || cs.transfer == ituth273::ETransfer::HLG;
     const bool supportsHdr = supportsExtendedRange &&
         (cs.maxLuminance > 80.0f || cs.maxLuminance == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
-    const bool supportsWideGamut = supportsExtendedRange || cs.primaries != 1; // Non-sRGB primaries imply wide color support.
+    const bool supportsWideGamut = supportsExtendedRange ||
+        cs.primaries != EWpPrimaries::SRGB; // Non-sRGB primaries imply wide color support.
     const bool supportsAbsoluteBrightness = supportsHdr;
 #endif
 
@@ -1276,7 +1394,7 @@ void ImageViewer::updateColorCapabilities() {
         prevColorSpace ? "Switched to" : "Initialized",
         this->bits_per_sample(),
         m_float_buffer ? "floating" : "fixed",
-        wpPrimariesToString(cs.primaries),
+        toString(cs.primaries),
         ituth273::toString(cs.transfer),
         supportsHdr           ? "hdr" :
             supportsWideGamut ? "wide_gamut_sdr" :
@@ -2340,6 +2458,57 @@ void ImageViewer::pasteImagesFromClipboard() {
 void ImageViewer::showErrorDialog(string_view message) {
     tlog::error() << message;
     new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
+}
+
+void ImageViewer::setInspectionChroma(const chroma_t& chr) {
+    TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
+
+    for (size_t i = 0; i < chr.size(); ++i) {
+        for (size_t c = 0; c < 2; ++c) {
+            mInspectionPrimariesBoxes.at(i * 2 + c)->set_value(chr[i][c]);
+        }
+    }
+
+    for (size_t i = 0; i < PRIMARIES.size(); ++i) {
+        if (chr == chroma(PRIMARIES[i].first)) {
+            mInspectionPrimariesComboBox->set_selected_index((int)i);
+            return;
+        }
+    }
+
+    // "Custom"
+    mInspectionPrimariesComboBox->set_selected_index(PRIMARIES.size());
+}
+
+chroma_t ImageViewer::inspectionChroma() const {
+    TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
+
+    chroma_t chr;
+    for (size_t i = 0; i < chr.size(); ++i) {
+        for (size_t c = 0; c < 2; ++c) {
+            chr[i][c] = mInspectionPrimariesBoxes.at(i * 2 + c)->value();
+        }
+    }
+
+    return chr;
+}
+
+void ImageViewer::setInspectionTransfer(const ituth273::ETransfer transfer) {
+    for (size_t i = 0; i < TRANSFERS.size(); ++i) {
+        if (transfer == TRANSFERS[i].first) {
+            mInspectionTransferComboBox->set_selected_index((int)i);
+            return;
+        }
+    }
+
+    TEV_ASSERT(false, "Invalid transfer function specified for inspection.");
+}
+
+ituth273::ETransfer ImageViewer::inspectionTransfer() const {
+    const size_t index = (size_t)mInspectionTransferComboBox->selected_index();
+    TEV_ASSERT(index <= TRANSFERS.size(), "Invalid transfer function index selected for inspection.");
+
+    return TRANSFERS.at(index).first;
 }
 
 void ImageViewer::updateFilter() {
