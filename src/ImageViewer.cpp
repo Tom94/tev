@@ -2706,48 +2706,55 @@ void ImageViewer::updateLayout() {
 }
 
 void ImageViewer::updateTitle() {
-    string caption = "tev";
-    if (mCurrentImage) {
-        auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
-        // Remove duplicates
-        channels.erase(unique(begin(channels), end(channels)), end(channels));
-
-        auto channelTails = channels;
-        transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
-
-        caption = fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
-
-        const auto rel = mouse_pos() - mImageCanvas->position();
-        const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
-        const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
-        TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
-
-        string valuesString;
-        for (size_t i = 0; i < channelTails.size(); ++i) {
-            valuesString += fmt::format("{:.2f},", values[i]);
-        }
-
-        valuesString.pop_back();
-        valuesString += " / 0x";
-        for (size_t i = 0; i < channelTails.size(); ++i) {
-            const float srgbValue = channelTails[i] == "A" ? values[i] : toSRGB(values[i]);
-            unsigned char discretizedValue = (char)(clamp(srgbValue, 0.0f, 1.0f) * 255 + 0.5f);
-            valuesString += fmt::format("{:02X}", discretizedValue);
-        }
-
-        caption += fmt::format(
-            " – @{},{} ({:.3f},{:.3f}) / {}x{}: {}",
-            imageCoords.x(),
-            imageCoords.y(),
-            imageCoords.x() / (double)mCurrentImage->size().x(),
-            imageCoords.y() / (double)mCurrentImage->size().y(),
-            mCurrentImage->size().x(),
-            mCurrentImage->size().y(),
-            valuesString
-        );
+    if (!mCurrentImage) {
+        set_caption("tev");
+        return;
     }
 
-    set_caption(caption);
+    ostringstream caption;
+
+    auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
+
+    // Remove duplicates
+    channels.erase(unique(begin(channels), end(channels)), end(channels));
+    // Only treat alpha specially if it is not the only channel.
+    const bool hasAlpha = channels.size() > 1 && Channel::isAlpha(channels.back());
+
+    auto channelTails = channels;
+    transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
+
+    caption << fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
+
+    const auto rel = mouse_pos() - mImageCanvas->position();
+    const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
+    const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
+    TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
+
+    caption << fmt::format(
+        " – @{},{} ({:.3f},{:.3f}) / {}x{}: ",
+        imageCoords.x(),
+        imageCoords.y(),
+        imageCoords.x() / (double)mCurrentImage->size().x(),
+        imageCoords.y() / (double)mCurrentImage->size().y(),
+        mCurrentImage->size().x(),
+        mCurrentImage->size().y()
+    );
+
+    auto transformedValues = values;
+    mImageCanvas->applyInspectionParameters(transformedValues, hasAlpha);
+    for (size_t i = 0; i < transformedValues.size(); ++i) {
+        caption << fmt::format("{:.2f},", transformedValues[i]);
+    }
+
+    caption.seekp(-1, ios_base::cur); // Remove last comma
+    caption << " / 0x";
+    for (size_t i = 0; i < values.size(); ++i) {
+        const float srgbValue = hasAlpha && i == values.size() - 1 ? values[i] : toSRGB(values[i]);
+        unsigned char discretizedValue = (char)(clamp(srgbValue, 0.0f, 1.0f) * 255 + 0.5f);
+        caption << fmt::format("{:02X}", discretizedValue);
+    }
+
+    set_caption(caption.str());
 }
 
 string ImageViewer::groupName(size_t index) {
