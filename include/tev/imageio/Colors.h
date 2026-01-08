@@ -107,6 +107,8 @@ enum class EWpPrimaries : int {
     DCIP3 = 8, // SMPTE431
     DisplayP3 = 9, // SMPTE432
     AdobeRGB = 10, // ISO 12640-4
+    //
+    ProPhotoRGB = 127, // Not actually in the spec, but useful for tev to have
 };
 
 chroma_t chroma(EWpPrimaries wpPrimaries);

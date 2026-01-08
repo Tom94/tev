@@ -922,10 +922,6 @@ Task<void> postprocessRgb(
         tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)pcsInt);
 
         const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(pcsInt);
-        // if (pcs == EPreviewColorSpace::AdobeRGB || pcs == EPreviewColorSpace::ProPhotoRGB) {
-        //     tlog::warning(
-        //     ) << "Linearization from Adobe RGB and ProPhoto RGB is not implemented yet. Using inverse sRGB transfer function instead.";
-        // }
 
         size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(

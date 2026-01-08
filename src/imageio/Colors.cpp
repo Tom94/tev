@@ -156,6 +156,7 @@ Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) 
         {0.0389f,  -0.0685f, 1.0296f },
     };
     const auto kBradford = toMatrix3(br);
+
     const float brInv[3][3] = {
         {0.9869929f,  -0.1470543f, 0.1599627f},
         {0.4323053f,  0.5183603f,  0.0492912f},
@@ -168,15 +169,9 @@ Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) 
     const auto lmsSrc = kBradford * xyToXYZ(srcWhite);
     const auto lmsDst = kBradford * xyToXYZ(dstWhite);
 
-    const float a[3][3] = {
-        {lmsDst[0] / lmsSrc[0], 0,                     0                    },
-        {0,                     lmsDst[1] / lmsSrc[1], 0                    },
-        {0,                     0,                     lmsDst[2] / lmsSrc[2]},
-    };
-    const auto aMat = toMatrix3(a);
+    const auto scale = Matrix3f::scale(lmsDst / lmsSrc);
 
-    const auto b = aMat * kBradford;
-    return kBradfordInv * b;
+    return kBradfordInv * scale * kBradford;
 }
 
 Matrix3f convertColorspaceMatrix(const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent) {
@@ -341,18 +336,22 @@ nanogui::Vector2f xy(EExifLightSource lightSource) {
 }
 
 chroma_t chroma(EWpPrimaries wpPrimaries) {
-    if (wpPrimaries == EWpPrimaries::AdobeRGB) {
-        // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
-        return adobeChroma();
+    // Special case for Adobe and ProPhoto primaries, which is not in the H.273 spec
+    switch (wpPrimaries) {
+        case EWpPrimaries::AdobeRGB: return adobeChroma();
+        case EWpPrimaries::ProPhotoRGB: return proPhotoChroma();
+        default: break;
     }
 
     return ituth273::chroma(ituth273::fromWpPrimaries(wpPrimaries));
 }
 
 string_view toString(EWpPrimaries wpPrimaries) {
-    if (wpPrimaries == EWpPrimaries::AdobeRGB) {
-        // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
-        return "adobergb";
+    // Special case for Adobe and ProPhoto primaries, which is not in the H.273 spec
+    switch (wpPrimaries) {
+        case EWpPrimaries::AdobeRGB: return "adobe_rgb";
+        case EWpPrimaries::ProPhotoRGB: return "pro_photo_rgb";
+        default: break;
     }
 
     return ituth273::toString(ituth273::fromWpPrimaries(wpPrimaries));
@@ -483,8 +482,7 @@ EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries) {
         case EWpPrimaries::CIE1931XYZ: return ituth273::EColorPrimaries::SMPTE428;
         case EWpPrimaries::DCIP3: return ituth273::EColorPrimaries::SMPTE431;
         case EWpPrimaries::DisplayP3: return ituth273::EColorPrimaries::SMPTE432;
-        default:
-            throw std::invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
+        default: throw std::invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
     }
 }
 
@@ -523,7 +521,7 @@ ETransfer fromWpTransfer(int wpTransfer) {
         case 7: return ETransfer::Log100Sqrt10;
         case 8: return ETransfer::IEC61966_2_4;
         case 9: return ETransfer::SRGB;
-        case 10: return ETransfer::SRGB; // TODO: handle the fact that this is the extended SRGB variant
+        case 10: return ETransfer::SRGB; // NOTE: both are treated as the extended sRGB transfer function by tev
         case 11: return ETransfer::PQ;
         case 12: return ETransfer::SMPTE428;
         case 13: return ETransfer::HLG;

@@ -55,16 +55,17 @@ static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
 static const vector<pair<EWpPrimaries, string_view>> PRIMARIES = {
-    {EWpPrimaries::SRGB,       "sRGB"        },
-    {EWpPrimaries::BT2020,     "BT.2020"     },
-    {EWpPrimaries::DCIP3,      "DCI P3"      },
-    {EWpPrimaries::DisplayP3,  "Display P3"  },
-    {EWpPrimaries::AdobeRGB,   "Adobe RGB"   },
-    {EWpPrimaries::NTSC,       "NTSC"        },
-    {EWpPrimaries::PAL,        "PAL"         },
-    {EWpPrimaries::PALM,       "PAL-M"       },
-    {EWpPrimaries::Film,       "Generic Film"},
-    {EWpPrimaries::CIE1931XYZ, "CIE 1931 XYZ"},
+    {EWpPrimaries::SRGB,        "sRGB"        },
+    {EWpPrimaries::BT2020,      "BT.2020"     },
+    {EWpPrimaries::DCIP3,       "DCI P3"      },
+    {EWpPrimaries::DisplayP3,   "Display P3"  },
+    {EWpPrimaries::AdobeRGB,    "Adobe RGB"   },
+    {EWpPrimaries::ProPhotoRGB, "ProPhoto RGB"},
+    {EWpPrimaries::NTSC,        "NTSC"        },
+    {EWpPrimaries::PAL,         "PAL"         },
+    {EWpPrimaries::PALM,        "PAL-M"       },
+    {EWpPrimaries::Film,        "Generic Film"},
+    {EWpPrimaries::CIE1931XYZ,  "CIE 1931 XYZ"},
 };
 
 static const vector<pair<ituth273::ETransfer, string_view>> TRANSFERS = {
