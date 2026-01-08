@@ -137,8 +137,22 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 
     if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
         vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
+
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
+
+        bool hasAlpha = false;
+        for (size_t i = 0; i < channels.size(); ++i) {
+            if (Channel::tail(channels[i]) == "A") {
+                // The following code expects the alpha channel to be the last, so let's make sure it is.
+                for (size_t j = i; j + 1 < channels.size(); ++j) {
+                    std::swap(channels[j], channels[j + 1]);
+                }
+
+                hasAlpha = true;
+                break;
+            }
+        }
 
         vector<Color> colors;
         for (const auto& channel : channels) {
@@ -149,7 +163,8 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
         if (colors.size() > 4) {
             fontSize *= 4.0f / colors.size();
         }
-        float fontAlpha = std::min(std::min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
+
+        const float fontAlpha = std::min(std::min(1.0f, (pixelSize.x() - 50) / 30), (1024 - pixelSize.x()) / 256);
 
         nvgFontSize(ctx, fontSize);
         nvgFontFace(ctx, "sans");
@@ -166,31 +181,38 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                 Vector2i nano = Vector2i{texToNano * (Vector2f{cur} + Vector2f{0.5f})};
                 getValuesAtNanoPos(nano, values, channels);
 
-                TEV_ASSERT(values.size() >= colors.size(), "Can not have more values than channels.");
+                TEV_ASSERT(values.size() == colors.size(), "Can not have more values than channels.");
+
+                // If shift and control are held, we display sRGB hex values
+                if (shiftAndControlHeld) {
+                    for (size_t i = 0; i < colors.size(); ++i) {
+                        values[i] = hasAlpha && i == colors.size() - 1 ? values[i] : toSRGB(values[i]);
+                    }
+                } else {
+                    // Otherwise, display what the user configured as the inspection color space
+                    applyInspectionParameters(values, hasAlpha);
+                }
 
                 for (size_t i = 0; i < colors.size(); ++i) {
                     string str;
                     Vector2f pos;
 
                     if (shiftAndControlHeld) {
-                        float tonemappedValue = Channel::tail(channels[i]) == "A" ? values[i] : toSRGB(values[i]);
-                        unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
+                        const unsigned char discretizedValue = (char)(values[i] * 255 + 0.5f);
                         str = fmt::format("{:02X}", discretizedValue);
-
                         pos = Vector2f{
                             m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
                             (float)m_pos.y() + nano.y(),
                         };
                     } else {
                         str = std::abs(values[i]) > 100000 ? fmt::format("{:6g}", values[i]) : fmt::format("{:.5f}", values[i]);
-
                         pos = Vector2f{
                             (float)m_pos.x() + nano.x(),
                             m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
                         };
                     }
 
-                    Color col = colors[i];
+                    const Color col = colors[i];
                     nvgFillColor(ctx, Color(col.r(), col.g(), col.b(), fontAlpha));
                     drawTextWithShadow(ctx, pos.x(), pos.y(), str, fontAlpha);
                 }
@@ -569,13 +591,13 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, sp
 
     // Subtract reference if it exists.
     if (mReference) {
-        auto referenceCoords = getImageCoords(mReference.get(), nanoPos);
+        const auto referenceCoords = getImageCoords(mReference.get(), nanoPos);
         for (size_t i = 0; i < result.size(); ++i) {
-            bool isAlpha = Channel::isAlpha(channels[i]);
-            float defaultVal = isAlpha && mReference->contains(referenceCoords) ? 1.0f : 0.0f;
+            const bool isAlpha = Channel::isAlpha(channels[i]);
+            const float defaultVal = isAlpha && mReference->contains(referenceCoords) ? 1.0f : 0.0f;
 
             const Channel* c = mReference->channel(channels[i]);
-            float reference = c ? c->eval(referenceCoords) : defaultVal;
+            const float reference = c ? c->eval(referenceCoords) : defaultVal;
 
             result[i] = isAlpha ? 0.5f * (result[i] + reference) : applyMetric(result[i], reference);
         }
@@ -866,6 +888,41 @@ void ImageCanvas::purgeCanvasStatistics(int imageId) {
     mImageIdToCanvasStatisticsKey.erase(imageId);
 }
 
+void ImageCanvas::applyInspectionParameters(vector<float>& values, bool hasAlpha) {
+    if (values.empty()) {
+        return;
+    }
+
+    // If we have 3 color channels, apply alpha, the inspection chroma, and transfer function
+    const size_t nColorChannels = values.size() - (hasAlpha ? 1 : 0);
+
+    const float alpha = hasAlpha && !mInspectionPremultipliedAlpha ? values.back() : 1.0f;
+    const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
+
+    if (nColorChannels >= 3) {
+        const auto mat = convertColorspaceMatrix(
+            rec709Chroma(),
+            mInspectionChroma,
+            mInspectionAdaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
+        );
+
+        Vector3f rgb;
+        for (size_t c = 0; c < 3; ++c) {
+            rgb[c] = values[c] * alphaFactor;
+        }
+
+        rgb = ituth273::transfer(mInspectionTransfer, mat * rgb);
+        for (size_t c = 0; c < 3; ++c) {
+            values[c] = rgb[c];
+        }
+    } else {
+        // Otherwise, apply just alpha and transfer function
+        for (size_t c = 0; c < nColorChannels; ++c) {
+            values[c] = ituth273::transferComponent(mInspectionTransfer, values[c] * alphaFactor);
+        }
+    }
+}
+
 vector<Channel> ImageCanvas::channelsFromImages(
     shared_ptr<Image> image, shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority
 ) {
@@ -965,14 +1022,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     // Only treat the alpha channel specially if it is not the only channel of the image.
     if (!all_of(begin(flattened), end(flattened), [](const Channel& c) { return c.name() == "A"; })) {
-        for (auto& channel : flattened) {
-            if (channel.name() == "A") {
-                alphaChannel = &channel;
+        for (size_t i = 0; i < flattened.size(); ++i) {
+            if (flattened[i].name() == "A") {
                 // The following code expects the alpha channel to be the last, so let's make sure it is.
-                if (alphaChannel != &flattened.back()) {
-                    swap(channel, flattened.back());
+                for (size_t j = i; j + 1 < flattened.size(); ++j) {
+                    swap(flattened[j], flattened[j + 1]);
                 }
 
+                alphaChannel = &flattened.back();
                 break;
             }
         }
@@ -1008,11 +1065,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                     rgb[c] = flattened[c].at({x, y}) * alphaFactor;
                 }
 
-                rgb = mat * rgb;
-                if (transfer != ituth273::ETransfer::Linear) {
-                    rgb = ituth273::transfer(transfer, rgb);
-                }
-
+                rgb = ituth273::transfer(transfer, mat * rgb);
                 for (size_t c = 0; c < 3; ++c) {
                     flattened[c].setAt({x, y}, rgb[c]);
                 }

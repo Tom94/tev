@@ -137,6 +137,9 @@ public:
     bool inspectionPremultipliedAlpha() const { return mInspectionPremultipliedAlpha; }
     void setInspectionPremultipliedAlpha(bool premultipied) { mInspectionPremultipliedAlpha = premultipied; }
 
+    // Assumes the alpha channel is the last one, if present
+    void applyInspectionParameters(std::vector<float>& values, bool hasAlpha);
+
 private:
     static std::vector<Channel> channelsFromImages(
         std::shared_ptr<Image> image, std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority
