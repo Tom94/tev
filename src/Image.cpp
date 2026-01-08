@@ -524,7 +524,7 @@ Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageDat
 
     if (groupChannels) {
         for (const auto& l : mData.layers) {
-            auto groups = getGroupedChannels(l);
+            const auto groups = getGroupedChannels(l);
             mChannelGroups.insert(end(mChannelGroups), begin(groups), end(groups));
         }
     } else {
@@ -536,6 +536,13 @@ Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageDat
                     vector<string>{string{c.name()}, string{c.name()}, string{c.name()}}
             }
             );
+        }
+    }
+
+    // Ensure that alpha channels are last in their group
+    for (const auto& group : mChannelGroups) {
+        for (const auto& channel : group.channels) {
+            TEV_ASSERT(Channel::tail(channel) != "A" || &channel == &group.channels.back(), "Alpha channel must be last in channel group.");
         }
     }
 }

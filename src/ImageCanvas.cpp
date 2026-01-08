@@ -137,22 +137,14 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 
     if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
         vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
-
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
-
-        bool hasAlpha = false;
-        for (size_t i = 0; i < channels.size(); ++i) {
-            if (Channel::tail(channels[i]) == "A") {
-                // The following code expects the alpha channel to be the last, so let's make sure it is.
-                for (size_t j = i; j + 1 < channels.size(); ++j) {
-                    std::swap(channels[j], channels[j + 1]);
-                }
-
-                hasAlpha = true;
-                break;
-            }
+        if (channels.empty()) {
+            return;
         }
+
+        // Only treat alpha specially if it's not the only channel
+        const bool hasAlpha = channels.size() > 1 && Channel::isAlpha(channels.back());
 
         vector<Color> colors;
         for (const auto& channel : channels) {
@@ -830,7 +822,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     }
 
     if (mCrop.has_value()) {
-        keyStream << fmt::format("-crop-{}", *mCrop);
+        keyStream << fmt::format("-crop-{}-{}", mCrop->min, mCrop->max);
     }
 
     const string key = keyStream.str();
@@ -1021,30 +1013,22 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const Channel* alphaChannel = nullptr;
 
     // Only treat the alpha channel specially if it is not the only channel of the image.
-    if (!all_of(begin(flattened), end(flattened), [](const Channel& c) { return c.name() == "A"; })) {
-        for (size_t i = 0; i < flattened.size(); ++i) {
-            if (flattened[i].name() == "A") {
-                // The following code expects the alpha channel to be the last, so let's make sure it is.
-                for (size_t j = i; j + 1 < flattened.size(); ++j) {
-                    swap(flattened[j], flattened[j + 1]);
-                }
-
-                alphaChannel = &flattened.back();
-                break;
-            }
+    if (!all_of(begin(flattened), end(flattened), [](const Channel& c) { return c.isAlpha(); })) {
+        if (flattened.back().isAlpha()) {
+            alphaChannel = &flattened.back();
         }
     }
 
     const auto result = make_shared<CanvasStatistics>();
-    const size_t nChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
-    result->histogramColors.resize(nChannels);
+    const size_t nColorChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
+    result->histogramColors.resize(nColorChannels);
 
     const auto regionSize = region.size();
     const size_t numPixels = region.area();
-    const size_t numSamples = nChannels * numPixels;
+    const size_t numSamples = nColorChannels * numPixels;
 
     // If we have 3 color channels, apply alpha, the inspection chroma, and transfer function
-    if (flattened.size() > 3 || (flattened.size() == 3 && flattened.back().name() != "A")) {
+    if (nColorChannels >= 3) {
         const auto mat = convertColorspaceMatrix(
             rec709Chroma(), chroma, adaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
         );
@@ -1086,7 +1070,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                     const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
                     const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
-                    for (size_t c = 0; c < nChannels; ++c) {
+                    for (size_t c = 0; c < nColorChannels; ++c) {
                         auto& channel = flattened[c];
                         const float val = channel.at({x, y}) * alphaFactor;
                         channel.setAt({x, y}, ituth273::transferComponent(transfer, val));
@@ -1097,9 +1081,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    for (size_t i = 0; i < nChannels; ++i) {
+    for (size_t i = 0; i < nColorChannels; ++i) {
         string rgba[] = {"R", "G", "B", "A"};
-        string colorName = nChannels == 1 ? "L" : rgba[std::min(i, (size_t)3)];
+        string colorName = nColorChannels == 1 ? "L" : rgba[std::min(i, (size_t)3)];
         result->histogramColors[i] = Channel::color(colorName, false);
 
         const auto& channel = flattened[i];
@@ -1124,7 +1108,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     // Now that we know the maximum and minimum value we can define our histogram bin size.
     static const size_t NUM_BINS = 400;
-    result->histogram.resize(NUM_BINS * nChannels);
+    result->histogram.resize(NUM_BINS * nColorChannels);
 
     // We're going to draw our histogram in log space.
     static const float addition = 0.001f;
@@ -1147,11 +1131,11 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const auto binToVal = [&](const float val) { return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog); };
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
-    if (nChannels == 0) {
+    if (nColorChannels == 0) {
         co_return result;
     }
 
-    HeapArray<int> indices(numPixels * nChannels);
+    HeapArray<int> indices(numPixels * nColorChannels);
 
     vector<Task<void>> tasks;
     tasks.emplace_back(
@@ -1162,9 +1146,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             [&](const size_t j) {
                 int x = (int)(j % regionSize.x()) + region.min.x();
                 int y = (int)(j / regionSize.x()) + region.min.y();
-                for (size_t c = 0; c < nChannels; ++c) {
+                for (size_t c = 0; c < nColorChannels; ++c) {
                     const auto& channel = flattened[c];
-                    indices[j * nChannels + c] = valToBin(channel.at({x, y}));
+                    indices[j * nColorChannels + c] = valToBin(channel.at({x, y}));
                 }
             },
             priority
@@ -1174,19 +1158,19 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
-        nChannels,
-        numPixels * nChannels,
+        nColorChannels,
+        numPixels * nColorChannels,
         [&](size_t c) {
             for (size_t j = 0; j < numPixels; ++j) {
                 int x = (int)(j % regionSize.x()) + region.min.x();
                 int y = (int)(j / regionSize.x()) + region.min.y();
-                result->histogram[indices[j * nChannels + c] + c * NUM_BINS] += alphaChannel ? alphaChannel->at({x, y}) : 1;
+                result->histogram[indices[j * nColorChannels + c] + c * NUM_BINS] += alphaChannel ? alphaChannel->at({x, y}) : 1;
             }
         },
         priority
     );
 
-    for (size_t i = 0; i < nChannels; ++i) {
+    for (size_t i = 0; i < nColorChannels; ++i) {
         for (size_t j = 0; j < NUM_BINS; ++j) {
             result->histogram[j + i * NUM_BINS] /= binToVal(j + 1) - binToVal(j);
         }
@@ -1198,7 +1182,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
     const float norm = 1.0f / (std::max(tmp[idx], 0.1f) * 1.3f);
-    for (size_t i = 0; i < nChannels; ++i) {
+    for (size_t i = 0; i < nColorChannels; ++i) {
         for (size_t j = 0; j < NUM_BINS; ++j) {
             result->histogram[j + i * NUM_BINS] *= norm;
         }
