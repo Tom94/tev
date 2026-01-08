@@ -30,6 +30,7 @@
 #include <tev/VectorGraphics.h>
 #include <tev/imageio/Colors.h>
 
+#include <nanogui/button.h>
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
@@ -195,11 +196,17 @@ public:
 
     void showErrorDialog(std::string_view message);
 
-    void setInspectionChroma(const chroma_t& chroma);
     chroma_t inspectionChroma() const;
+    void setInspectionChroma(const chroma_t& chroma);
 
-    void setInspectionTransfer(ituth273::ETransfer transfer);
     ituth273::ETransfer inspectionTransfer() const;
+    void setInspectionTransfer(ituth273::ETransfer transfer);
+
+    bool inspectionAdaptWhitePoint() const;
+    void setInspectionAdaptWhitePoint(bool adapt);
+
+    bool inspectionPremultipliedAlpha() const;
+    void setInspectionPremultipliedAlpha(bool value);
 
 private:
     void updateFilter();
@@ -327,6 +334,7 @@ private:
     std::vector<nanogui::FloatBox<float>*> mInspectionPrimariesBoxes;
     nanogui::ComboBox* mInspectionTransferComboBox = nullptr;
     nanogui::Button* mInspectionAdaptWhitePointButton = nullptr;
+    nanogui::Button* mInspectionPremultipliedAlphaButton = nullptr;
 
     nanogui::PopupButton* mColorsPopupButton = nullptr;
     nanogui::PopupButton* mHdrPopupButton = nullptr;

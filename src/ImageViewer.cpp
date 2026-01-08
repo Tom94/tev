@@ -68,22 +68,23 @@ static const vector<pair<EWpPrimaries, string_view>> PRIMARIES = {
 };
 
 static const vector<pair<ituth273::ETransfer, string_view>> TRANSFERS = {
-    {ituth273::ETransfer::Linear,         "Linear"          },
-    {ituth273::ETransfer::SRGB,           "sRGB"            },
-    {ituth273::ETransfer::PQ,             "PQ"              },
-    {ituth273::ETransfer::HLG,            "HLG"             },
-    {ituth273::ETransfer::Gamma22,        "Gamma 2.2"       },
-    {ituth273::ETransfer::Gamma28,        "Gamma 2.8"       },
-    {ituth273::ETransfer::Log100,         "Log100"          },
-    {ituth273::ETransfer::Log100Sqrt10,   "Log100 Sqrt10"   },
-    {ituth273::ETransfer::BT709,          "BT.709"          },
-    {ituth273::ETransfer::BT601,          "BT.601"          },
-    {ituth273::ETransfer::BT202010bit,    "BT.2020 10-bit"  },
-    {ituth273::ETransfer::BT202012bit,    "BT.2020 12-bit"  },
-    {ituth273::ETransfer::BT1361Extended, "BT.1361 Extended"},
-    {ituth273::ETransfer::SMPTE240,       "SMPTE 240M"      },
-    {ituth273::ETransfer::SMPTE428,       "SMPTE ST 428-1"  },
-    {ituth273::ETransfer::IEC61966_2_4,   "IEC 61966-2-4"   },
+    {ituth273::ETransfer::Linear,         "Linear"         },
+    {ituth273::ETransfer::SRGB,           "sRGB"           },
+    {ituth273::ETransfer::PQ,             "PQ"             },
+    {ituth273::ETransfer::HLG,            "HLG"            },
+    {ituth273::ETransfer::Gamma22,        "Gamma 2.2"      },
+    {ituth273::ETransfer::Gamma28,        "Gamma 2.8"      },
+    {ituth273::ETransfer::Log100,         "Log100"         },
+    {ituth273::ETransfer::Log100Sqrt10,   "Log100 Sqrt10"  },
+    {ituth273::ETransfer::BT709,          "BT.709/601/2020"},
+    // Same as above
+    // {ituth273::ETransfer::BT601,          "BT.601"          },
+    // {ituth273::ETransfer::BT202010bit,    "BT.2020 10-bit"  },
+    // {ituth273::ETransfer::BT202012bit,    "BT.2020"         },
+    {ituth273::ETransfer::BT1361Extended, "BT.1361 Ext."   },
+    {ituth273::ETransfer::SMPTE240,       "SMPTE 240M"     },
+    {ituth273::ETransfer::SMPTE428,       "SMPTE ST 428-1" },
+    {ituth273::ETransfer::IEC61966_2_4,   "IEC 61966-2-4"  },
 };
 
 ImageViewer::ImageViewer(
@@ -231,7 +232,7 @@ ImageViewer::ImageViewer(
             auto popup = mHdrPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
-            new Label{popup, "HDR Settings", "sans-bold", 20};
+            new Label{popup, "HDR settings", "sans-bold", 20};
             addSpacer(popup, 10);
 
             mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
@@ -245,7 +246,7 @@ ImageViewer::ImageViewer(
 
             addSpacer(popup, 10);
 
-            new Label{popup, "Display White Level"};
+            new Label{popup, "Display white level"};
 
             addSpacer(popup, 5);
 
@@ -276,7 +277,7 @@ ImageViewer::ImageViewer(
 
             addSpacer(popup, 10);
 
-            new Label{popup, "Best Guess Image White Level"};
+            new Label{popup, "Best guess image white level"};
 
             addSpacer(popup, 5);
 
@@ -307,15 +308,14 @@ ImageViewer::ImageViewer(
         mColorsPopupButton = new PopupButton{buttonContainer, "Colors"};
         mColorsPopupButton->set_font_size(15);
         mColorsPopupButton->set_chevron_icon(0);
-        mColorsPopupButton->set_tooltip("Color Settings");
+        mColorsPopupButton->set_tooltip("Color settings");
 
         // Color settings popup
         {
             auto popup = mColorsPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
-            popup->set_fixed_width(200);
 
-            auto label = new Label{popup, "Inspection Color Space", "sans-bold", 20};
+            auto label = new Label{popup, "Inspection color space", "sans-bold", 20};
             label->set_tooltip(
                 "The color space used for pixel inspection, i.e. the pixel values shown on hover, when zooming in, and in the histogram.\n\n"
                 "IMPORTANT: this setting does NOT affect the appearance of the image shown on screen. "
@@ -324,19 +324,25 @@ ImageViewer::ImageViewer(
 
             addSpacer(popup, 10);
 
-            auto dropdowns = new Widget{popup};
-            dropdowns->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
+            auto xy = new Widget{popup};
+            xy->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
 
-            new Label{dropdowns, "Transfer"};
-            new Label{dropdowns, "Primaries"};
+            label = new Label{xy, "Transfer"};
+            label->set_fixed_width(100);
+            label = new Label{xy, "Primaries"};
+            label->set_fixed_width(100);
 
             vector<string> transferNames;
             for (const auto& t : TRANSFERS) {
                 transferNames.emplace_back(t.second);
             }
 
-            mInspectionTransferComboBox = new ComboBox{dropdowns, transferNames};
+            mInspectionTransferComboBox = new ComboBox{xy, transferNames};
             mInspectionTransferComboBox->set_font_size(16);
+            mInspectionTransferComboBox->set_callback([this](int value) {
+                TEV_ASSERT(value >= 0 && (size_t)value < TRANSFERS.size(), "Invalid transfer function index");
+                setInspectionTransfer(ituth273::ETransfer(TRANSFERS[value].first));
+            });
 
             vector<string> primariesNames;
             for (const auto& p : PRIMARIES) {
@@ -345,7 +351,7 @@ ImageViewer::ImageViewer(
 
             primariesNames.emplace_back("Custom");
 
-            mInspectionPrimariesComboBox = new ComboBox{dropdowns, primariesNames};
+            mInspectionPrimariesComboBox = new ComboBox{xy, primariesNames};
             mInspectionPrimariesComboBox->set_font_size(16);
 
             const auto makeChromaBox = [this](Widget* parent, size_t idx) {
@@ -353,7 +359,7 @@ ImageViewer::ImageViewer(
                 box->set_editable(true);
                 box->set_enabled(true);
                 box->set_value_increment(0.0001f);
-                box->number_format("%.04f");
+                box->number_format("%.05f");
 
                 box->set_callback([this, idx](float val) {
                     TEV_ASSERT(idx < 8, "Invalid chromaticity index");
@@ -366,19 +372,22 @@ ImageViewer::ImageViewer(
                 return box;
             };
 
-            addSpacer(popup, 10);
+            addSpacer(xy, 6);
+            addSpacer(xy, 6);
 
-            const array<string_view, 4> labels = {"Red xy", "Green xy", "Blue xy", "White xy"};
+            const array<string_view, 4> labels = {"Red", "Green", "Blue", "White"};
             for (size_t i = 0; i < labels.size(); ++i) {
-                new Label{popup, labels[i]};
-                auto xy = new Widget{popup};
-                xy->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
+                new Label{xy, fmt::format("{} X", labels[i])};
+                new Label{xy, fmt::format("{} Y", labels[i])};
                 mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 0));
                 mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 1));
-                addSpacer(popup, 3);
+                addSpacer(xy, 1);
+                addSpacer(xy, 1);
             }
 
             mInspectionPrimariesComboBox->set_callback([this](int value) {
+                TEV_ASSERT(value >= 0 && (size_t)value < PRIMARIES.size() + 1, "Invalid primaries index");
+
                 if ((size_t)value >= PRIMARIES.size()) {
                     // When the user selects "Custom", we do not change the current chromaticities.
                     return;
@@ -387,24 +396,36 @@ ImageViewer::ImageViewer(
                 setInspectionChroma(chroma(PRIMARIES[value].first));
             });
 
-            setInspectionChroma(chroma(EWpPrimaries::SRGB));
-            setInspectionTransfer(ituth273::ETransfer::Linear);
+            addSpacer(xy, 1);
+            addSpacer(xy, 1);
 
-            mInspectionAdaptWhitePointButton = new Button{popup, "Adapt White Point"};
+            mInspectionAdaptWhitePointButton = new Button{xy, "Adapt white"};
             mInspectionAdaptWhitePointButton->set_font_size(16);
             mInspectionAdaptWhitePointButton->set_flags(Button::ToggleButton);
             mInspectionAdaptWhitePointButton->set_tooltip(
                 "Adapt from tev's internal D65 illuminant to the white point of the inspection color space using Bradford's algorithm. "
                 "Enabling this feature is equivalent to a \"relative colorimetric\" color space conversion. Disabled is \"absolute colorimetric\"."
             );
+            mInspectionAdaptWhitePointButton->set_change_callback([this](bool value) { setInspectionAdaptWhitePoint(value); });
+
+            mInspectionPremultipliedAlphaButton = new Button{xy, "Premult. alpha"};
+            mInspectionPremultipliedAlphaButton->set_font_size(16);
+            mInspectionPremultipliedAlphaButton->set_flags(Button::ToggleButton);
+            mInspectionPremultipliedAlphaButton->set_tooltip("Whether the inspected pixel values should have alpha premultiplied or not.");
+            mInspectionPremultipliedAlphaButton->set_change_callback([this](bool value) { setInspectionPremultipliedAlpha(value); });
+
+            setInspectionChroma(mImageCanvas->inspectionChroma());
+            setInspectionTransfer(mImageCanvas->inspectionTransfer());
+            setInspectionAdaptWhitePoint(mImageCanvas->inspectionAdaptWhitePoint());
+            setInspectionPremultipliedAlpha(mImageCanvas->inspectionPremultipliedAlpha());
 
             addSpacer(popup, 20);
 
-            new Label{popup, "Background Color", "sans-bold", 20};
+            new Label{popup, "Background color", "sans-bold", 20};
             auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
             colorwheel->set_color(mColorsPopupButton->background_color());
 
-            new Label{popup, "Background Alpha"};
+            new Label{popup, "Background alpha"};
             auto bgAlphaSlider = new Slider{popup};
             bgAlphaSlider->set_range({0.0f, 1.0f});
             bgAlphaSlider->set_callback([this](float value) {
@@ -636,7 +657,7 @@ ImageViewer::ImageViewer(
             ));
 
             mAnyImageButtons.push_back(makeImageButton(
-                "A", false, [this] { reloadAllImages(); }, 0, fmt::format("Reload All ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)
+                "A", false, [this] { reloadAllImages(); }, 0, fmt::format("Reload all ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
 
             mWatchFilesForChangesButton =
@@ -664,7 +685,7 @@ ImageViewer::ImageViewer(
                     }
                 },
                 FA_TIMES,
-                fmt::format("Close ({}+W); Close All ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
+                fmt::format("Close ({}+W); Close all ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
 
             spacer = new Widget{mSidebarLayout};
@@ -1324,7 +1345,8 @@ void ImageViewer::draw_contents() {
     updateTitle();
 
     // Update histogram
-    static const string histogramTooltipBase = "Histogram of color values. Adapts to the currently chosen channel group and error metric.";
+    static const string histogramTooltipBase =
+        "Histogram of color values with logarithmic x-axis. Adapts to the currently chosen channel group, error metric, and inspection color space.";
     auto lazyCanvasStatistics = mImageCanvas->canvasStatistics();
     if (lazyCanvasStatistics) {
         if (lazyCanvasStatistics->isReady()) {
@@ -2460,7 +2482,22 @@ void ImageViewer::showErrorDialog(string_view message) {
     new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
 }
 
+chroma_t ImageViewer::inspectionChroma() const {
+    TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
+
+    chroma_t chr;
+    for (size_t i = 0; i < chr.size(); ++i) {
+        for (size_t c = 0; c < 2; ++c) {
+            chr[i][c] = mInspectionPrimariesBoxes.at(i * 2 + c)->value();
+        }
+    }
+
+    return chr;
+}
+
 void ImageViewer::setInspectionChroma(const chroma_t& chr) {
+    mImageCanvas->setInspectionChroma(chr);
+
     TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
 
     for (size_t i = 0; i < chr.size(); ++i) {
@@ -2480,20 +2517,16 @@ void ImageViewer::setInspectionChroma(const chroma_t& chr) {
     mInspectionPrimariesComboBox->set_selected_index(PRIMARIES.size());
 }
 
-chroma_t ImageViewer::inspectionChroma() const {
-    TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
+ituth273::ETransfer ImageViewer::inspectionTransfer() const {
+    const size_t index = (size_t)mInspectionTransferComboBox->selected_index();
+    TEV_ASSERT(index <= TRANSFERS.size(), "Invalid transfer function index selected for inspection.");
 
-    chroma_t chr;
-    for (size_t i = 0; i < chr.size(); ++i) {
-        for (size_t c = 0; c < 2; ++c) {
-            chr[i][c] = mInspectionPrimariesBoxes.at(i * 2 + c)->value();
-        }
-    }
-
-    return chr;
+    return TRANSFERS.at(index).first;
 }
 
 void ImageViewer::setInspectionTransfer(const ituth273::ETransfer transfer) {
+    mImageCanvas->setInspectionTransfer(transfer);
+
     for (size_t i = 0; i < TRANSFERS.size(); ++i) {
         if (transfer == TRANSFERS[i].first) {
             mInspectionTransferComboBox->set_selected_index((int)i);
@@ -2504,11 +2537,18 @@ void ImageViewer::setInspectionTransfer(const ituth273::ETransfer transfer) {
     TEV_ASSERT(false, "Invalid transfer function specified for inspection.");
 }
 
-ituth273::ETransfer ImageViewer::inspectionTransfer() const {
-    const size_t index = (size_t)mInspectionTransferComboBox->selected_index();
-    TEV_ASSERT(index <= TRANSFERS.size(), "Invalid transfer function index selected for inspection.");
+bool ImageViewer::inspectionAdaptWhitePoint() const { return mInspectionAdaptWhitePointButton->pushed(); }
 
-    return TRANSFERS.at(index).first;
+void ImageViewer::setInspectionAdaptWhitePoint(bool value) {
+    mImageCanvas->setInspectionAdaptWhitePoint(value);
+    mInspectionAdaptWhitePointButton->set_pushed(value);
+}
+
+bool ImageViewer::inspectionPremultipliedAlpha() const { return mInspectionPremultipliedAlphaButton->pushed(); }
+
+void ImageViewer::setInspectionPremultipliedAlpha(bool value) {
+    mImageCanvas->setInspectionPremultipliedAlpha(value);
+    mInspectionPremultipliedAlphaButton->set_pushed(value);
 }
 
 void ImageViewer::updateFilter() {

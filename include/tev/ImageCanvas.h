@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <optional>
+#include <unordered_map>
 
 namespace tev {
 
@@ -124,6 +125,18 @@ public:
     float pixelRatio() const { return mPixelRatio; }
     void setPixelRatio(float ratio) { mPixelRatio = ratio; }
 
+    chroma_t inspectionChroma() const { return mInspectionChroma; }
+    void setInspectionChroma(const chroma_t& chroma) { mInspectionChroma = chroma; }
+
+    ituth273::ETransfer inspectionTransfer() const { return mInspectionTransfer; }
+    void setInspectionTransfer(const ituth273::ETransfer transfer) { mInspectionTransfer = transfer; }
+
+    bool inspectionAdaptWhitePoint() const { return mInspectionAdaptWhitePoint; }
+    void setInspectionAdaptWhitePoint(bool adapt) { mInspectionAdaptWhitePoint = adapt; }
+
+    bool inspectionPremultipliedAlpha() const { return mInspectionPremultipliedAlpha; }
+    void setInspectionPremultipliedAlpha(bool premultipied) { mInspectionPremultipliedAlpha = premultipied; }
+
 private:
     static std::vector<Channel> channelsFromImages(
         std::shared_ptr<Image> image, std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority
@@ -135,6 +148,10 @@ private:
         std::string_view requestedChannelGroup,
         EMetric metric,
         const Box2i& region,
+        const chroma_t& chroma,
+        ituth273::ETransfer transfer,
+        bool adaptWhitePoint,
+        bool premultipliedAlpha,
         int priority
     );
 
@@ -174,8 +191,13 @@ private:
     EMetric mMetric = EMetric::Error;
     std::optional<Box2i> mCrop;
 
-    std::map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
-    std::map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;
+    std::unordered_map<std::string, std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>>> mCanvasStatistics;
+    std::unordered_map<int, std::vector<std::string>> mImageIdToCanvasStatisticsKey;
+
+    chroma_t mInspectionChroma = rec709Chroma();
+    ituth273::ETransfer mInspectionTransfer = ituth273::ETransfer::Linear;
+    bool mInspectionAdaptWhitePoint = false;
+    bool mInspectionPremultipliedAlpha = true;
 };
 
 } // namespace tev
