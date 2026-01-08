@@ -296,7 +296,7 @@ inline float invTransferComponent(const ETransfer transfer, float val) noexcept 
         case ETransfer::SRGB: return toLinear(val);
         case ETransfer::PQ: return pqToLinear(val);
         case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
-        case ETransfer::HLG: return val; // Should be handled by `invTransfer()` below
+        case ETransfer::HLG: return hlgToLinear({val, val, val}).x(); // Treat single component as R=G=B
         case ETransfer::Unspecified: return val; // Default to linear if unspecified
     }
 
@@ -335,7 +335,7 @@ inline float transferComponent(const ETransfer transfer, float val) noexcept {
         case ETransfer::SRGB: return toSRGB(val);
         case ETransfer::PQ: return linearToPq(val);
         case ETransfer::SMPTE428: return linearToSmpteSt428(val);
-        case ETransfer::HLG: return val; // Should be handled by `transfer()` below
+        case ETransfer::HLG: return linearToHlg({val, val, val}).x(); // Treat single component as R=G=B
         case ETransfer::Unspecified: return val; // Default to linear if unspecified
     }
 
