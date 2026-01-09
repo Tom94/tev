@@ -707,6 +707,7 @@ Task<void> postprocessLinearRawDng(
         isHdr = pdr->dynamicRange == 1;
     }
 
+    // NOTE: The order of the following operations is defined on pages 71/72 of the DNG spec.
     float exposureScale = 1.0f;
     if (float baselineExposure; TIFFGetField(tif, TIFFTAG_BASELINEEXPOSURE, &baselineExposure)) {
         exposureScale *= exp2f(baselineExposure);
@@ -743,6 +744,10 @@ Task<void> postprocessLinearRawDng(
         co_return;
     }
 
+    if (const char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
+        tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
+    }
+
     {
         // Temporarily switch back to the raw's IFD to read gain table map, if present.
         TIFFSetDirectory(tif, prevIdf);
@@ -756,7 +761,6 @@ Task<void> postprocessLinearRawDng(
 
     // Profile application has to happen in SDR space if the image is HDR
     if (isHdr) {
-        tlog::debug() << "Encoding DNG HDR before applying profile";
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
@@ -774,10 +778,6 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
-    if (const char* str; TIFFGetField(tif, TIFFTAG_PROFILENAME, &numRead, &str)) {
-        tlog::debug() << fmt::format("Applying camera profile \"{}\"", str);
-    }
-
     if (const uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
         uint32_t hueDivisions = dims[0];
         uint32_t satDivisions = dims[1];
@@ -787,6 +787,17 @@ Task<void> postprocessLinearRawDng(
 
         // TODO: implement hue/sat/val map...
         tlog::warning() << "Found hue/sat/val map, but not implemented yet. Color profile may look wrong.";
+    }
+
+    if (const uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILELOOKTABLEDIMS, &dims)) {
+        uint32_t hueDivisions = dims[0];
+        uint32_t satDivisions = dims[1];
+        uint32_t valueDivisions = dims[2];
+
+        tlog::debug() << fmt::format("Look table dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
+
+        // TODO: implement hue/sat/val map...
+        tlog::warning() << "Found look table, but not implemented yet. Color profile may look wrong.";
     }
 
     if (const float* tonecurve; TIFFGetField(tif, TIFFTAG_PROFILETONECURVE, &numRead, &tonecurve)) {
@@ -803,14 +814,9 @@ Task<void> postprocessLinearRawDng(
 
         const auto applyPwLinear = [](span<const Vector2f> tc, float x) {
             const auto it = lower_bound(tc.begin(), tc.end(), x, [](auto a, float b) { return a.x() < b; });
-            size_t i = distance(tc.begin(), it);
 
             // The spec says to extend the slope of the last segment.
-            if (i > 0) {
-                --i;
-            } else if (i >= tc.size() - 1) {
-                i = tc.size() - 2;
-            }
+            const int i = clamp((int)distance(tc.begin(), it) - 1, 0, (int)tc.size() - 2);
 
             // TODO: Docs say to use cubic spline interpolation, whereas we're using linear interpolation. The difference seems to
             // be negligible so far, but we should fix this at some point.
@@ -835,8 +841,11 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
+    if (TIFFFindField(tif, TIFFTAG_RGBTABLES, TIFFDataType::TIFF_ANY)) {
+        tlog::warning() << "Found RGB tables, but not implemented yet. Color profile may look wrong.";
+    }
+
     if (isHdr) {
-        tlog::debug() << "Decoding DNG HDR after applying profile";
         co_await ThreadPool::global().parallelForAsync<int>(
             activeArea.min.y(),
             activeArea.max.y(),
