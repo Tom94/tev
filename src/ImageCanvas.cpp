@@ -1167,7 +1167,9 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     // Parallel histogram computation: every task computes its own histogram, which are combined at the end.
     {
-        const size_t numTasks = nextMultiple(ThreadPool::global().nTasks<size_t>(0, numPixels, numSamples), (size_t)nColorChannels);
+        const size_t approxCost = numSamples *
+            8; // constant factor to represent the increased workload of log/exp and somewhat random memory writes
+        const size_t numTasks = nextMultiple(ThreadPool::global().nTasks<size_t>(0, numPixels, approxCost), (size_t)nColorChannels);
         const size_t numTasksPerChannel = numTasks / nColorChannels;
 
         vector<float> perTaskHistograms(numBins * nColorChannels * numTasks);
@@ -1175,7 +1177,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numTasks,
-            numSamples,
+            approxCost,
             [&](size_t i) {
                 const size_t c = i % nColorChannels;
                 const size_t taskPerChannelIndex = i / nColorChannels;
@@ -1197,13 +1199,18 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             priority
         );
 
-        for (size_t t = 0; t < numTasks; ++t) {
-            for (size_t c = 0; c < nColorChannels; ++c) {
-                for (size_t j = 0; j < numBins; ++j) {
-                    result->histogram[j + c * numBins] += perTaskHistograms[j + numBins * (t * nColorChannels + c)];
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numBins * nColorChannels,
+            numBins * nColorChannels * numTasks,
+            [&](size_t i) {
+                const size_t stride = numBins * nColorChannels;
+                for (size_t j = 0; j < numTasks; ++j) {
+                    result->histogram[i] += perTaskHistograms[i + j * stride];
                 }
-            }
-        }
+            },
+            priority
+        );
     }
 
     for (size_t i = 0; i < nColorChannels; ++i) {
