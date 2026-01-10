@@ -361,8 +361,7 @@ private:
     bool mArmed = true;
 };
 
-template <typename T>
-class HeapArray {
+template <typename T> class HeapArray {
 public:
     HeapArray() : mBuf{nullptr}, mSize{0} {}
     HeapArray(size_t size) : mBuf{std::make_unique<T[]>(size)}, mSize{size} {}
@@ -411,6 +410,10 @@ inline bool isPot(size_t value) {
 
     return (value & (value - 1)) == 0;
 }
+
+template <typename Int> Int divRoundUp(Int value, Int divisor) { return (value + divisor - 1) / divisor; }
+
+template <typename Int> Int nextMultiple(Int value, Int multiple) { return divRoundUp(value, multiple) * multiple; }
 
 template <typename T> std::string join(const T& components, std::string_view delim) {
     std::ostringstream s;
