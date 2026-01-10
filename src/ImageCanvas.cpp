@@ -1044,7 +1044,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             rec709Chroma(), chroma, adaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
         );
 
-        ThreadPool::global().parallelFor<size_t>(
+        co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
             numSamples,
@@ -1070,7 +1070,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     } else {
         // Otherwise, apply just alpha and transfer function
         if (transfer != ituth273::ETransfer::Linear || (alphaChannel && !premultipliedAlpha)) {
-            ThreadPool::global().parallelFor<size_t>(
+            co_await ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 numPixels,
                 numSamples,
