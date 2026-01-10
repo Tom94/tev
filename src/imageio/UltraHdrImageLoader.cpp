@@ -54,14 +54,14 @@ static string toString(uhdr_color_gamut_t cg) {
     }
 }
 
-ituth273::ETransferCharacteristics toCicpTransfer(uhdr_color_transfer_t ct) {
+ituth273::ETransfer toCicpTransfer(uhdr_color_transfer_t ct) {
     switch (ct) {
-        case UHDR_CT_UNSPECIFIED: return ituth273::ETransferCharacteristics::Unspecified;
-        case UHDR_CT_LINEAR: return ituth273::ETransferCharacteristics::Linear;
-        case UHDR_CT_HLG: return ituth273::ETransferCharacteristics::HLG;
-        case UHDR_CT_PQ: return ituth273::ETransferCharacteristics::PQ;
-        case UHDR_CT_SRGB: return ituth273::ETransferCharacteristics::SRGB;
-        default: return ituth273::ETransferCharacteristics::Unspecified;
+        case UHDR_CT_UNSPECIFIED: return ituth273::ETransfer::Unspecified;
+        case UHDR_CT_LINEAR: return ituth273::ETransfer::Linear;
+        case UHDR_CT_HLG: return ituth273::ETransfer::HLG;
+        case UHDR_CT_PQ: return ituth273::ETransfer::PQ;
+        case UHDR_CT_SRGB: return ituth273::ETransfer::SRGB;
+        default: return ituth273::ETransfer::Unspecified;
     }
 }
 

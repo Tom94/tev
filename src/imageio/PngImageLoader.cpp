@@ -476,12 +476,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 ) == PNG_INFO_cICP) {
 
                 const auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
-                auto transfer = (ituth273::ETransferCharacteristics)cicp.transferFunction;
+                auto transfer = (ituth273::ETransfer)cicp.transferFunction;
 
                 if (!ituth273::isTransferImplemented(transfer)) {
                     tlog::warning()
                         << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
-                    transfer = ituth273::ETransferCharacteristics::SRGB;
+                    transfer = ituth273::ETransfer::SRGB;
                 }
 
                 tlog::debug() << fmt::format(
@@ -619,7 +619,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             resultData.hasPremultipliedAlpha = true;
 
             if (hasChunkChrm) {
-                const array<Vector2f, 4> chroma = {
+                const chroma_t chroma = {
                     {
                      {(float)ch[2], (float)ch[3]}, // red
                         {(float)ch[4], (float)ch[5]}, // green

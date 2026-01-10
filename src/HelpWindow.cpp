@@ -119,7 +119,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addRow(imageSelection, "O/Shift+O", "Increase/decrease offset by 0.1");
 
     addRow(imageSelection, "B (hold)", "Draw a border around the image");
-    addRow(imageSelection, "Shift+Ctrl (hold)", "Display raw bytes on pixels when zoomed-in");
+    addRow(imageSelection, "Shift+Ctrl (hold)", "Display sRGB bytes when zoomed-in");
 #ifdef __APPLE__
     addRow(imageSelection, "Enter", "Rename the image");
 #else

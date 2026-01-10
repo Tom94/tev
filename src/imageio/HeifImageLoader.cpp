@@ -370,7 +370,7 @@ Task<vector<ImageData>>
             range = limitedRangeForBitsPerSample(bitsPerSample);
         }
 
-        auto cicpTransfer = static_cast<ituth273::ETransferCharacteristics>(nclx->transfer_characteristics);
+        auto cicpTransfer = static_cast<ituth273::ETransfer>(nclx->transfer_characteristics);
         tlog::debug() << fmt::format(
             "NCLX: primaries={}, transfer={}, full_range={}",
             ituth273::toString((ituth273::EColorPrimaries)nclx->color_primaries),
@@ -380,7 +380,7 @@ Task<vector<ImageData>>
 
         if (!ituth273::isTransferImplemented(cicpTransfer)) {
             tlog::warning() << fmt::format("Unsupported transfer '{}' in NCLX. Using sRGB instead.", ituth273::toString(cicpTransfer));
-            cicpTransfer = ituth273::ETransferCharacteristics::SRGB;
+            cicpTransfer = ituth273::ETransfer::SRGB;
         }
 
         auto* const pixelData = resultData.channels.front().floatData();

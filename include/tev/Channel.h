@@ -58,6 +58,9 @@ public:
     std::string_view name() const { return mName; }
     void setName(std::string_view name) { mName = name; }
 
+    bool isAlpha() const { return Channel::isAlpha(mName); }
+    bool isTopmost() const { return Channel::isTopmost(mName); }
+
     size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
     const nanogui::Vector2i& size() const { return mSize; }

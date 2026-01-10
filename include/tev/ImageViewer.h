@@ -30,6 +30,7 @@
 #include <tev/VectorGraphics.h>
 #include <tev/imageio/Colors.h>
 
+#include <nanogui/button.h>
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
@@ -195,6 +196,18 @@ public:
 
     void showErrorDialog(std::string_view message);
 
+    chroma_t inspectionChroma() const;
+    void setInspectionChroma(const chroma_t& chroma);
+
+    ituth273::ETransfer inspectionTransfer() const;
+    void setInspectionTransfer(ituth273::ETransfer transfer);
+
+    bool inspectionAdaptWhitePoint() const;
+    void setInspectionAdaptWhitePoint(bool adapt);
+
+    bool inspectionPremultipliedAlpha() const;
+    void setInspectionPremultipliedAlpha(bool value);
+
 private:
     void updateFilter();
     void updateLayout();
@@ -306,8 +319,8 @@ private:
 
     // HDR UI elements support
     struct ColorSpace {
-        ituth273::ETransferCharacteristics transfer;
-        uint32_t primaries;
+        ituth273::ETransfer transfer;
+        EWpPrimaries primaries;
         float maxLuminance;
 
         bool operator==(const ColorSpace& other) const {
@@ -315,8 +328,15 @@ private:
         }
     };
 
-    std::optional<ColorSpace> mCurrentColorSpace;
+    std::optional<ColorSpace> mSystemColorSpace;
 
+    nanogui::ComboBox* mInspectionPrimariesComboBox = nullptr;
+    std::vector<nanogui::FloatBox<float>*> mInspectionPrimariesBoxes;
+    nanogui::ComboBox* mInspectionTransferComboBox = nullptr;
+    nanogui::Button* mInspectionAdaptWhitePointButton = nullptr;
+    nanogui::Button* mInspectionPremultipliedAlphaButton = nullptr;
+
+    nanogui::PopupButton* mColorsPopupButton = nullptr;
     nanogui::PopupButton* mHdrPopupButton = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
 

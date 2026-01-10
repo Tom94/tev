@@ -54,6 +54,40 @@ namespace tev {
 static const int SIDEBAR_MIN_WIDTH = 230;
 static const float CROP_MIN_SIZE = 3;
 
+static const vector<pair<EWpPrimaries, string_view>> PRIMARIES = {
+    {EWpPrimaries::SRGB,        "sRGB"        },
+    {EWpPrimaries::BT2020,      "BT.2020"     },
+    {EWpPrimaries::DCIP3,       "DCI P3"      },
+    {EWpPrimaries::DisplayP3,   "Display P3"  },
+    {EWpPrimaries::AdobeRGB,    "Adobe RGB"   },
+    {EWpPrimaries::ProPhotoRGB, "ProPhoto RGB"},
+    {EWpPrimaries::NTSC,        "NTSC"        },
+    {EWpPrimaries::PAL,         "PAL"         },
+    {EWpPrimaries::PALM,        "PAL-M"       },
+    {EWpPrimaries::Film,        "Generic Film"},
+    {EWpPrimaries::CIE1931XYZ,  "CIE 1931 XYZ"},
+};
+
+static const vector<pair<ituth273::ETransfer, string_view>> TRANSFERS = {
+    {ituth273::ETransfer::Linear,         "Linear"         },
+    {ituth273::ETransfer::SRGB,           "sRGB"           },
+    {ituth273::ETransfer::PQ,             "PQ"             },
+    {ituth273::ETransfer::HLG,            "HLG"            },
+    {ituth273::ETransfer::Gamma22,        "Gamma 2.2"      },
+    {ituth273::ETransfer::Gamma28,        "Gamma 2.8"      },
+    {ituth273::ETransfer::Log100,         "Log100"         },
+    {ituth273::ETransfer::Log100Sqrt10,   "Log100 Sqrt10"  },
+    {ituth273::ETransfer::BT709,          "BT.709/601/2020"},
+    // Same as above
+    // {ituth273::ETransfer::BT601,          "BT.601"          },
+    // {ituth273::ETransfer::BT202010bit,    "BT.2020 10-bit"  },
+    // {ituth273::ETransfer::BT202012bit,    "BT.2020"         },
+    {ituth273::ETransfer::BT1361Extended, "BT.1361 Ext."   },
+    {ituth273::ETransfer::SMPTE240,       "SMPTE 240M"     },
+    {ituth273::ETransfer::SMPTE428,       "SMPTE ST 428-1" },
+    {ituth273::ETransfer::IEC61966_2_4,   "IEC 61966-2-4"  },
+};
+
 ImageViewer::ImageViewer(
     const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, weak_ptr<Ipc> ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
@@ -190,20 +224,20 @@ ImageViewer::ImageViewer(
         mHdrPopupButton->set_font_size(15);
         mHdrPopupButton->set_chevron_icon(0);
 
-        {
-            auto addSpacer = [](Widget* current, int space) {
-                auto row = new Widget{current};
-                row->set_height(space);
-            };
+        auto addSpacer = [](Widget* current, int space) {
+            auto row = new Widget{current};
+            row->set_height(space);
+        };
 
+        {
             auto popup = mHdrPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
-            new Label{popup, "HDR Settings", "sans-bold", 20};
+            new Label{popup, "HDR settings", "sans-bold", 20};
             addSpacer(popup, 10);
 
             mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
-            mClipToLdrButton->set_font_size(15);
+            mClipToLdrButton->set_font_size(16);
             mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
             mClipToLdrButton->set_tooltip(
                 "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
@@ -213,7 +247,7 @@ ImageViewer::ImageViewer(
 
             addSpacer(popup, 10);
 
-            new Label{popup, "Display White Level"};
+            new Label{popup, "Display white level"};
 
             addSpacer(popup, 5);
 
@@ -244,7 +278,7 @@ ImageViewer::ImageViewer(
 
             addSpacer(popup, 10);
 
-            new Label{popup, "Best Guess Image White Level"};
+            new Label{popup, "Best guess image white level"};
 
             addSpacer(popup, 5);
 
@@ -272,21 +306,127 @@ ImageViewer::ImageViewer(
             mImageWhiteLevelBox->set_enabled(false);
         }
 
-        auto bgPopupBtn = new PopupButton{buttonContainer, "", FA_PAINT_BRUSH};
-        bgPopupBtn->set_font_size(15);
-        bgPopupBtn->set_chevron_icon(0);
-        bgPopupBtn->set_tooltip("Background Color");
+        mColorsPopupButton = new PopupButton{buttonContainer, "Colors"};
+        mColorsPopupButton->set_font_size(15);
+        mColorsPopupButton->set_chevron_icon(0);
+        mColorsPopupButton->set_tooltip("Color settings");
 
-        // Background color popup
+        // Color settings popup
         {
-            auto popup = bgPopupBtn->popup();
+            auto popup = mColorsPopupButton->popup();
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
-            new Label{popup, "Background Color"};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
-            colorwheel->set_color(bgPopupBtn->background_color());
+            auto label = new Label{popup, "Inspection color space", "sans-bold", 20};
+            label->set_tooltip(
+                "The color space used for pixel inspection, i.e. the pixel values shown on hover, when zooming in, and in the histogram.\n\n"
+                "IMPORTANT: this setting does NOT affect the appearance of the image shown on screen. "
+                "The image is always displayed in correct colors; tev negotiates the correct display color space with the operating system automatically."
+            );
 
-            new Label{popup, "Background Alpha"};
+            addSpacer(popup, 10);
+
+            auto xy = new Widget{popup};
+            xy->set_layout(new GridLayout{Orientation::Horizontal, 2, Alignment::Fill, 0, 2});
+
+            label = new Label{xy, "Transfer"};
+            label->set_fixed_width(100);
+            label = new Label{xy, "Primaries"};
+            label->set_fixed_width(100);
+
+            vector<string> transferNames;
+            for (const auto& t : TRANSFERS) {
+                transferNames.emplace_back(t.second);
+            }
+
+            mInspectionTransferComboBox = new ComboBox{xy, transferNames};
+            mInspectionTransferComboBox->set_font_size(16);
+            mInspectionTransferComboBox->set_callback([this](int value) {
+                TEV_ASSERT(value >= 0 && (size_t)value < TRANSFERS.size(), "Invalid transfer function index");
+                setInspectionTransfer(ituth273::ETransfer(TRANSFERS[value].first));
+            });
+
+            vector<string> primariesNames;
+            for (const auto& p : PRIMARIES) {
+                primariesNames.emplace_back(p.second);
+            }
+
+            primariesNames.emplace_back("Custom");
+
+            mInspectionPrimariesComboBox = new ComboBox{xy, primariesNames};
+            mInspectionPrimariesComboBox->set_font_size(16);
+
+            const auto makeChromaBox = [this](Widget* parent, size_t idx) {
+                auto box = new FloatBox<float>{parent};
+                box->set_editable(true);
+                box->set_enabled(true);
+                box->set_value_increment(0.0001f);
+                box->number_format("%.05f");
+
+                box->set_callback([this, idx](float val) {
+                    TEV_ASSERT(idx < 8, "Invalid chromaticity index");
+
+                    chroma_t chr = inspectionChroma();
+                    chr[idx / 2][idx % 2] = val;
+                    setInspectionChroma(chr);
+                });
+
+                return box;
+            };
+
+            addSpacer(xy, 6);
+            addSpacer(xy, 6);
+
+            const array<string_view, 4> labels = {"Red", "Green", "Blue", "White"};
+            for (size_t i = 0; i < labels.size(); ++i) {
+                new Label{xy, fmt::format("{} X", labels[i])};
+                new Label{xy, fmt::format("{} Y", labels[i])};
+                mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 0));
+                mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 1));
+                addSpacer(xy, 1);
+                addSpacer(xy, 1);
+            }
+
+            mInspectionPrimariesComboBox->set_callback([this](int value) {
+                TEV_ASSERT(value >= 0 && (size_t)value < PRIMARIES.size() + 1, "Invalid primaries index");
+
+                if ((size_t)value >= PRIMARIES.size()) {
+                    // When the user selects "Custom", we do not change the current chromaticities.
+                    return;
+                }
+
+                setInspectionChroma(chroma(PRIMARIES[value].first));
+            });
+
+            addSpacer(xy, 1);
+            addSpacer(xy, 1);
+
+            mInspectionAdaptWhitePointButton = new Button{xy, "Adapt white"};
+            mInspectionAdaptWhitePointButton->set_font_size(16);
+            mInspectionAdaptWhitePointButton->set_flags(Button::ToggleButton);
+            mInspectionAdaptWhitePointButton->set_tooltip(
+                "Adapt from tev's internal D65 illuminant to the white point of the inspection color space using Bradford's algorithm. "
+                "Enabling this feature is equivalent to a \"relative colorimetric\" color space conversion. Disabled is \"absolute colorimetric\"."
+            );
+            mInspectionAdaptWhitePointButton->set_change_callback([this](bool value) { setInspectionAdaptWhitePoint(value); });
+
+            mInspectionPremultipliedAlphaButton = new Button{xy, "Premult. alpha"};
+            mInspectionPremultipliedAlphaButton->set_font_size(16);
+            mInspectionPremultipliedAlphaButton->set_flags(Button::ToggleButton);
+            mInspectionPremultipliedAlphaButton->set_tooltip("Whether the inspected pixel values should have alpha premultiplied or not.");
+            mInspectionPremultipliedAlphaButton->set_change_callback([this](bool value) { setInspectionPremultipliedAlpha(value); });
+
+            setInspectionChroma(mImageCanvas->inspectionChroma());
+            setInspectionTransfer(mImageCanvas->inspectionTransfer());
+            setInspectionAdaptWhitePoint(mImageCanvas->inspectionAdaptWhitePoint());
+            setInspectionPremultipliedAlpha(mImageCanvas->inspectionPremultipliedAlpha());
+
+            addSpacer(popup, 20);
+
+            new Label{popup, "Background color", "sans-bold", 20};
+            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
+            colorwheel->set_color(mColorsPopupButton->background_color());
+
+            new Label{popup, "Background alpha"};
             auto bgAlphaSlider = new Slider{popup};
             bgAlphaSlider->set_range({0.0f, 1.0f});
             bgAlphaSlider->set_callback([this](float value) {
@@ -518,7 +658,7 @@ ImageViewer::ImageViewer(
             ));
 
             mAnyImageButtons.push_back(makeImageButton(
-                "A", false, [this] { reloadAllImages(); }, 0, fmt::format("Reload All ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)
+                "A", false, [this] { reloadAllImages(); }, 0, fmt::format("Reload all ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
 
             mWatchFilesForChangesButton =
@@ -546,7 +686,7 @@ ImageViewer::ImageViewer(
                     }
                 },
                 FA_TIMES,
-                fmt::format("Close ({}+W); Close All ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
+                fmt::format("Close ({}+W); Close all ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
 
             spacer = new Widget{mSidebarLayout};
@@ -1206,7 +1346,8 @@ void ImageViewer::draw_contents() {
     updateTitle();
 
     // Update histogram
-    static const string histogramTooltipBase = "Histogram of color values. Adapts to the currently chosen channel group and error metric.";
+    static const string histogramTooltipBase =
+        "Histogram of color values with logarithmic x-axis. Adapts to the currently chosen channel group, error metric, and inspection color space.";
     auto lazyCanvasStatistics = mImageCanvas->canvasStatistics();
     if (lazyCanvasStatistics) {
         if (lazyCanvasStatistics->isReady()) {
@@ -1246,28 +1387,28 @@ void ImageViewer::draw_contents() {
 }
 
 void ImageViewer::updateColorCapabilities() {
-    const auto prevColorSpace = mCurrentColorSpace;
-    mCurrentColorSpace = ColorSpace{
+    const auto prevColorSpace = mSystemColorSpace;
+    mSystemColorSpace = ColorSpace{
         .transfer = ituth273::fromWpTransfer(glfwGetWindowTransfer(m_glfw_window)),
-        .primaries = glfwGetWindowPrimaries(m_glfw_window),
+        .primaries = static_cast<EWpPrimaries>(glfwGetWindowPrimaries(m_glfw_window)),
         .maxLuminance = glfwGetWindowMaxLuminance(m_glfw_window),
     };
 
-    if (mCurrentColorSpace == prevColorSpace) {
+    if (mSystemColorSpace == prevColorSpace) {
         return;
     }
 
-    const auto& cs = *mCurrentColorSpace;
+    const auto& cs = *mSystemColorSpace;
 
 #if defined(__APPLE__)
     const auto [supportsWideGamut, supportsHdr] = metal_10bit_edr_support();
     const bool supportsAbsoluteBrightness = false;
 #else // Linux and Windows
-    const bool supportsExtendedRange = m_float_buffer || cs.transfer == ituth273::ETransferCharacteristics::PQ ||
-        cs.transfer == ituth273::ETransferCharacteristics::HLG;
+    const bool supportsExtendedRange = m_float_buffer || cs.transfer == ituth273::ETransfer::PQ || cs.transfer == ituth273::ETransfer::HLG;
     const bool supportsHdr = supportsExtendedRange &&
         (cs.maxLuminance > 80.0f || cs.maxLuminance == 0.0f); // Some systems don't report max luminance (value of 0.0). Assume HDR then.
-    const bool supportsWideGamut = supportsExtendedRange || cs.primaries != 1; // Non-sRGB primaries imply wide color support.
+    const bool supportsWideGamut = supportsExtendedRange ||
+        cs.primaries != EWpPrimaries::SRGB; // Non-sRGB primaries imply wide color support.
     const bool supportsAbsoluteBrightness = supportsHdr;
 #endif
 
@@ -1276,7 +1417,7 @@ void ImageViewer::updateColorCapabilities() {
         prevColorSpace ? "Switched to" : "Initialized",
         this->bits_per_sample(),
         m_float_buffer ? "floating" : "fixed",
-        wpPrimariesToString(cs.primaries),
+        toString(cs.primaries),
         ituth273::toString(cs.transfer),
         supportsHdr           ? "hdr" :
             supportsWideGamut ? "wide_gamut_sdr" :
@@ -2342,6 +2483,75 @@ void ImageViewer::showErrorDialog(string_view message) {
     new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
 }
 
+chroma_t ImageViewer::inspectionChroma() const {
+    TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
+
+    chroma_t chr;
+    for (size_t i = 0; i < chr.size(); ++i) {
+        for (size_t c = 0; c < 2; ++c) {
+            chr[i][c] = mInspectionPrimariesBoxes.at(i * 2 + c)->value();
+        }
+    }
+
+    return chr;
+}
+
+void ImageViewer::setInspectionChroma(const chroma_t& chr) {
+    mImageCanvas->setInspectionChroma(chr);
+
+    TEV_ASSERT(mInspectionPrimariesBoxes.size() == 8, "Expected 8 color space primary boxes.");
+
+    for (size_t i = 0; i < chr.size(); ++i) {
+        for (size_t c = 0; c < 2; ++c) {
+            mInspectionPrimariesBoxes.at(i * 2 + c)->set_value(chr[i][c]);
+        }
+    }
+
+    for (size_t i = 0; i < PRIMARIES.size(); ++i) {
+        if (chr == chroma(PRIMARIES[i].first)) {
+            mInspectionPrimariesComboBox->set_selected_index((int)i);
+            return;
+        }
+    }
+
+    // "Custom"
+    mInspectionPrimariesComboBox->set_selected_index(PRIMARIES.size());
+}
+
+ituth273::ETransfer ImageViewer::inspectionTransfer() const {
+    const size_t index = (size_t)mInspectionTransferComboBox->selected_index();
+    TEV_ASSERT(index <= TRANSFERS.size(), "Invalid transfer function index selected for inspection.");
+
+    return TRANSFERS.at(index).first;
+}
+
+void ImageViewer::setInspectionTransfer(const ituth273::ETransfer transfer) {
+    mImageCanvas->setInspectionTransfer(transfer);
+
+    for (size_t i = 0; i < TRANSFERS.size(); ++i) {
+        if (transfer == TRANSFERS[i].first) {
+            mInspectionTransferComboBox->set_selected_index((int)i);
+            return;
+        }
+    }
+
+    TEV_ASSERT(false, "Invalid transfer function specified for inspection.");
+}
+
+bool ImageViewer::inspectionAdaptWhitePoint() const { return mInspectionAdaptWhitePointButton->pushed(); }
+
+void ImageViewer::setInspectionAdaptWhitePoint(bool value) {
+    mImageCanvas->setInspectionAdaptWhitePoint(value);
+    mInspectionAdaptWhitePointButton->set_pushed(value);
+}
+
+bool ImageViewer::inspectionPremultipliedAlpha() const { return mInspectionPremultipliedAlphaButton->pushed(); }
+
+void ImageViewer::setInspectionPremultipliedAlpha(bool value) {
+    mImageCanvas->setInspectionPremultipliedAlpha(value);
+    mInspectionPremultipliedAlphaButton->set_pushed(value);
+}
+
 void ImageViewer::updateFilter() {
     string filter = mFilter->value();
     string imagePart = filter;
@@ -2497,48 +2707,55 @@ void ImageViewer::updateLayout() {
 }
 
 void ImageViewer::updateTitle() {
-    string caption = "tev";
-    if (mCurrentImage) {
-        auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
-        // Remove duplicates
-        channels.erase(unique(begin(channels), end(channels)), end(channels));
-
-        auto channelTails = channels;
-        transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
-
-        caption = fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
-
-        const auto rel = mouse_pos() - mImageCanvas->position();
-        const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
-        const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
-        TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
-
-        string valuesString;
-        for (size_t i = 0; i < channelTails.size(); ++i) {
-            valuesString += fmt::format("{:.2f},", values[i]);
-        }
-
-        valuesString.pop_back();
-        valuesString += " / 0x";
-        for (size_t i = 0; i < channelTails.size(); ++i) {
-            float tonemappedValue = channelTails[i] == "A" ? values[i] : toSRGB(values[i]);
-            unsigned char discretizedValue = (char)(tonemappedValue * 255 + 0.5f);
-            valuesString += fmt::format("{:02X}", discretizedValue);
-        }
-
-        caption += fmt::format(
-            " – @{},{} ({:.3f},{:.3f}) / {}x{}: {}",
-            imageCoords.x(),
-            imageCoords.y(),
-            imageCoords.x() / (double)mCurrentImage->size().x(),
-            imageCoords.y() / (double)mCurrentImage->size().y(),
-            mCurrentImage->size().x(),
-            mCurrentImage->size().y(),
-            valuesString
-        );
+    if (!mCurrentImage) {
+        set_caption("tev");
+        return;
     }
 
-    set_caption(caption);
+    ostringstream caption;
+
+    auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
+
+    // Remove duplicates
+    channels.erase(unique(begin(channels), end(channels)), end(channels));
+    // Only treat alpha specially if it is not the only channel.
+    const bool hasAlpha = channels.size() > 1 && Channel::isAlpha(channels.back());
+
+    auto channelTails = channels;
+    transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
+
+    caption << fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
+
+    const auto rel = mouse_pos() - mImageCanvas->position();
+    const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
+    const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
+    TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
+
+    caption << fmt::format(
+        " – @{},{} ({:.3f},{:.3f}) / {}x{}: ",
+        imageCoords.x(),
+        imageCoords.y(),
+        imageCoords.x() / (double)mCurrentImage->size().x(),
+        imageCoords.y() / (double)mCurrentImage->size().y(),
+        mCurrentImage->size().x(),
+        mCurrentImage->size().y()
+    );
+
+    auto transformedValues = values;
+    mImageCanvas->applyInspectionParameters(transformedValues, hasAlpha);
+    for (size_t i = 0; i < transformedValues.size(); ++i) {
+        caption << fmt::format("{:.2f},", transformedValues[i]);
+    }
+
+    caption.seekp(-1, ios_base::cur); // Remove last comma
+    caption << " / 0x";
+    for (size_t i = 0; i < values.size(); ++i) {
+        const float srgbValue = hasAlpha && i == values.size() - 1 ? values[i] : toSRGB(values[i]);
+        unsigned char discretizedValue = (char)(clamp(srgbValue, 0.0f, 1.0f) * 255 + 0.5f);
+        caption << fmt::format("{:02X}", discretizedValue);
+    }
+
+    set_caption(caption.str());
 }
 
 string ImageViewer::groupName(size_t index) {

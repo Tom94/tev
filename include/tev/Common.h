@@ -451,7 +451,7 @@ inline float toSRGB(float val, float gamma = 2.4f) {
     static constexpr float threshold = 0.0031308f;
 
     const float absVal = std::abs(val);
-    if (val <= threshold) {
+    if (absVal <= threshold) {
         return 12.92f * val;
     } else {
         return std::copysign((1.0f + a) * std::pow(absVal, 1.0f / gamma) - a, val);

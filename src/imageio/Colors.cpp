@@ -42,8 +42,8 @@ string_view toString(ERenderingIntent intent) {
     }
 }
 
-array<Vector2f, 4> zeroChroma() {
-    array<Vector2f, 4> chroma;
+chroma_t zeroChroma() {
+    chroma_t chroma;
     fill(chroma.begin(), chroma.end(), Vector2f{0.0f});
     return chroma;
 }
@@ -63,7 +63,7 @@ Matrix3f toMatrix3(const float data[3][3]) {
 // This routine was copied from OpenEXR's ImfChromaticities.cpp in accordance
 // with its BSD-3-Clause license. See the header of that file for details.
 // https://github.com/AcademySoftwareFoundation/openexr/blob/main/src/lib/OpenEXR/ImfChromaticities.cpp
-Matrix3f rgbToXyz(const std::array<Vector2f, 4>& chroma, float Y) {
+Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
     //
     // For an explanation of how the color conversion matrix is derived,
     // see Roy Hall, "Illumination and Color in Computer Generated Imagery",
@@ -140,9 +140,9 @@ Matrix3f rgbToXyz(const std::array<Vector2f, 4>& chroma, float Y) {
     return M;
 }
 
-Matrix3f xyzToRgb(const std::array<Vector2f, 4>& chroma, float Y) { return inverse(rgbToXyz(chroma, Y)); }
+Matrix3f xyzToRgb(const chroma_t& chroma, float Y) { return inverse(rgbToXyz(chroma, Y)); }
 
-Matrix3f xyzToChromaMatrix(const std::array<Vector2f, 4>& chroma) { return xyzToRgb(chroma, 1); }
+Matrix3f xyzToChromaMatrix(const chroma_t& chroma) { return xyzToRgb(chroma, 1); }
 
 // Adapted from LittleCMS's AdaptToXYZD50 function
 Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) {
@@ -156,6 +156,7 @@ Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) 
         {0.0389f,  -0.0685f, 1.0296f },
     };
     const auto kBradford = toMatrix3(br);
+
     const float brInv[3][3] = {
         {0.9869929f,  -0.1470543f, 0.1599627f},
         {0.4323053f,  0.5183603f,  0.0492912f},
@@ -168,18 +169,12 @@ Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) 
     const auto lmsSrc = kBradford * xyToXYZ(srcWhite);
     const auto lmsDst = kBradford * xyToXYZ(dstWhite);
 
-    const float a[3][3] = {
-        {lmsDst[0] / lmsSrc[0], 0,                     0                    },
-        {0,                     lmsDst[1] / lmsSrc[1], 0                    },
-        {0,                     0,                     lmsDst[2] / lmsSrc[2]},
-    };
-    const auto aMat = toMatrix3(a);
+    const auto scale = Matrix3f::scale(lmsDst / lmsSrc);
 
-    const auto b = aMat * kBradford;
-    return kBradfordInv * b;
+    return kBradfordInv * scale * kBradford;
 }
 
-Matrix3f convertColorspaceMatrix(const std::array<Vector2f, 4>& srcChroma, const std::array<Vector2f, 4>& dstChroma, ERenderingIntent intent) {
+Matrix3f convertColorspaceMatrix(const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent) {
     if (srcChroma == dstChroma) {
         return Matrix3f{1.0f};
     }
@@ -196,7 +191,7 @@ Matrix3f convertColorspaceMatrix(const std::array<Vector2f, 4>& srcChroma, const
     }
 }
 
-Matrix3f chromaToRec709Matrix(const std::array<Vector2f, 4>& chroma, ERenderingIntent intent) {
+Matrix3f chromaToRec709Matrix(const chroma_t& chroma, ERenderingIntent intent) {
     return convertColorspaceMatrix(chroma, rec709Chroma(), intent);
 }
 
@@ -213,7 +208,7 @@ Vector2f whiteC() { return {0.31006f, 0.31616f}; }
 Vector2f whiteCenter() { return {0.333333f, 0.333333f}; }
 Vector2f whiteDci() { return {0.314f, 0.351f}; }
 
-array<Vector2f, 4> rec709Chroma() {
+chroma_t rec709Chroma() {
     return {
         {
          {0.6400f, 0.3300f},
@@ -224,7 +219,7 @@ array<Vector2f, 4> rec709Chroma() {
     };
 }
 
-array<Vector2f, 4> adobeChroma() {
+chroma_t adobeChroma() {
     return {
         {
          {0.6400f, 0.3300f},
@@ -235,7 +230,7 @@ array<Vector2f, 4> adobeChroma() {
     };
 }
 
-array<Vector2f, 4> proPhotoChroma() {
+chroma_t proPhotoChroma() {
     return {
         {
          {0.734699f, 0.265301f},
@@ -246,7 +241,7 @@ array<Vector2f, 4> proPhotoChroma() {
     };
 }
 
-array<Vector2f, 4> displayP3Chroma() {
+chroma_t displayP3Chroma() {
     return {
         {
          {0.6800f, 0.3200f},
@@ -257,7 +252,7 @@ array<Vector2f, 4> displayP3Chroma() {
     };
 }
 
-array<Vector2f, 4> dciP3Chroma() {
+chroma_t dciP3Chroma() {
     return {
         {
          {0.6800f, 0.3200f},
@@ -268,7 +263,7 @@ array<Vector2f, 4> dciP3Chroma() {
     };
 }
 
-array<Vector2f, 4> bt2020Chroma() {
+chroma_t bt2020Chroma() {
     return {
         {
          {0.7080f, 0.2920f},
@@ -279,7 +274,7 @@ array<Vector2f, 4> bt2020Chroma() {
     };
 }
 
-array<Vector2f, 4> bt2100Chroma() {
+chroma_t bt2100Chroma() {
     return bt2020Chroma(); // BT.2100 uses the same primaries as BT.2020
 }
 
@@ -340,19 +335,23 @@ nanogui::Vector2f xy(EExifLightSource lightSource) {
     }
 }
 
-array<Vector2f, 4> chromaFromWpPrimaries(int wpPrimaries) {
-    if (wpPrimaries == 10) {
-        // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
-        return adobeChroma();
+chroma_t chroma(EWpPrimaries wpPrimaries) {
+    // Special case for Adobe and ProPhoto primaries, which is not in the H.273 spec
+    switch (wpPrimaries) {
+        case EWpPrimaries::AdobeRGB: return adobeChroma();
+        case EWpPrimaries::ProPhotoRGB: return proPhotoChroma();
+        default: break;
     }
 
     return ituth273::chroma(ituth273::fromWpPrimaries(wpPrimaries));
 }
 
-string_view wpPrimariesToString(int wpPrimaries) {
-    if (wpPrimaries == 10) {
-        // Special case for Adobe RGB (1998) primaries, which is not in the H.273 spec
-        return "adobe_rgb";
+string_view toString(EWpPrimaries wpPrimaries) {
+    // Special case for Adobe and ProPhoto primaries, which is not in the H.273 spec
+    switch (wpPrimaries) {
+        case EWpPrimaries::AdobeRGB: return "adobe_rgb";
+        case EWpPrimaries::ProPhotoRGB: return "pro_photo_rgb";
+        default: break;
     }
 
     return ituth273::toString(ituth273::fromWpPrimaries(wpPrimaries));
@@ -380,7 +379,7 @@ string_view toString(const EColorPrimaries primaries) {
     return "invalid";
 }
 
-array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
+chroma_t chroma(const EColorPrimaries primaries) {
     switch (primaries) {
         default: tlog::warning() << fmt::format("Unknown color primaries {}. Using Rec.709 chroma.", (int)primaries); return rec709Chroma();
         case EColorPrimaries::BT709: return rec709Chroma();
@@ -448,85 +447,84 @@ array<Vector2f, 4> chroma(const EColorPrimaries primaries) {
     return rec709Chroma(); // Fallback to Rec.709 if unknown
 }
 
-string_view toString(const ETransferCharacteristics transfer) {
+string_view toString(const ETransfer transfer) {
     switch (transfer) {
-        case ETransferCharacteristics::BT709: return "bt709";
-        case ETransferCharacteristics::Unspecified: return "unspecified";
-        case ETransferCharacteristics::Gamma22: return "gamma22";
-        case ETransferCharacteristics::Gamma28: return "gamma28";
-        case ETransferCharacteristics::BT601: return "bt601";
-        case ETransferCharacteristics::SMPTE240: return "smpte240";
-        case ETransferCharacteristics::Linear: return "linear";
-        case ETransferCharacteristics::Log100: return "log100";
-        case ETransferCharacteristics::Log100Sqrt10: return "log100_sqrt10";
-        case ETransferCharacteristics::IEC61966_2_4: return "iec61966";
-        case ETransferCharacteristics::BT1361Extended: return "bt1361_extended";
-        case ETransferCharacteristics::SRGB: return "srgb";
-        case ETransferCharacteristics::BT202010bit: return "bt2020_10bit";
-        case ETransferCharacteristics::BT202012bit: return "bt2020_12bit";
-        case ETransferCharacteristics::PQ: return "pq";
-        case ETransferCharacteristics::SMPTE428: return "smpte428";
-        case ETransferCharacteristics::HLG: return "hlg";
+        case ETransfer::BT709: return "bt709";
+        case ETransfer::Unspecified: return "unspecified";
+        case ETransfer::Gamma22: return "gamma22";
+        case ETransfer::Gamma28: return "gamma28";
+        case ETransfer::BT601: return "bt601";
+        case ETransfer::SMPTE240: return "smpte240";
+        case ETransfer::Linear: return "linear";
+        case ETransfer::Log100: return "log100";
+        case ETransfer::Log100Sqrt10: return "log100_sqrt10";
+        case ETransfer::IEC61966_2_4: return "iec61966";
+        case ETransfer::BT1361Extended: return "bt1361_extended";
+        case ETransfer::SRGB: return "srgb";
+        case ETransfer::BT202010bit: return "bt2020_10bit";
+        case ETransfer::BT202012bit: return "bt2020_12bit";
+        case ETransfer::PQ: return "pq";
+        case ETransfer::SMPTE428: return "smpte428";
+        case ETransfer::HLG: return "hlg";
     }
 
     return "invalid";
 }
 
-EColorPrimaries fromWpPrimaries(int wpPrimaries) {
+EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries) {
     switch (wpPrimaries) {
-        case 1: return ituth273::EColorPrimaries::BT709;
-        case 2: return ituth273::EColorPrimaries::BT470M;
-        case 3: return ituth273::EColorPrimaries::BT470BG;
-        case 4: return ituth273::EColorPrimaries::SMPTE170M;
-        case 5: return ituth273::EColorPrimaries::Film;
-        case 6: return ituth273::EColorPrimaries::BT2020;
-        case 7: return ituth273::EColorPrimaries::SMPTE428;
-        case 8: return ituth273::EColorPrimaries::SMPTE431;
-        case 9: return ituth273::EColorPrimaries::SMPTE432;
+        case EWpPrimaries::SRGB: return ituth273::EColorPrimaries::BT709;
+        case EWpPrimaries::PALM: return ituth273::EColorPrimaries::BT470M;
+        case EWpPrimaries::PAL: return ituth273::EColorPrimaries::BT470BG;
+        case EWpPrimaries::NTSC: return ituth273::EColorPrimaries::SMPTE170M;
+        case EWpPrimaries::Film: return ituth273::EColorPrimaries::Film;
+        case EWpPrimaries::BT2020: return ituth273::EColorPrimaries::BT2020;
+        case EWpPrimaries::CIE1931XYZ: return ituth273::EColorPrimaries::SMPTE428;
+        case EWpPrimaries::DCIP3: return ituth273::EColorPrimaries::SMPTE431;
+        case EWpPrimaries::DisplayP3: return ituth273::EColorPrimaries::SMPTE432;
+        default: throw std::invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
     }
-
-    throw std::invalid_argument{"Unknown wp color primaries: " + std::to_string(wpPrimaries)};
 }
 
-bool isTransferImplemented(const ETransferCharacteristics transfer) {
+bool isTransferImplemented(const ETransfer transfer) {
     switch (transfer) {
-        case ETransferCharacteristics::BT709:
-        case ETransferCharacteristics::BT601:
-        case ETransferCharacteristics::BT202010bit:
-        case ETransferCharacteristics::BT202012bit:
-        case ETransferCharacteristics::IEC61966_2_4: // handles negative values by mirroring
-        case ETransferCharacteristics::BT1361Extended: // extended to negative values (weirdly)
-        case ETransferCharacteristics::Gamma22:
-        case ETransferCharacteristics::Gamma28:
-        case ETransferCharacteristics::SMPTE240:
-        case ETransferCharacteristics::Linear:
-        case ETransferCharacteristics::Log100:
-        case ETransferCharacteristics::Log100Sqrt10:
-        case ETransferCharacteristics::SRGB:
-        case ETransferCharacteristics::PQ:
-        case ETransferCharacteristics::SMPTE428:
-        case ETransferCharacteristics::HLG:
-        case ETransferCharacteristics::Unspecified: return true;
+        case ETransfer::BT709:
+        case ETransfer::BT601:
+        case ETransfer::BT202010bit:
+        case ETransfer::BT202012bit:
+        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
+        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
+        case ETransfer::Gamma22:
+        case ETransfer::Gamma28:
+        case ETransfer::SMPTE240:
+        case ETransfer::Linear:
+        case ETransfer::Log100:
+        case ETransfer::Log100Sqrt10:
+        case ETransfer::SRGB:
+        case ETransfer::PQ:
+        case ETransfer::SMPTE428:
+        case ETransfer::HLG:
+        case ETransfer::Unspecified: return true;
     }
 
     return false;
 }
 
-ETransferCharacteristics fromWpTransfer(int wpTransfer) {
+ETransfer fromWpTransfer(int wpTransfer) {
     switch (wpTransfer) {
-        case 1: return ETransferCharacteristics::BT709;
-        case 2: return ETransferCharacteristics::Gamma22;
-        case 3: return ETransferCharacteristics::Gamma28;
-        case 4: return ETransferCharacteristics::SMPTE240;
-        case 5: return ETransferCharacteristics::Linear;
-        case 6: return ETransferCharacteristics::Log100;
-        case 7: return ETransferCharacteristics::Log100Sqrt10;
-        case 8: return ETransferCharacteristics::IEC61966_2_4;
-        case 9: return ETransferCharacteristics::SRGB;
-        case 10: return ETransferCharacteristics::SRGB; // TODO: handle the fact that this is the extended SRGB variant
-        case 11: return ETransferCharacteristics::PQ;
-        case 12: return ETransferCharacteristics::SMPTE428;
-        case 13: return ETransferCharacteristics::HLG;
+        case 1: return ETransfer::BT709;
+        case 2: return ETransfer::Gamma22;
+        case 3: return ETransfer::Gamma28;
+        case 4: return ETransfer::SMPTE240;
+        case 5: return ETransfer::Linear;
+        case 6: return ETransfer::Log100;
+        case 7: return ETransfer::Log100Sqrt10;
+        case 8: return ETransfer::IEC61966_2_4;
+        case 9: return ETransfer::SRGB;
+        case 10: return ETransfer::SRGB; // NOTE: both are treated as the extended sRGB transfer function by tev
+        case 11: return ETransfer::PQ;
+        case 12: return ETransfer::SMPTE428;
+        case 13: return ETransfer::HLG;
     }
 
     throw std::invalid_argument{"Unknown transfer characteristics from color manager: " + std::to_string(wpTransfer)};
@@ -624,7 +622,7 @@ optional<ColorProfile::CICP> ColorProfile::cicp() const {
 
     return ColorProfile::CICP{
         .primaries = (ituth273::EColorPrimaries)cicp->ColourPrimaries,
-        .transfer = (ituth273::ETransferCharacteristics)cicp->TransferCharacteristics,
+        .transfer = (ituth273::ETransfer)cicp->TransferCharacteristics,
         .matrixCoeffs = cicp->MatrixCoefficients,
         .videoFullRangeFlag = cicp->VideoFullRangeFlag,
     };
