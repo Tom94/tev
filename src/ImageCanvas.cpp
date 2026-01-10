@@ -924,7 +924,7 @@ Task<vector<Channel>> ImageCanvas::channelsFromImages(
     }
 
     vector<Channel> result;
-    auto channelNames = image->channelsInGroup(requestedChannelGroup);
+    const auto channelNames = image->channelsInGroup(requestedChannelGroup);
     for (size_t i = 0; i < channelNames.size(); ++i) {
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size(), EPixelFormat::F32, EPixelFormat::F32);
     }
@@ -945,8 +945,8 @@ Task<vector<Channel>> ImageCanvas::channelsFromImages(
     } else {
         const auto referenceChannels = reference->channels(channelNames);
 
-        Vector2i size = Vector2i{image->size().x(), image->size().y()};
-        Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
+        const Vector2i size = Vector2i{image->size().x(), image->size().y()};
+        const Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
 
         vector<bool> isAlpha(channelNames.size());
         for (size_t i = 0; i < channelNames.size(); ++i) {
@@ -1044,25 +1044,24 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             rec709Chroma(), chroma, adaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
         );
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
-            numPixels,
+        co_await ThreadPool::global().parallelForAsync<int>(
+            region.min.y(),
+            region.max.y(),
             numSamples,
-            [&](size_t j) {
-                int x = (int)(j % regionSize.x()) + region.min.x();
-                int y = (int)(j / regionSize.x()) + region.min.y();
+            [&](int y) {
+                for (int x = region.min.x(); x < region.max.x(); ++x) {
+                    const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
+                    const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
-                const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
-                const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
+                    Vector3f rgb;
+                    for (size_t c = 0; c < 3; ++c) {
+                        rgb[c] = flattened[c].at({x, y}) * alphaFactor;
+                    }
 
-                Vector3f rgb;
-                for (size_t c = 0; c < 3; ++c) {
-                    rgb[c] = flattened[c].at({x, y}) * alphaFactor;
-                }
-
-                rgb = ituth273::transfer(transfer, mat * rgb);
-                for (size_t c = 0; c < 3; ++c) {
-                    flattened[c].setAt({x, y}, rgb[c]);
+                    rgb = ituth273::transfer(transfer, mat * rgb);
+                    for (size_t c = 0; c < 3; ++c) {
+                        flattened[c].setAt({x, y}, rgb[c]);
+                    }
                 }
             },
             priority
@@ -1070,21 +1069,20 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     } else {
         // Otherwise, apply just alpha and transfer function
         if (transfer != ituth273::ETransfer::Linear || (alphaChannel && !premultipliedAlpha)) {
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
-                numPixels,
+            co_await ThreadPool::global().parallelForAsync<int>(
+                region.min.y(),
+                region.max.y(),
                 numSamples,
-                [&](size_t j) {
-                    int x = (int)(j % regionSize.x()) + region.min.x();
-                    int y = (int)(j / regionSize.x()) + region.min.y();
+                [&](int y) {
+                    for (int x = region.min.x(); x < region.max.x(); ++x) {
+                        const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
+                        const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
-                    const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
-                    const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
-
-                    for (size_t c = 0; c < nColorChannels; ++c) {
-                        auto& channel = flattened[c];
-                        const float val = channel.at({x, y}) * alphaFactor;
-                        channel.setAt({x, y}, ituth273::transferComponent(transfer, val));
+                        for (size_t c = 0; c < nColorChannels; ++c) {
+                            auto& channel = flattened[c];
+                            const float val = channel.at({x, y}) * alphaFactor;
+                            channel.setAt({x, y}, ituth273::transferComponent(transfer, val));
+                        }
                     }
                 },
                 priority
