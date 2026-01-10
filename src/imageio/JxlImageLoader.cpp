@@ -31,6 +31,7 @@
 #include <jxl/thread_parallel_runner_cxx.h>
 
 #include <istream>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -158,50 +159,41 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     const auto jxlRunParallel =
         [](void* runnerOpaque, void* jpegxlOpaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t startRange, uint32_t endRange) {
             const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
-            static const uint32_t hardwareConcurrency = thread::hardware_concurrency();
 
             const uint32_t range = endRange - startRange;
-            const uint32_t nTasks =
-                std::min({(uint32_t)ThreadPool::global().numThreads(), hardwareConcurrency, range, runnerData->jxlSuggestedNumThreads});
+            const uint32_t numTasks = std::min(
+                ThreadPool::global().nTasks<uint32_t>(
+                    0,
+                    range,
+                    numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
+                ),
+                runnerData->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
+            );
 
-            const auto initResult = init(jpegxlOpaque, nTasks);
+            const auto initResult = init(jpegxlOpaque, numTasks);
             if (initResult != 0) {
                 return initResult;
             }
 
-            vector<Task<void>> tasks;
-
-            {
-                // The task queue is already thread-safe due to the lock in enqueueTask, but we can optimize a bit by locking only once for
-                // all tasks.
-                std::scoped_lock lock{ThreadPool::global().taskQueueMutex()};
-
-                for (uint32_t i = 0; i < nTasks; ++i) {
-                    const uint32_t taskStart = startRange + (range * i / nTasks);
-                    const uint32_t taskEnd = startRange + (range * (i + 1) / nTasks);
+            // The synchronous parallel for loop is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get
+            // the thread pool to cooperate with the JXL API that expects a non-coroutine function here. We will offload the
+            // JxlImageLoader::load() function into a wholly separate thread to avoid blocking the thread pool as a consequence.
+            ThreadPool::global().parallelFor<uint32_t>(
+                0,
+                numTasks,
+                numeric_limits<uint32_t>::max(), // Maximum parallelism up to numTasks threads
+                [&](uint32_t i) {
+                    const uint32_t taskStart = startRange + (range * i / numTasks);
+                    const uint32_t taskEnd = startRange + (range * (i + 1) / numTasks);
                     TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
-                    tasks.emplace_back(
-                        [](JxlParallelRunFunction func,
-                           void* jpegxlOpaque,
-                           uint32_t taskId,
-                           uint32_t tStart,
-                           uint32_t tEnd,
-                           int tPriority,
-                           ThreadPool* pool) -> Task<void> {
-                            co_await pool->enqueueCoroutine(tPriority);
-                            for (uint32_t j = tStart; j < tEnd; ++j) {
-                                func(jpegxlOpaque, j, taskId);
-                            }
-                        }(func, jpegxlOpaque, i, taskStart, taskEnd, runnerData->priority, &ThreadPool::global())
-                    );
-                }
-            }
+                    for (uint32_t j = taskStart; j < taskEnd; ++j) {
+                        func(jpegxlOpaque, j, (uint32_t)i);
+                    }
+                },
+                runnerData->priority
+            );
 
-            // This is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get the thread pool to cooperate
-            // with the JXL API that expects a non-coroutine function here. We will offload the JxlImageLoader::load() function into a
-            // wholly separate thread to avoid blocking the thread pool as a consequence.
-            waitAll(tasks);
             return 0;
         };
 

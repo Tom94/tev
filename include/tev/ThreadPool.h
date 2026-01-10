@@ -111,21 +111,26 @@ public:
     void waitUntilFinished();
     void waitUntilFinishedFor(const std::chrono::microseconds Duration);
 
-    template <typename Int, typename F>
-    Task<void> parallelForAsync(
+    template <typename Int>
+    Int nTasks(
         Int start,
         Int end,
         // In ~number of samples (== pixels * channels) processed with a few operations (e.g. toSrgb, color transform, alpha mult/div) each.
         // If the per-sample cost is particularly high, an arbitrary factor can be applied to increase this value.
-        size_t approxCost,
-        F body,
-        int priority
-    ) {
+        size_t approxCost
+    ) const {
         const size_t targetCostPerTask = 64 * 1024;
         const size_t maxNTasks = (approxCost + targetCostPerTask - 1) / targetCostPerTask;
 
         const Int range = end - start;
         const Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, (Int)maxNTasks, range});
+
+        return nTasks;
+    }
+
+    template <typename Int, typename F> Task<void> parallelForAsync(Int start, Int end, size_t approxCost, F body, int priority) {
+        const Int range = end - start;
+        const Int n = nTasks(start, end, approxCost);
 
         std::vector<Task<void>> tasks;
 
@@ -134,9 +139,9 @@ public:
             // tasks.
             const std::scoped_lock lock{mTaskQueueMutex};
 
-            for (Int i = 0; i < nTasks; ++i) {
-                Int taskStart = start + (range * i / nTasks);
-                Int taskEnd = start + (range * (i + 1) / nTasks);
+            for (Int i = 0; i < n; ++i) {
+                Int taskStart = start + (range * i / n);
+                Int taskEnd = start + (range * (i + 1) / n);
                 TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
                 tasks.emplace_back([](Int tStart, Int tEnd, F& tBody, int tPriority, ThreadPool* pool) -> Task<void> {
