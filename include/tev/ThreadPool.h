@@ -156,10 +156,6 @@ public:
         co_await awaitAll(tasks);
     }
 
-    template <typename Int, typename F> void parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
-        parallelForAsync(start, end, approxCost, body, priority).get();
-    }
-
     size_t numThreads() const { return mNumThreads; }
 
     std::recursive_mutex& taskQueueMutex() { return mTaskQueueMutex; }

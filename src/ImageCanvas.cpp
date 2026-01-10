@@ -669,14 +669,14 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
 
 void ImageCanvas::resetTransform() { mTransform = Matrix3f::scale(Vector2f{1.0f}); }
 
-HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<float>> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
     if (!mImage) {
-        return {};
+        co_return {};
     }
 
-    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
+    const auto& channels = co_await channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
     if (channels.empty()) {
-        return {};
+        co_return {};
     }
 
     const auto imageRegion = cropInImageCoords();
@@ -686,7 +686,7 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
     // Flatten image into vector
     HeapArray<float> result{4 * numPixels};
 
-    ThreadPool::global().parallelFor(
+    co_await ThreadPool::global().parallelForAsync(
         imageRegion.min.y(),
         imageRegion.max.y(),
         numPixels * 4,
@@ -705,7 +705,7 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
-        ThreadPool::global().parallelFor(
+        co_await ThreadPool::global().parallelForAsync(
             (size_t)0,
             numPixels,
             numPixels * 4,
@@ -720,15 +720,15 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
         );
     }
 
-    return result;
+    co_return result;
 }
 
-HeapArray<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<char>> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
     // getHdrImageData always returns four floats per pixel (RGBA).
-    const auto floatData = getHdrImageData(divideAlpha, priority);
+    const auto floatData = co_await getHdrImageData(divideAlpha, priority);
     HeapArray<char> result(floatData.size());
 
-    ThreadPool::global().parallelFor<size_t>(
+    co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         floatData.size() / 4,
         floatData.size(),
@@ -749,7 +749,7 @@ HeapArray<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) con
         priority
     );
 
-    return result;
+    co_return result;
 }
 
 void ImageCanvas::saveImage(const fs::path& path) const {
@@ -785,9 +785,9 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()), imageSize, 4);
+            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()).get(), imageSize, 4);
         } else if (ldrSaver) {
-            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()), imageSize, 4);
+            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()).get(), imageSize, 4);
         }
 
         auto end = chrono::system_clock::now();
@@ -916,11 +916,11 @@ void ImageCanvas::applyInspectionParameters(vector<float>& values, bool hasAlpha
     }
 }
 
-vector<Channel> ImageCanvas::channelsFromImages(
+Task<vector<Channel>> ImageCanvas::channelsFromImages(
     shared_ptr<Image> image, shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority
 ) {
     if (!image) {
-        return {};
+        co_return {};
     }
 
     vector<Channel> result;
@@ -931,7 +931,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
 
     const auto channels = image->channels(channelNames);
     if (!reference) {
-        ThreadPool::global().parallelFor<size_t>(
+        co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             image->numPixels(),
             image->numPixels() * channels.size(),
@@ -953,7 +953,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
             isAlpha[i] = Channel::isAlpha(channelNames[i]);
         }
 
-        ThreadPool::global().parallelFor<int>(
+        co_await ThreadPool::global().parallelForAsync<int>(
             0,
             size.y(),
             image->numPixels() * channels.size(),
@@ -987,7 +987,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         );
     }
 
-    return result;
+    co_return result;
 }
 
 Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
@@ -1013,7 +1013,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         tlog::debug() << fmt::format("Computed canvas statistics for {} in {:.4f} seconds.", image->name(), elapsedSeconds.count());
     });
 
-    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
+    auto flattened = co_await channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
     const Channel* alphaChannel = nullptr;
 

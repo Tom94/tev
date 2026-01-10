@@ -156,29 +156,31 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         .jxlSuggestedNumThreads = thread::hardware_concurrency(),
     };
 
-    const auto jxlRunParallel =
-        [](void* runnerOpaque, void* jpegxlOpaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t startRange, uint32_t endRange) {
-            const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+    const auto jxlRunParallel = [](void* runnerOpaque,
+                                   void* jpegxlOpaque,
+                                   JxlParallelRunInit init,
+                                   JxlParallelRunFunction func,
+                                   uint32_t startRange,
+                                   uint32_t endRange) {
+        const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
 
-            const uint32_t range = endRange - startRange;
-            const uint32_t numTasks = std::min(
-                ThreadPool::global().nTasks<uint32_t>(
-                    0,
-                    range,
-                    numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
-                ),
-                runnerData->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
-            );
+        const uint32_t range = endRange - startRange;
+        const uint32_t numTasks = std::min(
+            ThreadPool::global().nTasks<uint32_t>(
+                0,
+                range,
+                numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
+            ),
+            runnerData->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
+        );
 
-            const auto initResult = init(jpegxlOpaque, numTasks);
-            if (initResult != 0) {
-                return initResult;
-            }
+        const auto initResult = init(jpegxlOpaque, numTasks);
+        if (initResult != 0) {
+            return initResult;
+        }
 
-            // The synchronous parallel for loop is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get
-            // the thread pool to cooperate with the JXL API that expects a non-coroutine function here. We will offload the
-            // JxlImageLoader::load() function into a wholly separate thread to avoid blocking the thread pool as a consequence.
-            ThreadPool::global().parallelFor<uint32_t>(
+        ThreadPool::global()
+            .parallelForAsync<uint32_t>(
                 0,
                 numTasks,
                 numeric_limits<uint32_t>::max(), // Maximum parallelism up to numTasks threads
@@ -192,10 +194,14 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     }
                 },
                 runnerData->priority
-            );
+            )
+            // The synchronous parallel for loop is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get
+            // the thread pool to cooperate with the JXL API that expects a non-coroutine function here. We will offload the
+            // JxlImageLoader::load() function into a wholly separate thread to avoid blocking the thread pool as a consequence.
+            .get();
 
-            return 0;
-        };
+        return 0;
+    };
 
     // Since we allow the JXL decoder to run in our coroutine thread pool, despite being not a coroutine itself and thus having to wait on
     // each task's completion, we need to offload the governing code (i.e. this function) to a separate thread to avoid stalling the
