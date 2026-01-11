@@ -29,6 +29,7 @@
 #include <nanogui/theme.h>
 #include <nanogui/vector.h>
 
+#include <chrono>
 #include <fstream>
 #include <set>
 #include <span>
@@ -668,14 +669,14 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
 
 void ImageCanvas::resetTransform() { mTransform = Matrix3f::scale(Vector2f{1.0f}); }
 
-HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<float>> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
     if (!mImage) {
-        return {};
+        co_return {};
     }
 
-    const auto& channels = channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
+    const auto& channels = co_await channelsFromImages(mImage, mReference, mRequestedChannelGroup, mMetric, priority);
     if (channels.empty()) {
-        return {};
+        co_return {};
     }
 
     const auto imageRegion = cropInImageCoords();
@@ -685,7 +686,7 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
     // Flatten image into vector
     HeapArray<float> result{4 * numPixels};
 
-    ThreadPool::global().parallelFor(
+    co_await ThreadPool::global().parallelForAsync(
         imageRegion.min.y(),
         imageRegion.max.y(),
         numPixels * 4,
@@ -704,7 +705,7 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
-        ThreadPool::global().parallelFor(
+        co_await ThreadPool::global().parallelForAsync(
             (size_t)0,
             numPixels,
             numPixels * 4,
@@ -719,15 +720,15 @@ HeapArray<float> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) co
         );
     }
 
-    return result;
+    co_return result;
 }
 
-HeapArray<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<char>> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
     // getHdrImageData always returns four floats per pixel (RGBA).
-    const auto floatData = getHdrImageData(divideAlpha, priority);
+    const auto floatData = co_await getHdrImageData(divideAlpha, priority);
     HeapArray<char> result(floatData.size());
 
-    ThreadPool::global().parallelFor<size_t>(
+    co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         floatData.size() / 4,
         floatData.size(),
@@ -748,7 +749,7 @@ HeapArray<char> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) con
         priority
     );
 
-    return result;
+    co_return result;
 }
 
 void ImageCanvas::saveImage(const fs::path& path) const {
@@ -784,9 +785,9 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()), imageSize, 4);
+            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()).get(), imageSize, 4);
         } else if (ldrSaver) {
-            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()), imageSize, 4);
+            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()).get(), imageSize, 4);
         }
 
         auto end = chrono::system_clock::now();
@@ -915,22 +916,22 @@ void ImageCanvas::applyInspectionParameters(vector<float>& values, bool hasAlpha
     }
 }
 
-vector<Channel> ImageCanvas::channelsFromImages(
+Task<vector<Channel>> ImageCanvas::channelsFromImages(
     shared_ptr<Image> image, shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority
 ) {
     if (!image) {
-        return {};
+        co_return {};
     }
 
     vector<Channel> result;
-    auto channelNames = image->channelsInGroup(requestedChannelGroup);
+    const auto channelNames = image->channelsInGroup(requestedChannelGroup);
     for (size_t i = 0; i < channelNames.size(); ++i) {
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), image->size(), EPixelFormat::F32, EPixelFormat::F32);
     }
 
     const auto channels = image->channels(channelNames);
     if (!reference) {
-        ThreadPool::global().parallelFor<size_t>(
+        co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             image->numPixels(),
             image->numPixels() * channels.size(),
@@ -944,15 +945,15 @@ vector<Channel> ImageCanvas::channelsFromImages(
     } else {
         const auto referenceChannels = reference->channels(channelNames);
 
-        Vector2i size = Vector2i{image->size().x(), image->size().y()};
-        Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
+        const Vector2i size = Vector2i{image->size().x(), image->size().y()};
+        const Vector2i offset = (Vector2i{reference->size().x(), reference->size().y()} - size) / 2;
 
         vector<bool> isAlpha(channelNames.size());
         for (size_t i = 0; i < channelNames.size(); ++i) {
             isAlpha[i] = Channel::isAlpha(channelNames[i]);
         }
 
-        ThreadPool::global().parallelFor<int>(
+        co_await ThreadPool::global().parallelForAsync<int>(
             0,
             size.y(),
             image->numPixels() * channels.size(),
@@ -986,7 +987,7 @@ vector<Channel> ImageCanvas::channelsFromImages(
         );
     }
 
-    return result;
+    co_return result;
 }
 
 Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
@@ -1001,14 +1002,18 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     bool premultipliedAlpha,
     int priority
 ) {
+    TEV_ASSERT(image, "Image must be valid.");
     TEV_ASSERT(region.isValid(), "Region must be valid.");
     TEV_ASSERT(Box2i{image->size()}.contains(region), "Region must be contained in image.");
 
-    auto flattened = channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
+    const auto start = chrono::steady_clock::now();
+    const auto scopeGuard = ScopeGuard([&]() {
+        const auto end = chrono::steady_clock::now();
+        const chrono::duration<double> elapsedSeconds = end - start;
+        tlog::debug() << fmt::format("Computed canvas statistics for {} in {:.4f} seconds.", image->name(), elapsedSeconds.count());
+    });
 
-    double mean = 0;
-    float maximum = -numeric_limits<float>::infinity();
-    float minimum = numeric_limits<float>::infinity();
+    auto flattened = co_await channelsFromImages(image, reference, requestedChannelGroup, metric, priority);
 
     const Channel* alphaChannel = nullptr;
 
@@ -1021,7 +1026,13 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     const auto result = make_shared<CanvasStatistics>();
     const size_t nColorChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
+
     result->histogramColors.resize(nColorChannels);
+    for (size_t i = 0; i < nColorChannels; ++i) {
+        string rgba[] = {"R", "G", "B", "A"};
+        string colorName = nColorChannels == 1 ? "L" : rgba[std::min(i, (size_t)3)];
+        result->histogramColors[i] = Channel::color(colorName, false);
+    }
 
     const auto regionSize = region.size();
     const size_t numPixels = region.area();
@@ -1033,25 +1044,24 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             rec709Chroma(), chroma, adaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
         );
 
-        ThreadPool::global().parallelFor<size_t>(
-            0,
-            numPixels,
+        co_await ThreadPool::global().parallelForAsync<int>(
+            region.min.y(),
+            region.max.y(),
             numSamples,
-            [&](size_t j) {
-                int x = (int)(j % regionSize.x()) + region.min.x();
-                int y = (int)(j / regionSize.x()) + region.min.y();
+            [&](int y) {
+                for (int x = region.min.x(); x < region.max.x(); ++x) {
+                    const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
+                    const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
-                const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
-                const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
+                    Vector3f rgb;
+                    for (size_t c = 0; c < 3; ++c) {
+                        rgb[c] = flattened[c].at({x, y}) * alphaFactor;
+                    }
 
-                Vector3f rgb;
-                for (size_t c = 0; c < 3; ++c) {
-                    rgb[c] = flattened[c].at({x, y}) * alphaFactor;
-                }
-
-                rgb = ituth273::transfer(transfer, mat * rgb);
-                for (size_t c = 0; c < 3; ++c) {
-                    flattened[c].setAt({x, y}, rgb[c]);
+                    rgb = ituth273::transfer(transfer, mat * rgb);
+                    for (size_t c = 0; c < 3; ++c) {
+                        flattened[c].setAt({x, y}, rgb[c]);
+                    }
                 }
             },
             priority
@@ -1059,21 +1069,20 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     } else {
         // Otherwise, apply just alpha and transfer function
         if (transfer != ituth273::ETransfer::Linear || (alphaChannel && !premultipliedAlpha)) {
-            ThreadPool::global().parallelFor<size_t>(
-                0,
-                numPixels,
+            co_await ThreadPool::global().parallelForAsync<int>(
+                region.min.y(),
+                region.max.y(),
                 numSamples,
-                [&](size_t j) {
-                    int x = (int)(j % regionSize.x()) + region.min.x();
-                    int y = (int)(j / regionSize.x()) + region.min.y();
+                [&](int y) {
+                    for (int x = region.min.x(); x < region.max.x(); ++x) {
+                        const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
+                        const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
-                    const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
-                    const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
-
-                    for (size_t c = 0; c < nColorChannels; ++c) {
-                        auto& channel = flattened[c];
-                        const float val = channel.at({x, y}) * alphaFactor;
-                        channel.setAt({x, y}, ituth273::transferComponent(transfer, val));
+                        for (size_t c = 0; c < nColorChannels; ++c) {
+                            auto& channel = flattened[c];
+                            const float val = channel.at({x, y}) * alphaFactor;
+                            channel.setAt({x, y}, ituth273::transferComponent(transfer, val));
+                        }
                     }
                 },
                 priority
@@ -1081,34 +1090,55 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         }
     }
 
-    for (size_t i = 0; i < nColorChannels; ++i) {
-        string rgba[] = {"R", "G", "B", "A"};
-        string colorName = nColorChannels == 1 ? "L" : rgba[std::min(i, (size_t)3)];
-        result->histogramColors[i] = Channel::color(colorName, false);
+    struct Stats {
+        double mean = 0;
+        float maximum = -numeric_limits<float>::infinity();
+        float minimum = numeric_limits<float>::infinity();
+    } stats;
 
-        const auto& channel = flattened[i];
+    // Parallel stats computation: every task computes its own stats, which are combined at the end.
+    {
+        vector<Stats> perLineStats(regionSize.y());
 
-        for (int y = region.min.y(); y < region.max.y(); ++y) {
-            for (int x = region.min.x(); x < region.max.x(); ++x) {
-                auto v = channel.at({x, y});
-                if (!isfinite(v)) {
-                    continue;
+        co_await ThreadPool::global().parallelForAsync<int>(
+            region.min.y(),
+            region.max.y(),
+            numSamples,
+            [&](int y) {
+                Stats& lineStats = perLineStats[y - region.min.y()];
+
+                for (int x = region.min.x(); x < region.max.x(); ++x) {
+                    for (size_t c = 0; c < nColorChannels; ++c) {
+                        const auto& channel = flattened[c];
+                        auto v = channel.at({x, y});
+                        if (!isfinite(v)) {
+                            continue;
+                        }
+
+                        lineStats.mean += v;
+                        lineStats.maximum = std::max(lineStats.maximum, v);
+                        lineStats.minimum = std::min(lineStats.minimum, v);
+                    }
                 }
+            },
+            priority
+        );
 
-                mean += v;
-                maximum = std::max(maximum, v);
-                minimum = std::min(minimum, v);
-            }
+        for (const auto& lineStats : perLineStats) {
+            stats.mean += lineStats.mean;
+            stats.maximum = std::max(stats.maximum, lineStats.maximum);
+            stats.minimum = std::min(stats.minimum, lineStats.minimum);
         }
     }
 
-    result->mean = numSamples > 0 ? (float)(mean / numSamples) : 0;
-    result->maximum = maximum;
-    result->minimum = minimum;
+    result->mean = numSamples > 0 ? (float)(stats.mean / numSamples) : 0;
+    result->maximum = stats.maximum;
+    result->minimum = stats.minimum;
 
-    // Now that we know the maximum and minimum value we can define our histogram bin size.
-    static const size_t NUM_BINS = 400;
-    result->histogram.resize(NUM_BINS * nColorChannels);
+    // The more pixels we have, the finer we can make the histogram without becoming noisy
+    // const size_t numBins = clamp(numPixels / 512, (size_t)16, (size_t)512);
+    const size_t numBins = 400;
+    result->histogram.resize(numBins * nColorChannels);
 
     // We're going to draw our histogram in log space.
     static const float addition = 0.001f;
@@ -1119,72 +1149,87 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         return val > 0 ? (exp(val + smallest) - addition) : -(exp(-val + smallest) - addition);
     };
 
-    const float minLog = symmetricLog(minimum);
-    const float diffLog = symmetricLog(maximum) - minLog;
+    const float minLog = symmetricLog(stats.minimum);
+    const float diffLog = symmetricLog(stats.maximum) - minLog;
 
     const auto valToBin = [&](const float val) {
-        return clamp((int)(NUM_BINS * (symmetricLog(val) - minLog) / diffLog), 0, (int)NUM_BINS - 1);
+        return clamp((int)(numBins * (symmetricLog(val) - minLog) / diffLog), 0, (int)numBins - 1);
     };
 
     result->histogramZero = valToBin(0);
 
-    const auto binToVal = [&](const float val) { return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog); };
+    const auto binToVal = [&](const float val) { return symmetricLogInverse((diffLog * val / numBins) + minLog); };
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
     if (nColorChannels == 0) {
         co_return result;
     }
 
-    HeapArray<int> indices(numPixels * nColorChannels);
+    // Parallel histogram computation: every task computes its own histogram, which are combined at the end.
+    {
+        const size_t approxCost = numSamples *
+            8; // constant factor to represent the increased workload of log/exp and somewhat random memory writes
+        const size_t numTasks = nextMultiple(ThreadPool::global().nTasks<size_t>(0, numPixels, approxCost), (size_t)nColorChannels);
+        const size_t numTasksPerChannel = numTasks / nColorChannels;
 
-    vector<Task<void>> tasks;
-    tasks.emplace_back(
-        ThreadPool::global().parallelForAsync<size_t>(
+        vector<float> perTaskHistograms(numBins * nColorChannels * numTasks);
+
+        co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
-            numPixels,
-            numSamples,
-            [&](const size_t j) {
-                int x = (int)(j % regionSize.x()) + region.min.x();
-                int y = (int)(j / regionSize.x()) + region.min.y();
-                for (size_t c = 0; c < nColorChannels; ++c) {
-                    const auto& channel = flattened[c];
-                    indices[j * nColorChannels + c] = valToBin(channel.at({x, y}));
+            numTasks,
+            approxCost,
+            [&](size_t i) {
+                const size_t c = i % nColorChannels;
+                const size_t taskPerChannelIndex = i / nColorChannels;
+
+                const size_t taskStart = numPixels * taskPerChannelIndex / numTasksPerChannel;
+                const size_t taskEnd = numPixels * (taskPerChannelIndex + 1) / numTasksPerChannel;
+
+                float* const histogram = perTaskHistograms.data() + numBins * i;
+                const auto& channel = flattened[c];
+
+                const auto regionSize = region.size();
+                for (size_t j = taskStart; j < taskEnd; ++j) {
+                    const int x = (int)(j % regionSize.x()) + region.min.x();
+                    const int y = (int)(j / regionSize.x()) + region.min.y();
+
+                    histogram[valToBin(channel.at({x, y}))] += alphaChannel ? alphaChannel->at({x, y}) : 1;
                 }
             },
             priority
-        )
-    );
-    co_await awaitAll(tasks);
+        );
 
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
-        nColorChannels,
-        numPixels * nColorChannels,
-        [&](size_t c) {
-            for (size_t j = 0; j < numPixels; ++j) {
-                int x = (int)(j % regionSize.x()) + region.min.x();
-                int y = (int)(j / regionSize.x()) + region.min.y();
-                result->histogram[indices[j * nColorChannels + c] + c * NUM_BINS] += alphaChannel ? alphaChannel->at({x, y}) : 1;
-            }
-        },
-        priority
-    );
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numBins * nColorChannels,
+            numBins * nColorChannels * numTasks,
+            [&](size_t i) {
+                const size_t stride = numBins * nColorChannels;
+                for (size_t j = 0; j < numTasks; ++j) {
+                    result->histogram[i] += perTaskHistograms[i + j * stride];
+                }
+            },
+            priority
+        );
+    }
 
     for (size_t i = 0; i < nColorChannels; ++i) {
-        for (size_t j = 0; j < NUM_BINS; ++j) {
-            result->histogram[j + i * NUM_BINS] /= binToVal(j + 1) - binToVal(j);
+        for (size_t j = 0; j < numBins; ++j) {
+            result->histogram[j + i * numBins] /= binToVal(j + 1) - binToVal(j);
         }
     }
 
-    // Normalize the histogram according to the 10th-largest element to avoid a couple spikes ruining the entire graph.
+    // Normalize the histogram according to the n-th largest element to avoid outliers dominating the histogram display.
+    // - Ensure at least one element per color channel is excluded (typically a spike at zero)
+    // - Additionally, scale by number of bins to make it a percentile-like normalization.
     auto tmp = result->histogram;
-    const size_t idx = tmp.size() - 10;
+    const size_t idx = tmp.size() - 1 - (1 + numBins / 128) * nColorChannels;
     nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
     const float norm = 1.0f / (std::max(tmp[idx], 0.1f) * 1.3f);
     for (size_t i = 0; i < nColorChannels; ++i) {
-        for (size_t j = 0; j < NUM_BINS; ++j) {
-            result->histogram[j + i * NUM_BINS] *= norm;
+        for (size_t j = 0; j < numBins; ++j) {
+            result->histogram[j + i * numBins] *= norm;
         }
     }
 

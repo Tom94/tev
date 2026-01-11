@@ -2365,6 +2365,8 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
+    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max()).get();
+
 #if defined(__APPLE__) or defined(_WIN32)
     clip::image_spec imageMetadata;
     imageMetadata.width = imageSize.x();
@@ -2381,14 +2383,12 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     imageMetadata.blue_shift = 16;
     imageMetadata.alpha_shift = 24;
 
-    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
     clip::image image(imageData.data(), imageMetadata);
 
     if (!clip::set_image(image)) {
         throw std::runtime_error{"clip::set_image failed."};
     }
 #else
-    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max());
     const auto pngImageSaver = make_unique<StbiLdrImageSaver>();
 
     stringstream pngData;
