@@ -371,6 +371,14 @@ static void makeSocketNonBlocking(Ipc::socket_t socketFd) {
 #endif
 }
 
+static int shutdownSocketWrite(Ipc::socket_t socket) {
+#ifdef _WIN32
+    return shutdown(socket, SD_SEND);
+#else
+    return shutdown(socket, SHUT_WR);
+#endif
+}
+
 static int closeSocket(Ipc::socket_t socket) {
 #ifdef _WIN32
     return closesocket(socket);
@@ -479,7 +487,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
                     tlog::warning() << fmt::format("connect() failed: {}", errorString(errorId));
                 }
 
-                closeSocket(mSocketFd);
+                closeSocket(mSocketFd); // discard socket closure error
                 mSocketFd = INVALID_SOCKET;
                 continue;
             }
@@ -500,10 +508,17 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
 Ipc::~Ipc() {
     tlog::debug() << "Shutting down IPC.";
 
-    // Socket
     if (mSocketFd != INVALID_SOCKET) {
+        if (!mIsPrimaryInstance) {
+            sendRemainingDataAndDisconnectFromPrimaryInstance();
+        } else {
+            if (shutdownSocketWrite(mSocketFd) == SOCKET_ERROR) {
+                tlog::warning() << fmt::format("Error shutting down listen socket {}: {}", mSocketFd, errorString(lastSocketError()));
+            }
+        }
+
         if (closeSocket(mSocketFd) == SOCKET_ERROR) {
-            tlog::warning() << "Error closing socket listen fd " << mSocketFd << ": " << errorString(lastSocketError());
+            tlog::warning() << fmt::format("Error closing socket {}: {}", mSocketFd, errorString(lastSocketError()));
         }
     }
 
@@ -533,6 +548,51 @@ Ipc::~Ipc() {
     // FIXME: only do this when the last Ipc is destroyed
     WSACleanup();
 #endif
+}
+
+void Ipc::sendRemainingDataAndDisconnectFromPrimaryInstance() {
+    if (mIsPrimaryInstance) {
+        throw runtime_error{"Must be a secondary instance to disconnect from the primary instance."};
+    }
+
+    if (mSocketFd == INVALID_SOCKET) {
+        return;
+    }
+
+    const bool successfulShutdown = shutdownSocketWrite(mSocketFd) != SOCKET_ERROR;
+    if (!successfulShutdown) {
+        tlog::warning() << fmt::format("Error shutting down socket {}: {}", mSocketFd, errorString(lastSocketError()));
+    } else {
+        const auto start = chrono::steady_clock::now();
+        const auto timeout = chrono::seconds{5};
+
+        // Drain any remaining incoming data. Only when done successfully we can be sure that the peer received all the data we sent and
+        // subsequently received our shutdown.
+        char buffer[4096];
+        while (chrono::steady_clock::now() - start < timeout) {
+            const int nReceived = recv(mSocketFd, buffer, sizeof(buffer), 0);
+            if (nReceived == SOCKET_ERROR) {
+                const int errorId = lastSocketError();
+                if (errorId == SocketError::Again || errorId == SocketError::WouldBlock) {
+                    this_thread::sleep_for(1ms);
+                    continue;
+                } else {
+                    tlog::warning()
+                        << fmt::format("Error receiving final data from primary instance ({}: {})", mSocketFd, errorString(errorId));
+                    break;
+                }
+            } else if (nReceived == 0) {
+                break;
+            }
+        }
+
+        if (chrono::steady_clock::now() - start >= timeout) {
+            tlog::warning()
+                << fmt::format("Timeout of {} seconds while disconnecting from primary instance {}", timeout.count(), this->hostname());
+        }
+
+        tlog::debug() << fmt::format("Gracefully disconnected from primary instance {}", this->hostname());
+    }
 }
 
 bool Ipc::isConnectedToPrimaryInstance() const { return !mIsPrimaryInstance && mSocketFd != INVALID_SOCKET; }
@@ -670,9 +730,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     const socket_t fd = accept(mSocketFd, (struct sockaddr*)&client, &addrlen);
     if (fd == INVALID_SOCKET) {
         const int errorId = lastSocketError();
-        if (errorId == SocketError::WouldBlock) {
-            // no problem; no one is trying to connect
-        } else {
+        if (errorId != SocketError::Again && errorId != SocketError::WouldBlock) {
             tlog::warning() << "accept() error: " << errorId << " " << errorString(errorId);
         }
     } else {
@@ -739,45 +797,39 @@ Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, string_view name) : mS
 
 size_t Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
     if (isClosed()) {
-        // Client disconnected, so don't bother.
         return 0;
     }
 
     size_t nTotalBytesReceived = 0;
     while (true) {
         // Receive as much data as we can, up to the capacity of 'mBuffer'.
-        size_t maxBytes = mBuffer.size() - mRecvOffset;
-        int bytesReceived = (int)recv(mSocketFd, mBuffer.data() + mRecvOffset, (int)maxBytes, 0);
+        const size_t maxBytes = mBuffer.size() - mRecvOffset;
+        const int bytesReceived = (int)recv(mSocketFd, mBuffer.data() + mRecvOffset, (int)maxBytes, 0);
         if (bytesReceived == SOCKET_ERROR) {
-            int errorId = lastSocketError();
-            // no more data; this is fine.
-            if (errorId == SocketError::Again || errorId == SocketError::WouldBlock) {
-                break;
-            } else {
+            const int errorId = lastSocketError();
+            if (errorId != SocketError::Again && errorId != SocketError::WouldBlock) {
                 tlog::warning() << "Error while reading from socket. " << errorString(errorId) << " Connection terminated.";
                 close();
                 break;
             }
-        }
 
-        TEV_ASSERT(bytesReceived >= 0, "With no error, the number of bytes received should be positive.");
-        mRecvOffset += (size_t)bytesReceived;
-        nTotalBytesReceived += (size_t)bytesReceived;
-
-        // Since we aren't getting annoying SIGPIPE signals when a client disconnects, a zero-byte read here is how we know when that
-        // happens.
-        if (bytesReceived == 0) {
+            break; // try again later
+        } else if (bytesReceived == 0) {
             tlog::info() << "Client " << mName << " (#" << mSocketFd << ") disconnected";
             close();
             break;
         }
 
+        TEV_ASSERT(bytesReceived > 0, "With no error, the number of bytes received should be positive.");
+        mRecvOffset += (size_t)bytesReceived;
+        nTotalBytesReceived += (size_t)bytesReceived;
+
         // Go through the buffer and service as many complete messages as we can find.
         size_t processedOffset = 0;
         while (processedOffset + 4 <= mRecvOffset) {
             // There's at least enough to figure out the next message's length.
-            const char* messagePtr = mBuffer.data() + processedOffset;
-            uint32_t messageLength = *((uint32_t*)messagePtr);
+            const char* const messagePtr = mBuffer.data() + processedOffset;
+            const uint32_t messageLength = *((uint32_t*)messagePtr);
 
             if (messageLength > mBuffer.size()) {
                 mBuffer.resize(messageLength);

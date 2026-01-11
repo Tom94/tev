@@ -270,6 +270,8 @@ public:
     Ipc(std::string_view hostname = "");
     virtual ~Ipc();
 
+    void sendRemainingDataAndDisconnectFromPrimaryInstance();
+
     bool isPrimaryInstance() const { return mIsPrimaryInstance; }
     bool isConnectedToPrimaryInstance() const;
 
