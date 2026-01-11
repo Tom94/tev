@@ -31,7 +31,7 @@ class Latch {
 public:
     Latch(int val) : mCounter{val} {}
     bool countDown() noexcept {
-        int val = --mCounter;
+        const int val = --mCounter;
         if (val < 0) {
             tlog::warning() << "Latch should never count below zero.";
         }
@@ -129,7 +129,7 @@ public:
             std::coroutine_handle<> mContinuation;
         };
 
-        bool isLast = mState->latch.countDown();
+        const bool isLast = mState->latch.countDown();
         return Awaiter{isLast ? mState->continuation : nullptr};
     }
 
@@ -207,7 +207,7 @@ public:
         // until then. The task's coroutine `mHandle` remains valid if suspended, implying that it needs to be manually cleaned up on
         // resumption of this coroutine (see await_resume()).
         mState->continuation = coroutine;
-        bool shallSuspend = !mState->latch.countDown();
+        const bool shallSuspend = !mState->latch.countDown();
         if (!shallSuspend) {
             mHandle = nullptr;
         }
