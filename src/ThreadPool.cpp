@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 
 #include <chrono>
@@ -53,6 +54,17 @@ void ThreadPool::startThreads(size_t num) {
     mNumThreads += num;
     for (size_t i = mThreads.size(); i < mNumThreads; ++i) {
         mThreads.emplace_back([this] {
+#ifdef _WIN32
+            if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL) == 0) {
+                tlog::warning() << fmt::format("Failed to set worker thread priority to BELOW_NORMAL: {}", errorString(lastError()));
+            }
+#else
+            static constexpr int targetNiceValue = 10;
+            if (nice(targetNiceValue) == -1) {
+                tlog::warning() << fmt::format("Failed to set worker thread priority to {}: {}", targetNiceValue, errorString(lastError()));
+            }
+#endif
+
             const auto id = this_thread::get_id();
             // tlog::debug() << "Spawning thread pool thread " << id;
 
