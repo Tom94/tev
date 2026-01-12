@@ -829,7 +829,10 @@ size_t Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback)
         while (processedOffset + 4 <= mRecvOffset) {
             // There's at least enough to figure out the next message's length.
             const char* const messagePtr = mBuffer.data() + processedOffset;
-            const uint32_t messageLength = *((uint32_t*)messagePtr);
+            uint32_t messageLength = *((uint32_t*)messagePtr);
+            if constexpr (endian::native == endian::big) {
+                messageLength = swapBytes(messageLength);
+            }
 
             if (messageLength > mBuffer.size()) {
                 mBuffer.resize(messageLength);
