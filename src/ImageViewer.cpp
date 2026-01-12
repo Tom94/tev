@@ -424,19 +424,18 @@ ImageViewer::ImageViewer(
 
             new Label{popup, "Background color", "sans-bold", 20};
             auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
-            colorwheel->set_color(mColorsPopupButton->background_color());
 
             new Label{popup, "Background alpha"};
             auto bgAlphaSlider = new Slider{popup};
             bgAlphaSlider->set_range({0.0f, 1.0f});
-            bgAlphaSlider->set_callback([this](float value) {
-                auto col = mImageCanvas->backgroundColor();
+            bgAlphaSlider->set_callback([colorwheel, this](float a) {
+                const auto col = colorwheel->color();
                 mImageCanvas->setBackgroundColor(
                     Color{
-                        col.r(),
-                        col.g(),
-                        col.b(),
-                        value,
+                        col.r() * a,
+                        col.g() * a,
+                        col.b() * a,
+                        a,
                     }
                 );
             });
@@ -444,13 +443,13 @@ ImageViewer::ImageViewer(
             bgAlphaSlider->set_value(0);
 
             colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
-                // popupBtn->set_background_color(value);
+                const float a = bgAlphaSlider->value();
                 mImageCanvas->setBackgroundColor(
                     Color{
-                        value.r(),
-                        value.g(),
-                        value.b(),
-                        bgAlphaSlider->value(),
+                        value.r() * a,
+                        value.g() * a,
+                        value.b() * a,
+                        a,
                     }
                 );
             });
