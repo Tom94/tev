@@ -240,7 +240,6 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 vec3 lightGray = vec3(0.55, 0.55, 0.55);
 
                 vec3 checker = abs(mod(floor(checkerUv.x) + floor(checkerUv.y), 2.0)) < 0.5 ? darkGray : lightGray;
-                checker = bgColor.rgb * bgColor.a + checker * (1.0 - bgColor.a);
                 if (!hasImage) {
                     return vec4(checker, 1.0);
                 }
@@ -251,6 +250,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 vec4 imageVal = sample(image, imageUv);
                 imageVal.a *= cropAlpha;
                 if (!hasReference) {
+                    imageVal += bgColor * (1.0 - imageVal.a);
                     vec4 result = vec4(
                         applyTonemap(colorMultiplier * applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
                         1.0
@@ -262,9 +262,10 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 referenceVal.a *= cropAlpha;
 
                 vec3 difference = imageVal.rgb - referenceVal.rgb;
-                float alpha = (imageVal.a + referenceVal.a) * 0.5;
+                vec4 val = vec4(applyMetric(difference, referenceVal.rgb), (imageVal.a + referenceVal.a) * 0.5);
+                val += bgColor * (1.0 - val.a);
                 vec4 result = vec4(
-                    applyTonemap(colorMultiplier * applyExposureAndOffset(applyMetric(difference, referenceVal.rgb)), vec4(checker, 1.0 - alpha)),
+                    applyTonemap(colorMultiplier * applyExposureAndOffset(val.rgb), vec4(checker, 1.0 - val.a)),
                     1.0
                 );
 
@@ -453,7 +454,6 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 float3 lightGray = float3(0.55f, 0.55f, 0.55f);
 
                 float3 checker = int(floor(vert.checkerUv.x) + floor(vert.checkerUv.y)) % 2 == 0 ? darkGray : lightGray;
-                checker = bgColor.rgb * bgColor.a + checker * (1.0f - bgColor.a);
                 if (!hasImage) {
                     return dither(float4(checker, 1.0f), ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
                 }
@@ -463,6 +463,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 float4 imageVal = sample(image, image_sampler, vert.imageUv, channelConfig);
                 imageVal.a *= cropAlpha;
                 if (!hasReference) {
+                    imageVal += bgColor * (1.0f - imageVal.a);
                     float4 color = float4(
                         applyTonemap(
                             colorMultiplier * applyExposureAndOffset(imageVal.rgb, exposure, offset),
@@ -483,11 +484,13 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 referenceVal.a *= cropAlpha;
 
                 float3 difference = imageVal.rgb - referenceVal.rgb;
-                float alpha = (imageVal.a + referenceVal.a) * 0.5f;
+                float4 val = float4(applyMetric(difference, referenceVal.rgb, metric), (imageVal.a + referenceVal.a) * 0.5f);
+                val += bgColor * (1.0f - val.a);
+
                 float4 color = float4(
                     applyTonemap(
-                        colorMultiplier * applyExposureAndOffset(applyMetric(difference, referenceVal.rgb, metric), exposure, offset),
-                        float4(checker, 1.0f - alpha),
+                        colorMultiplier * applyExposureAndOffset(val.rgb, exposure, offset),
+                        float4(checker, 1.0f - val.a),
                         tonemap,
                         offset,
                         gamma,
