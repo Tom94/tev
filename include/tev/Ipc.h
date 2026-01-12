@@ -23,6 +23,7 @@
 
 #include <list>
 #include <span>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -32,6 +33,16 @@
 #endif
 
 namespace tev {
+
+template <typename T, bool = std::is_enum_v<T>> struct underlying_or_identity {
+    using type = T;
+};
+
+template <typename T> struct underlying_or_identity<T, true> {
+    using type = std::underlying_type_t<T>;
+};
+
+template <typename T> using underlying_or_identity_t = typename underlying_or_identity<T>::type;
 
 struct IpcPacketOpenImage {
     std::string imagePath;
@@ -172,6 +183,7 @@ private:
             for (auto& elem : var) {
                 *this >> elem;
             }
+
             return *this;
         }
 
@@ -185,7 +197,15 @@ private:
                 throw std::runtime_error{"Trying to read generic type beyond the bounds of the IPC packet payload."};
             }
 
-            var = *(T*)&mData[mIdx];
+            using U = underlying_or_identity_t<T>;
+            auto tmp = *(T*)&mData[mIdx];
+
+            if constexpr (std::is_integral_v<U> && std::endian::native == std::endian::big) {
+                tmp = swapBytes(tmp);
+            }
+
+            var = (T)tmp;
+
             mIdx += sizeof(T);
             return *this;
         }
@@ -250,14 +270,28 @@ private:
                 mData.resize(mIdx + sizeof(T));
             }
 
-            *(T*)&mData[mIdx] = var;
+            using U = underlying_or_identity_t<T>;
+            auto tmp = (U)var;
+
+            if constexpr (std::is_integral_v<U> && std::endian::native == std::endian::big) {
+                tmp = swapBytes(tmp);
+            }
+
+            *(T*)&mData[mIdx] = (T)tmp;
             mIdx += sizeof(T);
             updateSize();
             return *this;
         }
 
     private:
-        void updateSize() { *((uint32_t*)mData.data()) = (uint32_t)mIdx; }
+        void updateSize() {
+            uint32_t size = (uint32_t)mIdx;
+            if constexpr (std::endian::native == std::endian::big) {
+                size = swapBytes(size);
+            }
+
+            *((uint32_t*)mData.data()) = size;
+        }
 
         std::vector<char>& mData;
         size_t mIdx = 0;
