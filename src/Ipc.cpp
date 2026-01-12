@@ -43,8 +43,6 @@ using socklen_t = int;
 #    include <sys/socket.h>
 #    include <sys/un.h>
 #    include <unistd.h>
-#    define SOCKET_ERROR (-1)
-#    define INVALID_SOCKET (-1)
 #endif
 
 #include <filesystem>
@@ -511,10 +509,6 @@ Ipc::~Ipc() {
     if (mSocketFd != INVALID_SOCKET) {
         if (!mIsPrimaryInstance) {
             sendRemainingDataAndDisconnectFromPrimaryInstance();
-        } else {
-            if (shutdownSocketWrite(mSocketFd) == SOCKET_ERROR) {
-                tlog::warning() << fmt::format("Error shutting down listen socket {}: {}", mSocketFd, errorString(lastSocketError()));
-            }
         }
 
         if (closeSocket(mSocketFd) == SOCKET_ERROR) {
@@ -795,6 +789,8 @@ Ipc::SocketConnection::SocketConnection(Ipc::socket_t fd, string_view name) : mS
     mBuffer.resize(1024 * 1024);
 }
 
+Ipc::SocketConnection::~SocketConnection() { close(); }
+
 size_t Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback) {
     if (isClosed()) {
         return 0;
@@ -860,6 +856,7 @@ size_t Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback)
 
 void Ipc::SocketConnection::close() {
     if (!isClosed()) {
+        shutdownSocketWrite(mSocketFd);
         closeSocket(mSocketFd);
         mSocketFd = INVALID_SOCKET;
     }

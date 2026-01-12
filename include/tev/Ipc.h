@@ -26,6 +26,11 @@
 #include <variant>
 #include <vector>
 
+#ifndef _WIN32
+#    define SOCKET_ERROR (-1)
+#    define INVALID_SOCKET (-1)
+#endif
+
 namespace tev {
 
 struct IpcPacketOpenImage {
@@ -300,6 +305,19 @@ private:
     class SocketConnection {
     public:
         SocketConnection(Ipc::socket_t fd, std::string_view name);
+        virtual ~SocketConnection();
+
+        SocketConnection(const SocketConnection&) = delete;
+        SocketConnection& operator=(const SocketConnection&) = delete;
+
+        SocketConnection(SocketConnection&& other) { *this = std::move(other); }
+        SocketConnection& operator=(SocketConnection&& other) {
+            std::swap(mSocketFd, other.mSocketFd);
+            std::swap(mName, other.mName);
+            std::swap(mBuffer, other.mBuffer);
+            std::swap(mRecvOffset, other.mRecvOffset);
+            return *this;
+        }
 
         // Servicing a connection also returns the total number of bytes received
         size_t service(std::function<void(const IpcPacket&)> callback);
@@ -309,7 +327,7 @@ private:
         bool isClosed() const;
 
     private:
-        Ipc::socket_t mSocketFd;
+        Ipc::socket_t mSocketFd = INVALID_SOCKET;
         std::string mName;
 
         // Because TCP socket recv() calls return as much data as is available (which may have the partial contents of a client-side send()
