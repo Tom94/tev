@@ -214,7 +214,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     }
 
     if (JXL_DEC_SUCCESS !=
-        JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME)) {
+        JxlDecoderSubscribeEvents(
+            decoder.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME | JXL_DEC_BOX | JXL_DEC_BOX_COMPLETE
+        )) {
         throw ImageLoadError{"Failed to subscribe to decoder events."};
     }
 
@@ -236,6 +238,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw ImageLoadError{"Failed to set input for decoder."};
     }
 
+    // Tells the decoder that we are done providing input after the initial input buffer. Necessary to properly handle joint subscription of
+    // box and image related events. See https://libjxl.readthedocs.io/en/latest/api_decoder.html#_CPPv420JxlDecoderCloseInputP10JxlDecoder
+    JxlDecoderCloseInput(decoder.get());
+
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
     HeapArray<float> colorData;
@@ -245,6 +251,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     string frameName;
 
     vector<ImageData> result;
+    vector<AttributeNode> attributes;
 
     optional<JxlColorEncoding> ce = nullopt;
 
@@ -595,98 +602,107 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     );
                 }
             } break;
+            case JXL_DEC_BOX: {
+                JxlBoxType type = {};
+                if (JXL_DEC_SUCCESS != JxlDecoderGetBoxType(decoder.get(), type, JXL_TRUE)) {
+                    throw ImageLoadError{"Failed to get box type."};
+                }
+
+                const auto boxTypeStr = toUpper(trim(string_view{type, 4}));
+                if (boxTypeStr != "EXIF" && boxTypeStr != "XML") {
+                    continue;
+                }
+
+                tlog::debug() << fmt::format("Found metadata box of type {}.", boxTypeStr);
+
+                if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(decoder.get(), JXL_TRUE)) {
+                    throw ImageLoadError{"Failed to set decompress boxes."};
+                }
+
+                uint64_t boxSize = 0;
+                if (JXL_DEC_SUCCESS != JxlDecoderGetBoxSizeContents(decoder.get(), &boxSize)) {
+                    throw ImageLoadError{"Failed to get metadata box size."};
+                }
+
+                boxSize = std::max(boxSize, (uint64_t)1024); // Start with at least 1 KB buffer
+                tlog::debug() << fmt::format("Metadata box initial size: {} bytes.", boxSize);
+
+                HeapArray<uint8_t> metadata(boxSize);
+                size_t pos = 0;
+                while (true) {
+                    const size_t remaining = metadata.size() - pos;
+                    if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), metadata.data() + pos, remaining)) {
+                        throw ImageLoadError{"Failed to set box buffer."};
+                    }
+
+                    status = JxlDecoderProcessInput(decoder.get());
+                    if (status != JXL_DEC_BOX_COMPLETE && status != JXL_DEC_BOX_NEED_MORE_OUTPUT) {
+                        throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
+                    }
+
+                    const size_t notYetWritten = JxlDecoderReleaseBoxBuffer(decoder.get());
+                    if (notYetWritten > remaining) {
+                        throw ImageLoadError{"Decoder reported more data than buffer size."};
+                    }
+
+                    pos += remaining - notYetWritten;
+                    if (status == JXL_DEC_BOX_COMPLETE || status == JXL_DEC_SUCCESS) {
+                        tlog::debug()
+                            << fmt::format("Completed reading box of type {} ({} bytes / {} size)", boxTypeStr, pos, metadata.size());
+                        metadata.resize(pos);
+                        break;
+                    } else if (status == JXL_DEC_BOX_NEED_MORE_OUTPUT) {
+                        metadata.resize(metadata.size() * 2); // Double buffer size and try again
+                        tlog::debug() << fmt::format("Doubled box buffer size to {}", metadata.size());
+                    } else {
+                        throw ImageLoadError{"Unexpected decoder status when reading box."};
+                    }
+                }
+
+                if (boxTypeStr == "XML") {
+                    try {
+                        const Xmp xmp{
+                            string_view{(const char*)metadata.data(), metadata.size()}
+                        };
+
+                        attributes.emplace_back(xmp.attributes());
+                    } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse XMP data: {}", e.what()); }
+                } else if (boxTypeStr == "EXIF") {
+                    try {
+                        if (metadata.size() < 4) {
+                            throw invalid_argument{"Invalid EXIF data: box size is smaller than 4 bytes."};
+                        }
+
+                        uint32_t offset = *(uint32_t*)metadata.data();
+                        if (endian::native != endian::big) {
+                            offset = swapBytes(offset);
+                        }
+
+                        if (offset > metadata.size() - 4) {
+                            throw invalid_argument{"Invalid EXIF data: offset is larger than box size."};
+                        }
+
+                        tlog::debug() << fmt::format("EXIF data offset: {}", offset);
+
+                        const auto exif = Exif{span<uint8_t>{metadata}.subspan(4 + offset)};
+                        const auto exifAttributes = exif.toAttributes();
+
+                        attributes.emplace_back(exifAttributes);
+                    } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse EXIF data: {}", e.what()); }
+                } else {
+                    tlog::warning() << fmt::format("Unhandled box type: {}", boxTypeStr);
+                }
+            } break;
+            case JXL_DEC_BOX_COMPLETE: {
+                tlog::debug() << "Completed processing box.";
+            } break;
         }
     }
 l_decode_success:
 
-    JxlDecoderRewind(decoder.get());
-    if (JXL_DEC_SUCCESS != JxlDecoderSetInput(decoder.get(), fileData.data(), fileData.size())) {
-        tlog::warning() << "Failed to set input for second decoder pass.";
-        co_return result;
-    }
-
-    if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(decoder.get(), JXL_DEC_BOX)) {
-        tlog::warning() << "Failed to subscribe to box events.";
-        co_return result;
-    }
-
-    // Attempt to get metadata in a separate pass. The reason we perform a separate pass is that box decoding appears to interfere with
-    // regular image decoding behavior.
-    JxlDecoderStatus status = JXL_DEC_SUCCESS;
-    while (true) {
-        status = JxlDecoderProcessInput(decoder.get());
-        if (status != JXL_DEC_BOX) {
-            break;
-        }
-
-        JxlBoxType type = {};
-        if (JXL_DEC_SUCCESS != JxlDecoderGetBoxType(decoder.get(), type, JXL_TRUE)) {
-            throw ImageLoadError{"Failed to get box type."};
-        }
-
-        const auto boxTypeStr = toUpper(trim(string_view{type, 4}));
-        if (boxTypeStr != "EXIF" && boxTypeStr != "XML") {
-            continue;
-        }
-
-        tlog::debug() << fmt::format("Found metadata box of type {}.", boxTypeStr);
-
-        uint64_t boxSize = 0;
-        if (JXL_DEC_SUCCESS != JxlDecoderGetBoxSizeContents(decoder.get(), &boxSize)) {
-            throw ImageLoadError{"Failed to get metadata box size."};
-        }
-
-        HeapArray<uint8_t> metadata(boxSize);
-        if (JXL_DEC_SUCCESS != JxlDecoderSetBoxBuffer(decoder.get(), metadata.data(), metadata.size())) {
-            throw ImageLoadError{"Failed to set initial box buffer."};
-        }
-
-        status = JxlDecoderProcessInput(decoder.get());
-        if (status != JXL_DEC_SUCCESS && status != JXL_DEC_BOX) {
-            throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
-        }
-
-        if (boxTypeStr == "XML") {
-            try {
-                const Xmp xmp{
-                    string_view{(const char*)metadata.data(), metadata.size()}
-                };
-
-                for (auto&& data : result) {
-                    data.attributes.emplace_back(xmp.attributes());
-                }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse XMP data: {}", e.what()); }
-        } else if (boxTypeStr == "EXIF") {
-            try {
-                if (metadata.size() < 4) {
-                    throw invalid_argument{"Invalid EXIF data: box size is smaller than 4 bytes."};
-                }
-
-                uint32_t offset = *(uint32_t*)metadata.data();
-                if (endian::native != endian::big) {
-                    offset = swapBytes(offset);
-                }
-
-                if (offset > metadata.size() - 4) {
-                    throw invalid_argument{"Invalid EXIF data: offset is larger than box size."};
-                }
-
-                tlog::debug() << fmt::format("EXIF data offset: {}", offset);
-
-                const auto exif = Exif{span<uint8_t>{metadata}.subspan(4 + offset)};
-                const auto exifAttributes = exif.toAttributes();
-
-                for (auto&& data : result) {
-                    data.attributes.emplace_back(exifAttributes);
-                }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse EXIF data: {}", e.what()); }
-        } else {
-            tlog::warning() << fmt::format("Unhandled box type: {}", boxTypeStr);
-        }
-    }
-
-    if (status != JXL_DEC_SUCCESS && status != JXL_DEC_NEED_MORE_INPUT) {
-        tlog::warning() << "Unexpected decoder status after processing boxes: " << (size_t)status;
+    // Attach collected attributes to all image data parts
+    for (auto&& data : result) {
+        data.attributes.insert(data.attributes.end(), attributes.begin(), attributes.end());
     }
 
     co_return result;
