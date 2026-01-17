@@ -376,6 +376,20 @@ public:
     const T* data() const { return mBuf.get(); }
 
     size_t size() const { return mSize; }
+    void resize(size_t newSize) {
+        if (newSize <= mSize) {
+            mSize = newSize;
+            return;
+        }
+
+        const auto oldBuf = std::move(mBuf);
+        mBuf = std::make_unique<T[]>(newSize);
+        if (oldBuf) {
+            std::copy_n(oldBuf.get(), mSize, mBuf.get());
+        }
+
+        mSize = newSize;
+    }
 
     operator std::span<const T>() const { return std::span<const T>{mBuf.get(), mSize}; }
     operator std::span<T>() { return std::span<T>{mBuf.get(), mSize}; }
