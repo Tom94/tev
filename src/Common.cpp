@@ -423,7 +423,7 @@ EInterpolationMode toInterpolationMode(string_view name) {
     }
 }
 
-string toString(EInterpolationMode mode) {
+string_view toString(EInterpolationMode mode) {
     switch (mode) {
         case Nearest: return "NEAREST";
         case Bilinear: return "BILINEAR";
@@ -468,7 +468,22 @@ EMetric toMetric(string_view name) {
     }
 }
 
-string toString(EPixelFormat format) {
+string_view toString(EOrientation orientation) {
+    switch (orientation) {
+        case None: return "none";
+        case TopLeft: return "topleft";
+        case TopRight: return "topright";
+        case BottomRight: return "bottomright";
+        case BottomLeft: return "bottomleft";
+        case LeftTop: return "lefttop";
+        case RightTop: return "righttop";
+        case RightBottom: return "rightbottom";
+        case LeftBottom: return "leftbottom";
+        default: throw runtime_error{"Unknown orientation."};
+    }
+}
+
+string_view toString(EPixelFormat format) {
     switch (format) {
         case EPixelFormat::U8: return "U8";
         case EPixelFormat::U16: return "U16";

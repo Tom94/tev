@@ -234,6 +234,11 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
         throw ImageLoadError{"Failed to set unpremultiply alpha."};
     }
 
+    // Disable automatic orientation handling. We want to handle orientation ourselves later on because we can do it faster.
+    if (JXL_DEC_SUCCESS != JxlDecoderSetKeepOrientation(decoder.get(), JXL_TRUE)) {
+        throw ImageLoadError{"Failed to set keep orientation."};
+    }
+
     if (JXL_DEC_SUCCESS != JxlDecoderSetInput(decoder.get(), fileData.data(), fileData.size())) {
         throw ImageLoadError{"Failed to set input for decoder."};
     }
@@ -273,7 +278,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 tlog::debug() << fmt::format(
-                    "Image size={}x{} channels={} bits_per_sample={}:{} alpha_bits={} alpha_premultiplied={} have_animation={} intensity_target={}",
+                    "Image size={}x{} channels={} bits_per_sample={}:{} alpha_bits={} alpha_premultiplied={} have_animation={} intensity_target={} orientation={}",
                     info.xsize,
                     info.ysize,
                     info.num_color_channels,
@@ -282,7 +287,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     info.alpha_bits,
                     info.alpha_premultiplied,
                     info.have_animation,
-                    info.intensity_target
+                    info.intensity_target,
+                    toString(static_cast<EOrientation>(info.orientation))
                 );
 
                 runnerData.jxlSuggestedNumThreads = std::max(JxlResizableParallelRunnerSuggestThreads(info.xsize, info.ysize), (uint32_t)1);
@@ -399,7 +405,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     // Skip loading of extra channels that don't match the selector entirely. And skip alpha channels, because they're
                     // already part of the color channels.
-                    bool skip = !matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA;
+                    const bool skip = !matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA;
                     if (skip) {
                         continue;
                     }
@@ -448,6 +454,9 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 if (info.have_animation) {
                     data.partName = frameName;
                 }
+
+                // JXL's orientation values match EXIF orientation tags (which also match our EOrientation enum).
+                data.orientation = (EOrientation)info.orientation;
 
                 if (info.intensity_target != 0 && info.intensity_target != 255) {
                     // Some JXL files use the intensity_target field to indicate maxCLL (e.g. https://people.csail.mit.edu/ericchan/hdr/).

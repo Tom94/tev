@@ -531,7 +531,7 @@ enum EInterpolationMode : int {
 };
 
 EInterpolationMode toInterpolationMode(std::string_view name);
-std::string toString(EInterpolationMode mode);
+std::string_view toString(EInterpolationMode mode);
 
 enum class ETonemap : int {
     None = 0,
@@ -592,6 +592,8 @@ inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogu
     return pos;
 }
 
+std::string_view toString(EOrientation orientation);
+
 enum class EPixelFormat {
     U8,
     U16,
@@ -599,7 +601,7 @@ enum class EPixelFormat {
     F32,
 };
 
-std::string toString(EPixelFormat format);
+std::string_view toString(EPixelFormat format);
 
 inline size_t nBytes(EPixelFormat format) {
     switch (format) {
