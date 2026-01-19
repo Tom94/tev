@@ -416,19 +416,19 @@ static int mainFunc(span<const string> arguments) {
     };
 
     // Parse command line arguments and react to parsing errors using exceptions.
-    try {
-        TEV_ASSERT(arguments.size() > 0, "Number of arguments must be bigger than 0.");
+    TEV_ASSERT(arguments.size() > 0, "Number of arguments must be bigger than 0.");
 
+    try {
         parser.Prog(arguments.front());
         parser.ParseArgs(begin(arguments) + 1, end(arguments));
     } catch (const Help&) {
         cout << parser;
         return 0;
     } catch (const ParseError& e) {
-        cerr << e.what() << endl;
+        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -1;
     } catch (const ValidationError& e) {
-        cerr << e.what() << endl;
+        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -2;
     }
 
