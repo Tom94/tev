@@ -29,7 +29,7 @@ using namespace std;
 
 namespace tev {
 
-void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<const char> data, const Vector2i& imageSize, int nChannels) const {
+void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<const uint8_t> data, const Vector2i& imageSize, int nChannels) const {
     static const auto stbiOStreamWrite = [](void* context, void* stbidata, int size) {
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(stbidata), size);
     };

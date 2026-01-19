@@ -29,7 +29,7 @@ using namespace std;
 
 namespace tev {
 
-void QoiImageSaver::save(ostream& oStream, const fs::path&, span<const char> data, const Vector2i& imageSize, int nChannels) const {
+void QoiImageSaver::save(ostream& oStream, const fs::path&, span<const uint8_t> data, const Vector2i& imageSize, int nChannels) const {
     // The QOI image format expects nChannels to be either 3 for RGB data or 4 for RGBA.
     if (nChannels != 4 && nChannels != 3) {
         throw ImageSaveError{fmt::format("Invalid number of channels {}.", nChannels)};

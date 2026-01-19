@@ -24,10 +24,10 @@
 
 namespace tev {
 
-class QoiImageSaver : public TypedImageSaver<char> {
+class QoiImageSaver : public TypedImageSaver<uint8_t> {
 public:
     void save(
-        std::ostream& oStream, const fs::path& path, std::span<const char> data, const nanogui::Vector2i& imageSize, int nChannels
+        std::ostream& oStream, const fs::path& path, std::span<const uint8_t> data, const nanogui::Vector2i& imageSize, int nChannels
     ) const override;
 
     bool hasPremultipliedAlpha() const override { return false; }

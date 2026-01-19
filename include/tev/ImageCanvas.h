@@ -114,7 +114,7 @@ public:
     // does not currently hold an image, or no channels are displayed, then zero pixels are returned.
     nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
     Task<HeapArray<float>> getHdrImageData(bool divideAlpha, int priority) const;
-    Task<HeapArray<char>> getLdrImageData(bool divideAlpha, int priority) const;
+    Task<HeapArray<uint8_t>> getLdrImageData(bool divideAlpha, int priority) const;
 
     void saveImage(const fs::path& filename) const;
 

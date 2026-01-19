@@ -2388,6 +2388,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw std::runtime_error{"clip::set_image failed."};
     }
 #else
+    // TODO: make a dedicated PNG saver via libpng which should be faster than stb_image_write.
     const auto pngImageSaver = make_unique<StbiLdrImageSaver>();
 
     stringstream pngData;

@@ -723,10 +723,10 @@ Task<HeapArray<float>> ImageCanvas::getHdrImageData(bool divideAlpha, int priori
     co_return result;
 }
 
-Task<HeapArray<char>> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<uint8_t>> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
     // getHdrImageData always returns four floats per pixel (RGBA).
     const auto floatData = co_await getHdrImageData(divideAlpha, priority);
-    HeapArray<char> result(floatData.size());
+    HeapArray<uint8_t> result(floatData.size());
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
@@ -743,7 +743,7 @@ Task<HeapArray<char>> ImageCanvas::getLdrImageData(bool divideAlpha, int priorit
             const Vector4f rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), floatData[start + 3]};
 
             for (int j = 0; j < 4; ++j) {
-                result[start + j] = (char)(rgba[j] * 255 + 0.5f);
+                result[start + j] = (uint8_t)(clamp(rgba[j], 0.0f, 1.0f) * 255 + 0.5f);
             }
         },
         priority
@@ -780,7 +780,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         }
 
         const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
-        const auto* ldrSaver = dynamic_cast<const TypedImageSaver<char>*>(saver.get());
+        const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
 
         TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
 
