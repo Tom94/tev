@@ -21,16 +21,12 @@
 #include <tev/ImageCanvas.h>
 #include <tev/ThreadPool.h>
 
-#include <tev/imageio/Colors.h>
-#include <tev/imageio/ImageSaver.h>
-
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
 #include <nanogui/theme.h>
 #include <nanogui/vector.h>
 
 #include <chrono>
-#include <fstream>
 #include <set>
 #include <span>
 
@@ -224,7 +220,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         Region = 2,
     };
 
-    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, std::string_view name, DrawFlags flags) {
+    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, string_view name, DrawFlags flags) {
         float fontSize = 20;
         float strokeWidth = 3.0f;
 
@@ -638,56 +634,29 @@ Task<HeapArray<uint8_t>> ImageCanvas::getLdrImageData(bool divideAlpha, int prio
     }
 
     co_return co_await mImage->getRgbaLdrImageData(
-        mReference, cropInImageCoords(), mRequestedChannelGroup, mMetric, mTonemap, mGamma, mExposure, mOffset, divideAlpha, priority
+        mReference, cropInImageCoords(), mRequestedChannelGroup, mMetric, divideAlpha, mTonemap, mGamma, mExposure, mOffset, priority
     );
 }
 
 void ImageCanvas::saveImage(const fs::path& path) const {
-    if (path.empty()) {
-        throw ImageSaveError{"You must specify a file name to save the image."};
+    if (!mImage) {
+        throw ImageSaveError{"There is no image to save."};
     }
 
-    if (path.extension().empty()) {
-        throw ImageSaveError{"You must specify a file extension or select one from the dropdown to save the image."};
-    }
-
-    Vector2i imageSize = imageDataSize();
-    if (imageSize.x() == 0 || imageSize.y() == 0) {
-        throw ImageSaveError{"Can not save image with zero pixels."};
-    }
-
-    tlog::info() << "Saving currently displayed image as " << path << ".";
-    auto start = chrono::system_clock::now();
-
-    ofstream f{path, ios_base::binary};
-    if (!f) {
-        throw ImageSaveError{fmt::format("Could not open file {}", path)};
-    }
-
-    for (const auto& saver : ImageSaver::getSavers()) {
-        if (!saver->canSaveFile(path)) {
-            continue;
-        }
-
-        const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
-        const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
-
-        TEV_ASSERT(hdrSaver || ldrSaver, "Each image saver must either be a HDR or an LDR saver.");
-
-        if (hdrSaver) {
-            hdrSaver->save(f, path, getHdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()).get(), imageSize, 4);
-        } else if (ldrSaver) {
-            ldrSaver->save(f, path, getLdrImageData(!saver->hasPremultipliedAlpha(), std::numeric_limits<int>::max()).get(), imageSize, 4);
-        }
-
-        auto end = chrono::system_clock::now();
-        chrono::duration<double> elapsedSeconds = end - start;
-
-        tlog::success() << fmt::format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
-        return;
-    }
-
-    throw ImageSaveError{fmt::format("No save routine for image type {} found.", path.extension())};
+    mImage
+        ->save(
+            path,
+            mReference,
+            cropInImageCoords(),
+            mRequestedChannelGroup,
+            mMetric,
+            mTonemap,
+            mGamma,
+            mExposure,
+            mOffset,
+            numeric_limits<int>::max() // Use maximum priority for saving images.
+        )
+        .get();
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
@@ -737,7 +706,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     }
 
     // Later requests must have higher priority than previous ones.
-    static std::atomic<int> sId{0};
+    static atomic<int> sId{0};
     invokeTaskDetached(
         [image = mImage,
          reference = mReference,
@@ -807,8 +776,8 @@ void ImageCanvas::applyInspectionParameters(vector<float>& values, bool hasAlpha
 }
 
 Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
-    std::shared_ptr<Image> image,
-    std::shared_ptr<Image> reference,
+    shared_ptr<Image> image,
+    shared_ptr<Image> reference,
     string_view requestedChannelGroup,
     EMetric metric,
     const Box2i& region,

@@ -244,7 +244,24 @@ public:
         std::shared_ptr<Image> reference, const Box2i& imageRegion, std::string_view requestedChannelGroup, EMetric metric, bool divideAlpha, int priority
     ) const;
 
+    Task<HeapArray<uint8_t>>
+        getRgbaLdrImageData(const HeapArray<float>& hdrData, ETonemap tonemap, float gamma, float exposure, float offset, int priority) const;
+
     Task<HeapArray<uint8_t>> getRgbaLdrImageData(
+        std::shared_ptr<Image> reference,
+        const Box2i& imageRegion,
+        std::string_view requestedChannelGroup,
+        EMetric metric,
+        bool divideAlpha,
+        ETonemap tonemap,
+        float gamma,
+        float exposure,
+        float offset,
+        int priority
+    ) const;
+
+    Task<void> save(
+        const fs::path& path,
         std::shared_ptr<Image> reference,
         const Box2i& imageRegion,
         std::string_view requestedChannelGroup,
@@ -253,7 +270,6 @@ public:
         float gamma,
         float exposure,
         float offset,
-        bool divideAlpha,
         int priority
     ) const;
 

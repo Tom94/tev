@@ -21,6 +21,7 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
+#include <tev/imageio/ImageSaver.h>
 
 #include <half.h>
 
@@ -963,8 +964,7 @@ void Image::updateVectorGraphics(bool append, span<const VgCommand> commands) {
     copy(begin(commands), end(commands), back_inserter(mVgCommands));
 }
 
-Task<vector<Channel>>
-    Image::getHdrImageData(shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority) const {
+Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority) const {
     const auto size = this->size();
     const auto numPixels = this->numPixels();
 
@@ -1085,38 +1085,27 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
 }
 
 Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
-    shared_ptr<Image> reference,
-    const Box2i& imageRegion,
-    string_view requestedChannelGroup,
-    EMetric metric,
-    ETonemap tonemap,
-    float gamma,
-    float exposure,
-    float offset,
-    bool divideAlpha,
-    int priority
+    const HeapArray<float>& rgbaHdrData, ETonemap tonemap, float gamma, float exposure, float offset, int priority
 ) const {
-    // getHdrImageData always returns four floats per pixel (RGBA).
-    const auto floatData = co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, divideAlpha, priority);
-    HeapArray<uint8_t> result(floatData.size());
+    HeapArray<uint8_t> result(rgbaHdrData.size());
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
-        floatData.size() / 4,
-        floatData.size(),
+        rgbaHdrData.size() / 4,
+        rgbaHdrData.size(),
         [&](const size_t i) {
             const size_t start = 4 * i;
             const Vector3f rgb = applyTonemap(
                 {
-                    applyExposureAndOffset(floatData[start + 0], exposure, offset),
-                    applyExposureAndOffset(floatData[start + 1], exposure, offset),
-                    applyExposureAndOffset(floatData[start + 2], exposure, offset),
+                    applyExposureAndOffset(rgbaHdrData[start + 0], exposure, offset),
+                    applyExposureAndOffset(rgbaHdrData[start + 1], exposure, offset),
+                    applyExposureAndOffset(rgbaHdrData[start + 2], exposure, offset),
                 },
                 gamma,
                 tonemap
             );
 
-            const auto rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), floatData[start + 3]};
+            const auto rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), rgbaHdrData[start + 3]};
 
             for (int j = 0; j < 4; ++j) {
                 result[start + j] = (uint8_t)(clamp(rgba[j], 0.0f, 1.0f) * 255 + 0.5f);
@@ -1126,6 +1115,90 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
     );
 
     co_return result;
+}
+
+Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
+    shared_ptr<Image> reference,
+    const Box2i& imageRegion,
+    string_view requestedChannelGroup,
+    EMetric metric,
+    bool divideAlpha,
+    ETonemap tonemap,
+    float gamma,
+    float exposure,
+    float offset,
+    int priority
+) const {
+    co_return co_await getRgbaLdrImageData(
+        co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, divideAlpha, priority),
+        tonemap,
+        gamma,
+        exposure,
+        offset,
+        priority
+    );
+}
+
+Task<void> Image::save(
+    const fs::path& path,
+    shared_ptr<Image> reference,
+    const Box2i& imageRegion,
+    string_view requestedChannelGroup,
+    EMetric metric,
+    ETonemap tonemap,
+    float gamma,
+    float exposure,
+    float offset,
+    int priority
+) const {
+    if (path.empty()) {
+        throw ImageSaveError{"You must specify a file name to save the image."};
+    }
+
+    if (path.extension().empty()) {
+        throw ImageSaveError{"You must specify a file extension or select one from the dropdown to save the image."};
+    }
+
+    const auto size = imageRegion.size();
+    if (size.x() == 0 || size.y() == 0) {
+        throw ImageSaveError{"Can not save image with zero pixels."};
+    }
+
+    tlog::info() << "Saving currently displayed image as " << path << ".";
+    const auto start = chrono::steady_clock::now();
+
+    ofstream f{path, ios_base::binary};
+    if (!f) {
+        throw ImageSaveError{fmt::format("Could not open file {}", path)};
+    }
+
+    for (const auto& saver : ImageSaver::getSavers()) {
+        if (!saver->canSaveFile(path)) {
+            continue;
+        }
+
+        const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
+        const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
+
+        const auto rgbaHdrData =
+            co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, !saver->hasPremultipliedAlpha(), priority);
+
+        if (hdrSaver) {
+            hdrSaver->save(f, path, rgbaHdrData, size, 4);
+        } else if (ldrSaver) {
+            const auto rgbaLdrData = co_await getRgbaLdrImageData(rgbaHdrData, tonemap, gamma, exposure, offset, priority);
+            ldrSaver->save(f, path, rgbaLdrData, size, 4);
+        } else {
+            TEV_ASSERT(false, "Each image saver must either be a HDR or an LDR saver.");
+        }
+
+        const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start};
+
+        tlog::success() << fmt::format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
+        co_return;
+    }
+
+    throw ImageSaveError{fmt::format("No save routine for image type {} found.", path.extension())};
 }
 
 template <typename T> time_t to_time_t(T timePoint) {
