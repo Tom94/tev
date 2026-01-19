@@ -188,6 +188,17 @@ static int mainFunc(span<const string> arguments) {
         {"no-channel-grouping"},
     };
 
+    ValueFlag<string> convertToFlag{
+        parser,
+        "FORMAT",
+        "Run tev in conversion mode without opening a window. "
+        "In this mode, tev will convert all supplied images to the format specified by FORMAT. "
+        "Supported formats are PNG, JPEG, BMP, TIFF, EXR, and HDR. "
+        "The converted images will be saved alongside the original images with an appropriate file extension, "
+        "unless the `output-path` flag is also provided.",
+        {"convert-to"},
+    };
+
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
@@ -315,6 +326,15 @@ static int mainFunc(span<const string> arguments) {
         {'o', "offset"},
     };
 
+    ValueFlag<string> outputFlag{
+        parser,
+        "OUTPUT PATH",
+        "The path where converted images will be saved when running in conversion mode (`convert-to` flag). If the path is a directory, "
+        "the directory must exist and converted images will be saved into it with their original filename and an appropriate file "
+        "extension. If the path is a file, only the first image will be saved into it.",
+        {"output-path"},
+    };
+
     Flag playFlag{
         parser,
         "PLAY",
@@ -421,8 +441,6 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    auto ipc = hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>();
-
     // If we don't have any images to load, create new windows regardless of flag. (In this case, the user likely wants to open a new
     // instance of tev rather than focusing the existing one.)
     bool newWindow = !imageFiles;
@@ -438,9 +456,11 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
+    auto ipc = convertToFlag ? nullptr : (hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>());
+
     // If we're not the primary instance and did not request to open a new window, simply send the to-be-opened images to the primary
     // instance.
-    if (!ipc->isPrimaryInstance() && !newWindow) {
+    if (ipc && !ipc->isPrimaryInstance() && !newWindow) {
         string channelSelector;
         bool first = true;
         for (auto imageFile : get(imageFiles)) {
@@ -480,7 +500,7 @@ static int mainFunc(span<const string> arguments) {
 
     // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
-    thread stdinThread{[weakImagesLoader = weak_ptr<BackgroundImagesLoader>{imagesLoader}]() {
+    auto stdinThread = thread{[weakImagesLoader = weak_ptr<BackgroundImagesLoader>{imagesLoader}]() {
         string channelSelector;
         while (!shuttingDown()) {
             for (string line; getline(cin, line) && !shuttingDown();) {
@@ -512,7 +532,7 @@ static int mainFunc(span<const string> arguments) {
     // Spawn another background thread, this one dealing with images passed to us via inter-process communication (IPC). This happens when a
     // user starts another instance of tev while one is already running. Note, that this behavior can be overridden by the -n flag, so not
     // _all_ secondary instances send their paths to the primary instance.
-    thread ipcThread = thread{[&]() {
+    auto ipcThread = !ipc ? thread{} : thread{[&]() {
         try {
             while (!shuttingDown()) {
                 // Attempt to become primary instance in case the primary instance got closed at some point. Attempt this with a reasonably
@@ -536,6 +556,9 @@ static int mainFunc(span<const string> arguments) {
     ScopeGuard backgroundThreadShutdownGuard{[&]() {
         setShuttingDown();
 
+        ThreadPool::global().waitUntilFinished();
+        ThreadPool::global().shutdown();
+
         if (ipcThread.joinable()) {
             ipcThread.join();
         }
@@ -556,6 +579,18 @@ static int mainFunc(span<const string> arguments) {
         }
 
         imagesLoader->enqueue(toPath(imageFile), channelSelector, false);
+    }
+
+    if (convertToFlag) {
+        tlog::info() << "Running in conversion mode. No window will be opened.";
+
+        while (imagesLoader->hasPendingLoads()) {
+            this_thread::sleep_for(1ms);
+        }
+
+        // TODO: do something
+
+        return 0;
     }
 
     // Init nanogui application
@@ -711,9 +746,6 @@ static int mainFunc(span<const string> arguments) {
 
     // Refresh only every 250ms if there are no user interactions. This makes an idling tev surprisingly energy-efficient. :)
     nanogui::run(nanogui::RunMode::Lazy);
-
-    ThreadPool::global().waitUntilFinished();
-    ThreadPool::global().shutdown();
 
     return 0;
 }
