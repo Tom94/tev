@@ -237,6 +237,26 @@ public:
 
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
+    Task<std::vector<Channel>>
+        getHdrImageData(std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority) const;
+
+    Task<HeapArray<float>> getRgbaHdrImageData(
+        std::shared_ptr<Image> reference, const Box2i& imageRegion, std::string_view requestedChannelGroup, EMetric metric, bool divideAlpha, int priority
+    ) const;
+
+    Task<HeapArray<uint8_t>> getRgbaLdrImageData(
+        std::shared_ptr<Image> reference,
+        const Box2i& imageRegion,
+        std::string_view requestedChannelGroup,
+        EMetric metric,
+        ETonemap tonemap,
+        float gamma,
+        float exposure,
+        float offset,
+        bool divideAlpha,
+        int priority
+    ) const;
+
     std::string toString() const;
 
     std::span<const AttributeNode> attributes() const { return mData.attributes; }

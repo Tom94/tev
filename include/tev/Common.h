@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <tev/FalseColor.h>
+
 #define FMT_HEADER_ONLY 1
 #include <fmt/core.h>
 
@@ -546,6 +548,37 @@ enum class ETonemap : int {
 
 ETonemap toTonemap(std::string_view name);
 
+inline nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap) {
+    nanogui::Vector3f result;
+    switch (tonemap) {
+        case ETonemap::SRGB: {
+            result = {toSRGB(value.x()), toSRGB(value.y()), toSRGB(value.z())};
+            break;
+        }
+        case ETonemap::Gamma: {
+            result = {std::pow(value.x(), 1 / gamma), std::pow(value.y(), 1 / gamma), std::pow(value.z(), 1 / gamma)};
+            break;
+        }
+        case ETonemap::FalseColor: {
+            static const auto falseColor = [](float linear) {
+                static const auto& fcd = colormap::turbo();
+                int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
+                return nanogui::Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
+            };
+
+            result = falseColor(log2(mean(value) + 0.03125f) / 10 + 0.5f);
+            break;
+        }
+        case ETonemap::PositiveNegative: {
+            result = {-2.0f * mean(min(value, nanogui::Vector3f{0.0f})), 2.0f * mean(max(value, nanogui::Vector3f{0.0f})), 0.0f};
+            break;
+        }
+        default: throw std::runtime_error{"Invalid tonemap selected."};
+    }
+
+    return min(max(result, nanogui::Vector3f{0.0f}), nanogui::Vector3f{1.0f});
+}
+
 enum class EMetric : int {
     Error = 0,
     AbsoluteError,
@@ -558,6 +591,20 @@ enum class EMetric : int {
 };
 
 EMetric toMetric(std::string_view name);
+
+inline float applyMetric(float image, float reference, EMetric metric) {
+    float diff = image - reference;
+    switch (metric) {
+        case EMetric::Error: return diff;
+        case EMetric::AbsoluteError: return abs(diff);
+        case EMetric::SquaredError: return diff * diff;
+        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01f);
+        case EMetric::RelativeSquaredError: return diff * diff / (reference * reference + 0.01f);
+        default: throw std::runtime_error{"Invalid metric selected."};
+    }
+}
+
+inline float applyExposureAndOffset(float value, float exposure, float offset) { return std::pow(2.0f, exposure) * value + offset; }
 
 enum EDirection {
     Forward,

@@ -60,8 +60,6 @@ public:
     void setOffset(float offset) { mOffset = offset; }
     void setGamma(float gamma) { mGamma = gamma; }
 
-    float applyExposureAndOffset(float value) const;
-
     void setImage(std::shared_ptr<Image> image) { mImage = image; }
     void setReference(std::shared_ptr<Image> reference) { mReference = reference; }
     void setRequestedChannelGroup(std::string_view groupName) { mRequestedChannelGroup = groupName; }
@@ -79,14 +77,8 @@ public:
     ETonemap tonemap() const { return mTonemap; }
     void setTonemap(ETonemap tonemap) { mTonemap = tonemap; }
 
-    static nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap);
-    nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value) const { return applyTonemap(value, mGamma, mTonemap); }
-
     EMetric metric() const { return mMetric; }
     void setMetric(EMetric metric) { mMetric = metric; }
-
-    static float applyMetric(float value, float reference, EMetric metric);
-    float applyMetric(float value, float reference) const { return applyMetric(value, reference, mMetric); }
 
     std::optional<Box2i> crop() { return mCrop; }
     void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
@@ -141,10 +133,6 @@ public:
     void applyInspectionParameters(std::vector<float>& values, bool hasAlpha);
 
 private:
-    static Task<std::vector<Channel>> channelsFromImages(
-        std::shared_ptr<Image> image, std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority
-    );
-
     static Task<std::shared_ptr<CanvasStatistics>> computeCanvasStatistics(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,

@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <tev/Common.h>
-
 #include <span>
 
 namespace tev { namespace colormap {
