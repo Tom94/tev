@@ -317,7 +317,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         tlog::debug() << fmt::format("Found ICC color profile: {}", iccProfileName);
     }
 
-    png_uint_32 numFrames = png_get_num_frames(pngPtr, infoPtr);
+    const png_uint_32 numFrames = png_get_num_frames(pngPtr, infoPtr);
     const bool isAnimated = numFrames > 1;
     if (isAnimated) {
         tlog::debug() << fmt::format("Image is an animated PNG with {} frames", numFrames);
@@ -344,14 +344,20 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     const float* prevCanvas = nullptr;
 
-    auto readFrame = [&]() -> Task<ImageData> {
+    const auto readFrame = [&](int frameIdx) -> Task<ImageData> {
         ImageData resultData;
         resultData.attributes = attributes;
 
+        if (isAnimated) {
+            resultData.partName = fmt::format("frames.{}", frameIdx);
+        }
+
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
-        resultData.channels =
-            co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
+        resultData.channels = co_await makeRgbaInterleavedChannels(
+            numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+        );
+
         resultData.orientation = orientation;
         resultData.hasPremultipliedAlpha = false;
 
@@ -694,16 +700,17 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         co_return resultData;
     };
 
+    if (!isAnimated && numFrames > 1) {
+        tlog::warning() << fmt::format("PNG has {} frames, but no animation control chunk found", numFrames);
+    }
+
     for (png_uint_32 i = 0; i < numFrames; ++i) {
         if (isAnimated) {
             png_read_frame_head(pngPtr, infoPtr);
             tlog::debug() << fmt::format("Reading frame {}/{}", i + 1, numFrames);
         }
 
-        result.emplace_back(co_await readFrame());
-        if (isAnimated) {
-            result.back().partName = fmt::format("frames.{}", i);
-        }
+        result.emplace_back(co_await readFrame(i));
     }
 
     co_return result;

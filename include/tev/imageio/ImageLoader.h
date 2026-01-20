@@ -133,13 +133,12 @@ public:
         const nanogui::Vector2i& size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
-        std::string_view namePrefix,
+        std::string_view layer,
         int priority
     );
 
-    static std::vector<Channel> makeNChannels(
-        int numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view namePrefix = ""
-    );
+    static std::vector<Channel>
+        makeNChannels(int numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer);
 
     static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
 };

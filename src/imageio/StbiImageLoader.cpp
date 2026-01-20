@@ -84,17 +84,17 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     vector<ImageData> result(numFrames);
     for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
         ImageData& resultData = result[frameIdx];
-
-        // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
-        resultData.channels = co_await makeRgbaInterleavedChannels(
-            numChannels, numChannels == 4, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16, "", priority
-        );
-        resultData.hasPremultipliedAlpha = false;
         if (numFrames > 1) {
             resultData.partName = fmt::format("frames.{}", frameIdx);
         }
 
-        auto numPixels = (size_t)size.x() * size.y();
+        // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
+        resultData.channels = co_await makeRgbaInterleavedChannels(
+            numChannels, numChannels == 4, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16, resultData.partName, priority
+        );
+        resultData.hasPremultipliedAlpha = false;
+
+        const auto numPixels = (size_t)size.x() * size.y();
         if (isHdr) {
             // Treated like EXR: scene-referred by nature. Usually corresponds to linear light, so should not get its white point adjusted.
             resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;

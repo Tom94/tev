@@ -454,11 +454,15 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         displayWindow = channels.front().size();
     }
 
-    for (const auto& c : channels) {
+    for (auto& c : channels) {
         if (c.size() != size()) {
             throw ImageLoadError{
                 fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())
             };
+        }
+
+        if (!c.name().starts_with(partName)) {
+            c.setName(Channel::joinIfNonempty(partName, c.name()));
         }
     }
 

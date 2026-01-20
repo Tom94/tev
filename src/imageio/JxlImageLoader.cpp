@@ -277,7 +277,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw ImageLoadError{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
                 }
 
-                tlog::debug() << fmt::format(
+                tlog::info() << fmt::format(
                     "Image size={}x{} channels={} bits_per_sample={}:{} alpha_bits={} alpha_premultiplied={} have_animation={} intensity_target={} orientation={}",
                     info.xsize,
                     info.ysize,
@@ -371,6 +371,11 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw ImageLoadError{"Failed to set output buffer."};
                 }
 
+                ImageData& data = result.emplace_back();
+                if (info.have_animation) {
+                    data.partName = frameName;
+                }
+
                 struct ExtraChannelInfo {
                     string name;
                     HeapArray<float> data;
@@ -396,12 +401,15 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     if (extraChannelInfo.name_length == 0) {
                         extraChannel.name = fmt::format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
                     } else {
-                        extraChannel.name.resize(extraChannelInfo.name_length + 1); // +1 for null terminator
-                        if (JXL_DEC_SUCCESS !=
-                            JxlDecoderGetExtraChannelName(decoder.get(), i, extraChannel.name.data(), extraChannel.name.size() + 1)) {
+                        vector<char> channelName(extraChannelInfo.name_length + 1, '\0'); // +1 for null terminator
+                        if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelName(decoder.get(), i, channelName.data(), channelName.size())) {
                             throw ImageLoadError{fmt::format("Failed to get extra channel {}'s name.", i)};
                         }
+
+                        extraChannel.name = channelName.data();
                     }
+
+                    extraChannel.name = Channel::joinIfNonempty(data.partName, extraChannel.name);
 
                     // Skip loading of extra channels that don't match the selector entirely. And skip alpha channels, because they're
                     // already part of the color channels.
@@ -436,8 +444,6 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw ImageLoadError{"Error processing input."};
                 }
 
-                ImageData& data = result.emplace_back();
-
                 const Vector2i size{(int)info.xsize, (int)info.ysize};
 
                 data.channels = co_await makeRgbaInterleavedChannels(
@@ -446,14 +452,11 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     size,
                     EPixelFormat::F32,
                     info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16,
-                    "",
+                    data.partName,
                     priority
                 );
 
                 data.hasPremultipliedAlpha = info.alpha_premultiplied;
-                if (info.have_animation) {
-                    data.partName = frameName;
-                }
 
                 // JXL's orientation values match EXIF orientation tags (which also match our EOrientation enum).
                 data.orientation = (EOrientation)info.orientation;

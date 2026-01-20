@@ -468,12 +468,8 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
 
             const Imf::ChannelList& imfChannels = part.header().channels();
 
-            auto channelName = [&](Imf::ChannelList::ConstIterator c) {
-                string name = c.name();
-                if (part.header().hasName()) {
-                    name = part.header().name() + "."s + name;
-                }
-                return name;
+            const auto channelName = [&](Imf::ChannelList::ConstIterator c) {
+                return part.header().hasName() ? Channel::join(part.header().name(), c.name()) : c.name();
             };
 
             Imath::Box2i dataWindow = part.header().dataWindow();
@@ -486,7 +482,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
 
             bool matched = false;
             for (Imf::ChannelList::ConstIterator c = imfChannels.begin(); c != imfChannels.end(); ++c) {
-                string name = channelName(c);
+                const string name = channelName(c);
                 if (matchesFuzzy(name, channelSelector)) {
                     rawChannels.emplace_back(parts.size(), name, c.name(), c.channel(), size);
                     matched = true;

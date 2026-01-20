@@ -109,7 +109,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
     Color bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
 
-    if (flags & ANIMATION_FLAG) {
+    const bool isAnimation = (flags & ANIMATION_FLAG) != 0;
+    if (isAnimation) {
         const uint32_t bgColor8bit = WebPDemuxGetI(demux, WEBP_FF_BACKGROUND_COLOR);
 
         // Byte order: BGRA (https://developers.google.com/speed/webp/docs/riff_container#animation)
@@ -171,11 +172,12 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             resultData.attributes = attributes;
 
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
-            resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
-            resultData.hasPremultipliedAlpha = false;
-            resultData.partName = fmt::format("frames.{}", frameIdx);
+            resultData.partName = isAnimation ? fmt::format("frames.{}", frameIdx++) : "";
+            resultData.channels = co_await makeRgbaInterleavedChannels(
+                numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            );
 
-            ++frameIdx;
+            resultData.hasPremultipliedAlpha = false;
 
             const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
             const size_t numFrameSamples = numFramePixels * numChannels;
@@ -267,9 +269,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         WebPDemuxReleaseIterator(&iter);
     }
 
-    // If there's just one frame in this webp, there's no need to give it a part name.
-    if (result.size() == 1) {
-        result.front().partName = "";
+    if (result.size() > 1 && !isAnimation) {
+        tlog::warning() << "WebP image has multiple frames, but animation flag is not set";
     }
 
     co_return result;

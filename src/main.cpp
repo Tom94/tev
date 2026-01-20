@@ -456,7 +456,7 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
-    auto ipc = convertToFlag ? nullptr : (hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>());
+    const auto ipc = convertToFlag ? nullptr : (hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>());
 
     // If we're not the primary instance and did not request to open a new window, simply send the to-be-opened images to the primary
     // instance.
@@ -493,7 +493,7 @@ static int mainFunc(span<const string> arguments) {
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
-    shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
+    const shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
     imagesLoader->setRecursiveDirectories(recursiveFlag);
     imagesLoader->setApplyGainmaps(!gainmapFlagOff);
     imagesLoader->setGroupChannels(!channelGroupingFlagOff);
@@ -553,7 +553,7 @@ static int mainFunc(span<const string> arguments) {
         } catch (const runtime_error& e) { tlog::warning() << "Uncaught exception in IPC thread: " << e.what(); }
     }};
 
-    ScopeGuard backgroundThreadShutdownGuard{[&]() {
+    const ScopeGuard backgroundThreadShutdownGuard{[&]() {
         setShuttingDown();
 
         ThreadPool::global().waitUntilFinished();
@@ -596,7 +596,7 @@ static int mainFunc(span<const string> arguments) {
     // Init nanogui application
     nanogui::init(!get(ldrFlag));
 
-    ScopeGuard nanoguiShutdownGuard{[&]() {
+    const ScopeGuard nanoguiShutdownGuard{[&]() {
     // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
 #if defined(__APPLE__) or defined(_WIN32)
