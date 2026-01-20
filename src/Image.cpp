@@ -484,10 +484,6 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         for (const auto& match : matches) {
             channels.emplace_back(std::move(tmp[match.second]));
         }
-
-        if (channels.empty()) {
-            throw ImageLoadError{fmt::format("Channel selector :{} discards all channels.", channelSelector)};
-        }
     }
 
     if (layers.empty()) {
@@ -1352,6 +1348,10 @@ Task<vector<shared_ptr<Image>>>
         for (auto& i : imageData) {
             co_await i.ensureValid(channelSelector, taskPriority);
 
+            if (i.channels.empty()) {
+                continue;
+            }
+
             // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
             string localChannelSelector;
             if (i.partName.empty()) {
@@ -1368,6 +1368,10 @@ Task<vector<shared_ptr<Image>>>
             }
 
             images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector, groupChannels));
+        }
+
+        if (images.empty()) {
+            throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
         }
 
         const auto end = chrono::system_clock::now();
