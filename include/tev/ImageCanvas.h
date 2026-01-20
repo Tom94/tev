@@ -105,8 +105,8 @@ public:
     // The following functions return four values per pixel in RGBA order. The number of pixels is given by `imageDataSize()`. If the canvas
     // does not currently hold an image, or no channels are displayed, then zero pixels are returned.
     nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
-    Task<HeapArray<float>> getHdrImageData(bool divideAlpha, int priority) const;
-    Task<HeapArray<uint8_t>> getLdrImageData(bool divideAlpha, int priority) const;
+    Task<HeapArray<float>> getRgbaHdrImageData(bool divideAlpha, int priority) const;
+    Task<HeapArray<uint8_t>> getRgbaLdrImageData(bool divideAlpha, int priority) const;
 
     void saveImage(const fs::path& filename) const;
 
@@ -138,7 +138,7 @@ private:
         std::shared_ptr<Image> reference,
         std::string_view requestedChannelGroup,
         EMetric metric,
-        const Box2i& region,
+        Box2i region,
         const chroma_t& chroma,
         ituth273::ETransfer transfer,
         bool adaptWhitePoint,

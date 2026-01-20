@@ -1055,7 +1055,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
             int yresult = y - imageRegion.min.y();
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
                 for (int c = 0; c < 4; ++c) {
-                    const float val = c < nChannelsToSave ? channels[c].at({x, y}) : c == 3 ? 1.0f : 0.0f;
+                    const float val = c < nChannelsToSave ? channels[c].eval({x, y}) : c == 3 ? 1.0f : 0.0f;
                     const int xresult = x - imageRegion.min.x();
                     result[(yresult * imageRegion.size().x() + xresult) * 4 + c] = val;
                 }
@@ -1071,8 +1071,8 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
             numPixels,
             numPixels * 4,
             [&result](size_t j) {
-                float alpha = result[j * 4 + 3];
-                float factor = alpha == 0 ? 0 : 1 / alpha;
+                const float alpha = result[j * 4 + 3];
+                const float factor = alpha == 0 ? 0 : 1 / alpha;
                 for (int c = 0; c < 3; ++c) {
                     result[j * 4 + c] *= factor;
                 }

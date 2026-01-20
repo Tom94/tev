@@ -596,20 +596,13 @@ Box2i ImageCanvas::cropInImageCoords() const {
         return Box2i{0};
     }
 
-    // The user specifies a crop region in display window coordinates. First, intersect this crop window with the image's extent, then
-    // translate the crop window to the image's data window for canvas statistics computation.
-    Box2i region = mImage->dataWindow();
-    if (mCrop.has_value()) {
-        region = region.intersect(mCrop.value().translate(mImage->displayWindow().min));
+    const auto region =
+        (mCrop.has_value() ? *mCrop : mImage->displayWindow()).translate(mImage->displayWindow().min - mImage->dataWindow().min);
 
-        // If there is no intersection between the crop and the image, return the empty region about the image origin.
-        if (!region.isValid()) {
-            return Box2i{0};
-        }
+    if (!region.isValid()) {
+        return Box2i{0};
     }
 
-    region = region.translate(-mImage->dataWindow().min);
-    TEV_ASSERT(region.isValid(), "Crop region must be valid.");
     return region;
 }
 
@@ -620,7 +613,7 @@ void ImageCanvas::fitImageToScreen(const Image& image) {
 
 void ImageCanvas::resetTransform() { mTransform = Matrix3f::scale(Vector2f{1.0f}); }
 
-Task<HeapArray<float>> ImageCanvas::getHdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<float>> ImageCanvas::getRgbaHdrImageData(bool divideAlpha, int priority) const {
     if (!mImage) {
         co_return {};
     }
@@ -628,7 +621,7 @@ Task<HeapArray<float>> ImageCanvas::getHdrImageData(bool divideAlpha, int priori
     co_return co_await mImage->getRgbaHdrImageData(mReference, cropInImageCoords(), mRequestedChannelGroup, mMetric, divideAlpha, priority);
 }
 
-Task<HeapArray<uint8_t>> ImageCanvas::getLdrImageData(bool divideAlpha, int priority) const {
+Task<HeapArray<uint8_t>> ImageCanvas::getRgbaLdrImageData(bool divideAlpha, int priority) const {
     if (!mImage) {
         co_return {};
     }
@@ -780,7 +773,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     shared_ptr<Image> reference,
     string_view requestedChannelGroup,
     EMetric metric,
-    const Box2i& region,
+    Box2i region,
     const chroma_t& chroma,
     ituth273::ETransfer transfer,
     bool adaptWhitePoint,
@@ -788,8 +781,12 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     int priority
 ) {
     TEV_ASSERT(image, "Image must be valid.");
-    TEV_ASSERT(region.isValid(), "Region must be valid.");
-    TEV_ASSERT(Box2i{image->size()}.contains(region), "Region must be contained in image.");
+
+    // If the crop region is outside the image, intersect. If no intersection, use the empty region about the origin.
+    region = region.intersect(Box2i{image->size()});
+    if (!region.isValid()) {
+        region = Box2i{0};
+    }
 
     const auto start = chrono::steady_clock::now();
     const auto scopeGuard = ScopeGuard([&]() {

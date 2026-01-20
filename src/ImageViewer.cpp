@@ -2364,7 +2364,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
-    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max()).get();
+    const auto imageData = mImageCanvas->getRgbaLdrImageData(true, std::numeric_limits<int>::max()).get();
 
 #if defined(__APPLE__) or defined(_WIN32)
     clip::image_spec imageMetadata;
