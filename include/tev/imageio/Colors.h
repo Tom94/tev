@@ -45,7 +45,9 @@ chroma_t zeroChroma();
 nanogui::Matrix3f xyzToChromaMatrix(const chroma_t& chroma);
 nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
 
-nanogui::Matrix3f convertColorspaceMatrix(const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent);
+nanogui::Matrix3f convertColorspaceMatrix(
+    const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent, std::optional<nanogui::Vector2f> adoptedNeutral = std::nullopt
+);
 
 nanogui::Vector2f whiteD50();
 nanogui::Vector2f whiteD55();

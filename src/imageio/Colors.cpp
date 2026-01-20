@@ -174,18 +174,21 @@ Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) 
     return kBradfordInv * scale * kBradford;
 }
 
-Matrix3f convertColorspaceMatrix(const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent) {
-    if (srcChroma == dstChroma) {
+Matrix3f
+    convertColorspaceMatrix(const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent, optional<Vector2f> adoptedNeutral) {
+    // If we neither need to adapt the white point nor change primaries, return identity
+    if (srcChroma == dstChroma && (intent == ERenderingIntent::AbsoluteColorimetric || !adoptedNeutral.has_value())) {
         return Matrix3f{1.0f};
     }
 
+    const auto srcWhite = adoptedNeutral.has_value() ? *adoptedNeutral : srcChroma[3];
     switch (intent) {
         case ERenderingIntent::Saturation:
             tlog::warning() << "Saturation rendering intent is not supported; falling back to Perceptual.";
             [[fallthrough]];
         case ERenderingIntent::Perceptual:
         case ERenderingIntent::RelativeColorimetric:
-            return xyzToRgb(dstChroma, 1) * adaptWhiteBradford(srcChroma[3], dstChroma[3]) * rgbToXyz(srcChroma, 1);
+            return xyzToRgb(dstChroma, 1) * adaptWhiteBradford(srcWhite, dstChroma[3]) * rgbToXyz(srcChroma, 1);
         case ERenderingIntent::AbsoluteColorimetric: return xyzToRgb(dstChroma, 1) * rgbToXyz(srcChroma, 1);
         default: throw std::invalid_argument("Invalid rendering intent");
     }

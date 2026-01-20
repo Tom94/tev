@@ -568,32 +568,29 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
                 // AbsoluteColorimetric (no white point adaptation) is the intended behavior.
                 data.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
 
-                // While OpenEXR images *can* have embedded `adoptedNeutral` values, those are to be used as suggested starting points for
-                // creative color grading (e.g. as a starting point for white balance adjustments) and not as actual white points for color
-                // space conversions.
+                // OpenEXR files may specify an "adoptedNeutral" white point that is meant to be rendered as neutral white. If this is the
+                // case, we want white point adaptation after all and switch to RelativeColorimetric.
+                optional<Vector2f> adoptedNeutral = nullopt;
                 if (Imf::hasAdoptedNeutral(part.header())) {
-                    const auto adoptedNeutral = Imf::adoptedNeutral(part.header());
-                    tlog::debug() << fmt::format(
-                        "EXR part '{}' has adopted neutral at ({}, {}). Ignoring for color space conversion.",
-                        part.header().name(),
-                        adoptedNeutral[0],
-                        adoptedNeutral[1]
-                    );
+                    const auto an = Imf::adoptedNeutral(part.header());
+
+                    adoptedNeutral = Vector2f{an.x, an.y};
+                    data.renderingIntent = ERenderingIntent::RelativeColorimetric;
+
+                    tlog::debug() << fmt::format("EXR part '{}' has adopted neutral {}. Adapting white.", data.partName, *adoptedNeutral);
                 }
 
+                chroma_t chroma = rec709Chroma(); // Assumption: EXR images are Rec. 709 unless specified otherwise
                 if (Imf::hasChromaticities(part.header())) {
-                    auto chroma = Imf::chromaticities(part.header());
-                    data.toRec709 = convertColorspaceMatrix(
-                        {
-                            {{chroma.red.x, chroma.red.y},
-                             {chroma.green.x, chroma.green.y},
-                             {chroma.blue.x, chroma.blue.y},
-                             {chroma.white.x, chroma.white.y}}
-                    },
-                        rec709Chroma(),
-                        data.renderingIntent
-                    );
+                    const auto c = Imf::chromaticities(part.header());
+                    chroma = {
+                        {{c.red.x, c.red.y}, {c.green.x, c.green.y}, {c.blue.x, c.blue.y}, {c.white.x, c.white.y}},
+                    };
+
+                    tlog::debug() << fmt::format("EXR part '{}' has chromaticities {}.", data.partName, chroma);
                 }
+
+                data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent, adoptedNeutral);
             } catch (const Iex::BaseExc& e) {
                 tlog::warning() << "Error reading EXR part " << partIdx << ": " << e.what();
 
