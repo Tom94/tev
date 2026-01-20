@@ -158,9 +158,7 @@ vector<string_view> split(string_view text, string_view delim, bool inclusive) {
     return result;
 }
 
-vector<string_view> splitWhitespace(string_view s, bool inclusive) {
-    return split(s, ws, inclusive);
-}
+vector<string_view> splitWhitespace(string_view s, bool inclusive) { return split(s, ws, inclusive); }
 
 string toLower(string_view str) {
     string result{str};
@@ -187,9 +185,7 @@ string_view trimRight(string_view s) {
     return s;
 }
 
-string_view trim(string_view s) {
-    return trimRight(trimLeft(s));
-}
+string_view trim(string_view s) { return trimRight(trimLeft(s)); }
 
 bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
     if (matchedPartId) {
@@ -407,6 +403,16 @@ const optional<FlatpakInfo>& flatpakInfo() {
 
     static optional<FlatpakInfo> sFlatpakInfo = getFlatpakInfo();
     return sFlatpakInfo;
+}
+
+string_view toString(EAlphaKind kind) {
+    switch (kind) {
+        case EAlphaKind::PremultipliedNonlinear: return "premultiplied_nonlinear";
+        case EAlphaKind::Premultiplied: return "premultiplied";
+        case EAlphaKind::Straight: return "straight";
+        case EAlphaKind::None: return "none";
+        default: throw runtime_error{"Unknown alpha kind."};
+    }
 }
 
 EInterpolationMode toInterpolationMode(string_view name) {

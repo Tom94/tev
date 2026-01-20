@@ -18,9 +18,11 @@
 
 #pragma once
 
+#include <tev/Common.h>
 #include <tev/imageio/ImageSaver.h>
 
 #include <ostream>
+#include <string_view>
 
 namespace tev {
 
@@ -30,7 +32,13 @@ public:
         std::ostream& oStream, const fs::path& path, std::span<const uint8_t> data, const nanogui::Vector2i& imageSize, int nChannels
     ) const override;
 
-    bool hasPremultipliedAlpha() const override { return false; }
+    EAlphaKind alphaKind(std::string_view extension) const override {
+        if (extension == ".png" || extension == ".tga" || extension == ".bmp") {
+            return EAlphaKind::Straight;
+        } else {
+            return EAlphaKind::None;
+        }
+    }
 
     virtual bool canSaveFile(std::string_view extension) const override {
         std::string lowerExtension = toLower(extension);

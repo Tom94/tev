@@ -18,9 +18,11 @@
 
 #pragma once
 
+#include <tev/Common.h>
 #include <tev/imageio/ImageSaver.h>
 
 #include <ostream>
+#include <string_view>
 
 namespace tev {
 
@@ -30,7 +32,10 @@ public:
         std::ostream& oStream, const fs::path& path, std::span<const float> data, const nanogui::Vector2i& imageSize, int nChannels
     ) const override;
 
-    bool hasPremultipliedAlpha() const override { return true; }
+    // JXL images technically support straight alpha. And, if a non-linear transfer function is used, premultiplied alpha is of the
+    // non-linear kind. However, tev saves JXLs only as lossless HDR image storage, which always uses linear transfer functions and
+    // premultiplied alpha.
+    EAlphaKind alphaKind(std::string_view) const override { return EAlphaKind::Premultiplied; }
 
     virtual bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".jxl"; }
 };

@@ -34,7 +34,7 @@ void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<const 
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(stbidata), size);
     };
 
-    auto extension = toLower(toString(path.extension()));
+    const auto extension = toLower(toString(path.extension()));
 
     if (extension == ".jpg" || extension == ".jpeg") {
         stbi_write_jpg_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data(), 100);

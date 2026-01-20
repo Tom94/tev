@@ -523,6 +523,21 @@ struct FlatpakInfo {
 
 const std::optional<FlatpakInfo>& flatpakInfo();
 
+enum class EAlphaKind {
+    // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
+    // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
+    // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
+    // expects this kind of premultiplied alpha, so we have to support it.
+    PremultipliedNonlinear,
+    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
+    // kind of premultiplied alpha.
+    Premultiplied,
+    Straight,
+    None,
+};
+
+std::string_view toString(EAlphaKind mode);
+
 enum EInterpolationMode : int {
     Nearest = 0,
     Bilinear,

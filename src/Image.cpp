@@ -1180,8 +1180,8 @@ Task<void> Image::save(
         const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
         const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
 
-        const auto rgbaHdrData =
-            co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, !saver->hasPremultipliedAlpha(), priority);
+        const bool divideAlpha = saver->alphaKind(path) == EAlphaKind::Straight;
+        const auto rgbaHdrData = co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, divideAlpha, priority);
 
         if (hdrSaver) {
             hdrSaver->save(f, path, rgbaHdrData, size, 4);

@@ -24,6 +24,7 @@
 
 #include <ostream>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace tev {
@@ -34,7 +35,8 @@ class ImageSaver {
 public:
     virtual ~ImageSaver() {}
 
-    virtual bool hasPremultipliedAlpha() const = 0;
+    virtual EAlphaKind alphaKind(std::string_view extension) const = 0;
+    EAlphaKind alphaKind(const fs::path& path) const { return alphaKind(std::string_view{toLower(toString(path.extension()))}); }
 
     virtual bool canSaveFile(std::string_view extension) const = 0;
     bool canSaveFile(const fs::path& path) const { return canSaveFile(std::string_view{toLower(toString(path.extension()))}); }
