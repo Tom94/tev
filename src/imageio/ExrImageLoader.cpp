@@ -559,6 +559,13 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
                     data.partName = part.header().name();
                 }
 
+                if (Imf::hasWhiteLuminance(part.header())) {
+                    const auto wl = Imf::whiteLuminance(part.header());
+                    tlog::debug() << fmt::format("EXR part '{}' has white luminance {}", data.partName, wl);
+
+                    data.hdrMetadata.bestGuessWhiteLevel = wl;
+                }
+
                 // OpenEXR, being linear, scene-referred, should not be falsified by white point adaptation. The test images provided at
                 // https://github.com/AcademySoftwareFoundation/openexr-images/tree/main/Chromaticities also indicate that
                 // AbsoluteColorimetric (no white point adaptation) is the intended behavior.
@@ -573,7 +580,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
                     adoptedNeutral = Vector2f{an.x, an.y};
                     data.renderingIntent = ERenderingIntent::RelativeColorimetric;
 
-                    tlog::debug() << fmt::format("EXR part '{}' has adopted neutral {}. Adapting white.", data.partName, *adoptedNeutral);
+                    tlog::debug() << fmt::format("EXR part '{}' has adopted neutral {}", data.partName, *adoptedNeutral);
                 }
 
                 chroma_t chroma = rec709Chroma(); // Assumption: EXR images are Rec. 709 unless specified otherwise
@@ -583,7 +590,7 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
                         {{c.red.x, c.red.y}, {c.green.x, c.green.y}, {c.blue.x, c.blue.y}, {c.white.x, c.white.y}},
                     };
 
-                    tlog::debug() << fmt::format("EXR part '{}' has chromaticities {}.", data.partName, chroma);
+                    tlog::debug() << fmt::format("EXR part '{}' has chromaticities {}", data.partName, chroma);
                 }
 
                 data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent, adoptedNeutral);
