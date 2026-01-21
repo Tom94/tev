@@ -28,7 +28,7 @@ namespace tev {
 
 class ExrImageSaver : public TypedImageSaver<float> {
 public:
-    void save(
+    Task<void> save(
         std::ostream& oStream, const fs::path& path, std::span<const float> data, const nanogui::Vector2i& imageSize, int nChannels
     ) const override;
 

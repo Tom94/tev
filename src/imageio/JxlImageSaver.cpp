@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Task.h>
 #include <tev/imageio/JxlImageSaver.h>
 
 #include <jxl/encode.h>
@@ -33,7 +34,7 @@ using namespace std;
 
 namespace tev {
 
-void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
+Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
     if (nChannels <= 0 || nChannels > 4098) {
         throw invalid_argument{fmt::format("Invalid number of channels {}.", nChannels)};
     }
@@ -71,7 +72,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const floa
     basicInfo.exponent_bits_per_sample = 8; // ieee single precision floating point
     basicInfo.uses_original_profile = JXL_TRUE;
 
-    bool hasAlpha = nChannels == 2 || nChannels == 4;
+    const bool hasAlpha = nChannels == 2 || nChannels == 4;
     if (hasAlpha) {
         basicInfo.alpha_bits = 32;
         basicInfo.alpha_exponent_bits = 8;
@@ -107,7 +108,7 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const floa
         throw ImageSaveError{"Failed to set color encoding."};
     }
 
-    JxlPixelFormat pixelFormat = {
+    const JxlPixelFormat pixelFormat = {
         static_cast<uint32_t>(nChannels), // num_channels
         JXL_TYPE_FLOAT,                   // data_type
         JXL_LITTLE_ENDIAN,                // endianness
@@ -123,10 +124,11 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const floa
 
     // Encode the image and write it to file in 1mb chunks
     vector<uint8_t> compressed(1024 * 1024);
-    while (true) {
+    JxlEncoderStatus processResult = JXL_ENC_NEED_MORE_OUTPUT;
+    while (processResult == JXL_ENC_NEED_MORE_OUTPUT) {
         uint8_t* nextOut = compressed.data();
         size_t availableOut = compressed.size();
-        JxlEncoderStatus processResult = JxlEncoderProcessOutput(encoder.get(), &nextOut, &availableOut);
+        processResult = JxlEncoderProcessOutput(encoder.get(), &nextOut, &availableOut);
         if (processResult == JXL_ENC_ERROR) {
             throw ImageSaveError{fmt::format("Failed to process output: {}.", (size_t)JxlEncoderGetError(encoder.get()))};
         }
@@ -136,10 +138,15 @@ void JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const floa
             throw ImageSaveError{fmt::format("Failed to write data to {}.", toString(path))};
         }
 
-        if (processResult == JXL_ENC_SUCCESS) {
-            break; // Encoding is done
+        switch (processResult) {
+            case JXL_ENC_SUCCESS: goto l_done;
+            case JXL_ENC_NEED_MORE_OUTPUT: continue;
+            default: throw ImageSaveError{fmt::format("Unexpected encoder process result: {}.", (size_t)processResult)};
         }
     }
+l_done:
+
+    co_return;
 }
 
 } // namespace tev

@@ -1184,10 +1184,10 @@ Task<void> Image::save(
         const auto rgbaHdrData = co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, divideAlpha, priority);
 
         if (hdrSaver) {
-            hdrSaver->save(f, path, rgbaHdrData, size, 4);
+            co_await hdrSaver->save(f, path, rgbaHdrData, size, 4);
         } else if (ldrSaver) {
             const auto rgbaLdrData = co_await getRgbaLdrImageData(rgbaHdrData, tonemap, gamma, exposure, offset, priority);
-            ldrSaver->save(f, path, rgbaLdrData, size, 4);
+            co_await ldrSaver->save(f, path, rgbaLdrData, size, 4);
         } else {
             TEV_ASSERT(false, "Each image saver must either be a HDR or an LDR saver.");
         }

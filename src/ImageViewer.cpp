@@ -2393,7 +2393,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
 
     stringstream pngData;
     try {
-        pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4);
+        pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4).get();
     } catch (const ImageSaveError& e) {
         throw std::runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())};
     }

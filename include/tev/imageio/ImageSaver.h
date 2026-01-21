@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/Task.h>
 
 #include <nanogui/vector.h>
 
@@ -46,7 +47,7 @@ public:
 
 template <typename T> class TypedImageSaver : public ImageSaver {
 public:
-    virtual void save(
+    virtual Task<void> save(
         std::ostream& oStream, const fs::path& path, std::span<const T> data, const nanogui::Vector2i& imageSize, int nChannels
     ) const = 0;
 };
