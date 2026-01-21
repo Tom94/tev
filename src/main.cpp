@@ -190,13 +190,20 @@ static int mainFunc(span<const string> arguments) {
 
     ValueFlag<string> convertToFlag{
         parser,
-        "FORMAT",
+        "PATH",
         "Run tev in conversion mode without opening a window. "
-        "In this mode, tev will convert all supplied images to the format specified by FORMAT. "
-        "Supported formats are PNG, JPEG, BMP, TIFF, EXR, and HDR. "
-        "The converted images will be saved alongside the original images with an appropriate file extension, "
-        "unless the `output-path` flag is also provided.",
-        {"convert-to"},
+        "In this mode, tev will convert all supplied images to the file extension of PATH. "
+        "Supported formats are bmp, exr, hdr, jpg, jxl, png, tga. "
+        "PATH may contain special placeholders:\n"
+        "{file}: the original filename without directory or extension\n"
+        "{dir}: the original file's directory\n"
+        "{ext}: the original file's extension\n"
+        "{idx:format}: the index of the image in the list of supplied images, formatted according to 'format' (e.g. 03 for zero-padded three digits)\n"
+        "\nExamples:\n"
+        "tev --convert-to {dir}/{file}_converted.png image1.exr image2.hdr\n"
+        "tev --convert-to /output/directory/{file}.jpg image1.exr image2.h\n"
+        "tev --convert-to /output/directory/converted_{idx:02}.png image1.exr image2.hdr image3.png\n",
+        {'c', "convert-to"},
     };
 
     ValueFlag<float> exposureFlag{
@@ -324,15 +331,6 @@ static int mainFunc(span<const string> arguments) {
         "OFFSET",
         "Add an absolute offset to the image after EXPOSURE has been applied. Default is 0.",
         {'o', "offset"},
-    };
-
-    ValueFlag<string> outputFlag{
-        parser,
-        "OUTPUT PATH",
-        "The path where converted images will be saved when running in conversion mode (`convert-to` flag). If the path is a directory, "
-        "the directory must exist and converted images will be saved into it with their original filename and an appropriate file "
-        "extension. If the path is a file, only the first image will be saved into it.",
-        {"output-path"},
     };
 
     Flag playFlag{
@@ -588,7 +586,75 @@ static int mainFunc(span<const string> arguments) {
             this_thread::sleep_for(1ms);
         }
 
-        // TODO: do something
+        const EMetric metric = metricFlag ? toMetric(get(metricFlag)) : EMetric::Error;
+        const ETonemap tonemap = tonemapFlag ? toTonemap(get(tonemapFlag)) : ETonemap::None;
+        const float gamma = gammaFlag ? get(gammaFlag) : 2.2f;
+        const float exposure = exposureFlag ? get(exposureFlag) : 0.0f;
+        const float offset = offsetFlag ? get(offsetFlag) : 0.0f;
+        const int priority = numeric_limits<int>::max();
+
+        unordered_set<fs::path> writtenPaths;
+
+        for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
+            if (imageAddition->images.empty()) {
+                tlog::error() << fmt::format("Image addition is empty, cannot convert");
+                continue;
+            }
+
+            // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
+            const auto& image = imageAddition->images.front();
+            if (image->channelGroups().empty()) {
+                tlog::error() << fmt::format("Image {} has no channel groups, cannot convert", image->path());
+                continue;
+            }
+
+            // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
+            const auto& cg = image->channelGroups().front();
+
+            const string srcExt = toLower(toString(image->path().extension()));
+            string targetExt = toLower(get(convertToFlag));
+            if (!targetExt.starts_with('.')) {
+                targetExt = fmt::format(".{}", targetExt);
+            }
+
+            const auto path = toPath(substituteCurly(get(convertToFlag), [&](string_view placeholder) {
+                if (placeholder == "file") {
+                    return image->path().stem().string();
+                } else if (placeholder == "dir") {
+                    return image->path().parent_path().string();
+                } else if (placeholder == "ext") {
+                    return srcExt;
+                } else if (placeholder.starts_with("idx")) {
+                    const auto parts = split(placeholder, ":");
+                    if (parts.size() == 2) {
+                        return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
+                    } else {
+                        return fmt::format("{}", idx);
+                    }
+                } else {
+                    throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
+                }
+            }));
+
+            if (writtenPaths.find(path) != writtenPaths.end()) {
+                tlog::info() << fmt::format("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
+                continue;
+            }
+
+            if (path == image->path()) {
+                tlog::info() << fmt::format("Skipping conversion of {} to itself", image->path());
+                continue;
+            }
+
+            try {
+                image->save(path, nullptr, image->displayWindow(), cg.name, metric, tonemap, gamma, exposure, offset, priority).get();
+                writtenPaths.insert(path);
+
+                tlog::success() << fmt::format("Converted {} to {}", image->path(), path);
+            } catch (const ImageSaveError& e) {
+                tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what());
+            }
+        }
 
         return 0;
     }

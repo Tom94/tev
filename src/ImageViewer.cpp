@@ -1774,7 +1774,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         mGroupButtonContainer->remove_child_at(mGroupButtonContainer->child_count() - 1);
     }
 
-    size_t numGroups = mCurrentImage->channelGroups().size();
+    const size_t numGroups = mCurrentImage->channelGroups().size();
     for (size_t i = 0; i < numGroups; ++i) {
         auto group = groupName(i);
         auto button = new ImageButton{mGroupButtonContainer, group, false};
@@ -2228,8 +2228,8 @@ void ImageViewer::openImageDialog() {
         return;
     }
 
-    auto runDialog = [this]() {
-        auto threadGuard = ScopeGuard{[this]() {
+    const auto runDialog = [this]() {
+        const auto threadGuard = ScopeGuard{[this]() {
             scheduleToUiThread([this]() {
                 focusWindow();
                 if (mFileDialogThread && mFileDialogThread->joinable()) {
@@ -2275,7 +2275,7 @@ void ImageViewer::openImageDialog() {
             }
 
             filters.emplace(filters.begin(), pair<string, string>{join(allImages, ","), "All images"});
-            auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
+            const auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
 
             for (size_t i = 0; i < paths.size(); ++i) {
                 const bool shallSelect = i == paths.size() - 1;
@@ -2304,8 +2304,8 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    auto runDialog = [this]() {
-        auto threadGuard = ScopeGuard{[this]() {
+    const auto runDialog = [this]() {
+        const auto threadGuard = ScopeGuard{[this]() {
             scheduleToUiThread([this]() {
                 focusWindow();
                 if (mFileDialogThread && mFileDialogThread->joinable()) {
@@ -2367,22 +2367,23 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     const auto imageData = mImageCanvas->getRgbaLdrImageData(true, std::numeric_limits<int>::max()).get();
 
 #if defined(__APPLE__) or defined(_WIN32)
-    clip::image_spec imageMetadata;
-    imageMetadata.width = imageSize.x();
-    imageMetadata.height = imageSize.y();
-    imageMetadata.bits_per_pixel = 32;
-    imageMetadata.bytes_per_row = imageMetadata.bits_per_pixel / 8 * imageMetadata.width;
-
-    imageMetadata.red_mask = 0x000000ff;
-    imageMetadata.green_mask = 0x0000ff00;
-    imageMetadata.blue_mask = 0x00ff0000;
-    imageMetadata.alpha_mask = 0xff000000;
-    imageMetadata.red_shift = 0;
-    imageMetadata.green_shift = 8;
-    imageMetadata.blue_shift = 16;
-    imageMetadata.alpha_shift = 24;
-
-    clip::image image(imageData.data(), imageMetadata);
+    const clip::image image(
+        imageData.data(),
+        clip::image_spec{
+            .width = (unsigned long)imageSize.x(),
+            .height = (unsigned long)imageSize.y(),
+            .bits_per_pixel = 32,
+            .bytes_per_row = 4 * (unsigned long)imageSize.x(),
+            .red_mask = 0x000000ff,
+            .green_mask = 0x0000ff00,
+            .blue_mask = 0x00ff0000,
+            .alpha_mask = 0xff000000,
+            .red_shift = 0,
+            .green_shift = 8,
+            .blue_shift = 16,
+            .alpha_shift = 24
+        }
+    );
 
     if (!clip::set_image(image)) {
         throw std::runtime_error{"clip::set_image failed."};

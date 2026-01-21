@@ -1164,7 +1164,6 @@ Task<void> Image::save(
         throw ImageSaveError{"Can not save image with zero pixels."};
     }
 
-    tlog::info() << "Saving currently displayed image as " << path << ".";
     const auto start = chrono::steady_clock::now();
 
     ofstream f{path, ios_base::binary};

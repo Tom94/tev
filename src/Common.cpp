@@ -187,6 +187,33 @@ string_view trimRight(string_view s) {
 
 string_view trim(string_view s) { return trimRight(trimLeft(s)); }
 
+string substituteCurly(string_view str, const function<string(string_view)>& replacer) {
+    ostringstream result;
+    size_t pos = 0;
+    while (true) {
+        const size_t openBrace = str.find('{', pos);
+        if (openBrace == string::npos) {
+            result << str.substr(pos);
+            break;
+        }
+
+        result << str.substr(pos, openBrace - pos);
+        const size_t closeBrace = str.find('}', openBrace + 1);
+        if (closeBrace == string::npos) {
+            // No matching closing brace, append the rest of the string and break.
+            result << str.substr(openBrace);
+            break;
+        }
+
+        const string_view key = str.substr(openBrace + 1, closeBrace - openBrace - 1);
+        result << replacer(key);
+
+        pos = closeBrace + 1;
+    }
+
+    return result.str();
+}
+
 bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
     if (matchedPartId) {
         // Default value of 0. Is returned when the filter is empty, when there is no match, or when the filter is a regex.

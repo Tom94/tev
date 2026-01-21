@@ -636,6 +636,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         throw ImageSaveError{"There is no image to save."};
     }
 
+    tlog::info() << "Saving currently displayed image as " << path << ".";
     mImage
         ->save(
             path,
