@@ -82,25 +82,33 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 
 const vector<string_view>& ImageLoader::supportedMimeTypes() {
     static const vector<string_view> mimeTypes = {
-        "image/png",
-        "image/webp",
-        "image/jpeg",
-        "image/tiff",
-        "image/gif",
-        "image/tga",
-        "image/bmp",
 #ifdef TEV_SUPPORT_AVIF
         "image/avif",
 #endif
+        "image/apng",
+        "image/bmp",
+        "image/gif",
 #ifdef TEV_SUPPORT_HEIC
         "image/heic",
+        "image/heif",
 #endif
+        "image/jpeg",
+        "image/jxl",
+        "image/png",
+        "image/qoi",
+        "image/tga",
+        "image/tiff",
+        "image/vnd.mozilla.apng",
+        "image/vnd.radiance",
+        "image/webp",
+        "image/x-adobe-dng",
 #ifdef _WIN32
         "image/x-dds",
         "image/x-direct-draw-surface",
 #endif
-        "image/x-adobe-dng",
         "image/x-exr",
+        "image/x-hdr",
+        "image/x-pfm",
         "image/x-portable-anymap",
         "image/x-portable-arbitrarymap",
         "image/x-portable-bitmap",
@@ -168,9 +176,8 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     co_return channels;
 }
 
-vector<Channel> ImageLoader::makeNChannels(
-    int numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer
-) {
+vector<Channel>
+    ImageLoader::makeNChannels(int numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
     vector<Channel> channels;
     for (int c = 0; c < numChannels; ++c) {
         channels.emplace_back(to_string(c), size, format, desiredFormat);
