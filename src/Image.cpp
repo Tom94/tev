@@ -1164,8 +1164,6 @@ Task<void> Image::save(
         throw ImageSaveError{"Can not save image with zero pixels."};
     }
 
-    const auto start = chrono::steady_clock::now();
-
     ofstream f{path, ios_base::binary};
     if (!f) {
         throw ImageSaveError{fmt::format("Could not open file {}", path)};
@@ -1191,9 +1189,6 @@ Task<void> Image::save(
             TEV_ASSERT(false, "Each image saver must either be a HDR or an LDR saver.");
         }
 
-        const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start};
-
-        tlog::success() << fmt::format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
         co_return;
     }
 

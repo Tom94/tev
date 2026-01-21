@@ -637,6 +637,9 @@ void ImageCanvas::saveImage(const fs::path& path) const {
     }
 
     tlog::info() << "Saving currently displayed image as " << path << ".";
+
+    const auto start = chrono::steady_clock::now();
+
     mImage
         ->save(
             path,
@@ -651,6 +654,9 @@ void ImageCanvas::saveImage(const fs::path& path) const {
             numeric_limits<int>::max() // Use maximum priority for saving images.
         )
         .get();
+
+    const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start};
+    tlog::success() << fmt::format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {

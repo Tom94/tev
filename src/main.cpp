@@ -164,6 +164,85 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
     }
 }
 
+static void convertTo(
+    const string& targetPathPattern,
+    const shared_ptr<BackgroundImagesLoader>& imagesLoader,
+    EMetric metric,
+    ETonemap tonemap,
+    float gamma,
+    float exposure,
+    float offset
+) {
+    const int priority = numeric_limits<int>::max();
+    unordered_set<fs::path> writtenPaths;
+
+    const auto start = chrono::steady_clock::now();
+    const ScopeGuard guard{[&]() {
+        if (writtenPaths.empty()) {
+            return;
+        }
+
+        const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start}.count();
+        tlog::success() << fmt::format("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
+    }};
+
+    for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
+        if (imageAddition->images.empty()) {
+            tlog::error() << fmt::format("Image addition is empty, cannot convert");
+            continue;
+        }
+
+        // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
+        const auto& image = imageAddition->images.front();
+        if (image->channelGroups().empty()) {
+            tlog::error() << fmt::format("Image {} has no channel groups, cannot convert", image->path());
+            continue;
+        }
+
+        // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
+        const auto& cg = image->channelGroups().front();
+
+        const auto path = toPath(substituteCurly(targetPathPattern, [&](string_view placeholder) {
+            if (placeholder == "file") {
+                return toString(image->path().stem());
+            } else if (placeholder == "dir") {
+                return toString(image->path().parent_path());
+            } else if (placeholder == "ext") {
+                return toString(image->path().extension());
+            } else if (placeholder.starts_with("idx")) {
+                const auto parts = split(placeholder, ":");
+                if (parts.size() == 2) {
+                    return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
+                } else {
+                    return fmt::format("{}", idx);
+                }
+            } else {
+                throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
+            }
+        }));
+
+        if (writtenPaths.find(path) != writtenPaths.end()) {
+            tlog::info() << fmt::format("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
+            continue;
+        }
+
+        if (path == image->path()) {
+            tlog::info() << fmt::format("Skipping conversion of {} to itself", image->path());
+            continue;
+        }
+
+        try {
+            const auto saveStart = chrono::steady_clock::now();
+
+            image->save(path, nullptr, image->displayWindow(), cg.name, metric, tonemap, gamma, exposure, offset, priority).get();
+            writtenPaths.insert(path);
+
+            const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
+            tlog::success() << fmt::format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
+        } catch (const ImageSaveError& e) { tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what()); }
+    }
+}
+
 static int mainFunc(span<const string> arguments) {
     ArgumentParser parser{
         "tev — The EDR Viewer\n"
@@ -591,70 +670,8 @@ static int mainFunc(span<const string> arguments) {
         const float gamma = gammaFlag ? get(gammaFlag) : 2.2f;
         const float exposure = exposureFlag ? get(exposureFlag) : 0.0f;
         const float offset = offsetFlag ? get(offsetFlag) : 0.0f;
-        const int priority = numeric_limits<int>::max();
 
-        unordered_set<fs::path> writtenPaths;
-
-        for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
-            if (imageAddition->images.empty()) {
-                tlog::error() << fmt::format("Image addition is empty, cannot convert");
-                continue;
-            }
-
-            // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
-            const auto& image = imageAddition->images.front();
-            if (image->channelGroups().empty()) {
-                tlog::error() << fmt::format("Image {} has no channel groups, cannot convert", image->path());
-                continue;
-            }
-
-            // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
-            const auto& cg = image->channelGroups().front();
-
-            const string srcExt = toLower(toString(image->path().extension()));
-            string targetExt = toLower(get(convertToFlag));
-            if (!targetExt.starts_with('.')) {
-                targetExt = fmt::format(".{}", targetExt);
-            }
-
-            const auto path = toPath(substituteCurly(get(convertToFlag), [&](string_view placeholder) {
-                if (placeholder == "file") {
-                    return image->path().stem().string();
-                } else if (placeholder == "dir") {
-                    return image->path().parent_path().string();
-                } else if (placeholder == "ext") {
-                    return srcExt;
-                } else if (placeholder.starts_with("idx")) {
-                    const auto parts = split(placeholder, ":");
-                    if (parts.size() == 2) {
-                        return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
-                    } else {
-                        return fmt::format("{}", idx);
-                    }
-                } else {
-                    throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
-                }
-            }));
-
-            if (writtenPaths.find(path) != writtenPaths.end()) {
-                tlog::info() << fmt::format("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
-                continue;
-            }
-
-            if (path == image->path()) {
-                tlog::info() << fmt::format("Skipping conversion of {} to itself", image->path());
-                continue;
-            }
-
-            try {
-                image->save(path, nullptr, image->displayWindow(), cg.name, metric, tonemap, gamma, exposure, offset, priority).get();
-                writtenPaths.insert(path);
-
-                tlog::success() << fmt::format("Converted {} to {}", image->path(), path);
-            } catch (const ImageSaveError& e) {
-                tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what());
-            }
-        }
+        convertTo(get(convertToFlag), imagesLoader, metric, tonemap, gamma, exposure, offset);
 
         return 0;
     }
