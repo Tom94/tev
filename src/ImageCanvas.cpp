@@ -596,9 +596,7 @@ Box2i ImageCanvas::cropInImageCoords() const {
         return Box2i{0};
     }
 
-    const auto region =
-        (mCrop.has_value() ? *mCrop : mImage->displayWindow()).translate(mImage->displayWindow().min - mImage->dataWindow().min);
-
+    const auto region = mImage->toImageCoords(mCrop.has_value() ? *mCrop : mImage->displayWindow());
     if (!region.isValid()) {
         return Box2i{0};
     }
@@ -814,7 +812,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     const auto result = make_shared<CanvasStatistics>();
-    const size_t nColorChannels = result->nChannels = (int)(alphaChannel ? (flattened.size() - 1) : flattened.size());
+    const size_t nColorChannels = alphaChannel ? (flattened.size() - 1) : flattened.size();
+    result->nChannels = (int)nColorChannels;
 
     result->histogramColors.resize(nColorChannels);
     for (size_t i = 0; i < nColorChannels; ++i) {

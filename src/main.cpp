@@ -186,6 +186,7 @@ static void convertTo(
         tlog::success() << fmt::format("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
     }};
 
+    vector<Task<void>> saveTasks;
     for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
         if (imageAddition->images.empty()) {
             tlog::error() << fmt::format("Image addition is empty, cannot convert");
@@ -198,9 +199,6 @@ static void convertTo(
             tlog::error() << fmt::format("Image {} has no channel groups, cannot convert", image->path());
             continue;
         }
-
-        // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
-        const auto& cg = image->channelGroups().front();
 
         const auto path = toPath(substituteCurly(targetPathPattern, [&](string_view placeholder) {
             if (placeholder == "file") {
@@ -226,21 +224,35 @@ static void convertTo(
             continue;
         }
 
+        writtenPaths.insert(path);
         if (path == image->path()) {
             tlog::info() << fmt::format("Skipping conversion of {} to itself", image->path());
             continue;
         }
 
-        try {
-            const auto saveStart = chrono::steady_clock::now();
+        saveTasks.emplace_back(
+            [](
+                shared_ptr<Image> image, fs::path path, EMetric metric, ETonemap tonemap, float gamma, float exposure, float offset, int priority
+            ) -> Task<void> {
+                try {
+                    co_await ThreadPool::global().enqueueCoroutine(priority);
+                    const auto saveStart = chrono::steady_clock::now();
 
-            image->save(path, nullptr, image->displayWindow(), cg.name, metric, tonemap, gamma, exposure, offset, priority).get();
-            writtenPaths.insert(path);
+                    // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
+                    const auto cg = image->channelGroups().front().name;
+                    const auto window = image->toImageCoords(image->displayWindow());
+                    co_await image->save(path, nullptr, window, cg, metric, tonemap, gamma, exposure, offset, priority);
 
-            const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
-            tlog::success() << fmt::format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
-        } catch (const ImageSaveError& e) { tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what()); }
+                    const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
+                    tlog::success() << fmt::format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
+                } catch (const ImageSaveError& e) {
+                    tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what());
+                }
+            }(image, path, metric, tonemap, gamma, exposure, offset, priority)
+        );
     }
+
+    waitAll(saveTasks);
 }
 
 static int mainFunc(span<const string> arguments) {

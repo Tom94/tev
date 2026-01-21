@@ -205,6 +205,7 @@ public:
 
     const Box2i& dataWindow() const { return mData.dataWindow; }
     const Box2i& displayWindow() const { return mData.displayWindow; }
+    Box2i toImageCoords(const Box2i& displayWindow) const { return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min); }
 
     float whiteLevel() const { return mData.hdrMetadata.bestGuessWhiteLevel; }
 
