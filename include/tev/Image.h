@@ -205,7 +205,9 @@ public:
 
     const Box2i& dataWindow() const { return mData.dataWindow; }
     const Box2i& displayWindow() const { return mData.displayWindow; }
-    Box2i toImageCoords(const Box2i& displayWindow) const { return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min); }
+    Box2i toImageCoords(const Box2i& displayWindow) const {
+        return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min);
+    }
 
     float whiteLevel() const { return mData.hdrMetadata.bestGuessWhiteLevel; }
 
@@ -242,7 +244,13 @@ public:
         getHdrImageData(std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority) const;
 
     Task<HeapArray<float>> getRgbaHdrImageData(
-        std::shared_ptr<Image> reference, const Box2i& imageRegion, std::string_view requestedChannelGroup, EMetric metric, bool divideAlpha, int priority
+        std::shared_ptr<Image> reference,
+        const Box2i& imageRegion,
+        std::string_view requestedChannelGroup,
+        EMetric metric,
+        const nanogui::Color& bg,
+        bool divideAlpha,
+        int priority
     ) const;
 
     Task<HeapArray<uint8_t>>
@@ -253,6 +261,7 @@ public:
         const Box2i& imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
+        const nanogui::Color& bg,
         bool divideAlpha,
         ETonemap tonemap,
         float gamma,
@@ -267,6 +276,7 @@ public:
         const Box2i& imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
+        const nanogui::Color& bg,
         ETonemap tonemap,
         float gamma,
         float exposure,

@@ -457,6 +457,8 @@ std::string_view trim(std::string_view s);
 
 std::string substituteCurly(std::string_view str, const std::function<std::string(std::string_view)>& replacer);
 
+nanogui::Color parseColor(std::string_view str);
+
 bool matchesFuzzy(std::string_view text, std::string_view filter, size_t* matchedPartId = nullptr);
 bool matchesRegex(std::string_view text, std::string_view filter);
 inline bool matchesFuzzyOrRegex(std::string_view text, std::string_view filter, bool isRegex) {

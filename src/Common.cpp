@@ -27,6 +27,7 @@
 #include <cctype>
 #include <map>
 #include <regex>
+#include <sstream>
 #include <string>
 
 #ifdef _WIN32
@@ -155,6 +156,7 @@ vector<string_view> split(string_view text, string_view delim, bool inclusive) {
         }
     }
 
+    TEV_ASSERT(!result.empty(), "Result of split must not be empty.");
     return result;
 }
 
@@ -212,6 +214,70 @@ string substituteCurly(string_view str, const function<string(string_view)>& rep
     }
 
     return result.str();
+}
+
+Color parseColor(string_view str) {
+    if (str.empty()) {
+        return Color{0, 0, 0, 0};
+    }
+
+    if (str.starts_with("#")) {
+        unsigned int hexValue = 0;
+        istringstream iss(string{str.substr(1)});
+        iss >> std::hex >> hexValue;
+
+        if (str.size() == 4) {
+            // #RGB
+            return Color{
+                toLinear(((hexValue >> 8) & 0xF) / 15.0f),
+                toLinear(((hexValue >> 4) & 0xF) / 15.0f),
+                toLinear((hexValue & 0xF) / 15.0f),
+                1.0f,
+            };
+        } else if (str.size() == 5) {
+            // #RGBA
+            return Color{
+                toLinear(((hexValue >> 12) & 0xF) / 15.0f),
+                toLinear(((hexValue >> 8) & 0xF) / 15.0f),
+                toLinear(((hexValue >> 4) & 0xF) / 15.0f),
+                (hexValue & 0xF) / 15.0f,
+            };
+        } else if (str.size() == 7) {
+            // #RRGGBB
+            return Color{
+                toLinear(((hexValue >> 16) & 0xFF) / 255.0f),
+                toLinear(((hexValue >> 8) & 0xFF) / 255.0f),
+                toLinear((hexValue & 0xFF) / 255.0f),
+                1.0f,
+            };
+        } else if (str.size() == 9) {
+            // #RRGGBBAA
+            return Color{
+                toLinear(((hexValue >> 24) & 0xFF) / 255.0f),
+                toLinear(((hexValue >> 16) & 0xFF) / 255.0f),
+                toLinear(((hexValue >> 8) & 0xFF) / 255.0f),
+                (hexValue & 0xFF) / 255.0f,
+            };
+        } else {
+            throw runtime_error{fmt::format("Invalid hex color format: {}", str)};
+        }
+    }
+
+    const auto parts = split(str, ",");
+    if (parts.size() < 3 || parts.size() > 4) {
+        throw runtime_error{fmt::format("Invalid color format: {}", str)};
+    }
+
+    Color color = {0.0f, 0.0f, 0.0f, 1.0f};
+    for (size_t i = 0; i < parts.size(); ++i) {
+        try {
+            color[i] = stof(string{trim(parts[i])});
+        } catch (const invalid_argument&) {
+            throw runtime_error{fmt::format("Invalid color component: {}", parts[i])};
+        } catch (const out_of_range&) { throw runtime_error{fmt::format("Color component out of range: {}", parts[i])}; }
+    }
+
+    return color;
 }
 
 bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {

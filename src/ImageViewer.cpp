@@ -423,36 +423,21 @@ ImageViewer::ImageViewer(
             addSpacer(popup, 20);
 
             new Label{popup, "Background color", "sans-bold", 20};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
+            mBackgroundColorWheel = new ColorWheel{popup};
+            mBackgroundColorWheel->set_callback([this](const Color& value) {
+                const float a = mBackgroundAlphaSlider->value();
+                mImageCanvas->setBackgroundColor(Color{value.r() * a, value.g() * a, value.b() * a, a});
+            });
 
             new Label{popup, "Background alpha"};
-            auto bgAlphaSlider = new Slider{popup};
-            bgAlphaSlider->set_range({0.0f, 1.0f});
-            bgAlphaSlider->set_callback([colorwheel, this](float a) {
-                const auto col = colorwheel->color();
-                mImageCanvas->setBackgroundColor(
-                    Color{
-                        col.r() * a,
-                        col.g() * a,
-                        col.b() * a,
-                        a,
-                    }
-                );
+            mBackgroundAlphaSlider = new Slider{popup};
+            mBackgroundAlphaSlider->set_range({0.0f, 1.0f});
+            mBackgroundAlphaSlider->set_callback([this](float a) {
+                const auto col = mBackgroundColorWheel->color();
+                mImageCanvas->setBackgroundColor(Color{col.r() * a, col.g() * a, col.b() * a, a});
             });
 
-            bgAlphaSlider->set_value(0);
-
-            colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
-                const float a = bgAlphaSlider->value();
-                mImageCanvas->setBackgroundColor(
-                    Color{
-                        value.r() * a,
-                        value.g() * a,
-                        value.b() * a,
-                        a,
-                    }
-                );
-            });
+            setBackgroundColorStraight(Color{0, 0, 0, 0});
         }
     }
 
@@ -1980,6 +1965,14 @@ void ImageViewer::setMetric(EMetric metric) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->set_pushed((EMetric)i == metric);
     }
+}
+
+void ImageViewer::setBackgroundColorStraight(const Color& color) {
+    mBackgroundColorWheel->set_color(color);
+    mBackgroundAlphaSlider->set_value(color.a());
+
+    const Color premul = Color{color.r() * color.a(), color.g() * color.a(), color.b() * color.a(), color.a()};
+    mImageCanvas->setBackgroundColor(premul);
 }
 
 float ImageViewer::displayWhiteLevel() const { return mDisplayWhiteLevelBox->value(); }

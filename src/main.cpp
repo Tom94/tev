@@ -168,6 +168,7 @@ static void convertTo(
     const string& targetPathPattern,
     const shared_ptr<BackgroundImagesLoader>& imagesLoader,
     EMetric metric,
+    const nanogui::Color& bg,
     ETonemap tonemap,
     float gamma,
     float exposure,
@@ -201,19 +202,18 @@ static void convertTo(
         }
 
         const auto path = toPath(substituteCurly(targetPathPattern, [&](string_view placeholder) {
-            if (placeholder == "file") {
+            const auto parts = split(placeholder, ":");
+            const auto fmt = parts[0];
+            if (fmt == "file" && parts.size() == 1) {
                 return toString(image->path().stem());
-            } else if (placeholder == "dir") {
+            } else if (fmt == "dir" && parts.size() == 1) {
                 return toString(image->path().parent_path());
-            } else if (placeholder == "ext") {
+            } else if (fmt == "ext" && parts.size() == 1) {
                 return toString(image->path().extension());
-            } else if (placeholder.starts_with("idx")) {
-                const auto parts = split(placeholder, ":");
-                if (parts.size() == 2) {
-                    return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
-                } else {
-                    return fmt::format("{}", idx);
-                }
+            } else if (fmt == "idx" && parts.size() == 1) {
+                return fmt::format("{}", idx);
+            } else if (fmt == "idx" && parts.size() == 2) {
+                return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
             } else {
                 throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
             }
@@ -231,9 +231,15 @@ static void convertTo(
         }
 
         saveTasks.emplace_back(
-            [](
-                shared_ptr<Image> image, fs::path path, EMetric metric, ETonemap tonemap, float gamma, float exposure, float offset, int priority
-            ) -> Task<void> {
+            [](shared_ptr<Image> image,
+               fs::path path,
+               EMetric metric,
+               nanogui::Color bg,
+               ETonemap tonemap,
+               float gamma,
+               float exposure,
+               float offset,
+               int priority) -> Task<void> {
                 try {
                     co_await ThreadPool::global().enqueueCoroutine(priority);
                     const auto saveStart = chrono::steady_clock::now();
@@ -241,14 +247,14 @@ static void convertTo(
                     // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
                     const auto cg = image->channelGroups().front().name;
                     const auto window = image->toImageCoords(image->displayWindow());
-                    co_await image->save(path, nullptr, window, cg, metric, tonemap, gamma, exposure, offset, priority);
+                    co_await image->save(path, nullptr, window, cg, metric, bg, tonemap, gamma, exposure, offset, priority);
 
                     const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
                     tlog::success() << fmt::format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
                 } catch (const ImageSaveError& e) {
                     tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what());
                 }
-            }(image, path, metric, tonemap, gamma, exposure, offset, priority)
+            }(image, path, metric, bg, tonemap, gamma, exposure, offset, priority)
         );
     }
 
@@ -270,6 +276,16 @@ static int mainFunc(span<const string> arguments) {
         "AUTO FIT",
         "Automatically fit selected images to tev's window size.",
         {"auto-fit"},
+    };
+
+    ValueFlag<string> backgroundColorFlag{
+        parser,
+        "BACKGROUND COLOR",
+        "The background color to blend images against. "
+        "Specify as sRGB hex code (#RGB, #RGBA, #RRGGBB, or #RRGGBBAA) or as linear comma-separated RGB(A) values (e.g. 0.5,0.5,0.5 or 0.5,0.5,0.5,1). "
+        "Alpha is straight. "
+        "Default is transparent, i.e. #00000000",
+        {"bg", "background-color"},
     };
 
     Flag channelGroupingFlagOff{
@@ -678,12 +694,13 @@ static int mainFunc(span<const string> arguments) {
         }
 
         const EMetric metric = metricFlag ? toMetric(get(metricFlag)) : EMetric::Error;
+        const nanogui::Color bg = backgroundColorFlag ? parseColor(get(backgroundColorFlag)) : nanogui::Color{0, 0, 0, 0};
         const ETonemap tonemap = tonemapFlag ? toTonemap(get(tonemapFlag)) : ETonemap::None;
         const float gamma = gammaFlag ? get(gammaFlag) : 2.2f;
         const float exposure = exposureFlag ? get(exposureFlag) : 0.0f;
         const float offset = offsetFlag ? get(offsetFlag) : 0.0f;
 
-        convertTo(get(convertToFlag), imagesLoader, metric, tonemap, gamma, exposure, offset);
+        convertTo(get(convertToFlag), imagesLoader, metric, bg, tonemap, gamma, exposure, offset);
 
         return 0;
     }
@@ -773,6 +790,10 @@ static int mainFunc(span<const string> arguments) {
     // Apply parameter flags
     if (autoFitFlag) {
         sImageViewer->setAutoFitToScreen(true);
+    }
+
+    if (backgroundColorFlag) {
+        sImageViewer->setBackgroundColorStraight(parseColor(get(backgroundColorFlag)));
     }
 
     if (exposureFlag) {

@@ -31,6 +31,7 @@
 #include <tev/imageio/Colors.h>
 
 #include <nanogui/button.h>
+#include <nanogui/colorwheel.h>
 #include <nanogui/opengl.h>
 #include <nanogui/screen.h>
 #include <nanogui/slider.h>
@@ -130,6 +131,8 @@ public:
 
     EMetric metric() const { return mImageCanvas->metric(); }
     void setMetric(EMetric metric);
+
+    void setBackgroundColorStraight(const nanogui::Color& color);
 
     float displayWhiteLevel() const;
     void setDisplayWhiteLevel(float value);
@@ -330,13 +333,17 @@ private:
 
     std::optional<ColorSpace> mSystemColorSpace;
 
+    nanogui::PopupButton* mColorsPopupButton = nullptr;
+
     nanogui::ComboBox* mInspectionPrimariesComboBox = nullptr;
     std::vector<nanogui::FloatBox<float>*> mInspectionPrimariesBoxes;
     nanogui::ComboBox* mInspectionTransferComboBox = nullptr;
     nanogui::Button* mInspectionAdaptWhitePointButton = nullptr;
     nanogui::Button* mInspectionPremultipliedAlphaButton = nullptr;
 
-    nanogui::PopupButton* mColorsPopupButton = nullptr;
+    nanogui::ColorWheel* mBackgroundColorWheel = nullptr;
+    nanogui::Slider* mBackgroundAlphaSlider = nullptr;
+
     nanogui::PopupButton* mHdrPopupButton = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
 

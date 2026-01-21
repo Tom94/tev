@@ -1034,7 +1034,13 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
 }
 
 Task<HeapArray<float>> Image::getRgbaHdrImageData(
-    shared_ptr<Image> reference, const Box2i& imageRegion, string_view requestedChannelGroup, EMetric metric, bool divideAlpha, int priority
+    shared_ptr<Image> reference,
+    const Box2i& imageRegion,
+    string_view requestedChannelGroup,
+    EMetric metric,
+    const Color& bg,
+    bool divideAlpha,
+    int priority
 ) const {
     const auto channels = co_await getHdrImageData(reference, requestedChannelGroup, metric, priority);
     if (channels.empty()) {
@@ -1062,16 +1068,19 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
         imageRegion.min.y(),
         imageRegion.max.y(),
         numPixels * 4,
-        [nColorChannelsToSave, &channels, alphaChannel, &result, &imageRegion](int y) {
+        [nColorChannelsToSave, &bg, &channels, alphaChannel, &result, &imageRegion](int y) {
             const auto yoffset = (size_t)(y - imageRegion.min.y()) * imageRegion.size().x();
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
                 const auto xoffset = x - imageRegion.min.x();
+
+                const float alpha = alphaChannel ? alphaChannel->eval({x, y}) : 1.0f;
                 for (size_t c = 0; c < 3; ++c) {
-                    const float val = nColorChannelsToSave == 1 ? channels[0].eval({x, y}) : (c < nColorChannelsToSave ? channels[c].eval({x, y}) : 0.0f);
-                    result[(yoffset + xoffset) * 4 + c] = val;
+                    const float val = nColorChannelsToSave == 1 ? channels[0].eval({x, y}) :
+                                                                  (c < nColorChannelsToSave ? channels[c].eval({x, y}) : 0.0f);
+                    result[(yoffset + xoffset) * 4 + c] = val + (1.0f - alpha) * bg[c];
                 }
 
-                result[(yoffset + xoffset) * 4 + 3] = alphaChannel ? alphaChannel->eval({x, y}) : 1.0f;
+                result[(yoffset + xoffset) * 4 + 3] = alpha + (1.0f - alpha) * bg[3];
             }
         },
         priority
@@ -1135,6 +1144,7 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
     const Box2i& imageRegion,
     string_view requestedChannelGroup,
     EMetric metric,
+    const Color& bg,
     bool divideAlpha,
     ETonemap tonemap,
     float gamma,
@@ -1143,7 +1153,7 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
     int priority
 ) const {
     co_return co_await getRgbaLdrImageData(
-        co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, divideAlpha, priority),
+        co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, bg, divideAlpha, priority),
         tonemap,
         gamma,
         exposure,
@@ -1158,6 +1168,7 @@ Task<void> Image::save(
     const Box2i& imageRegion,
     string_view requestedChannelGroup,
     EMetric metric,
+    const Color& bg,
     ETonemap tonemap,
     float gamma,
     float exposure,
@@ -1191,7 +1202,7 @@ Task<void> Image::save(
         const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
 
         const bool divideAlpha = saver->alphaKind(path) == EAlphaKind::Straight;
-        const auto rgbaHdrData = co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, divideAlpha, priority);
+        const auto rgbaHdrData = co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, bg, divideAlpha, priority);
 
         if (hdrSaver) {
             co_await hdrSaver->save(f, path, rgbaHdrData, size, 4);
