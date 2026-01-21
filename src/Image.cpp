@@ -1036,13 +1036,24 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
 Task<HeapArray<float>> Image::getRgbaHdrImageData(
     shared_ptr<Image> reference, const Box2i& imageRegion, string_view requestedChannelGroup, EMetric metric, bool divideAlpha, int priority
 ) const {
-    const auto& channels = co_await getHdrImageData(reference, requestedChannelGroup, metric, priority);
+    const auto channels = co_await getHdrImageData(reference, requestedChannelGroup, metric, priority);
     if (channels.empty()) {
         co_return {};
     }
 
-    const auto numPixels = (size_t)imageRegion.area();
-    const auto nChannelsToSave = std::min((int)channels.size(), 4);
+    const Channel* alphaChannel = nullptr;
+
+    // Only treat the alpha channel specially if it is not the only channel of the image.
+    if (!all_of(begin(channels), end(channels), [](const Channel& c) { return c.isAlpha(); })) {
+        if (channels.back().isAlpha()) {
+            alphaChannel = &channels.back();
+        }
+    }
+
+    const size_t nColorChannels = alphaChannel ? (channels.size() - 1) : channels.size();
+
+    const auto numPixels = (size_t)imageRegion.size().x() * imageRegion.size().y();
+    const auto nColorChannelsToSave = std::min(nColorChannels, (size_t)3);
 
     // Flatten image into vector
     HeapArray<float> result{4 * numPixels};
@@ -1051,14 +1062,16 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
         imageRegion.min.y(),
         imageRegion.max.y(),
         numPixels * 4,
-        [nChannelsToSave, &channels, &result, &imageRegion](int y) {
-            int yresult = y - imageRegion.min.y();
+        [nColorChannelsToSave, &channels, alphaChannel, &result, &imageRegion](int y) {
+            const auto yoffset = (size_t)(y - imageRegion.min.y()) * imageRegion.size().x();
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
-                for (int c = 0; c < 4; ++c) {
-                    const float val = c < nChannelsToSave ? channels[c].eval({x, y}) : c == 3 ? 1.0f : 0.0f;
-                    const int xresult = x - imageRegion.min.x();
-                    result[(yresult * imageRegion.size().x() + xresult) * 4 + c] = val;
+                const auto xoffset = x - imageRegion.min.x();
+                for (size_t c = 0; c < 3; ++c) {
+                    const float val = nColorChannelsToSave == 1 ? channels[0].eval({x, y}) : (c < nColorChannelsToSave ? channels[c].eval({x, y}) : 0.0f);
+                    result[(yoffset + xoffset) * 4 + c] = val;
                 }
+
+                result[(yoffset + xoffset) * 4 + 3] = alphaChannel ? alphaChannel->eval({x, y}) : 1.0f;
             }
         },
         priority
