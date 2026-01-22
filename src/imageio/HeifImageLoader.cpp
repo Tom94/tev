@@ -23,12 +23,15 @@
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
+#include <tev/imageio/IsoGainMapMetadata.h>
 #include <tev/imageio/Xmp.h>
 
 #include <nanogui/vector.h>
 
 #include <libheif/heif.h>
 #include <libheif/heif_sequences.h>
+
+#include <optional>
 
 using namespace nanogui;
 using namespace std;
@@ -532,15 +535,17 @@ Task<vector<ImageData>>
         throw ImageLoadError{fmt::format("Failed to get primary image handle: {}", error.message)};
     }
 
-    ScopeGuard handleGuard{[primaryImgHandle] { heif_image_handle_release(primaryImgHandle); }};
+    const ScopeGuard handleGuard{[primaryImgHandle] { heif_image_handle_release(primaryImgHandle); }};
 
     // Read main image
     result.emplace_back(co_await decodeImageHandle(primaryImgHandle));
     ImageData& mainImage = result.back();
 
-    unique_ptr<Exif> exif;
+    optional<Exif> exif;
     const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(primaryImgHandle, nullptr);
     vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
+
+    optional<IsoGainMapMetadata> gainmapMetadata;
 
     if (numMetadataBlocks > 0) {
         tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
@@ -568,11 +573,21 @@ Task<vector<ImageData>>
 
             try {
                 // The first four bytes are the length of the exif data and not strictly part of the exif data.
-                exif = make_unique<Exif>(span<uint8_t>{metadata}.subspan(4));
+                exif = Exif{span<uint8_t>{metadata}.subspan(4)};
                 mainImage.attributes.emplace_back(exif->toAttributes());
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+        } else if (type == "tmap") {
+            tlog::debug() << fmt::format("Found ISO 21496-1 gainmap metadata of size {} bytes", metadata.size());
+
+            try {
+                gainmapMetadata = IsoGainMapMetadata{
+                    span<uint8_t>{metadata.data(), metadata.size()}
+                };
+                mainImage.attributes.emplace_back(gainmapMetadata->toAttributes());
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read gainmap metadata: {}", e.what()); }
+
         } else if (contentType == "application/rdf+xml") {
-            tlog::debug() << fmt::format("Found XMP data of size {} bytes", metadata.size());
+            tlog::debug() << fmt::format("Found XMP data '{}/{}' of size {} bytes", type, contentType, metadata.size());
 
             try {
                 Xmp xmp{
@@ -585,19 +600,19 @@ Task<vector<ImageData>>
         }
     }
 
-    const auto findAppleMakerNote = [&]() -> unique_ptr<AppleMakerNote> {
+    const auto findAppleMakerNote = [&]() -> optional<AppleMakerNote> {
         if (!exif) {
             tlog::warning() << "No EXIF metadata found.";
-            return nullptr;
+            return nullopt;
         }
 
         try {
-            return make_unique<AppleMakerNote>(exif->tryGetAppleMakerNote());
+            return make_optional<AppleMakerNote>(exif->tryGetAppleMakerNote());
         } catch (const invalid_argument& e) {
             tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
         }
 
-        return nullptr;
+        return nullopt;
     };
 
     const auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view layer) -> Task<void> {
@@ -671,7 +686,7 @@ Task<vector<ImageData>>
                     tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
                 }
 
-                co_await applyAppleGainMap(mainImage, auxImgData, priority, amn.get());
+                co_await applyAppleGainMap(mainImage, auxImgData, priority, amn);
             }
 
             if (retainAuxLayer) {

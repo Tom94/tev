@@ -46,6 +46,17 @@ public:
     Exif(std::span<const uint8_t> exifData, bool autoPrependFourcc = true);
     ~Exif();
 
+    Exif(const Exif&) = delete;
+    Exif& operator=(const Exif&) = delete;
+    Exif(Exif&& other) noexcept { *this = std::move(other); }
+    Exif& operator=(Exif&& other) noexcept {
+        std::swap(mReverseEndianess, other.mReverseEndianess);
+        std::swap(mExif, other.mExif);
+        std::swap(mExifLog, other.mExifLog);
+        std::swap(mExifLogError, other.mExifLogError);
+        return *this;
+    }
+
     void reset();
 
     AppleMakerNote tryGetAppleMakerNote() const;

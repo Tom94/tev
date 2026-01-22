@@ -21,11 +21,15 @@
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/Task.h>
+#include <tev/imageio/AppleMakerNote.h>
+#include <tev/imageio/IsoGainMapMetadata.h>
 
-class AppleMakerNote;
+#include <optional>
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const AppleMakerNote* amn);
+Task<void> applyAppleGainMap(ImageData& image, const ImageData& gainMap, int priority, const std::optional<AppleMakerNote>& amn);
 
-}
+Task<void> applyIsoGainMap(ImageData& image, const ImageData& gainMap, int priority, const IsoGainMapMetadata& metadata);
+
+} // namespace tev

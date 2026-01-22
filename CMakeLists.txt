@@ -157,6 +157,7 @@ set(TEV_SOURCES
     include/tev/imageio/GainMap.h src/imageio/GainMap.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
+    include/tev/imageio/IsoGainMapMetadata.h src/imageio/IsoGainMapMetadata.cpp
     include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
