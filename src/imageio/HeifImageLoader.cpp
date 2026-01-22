@@ -28,6 +28,7 @@
 #include <nanogui/vector.h>
 
 #include <libheif/heif.h>
+#include <libheif/heif_sequences.h>
 
 using namespace nanogui;
 using namespace std;
@@ -41,12 +42,24 @@ Task<vector<ImageData>>
     uint8_t header[12];
     iStream.read((char*)header, 12);
 
-    if (!iStream || iStream.gcount() != 12 || heif_check_filetype(header, 12) != heif_filetype_yes_supported) {
-        throw FormatNotSupported{"File is not a HEIF image."};
+    if (!iStream || iStream.gcount() != 12) {
+        throw FormatNotSupported{"File is too short to be an HEIF image."};
+    }
+
+    const auto mimeTypeParts = split(heif_get_file_mime_type(header, 12), "/");
+    if (mimeTypeParts.size() != 2) {
+        throw FormatNotSupported{"Could not determine HEIF mime type."};
+    }
+
+    // We support heic, heif and avif formats, with and without sequence.
+    const auto format = mimeTypeParts.back();
+    if (format != "heic" && format != "heic-sequence" && format != "heif" && format != "heif-sequence" && format != "avif" &&
+        format != "avif-sequence") {
+        throw FormatNotSupported{fmt::format("HEIF format '{}' is not supported.", format)};
     }
 
     iStream.seekg(0, ios_base::end);
-    int64_t fileSize = iStream.tellg();
+    const int64_t fileSize = iStream.tellg();
     iStream.clear();
     iStream.seekg(0);
 
@@ -82,81 +95,32 @@ Task<vector<ImageData>>
         .release_error_msg = {},
     };
 
-    heif_context* ctx = heif_context_alloc();
-    if (!ctx) {
-        throw ImageLoadError{"Failed to allocate libheif context."};
-    }
+    struct DecodedImageHandle {
+        heif_image* img;
+        bool hasAlpha;
+    };
 
-    ScopeGuard contextGuard{[ctx] { heif_context_free(ctx); }};
-
-    if (auto error = heif_context_read_from_reader(ctx, &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
-        throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
-    }
-
-    // get a handle to the primary image
-    heif_image_handle* handle;
-    if (auto error = heif_context_get_primary_image_handle(ctx, &handle); error.code != heif_error_Ok) {
-        throw ImageLoadError{fmt::format("Failed to get primary image handle: {}", error.message)};
-    }
-
-    ScopeGuard handleGuard{[handle] { heif_image_handle_release(handle); }};
-
-    auto decodeImage = [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, string_view layer = "") -> Task<ImageData> {
+    const auto decodeImage =
+        [priority](
+            heif_image* img, int numChannels, bool hasAlpha, const Vector2i& targetSize = {0}, string_view layer = "", string_view partName = ""
+        ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image '{}'", layer);
 
+        TEV_ASSERT(numChannels >= 1 && numChannels <= 4, "Invalid number of channels.");
+        const int numColorChannels = hasAlpha ? numChannels - 1 : numChannels;
+
         ImageData resultData;
+        resultData.hasPremultipliedAlpha = hasAlpha && heif_image_is_premultiplied_alpha(img);
+        resultData.partName = partName;
 
-        heif_colorspace preferredColorspace = heif_colorspace_undefined;
-        heif_chroma preferredChroma = heif_chroma_undefined;
-        if (auto error = heif_image_handle_get_preferred_decoding_colorspace(imgHandle, &preferredColorspace, &preferredChroma);
-            error.code != heif_error_Ok) {
-            throw ImageLoadError{fmt::format("Failed to get preferred decoding colorspace: {}", error.message)};
-        }
-
-        const bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
-
-        bool isMonochrome = preferredColorspace == heif_colorspace_monochrome;
-        if (isMonochrome != (preferredChroma == heif_chroma_monochrome)) {
-            throw ImageLoadError{"Monochrome colorspace and chroma mismatch."};
-        }
-
-        if (hasAlpha) {
-            // We could handle monochrome images with an alpha channel ourselves, but our life becomes easier if we let libheif convert
-            // these to RGBA for us.
-            isMonochrome = false;
-        }
-
-        const int numColorChannels = isMonochrome ? 1 : 3;
-        const int numChannels = numColorChannels + (hasAlpha ? 1 : 0);
-        resultData.hasPremultipliedAlpha = hasAlpha && heif_image_handle_is_premultiplied_alpha(imgHandle);
-
-        const bool is_little_endian = std::endian::native == std::endian::little;
-
-        heif_chroma decodingChroma = heif_chroma_undefined;
-        switch (numChannels) {
-            case 1: decodingChroma = heif_chroma_monochrome; break;
-            case 2: throw ImageLoadError{"Heif images with 2 channels are not supported."};
-            case 3: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBB_LE : heif_chroma_interleaved_RRGGBB_BE; break;
-            case 4: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBBAA_LE : heif_chroma_interleaved_RRGGBBAA_BE; break;
-            default: throw ImageLoadError{"Unsupported number of channels."};
-        }
-
-        // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
-        const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
-
-        const Vector2i size = {heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
+        const Vector2i size = {heif_image_get_primary_width(img), heif_image_get_primary_height(img)};
         if (size.x() == 0 || size.y() == 0) {
             throw ImageLoadError{"Image has zero pixels."};
         }
 
-        heif_image* img = nullptr;
-        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, nullptr); error.code != heif_error_Ok) {
-            throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
-        }
-
         const ScopeGuard imgGuard{[img] { heif_image_release(img); }};
 
-        const heif_channel channelType = isMonochrome ? heif_channel_Y : heif_channel_interleaved;
+        const heif_channel channelType = numChannels == 1 ? heif_channel_Y : heif_channel_interleaved;
 
         const int bitDepth = heif_image_get_bits_per_pixel(img, channelType) / numChannels;
         if (bitDepth != 8 && bitDepth != 16) {
@@ -192,13 +156,13 @@ Task<vector<ImageData>>
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
 
         auto tryIccTransform = [&](const HeapArray<uint8_t>& iccProfile) -> Task<void> {
-            const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
+            const size_t profileSize = heif_image_get_raw_color_profile_size(img);
             if (profileSize == 0) {
                 throw ImageLoadError{"No ICC color profile found."};
             }
 
             HeapArray<uint8_t> profileData(profileSize);
-            if (auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
+            if (auto error = heif_image_get_raw_color_profile(img, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code == heif_error_Color_profile_does_not_exist) {
                     throw ImageLoadError{"ICC color profile does not exist."};
                 }
@@ -246,7 +210,10 @@ Task<vector<ImageData>>
             resultData.hasPremultipliedAlpha = true;
         };
 
-        if (heif_content_light_level cll; heif_image_handle_get_content_light_level(imgHandle, &cll) != 0) {
+        if (heif_image_has_content_light_level(img)) {
+            heif_content_light_level cll;
+            heif_image_get_content_light_level(img, &cll);
+
             resultData.hdrMetadata.maxCLL = cll.max_content_light_level;
             resultData.hdrMetadata.maxFALL = cll.max_pic_average_light_level;
 
@@ -256,8 +223,10 @@ Task<vector<ImageData>>
         }
 
         heif_decoded_mastering_display_colour_volume mdcv;
-        if (heif_mastering_display_colour_volume codedMdcv;
-            heif_image_handle_get_mastering_display_colour_volume(imgHandle, &codedMdcv) != 0) {
+        if (heif_image_has_mastering_display_colour_volume(img)) {
+            heif_mastering_display_colour_volume codedMdcv;
+            heif_image_get_mastering_display_colour_volume(img, &codedMdcv);
+
             if (const auto error = heif_mastering_display_colour_volume_decode(&codedMdcv, &mdcv); error.code != heif_error_Ok) {
                 tlog::debug() << fmt::format("Failed to decode mastering display color volume: {}", error.message);
             } else {
@@ -282,11 +251,11 @@ Task<vector<ImageData>>
         }
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
-        const size_t profileSize = heif_image_handle_get_raw_color_profile_size(imgHandle);
+        const size_t profileSize = heif_image_get_raw_color_profile_size(img);
         if (profileSize != 0) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
             HeapArray<uint8_t> profileData(profileSize);
-            if (const auto error = heif_image_handle_get_raw_color_profile(imgHandle, profileData.data()); error.code != heif_error_Ok) {
+            if (const auto error = heif_image_get_raw_color_profile(img, profileData.data()); error.code != heif_error_Ok) {
                 if (error.code != heif_error_Color_profile_does_not_exist) {
                     tlog::warning() << "Failed to read ICC profile: " << error.message;
                 }
@@ -301,7 +270,7 @@ Task<vector<ImageData>>
         // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
         // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
         heif_color_profile_nclx* nclx = nullptr;
-        if (const auto error = heif_image_handle_get_nclx_color_profile(imgHandle, &nclx); error.code != heif_error_Ok) {
+        if (const auto error = heif_image_get_nclx_color_profile(img, &nclx); error.code != heif_error_Ok) {
             if (error.code != heif_error_Color_profile_does_not_exist) {
                 tlog::warning() << "Failed to read NCLX color profile: " << error.message;
             }
@@ -430,24 +399,158 @@ Task<vector<ImageData>>
         co_return resultData;
     };
 
-    // Read main image
+    const auto decodeImageHandle =
+        [&decodeImage](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, string_view layer = "") -> Task<ImageData> {
+        tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
+
+        heif_colorspace preferredColorspace = heif_colorspace_undefined;
+        heif_chroma preferredChroma = heif_chroma_undefined;
+        if (auto error = heif_image_handle_get_preferred_decoding_colorspace(imgHandle, &preferredColorspace, &preferredChroma);
+            error.code != heif_error_Ok) {
+            throw ImageLoadError{fmt::format("Failed to get preferred decoding colorspace: {}", error.message)};
+        }
+
+        const bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
+
+        bool isMonochrome = preferredColorspace == heif_colorspace_monochrome;
+        if (isMonochrome != (preferredChroma == heif_chroma_monochrome)) {
+            throw ImageLoadError{"Monochrome colorspace and chroma mismatch."};
+        }
+
+        if (hasAlpha) {
+            // We could handle monochrome images with an alpha channel ourselves, but our life becomes easier if we let libheif convert
+            // these to RGBA for us.
+            isMonochrome = false;
+        }
+
+        const int numColorChannels = isMonochrome ? 1 : 3;
+        const int numChannels = numColorChannels + (hasAlpha ? 1 : 0);
+
+        const bool is_little_endian = std::endian::native == std::endian::little;
+
+        heif_chroma decodingChroma = heif_chroma_undefined;
+        switch (numChannels) {
+            case 1: decodingChroma = heif_chroma_monochrome; break;
+            case 2: throw ImageLoadError{"Heif images with 2 channels are not supported."};
+            case 3: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBB_LE : heif_chroma_interleaved_RRGGBB_BE; break;
+            case 4: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBBAA_LE : heif_chroma_interleaved_RRGGBBAA_BE; break;
+            default: throw ImageLoadError{"Unsupported number of channels."};
+        }
+
+        // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
+        const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
+
+        heif_image* img = nullptr;
+        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, nullptr); error.code != heif_error_Ok) {
+            throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
+        }
+
+        co_return co_await decodeImage(img, numChannels, hasAlpha, targetSize, layer);
+    };
+
+    const auto decodeSingleTrackImage =
+        [&decodeImage](heif_track* track, const Vector2i& targetSize = {0}, string_view partName = "") -> Task<optional<ImageData>> {
+        tlog::debug() << fmt::format("Decoding HEIF track '{}'", partName);
+
+        const bool hasAlpha = heif_track_has_alpha_channel(track);
+        const bool isMonochrome = false; // TODO: libheif doesn't seem to support monochrome tracks
+
+        const int numColorChannels = 3;
+        const int numChannels = numColorChannels + (hasAlpha ? 1 : 0);
+
+        const bool is_little_endian = std::endian::native == std::endian::little;
+
+        heif_chroma decodingChroma = heif_chroma_undefined;
+        switch (numChannels) {
+            case 1: decodingChroma = heif_chroma_monochrome; break;
+            case 2: throw ImageLoadError{"Heif images with 2 channels are not supported."};
+            case 3: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBB_LE : heif_chroma_interleaved_RRGGBB_BE; break;
+            case 4: decodingChroma = is_little_endian ? heif_chroma_interleaved_RRGGBBAA_LE : heif_chroma_interleaved_RRGGBBAA_BE; break;
+            default: throw ImageLoadError{"Unsupported number of channels."};
+        }
+
+        // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
+        const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
+
+        heif_image* img = nullptr;
+        if (const auto error = heif_track_decode_next_image(track, &img, decodingColorspace, decodingChroma, nullptr);
+            error.code != heif_error_Ok) {
+            if (error.code == heif_error_End_of_sequence) {
+                tlog::debug() << "End of sequence reached for track.";
+                co_return nullopt;
+            }
+
+            throw ImageLoadError{fmt::format("Failed to decode track image: {}", error.message)};
+        }
+
+        co_return co_await decodeImage(img, numChannels, hasAlpha, targetSize, partName, partName);
+    };
+
     vector<ImageData> result;
-    result.emplace_back(co_await decodeImage(handle));
-    ImageData& mainImage = result.front();
+
+    heif_context* ctx = heif_context_alloc();
+    if (!ctx) {
+        throw ImageLoadError{"Failed to allocate libheif context."};
+    }
+
+    const ScopeGuard contextGuard{[ctx] { heif_context_free(ctx); }};
+
+    if (const auto error = heif_context_read_from_reader(ctx, &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
+        throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
+    }
+
+    const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx);
+    if (seqTrackCount > 0) {
+        tlog::info() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
+
+        vector<int> trackIds(seqTrackCount);
+        heif_context_get_track_ids(ctx, reinterpret_cast<uint32_t*>(trackIds.data()));
+
+        for (int i = 0; i < seqTrackCount; ++i) {
+            const heif_track* track = heif_context_get_track(ctx, trackIds[i]);
+
+            for (size_t frameIdx = 0;; ++frameIdx) {
+                const auto partName = seqTrackCount > 1 ? fmt::format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
+                                                          fmt::format("frames.{}", frameIdx);
+
+                if (auto imageData = co_await decodeSingleTrackImage(const_cast<heif_track*>(track), {0}, partName)) {
+                    result.emplace_back(std::move(*imageData));
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // We're done loading the sequence tracks. The below code for handling the primary image would work, but it'd be a fallback
+        // implemented in libheif that just redundantly loads the first image of the first sequence track again.
+        co_return result;
+    }
+
+    // get a handle to the primary image
+    heif_image_handle* primaryImgHandle;
+    if (auto error = heif_context_get_primary_image_handle(ctx, &primaryImgHandle); error.code != heif_error_Ok) {
+        throw ImageLoadError{fmt::format("Failed to get primary image handle: {}", error.message)};
+    }
+
+    ScopeGuard handleGuard{[primaryImgHandle] { heif_image_handle_release(primaryImgHandle); }};
+
+    // Read main image
+    result.emplace_back(co_await decodeImageHandle(primaryImgHandle));
+    ImageData& mainImage = result.back();
 
     unique_ptr<Exif> exif;
-    const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(handle, nullptr);
+    const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(primaryImgHandle, nullptr);
     vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
 
     if (numMetadataBlocks > 0) {
         tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
     }
 
-    heif_image_handle_get_list_of_metadata_block_IDs(handle, nullptr, metadataIDs.data(), numMetadataBlocks);
+    heif_image_handle_get_list_of_metadata_block_IDs(primaryImgHandle, nullptr, metadataIDs.data(), numMetadataBlocks);
     for (heif_item_id id : metadataIDs) {
-        const string_view type = heif_image_handle_get_metadata_type(handle, id);
-        const string_view contentType = heif_image_handle_get_metadata_content_type(handle, id);
-        const size_t size = heif_image_handle_get_metadata_size(handle, id);
+        const string_view type = heif_image_handle_get_metadata_type(primaryImgHandle, id);
+        const string_view contentType = heif_image_handle_get_metadata_content_type(primaryImgHandle, id);
+        const size_t size = heif_image_handle_get_metadata_size(primaryImgHandle, id);
 
         if (size <= 4) {
             tlog::warning() << "Failed to get size of metadata.";
@@ -455,7 +558,7 @@ Task<vector<ImageData>>
         }
 
         HeapArray<uint8_t> metadata(size);
-        if (const auto error = heif_image_handle_get_metadata(handle, id, metadata.data()); error.code != heif_error_Ok) {
+        if (const auto error = heif_image_handle_get_metadata(primaryImgHandle, id, metadata.data()); error.code != heif_error_Ok) {
             tlog::warning() << "Failed to read metadata: " << error.message;
             continue;
         }
@@ -521,16 +624,17 @@ Task<vector<ImageData>>
     };
 
     // Read auxiliary images
-    const int num_aux = heif_image_handle_get_number_of_auxiliary_images(handle, 0);
+    const int num_aux = heif_image_handle_get_number_of_auxiliary_images(primaryImgHandle, 0);
     if (num_aux > 0) {
         tlog::debug() << "Found " << num_aux << " auxiliary image(s)";
 
         vector<heif_item_id> aux_ids(num_aux);
-        heif_image_handle_get_list_of_auxiliary_image_IDs(handle, 0, aux_ids.data(), num_aux);
+        heif_image_handle_get_list_of_auxiliary_image_IDs(primaryImgHandle, 0, aux_ids.data(), num_aux);
 
         for (int i = 0; i < num_aux; ++i) {
             heif_image_handle* auxImgHandle;
-            if (auto error = heif_image_handle_get_auxiliary_image_handle(handle, aux_ids[i], &auxImgHandle); error.code != heif_error_Ok) {
+            if (auto error = heif_image_handle_get_auxiliary_image_handle(primaryImgHandle, aux_ids[i], &auxImgHandle);
+                error.code != heif_error_Ok) {
                 tlog::warning() << fmt::format("Failed to get auxiliary image handle: {}", error.message);
                 continue;
             }
@@ -553,7 +657,7 @@ Task<vector<ImageData>>
                 continue;
             }
 
-            auto auxImgData = co_await decodeImage(auxImgHandle, mainImage.channels.front().size(), auxLayerName);
+            auto auxImgData = co_await decodeImageHandle(auxImgHandle, mainImage.channels.front().size(), auxLayerName);
             co_await resizeImage(auxImgData, mainImage.channels.front().size(), auxLayerName);
 
             // If we found an apple-style gainmap, apply it to the main image.
