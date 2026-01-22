@@ -127,12 +127,7 @@ vector<string> ImageData::channelsInLayer(string_view layerName) const {
     return result;
 }
 
-Task<void> ImageData::convertToRec709(int priority) {
-    // No need to do anything for identity transforms
-    if (toRec709 == Matrix3f{1.0f}) {
-        co_return;
-    }
-
+Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
     vector<Task<void>> tasks;
 
     for (const auto& layer : layers) {
@@ -153,8 +148,8 @@ Task<void> ImageData::convertToRec709(int priority) {
                 0,
                 r->numPixels(),
                 r->numPixels() * 3,
-                [r, g, b, this](size_t i) {
-                    const auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
+                [r, g, b, mat](size_t i) {
+                    const auto rgb = mat * Vector3f{r->at(i), g->at(i), b->at(i)};
                     r->setAt(i, rgb.x());
                     g->setAt(i, rgb.y());
                     b->setAt(i, rgb.z());
@@ -165,6 +160,17 @@ Task<void> ImageData::convertToRec709(int priority) {
     }
 
     co_await awaitAll(tasks);
+
+    toRec709 = toRec709 * inverse(mat);
+}
+
+Task<void> ImageData::convertToRec709(int priority) {
+    // No need to do anything for identity transforms
+    if (toRec709 == Matrix3f{1.0f}) {
+        co_return;
+    }
+
+    co_await applyColorConversion(toRec709, priority);
 
     // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
     toRec709 = Matrix3f{1.0f};

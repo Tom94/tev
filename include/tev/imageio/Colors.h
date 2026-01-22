@@ -437,6 +437,10 @@ struct LimitedRange {
     float offset = 0.0f; // Offset for limited range to full range conversion
 
     static constexpr LimitedRange full() { return {1.0f, 0.0f}; }
+
+    bool operator==(const LimitedRange& other) const {
+        return scale == other.scale && offset == other.offset;
+    }
 };
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample);

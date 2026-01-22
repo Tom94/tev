@@ -53,13 +53,27 @@ public:
 
     AttributeNode toAttributes() const;
 
-private:
-    float mGainMapMin[3];
-    float mGainMapMax[3];
-    float mGainMapGamma[3];
+    const nanogui::Vector3f& gainMapMin() const { return mGainMapMin; }
+    const nanogui::Vector3f& gainMapMax() const { return mGainMapMax; }
+    const nanogui::Vector3f& gainMapGamma() const { return mGainMapGamma; }
 
-    float mBaseOffset[3];
-    float mAlternateOffset[3];
+    const nanogui::Vector3f& baseOffset() const { return mBaseOffset; }
+    const nanogui::Vector3f& alternateOffset() const { return mAlternateOffset; }
+
+    float baseHdrHeadroom() const { return mBaseHdrHeadroom; }
+    float alternateHdrHeadroom() const { return mAlternateHdrHeadroom; }
+
+    // Whether to go from HDR to SDR (true) or from SDR to HDR (false)
+    bool backwardDirection() const { return mBackwardDirection; }
+    bool useBaseColorSpace() const { return mUseBaseColorSpace; }
+
+private:
+    nanogui::Vector3f mGainMapMin;
+    nanogui::Vector3f mGainMapMax;
+    nanogui::Vector3f mGainMapGamma;
+
+    nanogui::Vector3f mBaseOffset;
+    nanogui::Vector3f mAlternateOffset;
 
     float mBaseHdrHeadroom;
     float mAlternateHdrHeadroom;

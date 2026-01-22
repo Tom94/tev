@@ -26,18 +26,27 @@ namespace tev {
 enum class EFlags : uint8_t {
     BackwardDirection = 1u << 2,
     UseCommonDenominator = 1u << 3,
-    IsMultiChannel = 1u << 7,
     UseBaseColorSpace = 1u << 6,
+    IsMultiChannel = 1u << 7,
 };
 
 IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
-    mReverseEndianess = endian::native == endian::big;
+    mReverseEndianess = endian::native == endian::little;
+
+    // HACK HACK HACK: iPhone heic photos seem to have 1 extra padding byte at the beginning of the IsoGainMapMetadata box. Ignore it if
+    // present. This is hard to reliably detect: there's no magic byte or similar we could advance towards. As a heuristic, we check if the
+    // data size is 62 (1 more than 61 for single-channel data) or 142 (1 more than 141 for multi-channel data).
+    if (data.size() == 62 || data.size() == 142) {
+        data = data.subspan(1);
+    }
 
     size_t pos = 0;
 
+    static constexpr uint16_t LATEST_SUPPORTED_VERSION = 0;
+
     const uint16_t minVersion = read<uint16_t>(data, &pos);
-    if (minVersion != 0) {
-        throw invalid_argument(fmt::format("Unsupported IsoGainMapMetadata minimum version {}, expected 0.", minVersion));
+    if (minVersion > LATEST_SUPPORTED_VERSION) {
+        throw invalid_argument(fmt::format("Unsupported IsoGainMapMetadata version {}.", minVersion));
     }
 
     const uint16_t writerVersion = read<uint16_t>(data, &pos);
@@ -50,33 +59,43 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
         throw invalid_argument(fmt::format("Unsupported IsoGainMapMetadata channel count {}, expected 1 or 3.", channelCount));
     }
 
+    tlog::debug() << fmt::format("IsoGainMapMetadata channel count: {}", channelCount);
+
     mUseBaseColorSpace = flags & (uint8_t)EFlags::UseBaseColorSpace;
+
+    // The following two flags are not actually defined by the spec, but they seem to be used like this by UltraHDR, so we follow suit.
     mBackwardDirection = flags & (uint8_t)EFlags::BackwardDirection;
     const bool useCommonDenominator = flags & (uint8_t)EFlags::UseCommonDenominator;
+    tlog::debug() << fmt::format(
+        "IsoGainMapMetadata flags: UseBaseColorSpace={}, BackwardDirection={}, UseCommonDenominator={}",
+        mUseBaseColorSpace,
+        mBackwardDirection,
+        useCommonDenominator
+    );
 
     if (useCommonDenominator) {
-        const auto commonDenominator = (float)read<uint32_t>(data, &pos);
+        const auto commonDenominator = (double)read<uint32_t>(data, &pos);
 
-        mBaseHdrHeadroom = (float)read<uint32_t>(data, &pos) / commonDenominator;
-        mAlternateHdrHeadroom = (float)read<uint32_t>(data, &pos) / commonDenominator;
+        mBaseHdrHeadroom = (double)read<uint32_t>(data, &pos) / commonDenominator;
+        mAlternateHdrHeadroom = (double)read<uint32_t>(data, &pos) / commonDenominator;
 
         for (int c = 0; c < channelCount; ++c) {
-            mGainMapMin[c] = (float)read<int32_t>(data, &pos) / commonDenominator;
-            mGainMapMax[c] = (float)read<int32_t>(data, &pos) / commonDenominator;
-            mGainMapGamma[c] = (float)read<uint32_t>(data, &pos) / commonDenominator;
-            mBaseOffset[c] = (float)read<int32_t>(data, &pos) / commonDenominator;
-            mAlternateOffset[c] = (float)read<int32_t>(data, &pos) / commonDenominator;
+            mGainMapMin[c] = (double)read<int32_t>(data, &pos) / commonDenominator;
+            mGainMapMax[c] = (double)read<int32_t>(data, &pos) / commonDenominator;
+            mGainMapGamma[c] = (double)read<uint32_t>(data, &pos) / commonDenominator;
+            mBaseOffset[c] = (double)read<int32_t>(data, &pos) / commonDenominator;
+            mAlternateOffset[c] = (double)read<int32_t>(data, &pos) / commonDenominator;
         }
     } else {
-        mBaseHdrHeadroom = (float)read<uint32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
-        mAlternateHdrHeadroom = (float)read<uint32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
+        mBaseHdrHeadroom = (double)read<uint32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+        mAlternateHdrHeadroom = (double)read<uint32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
 
         for (int c = 0; c < channelCount; ++c) {
-            mGainMapMin[c] = (float)read<int32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
-            mGainMapMax[c] = (float)read<int32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
-            mGainMapGamma[c] = (float)read<uint32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
-            mBaseOffset[c] = (float)read<int32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
-            mAlternateOffset[c] = (float)read<int32_t>(data, &pos) / (float)read<uint32_t>(data, &pos);
+            mGainMapMin[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+            mGainMapMax[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+            mGainMapGamma[c] = (double)read<uint32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+            mBaseOffset[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+            mAlternateOffset[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
         }
     }
 

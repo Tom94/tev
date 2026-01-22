@@ -103,10 +103,15 @@ Task<vector<ImageData>>
         bool hasAlpha;
     };
 
-    const auto decodeImage =
-        [priority](
-            heif_image* img, int numChannels, bool hasAlpha, const Vector2i& targetSize = {0}, string_view layer = "", string_view partName = ""
-        ) -> Task<ImageData> {
+    const auto decodeImage = [priority](
+                                 heif_image* img,
+                                 int numChannels,
+                                 bool hasAlpha,
+                                 bool assumeLinear,
+                                 const Vector2i& targetSize = {0},
+                                 string_view layer = "",
+                                 string_view partName = ""
+                             ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image '{}'", layer);
 
         TEV_ASSERT(numChannels >= 1 && numChannels <= 4, "Invalid number of channels.");
@@ -270,45 +275,6 @@ Task<vector<ImageData>>
             }
         }
 
-        // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
-        // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
-        heif_color_profile_nclx* nclx = nullptr;
-        if (const auto error = heif_image_get_nclx_color_profile(img, &nclx); error.code != heif_error_Ok) {
-            if (error.code != heif_error_Color_profile_does_not_exist) {
-                tlog::warning() << "Failed to read NCLX color profile: " << error.message;
-            }
-
-            if (bitDepth == 16) {
-                co_await toFloat32<uint16_t, true>(
-                    (const uint16_t*)data,
-                    numChannels,
-                    resultData.channels.front().floatData(),
-                    numInterleavedChannels,
-                    size,
-                    hasAlpha,
-                    priority,
-                    channelScale,
-                    bytesPerRow / sizeof(uint16_t)
-                );
-            } else {
-                co_await toFloat32<uint8_t, true>(
-                    (const uint8_t*)data,
-                    numChannels,
-                    resultData.channels.front().floatData(),
-                    numInterleavedChannels,
-                    size,
-                    hasAlpha,
-                    priority,
-                    channelScale,
-                    bytesPerRow / sizeof(uint8_t)
-                );
-            }
-
-            co_return resultData;
-        }
-
-        const ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
-
         if (bitDepth == 16) {
             co_await toFloat32(
                 (const uint16_t*)data,
@@ -335,17 +301,40 @@ Task<vector<ImageData>>
             );
         }
 
+        const size_t numPixels = size.x() * (size_t)size.y();
+
+        // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
+        // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
+        heif_color_profile_nclx* nclx = nullptr;
+        if (const auto error = heif_image_get_nclx_color_profile(img, &nclx); error.code != heif_error_Ok) {
+            if (error.code != heif_error_Color_profile_does_not_exist) {
+                tlog::warning() << "Failed to read NCLX color profile: " << error.message;
+            }
+        } else {
+            tlog::debug() << "Found NCLX color profile. Deriving CICP from it.";
+        }
+
+        const ScopeGuard nclxGuard{[nclx] {
+            if (nclx) {
+                heif_nclx_color_profile_free(nclx);
+            }
+        }};
+
         LimitedRange range = LimitedRange::full();
-        if (nclx->full_range_flag == 0) {
+        if (nclx && nclx->full_range_flag == 0) {
             range = limitedRangeForBitsPerSample(bitsPerSample);
         }
 
-        auto cicpTransfer = static_cast<ituth273::ETransfer>(nclx->transfer_characteristics);
+        auto cicpTransfer = nclx ? static_cast<ituth273::ETransfer>(nclx->transfer_characteristics) :
+                                   (assumeLinear ? ituth273::ETransfer::Linear : ituth273::ETransfer::SRGB);
+
+        const auto primaries = (ituth273::EColorPrimaries)(nclx ? nclx->color_primaries : heif_color_primaries_ITU_R_BT_709_5);
+
         tlog::debug() << fmt::format(
-            "NCLX: primaries={}, transfer={}, full_range={}",
-            ituth273::toString((ituth273::EColorPrimaries)nclx->color_primaries),
+            "CICP: primaries={}, transfer={}, full_range={}",
+            ituth273::toString(primaries),
             ituth273::toString(cicpTransfer),
-            nclx->full_range_flag == 1 ? "yes" : "no"
+            range == LimitedRange::full() ? "yes" : "no"
         );
 
         if (!ituth273::isTransferImplemented(cicpTransfer)) {
@@ -354,7 +343,6 @@ Task<vector<ImageData>>
         }
 
         auto* const pixelData = resultData.channels.front().floatData();
-        const size_t numPixels = size.x() * (size_t)size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
@@ -382,7 +370,8 @@ Task<vector<ImageData>>
         resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
         // Only convert color space if not already in Rec.709/sRGB *and* if primaries are actually specified
-        if (nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 && nclx->color_primaries != heif_color_primaries_unspecified) {
+        if (nclx && nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 &&
+            nclx->color_primaries != heif_color_primaries_unspecified) {
             // Assume heic/avif image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
             resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
             resultData.toRec709 = convertColorspaceMatrix(
@@ -403,7 +392,7 @@ Task<vector<ImageData>>
     };
 
     const auto decodeImageHandle =
-        [&decodeImage](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, string_view layer = "") -> Task<ImageData> {
+        [&decodeImage](heif_image_handle* imgHandle, bool isAux, const Vector2i& targetSize = {0}, string_view layer = "") -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
 
         heif_colorspace preferredColorspace = heif_colorspace_undefined;
@@ -448,7 +437,8 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, numChannels, hasAlpha, targetSize, layer);
+        const bool assumeLinear = isAux;
+        co_return co_await decodeImage(img, numChannels, hasAlpha, assumeLinear, targetSize, layer);
     };
 
     const auto decodeSingleTrackImage =
@@ -486,7 +476,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Failed to decode track image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, numChannels, hasAlpha, targetSize, partName, partName);
+        co_return co_await decodeImage(img, numChannels, hasAlpha, false, targetSize, partName, partName);
     };
 
     vector<ImageData> result;
@@ -538,14 +528,14 @@ Task<vector<ImageData>>
     const ScopeGuard handleGuard{[primaryImgHandle] { heif_image_handle_release(primaryImgHandle); }};
 
     // Read main image
-    result.emplace_back(co_await decodeImageHandle(primaryImgHandle));
+    result.emplace_back(co_await decodeImageHandle(primaryImgHandle, false));
     ImageData& mainImage = result.back();
 
     optional<Exif> exif;
     const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(primaryImgHandle, nullptr);
     vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
 
-    optional<IsoGainMapMetadata> gainmapMetadata;
+    optional<IsoGainMapMetadata> isoGainmapMetadata;
 
     if (numMetadataBlocks > 0) {
         tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
@@ -577,13 +567,13 @@ Task<vector<ImageData>>
                 mainImage.attributes.emplace_back(exif->toAttributes());
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
         } else if (type == "tmap") {
-            tlog::debug() << fmt::format("Found ISO 21496-1 gainmap metadata of size {} bytes", metadata.size());
+            tlog::debug() << fmt::format("Found ISO 21496-1 gainmap metadata '{}' of size {} bytes", contentType, metadata.size());
 
             try {
-                gainmapMetadata = IsoGainMapMetadata{
+                isoGainmapMetadata = IsoGainMapMetadata{
                     span<uint8_t>{metadata.data(), metadata.size()}
                 };
-                mainImage.attributes.emplace_back(gainmapMetadata->toAttributes());
+                mainImage.attributes.emplace_back(isoGainmapMetadata->toAttributes());
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read gainmap metadata: {}", e.what()); }
 
         } else if (contentType == "application/rdf+xml") {
@@ -615,29 +605,6 @@ Task<vector<ImageData>>
         return nullopt;
     };
 
-    const auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view layer) -> Task<void> {
-        const Vector2i size = resultData.channels.front().size();
-        if (size == targetSize) {
-            co_return;
-        }
-
-        const int numChannels = (int)resultData.channels.size();
-
-        ImageData scaledResultData;
-        scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
-
-        if (numChannels == 1) {
-            scaledResultData.channels.emplace_back(Channel::joinIfNonempty(layer, "L"), targetSize, EPixelFormat::F32, EPixelFormat::F16);
-        } else {
-            scaledResultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, resultData.hasChannel(Channel::joinIfNonempty(layer, "A")), targetSize, EPixelFormat::F32, EPixelFormat::F16, layer, priority
-            );
-        }
-
-        co_await resizeChannelsAsync(resultData.channels, scaledResultData.channels, priority);
-        resultData = std::move(scaledResultData);
-    };
-
     // Read auxiliary images
     const int num_aux = heif_image_handle_get_number_of_auxiliary_images(primaryImgHandle, 0);
     if (num_aux > 0) {
@@ -664,34 +631,56 @@ Task<vector<ImageData>>
             string auxLayerName = auxType ? auxType : to_string(num_aux);
             replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
 
+            const bool isIsoGainmap = auxLayerName.find("urn.iso.std.iso.ts.21496.-1") != string::npos;
+            const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
+
             const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
-            const bool loadGainmap = applyGainmaps && auxLayerName.find("apple") != string::npos &&
-                auxLayerName.find("hdrgainmap") != string::npos;
+            const bool loadGainmap = applyGainmaps && (isIsoGainmap || isAppleGainmap);
 
             if (!retainAuxLayer && !loadGainmap) {
                 continue;
             }
 
-            auto auxImgData = co_await decodeImageHandle(auxImgHandle, mainImage.channels.front().size(), auxLayerName);
-            co_await resizeImage(auxImgData, mainImage.channels.front().size(), auxLayerName);
+            auto auxImgData = co_await decodeImageHandle(auxImgHandle, true, mainImage.channels.front().size(), auxLayerName);
 
-            // If we found an apple-style gainmap, apply it to the main image.
+            // If we found a gainmap, apply it to the main image. ISO 21496-1 gainmaps take precedence over Apple gainmaps.
             if (loadGainmap) {
-                tlog::debug()
-                    << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
-                auto amn = findAppleMakerNote();
-                if (amn) {
-                    tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
-                } else {
-                    tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
-                }
+                if (isAppleGainmap) {
+                    tlog::debug()
+                        << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
 
-                co_await applyAppleGainMap(mainImage, auxImgData, priority, amn);
+                    if (const auto amn = findAppleMakerNote()) {
+                        tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
+                        co_await applyAppleGainMap(mainImage, auxImgData, priority, amn);
+                    } else if (isoGainmapMetadata) {
+                        tlog::debug() << "No Apple maker note was found, but ISO 21496-1 metadata is available; applying gain map.";
+
+                        // TODO: read iso gainmap application chroma from metadata
+                        co_await applyIsoGainMap(mainImage, auxImgData, priority, *isoGainmapMetadata, rec709Chroma(), rec709Chroma());
+                    } else {
+                        tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
+                        co_await applyAppleGainMap(mainImage, auxImgData, priority, nullopt);
+                    }
+                } else if (isIsoGainmap) {
+                    if (isoGainmapMetadata) {
+                        tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: {}. Applying.", auxLayerName);
+
+                        // TODO: read iso gainmap application chroma from metadata
+                        co_await applyIsoGainMap(mainImage, auxImgData, priority, *isoGainmapMetadata, rec709Chroma(), rec709Chroma());
+                    } else {
+                        tlog::warning() << fmt::format(
+                            "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName
+                        );
+                    }
+                }
             }
 
             if (retainAuxLayer) {
-                // TODO:Handle the case where the auxiliary image has different color space, attributes, alpha premultiplication, etc.
-                // as the main image. Simply copying and attaching the channels is not sufficient in that case.
+                // TODO:Handle the case where the auxiliary image has different color space, attributes, alpha premultiplication, etc. as
+                // the main image. Simply copying and attaching the channels is not sufficient in that case -- and we can avoid resizing.
+
+                co_await ImageLoader::resizeImageData(auxImgData, mainImage.channels.front().size(), priority);
+
                 mainImage.channels.insert(
                     mainImage.channels.end(),
                     std::make_move_iterator(auxImgData.channels.begin()),
