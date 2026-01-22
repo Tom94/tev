@@ -18,6 +18,9 @@
 
 #include <tev/FalseColor.h>
 
+#include <span>
+#include <vector>
+
 using namespace std;
 
 namespace tev {

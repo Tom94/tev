@@ -60,8 +60,6 @@ public:
     void setOffset(float offset) { mOffset = offset; }
     void setGamma(float gamma) { mGamma = gamma; }
 
-    float applyExposureAndOffset(float value) const;
-
     void setImage(std::shared_ptr<Image> image) { mImage = image; }
     void setReference(std::shared_ptr<Image> reference) { mReference = reference; }
     void setRequestedChannelGroup(std::string_view groupName) { mRequestedChannelGroup = groupName; }
@@ -79,14 +77,8 @@ public:
     ETonemap tonemap() const { return mTonemap; }
     void setTonemap(ETonemap tonemap) { mTonemap = tonemap; }
 
-    static nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap);
-    nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value) const { return applyTonemap(value, mGamma, mTonemap); }
-
     EMetric metric() const { return mMetric; }
     void setMetric(EMetric metric) { mMetric = metric; }
-
-    static float applyMetric(float value, float reference, EMetric metric);
-    float applyMetric(float value, float reference) const { return applyMetric(value, reference, mMetric); }
 
     std::optional<Box2i> crop() { return mCrop; }
     void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
@@ -113,8 +105,8 @@ public:
     // The following functions return four values per pixel in RGBA order. The number of pixels is given by `imageDataSize()`. If the canvas
     // does not currently hold an image, or no channels are displayed, then zero pixels are returned.
     nanogui::Vector2i imageDataSize() const { return cropInImageCoords().size(); }
-    Task<HeapArray<float>> getHdrImageData(bool divideAlpha, int priority) const;
-    Task<HeapArray<char>> getLdrImageData(bool divideAlpha, int priority) const;
+    Task<HeapArray<float>> getRgbaHdrImageData(bool divideAlpha, int priority) const;
+    Task<HeapArray<uint8_t>> getRgbaLdrImageData(bool divideAlpha, int priority) const;
 
     void saveImage(const fs::path& filename) const;
 
@@ -141,16 +133,12 @@ public:
     void applyInspectionParameters(std::vector<float>& values, bool hasAlpha);
 
 private:
-    static Task<std::vector<Channel>> channelsFromImages(
-        std::shared_ptr<Image> image, std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority
-    );
-
     static Task<std::shared_ptr<CanvasStatistics>> computeCanvasStatistics(
         std::shared_ptr<Image> image,
         std::shared_ptr<Image> reference,
         std::string_view requestedChannelGroup,
         EMetric metric,
-        const Box2i& region,
+        Box2i region,
         const chroma_t& chroma,
         ituth273::ETransfer transfer,
         bool adaptWhitePoint,

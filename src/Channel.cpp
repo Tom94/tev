@@ -35,6 +35,16 @@ pair<string_view, string_view> Channel::split(string_view channel) {
     return {"", channel};
 }
 
+string Channel::join(string_view layer, string_view channel) { return fmt::format("{}.{}", layer, channel); }
+
+string Channel::joinIfNonempty(string_view layer, string_view channel) {
+    if (layer.empty()) {
+        return string{channel};
+    } else {
+        return Channel::join(layer, channel);
+    }
+}
+
 string_view Channel::tail(string_view channel) { return split(channel).second; }
 
 string_view Channel::head(string_view channel) { return split(channel).first; }

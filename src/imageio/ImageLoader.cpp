@@ -82,25 +82,33 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 
 const vector<string_view>& ImageLoader::supportedMimeTypes() {
     static const vector<string_view> mimeTypes = {
-        "image/png",
-        "image/webp",
-        "image/jpeg",
-        "image/tiff",
-        "image/gif",
-        "image/tga",
-        "image/bmp",
 #ifdef TEV_SUPPORT_AVIF
         "image/avif",
 #endif
+        "image/apng",
+        "image/bmp",
+        "image/gif",
 #ifdef TEV_SUPPORT_HEIC
         "image/heic",
+        "image/heif",
 #endif
+        "image/jpeg",
+        "image/jxl",
+        "image/png",
+        "image/qoi",
+        "image/tga",
+        "image/tiff",
+        "image/vnd.mozilla.apng",
+        "image/vnd.radiance",
+        "image/webp",
+        "image/x-adobe-dng",
 #ifdef _WIN32
         "image/x-dds",
         "image/x-direct-draw-surface",
 #endif
-        "image/x-adobe-dng",
         "image/x-exr",
+        "image/x-hdr",
+        "image/x-pfm",
         "image/x-portable-anymap",
         "image/x-portable-arbitrarymap",
         "image/x-portable-bitmap",
@@ -113,21 +121,21 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
 }
 
 Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
-    int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view namePrefix, int priority
+    int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer, int priority
 ) {
     vector<Channel> channels;
     if (numChannels > 4) {
         throw ImageLoadError{"Image has too many RGBA channels."};
     }
 
-    int numColorChannels = numChannels - (hasAlpha ? 1 : 0);
+    const int numColorChannels = numChannels - (hasAlpha ? 1 : 0);
     if (numColorChannels <= 0 || numColorChannels > 3) {
         throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
     const size_t numBytesPerSample = nBytes(format);
-    auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * 4);
+    const auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * 4);
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     const auto init = [numPixels, priority](auto* ptr) -> Task<void> {
@@ -149,28 +157,34 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     if (numColorChannels > 1) {
         const vector<string_view> channelNames = {"R", "G", "B"};
         for (int c = 0; c < numColorChannels; ++c) {
-            string name = fmt::format("{}{}", namePrefix, (c < (int)channelNames.size() ? channelNames[c] : to_string(c)));
-
-            // We assume that the channels are interleaved.
-            channels.emplace_back(name, size, format, desiredFormat, data, c * numBytesPerSample, 4 * numBytesPerSample);
+            channels.emplace_back(
+                c < (int)channelNames.size() ? channelNames[c] : to_string(c), size, format, desiredFormat, data, c * numBytesPerSample, 4 * numBytesPerSample
+            );
         }
     } else {
-        channels.emplace_back(fmt::format("{}L", namePrefix), size, format, desiredFormat, data, 0, 4 * numBytesPerSample);
+        channels.emplace_back("L", size, format, desiredFormat, data, 0, 4 * numBytesPerSample);
     }
 
     if (hasAlpha) {
-        channels.emplace_back(fmt::format("{}A", namePrefix), size, format, desiredFormat, data, 3 * numBytesPerSample, 4 * numBytesPerSample);
+        channels.emplace_back("A", size, format, desiredFormat, data, 3 * numBytesPerSample, 4 * numBytesPerSample);
+    }
+
+    for (auto& channel : channels) {
+        channel.setName(Channel::joinIfNonempty(layer, channel.name()));
     }
 
     co_return channels;
 }
 
-vector<Channel> ImageLoader::makeNChannels(
-    int numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view namePrefix
-) {
+vector<Channel>
+    ImageLoader::makeNChannels(int numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
     vector<Channel> channels;
     for (int c = 0; c < numChannels; ++c) {
-        channels.emplace_back(fmt::format("{}{}", namePrefix, to_string(c)), size, format, desiredFormat);
+        channels.emplace_back(to_string(c), size, format, desiredFormat);
+    }
+
+    for (auto& channel : channels) {
+        channel.setName(Channel::joinIfNonempty(layer, channel.name()));
     }
 
     return channels;

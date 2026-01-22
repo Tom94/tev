@@ -70,8 +70,8 @@ private:
     ostream& mStream;
 };
 
-void ExrImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
-    vector<string> channelNames = {
+Task<void> ExrImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
+    const vector<string> channelNames = {
         "R",
         "G",
         "B",
@@ -102,6 +102,8 @@ void ExrImageSaver::save(ostream& oStream, const fs::path& path, span<const floa
     Imf::OutputFile file{imfOStream, header};
     file.setFrameBuffer(frameBuffer);
     file.writePixels(imageSize.y());
+
+    co_return;
 }
 
 } // namespace tev

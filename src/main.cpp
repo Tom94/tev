@@ -164,6 +164,103 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
     }
 }
 
+static void convertTo(
+    const string& targetPathPattern,
+    const shared_ptr<BackgroundImagesLoader>& imagesLoader,
+    EMetric metric,
+    const nanogui::Color& bg,
+    ETonemap tonemap,
+    float gamma,
+    float exposure,
+    float offset
+) {
+    const int priority = numeric_limits<int>::max();
+    unordered_set<fs::path> writtenPaths;
+
+    const auto start = chrono::steady_clock::now();
+    const ScopeGuard guard{[&]() {
+        if (writtenPaths.empty()) {
+            return;
+        }
+
+        const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start}.count();
+        tlog::success() << fmt::format("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
+    }};
+
+    vector<Task<void>> saveTasks;
+    for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
+        if (imageAddition->images.empty()) {
+            tlog::error() << fmt::format("Image addition is empty, cannot convert");
+            continue;
+        }
+
+        // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
+        const auto& image = imageAddition->images.front();
+        if (image->channelGroups().empty()) {
+            tlog::error() << fmt::format("Image {} has no channel groups, cannot convert", image->path());
+            continue;
+        }
+
+        const auto path = toPath(substituteCurly(targetPathPattern, [&](string_view placeholder) {
+            const auto parts = split(placeholder, ":");
+            const auto fmt = parts[0];
+            if (fmt == "file" && parts.size() == 1) {
+                return toString(image->path().stem());
+            } else if (fmt == "dir" && parts.size() == 1) {
+                return toString(image->path().parent_path());
+            } else if (fmt == "ext" && parts.size() == 1) {
+                return toString(image->path().extension());
+            } else if (fmt == "idx" && parts.size() == 1) {
+                return fmt::format("{}", idx);
+            } else if (fmt == "idx" && parts.size() == 2) {
+                return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
+            } else {
+                throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
+            }
+        }));
+
+        if (writtenPaths.find(path) != writtenPaths.end()) {
+            tlog::info() << fmt::format("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
+            continue;
+        }
+
+        writtenPaths.insert(path);
+        if (path == image->path()) {
+            tlog::info() << fmt::format("Skipping conversion of {} to itself", image->path());
+            continue;
+        }
+
+        saveTasks.emplace_back(
+            [](shared_ptr<Image> image,
+               fs::path path,
+               EMetric metric,
+               nanogui::Color bg,
+               ETonemap tonemap,
+               float gamma,
+               float exposure,
+               float offset,
+               int priority) -> Task<void> {
+                try {
+                    co_await ThreadPool::global().enqueueCoroutine(priority);
+                    const auto saveStart = chrono::steady_clock::now();
+
+                    // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
+                    const auto cg = image->channelGroups().front().name;
+                    const auto window = image->toImageCoords(image->displayWindow());
+                    co_await image->save(path, nullptr, window, cg, metric, bg, tonemap, gamma, exposure, offset, priority);
+
+                    const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
+                    tlog::success() << fmt::format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
+                } catch (const ImageSaveError& e) {
+                    tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what());
+                }
+            }(image, path, metric, bg, tonemap, gamma, exposure, offset, priority)
+        );
+    }
+
+    waitAll(saveTasks);
+}
+
 static int mainFunc(span<const string> arguments) {
     ArgumentParser parser{
         "tev — The EDR Viewer\n"
@@ -181,11 +278,39 @@ static int mainFunc(span<const string> arguments) {
         {"auto-fit"},
     };
 
+    ValueFlag<string> backgroundColorFlag{
+        parser,
+        "BACKGROUND COLOR",
+        "The background color to blend images against. "
+        "Specify as sRGB hex code (#RGB, #RGBA, #RRGGBB, or #RRGGBBAA) or as linear comma-separated RGB(A) values (e.g. 0.5,0.5,0.5 or 0.5,0.5,0.5,1). "
+        "Alpha is straight. "
+        "Default is transparent, i.e. #00000000",
+        {"bg", "background-color"},
+    };
+
     Flag channelGroupingFlagOff{
         parser,
         "NO CHANNEL GROUPING",
         "Do not group channels into channel groups.",
         {"no-channel-grouping"},
+    };
+
+    ValueFlag<string> convertToFlag{
+        parser,
+        "PATH",
+        "Run tev in conversion mode without opening a window. "
+        "In this mode, tev will convert all supplied images to the file extension of PATH. "
+        "Supported formats are bmp, exr, hdr, jpg, jxl, png, tga. "
+        "PATH may contain special placeholders:\n"
+        "{file}: the original filename without directory or extension\n"
+        "{dir}: the original file's directory\n"
+        "{ext}: the original file's extension\n"
+        "{idx:format}: the index of the image in the list of supplied images, formatted according to 'format' (e.g. 03 for zero-padded three digits)\n"
+        "\nExamples:\n"
+        "tev --convert-to {dir}/{file}_converted.png image1.exr image2.hdr\n"
+        "tev --convert-to /output/directory/{file}.jpg image1.exr image2.h\n"
+        "tev --convert-to /output/directory/converted_{idx:02}.png image1.exr image2.hdr image3.png\n",
+        {'c', "convert-to"},
     };
 
     ValueFlag<float> exposureFlag{
@@ -396,19 +521,19 @@ static int mainFunc(span<const string> arguments) {
     };
 
     // Parse command line arguments and react to parsing errors using exceptions.
-    try {
-        TEV_ASSERT(arguments.size() > 0, "Number of arguments must be bigger than 0.");
+    TEV_ASSERT(arguments.size() > 0, "Number of arguments must be bigger than 0.");
 
+    try {
         parser.Prog(arguments.front());
         parser.ParseArgs(begin(arguments) + 1, end(arguments));
     } catch (const Help&) {
         cout << parser;
         return 0;
     } catch (const ParseError& e) {
-        cerr << e.what() << endl;
+        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -1;
     } catch (const ValidationError& e) {
-        cerr << e.what() << endl;
+        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -2;
     }
 
@@ -420,8 +545,6 @@ static int mainFunc(span<const string> arguments) {
         tlog::none() << "tev — The EDR Viewer\nversion " TEV_VERSION;
         return 0;
     }
-
-    auto ipc = hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>();
 
     // If we don't have any images to load, create new windows regardless of flag. (In this case, the user likely wants to open a new
     // instance of tev rather than focusing the existing one.)
@@ -438,9 +561,11 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
+    const auto ipc = convertToFlag ? nullptr : (hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>());
+
     // If we're not the primary instance and did not request to open a new window, simply send the to-be-opened images to the primary
     // instance.
-    if (!ipc->isPrimaryInstance() && !newWindow) {
+    if (ipc && !ipc->isPrimaryInstance() && !newWindow) {
         string channelSelector;
         bool first = true;
         for (auto imageFile : get(imageFiles)) {
@@ -473,14 +598,14 @@ static int mainFunc(span<const string> arguments) {
 
     Imf::setGlobalThreadCount(thread::hardware_concurrency());
 
-    shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
+    const shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
     imagesLoader->setRecursiveDirectories(recursiveFlag);
     imagesLoader->setApplyGainmaps(!gainmapFlagOff);
     imagesLoader->setGroupChannels(!channelGroupingFlagOff);
 
     // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
-    thread stdinThread{[weakImagesLoader = weak_ptr<BackgroundImagesLoader>{imagesLoader}]() {
+    auto stdinThread = thread{[weakImagesLoader = weak_ptr<BackgroundImagesLoader>{imagesLoader}]() {
         string channelSelector;
         while (!shuttingDown()) {
             for (string line; getline(cin, line) && !shuttingDown();) {
@@ -512,7 +637,7 @@ static int mainFunc(span<const string> arguments) {
     // Spawn another background thread, this one dealing with images passed to us via inter-process communication (IPC). This happens when a
     // user starts another instance of tev while one is already running. Note, that this behavior can be overridden by the -n flag, so not
     // _all_ secondary instances send their paths to the primary instance.
-    thread ipcThread = thread{[&]() {
+    auto ipcThread = !ipc ? thread{} : thread{[&]() {
         try {
             while (!shuttingDown()) {
                 // Attempt to become primary instance in case the primary instance got closed at some point. Attempt this with a reasonably
@@ -533,8 +658,11 @@ static int mainFunc(span<const string> arguments) {
         } catch (const runtime_error& e) { tlog::warning() << "Uncaught exception in IPC thread: " << e.what(); }
     }};
 
-    ScopeGuard backgroundThreadShutdownGuard{[&]() {
+    const ScopeGuard backgroundThreadShutdownGuard{[&]() {
         setShuttingDown();
+
+        ThreadPool::global().waitUntilFinished();
+        ThreadPool::global().shutdown();
 
         if (ipcThread.joinable()) {
             ipcThread.join();
@@ -558,10 +686,29 @@ static int mainFunc(span<const string> arguments) {
         imagesLoader->enqueue(toPath(imageFile), channelSelector, false);
     }
 
+    if (convertToFlag) {
+        tlog::info() << "Running in conversion mode. No window will be opened.";
+
+        while (imagesLoader->hasPendingLoads()) {
+            this_thread::sleep_for(1ms);
+        }
+
+        const EMetric metric = metricFlag ? toMetric(get(metricFlag)) : EMetric::Error;
+        const nanogui::Color bg = backgroundColorFlag ? parseColor(get(backgroundColorFlag)) : nanogui::Color{0, 0, 0, 0};
+        const ETonemap tonemap = tonemapFlag ? toTonemap(get(tonemapFlag)) : ETonemap::None;
+        const float gamma = gammaFlag ? get(gammaFlag) : 2.2f;
+        const float exposure = exposureFlag ? get(exposureFlag) : 0.0f;
+        const float offset = offsetFlag ? get(offsetFlag) : 0.0f;
+
+        convertTo(get(convertToFlag), imagesLoader, metric, bg, tonemap, gamma, exposure, offset);
+
+        return 0;
+    }
+
     // Init nanogui application
     nanogui::init(!get(ldrFlag));
 
-    ScopeGuard nanoguiShutdownGuard{[&]() {
+    const ScopeGuard nanoguiShutdownGuard{[&]() {
     // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
 #if defined(__APPLE__) or defined(_WIN32)
@@ -645,6 +792,10 @@ static int mainFunc(span<const string> arguments) {
         sImageViewer->setAutoFitToScreen(true);
     }
 
+    if (backgroundColorFlag) {
+        sImageViewer->setBackgroundColorStraight(parseColor(get(backgroundColorFlag)));
+    }
+
     if (exposureFlag) {
         sImageViewer->setExposure(get(exposureFlag));
     }
@@ -711,9 +862,6 @@ static int mainFunc(span<const string> arguments) {
 
     // Refresh only every 250ms if there are no user interactions. This makes an idling tev surprisingly energy-efficient. :)
     nanogui::run(nanogui::RunMode::Lazy);
-
-    ThreadPool::global().waitUntilFinished();
-    ThreadPool::global().shutdown();
 
     return 0;
 }

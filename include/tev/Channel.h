@@ -36,6 +36,8 @@ public:
     using Data = HeapArray<uint8_t>;
 
     static std::pair<std::string_view, std::string_view> split(std::string_view fullChannel);
+    static std::string join(std::string_view layer, std::string_view channel);
+    static std::string joinIfNonempty(std::string_view layer, std::string_view channel);
 
     static std::string_view tail(std::string_view fullChannel);
     static std::string_view head(std::string_view fullChannel);

@@ -205,6 +205,9 @@ public:
 
     const Box2i& dataWindow() const { return mData.dataWindow; }
     const Box2i& displayWindow() const { return mData.displayWindow; }
+    Box2i toImageCoords(const Box2i& displayWindow) const {
+        return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min);
+    }
 
     float whiteLevel() const { return mData.hdrMetadata.bestGuessWhiteLevel; }
 
@@ -236,6 +239,50 @@ public:
     std::span<const VgCommand> vgCommands() const { return mVgCommands; }
 
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
+
+    Task<std::vector<Channel>>
+        getHdrImageData(std::shared_ptr<Image> reference, std::string_view requestedChannelGroup, EMetric metric, int priority) const;
+
+    Task<HeapArray<float>> getRgbaHdrImageData(
+        std::shared_ptr<Image> reference,
+        const Box2i& imageRegion,
+        std::string_view requestedChannelGroup,
+        EMetric metric,
+        const nanogui::Color& bg,
+        bool divideAlpha,
+        int priority
+    ) const;
+
+    Task<HeapArray<uint8_t>>
+        getRgbaLdrImageData(const HeapArray<float>& hdrData, ETonemap tonemap, float gamma, float exposure, float offset, int priority) const;
+
+    Task<HeapArray<uint8_t>> getRgbaLdrImageData(
+        std::shared_ptr<Image> reference,
+        const Box2i& imageRegion,
+        std::string_view requestedChannelGroup,
+        EMetric metric,
+        const nanogui::Color& bg,
+        bool divideAlpha,
+        ETonemap tonemap,
+        float gamma,
+        float exposure,
+        float offset,
+        int priority
+    ) const;
+
+    Task<void> save(
+        const fs::path& path,
+        std::shared_ptr<Image> reference,
+        const Box2i& imageRegion,
+        std::string_view requestedChannelGroup,
+        EMetric metric,
+        const nanogui::Color& bg,
+        ETonemap tonemap,
+        float gamma,
+        float exposure,
+        float offset,
+        int priority
+    ) const;
 
     std::string toString() const;
 

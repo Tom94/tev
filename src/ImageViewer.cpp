@@ -423,36 +423,21 @@ ImageViewer::ImageViewer(
             addSpacer(popup, 20);
 
             new Label{popup, "Background color", "sans-bold", 20};
-            auto colorwheel = new ColorWheel{popup, mImageCanvas->backgroundColor()};
+            mBackgroundColorWheel = new ColorWheel{popup};
+            mBackgroundColorWheel->set_callback([this](const Color& value) {
+                const float a = mBackgroundAlphaSlider->value();
+                mImageCanvas->setBackgroundColor(Color{value.r() * a, value.g() * a, value.b() * a, a});
+            });
 
             new Label{popup, "Background alpha"};
-            auto bgAlphaSlider = new Slider{popup};
-            bgAlphaSlider->set_range({0.0f, 1.0f});
-            bgAlphaSlider->set_callback([colorwheel, this](float a) {
-                const auto col = colorwheel->color();
-                mImageCanvas->setBackgroundColor(
-                    Color{
-                        col.r() * a,
-                        col.g() * a,
-                        col.b() * a,
-                        a,
-                    }
-                );
+            mBackgroundAlphaSlider = new Slider{popup};
+            mBackgroundAlphaSlider->set_range({0.0f, 1.0f});
+            mBackgroundAlphaSlider->set_callback([this](float a) {
+                const auto col = mBackgroundColorWheel->color();
+                mImageCanvas->setBackgroundColor(Color{col.r() * a, col.g() * a, col.b() * a, a});
             });
 
-            bgAlphaSlider->set_value(0);
-
-            colorwheel->set_callback([bgAlphaSlider, this](const Color& value) {
-                const float a = bgAlphaSlider->value();
-                mImageCanvas->setBackgroundColor(
-                    Color{
-                        value.r() * a,
-                        value.g() * a,
-                        value.b() * a,
-                        a,
-                    }
-                );
-            });
+            setBackgroundColorStraight(Color{0, 0, 0, 0});
         }
     }
 
@@ -1774,7 +1759,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         mGroupButtonContainer->remove_child_at(mGroupButtonContainer->child_count() - 1);
     }
 
-    size_t numGroups = mCurrentImage->channelGroups().size();
+    const size_t numGroups = mCurrentImage->channelGroups().size();
     for (size_t i = 0; i < numGroups; ++i) {
         auto group = groupName(i);
         auto button = new ImageButton{mGroupButtonContainer, group, false};
@@ -1980,6 +1965,14 @@ void ImageViewer::setMetric(EMetric metric) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->set_pushed((EMetric)i == metric);
     }
+}
+
+void ImageViewer::setBackgroundColorStraight(const Color& color) {
+    mBackgroundColorWheel->set_color(color);
+    mBackgroundAlphaSlider->set_value(color.a());
+
+    const Color premul = Color{color.r() * color.a(), color.g() * color.a(), color.b() * color.a(), color.a()};
+    mImageCanvas->setBackgroundColor(premul);
 }
 
 float ImageViewer::displayWhiteLevel() const { return mDisplayWhiteLevelBox->value(); }
@@ -2228,8 +2221,8 @@ void ImageViewer::openImageDialog() {
         return;
     }
 
-    auto runDialog = [this]() {
-        auto threadGuard = ScopeGuard{[this]() {
+    const auto runDialog = [this]() {
+        const auto threadGuard = ScopeGuard{[this]() {
             scheduleToUiThread([this]() {
                 focusWindow();
                 if (mFileDialogThread && mFileDialogThread->joinable()) {
@@ -2275,7 +2268,7 @@ void ImageViewer::openImageDialog() {
             }
 
             filters.emplace(filters.begin(), pair<string, string>{join(allImages, ","), "All images"});
-            auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
+            const auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
 
             for (size_t i = 0; i < paths.size(); ++i) {
                 const bool shallSelect = i == paths.size() - 1;
@@ -2304,8 +2297,8 @@ void ImageViewer::saveImageDialog() {
         return;
     }
 
-    auto runDialog = [this]() {
-        auto threadGuard = ScopeGuard{[this]() {
+    const auto runDialog = [this]() {
+        const auto threadGuard = ScopeGuard{[this]() {
             scheduleToUiThread([this]() {
                 focusWindow();
                 if (mFileDialogThread && mFileDialogThread->joinable()) {
@@ -2364,35 +2357,37 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
-    const auto imageData = mImageCanvas->getLdrImageData(true, std::numeric_limits<int>::max()).get();
+    const auto imageData = mImageCanvas->getRgbaLdrImageData(true, std::numeric_limits<int>::max()).get();
 
 #if defined(__APPLE__) or defined(_WIN32)
-    clip::image_spec imageMetadata;
-    imageMetadata.width = imageSize.x();
-    imageMetadata.height = imageSize.y();
-    imageMetadata.bits_per_pixel = 32;
-    imageMetadata.bytes_per_row = imageMetadata.bits_per_pixel / 8 * imageMetadata.width;
-
-    imageMetadata.red_mask = 0x000000ff;
-    imageMetadata.green_mask = 0x0000ff00;
-    imageMetadata.blue_mask = 0x00ff0000;
-    imageMetadata.alpha_mask = 0xff000000;
-    imageMetadata.red_shift = 0;
-    imageMetadata.green_shift = 8;
-    imageMetadata.blue_shift = 16;
-    imageMetadata.alpha_shift = 24;
-
-    clip::image image(imageData.data(), imageMetadata);
+    const clip::image image(
+        imageData.data(),
+        clip::image_spec{
+            .width = (unsigned long)imageSize.x(),
+            .height = (unsigned long)imageSize.y(),
+            .bits_per_pixel = 32,
+            .bytes_per_row = 4 * (unsigned long)imageSize.x(),
+            .red_mask = 0x000000ff,
+            .green_mask = 0x0000ff00,
+            .blue_mask = 0x00ff0000,
+            .alpha_mask = 0xff000000,
+            .red_shift = 0,
+            .green_shift = 8,
+            .blue_shift = 16,
+            .alpha_shift = 24
+        }
+    );
 
     if (!clip::set_image(image)) {
         throw std::runtime_error{"clip::set_image failed."};
     }
 #else
+    // TODO: make a dedicated PNG saver via libpng which should be faster than stb_image_write.
     const auto pngImageSaver = make_unique<StbiLdrImageSaver>();
 
     stringstream pngData;
     try {
-        pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4);
+        pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4).get();
     } catch (const ImageSaveError& e) {
         throw std::runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())};
     }

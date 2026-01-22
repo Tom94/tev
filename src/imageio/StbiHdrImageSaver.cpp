@@ -28,12 +28,14 @@ using namespace std;
 
 namespace tev {
 
-void StbiHdrImageSaver::save(ostream& oStream, const fs::path&, span<const float> data, const Vector2i& imageSize, int nChannels) const {
+Task<void> StbiHdrImageSaver::save(ostream& oStream, const fs::path&, span<const float> data, const Vector2i& imageSize, int nChannels) const {
     static const auto stbiOStreamWrite = [](void* context, void* stbidata, int size) {
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(stbidata), size);
     };
 
     stbi_write_hdr_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
+
+    co_return;
 }
 
 } // namespace tev

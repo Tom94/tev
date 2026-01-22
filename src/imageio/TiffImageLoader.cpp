@@ -975,7 +975,7 @@ Task<void> postprocessRgb(
     }
 }
 
-Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int priority) {
+Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view partName, const int priority) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
         throw ImageLoadError{"Failed to read dimensions."};
@@ -1208,6 +1208,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     tlog::debug() << fmt::format("numRgbaChannels={}, numNonRgbaChannels={}, ", numRgbaChannels, numNonRgbaChannels);
 
     ImageData resultData;
+    resultData.partName = partName;
     resultData.dataWindow = resultData.displayWindow = {
         {0, 0},
         size
@@ -1224,9 +1225,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, const int pri
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
         auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
-            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, "", priority
+            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
-        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat);
+        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 
         resultData.channels.insert(resultData.channels.end(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end()));
         resultData.channels.insert(
@@ -1629,15 +1630,13 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         if (EDngSubfileType type; isDng && TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
             name = dngSubFileTypeToString(type);
         } else {
-            name = subId != -1 ? fmt::format("main.{}.sub.{}.{}", dir, subId, subChainId) : fmt::format("main.{}", dir);
+            name = subId != -1 ? fmt::format("ifd.{}.subifd.{}.{}", dir, subId, subChainId) : fmt::format("ifd.{}", dir);
         }
 
         try {
             tlog::debug() << fmt::format("Loading {}", name);
 
-            ImageData& data = result.emplace_back(co_await readTiffImage(tif, reverseEndian, priority));
-            data.partName = name;
-
+            ImageData& data = result.emplace_back(co_await readTiffImage(tif, reverseEndian, name, priority));
             if (exifAttributes) {
                 data.attributes.emplace_back(exifAttributes.value());
             }

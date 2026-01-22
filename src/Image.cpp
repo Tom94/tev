@@ -21,6 +21,7 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
+#include <tev/imageio/ImageSaver.h>
 
 #include <half.h>
 
@@ -453,11 +454,15 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         displayWindow = channels.front().size();
     }
 
-    for (const auto& c : channels) {
+    for (auto& c : channels) {
         if (c.size() != size()) {
             throw ImageLoadError{
                 fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())
             };
+        }
+
+        if (!c.name().starts_with(partName)) {
+            c.setName(Channel::joinIfNonempty(partName, c.name()));
         }
     }
 
@@ -478,10 +483,6 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
         for (const auto& match : matches) {
             channels.emplace_back(std::move(tmp[match.second]));
-        }
-
-        if (channels.empty()) {
-            throw ImageLoadError{fmt::format("Channel selector :{} discards all channels.", channelSelector)};
         }
     }
 
@@ -963,6 +964,261 @@ void Image::updateVectorGraphics(bool append, span<const VgCommand> commands) {
     copy(begin(commands), end(commands), back_inserter(mVgCommands));
 }
 
+Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string_view requestedChannelGroup, EMetric metric, int priority) const {
+    const auto size = this->size();
+    const auto numPixels = this->numPixels();
+
+    vector<Channel> result;
+    const auto channelNames = channelsInGroup(requestedChannelGroup);
+    for (size_t i = 0; i < channelNames.size(); ++i) {
+        result.emplace_back(toUpper(Channel::tail(channelNames[i])), size, EPixelFormat::F32, EPixelFormat::F32);
+    }
+
+    const auto channels = this->channels(channelNames);
+    if (!reference) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            numPixels * channels.size(),
+            [&](size_t j) {
+                for (size_t c = 0; c < channels.size(); ++c) {
+                    result[c].setAt(j, channels[c]->at(j));
+                }
+            },
+            priority
+        );
+    } else {
+        const auto referenceChannels = reference->channels(channelNames);
+        const auto offset = (reference->size() - size) / 2;
+
+        vector<bool> isAlpha(channelNames.size());
+        for (size_t i = 0; i < channelNames.size(); ++i) {
+            isAlpha[i] = Channel::isAlpha(channelNames[i]);
+        }
+
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            size.y(),
+            numPixels * channels.size(),
+            [&](int y) {
+                for (size_t c = 0; c < channels.size(); ++c) {
+                    const auto* channel = channels[c];
+                    const auto* referenceChannel = referenceChannels[c];
+
+                    if (isAlpha[c]) {
+                        for (int x = 0; x < size.x(); ++x) {
+                            result[c].setAt(
+                                {x, y},
+                                0.5f *
+                                    (channel->eval({x, y}) +
+                                     (referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 1.0f))
+                            );
+                        }
+                    } else {
+                        for (int x = 0; x < size.x(); ++x) {
+                            result[c].setAt(
+                                {x, y},
+                                applyMetric(
+                                    channel->eval({x, y}), referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 0.0f, metric
+                                )
+                            );
+                        }
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    co_return result;
+}
+
+Task<HeapArray<float>> Image::getRgbaHdrImageData(
+    shared_ptr<Image> reference,
+    const Box2i& imageRegion,
+    string_view requestedChannelGroup,
+    EMetric metric,
+    const Color& bg,
+    bool divideAlpha,
+    int priority
+) const {
+    const auto channels = co_await getHdrImageData(reference, requestedChannelGroup, metric, priority);
+    if (channels.empty()) {
+        co_return {};
+    }
+
+    const Channel* alphaChannel = nullptr;
+
+    // Only treat the alpha channel specially if it is not the only channel of the image.
+    if (!all_of(begin(channels), end(channels), [](const Channel& c) { return c.isAlpha(); })) {
+        if (channels.back().isAlpha()) {
+            alphaChannel = &channels.back();
+        }
+    }
+
+    const size_t nColorChannels = alphaChannel ? (channels.size() - 1) : channels.size();
+
+    const auto numPixels = (size_t)imageRegion.size().x() * imageRegion.size().y();
+    const auto nColorChannelsToSave = std::min(nColorChannels, (size_t)3);
+
+    // Flatten image into vector
+    HeapArray<float> result{4 * numPixels};
+
+    co_await ThreadPool::global().parallelForAsync(
+        imageRegion.min.y(),
+        imageRegion.max.y(),
+        numPixels * 4,
+        [nColorChannelsToSave, &bg, &channels, alphaChannel, &result, &imageRegion](int y) {
+            const auto yoffset = (size_t)(y - imageRegion.min.y()) * imageRegion.size().x();
+            for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
+                const auto xoffset = x - imageRegion.min.x();
+
+                const float alpha = alphaChannel ? alphaChannel->eval({x, y}) : 1.0f;
+                for (size_t c = 0; c < 3; ++c) {
+                    const float val = nColorChannelsToSave == 1 ? channels[0].eval({x, y}) :
+                                                                  (c < nColorChannelsToSave ? channels[c].eval({x, y}) : 0.0f);
+                    result[(yoffset + xoffset) * 4 + c] = val + (1.0f - alpha) * bg[c];
+                }
+
+                result[(yoffset + xoffset) * 4 + 3] = alpha + (1.0f - alpha) * bg[3];
+            }
+        },
+        priority
+    );
+
+    // Divide alpha out if needed (for storing in non-premultiplied formats)
+    if (divideAlpha) {
+        co_await ThreadPool::global().parallelForAsync(
+            (size_t)0,
+            numPixels,
+            numPixels * 4,
+            [&result](size_t j) {
+                const float alpha = result[j * 4 + 3];
+                const float factor = alpha == 0 ? 0 : 1 / alpha;
+                for (int c = 0; c < 3; ++c) {
+                    result[j * 4 + c] *= factor;
+                }
+            },
+            priority
+        );
+    }
+
+    co_return result;
+}
+
+Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
+    const HeapArray<float>& rgbaHdrData, ETonemap tonemap, float gamma, float exposure, float offset, int priority
+) const {
+    HeapArray<uint8_t> result(rgbaHdrData.size());
+
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        rgbaHdrData.size() / 4,
+        rgbaHdrData.size(),
+        [&](const size_t i) {
+            const size_t start = 4 * i;
+            const Vector3f rgb = applyTonemap(
+                {
+                    applyExposureAndOffset(rgbaHdrData[start + 0], exposure, offset),
+                    applyExposureAndOffset(rgbaHdrData[start + 1], exposure, offset),
+                    applyExposureAndOffset(rgbaHdrData[start + 2], exposure, offset),
+                },
+                gamma,
+                tonemap
+            );
+
+            const auto rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), rgbaHdrData[start + 3]};
+
+            for (int j = 0; j < 4; ++j) {
+                result[start + j] = (uint8_t)(clamp(rgba[j], 0.0f, 1.0f) * 255 + 0.5f);
+            }
+        },
+        priority
+    );
+
+    co_return result;
+}
+
+Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
+    shared_ptr<Image> reference,
+    const Box2i& imageRegion,
+    string_view requestedChannelGroup,
+    EMetric metric,
+    const Color& bg,
+    bool divideAlpha,
+    ETonemap tonemap,
+    float gamma,
+    float exposure,
+    float offset,
+    int priority
+) const {
+    co_return co_await getRgbaLdrImageData(
+        co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, bg, divideAlpha, priority),
+        tonemap,
+        gamma,
+        exposure,
+        offset,
+        priority
+    );
+}
+
+Task<void> Image::save(
+    const fs::path& path,
+    shared_ptr<Image> reference,
+    const Box2i& imageRegion,
+    string_view requestedChannelGroup,
+    EMetric metric,
+    const Color& bg,
+    ETonemap tonemap,
+    float gamma,
+    float exposure,
+    float offset,
+    int priority
+) const {
+    if (path.empty()) {
+        throw ImageSaveError{"You must specify a file name to save the image."};
+    }
+
+    if (path.extension().empty()) {
+        throw ImageSaveError{"You must specify a file extension or select one from the dropdown to save the image."};
+    }
+
+    const auto size = imageRegion.size();
+    if (size.x() == 0 || size.y() == 0) {
+        throw ImageSaveError{"Can not save image with zero pixels."};
+    }
+
+    ofstream f{path, ios_base::binary};
+    if (!f) {
+        throw ImageSaveError{fmt::format("Could not open file {}", path)};
+    }
+
+    for (const auto& saver : ImageSaver::getSavers()) {
+        if (!saver->canSaveFile(path)) {
+            continue;
+        }
+
+        const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
+        const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
+
+        const bool divideAlpha = saver->alphaKind(path) == EAlphaKind::Straight;
+        const auto rgbaHdrData = co_await getRgbaHdrImageData(reference, imageRegion, requestedChannelGroup, metric, bg, divideAlpha, priority);
+
+        if (hdrSaver) {
+            co_await hdrSaver->save(f, path, rgbaHdrData, size, 4);
+        } else if (ldrSaver) {
+            const auto rgbaLdrData = co_await getRgbaLdrImageData(rgbaHdrData, tonemap, gamma, exposure, offset, priority);
+            co_await ldrSaver->save(f, path, rgbaLdrData, size, 4);
+        } else {
+            TEV_ASSERT(false, "Each image saver must either be a HDR or an LDR saver.");
+        }
+
+        co_return;
+    }
+
+    throw ImageSaveError{fmt::format("No save routine for image type {} found.", path.extension())};
+}
+
 template <typename T> time_t to_time_t(T timePoint) {
     // `clock_cast` appears to throw errors on some systems, so we're using this slightly hacky inaccurate/random time conversion (now() is
     // not called simultaneously for both clocks) in order to convert to system time.
@@ -1110,6 +1366,10 @@ Task<vector<shared_ptr<Image>>>
         for (auto& i : imageData) {
             co_await i.ensureValid(channelSelector, taskPriority);
 
+            if (i.channels.empty()) {
+                continue;
+            }
+
             // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
             string localChannelSelector;
             if (i.partName.empty()) {
@@ -1126,6 +1386,10 @@ Task<vector<shared_ptr<Image>>>
             }
 
             images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector, groupChannels));
+        }
+
+        if (images.empty()) {
+            throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
         }
 
         const auto end = chrono::system_clock::now();

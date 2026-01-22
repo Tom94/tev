@@ -19,11 +19,13 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/Task.h>
 
 #include <nanogui/vector.h>
 
 #include <ostream>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace tev {
@@ -34,7 +36,8 @@ class ImageSaver {
 public:
     virtual ~ImageSaver() {}
 
-    virtual bool hasPremultipliedAlpha() const = 0;
+    virtual EAlphaKind alphaKind(std::string_view extension) const = 0;
+    EAlphaKind alphaKind(const fs::path& path) const { return alphaKind(std::string_view{toLower(toString(path.extension()))}); }
 
     virtual bool canSaveFile(std::string_view extension) const = 0;
     bool canSaveFile(const fs::path& path) const { return canSaveFile(std::string_view{toLower(toString(path.extension()))}); }
@@ -44,7 +47,7 @@ public:
 
 template <typename T> class TypedImageSaver : public ImageSaver {
 public:
-    virtual void save(
+    virtual Task<void> save(
         std::ostream& oStream, const fs::path& path, std::span<const T> data, const nanogui::Vector2i& imageSize, int nChannels
     ) const = 0;
 };

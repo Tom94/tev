@@ -98,7 +98,9 @@ static uint8_t version(const PamType pamType) {
 }
 
 Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
-    const auto loadPam = [&iStream, priority]() -> Task<vector<ImageData>> {
+    size_t frameIdx = 0;
+
+    const auto loadPam = [&iStream, &frameIdx, priority]() -> Task<vector<ImageData>> {
         PamType pamType;
         if (auto result = pamReadHeader(iStream)) {
             pamType = *result;
@@ -321,6 +323,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         vector<ImageData> result(1);
         ImageData& resultData = result.front();
+        resultData.partName = fmt::format("frames.{}", frameIdx++);
 
         if (!global.children.empty()) {
             resultData.attributes.emplace_back(std::move(header));
@@ -331,10 +334,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         const size_t numInterleavedChannels = numChannels == 1 ? 1 : 4;
         const bool hasAlpha = numChannels == 2 || numChannels == 4;
         if (numInterleavedChannels == 1) {
-            resultData.channels = makeNChannels(numChannels, size, EPixelFormat::F32, desiredFormat);
+            resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, desiredFormat);
         } else {
-            resultData.channels =
-                co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, "", priority);
+            resultData.channels = co_await makeRgbaInterleavedChannels(
+                numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
+            );
         }
 
         const auto numSamplesPerRow = (size_t)size.x() * numChannels;
@@ -497,10 +501,10 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         }
     }
 
-    if (result.size() > 1) {
-        for (size_t i = 0; i < result.size(); ++i) {
-            result.at(i).partName = fmt::format("frames.{}", i);
-        }
+    if (result.size() == 1) {
+        // No need for frame names if there's only one frame. Unfortunately, there is no way to tell ahead of time whether a PAM image has
+        // multiple frames.
+        result.front().partName = "";
     }
 
     co_return result;

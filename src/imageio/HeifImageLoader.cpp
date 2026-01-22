@@ -101,9 +101,8 @@ Task<vector<ImageData>>
 
     ScopeGuard handleGuard{[handle] { heif_image_handle_release(handle); }};
 
-    auto decodeImage =
-        [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, string_view namePrefix = "") -> Task<ImageData> {
-        tlog::debug() << fmt::format("Decoding HEIF image {}", namePrefix.empty() ? "main." : namePrefix);
+    auto decodeImage = [priority](heif_image_handle* imgHandle, const Vector2i& targetSize = {0}, string_view layer = "") -> Task<ImageData> {
+        tlog::debug() << fmt::format("Decoding HEIF image '{}'", layer);
 
         ImageData resultData;
 
@@ -184,11 +183,10 @@ Task<vector<ImageData>>
         // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
         if (numChannels == 1) {
-            resultData.channels.emplace_back(fmt::format("{}L", namePrefix), size, EPixelFormat::F32, EPixelFormat::F16);
+            resultData.channels.emplace_back(Channel::joinIfNonempty(layer, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
         } else {
-            resultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, namePrefix, priority
-            );
+            resultData.channels =
+                co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, layer, priority);
         }
 
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
@@ -499,8 +497,8 @@ Task<vector<ImageData>>
         return nullptr;
     };
 
-    const auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view namePrefix) -> Task<void> {
-        Vector2i size = resultData.channels.front().size();
+    const auto resizeImage = [priority](ImageData& resultData, const Vector2i& targetSize, string_view layer) -> Task<void> {
+        const Vector2i size = resultData.channels.front().size();
         if (size == targetSize) {
             co_return;
         }
@@ -511,10 +509,10 @@ Task<vector<ImageData>>
         scaledResultData.hasPremultipliedAlpha = resultData.hasPremultipliedAlpha;
 
         if (numChannels == 1) {
-            scaledResultData.channels.emplace_back(fmt::format("{}L", namePrefix), targetSize, EPixelFormat::F32, EPixelFormat::F16);
+            scaledResultData.channels.emplace_back(Channel::joinIfNonempty(layer, "L"), targetSize, EPixelFormat::F32, EPixelFormat::F16);
         } else {
             scaledResultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, resultData.hasChannel(fmt::format("{}A", namePrefix)), targetSize, EPixelFormat::F32, EPixelFormat::F16, namePrefix, priority
+                numChannels, resultData.hasChannel(Channel::joinIfNonempty(layer, "A")), targetSize, EPixelFormat::F32, EPixelFormat::F16, layer, priority
             );
         }
 
@@ -544,7 +542,7 @@ Task<vector<ImageData>>
             }
 
             ScopeGuard typeGuard{[auxImgHandle, &auxType] { heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType); }};
-            string auxLayerName = auxType ? fmt::format("{}.", auxType) : fmt::format("{}.", num_aux);
+            string auxLayerName = auxType ? auxType : to_string(num_aux);
             replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
 
             const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);

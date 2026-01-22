@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <tev/FalseColor.h>
+
 #define FMT_HEADER_ONLY 1
 #include <fmt/core.h>
 
@@ -453,6 +455,10 @@ std::string_view trimLeft(std::string_view s);
 std::string_view trimRight(std::string_view s);
 std::string_view trim(std::string_view s);
 
+std::string substituteCurly(std::string_view str, const std::function<std::string(std::string_view)>& replacer);
+
+nanogui::Color parseColor(std::string_view str);
+
 bool matchesFuzzy(std::string_view text, std::string_view filter, size_t* matchedPartId = nullptr);
 bool matchesRegex(std::string_view text, std::string_view filter);
 inline bool matchesFuzzyOrRegex(std::string_view text, std::string_view filter, bool isRegex) {
@@ -521,6 +527,21 @@ struct FlatpakInfo {
 
 const std::optional<FlatpakInfo>& flatpakInfo();
 
+enum class EAlphaKind {
+    // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
+    // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
+    // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
+    // expects this kind of premultiplied alpha, so we have to support it.
+    PremultipliedNonlinear,
+    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
+    // kind of premultiplied alpha.
+    Premultiplied,
+    Straight,
+    None,
+};
+
+std::string_view toString(EAlphaKind mode);
+
 enum EInterpolationMode : int {
     Nearest = 0,
     Bilinear,
@@ -546,6 +567,37 @@ enum class ETonemap : int {
 
 ETonemap toTonemap(std::string_view name);
 
+inline nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap) {
+    nanogui::Vector3f result;
+    switch (tonemap) {
+        case ETonemap::SRGB: {
+            result = {toSRGB(value.x()), toSRGB(value.y()), toSRGB(value.z())};
+            break;
+        }
+        case ETonemap::Gamma: {
+            result = {std::pow(value.x(), 1 / gamma), std::pow(value.y(), 1 / gamma), std::pow(value.z(), 1 / gamma)};
+            break;
+        }
+        case ETonemap::FalseColor: {
+            static const auto falseColor = [](float linear) {
+                static const auto& fcd = colormap::turbo();
+                int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
+                return nanogui::Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
+            };
+
+            result = falseColor(log2(mean(value) + 0.03125f) / 10 + 0.5f);
+            break;
+        }
+        case ETonemap::PositiveNegative: {
+            result = {-2.0f * mean(min(value, nanogui::Vector3f{0.0f})), 2.0f * mean(max(value, nanogui::Vector3f{0.0f})), 0.0f};
+            break;
+        }
+        default: throw std::runtime_error{"Invalid tonemap selected."};
+    }
+
+    return min(max(result, nanogui::Vector3f{0.0f}), nanogui::Vector3f{1.0f});
+}
+
 enum class EMetric : int {
     Error = 0,
     AbsoluteError,
@@ -558,6 +610,20 @@ enum class EMetric : int {
 };
 
 EMetric toMetric(std::string_view name);
+
+inline float applyMetric(float image, float reference, EMetric metric) {
+    float diff = image - reference;
+    switch (metric) {
+        case EMetric::Error: return diff;
+        case EMetric::AbsoluteError: return abs(diff);
+        case EMetric::SquaredError: return diff * diff;
+        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01f);
+        case EMetric::RelativeSquaredError: return diff * diff / (reference * reference + 0.01f);
+        default: throw std::runtime_error{"Invalid metric selected."};
+    }
+}
+
+inline float applyExposureAndOffset(float value, float exposure, float offset) { return std::pow(2.0f, exposure) * value + offset; }
 
 enum EDirection {
     Forward,

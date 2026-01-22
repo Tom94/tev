@@ -45,7 +45,9 @@ chroma_t zeroChroma();
 nanogui::Matrix3f xyzToChromaMatrix(const chroma_t& chroma);
 nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
 
-nanogui::Matrix3f convertColorspaceMatrix(const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent);
+nanogui::Matrix3f convertColorspaceMatrix(
+    const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent, std::optional<nanogui::Vector2f> adoptedNeutral = std::nullopt
+);
 
 nanogui::Vector2f whiteD50();
 nanogui::Vector2f whiteD55();
@@ -374,19 +376,6 @@ inline float bestGuessReferenceWhiteLevel(const ETransfer transfer) {
     }
 }
 } // namespace ituth273
-
-enum class EAlphaKind {
-    // This refers to premultiplied alpha in nonlinear space, i.e. after a transfer function like gamma correction. This kind of
-    // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
-    // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
-    // expects this kind of premultiplied alpha, so we have to support it.
-    PremultipliedNonlinear,
-    // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
-    // kind of premultiplied alpha.
-    Premultiplied,
-    Straight,
-    None,
-};
 
 class ColorProfile {
 public:

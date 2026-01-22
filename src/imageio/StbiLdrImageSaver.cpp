@@ -29,12 +29,13 @@ using namespace std;
 
 namespace tev {
 
-void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<const char> data, const Vector2i& imageSize, int nChannels) const {
+Task<void>
+    StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<const uint8_t> data, const Vector2i& imageSize, int nChannels) const {
     static const auto stbiOStreamWrite = [](void* context, void* stbidata, int size) {
         reinterpret_cast<ostream*>(context)->write(reinterpret_cast<char*>(stbidata), size);
     };
 
-    auto extension = toLower(toString(path.extension()));
+    const auto extension = toLower(toString(path.extension()));
 
     if (extension == ".jpg" || extension == ".jpeg") {
         stbi_write_jpg_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data(), 100);
@@ -47,6 +48,8 @@ void StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<const 
     } else {
         throw ImageSaveError{fmt::format("Image {} has unknown format.", path)};
     }
+
+    co_return;
 }
 
 } // namespace tev
