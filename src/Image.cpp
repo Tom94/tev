@@ -548,6 +548,9 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 
     attributes.emplace_back(hdrMetadata.toAttributes());
+
+    // Attribute tabs should have a consistent order. Arbitrarily sort them by name.
+    sort(begin(attributes), end(attributes), [](const AttributeNode& a, const AttributeNode& b) { return a.name < b.name; });
 }
 
 atomic<int> Image::sId(0);

@@ -21,15 +21,15 @@
 #include <tev/Common.h>
 
 #include <cstdint>
-#include <map>
+#include <optional>
+#include <span>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 namespace tev {
 
-bool isAppleMakernote(const uint8_t* data, size_t length);
-
-struct AppleMakerNoteEntry {
+struct TiffTag {
     enum class EFormat : uint16_t {
         Byte = 1,
         Ascii = 2,
@@ -72,15 +72,15 @@ struct AppleMakerNoteEntry {
                 return 4;
         }
 
-        throw std::invalid_argument{fmt::format("AppleMakerNoteEntry: unknown format: {}", (uint32_t)format)};
+        throw std::invalid_argument{fmt::format("TiffTag: unknown format: {}", (uint32_t)format)};
     }
 
     size_t size() const { return nComponents * formatSize(format); }
 };
 
-class AppleMakerNote {
+class Ifd {
 public:
-    AppleMakerNote(const uint8_t* data, size_t length);
+    Ifd(std::span<const uint8_t> data, size_t initialOffset = 0, bool tiffHeader = false);
 
     template <typename T> T read(const uint8_t* data) const {
         T result = *reinterpret_cast<const T*>(data);
@@ -91,50 +91,72 @@ public:
         return result;
     }
 
-    template <typename T> T tryGetFloat(uint16_t tag, T defaultValue) const {
-        if (mTags.count(tag) == 0) {
-            return defaultValue;
+    const TiffTag* tag(uint16_t tag) const {
+        const auto it = mTags.find(tag);
+        if (it == mTags.end()) {
+            return nullptr;
         }
 
-        return getFloat<T>(tag);
+        return &it->second;
     }
 
-    template <typename T> T getFloat(uint16_t tag) const {
-        if (mTags.count(tag) == 0) {
-            throw std::invalid_argument{"AppleMakerNote: requested tag does not exist."};
+    std::optional<TiffTag::EFormat> format(uint16_t tag) const {
+        const auto it = mTags.find(tag);
+        if (it == mTags.end()) {
+            throw std::invalid_argument{"IFD: requested tag does not exist."};
         }
 
-        const auto& entry = mTags.at(tag);
+        const auto& entry = it->second;
+        return entry.format;
+    }
+
+    const uint8_t* data(uint16_t tag) const {
+        const auto it = mTags.find(tag);
+        if (it == mTags.end()) {
+            return nullptr;
+        }
+
+        const auto& entry = it->second;
+        return entry.data.data();
+    }
+
+    template <typename T> std::optional<T> tryGet(uint16_t tag) const {
+        const auto it = mTags.find(tag);
+        if (it == mTags.end()) {
+            return std::nullopt;
+        }
+
+        const auto& entry = it->second;
         const uint8_t* data = entry.data.data();
 
         switch (entry.format) {
-            case AppleMakerNoteEntry::EFormat::Byte: return static_cast<T>(*data);
-            case AppleMakerNoteEntry::EFormat::Short: return static_cast<T>(read<uint16_t>(data));
-            case AppleMakerNoteEntry::EFormat::Long: return static_cast<T>(read<uint32_t>(data));
-            case AppleMakerNoteEntry::EFormat::Rational: {
-                uint32_t numerator = read<uint32_t>(data);
-                uint32_t denominator = read<uint32_t>(data + sizeof(uint32_t));
+            case TiffTag::EFormat::Byte: return static_cast<T>(*data);
+            case TiffTag::EFormat::Short: return static_cast<T>(read<uint16_t>(data));
+            case TiffTag::EFormat::Long: return static_cast<T>(read<uint32_t>(data));
+            case TiffTag::EFormat::Rational: {
+                const auto numerator = read<uint32_t>(data);
+                const auto denominator = read<uint32_t>(data + sizeof(uint32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
-            case AppleMakerNoteEntry::EFormat::Sbyte: return static_cast<T>(*reinterpret_cast<const int8_t*>(data));
-            case AppleMakerNoteEntry::EFormat::Sshort: return static_cast<T>(read<int16_t>(data));
-            case AppleMakerNoteEntry::EFormat::Slong: return static_cast<T>(read<int32_t>(data));
-            case AppleMakerNoteEntry::EFormat::Srational: {
-                int32_t numerator = read<int32_t>(data);
-                int32_t denominator = read<int32_t>(data + sizeof(int32_t));
+            case TiffTag::EFormat::Sbyte: return static_cast<T>(*reinterpret_cast<const int8_t*>(data));
+            case TiffTag::EFormat::Sshort: return static_cast<T>(read<int16_t>(data));
+            case TiffTag::EFormat::Slong: return static_cast<T>(read<int32_t>(data));
+            case TiffTag::EFormat::Srational: {
+                const auto numerator = read<int32_t>(data);
+                const auto denominator = read<int32_t>(data + sizeof(int32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
-            case AppleMakerNoteEntry::EFormat::Float: return static_cast<T>(*reinterpret_cast<const float*>(data));
-            case AppleMakerNoteEntry::EFormat::Double: return static_cast<T>(*reinterpret_cast<const double*>(data));
-            case AppleMakerNoteEntry::EFormat::Ascii:
-            case AppleMakerNoteEntry::EFormat::Undefined: throw std::invalid_argument{"Cannot convert this format to float."};
+            case TiffTag::EFormat::Float: return static_cast<T>(*reinterpret_cast<const float*>(data));
+            case TiffTag::EFormat::Double: return static_cast<T>(*reinterpret_cast<const double*>(data));
+            case TiffTag::EFormat::Ascii:
+            case TiffTag::EFormat::Undefined: return std::nullopt;
         }
 
-        throw std::invalid_argument{"Unknown format."};
+        return std::nullopt;
     }
 
 private:
-    std::map<uint16_t, AppleMakerNoteEntry> mTags;
+    std::unordered_map<uint16_t, TiffTag> mTags;
     bool mReverseEndianess = false;
 };
 

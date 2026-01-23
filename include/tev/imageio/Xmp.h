@@ -20,7 +20,9 @@
 
 #include <tev/Common.h>
 #include <tev/Image.h>
+#include <tev/imageio/IsoGainMapMetadata.h>
 
+#include <optional>
 #include <string_view>
 
 namespace tev {
@@ -29,12 +31,14 @@ class Xmp {
 public:
     Xmp(std::string_view xmpData);
 
-    EOrientation orientation() const { return mOrientation; }
     const AttributeNode& attributes() const { return mAttributes; }
+    EOrientation orientation() const { return mOrientation; }
+    const std::optional<IsoGainMapMetadata>& isoGainMapMetadata() const { return mIsoGainMapMetadata; }
 
 private:
     AttributeNode mAttributes;
     EOrientation mOrientation = EOrientation::None;
+    std::optional<IsoGainMapMetadata> mIsoGainMapMetadata;
 };
 
 } // namespace tev

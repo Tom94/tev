@@ -472,7 +472,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
-                        const auto profile = ColorProfile::fromIcc(iccProfile.data(), iccProfile.size());
+                        const auto profile = ColorProfile::fromIcc(iccProfile);
                         co_await toLinearSrgbPremul(
                             profile,
                             size,

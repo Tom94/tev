@@ -18,11 +18,11 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/AppleMakerNote.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/HeifImageLoader.h>
+#include <tev/imageio/Ifd.h>
 #include <tev/imageio/IsoGainMapMetadata.h>
 #include <tev/imageio/Xmp.h>
 
@@ -223,7 +223,7 @@ Task<vector<ImageData>>
                 );
             }
 
-            const auto profile = ColorProfile::fromIcc(iccProfile.data(), iccProfile.size());
+            const auto profile = ColorProfile::fromIcc(iccProfile);
             co_await toLinearSrgbPremul(
                 profile,
                 size,
@@ -468,7 +468,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, targetSize, layer);
+        co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, targetSize, layer, partName);
     };
 
     const auto decodeSingleTrackImage =
@@ -608,14 +608,14 @@ Task<vector<ImageData>>
         }
     }
 
-    const auto findAppleMakerNote = [&]() -> optional<AppleMakerNote> {
+    const auto findAppleMakerNote = [&]() -> optional<Ifd> {
         if (!exif) {
             tlog::warning() << "No EXIF metadata found.";
             return nullopt;
         }
 
         try {
-            return make_optional<AppleMakerNote>(exif->tryGetAppleMakerNote());
+            return make_optional<Ifd>(exif->tryGetAppleMakerNote());
         } catch (const invalid_argument& e) {
             tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
         }
@@ -706,7 +706,7 @@ Task<vector<ImageData>>
                         heif_image_handle_get_derived_image_raw_color_profile(primaryImgHandle, profileData.data()).code == heif_error_Ok) {
 
                         try {
-                            altImgChroma = ColorProfile::fromIcc(profileData.data(), profileData.size()).chroma();
+                            altImgChroma = ColorProfile::fromIcc(profileData).chroma();
                             if (altImgChroma) {
                                 tlog::debug() << fmt::format("ISO 21496-1 alt. image chroma from ICC: {}", *altImgChroma);
                             }

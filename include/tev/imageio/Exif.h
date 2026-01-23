@@ -20,10 +20,11 @@
 
 #include <tev/Common.h>
 #include <tev/Image.h>
-#include <tev/imageio/AppleMakerNote.h>
+#include <tev/imageio/Ifd.h>
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <span>
 
 struct _ExifData;
@@ -59,7 +60,7 @@ public:
 
     void reset();
 
-    AppleMakerNote tryGetAppleMakerNote() const;
+    Ifd tryGetAppleMakerNote() const;
 
     EOrientation getOrientation() const;
 

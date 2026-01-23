@@ -403,7 +403,7 @@ public:
 
     std::optional<chroma_t> chroma() const;
 
-    static ColorProfile fromIcc(const uint8_t* iccProfile, size_t iccProfileSize);
+    static ColorProfile fromIcc(std::span<const uint8_t> iccData);
     static ColorProfile srgb();
     static ColorProfile linearSrgb();
 
