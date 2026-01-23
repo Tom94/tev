@@ -72,14 +72,20 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
     resultData.hasPremultipliedAlpha = false;
 
+    resultData.nativeMetadata.chroma = rec709Chroma();
+
     if (desc.colorspace == QOI_LINEAR) {
         co_await toFloat32<uint8_t, false>(
             (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
         );
+
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
         co_await toFloat32<uint8_t, true>(
             (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
         );
+
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     }
 
     co_return result;

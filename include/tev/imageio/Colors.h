@@ -156,6 +156,9 @@ enum class ETransfer : uint8_t {
     PQ = 16, // Perceptual Quantizer, SMPTE ST 2084
     SMPTE428 = 17,
     HLG = 18, // Hybrid Log-Gamma
+    // Not actually in the spec, but useful for tev to have
+    LUT = 126,
+    GenericGamma = 127,
 };
 
 std::string_view toString(const ETransfer transfer);
@@ -302,10 +305,8 @@ inline float invTransferComponent(const ETransfer transfer, float val) noexcept 
         case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
         case ETransfer::HLG: return hlgToLinear({val, val, val}).x(); // Treat single component as R=G=B
         case ETransfer::Unspecified: return val; // Default to linear if unspecified
+        default: return val; // Other transfer functions are not implemented. Default to linear.
     }
-
-    // Other transfer functions are not implemented. Default to linear.
-    return val;
 }
 
 inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
@@ -341,10 +342,8 @@ inline float transferComponent(const ETransfer transfer, float val) noexcept {
         case ETransfer::SMPTE428: return linearToSmpteSt428(val);
         case ETransfer::HLG: return linearToHlg({val, val, val}).x(); // Treat single component as R=G=B
         case ETransfer::Unspecified: return val; // Default to linear if unspecified
+        default: return val; // Other transfer functions are not implemented. Default to linear.
     }
-
-    // Other transfer functions are not implemented. Default to linear.
-    return val;
 }
 
 inline nanogui::Vector3f transfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
@@ -401,6 +400,8 @@ public:
 
     std::optional<CICP> cicp() const;
     ERenderingIntent renderingIntent() const;
+
+    std::optional<chroma_t> chroma() const;
 
     static ColorProfile fromIcc(const uint8_t* iccProfile, size_t iccProfileSize);
     static ColorProfile srgb();

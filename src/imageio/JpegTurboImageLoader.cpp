@@ -214,16 +214,16 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                 priority
             );
 
-            resultData.renderingIntent = profile.renderingIntent();
-            if (const auto cicp = profile.cicp()) {
-                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-            }
-
+            resultData.readMetadataFromIcc(profile);
             co_return result;
         } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
     co_await toFloat32<uint8_t, true>(imageData.data(), numColorChannels, resultData.channels.front().floatData(), 4, size, false, priority);
+
+    resultData.nativeMetadata.chroma = rec709Chroma();
+    resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
+
     co_return result;
 }
 

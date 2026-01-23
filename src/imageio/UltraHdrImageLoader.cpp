@@ -186,11 +186,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
                 priority
             );
 
-            imageData.renderingIntent = profile.renderingIntent();
-            if (const auto cicp = profile.cicp()) {
-                imageData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-            }
-
+            imageData.readMetadataFromIcc(profile);
             swap(imageData.channels, channels);
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     } else {
@@ -200,16 +196,21 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
         switch (image->cg) {
             case UHDR_CG_DISPLAY_P3:
                 imageData.toRec709 = convertColorspaceMatrix(displayP3Chroma(), rec709Chroma(), imageData.renderingIntent);
+                imageData.nativeMetadata.chroma = displayP3Chroma();
                 break;
             case UHDR_CG_BT_2100:
                 imageData.toRec709 = convertColorspaceMatrix(bt2100Chroma(), rec709Chroma(), imageData.renderingIntent);
+                imageData.nativeMetadata.chroma = bt2100Chroma();
                 break;
             case UHDR_CG_UNSPECIFIED: tlog::warning() << "Ultra HDR image has unspecified color gamut. Assuming BT.709."; break;
-            case UHDR_CG_BT_709: break; // This is already linear sRGB / Rec.709, so no conversion needed.
+            case UHDR_CG_BT_709:
+                imageData.nativeMetadata.chroma = rec709Chroma();
+                break; // This is already linear sRGB / Rec.709, so no conversion needed.
             default: tlog::warning() << "Ultra HDR image has invalid color gamut. Assuming BT.709."; break;
         }
 
         imageData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(toCicpTransfer(image->ct));
+        imageData.nativeMetadata.transfer = toCicpTransfer(image->ct);
     }
 
     try {

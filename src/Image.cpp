@@ -110,6 +110,23 @@ AttributeNode HdrMetadata::toAttributes() const {
     return root;
 }
 
+void ImageData::readMetadataFromIcc(const ColorProfile& profile) {
+    renderingIntent = profile.renderingIntent();
+    nativeMetadata.chroma = profile.chroma();
+
+    if (const auto cicp = profile.cicp()) {
+        // Might override data previously set, but that's fine. CICP is authorative.
+        readMetadataFromCicp(*cicp);
+    }
+}
+
+void ImageData::readMetadataFromCicp(const ColorProfile::CICP& cicp) {
+    nativeMetadata.chroma = ituth273::chroma(cicp.primaries);
+    nativeMetadata.transfer = cicp.transfer;
+
+    hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp.transfer);
+}
+
 vector<string> ImageData::channelsInLayer(string_view layerName) const {
     vector<string> result;
 

@@ -594,6 +594,9 @@ Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent, adoptedNeutral);
+
+                data.nativeMetadata.chroma = chroma;
+                data.nativeMetadata.transfer = ituth273::ETransfer::Linear;
             } catch (const Iex::BaseExc& e) {
                 tlog::warning() << "Error reading EXR part " << partIdx << ": " << e.what();
 

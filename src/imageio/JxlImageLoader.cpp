@@ -486,12 +486,8 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             priority
                         );
 
-                        data.renderingIntent = profile.renderingIntent();
-                        if (const auto cicp = profile.cicp()) {
-                            data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-                        }
-
                         data.hasPremultipliedAlpha = true;
+                        data.readMetadataFromIcc(profile);
 
                         colorChannelsLoaded = true;
                     } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
@@ -520,25 +516,27 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                         // Primaries are only valid for RGB data. We need to set up a conversion matrix only if we aren't already in sRGB.
                         if (ce->color_space == JXL_COLOR_SPACE_RGB) {
                             if (ce->primaries != JXL_PRIMARIES_SRGB || ce->white_point != JXL_WHITE_POINT_D65) {
-                                data.toRec709 = convertColorspaceMatrix(
-                                    {
-                                        {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
-                                         {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
-                                         {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
-                                         {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
-                                },
-                                    rec709Chroma(),
-                                    data.renderingIntent
-                                );
+                                const chroma_t chroma = {
+                                    {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
+                                     {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
+                                     {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
+                                     {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
+                                };
+
+                                data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent);
+                                data.nativeMetadata.chroma = chroma;
+                            } else {
+                                data.nativeMetadata.chroma = rec709Chroma();
                             }
                         }
 
                         const bool hasGamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
                         if (hasGamma) {
                             tlog::debug() << fmt::format("gamma={}", ce->gamma);
+                            data.nativeMetadata.gamma = (float)ce->gamma;
                         }
 
-                        auto cicpTransfer = hasGamma ? ituth273::ETransfer::Unspecified :
+                        auto cicpTransfer = hasGamma ? ituth273::ETransfer::GenericGamma :
                                                        static_cast<ituth273::ETransfer>(ce->transfer_function);
 
                         if (!hasGamma) {
@@ -547,9 +545,10 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                                     << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
                                 cicpTransfer = ituth273::ETransfer::SRGB;
                             }
-
-                            data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
                         }
+
+                        data.nativeMetadata.transfer = cicpTransfer;
+                        data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
                         auto* const pixelData = data.channels.front().floatData();
                         const size_t numPixels = size.x() * (size_t)size.y();

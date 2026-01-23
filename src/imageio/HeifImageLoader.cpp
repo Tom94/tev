@@ -209,13 +209,9 @@ Task<vector<ImageData>>
                 numInterleavedChannels,
                 priority
             );
-
-            resultData.renderingIntent = profile.renderingIntent();
-            if (const auto cicp = profile.cicp()) {
-                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-            }
-
             resultData.hasPremultipliedAlpha = true;
+
+            resultData.readMetadataFromIcc(profile);
         };
 
         if (heif_image_has_content_light_level(img)) {

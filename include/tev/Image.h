@@ -63,6 +63,12 @@ struct HdrMetadata {
     AttributeNode toAttributes() const;
 };
 
+struct NativeImageMetadata {
+    std::optional<chroma_t> chroma = std::nullopt;
+    std::optional<ituth273::ETransfer> transfer = std::nullopt;
+    std::optional<float> gamma = std::nullopt; // Only used if transfer is ituth273::ETransfer::GenericGamma
+};
+
 struct ImageData {
     ImageData() = default;
     ImageData(const ImageData&) = delete;
@@ -78,6 +84,7 @@ struct ImageData {
     std::vector<AttributeNode> attributes;
 
     HdrMetadata hdrMetadata;
+    NativeImageMetadata nativeMetadata; // Information about the image's original color space, etc.
 
     // tev only really supports two rendering intents: relative and absolute colorimetric. The reason being that the other rendering intents
     // (perceptual and saturation) are subjective while tev, as an image analysis tool, should be as objective as possible. The difference
@@ -101,6 +108,9 @@ struct ImageData {
     Box2i displayWindow;
 
     std::string partName;
+
+    void readMetadataFromIcc(const ColorProfile& profile);
+    void readMetadataFromCicp(const ColorProfile::CICP& cicp);
 
     nanogui::Vector2i size() const { return dataWindow.size(); }
 

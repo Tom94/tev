@@ -60,6 +60,17 @@ Matrix3f toMatrix3(const float data[3][3]) {
     return result;
 }
 
+Matrix3f toMatrix3(const cmsMAT3& data) {
+    Matrix3f result;
+    for (int m = 0; m < 3; ++m) {
+        for (int n = 0; n < 3; ++n) {
+            result.m[m][n] = data.v[n].n[m];
+        }
+    }
+
+    return result;
+}
+
 // This routine was copied from OpenEXR's ImfChromaticities.cpp in accordance
 // with its BSD-3-Clause license. See the header of that file for details.
 // https://github.com/AcademySoftwareFoundation/openexr/blob/main/src/lib/OpenEXR/ImfChromaticities.cpp
@@ -469,6 +480,9 @@ string_view toString(const ETransfer transfer) {
         case ETransfer::PQ: return "pq";
         case ETransfer::SMPTE428: return "smpte428";
         case ETransfer::HLG: return "hlg";
+        // Not actually in the spec, but useful for tev to have
+        case ETransfer::LUT: return "lut";
+        case ETransfer::GenericGamma: return "gamma";
     }
 
     return "invalid";
@@ -508,6 +522,9 @@ bool isTransferImplemented(const ETransfer transfer) {
         case ETransfer::SMPTE428:
         case ETransfer::HLG:
         case ETransfer::Unspecified: return true;
+        // Require extra data
+        case ETransfer::LUT:
+        case ETransfer::GenericGamma: return false;
     }
 
     return false;
@@ -656,6 +673,69 @@ ERenderingIntent ColorProfile::renderingIntent() const {
 
     // Last resort — profile is probably broken or unsupported type
     return ERenderingIntent::RelativeColorimetric;
+}
+
+optional<chroma_t> ColorProfile::chroma() const {
+    // Extracting chromaticities and white point from ICC profiles is, unfortunately, somewhat tricky, since ICC profiles can store a myriad
+    // transformations that are more general than can be expressed with just chromaticities. The following code does its best to detect
+    // those kinds of profiles with reliable data and extract the chromaticities only from them.
+
+    // If CICP metadata is present, it overrides everything else by convention and our job is easy.
+    if (const auto cicp = this->cicp(); cicp && cicp->primaries != ituth273::EColorPrimaries::Unspecified) {
+        return ituth273::chroma(cicp->primaries);
+    }
+
+    // Else, try to read white point and colorants
+    const auto profile = get();
+
+    Matrix3f invAdapt = Matrix3f{1.0f};
+    if (const cmsMAT3* adaptation = (const cmsMAT3*)cmsReadTag(profile, cmsSigChromaticAdaptationTag)) {
+        invAdapt = inverse(toMatrix3(*adaptation));
+    }
+
+    const cmsCIEXYZ* white = (const cmsCIEXYZ*)cmsReadTag(profile, cmsSigMediaWhitePointTag);
+    if (!white) {
+        // Fallback to D50 (ICC profile connection space illuminant)
+        white = (const cmsCIEXYZ*)cmsD50_XYZ();
+    }
+
+    const Vector3f w = invAdapt * Vector3f{(float)white->X, (float)white->Y, (float)white->Z};
+    const float sum = w.x() + w.y() + w.z();
+    const Vector2f wp = {w.x() / sum, w.y() / sum};
+
+    const cmsCIEXYZ* red = (const cmsCIEXYZ*)cmsReadTag(profile, cmsSigRedColorantTag);
+    const cmsCIEXYZ* green = (const cmsCIEXYZ*)cmsReadTag(profile, cmsSigGreenColorantTag);
+    const cmsCIEXYZ* blue = (const cmsCIEXYZ*)cmsReadTag(profile, cmsSigBlueColorantTag);
+
+    // Prefer colorant information if available...
+    if (red && green && blue) {
+        const Vector3f R = invAdapt * Vector3f{(float)red->X, (float)red->Y, (float)red->Z};
+        const Vector3f G = invAdapt * Vector3f{(float)green->X, (float)green->Y, (float)green->Z};
+        const Vector3f B = invAdapt * Vector3f{(float)blue->X, (float)blue->Y, (float)blue->Z};
+        const float rs = R.x() + R.y() + R.z();
+        const float gs = G.x() + G.y() + G.z();
+        const float bs = B.x() + B.y() + B.z();
+
+        return chroma_t{
+            {
+             {R.x() / rs, R.y() / rs},
+             {G.x() / gs, G.y() / gs},
+             {B.x() / bs, B.y() / bs},
+             wp, }
+        };
+    } else if (const auto* primariesTag = (const cmsCIExyYTRIPLE*)cmsReadTag(profile, cmsSigChromaticityTag)) {
+        // Else fall back to chromaticity tag if available, but it's supposed to be just informational so might be wrong or indicate a
+        // broken profile.
+        return chroma_t{
+            {
+             {(float)primariesTag->Red.x, (float)primariesTag->Red.y},
+             {(float)primariesTag->Green.x, (float)primariesTag->Green.y},
+             {(float)primariesTag->Blue.x, (float)primariesTag->Blue.y},
+             wp, }
+        };
+    }
+
+    return nullopt;
 }
 
 ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
