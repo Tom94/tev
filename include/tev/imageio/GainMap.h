@@ -30,6 +30,13 @@ namespace tev {
 
 Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority, const std::optional<AppleMakerNote>& amn);
 
-Task<void> applyIsoGainMap(ImageData& image, ImageData& gainMap, int priority, const IsoGainMapMetadata& metadata, const chroma_t& baseChroma, const chroma_t& altChroma);
+Task<void> applyIsoGainMap(
+    ImageData& image,
+    ImageData& gainMap,
+    int priority,
+    const IsoGainMapMetadata& metadata,
+    const std::optional<chroma_t>& baseChroma,
+    const std::optional<chroma_t>& altChroma
+);
 
 } // namespace tev

@@ -56,7 +56,7 @@ struct HdrMetadata {
 
     float masteringMinLum = 0.0f;
     float masteringMaxLum = 0.0f;
-    std::array<nanogui::Vector2f, 4> masteringChroma = zeroChroma();
+    chroma_t masteringChroma = zeroChroma();
 
     float bestGuessWhiteLevel = DEFAULT_IMAGE_WHITE_LEVEL;
 
@@ -133,6 +133,7 @@ struct ImageData {
 
     Task<void> orientToTopLeft(int priority);
 
+    void updateLayers();
     Task<void> ensureValid(std::string_view channelSelector, int taskPriority);
 
     bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }

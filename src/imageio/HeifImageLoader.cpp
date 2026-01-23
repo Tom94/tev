@@ -363,25 +363,29 @@ Task<vector<ImageData>>
             priority
         );
 
+        // Assume heic/avif image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
+        resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+
         resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
+        resultData.nativeMetadata.transfer = cicpTransfer;
 
         // Only convert color space if not already in Rec.709/sRGB *and* if primaries are actually specified
         if (nclx && nclx->color_primaries != heif_color_primaries_ITU_R_BT_709_5 &&
             nclx->color_primaries != heif_color_primaries_unspecified) {
-            // Assume heic/avif image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
-            resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
-            resultData.toRec709 = convertColorspaceMatrix(
+
+            const chroma_t chroma = {
                 {
-                    {
-                     {nclx->color_primary_red_x, nclx->color_primary_red_y},
-                     {nclx->color_primary_green_x, nclx->color_primary_green_y},
-                     {nclx->color_primary_blue_x, nclx->color_primary_blue_y},
-                     {nclx->color_primary_white_x, nclx->color_primary_white_y},
-                     }
-            },
-                rec709Chroma(),
-                resultData.renderingIntent
-            );
+                 {nclx->color_primary_red_x, nclx->color_primary_red_y},
+                 {nclx->color_primary_green_x, nclx->color_primary_green_y},
+                 {nclx->color_primary_blue_x, nclx->color_primary_blue_y},
+                 {nclx->color_primary_white_x, nclx->color_primary_white_y},
+                 }
+            };
+
+            resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
+            resultData.nativeMetadata.chroma = chroma;
+        } else {
+            resultData.nativeMetadata.chroma = rec709Chroma();
         }
 
         co_return resultData;
@@ -531,8 +535,6 @@ Task<vector<ImageData>>
     const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(primaryImgHandle, nullptr);
     vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
 
-    optional<IsoGainMapMetadata> isoGainmapMetadata;
-
     if (numMetadataBlocks > 0) {
         tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
     }
@@ -562,16 +564,6 @@ Task<vector<ImageData>>
                 exif = Exif{span<uint8_t>{metadata}.subspan(4)};
                 mainImage.attributes.emplace_back(exif->toAttributes());
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
-        } else if (type == "tmap") {
-            tlog::debug() << fmt::format("Found ISO 21496-1 gainmap metadata '{}' of size {} bytes", contentType, metadata.size());
-
-            try {
-                isoGainmapMetadata = IsoGainMapMetadata{
-                    span<uint8_t>{metadata.data(), metadata.size()}
-                };
-                mainImage.attributes.emplace_back(isoGainmapMetadata->toAttributes());
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read gainmap metadata: {}", e.what()); }
-
         } else if (contentType == "application/rdf+xml") {
             tlog::debug() << fmt::format("Found XMP data '{}/{}' of size {} bytes", type, contentType, metadata.size());
 
@@ -601,17 +593,28 @@ Task<vector<ImageData>>
         return nullopt;
     };
 
+    optional<heif_item_id> gainmapItemId = nullopt;
+    if (heif_image_handle* gainmapImgHandle;
+        heif_image_handle_get_gain_map_image_handle(primaryImgHandle, &gainmapImgHandle).code == heif_error_Ok) {
+        const ScopeGuard gainmapHandleGuard{[gainmapImgHandle] { heif_image_handle_release(gainmapImgHandle); }};
+
+        gainmapItemId = heif_image_handle_get_item_id(gainmapImgHandle);
+        tlog::debug() << fmt::format(
+            "Found ISO 21496-1 gain map image with ID '{}'. Will be processed while reading auxiliary images.", *gainmapItemId
+        );
+    }
+
     // Read auxiliary images
     const int num_aux = heif_image_handle_get_number_of_auxiliary_images(primaryImgHandle, 0);
     if (num_aux > 0) {
         tlog::debug() << "Found " << num_aux << " auxiliary image(s)";
 
-        vector<heif_item_id> aux_ids(num_aux);
-        heif_image_handle_get_list_of_auxiliary_image_IDs(primaryImgHandle, 0, aux_ids.data(), num_aux);
+        vector<heif_item_id> auxIds(num_aux);
+        heif_image_handle_get_list_of_auxiliary_image_IDs(primaryImgHandle, 0, auxIds.data(), num_aux);
 
         for (int i = 0; i < num_aux; ++i) {
             heif_image_handle* auxImgHandle;
-            if (auto error = heif_image_handle_get_auxiliary_image_handle(primaryImgHandle, aux_ids[i], &auxImgHandle);
+            if (const auto error = heif_image_handle_get_auxiliary_image_handle(primaryImgHandle, auxIds[i], &auxImgHandle);
                 error.code != heif_error_Ok) {
                 tlog::warning() << fmt::format("Failed to get auxiliary image handle: {}", error.message);
                 continue;
@@ -627,7 +630,7 @@ Task<vector<ImageData>>
             string auxLayerName = auxType ? auxType : to_string(num_aux);
             replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
 
-            const bool isIsoGainmap = auxLayerName.find("urn.iso.std.iso.ts.21496.-1") != string::npos;
+            const bool isIsoGainmap = auxIds[i] == gainmapItemId;
             const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
 
             const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
@@ -639,8 +642,64 @@ Task<vector<ImageData>>
 
             auto auxImgData = co_await decodeImageHandle(auxImgHandle, true, mainImage.channels.front().size(), auxLayerName);
 
-            // If we found a gainmap, apply it to the main image. ISO 21496-1 gainmaps take precedence over Apple gainmaps.
             if (loadGainmap) {
+                optional<chroma_t> altImgChroma = nullopt;
+                optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
+
+                if (isIsoGainmap) {
+                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxLayerName);
+
+                    HeapArray<uint8_t> metadataData(heif_image_handle_get_gain_map_metadata_size(primaryImgHandle));
+                    if (metadataData.size() > 0 &&
+                        heif_image_handle_get_gain_map_metadata(primaryImgHandle, metadataData.data()).code == heif_error_Ok) {
+
+                        tlog::debug() << fmt::format("Read {} bytes of gainmap metadata.", metadataData.size());
+
+                        try {
+                            isoGainmapMetadata = IsoGainMapMetadata{
+                                span<uint8_t>{metadataData.data(), metadataData.size()}
+                            };
+                            mainImage.attributes.emplace_back(isoGainmapMetadata->toAttributes());
+
+                            tlog::debug() << "Successfully parsed ISO 21496-1 gain map metadata.";
+                        } catch (const invalid_argument& e) {
+                            tlog::warning() << fmt::format("Failed to read gainmap metadata: {}", e.what());
+                        }
+                    } else {
+                        tlog::warning() << "No gainmap metadata found for ISO 21496-1 gain map image.";
+                    }
+
+                    HeapArray<uint8_t> profileData(heif_image_handle_get_derived_image_raw_color_profile_size(primaryImgHandle));
+                    if (profileData.size() > 0 &&
+                        heif_image_handle_get_derived_image_raw_color_profile(primaryImgHandle, profileData.data()).code == heif_error_Ok) {
+
+                        try {
+                            altImgChroma = ColorProfile::fromIcc(profileData.data(), profileData.size()).chroma();
+                            if (altImgChroma) {
+                                tlog::debug() << fmt::format("ISO 21496-1 alt. image chroma from ICC: {}", *altImgChroma);
+                            }
+                        } catch (const invalid_argument& e) {
+                            tlog::warning() << fmt::format("Failed to read alt. image ICC profile: {}", e.what());
+                        }
+                    } else if (heif_color_profile_nclx* nclx;
+                               heif_image_handle_get_derived_image_nclx_color_profile(primaryImgHandle, &nclx).code == heif_error_Ok &&
+                               nclx->color_primaries != heif_color_primaries_unspecified) {
+
+                        const ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+
+                        altImgChroma = {
+                            {
+                             {nclx->color_primary_red_x, nclx->color_primary_red_y},
+                             {nclx->color_primary_green_x, nclx->color_primary_green_y},
+                             {nclx->color_primary_blue_x, nclx->color_primary_blue_y},
+                             {nclx->color_primary_white_x, nclx->color_primary_white_y},
+                             }
+                        };
+
+                        tlog::debug() << fmt::format("ISO 21496-1 alt. image chroma from NCLX: {}", *altImgChroma);
+                    }
+                }
+
                 if (isAppleGainmap) {
                     tlog::debug()
                         << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
@@ -650,9 +709,9 @@ Task<vector<ImageData>>
                         co_await applyAppleGainMap(mainImage, auxImgData, priority, amn);
                     } else if (isoGainmapMetadata) {
                         tlog::debug() << "No Apple maker note was found, but ISO 21496-1 metadata is available; applying gain map.";
-
-                        // TODO: read iso gainmap application chroma from metadata
-                        co_await applyIsoGainMap(mainImage, auxImgData, priority, *isoGainmapMetadata, rec709Chroma(), rec709Chroma());
+                        co_await applyIsoGainMap(
+                            mainImage, auxImgData, priority, *isoGainmapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
+                        );
                     } else {
                         tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
                         co_await applyAppleGainMap(mainImage, auxImgData, priority, nullopt);
@@ -660,9 +719,9 @@ Task<vector<ImageData>>
                 } else if (isIsoGainmap) {
                     if (isoGainmapMetadata) {
                         tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: {}. Applying.", auxLayerName);
-
-                        // TODO: read iso gainmap application chroma from metadata
-                        co_await applyIsoGainMap(mainImage, auxImgData, priority, *isoGainmapMetadata, rec709Chroma(), rec709Chroma());
+                        co_await applyIsoGainMap(
+                            mainImage, auxImgData, priority, *isoGainmapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
+                        );
                     } else {
                         tlog::warning() << fmt::format(
                             "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName

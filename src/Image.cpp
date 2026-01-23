@@ -145,6 +145,8 @@ vector<string> ImageData::channelsInLayer(string_view layerName) const {
 }
 
 Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
+    updateLayers();
+
     vector<Task<void>> tasks;
 
     for (const auto& layer : layers) {
@@ -201,6 +203,8 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
     if (hdrMetadata.maxCLL <= 0.0f && hdrMetadata.maxFALL <= 0.0f) {
         co_return;
     }
+
+    updateLayers();
 
     vector<Task<void>> tasks;
 
@@ -373,6 +377,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
 }
 
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
+    updateLayers();
+
     for (const auto& layer : layers) {
         string alphaChannelName = layer + "A";
 
@@ -459,6 +465,19 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     orientation = EOrientation::TopLeft;
 }
 
+void ImageData::updateLayers() {
+    layers.clear();
+
+    set<string> layerNames;
+    for (auto& c : channels) {
+        layerNames.emplace(Channel::head(c.name()));
+    }
+
+    for (string_view l : layerNames) {
+        layers.emplace_back(l);
+    }
+}
+
 Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
@@ -509,16 +528,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         }
     }
 
-    if (layers.empty()) {
-        set<string> layerNames;
-        for (auto& c : channels) {
-            layerNames.emplace(Channel::head(c.name()));
-        }
-
-        for (string_view l : layerNames) {
-            layers.emplace_back(l);
-        }
-    }
+    updateLayers();
 
     if (!hasPremultipliedAlpha) {
         co_await multiplyAlpha(taskPriority);

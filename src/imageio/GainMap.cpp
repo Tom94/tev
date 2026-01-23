@@ -129,7 +129,12 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority,
 }
 
 Task<void> applyIsoGainMap(
-    ImageData& image, ImageData& gainMap, int priority, const IsoGainMapMetadata& metadata, const chroma_t& baseChroma, const chroma_t& altChroma
+    ImageData& image,
+    ImageData& gainMap,
+    int priority,
+    const IsoGainMapMetadata& metadata,
+    const optional<chroma_t>& baseChroma,
+    const optional<chroma_t>& altChroma
 ) {
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
@@ -164,17 +169,17 @@ Task<void> applyIsoGainMap(
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
 
     const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
-    const float weightFactor = std::copysign(
+    const float weight = std::copysign(
         clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
         metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
     );
 
     tlog::debug() << fmt::format(
-        "Applying ISO gain map with base HDR headroom {}, alternate HDR headroom {}, target headroom {} and weight factor {}.",
+        "Applying ISO gain map: baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}.",
         metadata.baseHdrHeadroom(),
         metadata.alternateHdrHeadroom(),
         targetHeadroom,
-        weightFactor
+        weight
     );
 
     const int numImageChannels = (int)image.channels.size();
@@ -188,13 +193,17 @@ Task<void> applyIsoGainMap(
     const int numColorChannels = std::min(alphaChannelIndex == -1 ? numImageChannels : (numImageChannels - 1), 3);
 
     // Before applying the gainmap, convert the image to the appropriate color space
-    const chroma_t& chroma = metadata.useBaseColorSpace() ? baseChroma : altChroma;
+    const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : altChroma;
 
-    const auto chromaToRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), image.renderingIntent);
-    const auto imageToChroma = inverse(chromaToRec709) * image.toRec709;
+    if (chroma) {
+        tlog::debug() << fmt::format("Converting image to gain map chroma '{}' prior to gain map application", *chroma);
 
-    // NOTE: the color conversion internally updates image.toRec709 accordingly
-    co_await image.applyColorConversion(imageToChroma, priority);
+        const auto rec709ToChroma = convertColorspaceMatrix(rec709Chroma(), *chroma, image.renderingIntent);
+        const auto imageToChroma = rec709ToChroma * image.toRec709;
+
+        // NOTE: the color conversion internally updates image.toRec709 accordingly
+        co_await image.applyColorConversion(imageToChroma, priority);
+    }
 
     // Actual gainmap application
     const size_t numPixels = (size_t)size.x() * size.y();
@@ -209,7 +218,7 @@ Task<void> applyIsoGainMap(
                 const float logBoost = gainMap.channels[gainmapChannel].at(i);
 
                 const float sdr = image.channels[c].at(i);
-                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost) * weightFactor - metadata.alternateOffset()[c];
+                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost) * weight - metadata.alternateOffset()[c];
 
                 image.channels[c].setAt(i, hdr);
             }
