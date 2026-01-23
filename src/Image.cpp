@@ -110,6 +110,23 @@ AttributeNode HdrMetadata::toAttributes() const {
     return root;
 }
 
+void ImageData::readMetadataFromIcc(const ColorProfile& profile) {
+    renderingIntent = profile.renderingIntent();
+    nativeMetadata.chroma = profile.chroma();
+
+    if (const auto cicp = profile.cicp()) {
+        // Might override data previously set, but that's fine. CICP is authorative.
+        readMetadataFromCicp(*cicp);
+    }
+}
+
+void ImageData::readMetadataFromCicp(const ColorProfile::CICP& cicp) {
+    nativeMetadata.chroma = ituth273::chroma(cicp.primaries);
+    nativeMetadata.transfer = cicp.transfer;
+
+    hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp.transfer);
+}
+
 vector<string> ImageData::channelsInLayer(string_view layerName) const {
     vector<string> result;
 
@@ -127,11 +144,8 @@ vector<string> ImageData::channelsInLayer(string_view layerName) const {
     return result;
 }
 
-Task<void> ImageData::convertToRec709(int priority) {
-    // No need to do anything for identity transforms
-    if (toRec709 == Matrix3f{1.0f}) {
-        co_return;
-    }
+Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
+    updateLayers();
 
     vector<Task<void>> tasks;
 
@@ -153,8 +167,8 @@ Task<void> ImageData::convertToRec709(int priority) {
                 0,
                 r->numPixels(),
                 r->numPixels() * 3,
-                [r, g, b, this](size_t i) {
-                    const auto rgb = toRec709 * Vector3f{r->at(i), g->at(i), b->at(i)};
+                [r, g, b, mat](size_t i) {
+                    const auto rgb = mat * Vector3f{r->at(i), g->at(i), b->at(i)};
                     r->setAt(i, rgb.x());
                     g->setAt(i, rgb.y());
                     b->setAt(i, rgb.z());
@@ -165,6 +179,17 @@ Task<void> ImageData::convertToRec709(int priority) {
     }
 
     co_await awaitAll(tasks);
+
+    toRec709 = toRec709 * inverse(mat);
+}
+
+Task<void> ImageData::convertToRec709(int priority) {
+    // No need to do anything for identity transforms
+    if (toRec709 == Matrix3f{1.0f}) {
+        co_return;
+    }
+
+    co_await applyColorConversion(toRec709, priority);
 
     // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
     toRec709 = Matrix3f{1.0f};
@@ -178,6 +203,8 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
     if (hdrMetadata.maxCLL <= 0.0f && hdrMetadata.maxFALL <= 0.0f) {
         co_return;
     }
+
+    updateLayers();
 
     vector<Task<void>> tasks;
 
@@ -350,6 +377,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
 }
 
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
+    updateLayers();
+
     for (const auto& layer : layers) {
         string alphaChannelName = layer + "A";
 
@@ -436,6 +465,19 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     orientation = EOrientation::TopLeft;
 }
 
+void ImageData::updateLayers() {
+    layers.clear();
+
+    set<string> layerNames;
+    for (auto& c : channels) {
+        layerNames.emplace(Channel::head(c.name()));
+    }
+
+    for (string_view l : layerNames) {
+        layers.emplace_back(l);
+    }
+}
+
 Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
@@ -486,16 +528,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         }
     }
 
-    if (layers.empty()) {
-        set<string> layerNames;
-        for (auto& c : channels) {
-            layerNames.emplace(Channel::head(c.name()));
-        }
-
-        for (string_view l : layerNames) {
-            layers.emplace_back(l);
-        }
-    }
+    updateLayers();
 
     if (!hasPremultipliedAlpha) {
         co_await multiplyAlpha(taskPriority);

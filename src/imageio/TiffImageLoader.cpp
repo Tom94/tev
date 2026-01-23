@@ -893,6 +893,7 @@ Task<void> postprocessRgb(
     // TIFF images *do* exist in the wild, there is, unfortunately, no unambiguous way to determine this from the TIFF metadata alone.
     resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
     resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
+    resultData.nativeMetadata.chroma = chroma;
 
     enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
 
@@ -925,6 +926,8 @@ Task<void> postprocessRgb(
             },
             priority
         );
+
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::LUT;
     } else if (uint32_t pcsInt; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &pcsInt) && pcsInt > 1) {
         // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
         // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
@@ -946,10 +949,16 @@ Task<void> postprocessRgb(
             priority
         );
 
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
+
         if (pcs == EPreviewColorSpace::AdobeRGB) {
-            resultData.toRec709 = convertColorspaceMatrix(adobeChroma(), rec709Chroma(), resultData.renderingIntent);
+            const auto chroma = adobeChroma();
+            resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
+            resultData.nativeMetadata.chroma = chroma;
         } else if (pcs == EPreviewColorSpace::ProPhotoRGB) {
+            const auto chroma = adobeChroma();
             resultData.toRec709 = convertColorspaceMatrix(proPhotoChroma(), rec709Chroma(), resultData.renderingIntent);
+            resultData.nativeMetadata.chroma = chroma;
         }
     } else {
         // If there's no transfer function specified, the TIFF spec says to use gamma 2.2 for RGB data and no transfer (linear) for
@@ -972,6 +981,8 @@ Task<void> postprocessRgb(
             },
             priority
         );
+
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::Gamma22;
     }
 }
 
@@ -1497,12 +1508,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                 priority
             );
 
-            resultData.renderingIntent = profile.renderingIntent();
-            if (const auto cicp = profile.cicp()) {
-                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-            }
-
             resultData.hasPremultipliedAlpha = true;
+            resultData.readMetadataFromIcc(profile);
+
             co_return resultData;
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
@@ -1525,6 +1533,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
     } else {
         // Other photometric interpretations do not need a transfer
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     }
 
     co_await toFloat32<float, false>(

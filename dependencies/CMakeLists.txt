@@ -240,6 +240,7 @@ endif()
 # Compile libheif
 if (TEV_USE_LIBHEIF)
     # General build config
+    set(BUILD_DOCUMENTATION OFF CACHE BOOL " " FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
     set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
     set(WITH_EXAMPLES OFF CACHE BOOL " " FORCE)

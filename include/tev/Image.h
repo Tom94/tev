@@ -56,11 +56,17 @@ struct HdrMetadata {
 
     float masteringMinLum = 0.0f;
     float masteringMaxLum = 0.0f;
-    std::array<nanogui::Vector2f, 4> masteringChroma = zeroChroma();
+    chroma_t masteringChroma = zeroChroma();
 
     float bestGuessWhiteLevel = DEFAULT_IMAGE_WHITE_LEVEL;
 
     AttributeNode toAttributes() const;
+};
+
+struct NativeImageMetadata {
+    std::optional<chroma_t> chroma = std::nullopt;
+    std::optional<ituth273::ETransfer> transfer = std::nullopt;
+    std::optional<float> gamma = std::nullopt; // Only used if transfer is ituth273::ETransfer::GenericGamma
 };
 
 struct ImageData {
@@ -78,6 +84,7 @@ struct ImageData {
     std::vector<AttributeNode> attributes;
 
     HdrMetadata hdrMetadata;
+    NativeImageMetadata nativeMetadata; // Information about the image's original color space, etc.
 
     // tev only really supports two rendering intents: relative and absolute colorimetric. The reason being that the other rendering intents
     // (perceptual and saturation) are subjective while tev, as an image analysis tool, should be as objective as possible. The difference
@@ -102,6 +109,9 @@ struct ImageData {
 
     std::string partName;
 
+    void readMetadataFromIcc(const ColorProfile& profile);
+    void readMetadataFromCicp(const ColorProfile::CICP& cicp);
+
     nanogui::Vector2i size() const { return dataWindow.size(); }
 
     nanogui::Vector2i displaySize() const { return displayWindow.size(); }
@@ -110,7 +120,9 @@ struct ImageData {
 
     std::vector<std::string> channelsInLayer(std::string_view layerName) const;
 
+    Task<void> applyColorConversion(const nanogui::Matrix3f& mat, int priority);
     Task<void> convertToRec709(int priority);
+
     Task<void> deriveWhiteLevelFromMetadata(int priority);
     Task<void> convertToDesiredPixelFormat(int priority);
 
@@ -121,6 +133,7 @@ struct ImageData {
 
     Task<void> orientToTopLeft(int priority);
 
+    void updateLayers();
     Task<void> ensureValid(std::string_view channelSelector, int taskPriority);
 
     bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }

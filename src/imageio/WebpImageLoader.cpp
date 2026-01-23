@@ -212,15 +212,15 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         priority
                     );
 
-                    resultData.renderingIntent = profile.renderingIntent();
-                    if (const auto cicp = profile.cicp()) {
-                        resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-                    }
+                    resultData.readMetadataFromIcc(profile);
                 } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {
                 co_await toFloat32<uint8_t, true, true>(
                     (uint8_t*)data, numChannels, frameData.data(), 4, frameSize, numChannels == 4, priority
                 );
+
+                resultData.nativeMetadata.chroma = rec709Chroma();
+                resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
             }
 
             // If we did not dispose the previous canvas, we need to blend the current frame onto it. Otherwise, blend onto background. The

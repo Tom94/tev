@@ -190,7 +190,7 @@ vector<Channel>
     return channels;
 }
 
-Task<void> ImageLoader::resizeChannelsAsync(const vector<Channel>& srcChannels, vector<Channel>& dstChannels, int priority) {
+Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vector<Channel>& dstChannels, int priority) {
     TEV_ASSERT(srcChannels.size() == dstChannels.size(), "Number of source and destination channels must match.");
     if (srcChannels.empty()) {
         co_return;
@@ -253,5 +253,21 @@ Task<void> ImageLoader::resizeChannelsAsync(const vector<Channel>& srcChannels, 
         priority
     );
 }
+
+Task<void> ImageLoader::resizeImageData(ImageData& resultData, const Vector2i& targetSize, int priority) {
+    const Vector2i size = resultData.channels.front().size();
+    if (size == targetSize) {
+        co_return;
+    }
+
+    const auto prevChannels = std::move(resultData.channels);
+    resultData.channels.clear();
+
+    for (auto& c : prevChannels) {
+        resultData.channels.emplace_back(c.name(), targetSize, c.pixelFormat(), c.desiredPixelFormat());
+    }
+
+    co_await resizeChannelsAsync(prevChannels, resultData.channels, priority);
+};
 
 } // namespace tev

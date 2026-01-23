@@ -471,37 +471,34 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             // whether the image is in sRGB/Rec709. If not, then check the gAMA and cHRM chunks for gamma and chromaticity values and use
             // them to convert to linear sRGB. And lastly (this isn't in the spec, but based on having seen a lot of PNGs), if none of these
             // chunks are present, fall back to sRGB.
-            struct cICP {
-                png_byte colourPrimaries;
-                png_byte transferFunction;
-                png_byte matrixCoefficients;
-                png_byte videoFullRangeFlag;
-            } cicp;
-            if (png_get_cICP(
-                    pngPtr, infoPtr, &cicp.colourPrimaries, &cicp.transferFunction, &cicp.matrixCoefficients, &cicp.videoFullRangeFlag
-                ) == PNG_INFO_cICP) {
 
-                const auto primaries = (ituth273::EColorPrimaries)cicp.colourPrimaries;
-                auto transfer = (ituth273::ETransfer)cicp.transferFunction;
+            if (png_byte primaries, transfer, matrixCoeffs, fullRange;
+                png_get_cICP(pngPtr, infoPtr, &primaries, &transfer, &matrixCoeffs, &fullRange) == PNG_INFO_cICP) {
+                auto cicp = ColorProfile::CICP{
+                    .primaries = (ituth273::EColorPrimaries)primaries,
+                    .transfer = (ituth273::ETransfer)transfer,
+                    .matrixCoeffs = matrixCoeffs,
+                    .videoFullRangeFlag = fullRange,
+                };
 
-                if (!ituth273::isTransferImplemented(transfer)) {
+                if (!ituth273::isTransferImplemented(cicp.transfer)) {
                     tlog::warning()
-                        << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(transfer));
-                    transfer = ituth273::ETransfer::SRGB;
+                        << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(cicp.transfer));
+                    cicp.transfer = ituth273::ETransfer::SRGB;
                 }
 
                 tlog::debug() << fmt::format(
                     "cICP: primaries={} transfer={} full_range={}",
-                    ituth273::toString(primaries),
-                    ituth273::toString(transfer),
+                    ituth273::toString(cicp.primaries),
+                    ituth273::toString(cicp.transfer),
                     cicp.videoFullRangeFlag == 1 ? "yes" : "no"
                 );
 
                 const LimitedRange range = cicp.videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(bitDepth);
 
-                if (cicp.matrixCoefficients != 0) {
+                if (cicp.matrixCoeffs != 0) {
                     tlog::warning() << fmt::format(
-                        "Unsupported matrix coefficients in cICP chunk: {}. PNG images only support RGB (=0). Ignoring.", cicp.matrixCoefficients
+                        "Unsupported matrix coefficients in cICP chunk: {}. PNG images only support RGB (=0). Ignoring.", cicp.matrixCoeffs
                     );
                 }
 
@@ -522,19 +519,19 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                             color[c] = (dstData[i * 4 + c] - range.offset) * range.scale;
                         }
 
-                        color = ituth273::invTransfer(transfer, color) * alpha;
+                        color = ituth273::invTransfer(cicp.transfer, color) * alpha;
                         for (int c = 0; c < 3; ++c) {
                             dstData[i * 4 + c] = color[c];
                         }
                     },
                     priority
                 );
+                resultData.hasPremultipliedAlpha = true;
 
                 // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
                 resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
-                resultData.toRec709 = convertColorspaceMatrix(ituth273::chroma(primaries), rec709Chroma(), resultData.renderingIntent);
-                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(transfer);
-                resultData.hasPremultipliedAlpha = true;
+                resultData.toRec709 = convertColorspaceMatrix(ituth273::chroma(cicp.primaries), rec709Chroma(), resultData.renderingIntent);
+                resultData.readMetadataFromCicp(cicp);
 
                 co_return;
             } else if (iccProfileData) {
@@ -559,16 +556,15 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         4,
                         priority
                     );
-
-                    resultData.renderingIntent = profile.renderingIntent();
-                    if (const auto cicp = profile.cicp()) {
-                        resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp->transfer);
-                    }
-
                     resultData.hasPremultipliedAlpha = true;
+                    resultData.readMetadataFromIcc(profile);
                     co_return;
                 } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
             }
+
+            // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
+            resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+            resultData.nativeMetadata.chroma = rec709Chroma(); // default to Rec.709 primaries unless cHRM chunk says otherwise
 
             int srgbIntent = 0;
             const bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
@@ -599,6 +595,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 resultData.hasPremultipliedAlpha = true;
+                resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
                 co_return;
             }
 
@@ -623,6 +620,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             );
 
             resultData.hasPremultipliedAlpha = true;
+            resultData.nativeMetadata.transfer = ituth273::ETransfer::GenericGamma;
+            resultData.nativeMetadata.gamma = (float)invGamma64;
 
             if (hasChunkChrm) {
                 const chroma_t chroma = {
@@ -634,9 +633,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     }
                 };
 
-                // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
-                resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
                 resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
+                resultData.nativeMetadata.chroma = chroma;
 
                 tlog::debug() << fmt::format("cHRM: primaries={}", chroma);
             }

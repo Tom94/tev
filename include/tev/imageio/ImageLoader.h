@@ -140,7 +140,8 @@ public:
     static std::vector<Channel>
         makeNChannels(int numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer);
 
-    static Task<void> resizeChannelsAsync(const std::vector<Channel>& srcChannels, std::vector<Channel>& dstChannels, int priority);
+    static Task<void> resizeChannelsAsync(std::span<const Channel> srcChannels, std::vector<Channel>& dstChannels, int priority);
+    static Task<void> resizeImageData(ImageData& resultData, const nanogui::Vector2i& targetSize, int priority);
 };
 
 } // namespace tev

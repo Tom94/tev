@@ -479,6 +479,10 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         // get its white point adjusted. PNM/PAM, because gamma corrected, like PNG/JPEG, treated as display referred and thus adjusted to
         // the display white point.
         resultData.renderingIntent = pfm ? ERenderingIntent::AbsoluteColorimetric : ERenderingIntent::RelativeColorimetric;
+
+        resultData.nativeMetadata.transfer = pfm ? ituth273::ETransfer::Linear : ituth273::ETransfer::SRGB;
+        resultData.nativeMetadata.chroma = rec709Chroma();
+
         resultData.hasPremultipliedAlpha = false;
 
         co_return result;
