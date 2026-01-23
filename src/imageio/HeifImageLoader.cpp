@@ -494,7 +494,7 @@ Task<vector<ImageData>>
 
     const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx);
     if (seqTrackCount > 0) {
-        tlog::info() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
+        tlog::debug() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
 
         vector<int> trackIds(seqTrackCount);
         heif_context_get_track_ids(ctx, reinterpret_cast<uint32_t*>(trackIds.data()));

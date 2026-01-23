@@ -277,7 +277,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                     throw ImageLoadError{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
                 }
 
-                tlog::info() << fmt::format(
+                tlog::debug() << fmt::format(
                     "Image size={}x{} channels={} bits_per_sample={}:{} alpha_bits={} alpha_premultiplied={} have_animation={} intensity_target={} orientation={}",
                     info.xsize,
                     info.ysize,
