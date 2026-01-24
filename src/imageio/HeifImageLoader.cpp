@@ -107,7 +107,7 @@ Task<vector<ImageData>>
                                  heif_image* img,
                                  int numChannels,
                                  bool hasAlpha,
-                                 bool assumeLinear,
+                                 bool skipColorProcessing,
                                  const Vector2i& targetSize = {0},
                                  string_view layer = "",
                                  string_view partName = ""
@@ -256,7 +256,7 @@ Task<vector<ImageData>>
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
         const size_t profileSize = heif_image_get_raw_color_profile_size(img);
-        if (profileSize != 0) {
+        if (profileSize != 0 && !skipColorProcessing) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
             HeapArray<uint8_t> profileData(profileSize);
             if (const auto error = heif_image_get_raw_color_profile(img, profileData.data()); error.code != heif_error_Ok) {
@@ -297,7 +297,10 @@ Task<vector<ImageData>>
             );
         }
 
-        const size_t numPixels = size.x() * (size_t)size.y();
+        if (skipColorProcessing) {
+            tlog::debug() << "Skipping color processing.";
+            co_return resultData;
+        }
 
         // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
         // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
@@ -321,8 +324,7 @@ Task<vector<ImageData>>
             range = limitedRangeForBitsPerSample(bitsPerSample);
         }
 
-        auto cicpTransfer = nclx ? static_cast<ituth273::ETransfer>(nclx->transfer_characteristics) :
-                                   (assumeLinear ? ituth273::ETransfer::Linear : ituth273::ETransfer::SRGB);
+        auto cicpTransfer = nclx ? static_cast<ituth273::ETransfer>(nclx->transfer_characteristics) : ituth273::ETransfer::SRGB;
 
         const auto primaries = (ituth273::EColorPrimaries)(nclx ? nclx->color_primaries : heif_color_primaries_ITU_R_BT_709_5);
 
@@ -338,6 +340,7 @@ Task<vector<ImageData>>
             cicpTransfer = ituth273::ETransfer::SRGB;
         }
 
+        const size_t numPixels = size.x() * (size_t)size.y();
         auto* const pixelData = resultData.channels.front().floatData();
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
@@ -392,7 +395,9 @@ Task<vector<ImageData>>
     };
 
     const auto decodeImageHandle =
-        [&decodeImage](heif_image_handle* imgHandle, bool isAux, const Vector2i& targetSize = {0}, string_view layer = "") -> Task<ImageData> {
+        [&decodeImage](
+            heif_image_handle* imgHandle, bool skipColorProcessing, const Vector2i& targetSize = {0}, string_view layer = ""
+        ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
 
         heif_colorspace preferredColorspace = heif_colorspace_undefined;
@@ -437,8 +442,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
-        const bool assumeLinear = isAux;
-        co_return co_await decodeImage(img, numChannels, hasAlpha, assumeLinear, targetSize, layer);
+        co_return co_await decodeImage(img, numChannels, hasAlpha, skipColorProcessing, targetSize, layer);
     };
 
     const auto decodeSingleTrackImage =
@@ -633,14 +637,16 @@ Task<vector<ImageData>>
             const bool isIsoGainmap = auxIds[i] == gainmapItemId;
             const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
 
+            const bool isGainmap = isIsoGainmap || isAppleGainmap;
+
             const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
-            const bool loadGainmap = applyGainmaps && (isIsoGainmap || isAppleGainmap);
+            const bool loadGainmap = applyGainmaps && isGainmap;
 
             if (!retainAuxLayer && !loadGainmap) {
                 continue;
             }
 
-            auto auxImgData = co_await decodeImageHandle(auxImgHandle, true, mainImage.channels.front().size(), auxLayerName);
+            auto auxImgData = co_await decodeImageHandle(auxImgHandle, isGainmap, mainImage.channels.front().size(), auxLayerName);
 
             if (loadGainmap) {
                 optional<chroma_t> altImgChroma = nullopt;
