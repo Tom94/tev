@@ -420,10 +420,13 @@ Task<vector<ImageData>>
         co_return resultData;
     };
 
-    const auto decodeImageHandle =
-        [&decodeImage](
-            heif_image_handle* imgHandle, bool skipColorProcessing, const Vector2i& targetSize = {0}, string_view layer = ""
-        ) -> Task<ImageData> {
+    const auto decodeImageHandle = [&decodeImage](
+                                       heif_image_handle* imgHandle,
+                                       bool skipColorProcessing,
+                                       const Vector2i& targetSize = {0},
+                                       string_view layer = "",
+                                       string_view partName = ""
+                                   ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
 
         heif_colorspace preferredColorspace = heif_colorspace_undefined;
@@ -509,8 +512,6 @@ Task<vector<ImageData>>
         co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, targetSize, partName, partName);
     };
 
-    vector<ImageData> result;
-
     heif_context* ctx = heif_context_alloc();
     if (!ctx) {
         throw ImageLoadError{"Failed to allocate libheif context."};
@@ -522,6 +523,9 @@ Task<vector<ImageData>>
         throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 
+    vector<ImageData> result;
+
+    // If we're an image *sequence*, load the sequence tracks instead of individual images.
     const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx);
     if (seqTrackCount > 0) {
         tlog::debug() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
@@ -549,106 +553,127 @@ Task<vector<ImageData>>
         co_return result;
     }
 
-    // get a handle to the primary image
-    heif_image_handle* primaryImgHandle;
-    if (auto error = heif_context_get_primary_image_handle(ctx, &primaryImgHandle); error.code != heif_error_Ok) {
-        throw ImageLoadError{fmt::format("Failed to get primary image handle: {}", error.message)};
-    }
+    const size_t numImages = heif_context_get_number_of_top_level_images(ctx);
+    vector<heif_item_id> imageIds(numImages);
+    heif_context_get_list_of_top_level_image_IDs(ctx, imageIds.data(), (int)numImages);
 
-    const ScopeGuard handleGuard{[primaryImgHandle] { heif_image_handle_release(primaryImgHandle); }};
+    const auto decodeTopLevelImgIdAndAuxImages = [&](heif_item_id id, string partName) -> Task<void> {
+        tlog::debug() << fmt::format("Decoding top-level HEIF image ID '{}'", id);
 
-    // Read main image
-    result.emplace_back(co_await decodeImageHandle(primaryImgHandle, false));
-    ImageData& mainImage = result.back();
-
-    optional<Exif> exif;
-    const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(primaryImgHandle, nullptr);
-    vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
-
-    if (numMetadataBlocks > 0) {
-        tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
-    }
-
-    heif_image_handle_get_list_of_metadata_block_IDs(primaryImgHandle, nullptr, metadataIDs.data(), numMetadataBlocks);
-    for (heif_item_id id : metadataIDs) {
-        const string_view type = heif_image_handle_get_metadata_type(primaryImgHandle, id);
-        const string_view contentType = heif_image_handle_get_metadata_content_type(primaryImgHandle, id);
-        const size_t size = heif_image_handle_get_metadata_size(primaryImgHandle, id);
-
-        if (size <= 4) {
-            tlog::warning() << "Failed to get size of metadata.";
-            continue;
+        heif_image_handle* imgHandle;
+        if (const auto error = heif_context_get_image_handle(ctx, id, &imgHandle); error.code != heif_error_Ok) {
+            throw ImageLoadError{fmt::format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
         }
 
-        HeapArray<uint8_t> metadata(size);
-        if (const auto error = heif_image_handle_get_metadata(primaryImgHandle, id, metadata.data()); error.code != heif_error_Ok) {
-            tlog::warning() << "Failed to read metadata: " << error.message;
-            continue;
+        // Read main image
+        result.emplace_back(co_await decodeImageHandle(imgHandle, false, {0}, partName, partName));
+        ImageData& mainImage = result.back();
+
+        optional<Exif> exif;
+        const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(imgHandle, nullptr);
+        vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
+
+        if (numMetadataBlocks > 0) {
+            tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
         }
 
-        if (type == "Exif") {
-            tlog::debug() << fmt::format("Found EXIF data of size {} bytes", metadata.size());
+        heif_image_handle_get_list_of_metadata_block_IDs(imgHandle, nullptr, metadataIDs.data(), numMetadataBlocks);
+        for (heif_item_id id : metadataIDs) {
+            const string_view type = heif_image_handle_get_metadata_type(imgHandle, id);
+            const string_view contentType = heif_image_handle_get_metadata_content_type(imgHandle, id);
+            const size_t size = heif_image_handle_get_metadata_size(imgHandle, id);
 
-            try {
-                // The first four bytes are the length of the exif data and not strictly part of the exif data.
-                exif = Exif{span<uint8_t>{metadata}.subspan(4)};
-                mainImage.attributes.emplace_back(exif->toAttributes());
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
-        } else if (contentType == "application/rdf+xml") {
-            tlog::debug() << fmt::format("Found XMP data '{}/{}' of size {} bytes", type, contentType, metadata.size());
-
-            try {
-                Xmp xmp{
-                    string_view{(const char*)metadata.data(), metadata.size()}
-                };
-                mainImage.attributes.emplace_back(xmp.attributes());
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
-        } else {
-            tlog::debug() << fmt::format("Skipping unknown metadata block of type '{}/{}' ({} bytes).", type, contentType, size);
-        }
-    }
-
-    const auto findAppleMakerNote = [&]() -> optional<Ifd> {
-        if (!exif) {
-            tlog::warning() << "No EXIF metadata found.";
-            return nullopt;
-        }
-
-        try {
-            return make_optional<Ifd>(exif->tryGetAppleMakerNote());
-        } catch (const invalid_argument& e) {
-            tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
-        }
-
-        return nullopt;
-    };
-
-    optional<heif_item_id> gainmapItemId = nullopt;
-    if (heif_image_handle* gainmapImgHandle;
-        heif_image_handle_get_gain_map_image_handle(primaryImgHandle, &gainmapImgHandle).code == heif_error_Ok) {
-        const ScopeGuard gainmapHandleGuard{[gainmapImgHandle] { heif_image_handle_release(gainmapImgHandle); }};
-
-        gainmapItemId = heif_image_handle_get_item_id(gainmapImgHandle);
-        tlog::debug() << fmt::format(
-            "Found ISO 21496-1 gain map image with ID '{}'. Will be processed while reading auxiliary images.", *gainmapItemId
-        );
-    }
-
-    // Read auxiliary images
-    const int num_aux = heif_image_handle_get_number_of_auxiliary_images(primaryImgHandle, 0);
-    if (num_aux > 0) {
-        tlog::debug() << "Found " << num_aux << " auxiliary image(s)";
-
-        vector<heif_item_id> auxIds(num_aux);
-        heif_image_handle_get_list_of_auxiliary_image_IDs(primaryImgHandle, 0, auxIds.data(), num_aux);
-
-        for (int i = 0; i < num_aux; ++i) {
-            heif_image_handle* auxImgHandle;
-            if (const auto error = heif_image_handle_get_auxiliary_image_handle(primaryImgHandle, auxIds[i], &auxImgHandle);
-                error.code != heif_error_Ok) {
-                tlog::warning() << fmt::format("Failed to get auxiliary image handle: {}", error.message);
+            if (size <= 4) {
+                tlog::warning() << "Failed to get size of metadata.";
                 continue;
             }
+
+            HeapArray<uint8_t> metadata(size);
+            if (const auto error = heif_image_handle_get_metadata(imgHandle, id, metadata.data()); error.code != heif_error_Ok) {
+                tlog::warning() << "Failed to read metadata: " << error.message;
+                continue;
+            }
+
+            if (type == "Exif") {
+                tlog::debug() << fmt::format("Found EXIF data of size {} bytes", metadata.size());
+
+                try {
+                    // The first four bytes are the length of the exif data and not strictly part of the exif data.
+                    exif = Exif{span<uint8_t>{metadata}.subspan(4)};
+                    mainImage.attributes.emplace_back(exif->toAttributes());
+                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+            } else if (contentType == "application/rdf+xml") {
+                tlog::debug() << fmt::format("Found XMP data '{}/{}' of size {} bytes", type, contentType, metadata.size());
+
+                try {
+                    Xmp xmp{
+                        string_view{(const char*)metadata.data(), metadata.size()}
+                    };
+                    mainImage.attributes.emplace_back(xmp.attributes());
+                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+            } else {
+                tlog::debug() << fmt::format("Skipping unknown metadata block of type '{}/{}' ({} bytes).", type, contentType, size);
+            }
+        }
+
+        const auto findAppleMakerNote = [&]() -> optional<Ifd> {
+            if (!exif) {
+                tlog::warning() << "No EXIF metadata found.";
+                return nullopt;
+            }
+
+            try {
+                return make_optional<Ifd>(exif->tryGetAppleMakerNote());
+            } catch (const invalid_argument& e) {
+                tlog::warning() << fmt::format("Failed to extract Apple maker note from exif: {}", e.what());
+            }
+
+            return nullopt;
+        };
+
+        // Read auxiliary images
+        vector<heif_item_id> auxIds;
+        vector<heif_image_handle*> auxImgHandles;
+        ScopeGuard auxImgHandlesGuard{[&auxImgHandles] {
+            for (heif_image_handle* handle : auxImgHandles) {
+                heif_image_handle_release(handle);
+            }
+        }};
+
+        if (const int numAux = heif_image_handle_get_number_of_auxiliary_images(imgHandle, 0); numAux > 0) {
+            auxIds.resize((size_t)numAux);
+            heif_image_handle_get_list_of_auxiliary_image_IDs(imgHandle, 0, auxIds.data(), numAux);
+
+            for (const auto auxId : auxIds) {
+                if (heif_image_handle* auxImgHandle;
+                    heif_image_handle_get_auxiliary_image_handle(imgHandle, auxId, &auxImgHandle).code == heif_error_Ok) {
+                    auxImgHandles.emplace_back(auxImgHandle);
+                } else {
+                    tlog::warning() << fmt::format("Failed to get auxiliary image handle for ID {}.", auxId);
+                }
+            }
+        }
+
+        heif_image_handle* gainmapImgHandle = nullptr;
+        if (heif_image_handle_get_gain_map_image_handle(imgHandle, &gainmapImgHandle).code == heif_error_Ok) {
+            const auto gainmapItemId = heif_image_handle_get_item_id(gainmapImgHandle);
+            tlog::debug() << fmt::format(
+                "Found ISO 21496-1 gain map image with ID '{}'. Will be processed while reading auxiliary images.", gainmapItemId
+            );
+
+            // If gainmap isn't an aux image, but a separate item, add it to the aux image list to be processed below.
+            if (std::find(auxIds.begin(), auxIds.end(), gainmapItemId) == auxIds.end()) {
+                auxIds.emplace_back(gainmapItemId);
+                auxImgHandles.emplace_back(gainmapImgHandle);
+            } else {
+                heif_image_handle_release(gainmapImgHandle);
+            }
+        }
+
+        tlog::debug() << "Found " << auxImgHandles.size() << " auxiliary image(s)";
+
+        for (auto* auxImgHandle : auxImgHandles) {
+            const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
 
             const char* auxType = nullptr;
             if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
@@ -657,10 +682,14 @@ Task<vector<ImageData>>
             }
 
             ScopeGuard typeGuard{[auxImgHandle, &auxType] { heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType); }};
-            string auxLayerName = auxType ? auxType : to_string(num_aux);
+            string auxLayerName = auxType ? auxType : "";
             replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
 
-            const bool isIsoGainmap = auxIds[i] == gainmapItemId;
+            const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
+            if (auxLayerName.empty()) {
+                auxLayerName = isIsoGainmap ? "gainmap" : fmt::format("aux.{}", auxId);
+            }
+
             const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
 
             const bool isGainmap = isIsoGainmap || isAppleGainmap;
@@ -672,7 +701,9 @@ Task<vector<ImageData>>
                 continue;
             }
 
-            auto auxImgData = co_await decodeImageHandle(auxImgHandle, isGainmap, mainImage.channels.front().size(), auxLayerName);
+            auto auxImgData = co_await decodeImageHandle(
+                auxImgHandle, isGainmap, mainImage.channels.front().size(), Channel::joinIfNonempty(partName, auxLayerName), partName
+            );
 
             if (loadGainmap) {
                 optional<chroma_t> altImgChroma = nullopt;
@@ -681,9 +712,9 @@ Task<vector<ImageData>>
                 if (isIsoGainmap) {
                     tlog::debug() << fmt::format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxLayerName);
 
-                    HeapArray<uint8_t> metadataData(heif_image_handle_get_gain_map_metadata_size(primaryImgHandle));
+                    HeapArray<uint8_t> metadataData(heif_image_handle_get_gain_map_metadata_size(imgHandle));
                     if (metadataData.size() > 0 &&
-                        heif_image_handle_get_gain_map_metadata(primaryImgHandle, metadataData.data()).code == heif_error_Ok) {
+                        heif_image_handle_get_gain_map_metadata(imgHandle, metadataData.data()).code == heif_error_Ok) {
 
                         tlog::debug() << fmt::format("Read {} bytes of gainmap metadata.", metadataData.size());
 
@@ -701,9 +732,9 @@ Task<vector<ImageData>>
                         tlog::warning() << "No gainmap metadata found for ISO 21496-1 gain map image.";
                     }
 
-                    HeapArray<uint8_t> profileData(heif_image_handle_get_derived_image_raw_color_profile_size(primaryImgHandle));
+                    HeapArray<uint8_t> profileData(heif_image_handle_get_derived_image_raw_color_profile_size(imgHandle));
                     if (profileData.size() > 0 &&
-                        heif_image_handle_get_derived_image_raw_color_profile(primaryImgHandle, profileData.data()).code == heif_error_Ok) {
+                        heif_image_handle_get_derived_image_raw_color_profile(imgHandle, profileData.data()).code == heif_error_Ok) {
 
                         try {
                             altImgChroma = ColorProfile::fromIcc(profileData).chroma();
@@ -714,7 +745,7 @@ Task<vector<ImageData>>
                             tlog::warning() << fmt::format("Failed to read alt. image ICC profile: {}", e.what());
                         }
                     } else if (heif_color_profile_nclx* nclx;
-                               heif_image_handle_get_derived_image_nclx_color_profile(primaryImgHandle, &nclx).code == heif_error_Ok &&
+                               heif_image_handle_get_derived_image_nclx_color_profile(imgHandle, &nclx).code == heif_error_Ok &&
                                nclx->color_primaries != heif_color_primaries_unspecified) {
 
                         const ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
@@ -750,7 +781,7 @@ Task<vector<ImageData>>
                     }
                 } else if (isIsoGainmap) {
                     if (isoGainmapMetadata) {
-                        tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: {}. Applying.", auxLayerName);
+                        tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
                         co_await applyIsoGainMap(
                             mainImage, auxImgData, priority, *isoGainmapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
                         );
@@ -775,6 +806,13 @@ Task<vector<ImageData>>
                 );
             }
         }
+    };
+
+    for (size_t i = 0; i < numImages; ++i) {
+        const heif_item_id id = imageIds[i];
+        const string partName = numImages > 1 ? fmt::format("frames.{}", id) : "";
+
+        co_await decodeTopLevelImgIdAndAuxImages(id, partName);
     }
 
     co_return result;
