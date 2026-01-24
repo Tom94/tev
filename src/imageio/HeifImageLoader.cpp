@@ -103,8 +103,48 @@ Task<vector<ImageData>>
         bool hasAlpha;
     };
 
-    const auto decodeImage = [priority](
+    const auto getIccProfileFromImgAndHandle = [](heif_image* img, heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
+        if (handle) {
+            const size_t handleProfileSize = heif_image_handle_get_raw_color_profile_size(handle);
+            if (handleProfileSize > 0) {
+                HeapArray<uint8_t> handleProfileData(handleProfileSize);
+                if (const auto error = heif_image_handle_get_raw_color_profile(handle, handleProfileData.data());
+                    error.code != heif_error_Ok) {
+                    if (error.code == heif_error_Color_profile_does_not_exist) {
+                        tlog::warning() << "ICC color profile does not exist in handle.";
+                    } else {
+                        tlog::warning() << fmt::format("Failed to read ICC profile from handle: {}", error.message);
+                    }
+
+                    return nullopt;
+                }
+
+                return handleProfileData;
+            }
+        }
+
+        const size_t profileSize = heif_image_get_raw_color_profile_size(img);
+        if (profileSize > 0) {
+            HeapArray<uint8_t> profileData(profileSize);
+            if (const auto error = heif_image_get_raw_color_profile(img, profileData.data()); error.code != heif_error_Ok) {
+                if (error.code == heif_error_Color_profile_does_not_exist) {
+                    tlog::warning() << "ICC color profile does not exist in img.";
+                } else {
+                    tlog::warning() << fmt::format("Failed to read ICC profile from img: {}", error.message);
+                }
+
+                return nullopt;
+            }
+
+            return profileData;
+        }
+
+        return nullopt;
+    };
+
+    const auto decodeImage = [priority, &getIccProfileFromImgAndHandle](
                                  heif_image* img,
+                                 heif_image_handle* imgHandle, // may be nullptr
                                  int numChannels,
                                  bool hasAlpha,
                                  bool skipColorProcessing,
@@ -163,21 +203,7 @@ Task<vector<ImageData>>
 
         const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
 
-        auto tryIccTransform = [&](const HeapArray<uint8_t>& iccProfile) -> Task<void> {
-            const size_t profileSize = heif_image_get_raw_color_profile_size(img);
-            if (profileSize == 0) {
-                throw ImageLoadError{"No ICC color profile found."};
-            }
-
-            HeapArray<uint8_t> profileData(profileSize);
-            if (auto error = heif_image_get_raw_color_profile(img, profileData.data()); error.code != heif_error_Ok) {
-                if (error.code == heif_error_Color_profile_does_not_exist) {
-                    throw ImageLoadError{"ICC color profile does not exist."};
-                }
-
-                throw ImageLoadError{fmt::format("Failed to read ICC profile: {}", error.message)};
-            }
-
+        const auto tryIccTransform = [&](const HeapArray<uint8_t>& iccProfile) -> Task<void> {
             HeapArray<float> dataF32((size_t)size.x() * size.y() * numChannels);
             if (bitDepth == 16) {
                 co_await toFloat32(
@@ -197,7 +223,7 @@ Task<vector<ImageData>>
                 );
             }
 
-            const auto profile = ColorProfile::fromIcc(profileData.data(), profileData.size());
+            const auto profile = ColorProfile::fromIcc(iccProfile.data(), iccProfile.size());
             co_await toLinearSrgbPremul(
                 profile,
                 size,
@@ -255,20 +281,14 @@ Task<vector<ImageData>>
         }
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
-        const size_t profileSize = heif_image_get_raw_color_profile_size(img);
-        if (profileSize != 0 && !skipColorProcessing) {
+        const auto iccProfileData = getIccProfileFromImgAndHandle(img, imgHandle);
+        if (iccProfileData && !skipColorProcessing) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
-            HeapArray<uint8_t> profileData(profileSize);
-            if (const auto error = heif_image_get_raw_color_profile(img, profileData.data()); error.code != heif_error_Ok) {
-                if (error.code != heif_error_Color_profile_does_not_exist) {
-                    tlog::warning() << "Failed to read ICC profile: " << error.message;
-                }
-            } else {
-                try {
-                    co_await tryIccTransform(profileData);
-                    co_return resultData;
-                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
-            }
+
+            try {
+                co_await tryIccTransform(*iccProfileData);
+                co_return resultData;
+            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
         }
 
         if (bitDepth == 16) {
@@ -305,9 +325,15 @@ Task<vector<ImageData>>
         // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
         // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
         heif_color_profile_nclx* nclx = nullptr;
-        if (const auto error = heif_image_get_nclx_color_profile(img, &nclx); error.code != heif_error_Ok) {
+        if (const auto error = imgHandle ? heif_image_handle_get_nclx_color_profile(imgHandle, &nclx) :
+                                           heif_error{heif_error_Color_profile_does_not_exist, heif_suberror_Unspecified, ""};
+            error.code != heif_error_Ok) {
             if (error.code != heif_error_Color_profile_does_not_exist) {
-                tlog::warning() << "Failed to read NCLX color profile: " << error.message;
+                tlog::warning() << "Failed to read NCLX color profile from handle: " << error.message;
+            }
+        } else if (const auto error = heif_image_get_nclx_color_profile(img, &nclx); error.code != heif_error_Ok) {
+            if (error.code != heif_error_Color_profile_does_not_exist) {
+                tlog::warning() << "Failed to read NCLX color profile from img: " << error.message;
             }
         } else {
             tlog::debug() << "Found NCLX color profile. Deriving CICP from it.";
@@ -442,7 +468,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, numChannels, hasAlpha, skipColorProcessing, targetSize, layer);
+        co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, targetSize, layer);
     };
 
     const auto decodeSingleTrackImage =
@@ -480,7 +506,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Failed to decode track image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, numChannels, hasAlpha, false, targetSize, partName, partName);
+        co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, targetSize, partName, partName);
     };
 
     vector<ImageData> result;
