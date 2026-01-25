@@ -316,12 +316,20 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         EOrientation orientation = EOrientation::None;
         optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
 
+        // Per ISO 21496-1, an sRGB color space exif setting takes precedence over ICC profiles
+        bool forceSrgb = false;
+
         if (!appN.exif.empty()) {
             tlog::debug() << fmt::format("Found EXIF data of size {} bytes", appN.exif.size());
 
             try {
                 const auto exif = Exif{appN.exif};
                 resultData.attributes.emplace_back(exif.toAttributes());
+
+                forceSrgb = exif.forceSrgb();
+                if (forceSrgb) {
+                    tlog::debug() << "EXIF forces sRGB color space.";
+                }
 
                 const EOrientation exifOrientation = exif.getOrientation();
                 if (exifOrientation != EOrientation::None) {
@@ -391,7 +399,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
         // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG
         // spec) and convert it to linear space via inverse sRGB transfer function.
-        {
+        if (!forceSrgb) {
             vector<uint8_t> iccProfile;
             for (const auto& chunk : appN.iccChunks) {
                 iccProfile.insert(iccProfile.end(), chunk.begin(), chunk.end());

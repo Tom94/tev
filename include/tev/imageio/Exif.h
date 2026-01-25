@@ -64,6 +64,8 @@ public:
 
     EOrientation getOrientation() const;
 
+    bool forceSrgb() const;
+
     AttributeNode toAttributes() const;
 
 private:

@@ -143,7 +143,10 @@ Ifd Exif::tryGetAppleMakerNote() const {
         throw invalid_argument{"No Apple maker note found in EXIF data."};
     }
 
-    return Ifd{{makerNote->data, makerNote->size}, SIG_LENGTH + 2};
+    return Ifd{
+        {makerNote->data, makerNote->size},
+        SIG_LENGTH + 2,
+    };
 }
 
 EOrientation Exif::getOrientation() const {
@@ -153,6 +156,15 @@ EOrientation Exif::getOrientation() const {
     }
 
     return (EOrientation)exif_get_short(orientationEntry->data, byteOrder(mReverseEndianess));
+}
+
+bool Exif::forceSrgb() const {
+    const ExifEntry* colorSpaceEntry = exif_content_get_entry(mExif->ifd[EXIF_IFD_0], EXIF_TAG_COLOR_SPACE);
+    if (!colorSpaceEntry) {
+        return false;
+    }
+
+    return exif_get_short(colorSpaceEntry->data, byteOrder(mReverseEndianess)) == 1;
 }
 
 AttributeNode Exif::toAttributes() const {
