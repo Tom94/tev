@@ -219,7 +219,7 @@ Task<void> applyIsoGainMap(
                 const float logBoost = gainMap.channels[gainmapChannel].at(i);
 
                 const float sdr = image.channels[c].at(i);
-                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost) * weight - metadata.alternateOffset()[c];
+                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost * weight) - metadata.alternateOffset()[c];
 
                 image.channels[c].setAt(i, hdr);
             }
