@@ -570,6 +570,8 @@ Task<vector<ImageData>>
         ImageData& mainImage = result.back();
 
         optional<Exif> exif;
+        optional<IsoGainMapMetadata> isoGainMapMetadata;
+
         const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(imgHandle, nullptr);
         vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
 
@@ -609,8 +611,20 @@ Task<vector<ImageData>>
                     Xmp xmp{
                         string_view{(const char*)metadata.data(), metadata.size()}
                     };
+
+                    if (!isoGainMapMetadata) {
+                        isoGainMapMetadata = xmp.isoGainMapMetadata();
+                    }
+
                     mainImage.attributes.emplace_back(xmp.attributes());
                 } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+            } else if (type == "tmap") {
+                tlog::debug() << fmt::format("Found tmap data of size {} bytes", metadata.size());
+
+                try {
+                    isoGainMapMetadata = IsoGainMapMetadata{metadata};
+                    tlog::debug() << "Successfully parsed tmap ISO 21496-1 gain map metadata.";
+                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read tmap metadata: {}", e.what()); }
             } else {
                 tlog::debug() << fmt::format("Skipping unknown metadata block of type '{}/{}' ({} bytes).", type, contentType, size);
             }
@@ -707,7 +721,6 @@ Task<vector<ImageData>>
 
             if (loadGainmap) {
                 optional<chroma_t> altImgChroma = nullopt;
-                optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
 
                 if (isIsoGainmap) {
                     tlog::debug() << fmt::format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxLayerName);
@@ -716,19 +729,19 @@ Task<vector<ImageData>>
                     if (metadataData.size() > 0 &&
                         heif_image_handle_get_gain_map_metadata(imgHandle, metadataData.data()).code == heif_error_Ok) {
 
-                        tlog::debug() << fmt::format("Read {} bytes of gainmap metadata.", metadataData.size());
+                        tlog::debug()
+                            << fmt::format("Read {} bytes of gainmap metadata. Attempting to override if existing.", metadataData.size());
 
                         try {
-                            isoGainmapMetadata = IsoGainMapMetadata{
+                            isoGainMapMetadata = IsoGainMapMetadata{
                                 span<uint8_t>{metadataData.data(), metadataData.size()}
                             };
-                            mainImage.attributes.emplace_back(isoGainmapMetadata->toAttributes());
 
                             tlog::debug() << "Successfully parsed ISO 21496-1 gain map metadata.";
                         } catch (const invalid_argument& e) {
                             tlog::warning() << fmt::format("Failed to read gainmap metadata: {}", e.what());
                         }
-                    } else {
+                    } else if (!isoGainMapMetadata) {
                         tlog::warning() << "No gainmap metadata found for ISO 21496-1 gain map image.";
                     }
 
@@ -770,20 +783,20 @@ Task<vector<ImageData>>
                     if (const auto amn = findAppleMakerNote()) {
                         tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
                         co_await applyAppleGainMap(mainImage, auxImgData, priority, amn);
-                    } else if (isoGainmapMetadata) {
+                    } else if (isoGainMapMetadata) {
                         tlog::debug() << "No Apple maker note was found, but ISO 21496-1 metadata is available; applying gain map.";
                         co_await applyIsoGainMap(
-                            mainImage, auxImgData, priority, *isoGainmapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
+                            mainImage, auxImgData, priority, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
                         );
                     } else {
                         tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
                         co_await applyAppleGainMap(mainImage, auxImgData, priority, nullopt);
                     }
                 } else if (isIsoGainmap) {
-                    if (isoGainmapMetadata) {
+                    if (isoGainMapMetadata) {
                         tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
                         co_await applyIsoGainMap(
-                            mainImage, auxImgData, priority, *isoGainmapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
+                            mainImage, auxImgData, priority, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
                         );
                     } else {
                         tlog::warning() << fmt::format(
@@ -805,6 +818,10 @@ Task<vector<ImageData>>
                     std::make_move_iterator(auxImgData.channels.end())
                 );
             }
+        }
+
+        if (isoGainMapMetadata) {
+            mainImage.attributes.emplace_back(isoGainMapMetadata->toAttributes());
         }
     };
 
