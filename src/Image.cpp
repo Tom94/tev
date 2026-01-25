@@ -121,7 +121,10 @@ void ImageData::readMetadataFromIcc(const ColorProfile& profile) {
 }
 
 void ImageData::readMetadataFromCicp(const ColorProfile::CICP& cicp) {
-    nativeMetadata.chroma = ituth273::chroma(cicp.primaries);
+    if (cicp.primaries != ituth273::EColorPrimaries::Unspecified) {
+        nativeMetadata.chroma = ituth273::chroma(cicp.primaries);
+    }
+
     nativeMetadata.transfer = cicp.transfer;
 
     hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp.transfer);
