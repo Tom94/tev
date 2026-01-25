@@ -385,7 +385,11 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
             resultData.partName = fmt::format("gainmap.{}", idx);
 
             // Gain map images are handled specially later. They will become part of a larger HDR image rather than a separate image.
-            imageInfo.gainmapInfo = isoGainmapMetadata;
+            if (imageInfo.parentIndex != idx) {
+                imageInfo.gainmapInfo = isoGainmapMetadata;
+            } else {
+                tlog::warning() << "Gain map image has itself as parent. Treating as regular image.";
+            }
         }
 
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
@@ -463,6 +467,8 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     };
 
     vector<ImageData> result;
+    vector<int> resultIndices;
+
     for (size_t i = 0; i < imageInfos.size(); ++i) {
         auto imageData = co_await decodeJpeg(imageInfos[i].data, i, imageInfos[i].partName);
 
@@ -471,15 +477,20 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         if (!imageInfo.gainmapInfo.has_value()) {
             // Non-gainmap images are added directly to the result set and not processed further
             result.emplace_back(std::move(imageData));
+            resultIndices.emplace_back(i);
+            continue;
+        } else {
+            resultIndices.emplace_back(-1);
+        }
+
+        if (imageInfo.parentIndex >= resultIndices.size() || resultIndices.at(imageInfo.parentIndex) == -1) {
+            tlog::warning() << fmt::format("Gain map image has invalid parent index {}, skipping.", imageInfo.parentIndex);
             continue;
         }
 
-        if (imageInfo.parentIndex >= result.size()) {
-            tlog::warning() << "Gain map image has invalid parent index, skipping.";
-            continue;
-        }
+        const auto resultIndex = resultIndices.at(imageInfo.parentIndex);
 
-        auto& mainImage = result.at(imageInfo.parentIndex);
+        auto& mainImage = result.at(resultIndex);
         mainImage.attributes.emplace_back(imageInfo.gainmapInfo->toAttributes());
 
         if (applyGainmaps) {
