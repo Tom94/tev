@@ -1406,9 +1406,11 @@ Task<vector<shared_ptr<Image>>>
                 continue;
             }
 
-            // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
+            // If *multiple* image "parts" were loaded and they have names, ensure that these names are present in the channel selector. If
+            // there's just a single part, it'll already be represented in the image's top-level layer name, so no need to clutter the UI by
+            // explicitly listing it.
             string localChannelSelector;
-            if (i.partName.empty()) {
+            if (i.partName.empty() || imageData.size() == 1) {
                 localChannelSelector = string{channelSelector};
             } else {
                 const auto selectorParts = split(channelSelector, ",");
