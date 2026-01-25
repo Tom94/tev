@@ -4,7 +4,7 @@ High dynamic range (HDR) image viewer for people who care about colors.
 
 - __Lightning fast:__ starts up instantly, loads hundreds of images in seconds.
 - __Accurate:__ understands HDR and color profiles (ICC, CICP, etc.). Displays HDR on all operating systems.
-- __Versatile:__ supports many [file formats](#file-formats), histograms, pixel-peeping, tonemaps, error metrics, etc.
+- __Versatile:__ supports many [file formats](#file-formats) and their quirks: gain maps, aux channels, animation, and more metadata than just EXIF & XMP. Pixel-peep: histograms, tonemaps, error metrics, etc. in any color space.
 
 ![Screenshot](resources/screenshot.png)
 _A false-color comparison of two multi-layer OpenEXR images of a beach ball. Image courtesy of [openexr-images](https://github.com/openexr/openexr-images)._
