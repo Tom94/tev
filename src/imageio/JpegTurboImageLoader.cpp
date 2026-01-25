@@ -53,11 +53,17 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
     unordered_set<ptrdiff_t> seenOffsets; // to avoid processing the same data multiple times
 
+    struct GainmapInfo {
+        IsoGainMapMetadata metadata;
+        optional<chroma_t> chroma = nullopt;
+    };
+
     struct ImageInfo {
         span<const uint8_t> data = {};
         size_t parentIndex = 0;
         string partName = "";
-        optional<IsoGainMapMetadata> gainmapInfo = nullopt;
+
+        unique_ptr<GainmapInfo> gainmapInfo = nullptr;
     };
 
     vector<ImageInfo> imageInfos;
@@ -386,7 +392,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
             // Gain map images are handled specially later. They will become part of a larger HDR image rather than a separate image.
             if (imageInfo.parentIndex != idx) {
-                imageInfo.gainmapInfo = isoGainmapMetadata;
+                imageInfo.gainmapInfo = make_unique<GainmapInfo>(isoGainmapMetadata.value());
             } else {
                 tlog::warning() << "Gain map image has itself as parent. Treating as regular image.";
             }
@@ -421,11 +427,12 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                     // Per ISO 21496-1, gain maps should be loaded as-is in their encoded color space (except for the conversion from
                     // YCbCr), and their ICC profile should only be used for its chroma at gain map application time.
                     if (imageInfo.gainmapInfo) {
+                        imageInfo.gainmapInfo->chroma = profile.chroma();
+
                         co_await toFloat32<uint8_t, false>(
                             imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
                         );
 
-                        resultData.readMetadataFromIcc(profile);
                         co_return resultData;
                     }
 
@@ -458,10 +465,10 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
             co_await toFloat32<uint8_t, true>(
                 imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
             );
-        }
 
-        resultData.nativeMetadata.chroma = rec709Chroma();
-        resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
+            resultData.nativeMetadata.chroma = rec709Chroma();
+            resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
+        }
 
         co_return resultData;
     };
@@ -474,7 +481,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
         // Danger: imageInfos may grow due to decodeJpeg adding MPF images!
         const auto& imageInfo = imageInfos[i];
-        if (!imageInfo.gainmapInfo.has_value()) {
+        if (!imageInfo.gainmapInfo) {
             // Non-gainmap images are added directly to the result set and not processed further
             result.emplace_back(std::move(imageData));
             resultIndices.emplace_back(i);
@@ -491,13 +498,12 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         const auto resultIndex = resultIndices.at(imageInfo.parentIndex);
 
         auto& mainImage = result.at(resultIndex);
-        mainImage.attributes.emplace_back(imageInfo.gainmapInfo->toAttributes());
+        const auto& gainmapInfo = *imageInfo.gainmapInfo;
+        mainImage.attributes.emplace_back(gainmapInfo.metadata.toAttributes());
 
         if (applyGainmaps) {
             tlog::debug() << fmt::format("Applying ISO 21496-1 gain map #{} to main image #{}", i, imageInfo.parentIndex);
-            co_await applyIsoGainMap(
-                mainImage, imageData, priority, *imageInfo.gainmapInfo, mainImage.nativeMetadata.chroma, imageData.nativeMetadata.chroma
-            );
+            co_await applyIsoGainMap(mainImage, imageData, priority, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma);
         }
 
         co_await ImageLoader::resizeImageData(imageData, mainImage.channels.front().size(), priority);
