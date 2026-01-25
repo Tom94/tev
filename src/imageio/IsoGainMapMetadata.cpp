@@ -73,12 +73,12 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
     mUseBaseColorSpace = flags & (uint8_t)EFlags::UseBaseColorSpace;
 
     // The following two flags are not actually defined by the spec, but they seem to be used like this by UltraHDR, so we follow suit.
-    mBackwardDirection = flags & (uint8_t)EFlags::BackwardDirection;
+    const bool backwardDirection = flags & (uint8_t)EFlags::BackwardDirection;
     const bool useCommonDenominator = flags & (uint8_t)EFlags::UseCommonDenominator;
     tlog::debug() << fmt::format(
-        "IsoGainMapMetadata flags: UseBaseColorSpace={}, BackwardDirection={}, UseCommonDenominator={}",
+        "IsoGainMapMetadata flags: useBaseColorSpace={} backwardDirection={} useCommonDenominator={}",
         mUseBaseColorSpace,
-        mBackwardDirection,
+        backwardDirection,
         useCommonDenominator
     );
 
@@ -115,6 +115,10 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
         mBaseOffset[c] = mBaseOffset[0];
         mAlternateOffset[c] = mAlternateOffset[0];
     }
+
+    if (backwardDirection) {
+        reverseDirection();
+    }
 }
 
 IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
@@ -126,11 +130,6 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
     }
 
     mVersion = IsoGainMapVersion{fmt::format("XMP v{}", version)};
-
-    // Read actual data per https://developer.android.com/media/platform/hdr-image-format#HDR_gain_map_metadata
-    if (!meta->GetProperty_Bool(ns, "BaseRenditionIsHDR", &mBackwardDirection, nullptr)) {
-        mBackwardDirection = false;
-    }
 
     const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f& out) {
         if (XMP_OptionBits options; meta->GetProperty(ns, name, nullptr, &options)) {
@@ -217,6 +216,10 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
     }
 
     mAlternateHdrHeadroom = max(mAlternateHdrHeadroom, mBaseHdrHeadroom);
+
+    if (bool backwardDirection; meta->GetProperty_Bool(ns, "BaseRenditionIsHDR", &backwardDirection, nullptr) && backwardDirection) {
+        reverseDirection();
+    }
 }
 
 AttributeNode IsoGainMapMetadata::toAttributes() const {
@@ -228,7 +231,6 @@ AttributeNode IsoGainMapMetadata::toAttributes() const {
     global.children.push_back({.name = "Version", .value = mVersion.toString(), .type = "string", .children = {}});
 
     global.children.push_back({.name = "Use Base Color Space", .value = mUseBaseColorSpace ? "true" : "false", .type = "bool", .children = {}});
-    global.children.push_back({.name = "Backward Direction", .value = mBackwardDirection ? "true" : "false", .type = "bool", .children = {}});
     global.children.push_back({.name = "Base HDR Headroom", .value = fmt::format("{}", mBaseHdrHeadroom), .type = "float", .children = {}});
     global.children.push_back(
         {.name = "Alternate HDR Headroom", .value = fmt::format("{}", mAlternateHdrHeadroom), .type = "float", .children = {}}
@@ -250,6 +252,12 @@ AttributeNode IsoGainMapMetadata::toAttributes() const {
     }
 
     return result;
+}
+
+void IsoGainMapMetadata::reverseDirection() {
+    // Swap base and alternate parameters
+    std::swap(mBaseHdrHeadroom, mAlternateHdrHeadroom);
+    std::swap(mBaseOffset, mAlternateOffset);
 }
 
 } // namespace tev

@@ -138,7 +138,13 @@ Task<void> applyIsoGainMap(
 ) {
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
-    if (metadata.backwardDirection()) {
+    const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
+    const float weight = std::copysign(
+        clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
+        metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
+    );
+
+    if (weight <= 0.0f) {
         co_return; // We'd like the image to be HDR. If the gainmap describes the HDR->SDR direction, we don't need to do anything.
     }
 
@@ -167,12 +173,6 @@ Task<void> applyIsoGainMap(
     co_await ImageLoader::resizeImageData(gainMap, size, priority);
 
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
-
-    const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
-    const float weight = std::copysign(
-        clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
-        metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
-    );
 
     tlog::debug() << fmt::format(
         "Applying ISO gain map: baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}.",

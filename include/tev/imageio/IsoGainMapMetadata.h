@@ -80,11 +80,11 @@ public:
     float baseHdrHeadroom() const { return mBaseHdrHeadroom; }
     float alternateHdrHeadroom() const { return mAlternateHdrHeadroom; }
 
-    // Whether to go from HDR to SDR (true) or from SDR to HDR (false)
-    bool backwardDirection() const { return mBackwardDirection; }
     bool useBaseColorSpace() const { return mUseBaseColorSpace; }
 
 private:
+    void reverseDirection();
+
     IsoGainMapVersion mVersion;
 
     nanogui::Vector3f mGainMapMin;
@@ -97,7 +97,6 @@ private:
     float mBaseHdrHeadroom;
     float mAlternateHdrHeadroom;
 
-    bool mBackwardDirection = false;
     bool mUseBaseColorSpace = false;
 };
 
