@@ -108,7 +108,7 @@ Xmp::Xmp(string_view xmpData) {
             node->type = "string";
         }
 
-        if (int orientation; meta.GetProperty_Int(kXMP_NS_TIFF, "Orientation", &orientation, nullptr)) {
+        if (XMP_Int32 orientation; meta.GetProperty_Int(kXMP_NS_TIFF, "Orientation", &orientation, nullptr)) {
             mOrientation = static_cast<EOrientation>(orientation);
             tlog::debug() << fmt::format("Found XMP orientation: {}", orientation);
         }
