@@ -709,9 +709,8 @@ Task<vector<ImageData>>
             const bool isGainmap = isIsoGainmap || isAppleGainmap;
 
             const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
-            const bool loadGainmap = applyGainmaps && isGainmap;
 
-            if (!retainAuxLayer && !loadGainmap) {
+            if (!retainAuxLayer && !isGainmap) {
                 continue;
             }
 
@@ -719,7 +718,7 @@ Task<vector<ImageData>>
                 auxImgHandle, isGainmap, mainImage.channels.front().size(), Channel::joinIfNonempty(partName, auxLayerName), partName
             );
 
-            if (loadGainmap) {
+            if (isGainmap) {
                 optional<chroma_t> altImgChroma = nullopt;
 
                 if (isIsoGainmap) {
@@ -776,33 +775,21 @@ Task<vector<ImageData>>
                     }
                 }
 
-                if (isAppleGainmap) {
+                // Prioritize ISO 21496-1 gain map application if both types are present. If the gain map is of Apple's type, we can fall
+                // back to their vendor-specific handling (optionally with maker note parameters, but also handles default).
+                if (isoGainMapMetadata) {
+                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
+                    co_await applyIsoGainMap(
+                        mainImage, auxImgData, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, applyGainmaps, priority
+                    );
+                } else if (isAppleGainmap) {
                     tlog::debug()
                         << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
-
-                    if (const auto amn = findAppleMakerNote()) {
-                        tlog::debug() << "Successfully decoded Apple maker note; applying gain map.";
-                        co_await applyAppleGainMap(mainImage, auxImgData, priority, amn);
-                    } else if (isoGainMapMetadata) {
-                        tlog::debug() << "No Apple maker note was found, but ISO 21496-1 metadata is available; applying gain map.";
-                        co_await applyIsoGainMap(
-                            mainImage, auxImgData, priority, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
-                        );
-                    } else {
-                        tlog::warning() << "No Apple maker note was found; applying gain map with headroom defaults.";
-                        co_await applyAppleGainMap(mainImage, auxImgData, priority, nullopt);
-                    }
-                } else if (isIsoGainmap) {
-                    if (isoGainMapMetadata) {
-                        tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
-                        co_await applyIsoGainMap(
-                            mainImage, auxImgData, priority, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma
-                        );
-                    } else {
-                        tlog::warning() << fmt::format(
-                            "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName
-                        );
-                    }
+                    co_await applyAppleGainMap(mainImage, auxImgData, findAppleMakerNote(), applyGainmaps, priority);
+                } else {
+                    tlog::warning() << fmt::format(
+                        "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName
+                    );
                 }
             }
 

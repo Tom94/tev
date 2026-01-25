@@ -501,10 +501,9 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         const auto& gainmapInfo = *imageInfo.gainmapInfo;
         mainImage.attributes.emplace_back(gainmapInfo.metadata.toAttributes());
 
-        if (applyGainmaps) {
-            tlog::debug() << fmt::format("Applying ISO 21496-1 gain map #{} to main image #{}", i, imageInfo.parentIndex);
-            co_await applyIsoGainMap(mainImage, imageData, priority, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma);
-        }
+        co_await applyIsoGainMap(
+            mainImage, imageData, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma, applyGainmaps, priority
+        );
 
         co_await ImageLoader::resizeImageData(imageData, mainImage.channels.front().size(), priority);
 

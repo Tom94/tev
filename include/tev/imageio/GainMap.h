@@ -28,15 +28,16 @@
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority, const std::optional<Ifd>& amn);
+Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const std::optional<Ifd>& amn, bool shallApply, int priority);
 
 Task<void> applyIsoGainMap(
     ImageData& image,
     ImageData& gainMap,
-    int priority,
     const IsoGainMapMetadata& metadata,
     const std::optional<chroma_t>& baseChroma,
-    const std::optional<chroma_t>& altChroma
+    const std::optional<chroma_t>& altChroma,
+    bool shallApply,
+    int priority
 );
 
 } // namespace tev

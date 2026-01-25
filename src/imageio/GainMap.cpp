@@ -28,8 +28,10 @@ using namespace std;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority, const optional<Ifd>& amn) {
+Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
+
+    tlog::debug() << "Apple gain map: linearizing and resizing";
 
     // First: linearize per the spec, then resize to image size
     const auto gainmapSize = gainMap.channels[0].size();
@@ -54,6 +56,12 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority,
     co_await ImageLoader::resizeImageData(gainMap, size, priority);
 
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
+
+    // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
+    // gain map itself in tev.
+    if (!shallApply) {
+        co_return;
+    }
 
     // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
     float maker33 = 0.0f;
@@ -80,13 +88,13 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority,
     }
 
     const float headroom = pow(2.0f, std::max(stops, 0.0f));
-    tlog::debug() << fmt::format("Derived gain map headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
+    tlog::debug() << fmt::format("Apple gain map: derived headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
 
     const int numImageChannels = (int)image.channels.size();
     const int numGainMapChannels = (int)gainMap.channels.size();
 
     if (numGainMapChannels > 1) {
-        tlog::warning() << "Apple gain maps should only have one channel. Attempting to apply multi-channel gain map.";
+        tlog::warning() << "Apple gain map: should only have one channel. Attempting to apply multi-channel gain map.";
     }
 
     int alphaChannelIndex = -1;
@@ -94,8 +102,9 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority,
         bool isAlpha = Channel::isAlpha(image.channels[c].name());
         if (isAlpha) {
             if (alphaChannelIndex != -1) {
-                tlog::warning()
-                    << fmt::format("Image has multiple alpha channels, using the first one: {}", image.channels[alphaChannelIndex].name());
+                tlog::warning() << fmt::format(
+                    "Apple gain map: image has multiple alpha channels, using the first one: {}", image.channels[alphaChannelIndex].name()
+                );
                 continue;
             }
 
@@ -131,22 +140,21 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority,
 Task<void> applyIsoGainMap(
     ImageData& image,
     ImageData& gainMap,
-    int priority,
     const IsoGainMapMetadata& metadata,
     const optional<chroma_t>& baseChroma,
-    const optional<chroma_t>& altChroma
+    const optional<chroma_t>& altChroma,
+    bool shallApply,
+    int priority
 ) {
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
+
+    tlog::debug() << "ISO gain map: undoing gamma, unnormalizing, and resizing";
 
     const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
     const float weight = std::copysign(
         clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
         metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
     );
-
-    if (weight <= 0.0f) {
-        co_return; // We'd like the image to be HDR. If the gainmap describes the HDR->SDR direction, we don't need to do anything.
-    }
 
     // Per the spec, unnormalize and then resize (in log space) to image size
     const auto gainmapSize = gainMap.channels[0].size();
@@ -174,14 +182,6 @@ Task<void> applyIsoGainMap(
 
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
 
-    tlog::debug() << fmt::format(
-        "Applying ISO gain map: baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}.",
-        metadata.baseHdrHeadroom(),
-        metadata.alternateHdrHeadroom(),
-        targetHeadroom,
-        weight
-    );
-
     const int numImageChannels = (int)image.channels.size();
     const int numGainMapChannels = (int)gainMap.channels.size();
 
@@ -197,7 +197,7 @@ Task<void> applyIsoGainMap(
     const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : (altChroma ? altChroma : baseChroma);
 
     if (chroma) {
-        tlog::debug() << fmt::format("Converting image to gain map chroma '{}' prior to gain map application", *chroma);
+        tlog::debug() << fmt::format("ISO gain map: converting image to chroma '{}' prior to application", *chroma);
 
         const auto rec709ToChroma = convertColorspaceMatrix(rec709Chroma(), *chroma, image.renderingIntent);
         const auto imageToChroma = rec709ToChroma * image.toRec709;
@@ -205,6 +205,20 @@ Task<void> applyIsoGainMap(
         // NOTE: the color conversion internally updates image.toRec709 accordingly
         co_await image.applyColorConversion(imageToChroma, priority);
     }
+
+    // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
+    // gain map itself in tev.
+    if (weight <= 0.0f || !shallApply) {
+        co_return; // We'd like the image to be HDR. If the gainmap describes the HDR->SDR direction, we don't need to do anything.
+    }
+
+    tlog::debug() << fmt::format(
+        "ISO gain map: applying with baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}",
+        metadata.baseHdrHeadroom(),
+        metadata.alternateHdrHeadroom(),
+        targetHeadroom,
+        weight
+    );
 
     // Actual gainmap application
     const size_t numPixels = (size_t)size.x() * size.y();
