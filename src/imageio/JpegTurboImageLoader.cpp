@@ -390,9 +390,14 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
         // fits into F16.
-        resultData.channels = co_await makeRgbaInterleavedChannels(
-            numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
-        );
+        const size_t numInterleavedChannels = numColorChannels == 1 ? 1 : 4;
+        if (numInterleavedChannels == 1) {
+            resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
+        } else {
+            resultData.channels = co_await makeRgbaInterleavedChannels(
+                numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            );
+        }
 
         // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
         resultData.hasPremultipliedAlpha = true;
@@ -413,7 +418,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                     // YCbCr), and their ICC profile should only be used for its chroma at gain map application time.
                     if (imageInfo.gainmapInfo) {
                         co_await toFloat32<uint8_t, false>(
-                            imageData.data(), numColorChannels, resultData.channels.front().floatData(), 4, size, false, priority
+                            imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
                         );
 
                         resultData.readMetadataFromIcc(profile);
@@ -431,7 +436,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
                         EPixelFormat::F32,
                         (uint8_t*)floatData.data(),
                         resultData.channels.front().floatData(),
-                        4,
+                        numInterleavedChannels,
                         priority
                     );
 
@@ -443,11 +448,11 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
 
         if (imageInfo.gainmapInfo) {
             co_await toFloat32<uint8_t, false>(
-                imageData.data(), numColorChannels, resultData.channels.front().floatData(), 4, size, false, priority
+                imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
             );
         } else {
             co_await toFloat32<uint8_t, true>(
-                imageData.data(), numColorChannels, resultData.channels.front().floatData(), 4, size, false, priority
+                imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
             );
         }
 
