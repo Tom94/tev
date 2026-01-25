@@ -275,7 +275,8 @@ if (TEV_USE_LIBHEIF)
     list(APPEND TEV_LIBS lcms2-tev heif)
 endif()
 if (TEV_SUPPORT_JXL)
-    list(APPEND TEV_LIBS jxl jxl_dec jxl_threads)
+    # jxl_dec for decoding, jxl_extras for gain maps, jxl_threads for threading support
+    list(APPEND TEV_LIBS jxl jxl_dec jxl_extras_nocodec-internal jxl_threads)
 endif()
 
 target_link_libraries(tev ${TEV_LIBS})

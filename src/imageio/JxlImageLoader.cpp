@@ -20,12 +20,14 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/GainMap.h>
 #include <tev/imageio/JxlImageLoader.h>
 #include <tev/imageio/Xmp.h>
 
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
 #include <jxl/encode.h>
+#include <jxl/gain_map.h>
 #include <jxl/resizable_parallel_runner.h>
 #include <jxl/thread_parallel_runner.h>
 #include <jxl/thread_parallel_runner_cxx.h>
@@ -131,7 +133,8 @@ string jxlToString(JxlTransferFunction type) {
 
 } // namespace
 
-Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool) const {
+Task<vector<ImageData>>
+    JxlImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool applyGainmaps) const {
     if (!isJxlImage(iStream)) {
         throw FormatNotSupported{"File is not a JPEG XL image."};
     }
@@ -143,6 +146,12 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     HeapArray<uint8_t> fileData(fileSize);
     iStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
 
+    co_return co_await load(fileData, path, channelSelector, priority, applyGainmaps, false);
+}
+
+Task<vector<ImageData>> JxlImageLoader::load(
+    span<const uint8_t> fileData, const fs::path& path, string_view channelSelector, int priority, bool applyGainmaps, bool skipColorProcessing
+) const {
     auto decoder = JxlDecoderMake(nullptr);
     if (!decoder) {
         throw ImageLoadError{"Failed to create decoder."};
@@ -259,6 +268,14 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
     vector<AttributeNode> attributes;
 
     optional<JxlColorEncoding> ce = nullopt;
+
+    struct GainMapInfo {
+        IsoGainMapMetadata metadata;
+        optional<chroma_t> altChroma;
+        ImageData imageData;
+    };
+
+    optional<GainMapInfo> gainMapInfo = nullopt;
 
     // Decode the image
     while (true) {
@@ -406,7 +423,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                             throw ImageLoadError{fmt::format("Failed to get extra channel {}'s name.", i)};
                         }
 
-                        extraChannel.name = channelName.data();
+                        extraChannel.name = fmt::format("extra.{}", channelName.data());
                     }
 
                     extraChannel.name = Channel::joinIfNonempty(data.partName, extraChannel.name);
@@ -468,7 +485,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 bool colorChannelsLoaded = false;
-                if (iccProfile) {
+                if (iccProfile && !skipColorProcessing) {
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
                     try {
@@ -501,7 +518,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
-                    if (ce) {
+                    if (ce && !skipColorProcessing) {
                         data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
 
                         tlog::debug() << fmt::format(
@@ -620,7 +637,7 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
                 }
 
                 const auto boxTypeStr = toUpper(trim(string_view{type, 4}));
-                if (boxTypeStr != "EXIF" && boxTypeStr != "XML") {
+                if (boxTypeStr != "EXIF" && boxTypeStr != "XML" && boxTypeStr != "JHGM") {
                     continue;
                 }
 
@@ -700,6 +717,83 @@ Task<vector<ImageData>> JxlImageLoader::load(istream& iStream, const fs::path& p
 
                         attributes.emplace_back(exifAttributes);
                     } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse EXIF data: {}", e.what()); }
+                } else if (boxTypeStr == "JHGM") {
+                    if (JxlGainMapBundle jgmb; JxlGainMapReadBundle(&jgmb, metadata.data(), metadata.size(), nullptr)) {
+                        tlog::debug() << fmt::format("Parsed JHGM gain map box: version={}", jgmb.jhgm_version);
+
+                        try {
+                            if (jgmb.gain_map_size == 0 || jgmb.gain_map == nullptr) {
+                                throw invalid_argument{"Gain map image data is missing."};
+                            }
+
+                            if (jgmb.gain_map_metadata_size == 0 || jgmb.gain_map_metadata == nullptr) {
+                                throw invalid_argument{"Gain map metadata is missing."};
+                            }
+
+                            const auto isoGainMapMetadata = IsoGainMapMetadata{
+                                {jgmb.gain_map_metadata, jgmb.gain_map_metadata_size}
+                            };
+                            attributes.emplace_back(isoGainMapMetadata.toAttributes());
+
+                            optional<chroma_t> altChroma = nullopt;
+                            if (jgmb.has_color_encoding) {
+                                tlog::debug() << "Gain map has JxlColorEncoding. Parsing...";
+
+                                const auto& jce = jgmb.color_encoding;
+
+                                if (jce.color_space != JXL_COLOR_SPACE_RGB) {
+                                    throw invalid_argument{"Gain map color encoding is not RGB."};
+                                }
+
+                                altChroma = chroma_t{
+                                    {{(float)jce.primaries_red_xy[0], (float)jce.primaries_red_xy[1]},
+                                     {(float)jce.primaries_green_xy[0], (float)jce.primaries_green_xy[1]},
+                                     {(float)jce.primaries_blue_xy[0], (float)jce.primaries_blue_xy[1]},
+                                     {(float)jce.white_point_xy[0], (float)jce.white_point_xy[1]}}
+                                };
+                            } else if (jgmb.alt_icc_size > 0 && jgmb.alt_icc != nullptr) {
+                                tlog::debug() << "Gain map has alternative ICC profile. Attempting to parse...";
+
+                                try {
+                                    const auto profile = ColorProfile::fromIcc({jgmb.alt_icc, jgmb.alt_icc_size});
+                                    altChroma = profile.chroma();
+                                } catch (const runtime_error& e) {
+                                    tlog::warning() << fmt::format("Failed to parse gain map alternative ICC profile: {}", e.what());
+                                }
+                            }
+
+                            try {
+                                auto gainMapLoadResult = co_await load(
+                                    span<const uint8_t>{jgmb.gain_map, jgmb.gain_map_size}, path, channelSelector, false, priority, true
+                                );
+
+                                tlog::debug() << fmt::format("Decoded JXL gain map image data into {} image(s).", gainMapLoadResult.size());
+
+                                if (gainMapLoadResult.size() == 0 || gainMapLoadResult.front().channels.empty()) {
+                                    throw invalid_argument{"Decoded gain map image data is empty."};
+                                } else if (gainMapLoadResult.size() > 1) {
+                                    tlog::warning() << "Decoded gain map image data contains multiple images. Using the first one.";
+                                }
+
+                                auto& gainMap = gainMapLoadResult.front();
+                                for (auto& channel : gainMap.channels) {
+                                    channel.setName(Channel::joinIfNonempty("gainmap", channel.name()));
+                                }
+
+                                gainMapInfo = GainMapInfo{
+                                    .metadata = std::move(isoGainMapMetadata),
+                                    .altChroma = altChroma,
+                                    .imageData = std::move(gainMap),
+                                };
+                            } catch (const ImageLoadError& e) {
+                                throw invalid_argument{fmt::format("Failed to decode gain map image data: {}", e.what())};
+                            }
+                        } catch (const invalid_argument& e) {
+                            tlog::warning() << fmt::format("Failed to load ISO 21496-1 gain map from JHGM box: {}", e.what());
+                        }
+                    } else {
+                        tlog::warning() << "Failed to parse JHGM gain map box.";
+                    }
                 } else {
                     tlog::warning() << fmt::format("Unhandled box type: {}", boxTypeStr);
                 }
@@ -714,6 +808,19 @@ l_decode_success:
     // Attach collected attributes to all image data parts
     for (auto&& data : result) {
         data.attributes.insert(data.attributes.end(), attributes.begin(), attributes.end());
+
+        if (gainMapInfo) {
+            auto& gainMap = gainMapInfo->imageData;
+            co_await applyIsoGainMap(
+                data, gainMap, gainMapInfo->metadata, data.nativeMetadata.chroma, gainMapInfo->altChroma, applyGainmaps, priority
+            );
+
+            co_await ImageLoader::resizeImageData(gainMap, data.channels.front().size(), priority);
+
+            data.channels.insert(
+                data.channels.end(), std::make_move_iterator(gainMap.channels.begin()), std::make_move_iterator(gainMap.channels.end())
+            );
+        }
     }
 
     co_return result;
