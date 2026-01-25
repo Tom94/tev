@@ -131,7 +131,6 @@ Xmp::Xmp(string_view xmpData) {
                 }
             }
         } catch (invalid_argument& e) { tlog::warning() << fmt::format("Failed to convert XMP gainmap metadata: {}", e.what()); }
-
     } catch (XMP_Error& e) { throw invalid_argument{e.GetErrMsg()}; }
 }
 

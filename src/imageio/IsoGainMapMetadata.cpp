@@ -124,101 +124,132 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
 IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
     SXMPMeta* meta = reinterpret_cast<SXMPMeta*>(xmpMeta);
 
-    string version;
-    if (!meta->GetProperty(ns, "Version", &version, nullptr)) {
-        throw invalid_argument{"XMP gainmap property Version is required."};
-    }
+    try {
+        string version;
+        if (!meta->GetProperty(ns, "Version", &version, nullptr)) {
+            throw invalid_argument{"XMP gainmap property Version is required."};
+        }
 
-    mVersion = IsoGainMapVersion{fmt::format("XMP v{}", version)};
+        mVersion = IsoGainMapVersion{fmt::format("XMP v{}", version)};
 
-    const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f& out) {
-        if (XMP_OptionBits options; meta->GetProperty(ns, name, nullptr, &options)) {
-            if (options & kXMP_PropValueIsArray) {
-                XMP_Index count = meta->CountArrayItems(ns, name);
-                if (count != 1 && count != 3) {
-                    throw invalid_argument(
-                        fmt::format("XMP gainmap property '{}' has invalid number of array items {}, expected 1 or 3.", name, count)
-                    );
-                }
+        const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f& out) {
+            if (XMP_OptionBits options; meta->GetProperty(ns, name, nullptr, &options)) {
+                if (options & kXMP_PropValueIsArray) {
+                    XMP_Index count = meta->CountArrayItems(ns, name);
+                    if (count != 1 && count != 3) {
+                        throw invalid_argument(
+                            fmt::format("XMP gainmap property '{}' has invalid number of array items {}, expected 1 or 3.", name, count)
+                        );
+                    }
 
-                for (XMP_Index i = 0; i < count; ++i) {
-                    std::string path;
-                    SXMPUtils::ComposeArrayItemPath(ns, name, i + 1, &path);
+                    for (XMP_Index i = 0; i < count; ++i) {
+                        std::string path;
+                        SXMPUtils::ComposeArrayItemPath(ns, name, i + 1, &path);
 
-                    if (double val; meta->GetProperty_Float(ns, path.c_str(), &val, nullptr)) {
-                        out[i] = (float)val;
-                    } else {
-                        throw invalid_argument(fmt::format("XMP gainmap property '{}' array item {} is not a float.", name, i));
+                        if (double val; meta->GetProperty_Float(ns, path.c_str(), &val, nullptr)) {
+                            out[i] = (float)val;
+                        } else {
+                            throw invalid_argument(fmt::format("XMP gainmap property '{}' array item {} is not a float.", name, i));
+                        }
+                    }
+
+                    // Fill up remaining channels with first channel if only one was given
+                    for (size_t i = count; i < 3; ++i) {
+                        out[i] = out[0];
+                    }
+                } else {
+                    string val;
+                    if (!meta->GetProperty(ns, name, &val, nullptr)) {
+                        throw invalid_argument(fmt::format("XMP gainmap property '{}' should exist.", name));
+                    }
+
+                    const auto parts = split(val, ",");
+                    if (parts.size() != 1 && parts.size() != 3) {
+                        throw invalid_argument(
+                            fmt::format(
+                                "XMP gainmap property '{}' has invalid number of comma-separated values {}, expected 1 or 3.", name, parts.size()
+                            )
+                        );
+                    }
+
+                    for (size_t i = 0; i < parts.size(); ++i) {
+                        try {
+                            out[i] = std::stof(string{parts[i]});
+                        } catch (const invalid_argument&) {
+                            throw invalid_argument(fmt::format("XMP gainmap property '{}' value '{}' is not a float.", name, parts[i]));
+                        }
+                    }
+
+                    // Fill up remaining channels with first channel if only one was given
+                    for (size_t i = parts.size(); i < 3; ++i) {
+                        out[i] = out[0];
                     }
                 }
 
-                // Fill up remaining channels with first channel if only one was given
-                for (size_t i = count; i < 3; ++i) {
-                    out[i] = out[0];
-                }
-            } else {
-                if (double val; meta->GetProperty_Float(ns, name, &val, nullptr)) {
-                    out = nanogui::Vector3f{(float)val};
-                } else {
-                    throw invalid_argument(fmt::format("XMP gainmap property '{}' is not a float.", name));
-                }
+                return true;
             }
 
-            return true;
+            return false;
+        };
+
+        const auto getFloat = [&](const char* name, float& out) {
+            if (double val; meta->GetProperty_Float(ns, name, &val, nullptr)) {
+                out = (float)val;
+                return true;
+            }
+
+            return false;
+        };
+
+        if (!getMaybeRgbFloat("GainMapMin", mGainMapMin)) {
+            mGainMapMin = nanogui::Vector3f{0.0f};
         }
 
-        return false;
-    };
-
-    const auto getFloat = [&](const char* name, float& out) {
-        if (double val; meta->GetProperty_Float(ns, name, &val, nullptr)) {
-            out = (float)val;
-            return true;
+        if (!getMaybeRgbFloat("GainMapMax", mGainMapMax)) {
+            throw invalid_argument{"XMP gainmap property GainMapMax is required."};
         }
 
-        return false;
-    };
+        mGainMapMax = max(mGainMapMax, mGainMapMin);
 
-    if (!getMaybeRgbFloat("GainMapMin", mGainMapMin)) {
-        mGainMapMin = nanogui::Vector3f{0.0f};
-    }
+        if (!getMaybeRgbFloat("Gamma", mGainMapGamma)) {
+            mGainMapGamma = nanogui::Vector3f{1.0f};
+        }
 
-    if (!getMaybeRgbFloat("GainMapMax", mGainMapMax)) {
-        throw invalid_argument{"XMP gainmap property GainMapMax is required."};
-    }
+        mGainMapGamma = max(mGainMapGamma, nanogui::Vector3f{0.001f});
 
-    mGainMapMax = max(mGainMapMax, mGainMapMin);
+        if (!getMaybeRgbFloat("OffsetSDR", mBaseOffset)) {
+            mBaseOffset = nanogui::Vector3f{1.0f / 64.0f};
+        }
 
-    if (!getMaybeRgbFloat("Gamma", mGainMapGamma)) {
-        mGainMapGamma = nanogui::Vector3f{1.0f};
-    }
+        mBaseOffset = max(mBaseOffset, nanogui::Vector3f{0.0f});
 
-    mGainMapGamma = max(mGainMapGamma, nanogui::Vector3f{0.001f});
+        if (!getMaybeRgbFloat("OffsetHDR", mAlternateOffset)) {
+            mAlternateOffset = nanogui::Vector3f{1.0f / 64.0f};
+        }
 
-    if (!getMaybeRgbFloat("OffsetSDR", mBaseOffset)) {
-        mBaseOffset = nanogui::Vector3f{1.0f / 64.0f};
-    }
+        mAlternateOffset = max(mAlternateOffset, nanogui::Vector3f{0.0f});
 
-    mBaseOffset = max(mBaseOffset, nanogui::Vector3f{0.0f});
+        if (!getFloat("HDRCapacityMin", mBaseHdrHeadroom)) {
+            mBaseHdrHeadroom = 0.0f;
+        }
 
-    if (!getMaybeRgbFloat("OffsetHDR", mAlternateOffset)) {
-        mAlternateOffset = nanogui::Vector3f{1.0f / 64.0f};
-    }
+        if (!getFloat("HDRCapacityMax", mAlternateHdrHeadroom)) {
+            throw invalid_argument{"XMP gainmap property HDRCapacityMax is required."};
+        }
 
-    mAlternateOffset = max(mAlternateOffset, nanogui::Vector3f{0.0f});
+        mAlternateHdrHeadroom = max(mAlternateHdrHeadroom, mBaseHdrHeadroom);
 
-    if (!getFloat("HDRCapacityMin", mBaseHdrHeadroom)) {
-        mBaseHdrHeadroom = 0.0f;
-    }
-
-    if (!getFloat("HDRCapacityMax", mAlternateHdrHeadroom)) {
-        throw invalid_argument{"XMP gainmap property HDRCapacityMax is required."};
-    }
-
-    mAlternateHdrHeadroom = max(mAlternateHdrHeadroom, mBaseHdrHeadroom);
-
-    if (bool backwardDirection; meta->GetProperty_Bool(ns, "BaseRenditionIsHDR", &backwardDirection, nullptr) && backwardDirection) {
-        reverseDirection();
+        // Old versions of XMP gainmap metadata used different properties to indicate the gainmap direction.
+        if (string baseRendition; meta->GetProperty(ns, "BaseRendition", &baseRendition, nullptr)) {
+            if (baseRendition == "HDR" || baseRendition == "HighDynamicRange") {
+                reverseDirection();
+            }
+        } else if (bool backwardDirection;
+                   meta->GetProperty_Bool(ns, "BaseRenditionIsHDR", &backwardDirection, nullptr) && backwardDirection) {
+            reverseDirection();
+        }
+    } catch (const XMP_Error& e) {
+        throw invalid_argument(fmt::format("Failed to read ISO 21496-1 gainmap XMP metadata: {}", e.GetErrMsg()));
     }
 }
 
