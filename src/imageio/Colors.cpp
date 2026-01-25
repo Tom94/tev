@@ -688,18 +688,20 @@ optional<chroma_t> ColorProfile::chroma() const {
     // Else, try to read white point and colorants
     const auto profile = get();
 
+    const cmsCIEXYZ* defaultWhite = (const cmsCIEXYZ*)cmsD50_XYZ();
+    Vector3f w = Vector3f{(float)defaultWhite->X, (float)defaultWhite->Y, (float)defaultWhite->Z};
+
     Matrix3f invAdapt = Matrix3f{1.0f};
     if (const cmsMAT3* adaptation = (const cmsMAT3*)cmsReadTag(profile, cmsSigChromaticAdaptationTag)) {
         invAdapt = inverse(toMatrix3(*adaptation));
+
+        // The adaptation matrix always converts from D50 to the profile's white point, because ICC's PCS is D50-based.
+        // Only use the ambiguous media white point if no adaptation matrix is present.
+        w = invAdapt * w;
+    } else if (const cmsCIEXYZ* mediaWhitePoint = (const cmsCIEXYZ*)cmsReadTag(profile, cmsSigMediaWhitePointTag)) {
+        w = Vector3f{(float)mediaWhitePoint->X, (float)mediaWhitePoint->Y, (float)mediaWhitePoint->Z};
     }
 
-    const cmsCIEXYZ* white = (const cmsCIEXYZ*)cmsReadTag(profile, cmsSigMediaWhitePointTag);
-    if (!white) {
-        // Fallback to D50 (ICC profile connection space illuminant)
-        white = (const cmsCIEXYZ*)cmsD50_XYZ();
-    }
-
-    const Vector3f w = invAdapt * Vector3f{(float)white->X, (float)white->Y, (float)white->Z};
     const float sum = w.x() + w.y() + w.z();
     const Vector2f wp = {w.x() / sum, w.y() / sum};
 
