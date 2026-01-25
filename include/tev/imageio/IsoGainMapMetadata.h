@@ -23,15 +23,30 @@
 
 #include <cstdint>
 #include <span>
-#include <stdexcept>
 
 namespace tev {
 
+class IsoGainMapVersion {
+public:
+    IsoGainMapVersion() = default;
+    IsoGainMapVersion(std::span<const uint8_t> data, size_t* pos = nullptr);
+    IsoGainMapVersion(std::string_view v) : mVersionString{v} {}
+
+    const std::string& toString() const { return mVersionString; }
+    void setString(const std::string& v) { mVersionString = v; }
+
+private:
+    std::string mVersionString = "n/a";
+};
+
 class IsoGainMapMetadata {
 public:
-    IsoGainMapMetadata(std::span<const uint8_t> data);
+    IsoGainMapMetadata(std::span<const uint8_t> data); // Construct from bytes per ISO 21496-1
+    IsoGainMapMetadata(const char* ns, void* xmpMeta); // Construct from Adobe XMP metadata
 
-    template <typename T> T read(std::span<const uint8_t> data, size_t* pos = nullptr) const {
+    template <typename T> static T read(std::span<const uint8_t> data, size_t* pos = nullptr) {
+        static constexpr bool reverseEndianess = std::endian::native == std::endian::little;
+
         const size_t offset = pos ? *pos : 0;
         if (data.size() < offset + sizeof(T)) {
             throw std::invalid_argument{"Not enough data to read value."};
@@ -44,7 +59,7 @@ public:
         }
 
         T result = *reinterpret_cast<const T*>(ptr);
-        if (mReverseEndianess) {
+        if (reverseEndianess) {
             result = swapBytes(result);
         }
 
@@ -52,6 +67,8 @@ public:
     }
 
     AttributeNode toAttributes() const;
+
+    const IsoGainMapVersion& version() const { return mVersion; }
 
     const nanogui::Vector3f& gainMapMin() const { return mGainMapMin; }
     const nanogui::Vector3f& gainMapMax() const { return mGainMapMax; }
@@ -63,11 +80,13 @@ public:
     float baseHdrHeadroom() const { return mBaseHdrHeadroom; }
     float alternateHdrHeadroom() const { return mAlternateHdrHeadroom; }
 
-    // Whether to go from HDR to SDR (true) or from SDR to HDR (false)
-    bool backwardDirection() const { return mBackwardDirection; }
     bool useBaseColorSpace() const { return mUseBaseColorSpace; }
 
 private:
+    void reverseDirection();
+
+    IsoGainMapVersion mVersion;
+
     nanogui::Vector3f mGainMapMin;
     nanogui::Vector3f mGainMapMax;
     nanogui::Vector3f mGainMapGamma;
@@ -78,10 +97,7 @@ private:
     float mBaseHdrHeadroom;
     float mAlternateHdrHeadroom;
 
-    bool mBackwardDirection;
-    bool mUseBaseColorSpace;
-
-    bool mReverseEndianess = false;
+    bool mUseBaseColorSpace = false;
 };
 
 } // namespace tev

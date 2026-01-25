@@ -738,8 +738,8 @@ optional<chroma_t> ColorProfile::chroma() const {
     return nullopt;
 }
 
-ColorProfile ColorProfile::fromIcc(const uint8_t* iccProfile, size_t iccProfileSize) {
-    cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(CmsContext::threadLocal().get(), iccProfile, (cmsUInt32Number)iccProfileSize);
+ColorProfile ColorProfile::fromIcc(span<const uint8_t> iccProfile) {
+    cmsHPROFILE srcProfile = cmsOpenProfileFromMemTHR(CmsContext::threadLocal().get(), iccProfile.data(), (cmsUInt32Number)iccProfile.size());
     if (!srcProfile) {
         throw runtime_error{"Failed to create ICC profile from raw data."};
     }

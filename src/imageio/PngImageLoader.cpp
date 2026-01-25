@@ -544,7 +544,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         co_await toFloat32(pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority);
                     }
 
-                    const auto profile = ColorProfile::fromIcc(iccProfileData, iccProfileSize);
+                    const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
                     co_await toLinearSrgbPremul(
                         profile,
                         size,

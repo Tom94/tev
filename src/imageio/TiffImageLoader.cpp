@@ -1495,7 +1495,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
     if (iccProfileData && iccProfileSize > 0) {
         try {
-            const auto profile = ColorProfile::fromIcc((uint8_t*)iccProfileData, iccProfileSize);
+            const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
             co_await toLinearSrgbPremul(
                 profile,
                 size,
@@ -1693,11 +1693,6 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     if (result.empty()) {
         throw ImageLoadError{"No images found in TIFF file."};
-    }
-
-    // No need to label the parts if it turns out there's just one image in this TIFF container.
-    if (result.size() == 1) {
-        result.front().partName = "";
     }
 
     co_return result;

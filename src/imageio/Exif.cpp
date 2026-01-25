@@ -17,8 +17,8 @@
  */
 
 #include <tev/Common.h>
-#include <tev/imageio/AppleMakerNote.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/Ifd.h>
 
 #include <libexif/exif-data.h>
 
@@ -54,17 +54,18 @@ Exif::Exif() {
 
             char buf[1024];
             vsnprintf(buf, sizeof(buf), format, args);
-            string msg = fmt::format("{}: {}", domain, buf);
+            const string msg = fmt::format("{}: {}", domain, buf);
+            const auto m = trimRight(msg);
             switch (kind) {
-                case EXIF_LOG_CODE_NONE: tlog::info() << msg; break;
-                case EXIF_LOG_CODE_DEBUG: tlog::debug() << msg; break;
+                case EXIF_LOG_CODE_NONE: tlog::info() << m; break;
+                case EXIF_LOG_CODE_DEBUG: tlog::debug() << m; break;
                 case EXIF_LOG_CODE_NO_MEMORY:
                     *error = true;
-                    tlog::error() << msg;
+                    tlog::error() << m;
                     break;
                 case EXIF_LOG_CODE_CORRUPT_DATA:
                     *error = true;
-                    tlog::error() << msg;
+                    tlog::error() << m;
                     break;
             }
         },
@@ -125,9 +126,27 @@ void Exif::reset() {
     }
 }
 
-AppleMakerNote Exif::tryGetAppleMakerNote() const {
+Ifd Exif::tryGetAppleMakerNote() const {
+    static constexpr uint8_t APPLE_SIGNATURE[] = {0x41, 0x70, 0x70, 0x6C, 0x65, 0x20, 0x69, 0x4F, 0x53, 0x00}; // "Apple iOS\0"
+    static constexpr size_t SIG_LENGTH = sizeof(APPLE_SIGNATURE);
+
+    const auto isAppleMakernote = [](const uint8_t* data, size_t length) {
+        if (length < SIG_LENGTH + 2) {
+            return false;
+        }
+
+        return memcmp(data, APPLE_SIGNATURE, SIG_LENGTH) == 0;
+    };
+
     const ExifEntry* makerNote = exif_data_get_entry(mExif, EXIF_TAG_MAKER_NOTE);
-    return AppleMakerNote{makerNote->data, makerNote->size};
+    if (!makerNote || !isAppleMakernote(makerNote->data, makerNote->size)) {
+        throw invalid_argument{"No Apple maker note found in EXIF data."};
+    }
+
+    return Ifd{
+        {makerNote->data, makerNote->size},
+        SIG_LENGTH + 2,
+    };
 }
 
 EOrientation Exif::getOrientation() const {
@@ -137,6 +156,15 @@ EOrientation Exif::getOrientation() const {
     }
 
     return (EOrientation)exif_get_short(orientationEntry->data, byteOrder(mReverseEndianess));
+}
+
+bool Exif::forceSrgb() const {
+    const ExifEntry* colorSpaceEntry = exif_content_get_entry(mExif->ifd[EXIF_IFD_0], EXIF_TAG_COLOR_SPACE);
+    if (!colorSpaceEntry) {
+        return false;
+    }
+
+    return exif_get_short(colorSpaceEntry->data, byteOrder(mReverseEndianess)) == 1;
 }
 
 AttributeNode Exif::toAttributes() const {

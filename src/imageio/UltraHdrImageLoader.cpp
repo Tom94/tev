@@ -173,7 +173,7 @@ Task<vector<ImageData>> UltraHdrImageLoader::load(istream& iStream, const fs::pa
 
         auto channels = co_await makeRgbaInterleavedChannels(numChannels, true, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
         try {
-            const auto profile = ColorProfile::fromIcc((uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14);
+            const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfile->data + 14, iccProfile->data_sz - 14});
             co_await toLinearSrgbPremul(
                 profile,
                 size,

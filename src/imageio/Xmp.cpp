@@ -108,15 +108,29 @@ Xmp::Xmp(string_view xmpData) {
             node->type = "string";
         }
 
-        if (string orientationStr; meta.GetProperty(kXMP_NS_TIFF, "Orientation", &orientationStr, nullptr)) {
-            try {
-                const int orientationInt = stoi(orientationStr);
-                mOrientation = static_cast<EOrientation>(orientationInt);
-                tlog::debug() << fmt::format("Found XMP orientation: {}", orientationInt);
-            } catch (const invalid_argument&) {
-                tlog::warning() << fmt::format("Failed to parse XMP orientation value: '{}'.", orientationStr);
-            }
+        if (XMP_Int32 orientation; meta.GetProperty_Int(kXMP_NS_TIFF, "Orientation", &orientation, nullptr)) {
+            mOrientation = static_cast<EOrientation>(orientation);
+            tlog::debug() << fmt::format("Found XMP orientation: {}", orientation);
         }
+
+        try {
+            const auto ns = "http://ns.adobe.com/hdr-gain-map/1.0/";
+            if (string prefix, version; meta.GetNamespacePrefix(ns, &prefix) && meta.GetProperty(ns, "Version", &version, nullptr)) {
+                tlog::debug() << fmt::format(
+                    "Found XMP gainmap metadata: prefix={} version={}", prefix, version
+                );
+
+                const auto it = std::find_if(mAttributes.children.begin(), mAttributes.children.end(), [&](const auto& child) {
+                    return child.name.starts_with(prefix);
+                });
+
+                if (it != mAttributes.children.end() && it->children.size() > 1) {
+                    tlog::debug()
+                        << "XMP gainmap metadata contains more entries than just Version. Attempting to convert to ISO 21496-1 format.";
+                    mIsoGainMapMetadata = IsoGainMapMetadata{ns, &meta};
+                }
+            }
+        } catch (invalid_argument& e) { tlog::warning() << fmt::format("Failed to convert XMP gainmap metadata: {}", e.what()); }
     } catch (XMP_Error& e) { throw invalid_argument{e.GetErrMsg()}; }
 }
 

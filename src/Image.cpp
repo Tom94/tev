@@ -121,7 +121,10 @@ void ImageData::readMetadataFromIcc(const ColorProfile& profile) {
 }
 
 void ImageData::readMetadataFromCicp(const ColorProfile::CICP& cicp) {
-    nativeMetadata.chroma = ituth273::chroma(cicp.primaries);
+    if (cicp.primaries != ituth273::EColorPrimaries::Unspecified) {
+        nativeMetadata.chroma = ituth273::chroma(cicp.primaries);
+    }
+
     nativeMetadata.transfer = cicp.transfer;
 
     hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp.transfer);
@@ -548,6 +551,9 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 
     attributes.emplace_back(hdrMetadata.toAttributes());
+
+    // Attribute tabs should have a consistent order. Arbitrarily sort them by name.
+    sort(begin(attributes), end(attributes), [](const AttributeNode& a, const AttributeNode& b) { return a.name < b.name; });
 }
 
 atomic<int> Image::sId(0);
@@ -1403,9 +1409,11 @@ Task<vector<shared_ptr<Image>>>
                 continue;
             }
 
-            // If multiple image "parts" were loaded and they have names, ensure that these names are present in the channel selector.
+            // If *multiple* image "parts" were loaded and they have names, ensure that these names are present in the channel selector. If
+            // there's just a single part, it'll already be represented in the image's top-level layer name, so no need to clutter the UI by
+            // explicitly listing it.
             string localChannelSelector;
-            if (i.partName.empty()) {
+            if (i.partName.empty() || imageData.size() == 1) {
                 localChannelSelector = string{channelSelector};
             } else {
                 const auto selectorParts = split(channelSelector, ",");

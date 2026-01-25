@@ -17,9 +17,9 @@
  */
 
 #include <tev/Common.h>
-#include <tev/imageio/AppleMakerNote.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
+#include <tev/imageio/Ifd.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/IsoGainMapMetadata.h>
 
@@ -28,7 +28,7 @@ using namespace std;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority, const optional<AppleMakerNote>& amn) {
+Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority, const optional<Ifd>& amn) {
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
 
     // First: linearize per the spec, then resize to image size
@@ -59,9 +59,9 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, int priority,
     float maker33 = 0.0f;
     float maker48 = 8.0f;
 
-    if (amn) {
-        maker33 = amn->tryGetFloat(33, maker33);
-        maker48 = amn->tryGetFloat(48, maker48);
+    if (amn.has_value()) {
+        maker33 = amn->tryGet<float>(33).value_or(maker33);
+        maker48 = amn->tryGet<float>(48).value_or(maker48);
     }
 
     float stops;
@@ -138,7 +138,13 @@ Task<void> applyIsoGainMap(
 ) {
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
-    if (metadata.backwardDirection()) {
+    const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
+    const float weight = std::copysign(
+        clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
+        metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
+    );
+
+    if (weight <= 0.0f) {
         co_return; // We'd like the image to be HDR. If the gainmap describes the HDR->SDR direction, we don't need to do anything.
     }
 
@@ -168,12 +174,6 @@ Task<void> applyIsoGainMap(
 
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
 
-    const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
-    const float weight = std::copysign(
-        clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
-        metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
-    );
-
     tlog::debug() << fmt::format(
         "Applying ISO gain map: baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}.",
         metadata.baseHdrHeadroom(),
@@ -192,8 +192,9 @@ Task<void> applyIsoGainMap(
 
     const int numColorChannels = std::min(alphaChannelIndex == -1 ? numImageChannels : (numImageChannels - 1), 3);
 
-    // Before applying the gainmap, convert the image to the appropriate color space
-    const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : altChroma;
+    // Before applying the gainmap, convert the image to the appropriate color space. Fall back to base chroma if alt chroma requested but
+    // not given (image should have been left in base chroma in that case).
+    const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : (altChroma ? altChroma : baseChroma);
 
     if (chroma) {
         tlog::debug() << fmt::format("Converting image to gain map chroma '{}' prior to gain map application", *chroma);
@@ -218,7 +219,7 @@ Task<void> applyIsoGainMap(
                 const float logBoost = gainMap.channels[gainmapChannel].at(i);
 
                 const float sdr = image.channels[c].at(i);
-                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost) * weight - metadata.alternateOffset()[c];
+                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost * weight) - metadata.alternateOffset()[c];
 
                 image.channels[c].setAt(i, hdr);
             }

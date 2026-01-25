@@ -121,7 +121,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             try {
                 const auto tmp = bgColor;
                 co_await toLinearSrgbPremul(
-                    ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size()),
+                    ColorProfile::fromIcc(iccProfileData),
                     {1, 1},
                     numColorChannels,
                     EAlphaKind::Straight,
@@ -199,7 +199,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     // Color space conversion from float to float is faster than u8 to float, hence we convert first.
                     co_await toFloat32(data, numChannels, iccTmpFloatData.data(), numChannels, frameSize, true, priority);
 
-                    const auto profile = ColorProfile::fromIcc(iccProfileData.data(), iccProfileData.size());
+                    const auto profile = ColorProfile::fromIcc(iccProfileData);
                     co_await toLinearSrgbPremul(
                         profile,
                         frameSize,
