@@ -281,8 +281,8 @@ Task<vector<ImageData>>
         }
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
-        const auto iccProfileData = getIccProfileFromImgAndHandle(img, imgHandle);
-        if (iccProfileData && !skipColorProcessing) {
+        const auto iccProfileData = skipColorProcessing ? nullopt : getIccProfileFromImgAndHandle(img, imgHandle);
+        if (iccProfileData) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
             try {
