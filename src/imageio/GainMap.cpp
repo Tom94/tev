@@ -167,7 +167,7 @@ Task<void> applyIsoGainMap(
             for (int c = 0; c < (int)gainMap.channels.size(); ++c) {
                 const float val = gainMap.channels[c].at(i);
 
-                const float logRecovery = std::pow(val, 1.0f / metadata.gainMapGamma()[c]);
+                const float logRecovery = copysign(std::pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
                 gainMap.channels[c].setAt(i, logBoost);
