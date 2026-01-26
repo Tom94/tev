@@ -28,7 +28,7 @@ using namespace std;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
+Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
     if (image.channels.empty() || gainMap.channels.empty()) {
         tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
         co_return;
@@ -142,7 +142,7 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const optiona
     co_return;
 }
 
-Task<void> applyIsoGainMap(
+Task<void> preprocessAndApplyIsoGainMap(
     ImageData& image,
     ImageData& gainMap,
     const IsoGainMapMetadata& metadata,

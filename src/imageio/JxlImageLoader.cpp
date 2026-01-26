@@ -811,11 +811,9 @@ l_decode_success:
 
         if (gainMapInfo) {
             auto& gainMap = gainMapInfo->imageData;
-            co_await applyIsoGainMap(
+            co_await preprocessAndApplyIsoGainMap(
                 data, gainMap, gainMapInfo->metadata, data.nativeMetadata.chroma, gainMapInfo->altChroma, applyGainmaps, priority
             );
-
-            co_await ImageLoader::resizeImageData(gainMap, data.channels.front().size(), priority);
 
             data.channels.insert(
                 data.channels.end(), std::make_move_iterator(gainMap.channels.begin()), std::make_move_iterator(gainMap.channels.end())

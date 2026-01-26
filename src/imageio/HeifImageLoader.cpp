@@ -779,13 +779,13 @@ Task<vector<ImageData>>
                 // back to their vendor-specific handling (optionally with maker note parameters, but also handles default).
                 if (isoGainMapMetadata) {
                     tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
-                    co_await applyIsoGainMap(
+                    co_await preprocessAndApplyIsoGainMap(
                         mainImage, auxImgData, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, applyGainmaps, priority
                     );
                 } else if (isAppleGainmap) {
                     tlog::debug()
                         << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
-                    co_await applyAppleGainMap(mainImage, auxImgData, findAppleMakerNote(), applyGainmaps, priority);
+                    co_await preprocessAndApplyAppleGainMap(mainImage, auxImgData, findAppleMakerNote(), applyGainmaps, priority);
                 } else {
                     tlog::warning() << fmt::format(
                         "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName
