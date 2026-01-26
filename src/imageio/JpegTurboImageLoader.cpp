@@ -67,7 +67,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
     };
 
     vector<ImageInfo> imageInfos;
-    imageInfos.emplace_back(span<const uint8_t>{buffer}, 0, "primary");
+    imageInfos.emplace_back(span<const uint8_t>{buffer}, 0, "");
 
     const auto decodeJpeg =
         [priority, &seenOffsets, &imageInfos, &buffer](span<const uint8_t> data, size_t idx, string partName) -> Task<ImageData> {
@@ -317,7 +317,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         jpeg_finish_decompress(&cinfo);
 
         ImageData resultData;
-        resultData.partName = fmt::format("{}.{}", partName, idx);
+        resultData.partName = partName.empty() ? "" : fmt::format("{}.{}", partName, idx);
 
         EOrientation orientation = EOrientation::None;
         optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
@@ -388,7 +388,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         if (isoGainmapMetadata.has_value()) {
             tlog::debug() << fmt::format("Gain map metadata version '{}'", isoGainmapMetadata->version().toString());
             resultData.attributes.emplace_back(isoGainmapMetadata->toAttributes());
-            resultData.partName = fmt::format("gainmap.{}", idx);
+            resultData.partName = fmt::format("gainmap", idx);
 
             // Gain map images are handled specially later. They will become part of a larger HDR image rather than a separate image.
             if (imageInfo.parentIndex != idx) {
