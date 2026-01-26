@@ -29,6 +29,11 @@ using namespace std;
 namespace tev {
 
 Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
+    if (image.channels.empty() || gainMap.channels.empty()) {
+        tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
+        co_return;
+    }
+
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
 
     tlog::debug() << "Apple gain map: linearizing and resizing";
@@ -146,6 +151,11 @@ Task<void> applyIsoGainMap(
     bool shallApply,
     int priority
 ) {
+    if (image.channels.empty() || gainMap.channels.empty()) {
+        tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
+        co_return;
+    }
+
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
     tlog::debug() << "ISO gain map: undoing gamma, unnormalizing, and resizing";
