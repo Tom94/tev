@@ -501,11 +501,9 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         const auto& gainmapInfo = *imageInfo.gainmapInfo;
         mainImage.attributes.emplace_back(gainmapInfo.metadata.toAttributes());
 
-        co_await applyIsoGainMap(
+        co_await preprocessAndApplyIsoGainMap(
             mainImage, imageData, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma, applyGainmaps, priority
         );
-
-        co_await ImageLoader::resizeImageData(imageData, mainImage.channels.front().size(), priority);
 
         mainImage.channels.insert(
             mainImage.channels.end(), std::make_move_iterator(imageData.channels.begin()), std::make_move_iterator(imageData.channels.end())

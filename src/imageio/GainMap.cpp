@@ -28,7 +28,12 @@ using namespace std;
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
+Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
+    if (image.channels.empty() || gainMap.channels.empty()) {
+        tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
+        co_return;
+    }
+
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
 
     tlog::debug() << "Apple gain map: linearizing and resizing";
@@ -137,7 +142,7 @@ Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const optiona
     co_return;
 }
 
-Task<void> applyIsoGainMap(
+Task<void> preprocessAndApplyIsoGainMap(
     ImageData& image,
     ImageData& gainMap,
     const IsoGainMapMetadata& metadata,
@@ -146,6 +151,11 @@ Task<void> applyIsoGainMap(
     bool shallApply,
     int priority
 ) {
+    if (image.channels.empty() || gainMap.channels.empty()) {
+        tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
+        co_return;
+    }
+
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
     tlog::debug() << "ISO gain map: undoing gamma, unnormalizing, and resizing";
@@ -167,7 +177,7 @@ Task<void> applyIsoGainMap(
             for (int c = 0; c < (int)gainMap.channels.size(); ++c) {
                 const float val = gainMap.channels[c].at(i);
 
-                const float logRecovery = std::pow(val, 1.0f / metadata.gainMapGamma()[c]);
+                const float logRecovery = copysign(std::pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
                 gainMap.channels[c].setAt(i, logBoost);

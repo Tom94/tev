@@ -28,9 +28,9 @@
 
 namespace tev {
 
-Task<void> applyAppleGainMap(ImageData& image, ImageData& gainMap, const std::optional<Ifd>& amn, bool shallApply, int priority);
+Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, const std::optional<Ifd>& amn, bool shallApply, int priority);
 
-Task<void> applyIsoGainMap(
+Task<void> preprocessAndApplyIsoGainMap(
     ImageData& image,
     ImageData& gainMap,
     const IsoGainMapMetadata& metadata,
