@@ -499,6 +499,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         displayWindow = channels.front().size();
     }
 
+    unordered_map<string_view, size_t> channelNameCounter;
     for (auto& c : channels) {
         if (c.size() != size()) {
             throw ImageLoadError{
@@ -506,8 +507,17 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
             };
         }
 
+        // Ensure the top-level layer of each channel is the image's part name
         if (!c.name().starts_with(partName)) {
             c.setName(Channel::joinIfNonempty(partName, c.name()));
+        }
+
+        // Deduplicate channel names by appending a numeric suffix to their head (before the last dot).
+        // E.g.: foo.bar.R -> foo.bar.1.R, R -> 1.R
+        const size_t count = channelNameCounter[c.name()]++;
+        if (count > 0) {
+            c.setName(Channel::join(Channel::joinIfNonempty(Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
+            tlog::debug() << fmt::format("Renamed duplicate channel to '{}'", c.name());
         }
     }
 
