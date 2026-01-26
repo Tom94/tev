@@ -44,15 +44,20 @@ namespace tev {
 
 namespace {
 // Helper to identify JPEG XL files by signature
+bool isJxlImage(span<const uint8_t> data) {
+    if (data.size() < 16) {
+        return false;
+    }
+
+    const auto sig = JxlSignatureCheck(data.data(), data.size());
+    return sig == JxlSignature::JXL_SIG_CODESTREAM || sig == JxlSignature::JXL_SIG_CONTAINER;
+}
+
 bool isJxlImage(istream& iStream) {
     uint8_t signature[16];
     iStream.read(reinterpret_cast<char*>(signature), sizeof(signature));
 
-    bool result = false;
-    if (!!iStream && iStream.gcount() == sizeof(signature)) {
-        auto sig = JxlSignatureCheck(signature, sizeof(signature));
-        result = (sig == JxlSignature::JXL_SIG_CODESTREAM || sig == JxlSignature::JXL_SIG_CONTAINER);
-    }
+    const bool result = !!iStream && iStream.gcount() == sizeof(signature) && isJxlImage(signature);
 
     iStream.clear();
     iStream.seekg(0);
@@ -152,6 +157,10 @@ Task<vector<ImageData>>
 Task<vector<ImageData>> JxlImageLoader::load(
     span<const uint8_t> fileData, const fs::path& path, string_view channelSelector, int priority, bool applyGainmaps, bool skipColorProcessing
 ) const {
+    if (!isJxlImage(fileData)) {
+        throw FormatNotSupported{"Data is not a JPEG XL image."};
+    }
+
     auto decoder = JxlDecoderMake(nullptr);
     if (!decoder) {
         throw ImageLoadError{"Failed to create decoder."};
