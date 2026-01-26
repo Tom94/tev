@@ -256,7 +256,6 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles");
     addLibrary(about, "libtiff", "TIFF image format library");
     addLibrary(about, "libraw", "Image format library for RAW files from digital cameras");
-    addLibrary(about, "libultrahdr", "Ultra HDR JPEG image format library");
     addLibrary(about, "libwebp", "WEBP image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");

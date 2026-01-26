@@ -28,6 +28,8 @@ using namespace std;
 namespace tev {
 
 enum class EFlags : uint8_t {
+    // The BackwardDirection and UseCommonDenominator flags are not defined in ISO 21496-1, but are used in practice by libultrahdr. We
+    // follow suit here for compatibility.
     BackwardDirection = 1u << 2,
     UseCommonDenominator = 1u << 3,
     UseBaseColorSpace = 1u << 6,
@@ -72,7 +74,6 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
 
     mUseBaseColorSpace = flags & (uint8_t)EFlags::UseBaseColorSpace;
 
-    // The following two flags are not actually defined by the spec, but they seem to be used like this by UltraHDR, so we follow suit.
     const bool backwardDirection = flags & (uint8_t)EFlags::BackwardDirection;
     const bool useCommonDenominator = flags & (uint8_t)EFlags::UseCommonDenominator;
     tlog::debug() << fmt::format(

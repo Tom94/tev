@@ -147,17 +147,7 @@ set_target_properties(jpeg-turbo PROPERTIES
     INTERFACE_LINK_LIBRARIES "${JPEG_LIBRARIES}"
 )
 add_library(JPEG::JPEG ALIAS jpeg-turbo)
-
-# Compile libultrahdr for HDR JPG support
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
-set(UHDR_BUILD_DEPS ON CACHE BOOL " " FORCE)
-set(UHDR_BUILD_EXAMPLES OFF CACHE BOOL " " FORCE)
-set(UHDR_BUILD_TESTS OFF CACHE BOOL " " FORCE)
-set(UHDR_ENABLE_INSTALL OFF CACHE BOOL " " FORCE)
-add_subdirectory(libultrahdr EXCLUDE_FROM_ALL)
-add_dependencies(core ${JPEGTURBO_TARGET_NAME})
-add_dependencies(uhdr ${JPEGTURBO_TARGET_NAME})
 
 # Compile aom (dependency of libheif, which follows)
 if (TEV_SUPPORT_AVIF)
