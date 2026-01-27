@@ -1543,7 +1543,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     co_return resultData;
 }
 
-Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
     // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
     // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
     // It became quite huge, but there are still many things that are not supported, most notably the photometric specifiers for CIELAB, CIE Lab, and ICC Lab.

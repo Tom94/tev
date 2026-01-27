@@ -21,6 +21,7 @@
 #include <tev/ImageViewer.h>
 #include <tev/Ipc.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/GainMap.h>
 
 #include <ImfThreading.h>
 #include <args.hxx>
@@ -132,7 +133,7 @@ static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<Backg
                     toPath(info.imageName),
                     imageStream,
                     "",
-                    sImageViewer->imagesLoader().applyGainmaps(),
+                    sImageViewer->imagesLoader().gainmapHeadroom(),
                     sImageViewer->imagesLoader().groupChannels()
                 );
                 const auto images = imagesLoadTask.get();
@@ -280,7 +281,7 @@ static int mainFunc(span<const string> arguments) {
 
     ValueFlag<string> backgroundColorFlag{
         parser,
-        "BACKGROUND COLOR",
+        "COLOR",
         "The background color to blend images against. "
         "Specify as sRGB hex code (#RGB, #RGBA, #RRGGBB, or #RRGGBBAA) or as linear comma-separated RGB(A) values (e.g. 0.5,0.5,0.5 or 0.5,0.5,0.5,1). "
         "Alpha is straight. "
@@ -336,11 +337,14 @@ static int mainFunc(span<const string> arguments) {
         {"fps"},
     };
 
-    Flag gainmapFlagOff{
+    ValueFlag<string> gainmapHeadroomFlag{
         parser,
-        "NO GAINMAPS",
-        "Do not apply gainmaps to LDR images, even if they come with one.",
-        {"no-gainmaps"},
+        "HEADROOM",
+        "Headroom to use when applying gainmaps in stops. I.e. for a given value of HEADROOM, the maximum brightness in the image's native color space after applying gainmaps will "
+        "be 2^HEADROOM or the gainmap's maximum headroom, whichever is smaller. Default is 'inf', always resulting in the gainmap's maximum headroom (maximum HDR). "
+        "This flag can also be set to a percentage of the the gainmap's maximum headroom (stops), e.g. '0%' to skip applying gainmaps altogether and '100%' to always apply gainmaps fully."
+        "Note that for images with HDR->SDR gainmaps (typically JPEG XL) the percentage indicates how much darkening (not brightening) is applied, whereas stops always indicate brightening.",
+        {"gainmap-headroom"},
     };
 
     ValueFlag<float> gammaFlag{
@@ -600,8 +604,17 @@ static int mainFunc(span<const string> arguments) {
 
     const shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
     imagesLoader->setRecursiveDirectories(recursiveFlag);
-    imagesLoader->setApplyGainmaps(!gainmapFlagOff);
     imagesLoader->setGroupChannels(!channelGroupingFlagOff);
+
+    if (gainmapHeadroomFlag) {
+        try {
+            const auto gainmapHeadroom = GainmapHeadroom{get(gainmapHeadroomFlag)};
+            imagesLoader->setGainmapHeadroom(gainmapHeadroom);
+        } catch (const invalid_argument& e) {
+            tlog::error() << fmt::format("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
+            return -6;
+        }
+    }
 
     // Spawn a background thread that opens images passed via stdin. To allow whitespace characters in filenames, we use the convention that
     // paths in stdin must be separated by newlines.
@@ -851,7 +864,7 @@ static int mainFunc(span<const string> arguments) {
                 sImageViewer->setDisplayWhiteLevel(whiteLevel);
             } catch (const invalid_argument&) {
                 tlog::error() << fmt::format("Invalid white level value '{}'. Must be a float or 'image'.", get(whiteLevelFlag));
-                return -4;
+                return -5;
             }
         }
     }

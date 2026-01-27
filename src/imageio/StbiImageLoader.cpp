@@ -27,7 +27,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
+Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom&) const {
     static const stbi_io_callbacks callbacks = {
         // Read
         [](void* context, char* data, int size) {

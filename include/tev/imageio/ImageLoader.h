@@ -22,6 +22,7 @@
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/GainMap.h>
 
 #include <nanogui/vector.h>
 
@@ -117,8 +118,9 @@ public:
 
     virtual ~ImageLoader() {}
 
-    virtual Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, bool applyGainmaps) const = 0;
+    virtual Task<std::vector<ImageData>> load(
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+    ) const = 0;
 
     virtual std::string name() const = 0;
 

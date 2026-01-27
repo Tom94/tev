@@ -2458,7 +2458,7 @@ void ImageViewer::pasteImagesFromClipboard() {
 
     tlog::info() << "Loading image from clipboard...";
     auto imagesLoadTask = tryLoadImage(
-        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->applyGainmaps(), mImagesLoader->groupChannels()
+        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->gainmapHeadroom(), mImagesLoader->groupChannels()
     );
 
     const auto images = imagesLoadTask.get();

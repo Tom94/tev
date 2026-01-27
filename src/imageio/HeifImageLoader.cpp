@@ -38,8 +38,9 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>>
-    HeifImageLoader::load(istream& iStream, const fs::path&, string_view channelSelector, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>> HeifImageLoader::load(
+    istream& iStream, const fs::path&, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+) const {
 
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
     uint8_t header[12];
@@ -780,12 +781,12 @@ Task<vector<ImageData>>
                 if (isoGainMapMetadata) {
                     tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
                     co_await preprocessAndApplyIsoGainMap(
-                        mainImage, auxImgData, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, applyGainmaps, priority
+                        mainImage, auxImgData, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, gainmapHeadroom, priority
                     );
                 } else if (isAppleGainmap) {
                     tlog::debug()
                         << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
-                    co_await preprocessAndApplyAppleGainMap(mainImage, auxImgData, findAppleMakerNote(), applyGainmaps, priority);
+                    co_await preprocessAndApplyAppleGainMap(mainImage, auxImgData, findAppleMakerNote(), gainmapHeadroom, priority);
                 } else {
                     tlog::warning() << fmt::format(
                         "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName

@@ -1357,8 +1357,9 @@ Task<nanogui::Vector2i>
     co_return size;
 }
 
-Task<vector<shared_ptr<Image>>>
-    tryLoadImage(int taskPriority, fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
+Task<vector<shared_ptr<Image>>> tryLoadImage(
+    int taskPriority, fs::path path, istream& iStream, string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+) {
     const auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
             tlog::error() << fmt::format("Could not load {}: {}", toString(path), e.what());
@@ -1394,7 +1395,7 @@ Task<vector<shared_ptr<Image>>>
         for (const auto& imageLoader : ImageLoader::getLoaders()) {
             try {
                 loadMethod = imageLoader->name();
-                imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority, applyGainmaps);
+                imageData = co_await imageLoader->load(iStream, path, channelSelector, taskPriority, gainmapHeadroom);
                 success = true;
                 break;
             } catch (const ImageLoader::FormatNotSupported& e) {
@@ -1457,12 +1458,12 @@ Task<vector<shared_ptr<Image>>>
 }
 
 Task<vector<shared_ptr<Image>>>
-    tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
-    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, applyGainmaps, groupChannels);
+    tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, gainmapHeadroom, groupChannels);
 }
 
 Task<vector<shared_ptr<Image>>>
-    tryLoadImage(int taskPriority, fs::path path, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
+    tryLoadImage(int taskPriority, fs::path path, string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels) {
     try {
         path = fs::absolute(path);
     } catch (const runtime_error&) {
@@ -1471,11 +1472,12 @@ Task<vector<shared_ptr<Image>>>
     }
 
     ifstream fileStream{path, ios_base::binary};
-    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, applyGainmaps, groupChannels);
+    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, gainmapHeadroom, groupChannels);
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(fs::path path, string_view channelSelector, bool applyGainmaps, bool groupChannels) {
-    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, applyGainmaps, groupChannels);
+Task<vector<shared_ptr<Image>>>
+    tryLoadImage(fs::path path, string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels) {
+    co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, gainmapHeadroom, groupChannels);
 }
 
 void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
@@ -1517,7 +1519,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSe
         const int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
-        const auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mApplyGainmaps, mGroupChannels);
+        const auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mGainmapHeadroom, mGroupChannels);
 
         {
             const lock_guard lock{mPendingLoadedImagesMutex};

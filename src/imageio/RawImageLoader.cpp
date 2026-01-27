@@ -139,7 +139,7 @@ Box2i maskToBox(const int mask[4]) {
     };
 }
 
-Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, bool) const {
+Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
     LibRaw iProcessor;
 
     struct ExifContext {

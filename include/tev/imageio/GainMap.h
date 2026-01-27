@@ -19,16 +19,35 @@
 #pragma once
 
 #include <tev/Common.h>
-#include <tev/Image.h>
 #include <tev/Task.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/Ifd.h>
-#include <tev/imageio/IsoGainMapMetadata.h>
 
 #include <optional>
+#include <string_view>
 
 namespace tev {
 
-Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, const std::optional<Ifd>& amn, bool shallApply, int priority);
+struct ImageData;
+class IsoGainMapMetadata;
+
+struct GainmapHeadroom {
+    GainmapHeadroom() = default;
+    GainmapHeadroom(std::string_view str);
+
+    std::string toString() const;
+
+    float value = std::numeric_limits<float>::infinity();
+
+    enum class EUnit {
+        Stops,
+        Percent,
+    } unit = EUnit::Stops;
+};
+
+Task<void> preprocessAndApplyAppleGainMap(
+    ImageData& image, ImageData& gainMap, const std::optional<Ifd>& amn, const GainmapHeadroom& headroom, int priority
+);
 
 Task<void> preprocessAndApplyIsoGainMap(
     ImageData& image,
@@ -36,7 +55,7 @@ Task<void> preprocessAndApplyIsoGainMap(
     const IsoGainMapMetadata& metadata,
     const std::optional<chroma_t>& baseChroma,
     const std::optional<chroma_t>& altChroma,
-    bool shallApply,
+    const GainmapHeadroom& headroom,
     int priority
 );
 

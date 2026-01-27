@@ -33,7 +33,8 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>>
+    JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom& gainmapHeadroom) const {
     unsigned char header[2] = {0};
     iStream.read(reinterpret_cast<char*>(header), 2);
     if (header[0] != 0xFF || header[1] != 0xD8) {
@@ -502,7 +503,7 @@ Task<vector<ImageData>> JpegTurboImageLoader::load(istream& iStream, const fs::p
         mainImage.attributes.emplace_back(gainmapInfo.metadata.toAttributes());
 
         co_await preprocessAndApplyIsoGainMap(
-            mainImage, imageData, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma, applyGainmaps, priority
+            mainImage, imageData, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma, gainmapHeadroom, priority
         );
 
         mainImage.channels.insert(

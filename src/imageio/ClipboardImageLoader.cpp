@@ -26,7 +26,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, bool) const {
+Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom&) const {
     char magic[4];
     clip::image_spec spec;
 

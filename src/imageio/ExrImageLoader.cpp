@@ -443,7 +443,7 @@ private:
     HeapArray<char> mData;
 };
 
-Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool) const {
+Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, const GainmapHeadroom&) const {
     try {
         if (!isExrImage(iStream)) {
             throw FormatNotSupported{"File is not an EXR image."};

@@ -25,6 +25,7 @@
 #include <tev/ThreadPool.h>
 #include <tev/VectorGraphics.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/GainMap.h>
 
 #include <nanogui/texture.h>
 
@@ -332,13 +333,16 @@ private:
 Task<nanogui::Vector2i>
     orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority);
 
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
+    int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+);
+Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
+    fs::path path, std::istream& iStream, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+);
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
+    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels);
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(fs::path path, std::istream& iStream, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
-Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(fs::path path, std::string_view channelSelector, bool applyGainmaps, bool groupChannels);
+    tryLoadImage(fs::path path, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels);
 
 struct ImageAddition {
     int loadId;
@@ -374,8 +378,8 @@ public:
     bool recursiveDirectories() const { return mRecursiveDirectories; }
     void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
 
-    bool applyGainmaps() const { return mApplyGainmaps; }
-    void setApplyGainmaps(bool value) { mApplyGainmaps = value; }
+    const GainmapHeadroom& gainmapHeadroom() const { return mGainmapHeadroom; }
+    void setGainmapHeadroom(const GainmapHeadroom& gainmapHeadroom) { mGainmapHeadroom = gainmapHeadroom; }
 
     bool groupChannels() const { return mGroupChannels; }
     void setGroupChannels(bool value) { mGroupChannels = value; }
@@ -393,7 +397,7 @@ private:
     std::map<fs::path, std::set<std::string>> mDirectories;
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 
-    bool mApplyGainmaps = true;
+    GainmapHeadroom mGainmapHeadroom;
     bool mGroupChannels = true;
 
     std::chrono::system_clock::time_point mLoadStartTime;

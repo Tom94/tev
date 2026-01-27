@@ -28,7 +28,27 @@ using namespace std;
 
 namespace tev {
 
-Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, bool shallApply, int priority) {
+GainmapHeadroom::GainmapHeadroom(std::string_view str) {
+    if (str.ends_with("%")) {
+        unit = EUnit::Percent;
+        value = stof(string{str.substr(0, str.size() - 1)}) / 100.0f;
+    } else {
+        unit = EUnit::Stops;
+        value = stof(string{str});
+    }
+}
+
+string GainmapHeadroom::toString() const {
+    if (unit == EUnit::Percent) {
+        return fmt::format("{}%", value * 100.0f);
+    } else {
+        return fmt::format("{} stops", value);
+    }
+}
+
+Task<void> preprocessAndApplyAppleGainMap(
+    ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, const GainmapHeadroom& targetHeadroom, int priority
+) {
     if (image.channels.empty() || gainMap.channels.empty()) {
         tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
         co_return;
@@ -62,12 +82,6 @@ Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, 
 
     TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
 
-    // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
-    // gain map itself in tev.
-    if (!shallApply) {
-        co_return;
-    }
-
     // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
     float maker33 = 0.0f;
     float maker48 = 8.0f;
@@ -92,8 +106,20 @@ Task<void> preprocessAndApplyAppleGainMap(ImageData& image, ImageData& gainMap, 
         }
     }
 
-    const float headroom = pow(2.0f, std::max(stops, 0.0f));
-    tlog::debug() << fmt::format("Apple gain map: derived headroom {} from maker note entries #33={} and #48={}.", headroom, maker33, maker48);
+    const float headroom = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ?
+        exp2f(std::clamp(stops * targetHeadroom.value, 0.0f, stops)) :
+        exp2f(std::clamp(stops, 0.0f, targetHeadroom.value));
+
+    // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
+    // gain map itself in tev.
+    if (headroom <= 1.0f) {
+        tlog::debug() << "Apple gain map: target headroom <= 1.0, skipping gain map application.";
+        co_return;
+    }
+
+    tlog::debug() << fmt::format(
+        "Apple gain map: derived weight {} from headroom {} and maker note #33={} #48={}", headroom, targetHeadroom.toString(), maker33, maker48
+    );
 
     const int numImageChannels = (int)image.channels.size();
     const int numGainMapChannels = (int)gainMap.channels.size();
@@ -148,7 +174,7 @@ Task<void> preprocessAndApplyIsoGainMap(
     const IsoGainMapMetadata& metadata,
     const optional<chroma_t>& baseChroma,
     const optional<chroma_t>& altChroma,
-    bool shallApply,
+    const GainmapHeadroom& targetHeadroom,
     int priority
 ) {
     if (image.channels.empty() || gainMap.channels.empty()) {
@@ -160,9 +186,12 @@ Task<void> preprocessAndApplyIsoGainMap(
 
     tlog::debug() << "ISO gain map: undoing gamma, unnormalizing, and resizing";
 
-    const float targetHeadroom = metadata.alternateHdrHeadroom(); // Assume we have all headroom available
+    const float targetHeadroomStops = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ?
+        metadata.baseHdrHeadroom() + targetHeadroom.value * (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()) :
+        targetHeadroom.value;
+
     const float weight = std::copysign(
-        clamp((targetHeadroom - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
+        clamp((targetHeadroomStops - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
         metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
     );
 
@@ -218,15 +247,16 @@ Task<void> preprocessAndApplyIsoGainMap(
 
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
     // gain map itself in tev.
-    if (weight <= 0.0f || !shallApply) {
-        co_return; // We'd like the image to be HDR. If the gainmap describes the HDR->SDR direction, we don't need to do anything.
+    if (weight == 0.0f) {
+        tlog::debug() << "ISO gain map: weight is 0, skipping gain map application.";
+        co_return;
     }
 
     tlog::debug() << fmt::format(
         "ISO gain map: applying with baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}",
         metadata.baseHdrHeadroom(),
         metadata.alternateHdrHeadroom(),
-        targetHeadroom,
+        targetHeadroomStops,
         weight
     );
 

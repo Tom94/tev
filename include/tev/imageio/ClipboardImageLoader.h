@@ -27,8 +27,9 @@ namespace tev {
 
 class ClipboardImageLoader : public ImageLoader {
 public:
-    Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, bool applyGainmaps) const override;
+    Task<std::vector<ImageData>> load(
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+    ) const override;
 
     std::string name() const override { return "clipboard"; }
 };

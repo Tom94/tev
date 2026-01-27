@@ -138,8 +138,9 @@ string jxlToString(JxlTransferFunction type) {
 
 } // namespace
 
-Task<vector<ImageData>>
-    JxlImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, int priority, bool applyGainmaps) const {
+Task<vector<ImageData>> JxlImageLoader::load(
+    istream& iStream, const fs::path& path, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+) const {
     if (!isJxlImage(iStream)) {
         throw FormatNotSupported{"File is not a JPEG XL image."};
     }
@@ -151,11 +152,16 @@ Task<vector<ImageData>>
     HeapArray<uint8_t> fileData(fileSize);
     iStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
 
-    co_return co_await load(fileData, path, channelSelector, priority, applyGainmaps, false);
+    co_return co_await load(fileData, path, channelSelector, priority, gainmapHeadroom, false);
 }
 
 Task<vector<ImageData>> JxlImageLoader::load(
-    span<const uint8_t> fileData, const fs::path& path, string_view channelSelector, int priority, bool applyGainmaps, bool skipColorProcessing
+    span<const uint8_t> fileData,
+    const fs::path& path,
+    string_view channelSelector,
+    int priority,
+    const GainmapHeadroom& gainmapHeadroom,
+    bool skipColorProcessing
 ) const {
     if (!isJxlImage(fileData)) {
         throw FormatNotSupported{"Data is not a JPEG XL image."};
@@ -773,7 +779,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                             try {
                                 auto gainMapLoadResult = co_await load(
-                                    span<const uint8_t>{jgmb.gain_map, jgmb.gain_map_size}, path, channelSelector, false, priority, true
+                                    span<const uint8_t>{jgmb.gain_map, jgmb.gain_map_size}, path, channelSelector, priority, gainmapHeadroom, true
                                 );
 
                                 tlog::debug() << fmt::format("Decoded JXL gain map image data into {} image(s).", gainMapLoadResult.size());
@@ -821,7 +827,7 @@ l_decode_success:
         if (gainMapInfo) {
             auto& gainMap = gainMapInfo->imageData;
             co_await preprocessAndApplyIsoGainMap(
-                data, gainMap, gainMapInfo->metadata, data.nativeMetadata.chroma, gainMapInfo->altChroma, applyGainmaps, priority
+                data, gainMap, gainMapInfo->metadata, data.nativeMetadata.chroma, gainMapInfo->altChroma, gainmapHeadroom, priority
             );
 
             data.channels.insert(
