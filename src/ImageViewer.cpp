@@ -112,6 +112,7 @@ ImageViewer::ImageViewer(
                 monitorMax = max(monitorMax, pos + size);
             }
 
+            mMinWindowPos = monitorMin;
             mMaxWindowSize = min(mMaxWindowSize, max(monitorMax - monitorMin, Vector2i{1024, 800}));
         }
     }
@@ -2080,9 +2081,12 @@ void ImageViewer::resizeToFit(Vector2i targetSize) {
     // windows to control their own position. On Windows, we add additional padding because, otherwise, moving the mouse to the edge of the
     // screen does not allow the user to resize the window anymore.
     if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
+        const auto minWindowPos = mMinWindowPos + padding;
+        const auto maxWindowPos = mMinWindowPos + maxSize - targetSize + padding;
+
         Vector2i pos;
         glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
-        pos = min(max(pos, padding), maxSize - targetSize + padding);
+        pos = min(max(pos, minWindowPos), maxWindowPos);
         glfwSetWindowPos(m_glfw_window, pos.x(), pos.y());
     }
 
@@ -2881,16 +2885,18 @@ void ImageViewer::updateCurrentMonitorSize() {
         }
 
         if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+            pos = Vector2f{pos} / pixel_ratio();
             size = Vector2f{size} / pixel_ratio();
         }
 
-        if (size == mMaxWindowSize) {
+        if (pos == mMinWindowPos && size == mMaxWindowSize) {
             return;
         }
 
+        mMinWindowPos = pos;
         mMaxWindowSize = size;
 
-        tlog::debug() << fmt::format("Current monitor work area size: {}", mMaxWindowSize);
+        tlog::debug() << fmt::format("Current monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
     }
 }
 
