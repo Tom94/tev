@@ -579,7 +579,7 @@ ImageViewer::ImageViewer(
         // Playback controls
         {
             auto playback = new Widget{mSidebarLayout};
-            playback->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
+            playback->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 2});
 
             auto makePlaybackButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
                 auto button = new Button{playback, name, icon};
@@ -615,6 +615,12 @@ ImageViewer::ImageViewer(
                 makePlaybackButton("", true, {}, FA_EXPAND_ARROWS_ALT, "Automatically fit image to screen upon selection.");
             mAutoFitToScreenButton->set_flags(Button::Flags::ToggleButton);
             mAutoFitToScreenButton->set_change_callback([this](bool value) { setAutoFitToScreen(value); });
+
+            mResizeWindowToFitImageOnLoadButton =
+                makePlaybackButton("", true, {}, FA_WINDOW_RESTORE, "Automatically resize tev's window to fit image on load.");
+            mResizeWindowToFitImageOnLoadButton->set_flags(Button::Flags::ToggleButton);
+            mResizeWindowToFitImageOnLoadButton->set_change_callback([this](bool value) { setResizeWindowToFitImageOnLoad(value); });
+            mResizeWindowToFitImageOnLoadButton->set_pushed(true);
         }
 
         // Save, refresh, load, close
@@ -1222,7 +1228,10 @@ void ImageViewer::draw_contents() {
     // a repeated resize to the actually desired window size.
     if (mDidFitToImage < 3 && !isMaximized()) {
         ++mDidFitToImage;
-        resizeToFit(sizeToFitAllImages());
+
+        if (resizeWindowToFitImageOnLoad()) {
+            resizeToFit(sizeToFitAllImages());
+        }
     }
 
     clear();
@@ -1485,7 +1494,7 @@ void ImageViewer::insertImage(shared_ptr<Image> image, size_t index, bool shallS
     // First image got added, let's select it.
     if ((index == 0 && mImages.size() == 1) || shallSelect) {
         selectImage(image);
-        if (!isMaximized() && !autoFitToScreen()) {
+        if (!isMaximized() && resizeWindowToFitImageOnLoad()) {
             resizeToFit(sizeToFitImage(image));
         }
     }
@@ -2126,6 +2135,15 @@ void ImageViewer::setAutoFitToScreen(bool value) {
     mAutoFitToScreenButton->set_pushed(value);
     if (value && mCurrentImage) {
         mImageCanvas->fitImageToScreen(*mCurrentImage);
+    }
+}
+
+bool ImageViewer::resizeWindowToFitImageOnLoad() const { return mResizeWindowToFitImageOnLoadButton->pushed(); }
+
+void ImageViewer::setResizeWindowToFitImageOnLoad(bool value) {
+    mResizeWindowToFitImageOnLoadButton->set_pushed(value);
+    if (value && mCurrentImage) {
+        resizeToFit(sizeToFitImage(mCurrentImage));
     }
 }
 

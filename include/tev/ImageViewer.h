@@ -168,6 +168,9 @@ public:
     bool autoFitToScreen() const;
     void setAutoFitToScreen(bool value);
 
+    bool resizeWindowToFitImageOnLoad() const;
+    void setResizeWindowToFitImageOnLoad(bool value);
+
     void maximize();
     bool isMaximized();
     void toggleMaximized();
@@ -282,6 +285,7 @@ private:
     std::chrono::steady_clock::time_point mLastFileChangesCheckTime = {};
 
     nanogui::Button* mAutoFitToScreenButton = nullptr;
+    nanogui::Button* mResizeWindowToFitImageOnLoadButton = nullptr;
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
