@@ -113,7 +113,7 @@ ImageViewer::ImageViewer(
             }
 
             mMinWindowPos = monitorMin;
-            mMaxWindowSize = min(mMaxWindowSize, max(monitorMax - monitorMin, Vector2i{1024, 800}));
+            mMaxWindowSize = min(mMaxWindowSize, Vector2f{max(monitorMax - monitorMin, Vector2i{1024, 800})});
         }
     }
 
@@ -2010,15 +2010,13 @@ void ImageViewer::setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting setting)
     }
 }
 
-Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
+Vector2f ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
     if (!image) {
         return m_size;
     }
 
-    Vector2i requiredSize{image->displaySize().x(), image->displaySize().y()};
-
     // Convert from image pixel coordinates to nanogui coordinates.
-    requiredSize = Vector2i{Vector2f{requiredSize} / pixel_ratio()};
+    auto requiredSize = Vector2f{image->displaySize()} / pixel_ratio();
 
     // Take into account the size of the UI.
     if (mSidebar->visible()) {
@@ -2032,8 +2030,8 @@ Vector2i ImageViewer::sizeToFitImage(const shared_ptr<Image>& image) {
     return requiredSize;
 }
 
-Vector2i ImageViewer::sizeToFitAllImages() {
-    Vector2i result = m_size;
+Vector2f ImageViewer::sizeToFitAllImages() {
+    Vector2f result = m_size;
     for (const auto& image : mImages) {
         result = max(result, sizeToFitImage(image));
     }
@@ -2041,7 +2039,7 @@ Vector2i ImageViewer::sizeToFitAllImages() {
     return result;
 }
 
-void ImageViewer::resizeToFit(Vector2i targetSize) {
+void ImageViewer::resizeToFit(Vector2f targetSize) {
     // On Wayland, some information like the current monitor or fractional DPI scaling is not available until some time has passed.
     // Potentially a few frames have been rendered. Hence postpone resizing until we have a valid monitor.
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND && !glfwGetWindowCurrentMonitor(m_glfw_window)) {
@@ -2050,12 +2048,12 @@ void ImageViewer::resizeToFit(Vector2i targetSize) {
     }
 
     // Only increase our current size if we are larger than the current size of the window.
-    targetSize = max(m_size, targetSize);
+    targetSize = max(Vector2f{m_size}, targetSize);
     // For sanity, don't make us larger than 8192x8192 to ensure that we don't break any texture size limitations of the user's GPU.
 
     auto maxSize = mMaxWindowSize;
 
-    const Vector2i padding = {
+    const Vector2f padding = {
 #ifdef _WIN32
         2
 #else
@@ -2072,7 +2070,7 @@ void ImageViewer::resizeToFit(Vector2i targetSize) {
 
     tlog::debug() << fmt::format("Resizing window to {}", targetSize);
 
-    const auto sizeDiff = targetSize - m_size;
+    const auto sizeDiff = targetSize - Vector2f{m_size};
 
     set_size(targetSize);
     move_window(-sizeDiff / 2);
@@ -2081,8 +2079,8 @@ void ImageViewer::resizeToFit(Vector2i targetSize) {
     // windows to control their own position. On Windows, we add additional padding because, otherwise, moving the mouse to the edge of the
     // screen does not allow the user to resize the window anymore.
     if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
-        const auto minWindowPos = mMinWindowPos + padding;
-        const auto maxWindowPos = mMinWindowPos + maxSize - targetSize + padding;
+        const auto minWindowPos = Vector2i{mMinWindowPos + padding};
+        const auto maxWindowPos = Vector2i{mMinWindowPos + maxSize - targetSize + padding};
 
         Vector2i pos;
         glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
@@ -2884,17 +2882,20 @@ void ImageViewer::updateCurrentMonitorSize() {
             mMaximizedUnreliable = true;
         }
 
+        auto posf = Vector2f{pos};
+        auto sizef = Vector2f{size};
+
         if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-            pos = Vector2f{pos} / pixel_ratio();
-            size = Vector2f{size} / pixel_ratio();
+            posf = posf / pixel_ratio();
+            sizef = sizef / pixel_ratio();
         }
 
-        if (pos == mMinWindowPos && size == mMaxWindowSize) {
+        if (posf == mMinWindowPos && sizef == mMaxWindowSize) {
             return;
         }
 
-        mMinWindowPos = pos;
-        mMaxWindowSize = size;
+        mMinWindowPos = posf;
+        mMaxWindowSize = sizef;
 
         tlog::debug() << fmt::format("Current monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
     }
