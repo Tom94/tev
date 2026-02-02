@@ -148,9 +148,9 @@ public:
     EDisplayWhiteLevelSetting displayWhiteLevelSetting() const;
     void setDisplayWhiteLevelSetting(EDisplayWhiteLevelSetting value);
 
-    nanogui::Vector2i sizeToFitImage(const std::shared_ptr<Image>& image);
-    nanogui::Vector2i sizeToFitAllImages();
-    void resizeToFit(nanogui::Vector2i size);
+    nanogui::Vector2f sizeToFitImage(const std::shared_ptr<Image>& image);
+    nanogui::Vector2f sizeToFitAllImages();
+    void resizeToFit(nanogui::Vector2f size);
 
     bool playingBack() const;
     void setPlayingBack(bool value);
@@ -167,6 +167,9 @@ public:
 
     bool autoFitToScreen() const;
     void setAutoFitToScreen(bool value);
+
+    bool resizeWindowToFitImageOnLoad() const;
+    void setResizeWindowToFitImageOnLoad(bool value);
 
     void maximize();
     bool isMaximized();
@@ -282,6 +285,7 @@ private:
     std::chrono::steady_clock::time_point mLastFileChangesCheckTime = {};
 
     nanogui::Button* mAutoFitToScreenButton = nullptr;
+    nanogui::Button* mResizeWindowToFitImageOnLoadButton = nullptr;
 
     // Buttons which require a current image to be meaningful.
     std::vector<nanogui::Button*> mCurrentImageButtons;
@@ -355,7 +359,8 @@ private:
     // Misc state tracking variables
     int mDidFitToImage = 0;
 
-    nanogui::Vector2i mMaxWindowSize = {8192, 8192};
+    nanogui::Vector2f mMinWindowPos = {0, 0};
+    nanogui::Vector2f mMaxWindowSize = {8192, 8192};
 
     bool mInitialized = false;
 

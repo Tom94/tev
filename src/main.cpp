@@ -480,6 +480,19 @@ static int mainFunc(span<const string> arguments) {
         {'r', "recursive"},
     };
 
+    Flag resizeWindowToFitFlagOn{
+        parser,
+        "RESIZE TO FIT",
+        "Resize the window to fit the image(s) on startup. Default is to resize.",
+        {"resize-window"},
+    };
+    Flag resizeWindowToFitFlagOff{
+        parser,
+        "NO RESIZE TO FIT",
+        "Do not resize the window to fit the image(s) on startup. Default is to resize.",
+        {"no-resize-window"},
+    };
+
     Flag verboseFlag{
         parser,
         "VERBOSE",
@@ -550,20 +563,14 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    // If we don't have any images to load, create new windows regardless of flag. (In this case, the user likely wants to open a new
-    // instance of tev rather than focusing the existing one.)
-    bool newWindow = !imageFiles;
-    if (newWindowFlagOn) {
-        newWindow = true;
-    }
-    if (newWindowFlagOff) {
-        newWindow = false;
-    }
-
     if (newWindowFlagOn && newWindowFlagOff) {
-        tlog::error() << "Ambiguous 'new window' arguments.";
+        tlog::error() << "Ambiguous '--new' arguments.";
         return -3;
     }
+
+    // If we don't have any images to load, create new windows regardless of flag. (In this case, the user likely wants to open a new
+    // instance of tev rather than focusing the existing one.)
+    const bool newWindow = (!imageFiles && !newWindowFlagOff) || newWindowFlagOn;
 
     const auto ipc = convertToFlag ? nullptr : (hostnameFlag ? make_shared<Ipc>(get(hostnameFlag)) : make_shared<Ipc>());
 
@@ -748,19 +755,21 @@ static int mainFunc(span<const string> arguments) {
     glfwSetOpenedFilenamesCallback([](const char* imageFile) { sImageViewer->imagesLoader().enqueue(toPath(imageFile), "", false); });
 #endif
 
-    bool maximize = false;
-    if (maximizeFlagOn) {
-        maximize = true;
-    }
-
-    if (maximizeFlagOff) {
-        maximize = false;
-    }
-
     if (maximizeFlagOn && maximizeFlagOff) {
-        tlog::error() << "Ambiguous 'maximize' arguments.";
+        tlog::error() << "Ambiguous '--maximize' arguments.";
         return -3;
     }
+
+    // Default false (off-flag is no-op)
+    const bool maximize = (false && !maximizeFlagOff) || maximizeFlagOn;
+
+    if (resizeWindowToFitFlagOn && resizeWindowToFitFlagOff) {
+        tlog::error() << "Ambiguous '--resize-window' arguments.";
+        return -3;
+    }
+
+    // Default true (on-flag is no-op)
+    const bool resizeWindowToFit = (true && !resizeWindowToFitFlagOff) || resizeWindowToFitFlagOn;
 
     nanogui::Vector2i size = {1024, 800};
     if (sizeFlag) {
@@ -782,7 +791,7 @@ static int mainFunc(span<const string> arguments) {
         }
     }
 
-    if (!maximize) {
+    if (!maximize && resizeWindowToFit) {
         // Wait until the first image is loaded before creating the window such that it can size itself appropriately. We can not pass the
         // Window a size right away, because we don't have information about the user's monitor size or DPI scaling yet, hence `size` stays
         // unmodified. However waiting for the first image to load allows `ImageViewer` to size itself to the first image's size early
@@ -843,6 +852,10 @@ static int mainFunc(span<const string> arguments) {
 
     if (playFlag) {
         sImageViewer->setPlayingBack(true);
+    }
+
+    if (resizeWindowToFitFlagOn || resizeWindowToFitFlagOff) {
+        sImageViewer->setResizeWindowToFitImageOnLoad(resizeWindowToFit);
     }
 
     if (tonemapFlag) {
