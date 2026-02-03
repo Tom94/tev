@@ -46,11 +46,34 @@ string GainmapHeadroom::toString() const {
     }
 }
 
+static vector<Channel*> getRgbOrLuminanceChannels(ImageData& image) {
+    image.updateLayers();
+
+    Channel* r = nullptr;
+    Channel* g = nullptr;
+    Channel* b = nullptr;
+
+    for (auto& layer : image.layers) {
+        if (((r = image.mutableChannel(layer + "R")) && (g = image.mutableChannel(layer + "G")) && (b = image.mutableChannel(layer + "B"))) ||
+            ((r = image.mutableChannel(layer + "r")) && (g = image.mutableChannel(layer + "g")) && (b = image.mutableChannel(layer + "b")))) {
+            return {r, g, b};
+        } else if ((r = image.mutableChannel(layer + "L")) || (r = image.mutableChannel(layer + "l")) ||
+                   (r = image.mutableChannel(layer + "Y")) || (r = image.mutableChannel(layer + "y"))) {
+            return {r};
+        }
+    }
+
+    return {};
+}
+
 Task<void> preprocessAndApplyAppleGainMap(
     ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, const GainmapHeadroom& targetHeadroom, int priority
 ) {
-    if (image.channels.empty() || gainMap.channels.empty()) {
-        tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
+    const auto imageChannels = getRgbOrLuminanceChannels(image);
+    auto gainMapChannels = getRgbOrLuminanceChannels(gainMap);
+
+    if (imageChannels.empty() || gainMapChannels.empty()) {
+        tlog::warning() << "Apple gain map: image or gain map has no channels. Skipping gain map application.";
         co_return;
     }
 
@@ -59,28 +82,33 @@ Task<void> preprocessAndApplyAppleGainMap(
     tlog::debug() << "Apple gain map: linearizing and resizing";
 
     // First: linearize per the spec, then resize to image size
-    const auto gainmapSize = gainMap.channels[0].size();
+    const auto gainmapSize = gainMapChannels.front()->size();
     const size_t gainmapNumPixels = (size_t)gainmapSize.x() * gainmapSize.y();
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         gainmapNumPixels,
-        gainmapNumPixels * gainMap.channels.size(),
+        gainmapNumPixels * gainMapChannels.size(),
         [&](int i) {
-            for (int c = 0; c < (int)gainMap.channels.size(); ++c) {
+            for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
                 // NOTE: The docs (above link) say to use the Rec.709 transfer function here, but comparisons with ISO gain maps indicate
                 // that the gain maps are actually encoded with the sRGB transfer function.
-                // const float gain = ituth273::invTransferComponent(ituth273::ETransfer::BT709, gainMap.channels[gainmapChannel].at(i));
-                gainMap.channels[c].setAt(i, toLinear(gainMap.channels[c].at(i)));
+                // const float gain = ituth273::invTransferComponent(ituth273::ETransfer::BT709, gainMapChannels[gainmapChannel].at(i));
+                gainMapChannels[c]->setAt(i, toLinear(gainMapChannels[c]->at(i)));
             }
         },
         priority
     );
 
-    const auto size = image.channels[0].size();
+    const auto size = imageChannels.front()->size();
 
     co_await ImageLoader::resizeImageData(gainMap, size, priority);
 
-    TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
+    // Re-fetch channels after resize
+    gainMapChannels = getRgbOrLuminanceChannels(gainMap);
+    TEV_ASSERT(!gainMapChannels.empty(), "Gain map must have at least one channel after resize.");
+    TEV_ASSERT(
+        size == gainMapChannels.front()->size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.front()->size()
+    );
 
     // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
     float maker33 = 0.0f;
@@ -121,45 +149,23 @@ Task<void> preprocessAndApplyAppleGainMap(
         "Apple gain map: derived weight {} from headroom {} and maker note #33={} #48={}", headroom, targetHeadroom.toString(), maker33, maker48
     );
 
-    const int numImageChannels = (int)image.channels.size();
-    const int numGainMapChannels = (int)gainMap.channels.size();
-
-    if (numGainMapChannels > 1) {
+    if (gainMapChannels.size() > 1) {
         tlog::warning() << "Apple gain map: should only have one channel. Attempting to apply multi-channel gain map.";
-    }
-
-    int alphaChannelIndex = -1;
-    for (int c = 0; c < numImageChannels; ++c) {
-        bool isAlpha = Channel::isAlpha(image.channels[c].name());
-        if (isAlpha) {
-            if (alphaChannelIndex != -1) {
-                tlog::warning() << fmt::format(
-                    "Apple gain map: image has multiple alpha channels, using the first one: {}", image.channels[alphaChannelIndex].name()
-                );
-                continue;
-            }
-
-            alphaChannelIndex = c;
-        }
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
-        numPixels * numImageChannels,
+        numPixels * imageChannels.size(),
         [&](size_t i) {
-            for (int c = 0; c < numImageChannels; ++c) {
-                if (c == alphaChannelIndex) {
-                    continue;
-                }
+            for (size_t c = 0; c < imageChannels.size(); ++c) {
+                const size_t gainmapChannel = std::min(c, gainMapChannels.size() - 1);
 
-                const int gainmapChannel = std::min(c, numGainMapChannels - 1);
+                const float sdr = imageChannels[c]->at(i);
+                const float gain = gainMapChannels[gainmapChannel]->at(i);
 
-                const float sdr = image.channels[c].at(i);
-                const float gain = gainMap.channels[gainmapChannel].at(i);
-
-                image.channels[c].setAt(i, sdr * (1.0f + (headroom - 1.0f) * gain));
+                imageChannels[c]->setAt(i, sdr * (1.0f + (headroom - 1.0f) * gain));
             }
         },
         priority
@@ -177,7 +183,10 @@ Task<void> preprocessAndApplyIsoGainMap(
     const GainmapHeadroom& targetHeadroom,
     int priority
 ) {
-    if (image.channels.empty() || gainMap.channels.empty()) {
+    const auto imageChannels = getRgbOrLuminanceChannels(image);
+    auto gainMapChannels = getRgbOrLuminanceChannels(gainMap);
+
+    if (imageChannels.empty() || gainMapChannels.empty()) {
         tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
         co_return;
     }
@@ -196,40 +205,35 @@ Task<void> preprocessAndApplyIsoGainMap(
     );
 
     // Per the spec, unnormalize and then resize (in log space) to image size
-    const auto gainmapSize = gainMap.channels[0].size();
+    const auto gainmapSize = gainMapChannels.front()->size();
     const size_t gainmapNumPixels = (size_t)gainmapSize.x() * gainmapSize.y();
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         gainmapNumPixels,
-        gainmapNumPixels * gainMap.channels.size(),
+        gainmapNumPixels * gainMapChannels.size(),
         [&](int i) {
-            for (int c = 0; c < (int)gainMap.channels.size(); ++c) {
-                const float val = gainMap.channels[c].at(i);
+            for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
+                const float val = gainMapChannels[c]->at(i);
 
                 const float logRecovery = copysign(std::pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
-                gainMap.channels[c].setAt(i, logBoost);
+                gainMapChannels[c]->setAt(i, logBoost);
             }
         },
         priority
     );
 
-    const auto size = image.channels[0].size();
+    const auto size = imageChannels.front()->size();
 
     co_await ImageLoader::resizeImageData(gainMap, size, priority);
 
-    TEV_ASSERT(size == gainMap.channels[0].size(), "Image and gain map must have the same size.");
-
-    const int numImageChannels = (int)image.channels.size();
-    const int numGainMapChannels = (int)gainMap.channels.size();
-
-    int alphaChannelIndex = -1;
-    if (Channel::isAlpha(image.channels.back().name())) {
-        alphaChannelIndex = image.channels.size() - 1;
-    }
-
-    const int numColorChannels = std::min(alphaChannelIndex == -1 ? numImageChannels : (numImageChannels - 1), 3);
+    // Re-fetch channels after resize
+    gainMapChannels = getRgbOrLuminanceChannels(gainMap);
+    TEV_ASSERT(!gainMapChannels.empty(), "Gain map must have at least one channel after resize.");
+    TEV_ASSERT(
+        size == gainMapChannels.front()->size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.front()->size()
+    );
 
     // Before applying the gainmap, convert the image to the appropriate color space. Fall back to base chroma if alt chroma requested but
     // not given (image should have been left in base chroma in that case).
@@ -265,17 +269,17 @@ Task<void> preprocessAndApplyIsoGainMap(
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
-        numPixels * numColorChannels,
+        numPixels * imageChannels.size(),
         [&](size_t i) {
-            for (int c = 0; c < numColorChannels; ++c) {
-                const int gainmapChannel = std::min(c, numGainMapChannels - 1);
+            for (size_t c = 0; c < imageChannels.size(); ++c) {
+                const int gainmapChannel = std::min(c, gainMapChannels.size() - 1);
 
-                const float logBoost = gainMap.channels[gainmapChannel].at(i);
+                const float logBoost = gainMapChannels[gainmapChannel]->at(i);
 
-                const float sdr = image.channels[c].at(i);
+                const float sdr = imageChannels[c]->at(i);
                 const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost * weight) - metadata.alternateOffset()[c];
 
-                image.channels[c].setAt(i, hdr);
+                imageChannels[c]->setAt(i, hdr);
             }
         },
         priority
