@@ -14,7 +14,7 @@
     <ul>
         <li>Lightning fast: starts up instantly, loads hundreds of images in seconds.</li>
         <li>Accurate: understands HDR and color profiles (ICC, CICP, etc.). Displays HDR on all operating systems.</li>
-        <li>Versatile: supports many file formats, histograms, pixel-peeping, tonemaps, error metrics, etc.</li>
+        <li>Versatile: supports many file formats and their quirks: gain maps, aux channels, animation, and more metadata than just EXIF &amp; XMP. Advanced pixel peeping: histograms, tonemaps, error metrics, etc. in any color space.</li>
     </ul>
     </description>
     <supports>
