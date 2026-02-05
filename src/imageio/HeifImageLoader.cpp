@@ -677,11 +677,13 @@ Task<vector<ImageData>> HeifImageLoader::load(
             );
 
             // If gainmap isn't an aux image, but a separate item, add it to the aux image list to be processed below.
-            if (std::find(auxIds.begin(), auxIds.end(), gainmapItemId) == auxIds.end()) {
+            const auto it = std::find(auxIds.begin(), auxIds.end(), gainmapItemId);
+            if (it == auxIds.end()) {
                 auxIds.emplace_back(gainmapItemId);
                 auxImgHandles.emplace_back(gainmapImgHandle);
             } else {
                 heif_image_handle_release(gainmapImgHandle);
+                gainmapImgHandle = auxImgHandles.at(std::distance(auxIds.begin(), it));
             }
         }
 
