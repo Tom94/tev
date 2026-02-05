@@ -80,7 +80,7 @@ struct TiffTag {
 
 class Ifd {
 public:
-    Ifd(std::span<const uint8_t> data, size_t initialOffset = 0, bool tiffHeader = false);
+    Ifd(std::span<const uint8_t> data, size_t initialOffset = 0, bool tiffHeader = false, std::optional<bool> reverseEndianess = std::nullopt);
 
     template <typename T> T read(const uint8_t* data) const {
         T result = *reinterpret_cast<const T*>(data);
@@ -155,9 +155,14 @@ public:
         return std::nullopt;
     }
 
+    bool reverseEndianess() const { return mReverseEndianess; }
+    std::optional<uint32_t> nextIfdOffset() const { return mNextIfdOffset; }
+
 private:
     std::unordered_map<uint16_t, TiffTag> mTags;
+
     bool mReverseEndianess = false;
+    std::optional<uint32_t> mNextIfdOffset;
 };
 
 } // namespace tev

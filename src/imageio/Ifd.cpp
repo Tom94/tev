@@ -19,27 +19,35 @@
 #include <tev/Common.h>
 #include <tev/imageio/Ifd.h>
 
+#include <optional>
+
 using namespace std;
 
 namespace tev {
 
-Ifd::Ifd(std::span<const uint8_t> data, size_t initialOffset, bool tiffHeader) {
+Ifd::Ifd(std::span<const uint8_t> data, size_t initialOffset, bool tiffHeader, optional<bool> reverseEndianess) {
     const uint8_t* ptr = data.data();
 
     size_t ofs = initialOffset;
-    if ((data[ofs] == 'M') && (data[ofs + 1] == 'M')) {
-        mReverseEndianess = std::endian::little == std::endian::native;
-    } else if ((data[ofs] == 'I') && (data[ofs + 1] == 'I')) {
-        mReverseEndianess = std::endian::big == std::endian::native;
-    } else {
-        throw invalid_argument{"IFD: failed to determine byte order."};
-    }
 
-    ofs += 2;
+    if (reverseEndianess.has_value()) {
+        mReverseEndianess = *reverseEndianess;
+    } else {
+        if ((data[ofs] == 'M') && (data[ofs + 1] == 'M')) {
+            mReverseEndianess = std::endian::little == std::endian::native;
+        } else if ((data[ofs] == 'I') && (data[ofs + 1] == 'I')) {
+            mReverseEndianess = std::endian::big == std::endian::native;
+        } else {
+            throw invalid_argument{"IFD: failed to determine byte order."};
+        }
+
+        ofs += 2;
+    }
 
     if (tiffHeader) {
         const uint16_t magic = read<uint16_t>(ptr + ofs);
         ofs += 2;
+
         if (magic != 42) {
             throw invalid_argument{"IFD: invalid TIFF magic."};
         }
@@ -91,6 +99,14 @@ Ifd::Ifd(std::span<const uint8_t> data, size_t initialOffset, bool tiffHeader) {
         mTags[entry.tag] = entry;
 
         tlog::debug() << fmt::format("  tag={} format={} components={}", entry.tag, (int)entry.format, entry.nComponents);
+    }
+
+    if (ofs + 4 <= data.size()) {
+        const auto nextIfdOffset = read<uint32_t>(ptr + ofs);
+        if (nextIfdOffset != 0) {
+            tlog::debug() << fmt::format("IFD: next IFD offset: {}", nextIfdOffset);
+            mNextIfdOffset = nextIfdOffset;
+        }
     }
 }
 

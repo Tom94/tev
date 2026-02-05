@@ -173,115 +173,147 @@ Task<vector<ImageData>>
             tlog::debug() << fmt::format("Found MPF data of size {} bytes", appN.mpf.size());
 
             try {
-                const auto mpf = Ifd{appN.mpf, 0, true};
-
-                enum class EMpfTag : uint16_t {
-                    Version = 0xB000,
-                    NumberOfImages = 0xB001,
-                    ImageInformationArray = 0xB002,
-                };
-
-                const uint16_t numImages = mpf.tryGet<uint16_t>((uint16_t)EMpfTag::NumberOfImages).value_or(0);
-                if (numImages > 0) {
-                    tlog::debug() << fmt::format("MPF number of sub-images: {}", numImages);
-
-                    const auto* iiTag = mpf.tag((uint16_t)EMpfTag::ImageInformationArray);
-                    if (!iiTag) {
-                        throw invalid_argument{"MPF: Missing ImageInformationArray tag or zero images."};
-                    }
-
-                    enum class EMpfImageType : uint32_t {
-                        Undefined = 0x000000,
-                        LargeThumbnailVga = 0x010001,
-                        LargeThumbnailFullHd = 0x010002,
-                        MultiFramePanorama = 0x020001,
-                        MultiFrameDisparity = 0x020002,
-                        MultiFrameMultiAngle = 0x020003,
-                        Primary = 0x030000,
+                const auto handleIfd = [&](const Ifd& ifd) {
+                    enum class EMpfTag : uint16_t {
+                        MPFVersion = 0xB000,
+                        // Index tags
+                        NumberOfImages = 0xB001,
+                        MPEntry = 0xB002,
+                        ImageUIDList = 0xB003,
+                        TotalFrames = 0xB004,
+                        // Attribute tags
+                        MPIndividualNum = 0xB101,
+                        PanOrientation = 0xB201,
+                        PanOverlapH = 0xB202,
+                        PanOverlapV = 0xB203,
+                        BaseViewpointNum = 0xB204,
+                        ConvergenceAngle = 0xB205,
+                        BaselineLength = 0xB206,
+                        VerticalDivergence = 0xB207,
+                        AxisDistanceX = 0xB208,
+                        AxisDistanceY = 0xB209,
+                        AxisDistanceZ = 0xB20A,
+                        YawAngle = 0xB20B,
+                        PitchAngle = 0xB20C,
+                        RollAngle = 0xB20D,
                     };
 
-                    const auto mfpTypeToString = [](EMpfImageType type) -> string {
-                        switch (type) {
-                            case EMpfImageType::Undefined: return "undefined";
-                            case EMpfImageType::LargeThumbnailVga: return "large_thumbnail_vga";
-                            case EMpfImageType::LargeThumbnailFullHd: return "large_thumbnail_full_hd";
-                            case EMpfImageType::MultiFramePanorama: return "multi_frame_panorama";
-                            case EMpfImageType::MultiFrameDisparity: return "multi_frame_disparity";
-                            case EMpfImageType::MultiFrameMultiAngle: return "multi_frame_multi_angle";
-                            case EMpfImageType::Primary: return "primary";
-                            default: return "unknown";
+                    // TODO: extract metadata from attribute tags if present
+
+                    const uint16_t numImages = ifd.tryGet<uint16_t>((uint16_t)EMpfTag::NumberOfImages).value_or(0);
+                    if (numImages > 0) {
+                        tlog::debug() << fmt::format("MPF number of sub-images: {}", numImages);
+
+                        const auto* iiTag = ifd.tag((uint16_t)EMpfTag::MPEntry);
+                        if (!iiTag) {
+                            throw invalid_argument{"MPF: Missing ImageInformationArray tag or zero images."};
                         }
-                    };
 
-                    struct ImageInfoEntry {
-                        uint32_t attributes;
-                        uint32_t size;
-                        uint32_t offset;
-                        uint16_t dependentImage1EntryNumber;
-                        uint16_t dependentImage2EntryNumber;
+                        enum class EMpfImageType : uint32_t {
+                            Undefined = 0x000000,
+                            LargeThumbnailVga = 0x010001,
+                            LargeThumbnailFullHd = 0x010002,
+                            MultiFramePanorama = 0x020001,
+                            MultiFrameDisparity = 0x020002,
+                            MultiFrameMultiAngle = 0x020003,
+                            Primary = 0x030000,
+                        };
 
-                        uint8_t flags() const { return (attributes >> 24) & 0xFF; }
-                        EMpfImageType type() const { return (EMpfImageType)(attributes & 0x00FFFFFF); }
-                    };
+                        const auto mfpTypeToString = [](EMpfImageType type) -> string {
+                            switch (type) {
+                                case EMpfImageType::Undefined: return "undefined";
+                                case EMpfImageType::LargeThumbnailVga: return "large_thumbnail_vga";
+                                case EMpfImageType::LargeThumbnailFullHd: return "large_thumbnail_full_hd";
+                                case EMpfImageType::MultiFramePanorama: return "multi_frame_panorama";
+                                case EMpfImageType::MultiFrameDisparity: return "multi_frame_disparity";
+                                case EMpfImageType::MultiFrameMultiAngle: return "multi_frame_multi_angle";
+                                case EMpfImageType::Primary: return "primary";
+                                default: return "unknown";
+                            }
+                        };
 
-                    if (iiTag->data.size() < sizeof(ImageInfoEntry) * numImages) {
-                        throw invalid_argument{"MPF: ImageInformationArray too small."};
-                    }
+                        struct ImageInfoEntry {
+                            uint32_t attributes;
+                            uint32_t size;
+                            uint32_t offset;
+                            uint16_t dependentImage1EntryNumber;
+                            uint16_t dependentImage2EntryNumber;
 
-                    for (size_t i = 0; i < numImages; ++i) {
-                        ImageInfoEntry iie;
-                        const auto* iiData = iiTag->data.data() + i * sizeof(iie);
-                        iie.attributes = mpf.read<uint32_t>(iiData + 0);
-                        iie.size = mpf.read<uint32_t>(iiData + 4);
-                        iie.offset = mpf.read<uint32_t>(iiData + 8);
-                        iie.dependentImage1EntryNumber = mpf.read<uint16_t>(iiData + 12);
-                        iie.dependentImage2EntryNumber = mpf.read<uint16_t>(iiData + 14);
+                            uint8_t flags() const { return (attributes >> 24) & 0xFF; }
+                            EMpfImageType type() const { return (EMpfImageType)(attributes & 0x00FFFFFF); }
+                        };
 
-                        tlog::debug() << fmt::format(
-                            "  #{}: flags={:02X} type={} size={} offset={} dep1={} dep2={}",
-                            i,
-                            iie.flags(),
-                            mfpTypeToString(iie.type()),
-                            iie.size,
-                            iie.offset,
-                            iie.dependentImage1EntryNumber,
-                            iie.dependentImage2EntryNumber
-                        );
+                        if (iiTag->data.size() < sizeof(ImageInfoEntry) * numImages) {
+                            throw invalid_argument{"MPF: ImageInformationArray too small."};
+                        }
 
-                        // Skip images with zero offset: those are the one we're already reading. But: in this case we should overwrite the
-                        // part name if we're not the primary image. (Primary image should have empty part name.)
-                        if (iie.offset == 0) {
-                            if (iie.type() != EMpfImageType::Primary) {
-                                partName = mfpTypeToString(iie.type());
+                        for (size_t i = 0; i < numImages; ++i) {
+                            ImageInfoEntry iie;
+                            const auto* iiData = iiTag->data.data() + i * sizeof(iie);
+                            iie.attributes = ifd.read<uint32_t>(iiData + 0);
+                            iie.size = ifd.read<uint32_t>(iiData + 4);
+                            iie.offset = ifd.read<uint32_t>(iiData + 8);
+                            iie.dependentImage1EntryNumber = ifd.read<uint16_t>(iiData + 12);
+                            iie.dependentImage2EntryNumber = ifd.read<uint16_t>(iiData + 14);
+
+                            tlog::debug() << fmt::format(
+                                "  #{}: flags={:02X} type={} size={} offset={} dep1={} dep2={}",
+                                i,
+                                iie.flags(),
+                                mfpTypeToString(iie.type()),
+                                iie.size,
+                                iie.offset,
+                                iie.dependentImage1EntryNumber,
+                                iie.dependentImage2EntryNumber
+                            );
+
+                            // Skip images with zero offset: those are the one we're already reading. But: in this case we should overwrite
+                            // the part name if we're not the primary image. (Primary image should have empty part name.)
+                            if (iie.offset == 0) {
+                                if (iie.type() != EMpfImageType::Primary) {
+                                    partName = mfpTypeToString(iie.type());
+                                }
+
+                                continue;
                             }
 
-                            continue;
-                        }
+                            // We aren't interested in cluttering tev with thumbnail images. Generic multiframe images are fine, though
+                            if (iie.type() == EMpfImageType::LargeThumbnailVga || iie.type() == EMpfImageType::LargeThumbnailFullHd) {
+                                tlog::debug() << fmt::format("Skipping MPF thumbnail image #{}.", i);
+                                continue;
+                            }
 
-                        // We aren't interested in cluttering tev with thumbnail images. Generic multiframe images are fine, though
-                        if (iie.type() == EMpfImageType::LargeThumbnailVga || iie.type() == EMpfImageType::LargeThumbnailFullHd) {
-                            tlog::debug() << fmt::format("Skipping MPF thumbnail image #{}.", i);
-                            continue;
-                        }
+                            // The offset is relative to the start of the MPF data
+                            const uint8_t* imageData = appN.mpf.data() + iie.offset;
+                            const ptrdiff_t imageDataOffset = imageData - buffer.data();
+                            if (seenOffsets.find(imageDataOffset) != seenOffsets.end()) {
+                                tlog::warning() << fmt::format("Already seen image at offset {}, skipping.", imageDataOffset);
+                                continue;
+                            }
 
-                        // The offset is relative to the start of the MPF data
-                        const uint8_t* imageData = appN.mpf.data() + iie.offset;
-                        const ptrdiff_t imageDataOffset = imageData - buffer.data();
-                        if (seenOffsets.find(imageDataOffset) != seenOffsets.end()) {
-                            tlog::warning() << fmt::format("Already seen image at offset {}, skipping.", imageDataOffset);
-                            continue;
-                        }
+                            const auto slice = span<const uint8_t>{imageData, iie.size}; // +4 to account for JPEG SOI and EOI marker
+                            if (slice.data() + slice.size() > buffer.data() + buffer.size()) {
+                                tlog::warning() << fmt::format("MPF image #{} exceeds buffer bounds, skipping.", i);
+                                continue;
+                            }
 
-                        const auto slice = span<const uint8_t>{imageData, iie.size}; // +4 to account for JPEG SOI and EOI marker
-                        if (slice.data() + slice.size() > buffer.data() + buffer.size()) {
-                            tlog::warning() << fmt::format("MPF image #{} exceeds buffer bounds, skipping.", i);
-                            continue;
+                            tlog::debug() << fmt::format(
+                                "Adding MPF image #{} slice at offset {} of size {} bytes.", i, imageDataOffset, slice.size()
+                            );
+                            imageInfos.emplace_back(slice, idx, mfpTypeToString(iie.type()));
                         }
-
-                        tlog::debug()
-                            << fmt::format("Adding MPF image #{} slice at offset {} of size {} bytes.", i, imageDataOffset, slice.size());
-                        imageInfos.emplace_back(slice, idx, mfpTypeToString(iie.type()));
                     }
+                };
+
+                optional<Ifd> ifd = Ifd{appN.mpf, 0, true};
+                while (true) {
+                    handleIfd(*ifd);
+                    if (!ifd->nextIfdOffset().has_value()) {
+                        break;
+                    }
+
+                    tlog::debug() << fmt::format("Found sub-IFD in MPF data at offset {}", *ifd->nextIfdOffset());
+                    ifd = Ifd{appN.mpf, *ifd->nextIfdOffset(), false, ifd->reverseEndianess()};
                 }
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read MPF data: {}", e.what()); }
         }
