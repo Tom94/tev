@@ -26,11 +26,13 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+using namespace std;
+
 namespace tev {
 
 void waylandSetClipboardPngImage(const char* data, size_t size) {
     if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
-        throw std::runtime_error("Wayland clipboard operations are only supported on Wayland.");
+        throw runtime_error("Wayland clipboard operations are only supported on Wayland.");
     }
 
 #if !defined(__APPLE__) && !defined(_WIN32)
@@ -40,7 +42,7 @@ void waylandSetClipboardPngImage(const char* data, size_t size) {
 
 const char* waylandGetClipboardPngImage(size_t* size) {
     if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
-        throw std::runtime_error("Wayland clipboard operations are only supported on Wayland.");
+        throw runtime_error("Wayland clipboard operations are only supported on Wayland.");
     }
 
 #if !defined(__APPLE__) && !defined(_WIN32)

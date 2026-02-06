@@ -68,7 +68,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     }
 
     if (!data) {
-        throw ImageLoadError{std::string{stbi_failure_reason()}};
+        throw ImageLoadError{stbi_failure_reason()};
     }
 
     if (numFrames == 0) {

@@ -453,7 +453,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const int numColorChannels = isMonochrome ? 1 : 3;
         const int numChannels = numColorChannels + (hasAlpha ? 1 : 0);
 
-        const bool is_little_endian = std::endian::native == std::endian::little;
+        const bool is_little_endian = endian::native == endian::little;
 
         heif_chroma decodingChroma = heif_chroma_undefined;
         switch (numChannels) {
@@ -485,7 +485,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const int numColorChannels = 3;
         const int numChannels = numColorChannels + (hasAlpha ? 1 : 0);
 
-        const bool is_little_endian = std::endian::native == std::endian::little;
+        const bool is_little_endian = endian::native == endian::little;
 
         heif_chroma decodingChroma = heif_chroma_undefined;
         switch (numChannels) {
@@ -677,13 +677,13 @@ Task<vector<ImageData>> HeifImageLoader::load(
             );
 
             // If gainmap isn't an aux image, but a separate item, add it to the aux image list to be processed below.
-            const auto it = std::find(auxIds.begin(), auxIds.end(), gainmapItemId);
+            const auto it = find(auxIds.begin(), auxIds.end(), gainmapItemId);
             if (it == auxIds.end()) {
                 auxIds.emplace_back(gainmapItemId);
                 auxImgHandles.emplace_back(gainmapImgHandle);
             } else {
                 heif_image_handle_release(gainmapImgHandle);
-                gainmapImgHandle = auxImgHandles.at(std::distance(auxIds.begin(), it));
+                gainmapImgHandle = auxImgHandles.at(distance(auxIds.begin(), it));
             }
         }
 
@@ -804,8 +804,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
                 mainImage.channels.insert(
                     mainImage.channels.end(),
-                    std::make_move_iterator(auxImgData.channels.begin()),
-                    std::make_move_iterator(auxImgData.channels.end())
+                    make_move_iterator(auxImgData.channels.begin()),
+                    make_move_iterator(auxImgData.channels.end())
                 );
             }
         }

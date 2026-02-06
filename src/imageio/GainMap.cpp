@@ -28,7 +28,7 @@ using namespace std;
 
 namespace tev {
 
-GainmapHeadroom::GainmapHeadroom(std::string_view str) {
+GainmapHeadroom::GainmapHeadroom(string_view str) {
     if (str.ends_with("%")) {
         unit = EUnit::Percent;
         value = stof(string{str.substr(0, str.size() - 1)}) / 100.0f;
@@ -135,8 +135,8 @@ Task<void> preprocessAndApplyAppleGainMap(
     }
 
     const float headroom = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ?
-        exp2f(std::clamp(stops * targetHeadroom.value, 0.0f, stops)) :
-        exp2f(std::clamp(stops, 0.0f, targetHeadroom.value));
+        exp2f(clamp(stops * targetHeadroom.value, 0.0f, stops)) :
+        exp2f(clamp(stops, 0.0f, targetHeadroom.value));
 
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
     // gain map itself in tev.
@@ -199,7 +199,7 @@ Task<void> preprocessAndApplyIsoGainMap(
         metadata.baseHdrHeadroom() + targetHeadroom.value * (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()) :
         targetHeadroom.value;
 
-    const float weight = std::copysign(
+    const float weight = copysign(
         clamp((targetHeadroomStops - metadata.baseHdrHeadroom()) / (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()), 0.0f, 1.0f),
         metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()
     );
@@ -215,7 +215,7 @@ Task<void> preprocessAndApplyIsoGainMap(
             for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
                 const float val = gainMapChannels[c]->at(i);
 
-                const float logRecovery = copysign(std::pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
+                const float logRecovery = copysign(pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
                 gainMapChannels[c]->setAt(i, logBoost);

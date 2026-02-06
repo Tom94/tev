@@ -26,7 +26,7 @@ using namespace std;
 namespace tev {
 
 static const size_t DITHER_MATRIX_SIZE = 8;
-using DitherMatrix = std::array<float, DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE>;
+using DitherMatrix = array<float, DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE>;
 
 static DitherMatrix ditherMatrix(float scale) {
     // 8x8 Bayer dithering matrix scaled to [-0.5f, 0.5f] / 255
@@ -48,13 +48,13 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
     try {
 #if defined(NANOGUI_USE_OPENGL) || defined(NANOGUI_USE_GLES)
 #    if defined(NANOGUI_USE_OPENGL)
-        std::string preamble = R"(#version 110)";
+        const string preamble = R"(#version 110)";
 #    elif defined(NANOGUI_USE_GLES)
-        std::string preamble =
+        const string preamble =
             R"(#version 100
         precision highp float;)";
 #    endif
-        auto vertexShader = preamble +
+        const auto vertexShader = preamble +
             R"glsl(
             uniform vec2 pixelSize;
             uniform vec2 checkerSize;
@@ -86,7 +86,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 gl_Position = vec4(position, 1.0, 1.0);
             })glsl";
 
-        auto fragmentShader = preamble +
+        const auto fragmentShader = preamble +
             R"glsl(
             #define SRGB        0
             #define GAMMA       1
@@ -569,7 +569,7 @@ void UberShader::draw(
     const Color& backgroundColor,
     ETonemap tonemap,
     EMetric metric,
-    const std::optional<Box2i>& crop
+    const optional<Box2i>& crop
 ) {
     // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
     // values (0 for colors, 1 for alpha).
@@ -605,8 +605,8 @@ void UberShader::draw(
         mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
         mShader->set_uniform("cropMax", Vector2f{crop->max} / Vector2f{textureImage->size()});
     } else {
-        mShader->set_uniform("cropMin", Vector2f{-std::numeric_limits<float>::infinity()});
-        mShader->set_uniform("cropMax", Vector2f{std::numeric_limits<float>::infinity()});
+        mShader->set_uniform("cropMin", Vector2f{-numeric_limits<float>::infinity()});
+        mShader->set_uniform("cropMax", Vector2f{numeric_limits<float>::infinity()});
     }
 
     mShader->set_uniform("ditherSize", static_cast<float>(DITHER_MATRIX_SIZE));

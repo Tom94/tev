@@ -769,10 +769,10 @@ string Ipc::hostname() const {
     string result = "";
     visit(
         [&](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, IpHost>) {
+            using T = decay_t<decltype(arg)>;
+            if constexpr (is_same_v<T, IpHost>) {
                 result = fmt::format("{}:{}", arg.ip, arg.port);
-            } else if constexpr (std::is_same_v<T, UnixHost>) {
+            } else if constexpr (is_same_v<T, UnixHost>) {
                 result = fmt::format("{}", arg.socketPath);
             } else {
                 TEV_ASSERT(false, "Non-exhaustive visitor");

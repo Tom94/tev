@@ -25,7 +25,7 @@ using namespace std;
 
 namespace tev {
 
-Ifd::Ifd(std::span<const uint8_t> data, size_t initialOffset, bool tiffHeader, optional<bool> reverseEndianess) {
+Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, optional<bool> reverseEndianess) {
     const uint8_t* ptr = data.data();
 
     size_t ofs = initialOffset;
@@ -34,9 +34,9 @@ Ifd::Ifd(std::span<const uint8_t> data, size_t initialOffset, bool tiffHeader, o
         mReverseEndianess = *reverseEndianess;
     } else {
         if ((data[ofs] == 'M') && (data[ofs + 1] == 'M')) {
-            mReverseEndianess = std::endian::little == std::endian::native;
+            mReverseEndianess = endian::little == endian::native;
         } else if ((data[ofs] == 'I') && (data[ofs + 1] == 'I')) {
-            mReverseEndianess = std::endian::big == std::endian::native;
+            mReverseEndianess = endian::big == endian::native;
         } else {
             throw invalid_argument{"IFD: failed to determine byte order."};
         }

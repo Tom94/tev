@@ -46,7 +46,7 @@ public:
         checkError(mStream);
     }
 
-    uint64_t tellp() { return std::streamoff(mStream.tellp()); }
+    uint64_t tellp() { return streamoff(mStream.tellp()); }
 
     void seekp(uint64_t pos) {
         mStream.seekp(pos);

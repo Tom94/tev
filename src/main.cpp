@@ -48,7 +48,7 @@ namespace tev {
 static ImageViewer* sImageViewer = nullptr;
 static atomic<bool> imageViewerIsReady = false;
 
-void scheduleToMainThread(const std::function<void()>& fun) {
+void scheduleToMainThread(const function<void()>& fun) {
     if (imageViewerIsReady) {
         sImageViewer->scheduleToUiThread(fun);
     }
@@ -62,8 +62,8 @@ void redrawWindow() {
 
 // Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
 template <typename T> bool fromChars(const char* begin, const char* end, T&& value) {
-    const auto result = std::from_chars(begin, end, std::forward<T>(value));
-    return result.ec == std::errc{} && result.ptr == end;
+    const auto result = from_chars(begin, end, std::forward<T>(value));
+    return result.ec == errc{} && result.ptr == end;
 }
 
 template <typename T> bool fromChars(string_view s, T&& value) { return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value)); }
@@ -72,7 +72,7 @@ template <typename T> bool fromChars(const string& s, T&& value) {
     return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value));
 }
 
-static void handleIpcPacket(const IpcPacket& packet, const std::shared_ptr<BackgroundImagesLoader>& imagesLoader) {
+static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<BackgroundImagesLoader>& imagesLoader) {
     switch (packet.type()) {
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
@@ -651,7 +651,7 @@ static int mainFunc(span<const string> arguments) {
 
     // HACK: It is unfortunately not easily possible to poll/timeout on cin in a portable manner, so instead we resort to simply detaching
     // this thread, causing it to be forcefully terminated as the main thread terminates. Also, on some Linux systems, this will still not
-    // terminate, so we schedule std::exit(0) to be called as well.
+    // terminate, so we schedule exit(0) to be called as well.
     stdinThread.detach();
 
     // Spawn another background thread, this one dealing with images passed to us via inter-process communication (IPC). This happens when a

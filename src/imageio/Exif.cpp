@@ -106,7 +106,7 @@ Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
     // }
 
     auto exifByteOrder = exif_data_get_byte_order(mExif);
-    auto systemByteOrder = endian::native == std::endian::little ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA;
+    auto systemByteOrder = endian::native == endian::little ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA;
     mReverseEndianess = exifByteOrder != systemByteOrder;
 
     guard.disarm();

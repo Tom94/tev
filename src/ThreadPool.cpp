@@ -81,7 +81,7 @@ void ThreadPool::startThreads(size_t num) {
             // Remove oneself from the thread pool. NOTE: at this point, the lock is still held, so modifying mThreads is safe.
             // tlog::debug() << "Shutting down thread pool thread " << id;
 
-            const auto it = find_if(mThreads.begin(), mThreads.end(), [&id](const std::thread& t) { return t.get_id() == id; });
+            const auto it = find_if(mThreads.begin(), mThreads.end(), [&id](const thread& t) { return t.get_id() == id; });
             TEV_ASSERT(it != mThreads.end(), "Thread not found in thread pool.");
 
             // Thread must be detached, otherwise running our own constructor while still running would result in errors.

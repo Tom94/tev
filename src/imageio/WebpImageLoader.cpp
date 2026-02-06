@@ -131,7 +131,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     4,
                     priority
                 );
-            } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
+            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
         } else {
             for (uint32_t i = 0; i < 3; ++i) {
                 bgColor[i] = toLinear(bgColor[i]) * bgColor[3]; // Premultiply alpha
@@ -213,7 +213,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     );
 
                     resultData.readMetadataFromIcc(profile);
-                } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
+                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {
                 co_await toFloat32<uint8_t, true, true>(
                     (uint8_t*)data, numChannels, frameData.data(), 4, frameSize, numChannels == 4, priority

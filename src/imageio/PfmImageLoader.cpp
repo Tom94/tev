@@ -157,7 +157,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             // Skip until end of line after reading header parameters. This is unfortunately a bit messy because some images might start
             // their data right after the last header parameter without a newline... in which case the following code is incorrect if the
             // beginning of the image data is equivalent to a whitespace character.
-            while (std::isspace(iStream.peek())) {
+            while (isspace(iStream.peek())) {
                 iStream.get();
             }
 
@@ -392,7 +392,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         // Reverse bytes of every entry if endianness does not match up with system
-        const bool shallSwapBytes = isBinary && (std::endian::native == std::endian::little) != isLittleEndian;
+        const bool shallSwapBytes = isBinary && (endian::native == endian::little) != isLittleEndian;
 
         if (pfm) {
             const float* const floatData = reinterpret_cast<float*>(data);

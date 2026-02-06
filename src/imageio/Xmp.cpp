@@ -34,10 +34,10 @@ namespace tev {
 class XMPContext {
 public:
     static bool init() {
-        std::call_once(initFlag, []() {
+        call_once(initFlag, []() {
             initialized = SXMPMeta::Initialize();
             if (initialized) {
-                std::atexit(shutdown);
+                atexit(shutdown);
             }
         });
 
@@ -51,11 +51,11 @@ private:
         }
     }
 
-    static std::once_flag initFlag;
+    static once_flag initFlag;
     static bool initialized;
 };
 
-std::once_flag XMPContext::initFlag;
+once_flag XMPContext::initFlag;
 bool XMPContext::initialized = false;
 
 Xmp::Xmp(string_view xmpData) {
@@ -86,9 +86,7 @@ Xmp::Xmp(string_view xmpData) {
 
             for (const auto& part : parts) {
                 // Search from the back because XMP properties are often nested in order.
-                const auto it = std::find_if(node->children.rbegin(), node->children.rend(), [&](const auto& child) {
-                    return child.name == part;
-                });
+                const auto it = find_if(node->children.rbegin(), node->children.rend(), [&](const auto& child) { return child.name == part; });
 
                 if (it == node->children.rend()) {
                     node->children.emplace_back(AttributeNode{.name = string{part}, .value = "", .type = "", .children = {}});
@@ -116,11 +114,9 @@ Xmp::Xmp(string_view xmpData) {
         try {
             const auto ns = "http://ns.adobe.com/hdr-gain-map/1.0/";
             if (string prefix, version; meta.GetNamespacePrefix(ns, &prefix) && meta.GetProperty(ns, "Version", &version, nullptr)) {
-                tlog::debug() << fmt::format(
-                    "Found XMP gainmap metadata: prefix={} version={}", prefix, version
-                );
+                tlog::debug() << fmt::format("Found XMP gainmap metadata: prefix={} version={}", prefix, version);
 
-                const auto it = std::find_if(mAttributes.children.begin(), mAttributes.children.end(), [&](const auto& child) {
+                const auto it = find_if(mAttributes.children.begin(), mAttributes.children.end(), [&](const auto& child) {
                     return child.name.starts_with(prefix);
                 });
 

@@ -800,7 +800,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         join(channelNames, ",")
     );
 
-    using DataBufPtr = std::shared_ptr<Channel::Data>;
+    using DataBufPtr = shared_ptr<Channel::Data>;
     DataBufPtr dataPtr = nullptr;
 
     // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
@@ -1347,13 +1347,13 @@ Task<nanogui::Vector2i>
                 const auto other = applyOrientation(orientation, nanogui::Vector2i{x, y}, size);
                 const size_t j = other.y() * (size_t)otherSize.x() + other.x();
 
-                std::memcpy(&reorientedData[i * numBytesPerPixel], &data[j * numBytesPerPixel], numBytesPerPixel);
+                memcpy(&reorientedData[i * numBytesPerPixel], &data[j * numBytesPerPixel], numBytesPerPixel);
             }
         },
         priority
     );
 
-    std::swap(data, reorientedData);
+    swap(data, reorientedData);
     co_return size;
 }
 

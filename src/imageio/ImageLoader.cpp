@@ -135,7 +135,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     const auto init = [numPixels, priority](auto* ptr) -> Task<void> {
-        using ptr_float_t = std::remove_pointer_t<decltype(ptr)>;
+        using ptr_float_t = remove_pointer_t<decltype(ptr)>;
         const ptr_float_t pattern[4] = {(ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)1.0};
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0, numPixels, numPixels, [pattern, ptr](size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, priority
@@ -214,8 +214,8 @@ Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vec
                 const float srcX = (dstX + 0.5f) * scaleX - 0.5f;
                 const float srcY = (dstY + 0.5f) * scaleY - 0.5f;
 
-                const int x0 = std::max((int)std::floor(srcX), 0);
-                const int y0 = std::max((int)std::floor(srcY), 0);
+                const int x0 = std::max((int)floor(srcX), 0);
+                const int y0 = std::max((int)floor(srcY), 0);
                 const int x1 = std::min(x0 + 1, size.x() - 1);
                 const int y1 = std::min(y0 + 1, size.y() - 1);
 

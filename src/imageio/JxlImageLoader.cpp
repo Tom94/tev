@@ -830,9 +830,7 @@ l_decode_success:
                 data, gainMap, gainMapInfo->metadata, data.nativeMetadata.chroma, gainMapInfo->altChroma, gainmapHeadroom, priority
             );
 
-            data.channels.insert(
-                data.channels.end(), std::make_move_iterator(gainMap.channels.begin()), std::make_move_iterator(gainMap.channels.end())
-            );
+            data.channels.insert(data.channels.end(), make_move_iterator(gainMap.channels.begin()), make_move_iterator(gainMap.channels.end()));
         }
     }
 

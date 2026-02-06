@@ -144,7 +144,7 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
                     }
 
                     for (XMP_Index i = 0; i < count; ++i) {
-                        std::string path;
+                        string path;
                         SXMPUtils::ComposeArrayItemPath(ns, name, i + 1, &path);
 
                         if (double val; meta->GetProperty_Float(ns, path.c_str(), &val, nullptr)) {
@@ -175,7 +175,7 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
 
                     for (size_t i = 0; i < parts.size(); ++i) {
                         try {
-                            out[i] = std::stof(string{parts[i]});
+                            out[i] = stof(string{parts[i]});
                         } catch (const invalid_argument&) {
                             throw invalid_argument(fmt::format("XMP gainmap property '{}' value '{}' is not a float.", name, parts[i]));
                         }
@@ -288,8 +288,8 @@ AttributeNode IsoGainMapMetadata::toAttributes() const {
 
 void IsoGainMapMetadata::reverseDirection() {
     // Swap base and alternate parameters
-    std::swap(mBaseHdrHeadroom, mAlternateHdrHeadroom);
-    std::swap(mBaseOffset, mAlternateOffset);
+    swap(mBaseHdrHeadroom, mAlternateHdrHeadroom);
+    swap(mBaseOffset, mAlternateOffset);
 }
 
 } // namespace tev

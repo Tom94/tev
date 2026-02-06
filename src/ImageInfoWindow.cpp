@@ -54,7 +54,7 @@ void addRows(Widget* current, const AttributeNode& node, int indentation) {
     }
 };
 
-ImageInfoWindow::ImageInfoWindow(Widget* parent, const std::shared_ptr<Image>& image, function<void()> closeCallback) :
+ImageInfoWindow::ImageInfoWindow(Widget* parent, const shared_ptr<Image>& image, function<void()> closeCallback) :
     Window{parent, "Info"}, mCloseCallback{closeCallback} {
 
     auto closeButton = new Button{button_panel(), "", FA_TIMES};

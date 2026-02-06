@@ -782,7 +782,7 @@ bool ImageViewer::mouse_button_event(const Vector2i& p, int button, bool down, i
         } else if (mDragType == EMouseDragType::ImageCrop) {
             if (norm(mDraggingStartPosition - p) < CROP_MIN_SIZE) {
                 // If the user did not drag the mouse far enough, we assume that they wanted to reset the crop rather than create a new one.
-                mImageCanvas->setCrop(std::nullopt);
+                mImageCanvas->setCrop(nullopt);
             }
         }
 
@@ -1298,7 +1298,7 @@ void ImageViewer::draw_contents() {
         bool isShown = image == mCurrentImage || image == mCurrentReference;
 
         // If the image is no longer shown, bump ID immediately. Otherwise, wait until canvas statistics were ready for over 200 ms.
-        if (!isShown || std::chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt() > 200ms) {
+        if (!isShown || chrono::steady_clock::now() - mImageCanvas->canvasStatistics()->becameReadyAt() > 200ms) {
             image->bumpId();
             auto localIt = it;
             ++it;
@@ -1314,9 +1314,7 @@ void ImageViewer::draw_contents() {
     }
 
     bool anyImageVisible = mCurrentImage || mCurrentReference ||
-        std::any_of(begin(mImageButtonContainer->children()), end(mImageButtonContainer->children()), [](const auto& c) {
-                               return c->visible();
-                           });
+        any_of(begin(mImageButtonContainer->children()), end(mImageButtonContainer->children()), [](const auto& c) { return c->visible(); });
 
     for (auto button : mAnyImageButtons) {
         button->set_enabled(anyImageVisible);
@@ -1606,7 +1604,7 @@ void ImageViewer::removeAllImages() {
 
 void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replacement, bool shallSelect) {
     if (replacement == nullptr) {
-        throw std::runtime_error{"Must not replace image with nullptr."};
+        throw runtime_error{"Must not replace image with nullptr."};
     }
 
     const int currentId = imageId(mCurrentImage);
@@ -1618,7 +1616,7 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
 
     // Preserve image button caption when replacing an image
     ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[id]);
-    const std::string caption{ib->caption()};
+    const string caption{ib->caption()};
 
     // If we already have the image selected, we must re-select it regardless of the `shallSelect` parameter.
     shallSelect |= currentId == id;
@@ -2294,7 +2292,7 @@ void ImageViewer::openImageDialog() {
                 const bool shallSelect = i == paths.size() - 1;
                 mImagesLoader->enqueue(paths[i], "", shallSelect);
             }
-        } catch (const std::runtime_error& e) {
+        } catch (const runtime_error& e) {
             const auto error = fmt::format("File dialog: {}", e.what());
             scheduleToUiThread([this, error]() { showErrorDialog(error); });
         }
@@ -2369,15 +2367,15 @@ void ImageViewer::saveImageDialog() {
 
 void ImageViewer::copyImageCanvasToClipboard() const {
     if (!mCurrentImage) {
-        throw std::runtime_error{"No image selected for copy."};
+        throw runtime_error{"No image selected for copy."};
     }
 
     const auto imageSize = mImageCanvas->imageDataSize();
     if (imageSize.x() == 0 || imageSize.y() == 0) {
-        throw std::runtime_error{"Image canvas has no image data to copy to clipboard."};
+        throw runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
-    const auto imageData = mImageCanvas->getRgbaLdrImageData(true, std::numeric_limits<int>::max()).get();
+    const auto imageData = mImageCanvas->getRgbaLdrImageData(true, numeric_limits<int>::max()).get();
 
 #if defined(__APPLE__) or defined(_WIN32)
     const clip::image image(
@@ -2399,7 +2397,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     );
 
     if (!clip::set_image(image)) {
-        throw std::runtime_error{"clip::set_image failed."};
+        throw runtime_error{"clip::set_image failed."};
     }
 #else
     // TODO: make a dedicated PNG saver via libpng which should be faster than stb_image_write.
@@ -2408,21 +2406,19 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     stringstream pngData;
     try {
         pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4).get();
-    } catch (const ImageSaveError& e) {
-        throw std::runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())};
-    }
+    } catch (const ImageSaveError& e) { throw runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())}; }
 
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
         waylandSetClipboardPngImage(pngData.view().data(), pngData.view().size());
     } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
         clip::lock l;
         if (!l.locked()) {
-            throw std::runtime_error{"Failed to lock clipboard."};
+            throw runtime_error{"Failed to lock clipboard."};
         }
 
         l.clear();
         if (!l.set_data(clip::image_format(), pngData.view().data(), pngData.view().size())) {
-            throw std::runtime_error{"Failed to set image data to clipboard."};
+            throw runtime_error{"Failed to set image data to clipboard."};
         }
     }
 #endif
@@ -2432,7 +2428,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
 
 void ImageViewer::copyImageNameToClipboard() const {
     if (!mCurrentImage) {
-        throw std::runtime_error{"No image selected for copy."};
+        throw runtime_error{"No image selected for copy."};
     }
 
     glfwSetClipboardString(m_glfw_window, string{mCurrentImage->name()}.c_str());
@@ -2445,19 +2441,19 @@ void ImageViewer::pasteImagesFromClipboard() {
         size_t size = 0;
         const char* data = waylandGetClipboardPngImage(&size);
         if (data == nullptr || size == 0) {
-            throw std::runtime_error{"No image data found in clipboard."};
+            throw runtime_error{"No image data found in clipboard."};
         }
 
         imageStream.write(data, size);
     } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
         clip::lock l;
         if (!l.locked()) {
-            throw std::runtime_error{"Failed to lock clipboard."};
+            throw runtime_error{"Failed to lock clipboard."};
         }
 
         clip::format f = clip::image_format();
         if (!l.is_convertible(f)) {
-            throw std::runtime_error{"Clipboard does not contain image data."};
+            throw runtime_error{"Clipboard does not contain image data."};
         }
 
         size_t len = l.get_data_length(f);
@@ -2468,7 +2464,7 @@ void ImageViewer::pasteImagesFromClipboard() {
     } else {
         clip::image clipImage;
         if (!clip::get_image(clipImage)) {
-            throw std::runtime_error{"No image data found in clipboard."};
+            throw runtime_error{"No image data found in clipboard."};
         }
 
         imageStream << "clip";
@@ -2484,7 +2480,7 @@ void ImageViewer::pasteImagesFromClipboard() {
     const auto images = imagesLoadTask.get();
 
     if (images.empty()) {
-        throw std::runtime_error{"Failed to load image from clipboard data."};
+        throw runtime_error{"Failed to load image from clipboard data."};
     } else {
         for (auto& image : images) {
             addImage(image, true);

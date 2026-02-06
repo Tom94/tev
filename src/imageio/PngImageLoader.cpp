@@ -142,7 +142,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     tlog::debug() << fmt::format("PNG image info: size={} numChannels={} bitDepth={} colorType={}", size, numChannels, bitDepth, colorType);
 
     // 16 bit channels are big endian by default, but we want little endian on little endian systems
-    if (bitDepth == 16 && std::endian::little == std::endian::native) {
+    if (bitDepth == 16 && endian::little == endian::native) {
         png_set_swap(pngPtr);
     }
 
@@ -559,7 +559,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     resultData.hasPremultipliedAlpha = true;
                     resultData.readMetadataFromIcc(profile);
                     co_return;
-                } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
             }
 
             // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.

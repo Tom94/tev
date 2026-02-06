@@ -45,9 +45,9 @@ Task<vector<ImageData>>
     iStream.seekg(0);
 
     // Read the entire stream into memory and decompress from there. JPEG does not support streaming decompression from iostreams.
-    iStream.seekg(0, std::ios::end);
+    iStream.seekg(0, ios::end);
     const size_t fileSize = iStream.tellg();
-    iStream.seekg(0, std::ios::beg);
+    iStream.seekg(0, ios::beg);
 
     HeapArray<unsigned char> buffer(fileSize);
     iStream.read(reinterpret_cast<char*>(buffer.data()), fileSize);
@@ -489,7 +489,7 @@ Task<vector<ImageData>>
 
                     resultData.readMetadataFromIcc(profile);
                     co_return resultData;
-                } catch (const std::runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
             }
         }
 
@@ -542,7 +542,7 @@ Task<vector<ImageData>>
         );
 
         mainImage.channels.insert(
-            mainImage.channels.end(), std::make_move_iterator(imageData.channels.begin()), std::make_move_iterator(imageData.channels.end())
+            mainImage.channels.end(), make_move_iterator(imageData.channels.begin()), make_move_iterator(imageData.channels.end())
         );
     }
 

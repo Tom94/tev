@@ -199,7 +199,8 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         if (DirectX::Decompress(*scratchImage.GetImage(0, 0, 0), format, decompImage) != S_OK) {
             throw ImageLoadError{"Failed to decompress DDS image."};
         }
-        std::swap(scratchImage, decompImage);
+
+        swap(scratchImage, decompImage);
     } else if (metadata.format != format) {
         DirectX::ScratchImage convertedImage;
         if (DirectX::Convert(
@@ -207,7 +208,8 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
             ) != S_OK) {
             throw ImageLoadError{"Failed to convert DDS image."};
         }
-        std::swap(scratchImage, convertedImage);
+
+        swap(scratchImage, convertedImage);
     }
 
     const Vector2i size = {(int)metadata.width, (int)metadata.height};

@@ -71,68 +71,53 @@ Matrix3f toMatrix3(const cmsMAT3& data) {
     return result;
 }
 
-// This routine was copied from OpenEXR's ImfChromaticities.cpp in accordance
-// with its BSD-3-Clause license. See the header of that file for details.
-// https://github.com/AcademySoftwareFoundation/openexr/blob/main/src/lib/OpenEXR/ImfChromaticities.cpp
+// This routine was copied from OpenEXR's ImfChromaticities.cpp in accordance with its BSD-3-Clause license. See the header of that file for
+// details. https://github.com/AcademySoftwareFoundation/openexr/blob/main/src/lib/OpenEXR/ImfChromaticities.cpp
 Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
-    //
-    // For an explanation of how the color conversion matrix is derived,
-    // see Roy Hall, "Illumination and Color in Computer Generated Imagery",
-    // Springer-Verlag, 1989, chapter 3, "Perceptual Response"; and
-    // Charles A. Poynton, "A Technical Introduction to Digital Video",
-    // John Wiley & Sons, 1996, chapter 7, "Color science for video".
-    //
+    // For an explanation of how the color conversion matrix is derived, see Roy Hall, "Illumination and Color in Computer Generated
+    // Imagery", Springer-Verlag, 1989, chapter 3, "Perceptual Response"; and Charles A. Poynton, "A Technical Introduction to Digital
+    // Video", John Wiley & Sons, 1996, chapter 7, "Color science for video".
 
-    //
     // X and Z values of RGB value (1, 1, 1), or "white"
-    //
-
     const Vector2f& red = chroma[0];
     const Vector2f& green = chroma[1];
     const Vector2f& blue = chroma[2];
     const Vector2f& white = chroma[3];
 
     // prevent a division that rounds to zero
-    if (std::abs(white.y()) <= 1.f && std::abs(white.x() * Y) >= std::abs(white.y()) * std::numeric_limits<float>::max()) {
-        throw std::invalid_argument("Bad chromaticities: white.y cannot be zero");
+    if (abs(white.y()) <= 1.f && abs(white.x() * Y) >= abs(white.y()) * numeric_limits<float>::max()) {
+        throw invalid_argument("Bad chromaticities: white.y cannot be zero");
     }
 
-    float X = white.x() * Y / white.y();
-    float Z = (1 - white.x() - white.y()) * Y / white.y();
+    const float X = white.x() * Y / white.y();
+    const float Z = (1 - white.x() - white.y()) * Y / white.y();
 
-    //
     // Scale factors for matrix rows, compute numerators and common denominator
-    //
+    const float d = red.x() * (blue.y() - green.y()) + blue.x() * (green.y() - red.y()) + green.x() * (red.y() - blue.y());
 
-    float d = red.x() * (blue.y() - green.y()) + blue.x() * (green.y() - red.y()) + green.x() * (red.y() - blue.y());
-
-    float SrN =
+    const float SrN =
         (X * (blue.y() - green.y()) - green.x() * (Y * (blue.y() - 1) + blue.y() * (X + Z)) +
          blue.x() * (Y * (green.y() - 1) + green.y() * (X + Z)));
 
-    float SgN =
+    const float SgN =
         (X * (red.y() - blue.y()) + red.x() * (Y * (blue.y() - 1) + blue.y() * (X + Z)) - blue.x() * (Y * (red.y() - 1) + red.y() * (X + Z)));
 
-    float SbN =
+    const float SbN =
         (X * (green.y() - red.y()) - red.x() * (Y * (green.y() - 1) + green.y() * (X + Z)) +
          green.x() * (Y * (red.y() - 1) + red.y() * (X + Z)));
 
-    if (std::abs(d) < 1.f &&
-        (std::abs(SrN) >= std::abs(d) * std::numeric_limits<float>::max() || std::abs(SgN) >= std::abs(d) * std::numeric_limits<float>::max() ||
-         std::abs(SbN) >= std::abs(d) * std::numeric_limits<float>::max())) {
+    if (abs(d) < 1.f &&
+        (abs(SrN) >= abs(d) * numeric_limits<float>::max() || abs(SgN) >= abs(d) * numeric_limits<float>::max() ||
+         abs(SbN) >= abs(d) * numeric_limits<float>::max())) {
         // cannot generate matrix if all RGB primaries have the same y value
         // or if they all have the an x value of zero
         // in both cases, the primaries are colinear, which makes them unusable
-        throw std::invalid_argument("Bad chromaticities: RGBtoXYZ matrix is degenerate");
+        throw invalid_argument("Bad chromaticities: RGBtoXYZ matrix is degenerate");
     }
 
-    float Sr = SrN / d;
-    float Sg = SgN / d;
-    float Sb = SbN / d;
-
-    //
-    // Assemble the matrix
-    //
+    const float Sr = SrN / d;
+    const float Sg = SgN / d;
+    const float Sb = SbN / d;
 
     Matrix3f M;
 
@@ -201,7 +186,7 @@ Matrix3f
         case ERenderingIntent::RelativeColorimetric:
             return xyzToRgb(dstChroma, 1) * adaptWhiteBradford(srcWhite, dstChroma[3]) * rgbToXyz(srcChroma, 1);
         case ERenderingIntent::AbsoluteColorimetric: return xyzToRgb(dstChroma, 1) * rgbToXyz(srcChroma, 1);
-        default: throw std::invalid_argument("Invalid rendering intent");
+        default: throw invalid_argument("Invalid rendering intent");
     }
 }
 
@@ -499,7 +484,7 @@ EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries) {
         case EWpPrimaries::CIE1931XYZ: return ituth273::EColorPrimaries::SMPTE428;
         case EWpPrimaries::DCIP3: return ituth273::EColorPrimaries::SMPTE431;
         case EWpPrimaries::DisplayP3: return ituth273::EColorPrimaries::SMPTE432;
-        default: throw std::invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
+        default: throw invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
     }
 }
 
@@ -547,7 +532,7 @@ ETransfer fromWpTransfer(int wpTransfer) {
         case 13: return ETransfer::HLG;
     }
 
-    throw std::invalid_argument{"Unknown transfer characteristics from color manager: " + std::to_string(wpTransfer)};
+    throw invalid_argument{fmt::format("Unknown transfer characteristics from color manager: {}", wpTransfer)};
 }
 
 } // namespace ituth273

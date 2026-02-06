@@ -73,13 +73,13 @@ string utf16to8(wstring_view utf16) {
 }
 
 fs::path toPath(string_view utf8) {
-    // tev's strings are always utf8 encoded, however fs::path does not know this. Therefore: convert the string to a std::u8string and pass
+    // tev's strings are always utf8 encoded, however fs::path does not know this. Therefore: convert the string to a u8string and pass
     // _that_ string to the fs::path constructor, which will then take care of converting the utf8 string to the native file name encoding.
     return toU8string(utf8);
 }
 
 string toString(const fs::path& path) {
-    // Conversely to `toPath`, ensure that the returned string is utf8 encoded by requesting a std::u8string from the path object and then
+    // Conversely to `toPath`, ensure that the returned string is utf8 encoded by requesting a u8string from the path object and then
     // convert _that_ string to a regular char string.
     return fromU8string(path.u8string());
 }
@@ -97,7 +97,7 @@ string toDisplayString(const fs::path& path) {
         return toString(path);
     }
 
-    std::string buffer;
+    string buffer;
     buffer.resize(size_hint);
     ssize_t actual_size = getxattr(path.c_str(), HOST_PATH_XATTR, buffer.data(), size_hint);
     if (actual_size < 0) {
@@ -224,7 +224,7 @@ Color parseColor(string_view str) {
     if (str.starts_with("#")) {
         unsigned int hexValue = 0;
         istringstream iss(string{str.substr(1)});
-        iss >> std::hex >> hexValue;
+        iss >> hex >> hexValue;
 
         if (str.size() == 4) {
             // #RGB
@@ -338,8 +338,8 @@ bool matchesRegex(string_view text, string_view filter) {
     }
 
     try {
-        // std::regex doesn't support std::string_view yet
-        regex searchRegex{string{filter}, std::regex_constants::ECMAScript | std::regex_constants::icase};
+        // regex doesn't support string_view yet
+        regex searchRegex{string{filter}, regex_constants::ECMAScript | regex_constants::icase};
         return regex_search(string{text}, searchRegex);
     } catch (const regex_error&) { return false; }
 }
@@ -450,7 +450,7 @@ void toggleConsole() {
 #endif
 }
 
-static std::atomic<bool> sShuttingDown{false};
+static atomic<bool> sShuttingDown{false};
 
 bool shuttingDown() { return sShuttingDown; }
 
