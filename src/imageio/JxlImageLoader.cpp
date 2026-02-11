@@ -180,58 +180,54 @@ Task<vector<ImageData>> JxlImageLoader::load(
         .jxlSuggestedNumThreads = thread::hardware_concurrency(),
     };
 
-    const auto jxlRunParallel = [](void* runnerOpaque,
-                                   void* jpegxlOpaque,
-                                   JxlParallelRunInit init,
-                                   JxlParallelRunFunction func,
-                                   uint32_t startRange,
-                                   uint32_t endRange) {
-        const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+    const auto jxlRunParallel =
+        [](void* runnerOpaque, void* jpegxlOpaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t startRange, uint32_t endRange) {
+            // We use a separate thread pool from the global one (still a singleton), because the JXL API does not allow jxlRunParallel to be a
+            // co-routine. I.e. we need to synchronously wait for the work to finish, which could deadlock the global threadpool. Other mitigation
+            // strategies involve temporarily creating and removing extra threads from the global threadpool (which tev previously implemented),
+            // but this approach here scales better to huge numbers of images (n-cores extra threads instead of n-images extra threads).
+            static auto jxlPool = ThreadPool();
 
-        const uint32_t range = endRange - startRange;
-        const uint32_t numTasks = std::min(
-            ThreadPool::global().nTasks<uint32_t>(
-                0,
-                range,
-                numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
-            ),
-            runnerData->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
-        );
+            const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
 
-        const auto initResult = init(jpegxlOpaque, numTasks);
-        if (initResult != 0) {
-            return initResult;
-        }
+            const uint32_t range = endRange - startRange;
+            const uint32_t numTasks = std::min(
+                jxlPool.nTasks<uint32_t>(
+                    0,
+                    range,
+                    numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
+                ),
+                runnerData->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
+            );
 
-        ThreadPool::global()
-            .parallelForAsync<uint32_t>(
-                0,
-                numTasks,
-                numeric_limits<uint32_t>::max(), // Maximum parallelism up to numTasks threads
-                [&](uint32_t i) {
-                    const uint32_t taskStart = startRange + (range * i / numTasks);
-                    const uint32_t taskEnd = startRange + (range * (i + 1) / numTasks);
-                    TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
+            const auto initResult = init(jpegxlOpaque, numTasks);
+            if (initResult != 0) {
+                return initResult;
+            }
 
-                    for (uint32_t j = taskStart; j < taskEnd; ++j) {
-                        func(jpegxlOpaque, j, (uint32_t)i);
-                    }
-                },
-                runnerData->priority
-            )
-            // The synchronous parallel for loop is janky, because it doesn't follow the coroutine paradigm. But it is the only way to get
-            // the thread pool to cooperate with the JXL API that expects a non-coroutine function here. We will offload the
-            // JxlImageLoader::load() function into a wholly separate thread to avoid blocking the thread pool as a consequence.
-            .get();
+            jxlPool
+                .parallelForAsync<uint32_t>(
+                    0,
+                    numTasks,
+                    numeric_limits<uint32_t>::max(), // Maximum parallelism up to numTasks threads
+                    [&](uint32_t i) {
+                        const uint32_t taskStart = startRange + (range * i / numTasks);
+                        const uint32_t taskEnd = startRange + (range * (i + 1) / numTasks);
+                        TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
-        return 0;
-    };
+                        for (uint32_t j = taskStart; j < taskEnd; ++j) {
+                            func(jpegxlOpaque, j, (uint32_t)i);
+                        }
+                    },
+                    runnerData->priority
+                )
+                // The synchronous parallel for loop is janky, because it doesn't follow the coroutine paradigm. But it is the only way to
+                // get the thread pool to cooperate with the JXL API that expects a non-coroutine function here. We will offload the
+                // JxlImageLoader::load() function into a wholly separate thread to avoid blocking the thread pool as a consequence.
+                .get();
 
-    // Since we allow the JXL decoder to run in our coroutine thread pool, despite being not a coroutine itself and thus having to wait on
-    // each task's completion, we need to offload the governing code (i.e. this function) to a separate thread to avoid stalling the
-    // threadpool. We achieve this by temporarily adding an extra thread to the thread pool until JXL is done.
-    ThreadPool::global().startThreads(1);
-    const ScopeGuard threadPoolGuard{[] { ThreadPool::global().shutdownThreads(1); }};
+            return 0;
+        };
 
     if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(decoder.get(), jxlRunParallel, &runnerData)) {
         throw ImageLoadError{"Failed to set parallel runner for decoder."};
