@@ -135,7 +135,7 @@ Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<cons
 
         oStream.write(reinterpret_cast<const char*>(compressed.data()), compressed.size() - availableOut);
         if (!oStream) {
-            throw ImageSaveError{fmt::format("Failed to write data to {}.", toString(path))};
+            throw ImageSaveError{fmt::format("Failed to write data to {}.", path)};
         }
 
         switch (processResult) {

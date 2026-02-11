@@ -1362,9 +1362,9 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
 ) {
     const auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << fmt::format("Could not load {}: {}", toString(path), e.what());
+            tlog::error() << fmt::format("Could not load {}: {}", path, e.what());
         } else {
-            tlog::error() << fmt::format("Could not load {}:{}: {}", toString(path), channelSelector, e.what());
+            tlog::error() << fmt::format("Could not load {}:{}: {}", path, channelSelector, e.what());
         }
     };
 
@@ -1447,7 +1447,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         const auto end = chrono::system_clock::now();
         const chrono::duration<double> elapsedSeconds = end - start;
 
-        tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", toString(path), loadMethod, elapsedSeconds.count());
+        tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
 
         co_return images;
     } catch (const ImageLoadError& e) { handleException(e); } catch (const ImageModifyError& e) {
@@ -1483,7 +1483,7 @@ Task<vector<shared_ptr<Image>>>
 void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
     // If we're trying to open a directory, try loading all the images inside of that directory
     if (fs::exists(path) && fs::is_directory(path)) {
-        tlog::info() << "Loading images " << (mRecursiveDirectories ? "recursively " : "") << "from directory " << toString(path);
+        tlog::info() << fmt::format("Loading images {} from directory {}", mRecursiveDirectories ? "recursively " : "", path);
 
         const fs::path canonicalPath = fs::canonical(path);
         mDirectories[canonicalPath].emplace(channelSelector);

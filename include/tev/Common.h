@@ -74,10 +74,14 @@
 #    define TEV_VERSION "undefined"
 #endif
 
+namespace tev {
+std::string toString(const std::filesystem::path& path);
+}
+
 // Make std::filesystem::path formattable.
 template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
     template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) const {
-        return formatter<std::string_view>::format(path.string(), ctx);
+        return formatter<std::string_view>::format(tev::toString(path), ctx);
     }
 };
 

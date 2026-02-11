@@ -35,11 +35,11 @@ namespace tev {
 class LibRawDataStream : public LibRaw_abstract_datastream {
 public:
     LibRawDataStream(istream& stream, const fs::path& path) : stream{stream} {
-        auto pathStr = toString(path);
+        const auto pathStr = toString(path);
         strncpy(mPath, pathStr.c_str(), sizeof(mPath) - 1);
 
 #ifdef LIBRAW_WIN32_UNICODEPATHS
-        auto wPathStr = path.wstring();
+        const auto wPathStr = path.wstring();
         wcsncpy(mWPath, wPathStr.c_str(), sizeof(mWPath) / sizeof(mWPath[0]) - 1);
 #endif
     }
