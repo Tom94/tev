@@ -8,12 +8,13 @@ cmake_print_variables(PROJECT_BINARY_DIR)
 
 find_program(LINUXDEPLOY_EXECUTABLE
     NAMES linuxdeploy linuxdeploy-${CMAKE_SYSTEM_PROCESSOR}.AppImage
-    PATHS ${CPACK_PACKAGE_DIRECTORY}/dependencies/)
+    PATHS ${CPACK_PACKAGE_DIRECTORY}/dependencies/
+)
 
 if (NOT LINUXDEPLOY_EXECUTABLE)
     message(Warning "Couldn't build linuxdeploy. Downloading pre-build binary instead.")
     set(LINUXDEPLOY_EXECUTABLE ${CPACK_PACKAGE_DIRECTORY}/dependencies/linuxdeploy-${CMAKE_SYSTEM_PROCESSOR}.AppImage)
-    file(DOWNLOAD 
+    file(DOWNLOAD
         https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${CMAKE_SYSTEM_PROCESSOR}.AppImage
         ${LINUXDEPLOY_EXECUTABLE}
         INACTIVITY_TIMEOUT 10
