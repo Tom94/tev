@@ -147,6 +147,7 @@ endif()
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 
 set(TEV_SOURCES
+    include/tev/imageio/BmpImageLoader.h src/imageio/BmpImageLoader.cpp
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
     include/tev/imageio/Colors.h src/imageio/Colors.cpp
     include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
@@ -154,6 +155,7 @@ set(TEV_SOURCES
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
     include/tev/imageio/ExrImageSaver.h src/imageio/ExrImageSaver.cpp
     include/tev/imageio/GainMap.h src/imageio/GainMap.cpp
+    include/tev/imageio/IcoImageLoader.h src/imageio/IcoImageLoader.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/Ifd.h src/imageio/Ifd.cpp

@@ -40,6 +40,8 @@ string Channel::join(string_view layer, string_view channel) { return fmt::forma
 string Channel::joinIfNonempty(string_view layer, string_view channel) {
     if (layer.empty()) {
         return string{channel};
+    } else if (channel.empty()) {
+        return string{layer};
     } else {
         return Channel::join(layer, channel);
     }

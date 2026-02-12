@@ -752,6 +752,7 @@ Task<void> toLinearSrgbPremul(
     uint8_t* __restrict src,
     float* __restrict rgbaDst,
     int numChannelsOut,
+    optional<ERenderingIntent> intentOverride,
     int priority
 ) {
     const int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
@@ -791,7 +792,7 @@ Task<void> toLinearSrgbPremul(
     LimitedRange range = LimitedRange::full();
     Matrix3f toRec709 = Matrix3f{1.0f};
 
-    const ERenderingIntent intent = profile.renderingIntent();
+    const ERenderingIntent intent = intentOverride.value_or(profile.renderingIntent());
     if (cicp) {
         tlog::debug() << fmt::format(
             "CICP: primaries={} transfer={} coeffs={} fullRange={}",

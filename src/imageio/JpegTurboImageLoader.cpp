@@ -35,6 +35,8 @@ namespace tev {
 
 Task<vector<ImageData>>
     JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom& gainmapHeadroom) const {
+    const size_t initialPos = iStream.tellg();
+
     unsigned char header[2] = {0};
     iStream.read(reinterpret_cast<char*>(header), 2);
     if (header[0] != 0xFF || header[1] != 0xD8) {
@@ -42,12 +44,12 @@ Task<vector<ImageData>>
     }
 
     iStream.clear();
-    iStream.seekg(0);
+    iStream.seekg(initialPos, ios::beg);
 
     // Read the entire stream into memory and decompress from there. JPEG does not support streaming decompression from iostreams.
     iStream.seekg(0, ios::end);
     const size_t fileSize = iStream.tellg();
-    iStream.seekg(0, ios::beg);
+    iStream.seekg(initialPos, ios::beg);
 
     HeapArray<unsigned char> buffer(fileSize);
     iStream.read(reinterpret_cast<char*>(buffer.data()), fileSize);
@@ -333,7 +335,7 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
         }
 
-        tlog::debug() << fmt::format("JPEG image info: size={}, numColorChannels={}", size, numColorChannels);
+        tlog::debug() << fmt::format("JPEG image info: size={} numColorChannels={}", size, numColorChannels);
 
         // Allocate memory for image data
         auto numPixels = static_cast<size_t>(size.x()) * size.y();
@@ -484,6 +486,7 @@ Task<vector<ImageData>>
                         (uint8_t*)floatData.data(),
                         resultData.channels.front().floatData(),
                         numInterleavedChannels,
+                        nullopt,
                         priority
                     );
 

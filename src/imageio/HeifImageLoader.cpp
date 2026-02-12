@@ -234,6 +234,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 (uint8_t*)dataF32.data(),
                 resultData.channels.front().floatData(),
                 numInterleavedChannels,
+                nullopt,
                 priority
             );
             resultData.hasPremultipliedAlpha = true;
@@ -803,9 +804,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 co_await ImageLoader::resizeImageData(auxImgData, mainImage.channels.front().size(), priority);
 
                 mainImage.channels.insert(
-                    mainImage.channels.end(),
-                    make_move_iterator(auxImgData.channels.begin()),
-                    make_move_iterator(auxImgData.channels.end())
+                    mainImage.channels.end(), make_move_iterator(auxImgData.channels.begin()), make_move_iterator(auxImgData.channels.end())
                 );
             }
         }
