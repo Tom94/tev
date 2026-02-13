@@ -35,6 +35,9 @@ jobs:
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --target all --verbose -j
+      - name: Test program runs
+        working-directory: ${{ env.build_dir }}
+        run: ./tev --version
       - name: Package
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target package --verbose
@@ -71,6 +74,9 @@ jobs:
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target all --verbose -j
+      - name: Test program runs
+        working-directory: ${{ env.build_dir }}
+        run: ./tev.app/Contents/MacOS/tev --version
       - name: Zip app
         working-directory: ${{ env.build_dir }}
         run: zip -r tev.app.zip tev.app
@@ -107,6 +113,9 @@ jobs:
       - name: Build
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target ALL_BUILD --verbose
+      - name: Test program runs
+        working-directory: ${{ env.build_dir }}/${{ env.config }}
+        run: .\tev.exe --version
       - name: Create installer
         working-directory: ${{ env.build_dir }}
         run: cpack
