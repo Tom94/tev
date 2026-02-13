@@ -574,8 +574,8 @@ void UberShader::draw(
     // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
     // values (0 for colors, 1 for alpha).
     const vector<string> channels = image ? image->channelsInGroup(requestedChannelGroup) : vector<string>{};
-    Texture* const textureImage = image ? image->texture(channels, minFilter, magFilter) : mColorMap.get();
-    Texture* const textureReference = reference ? reference->texture(channels, minFilter, magFilter) : textureImage;
+    Texture* const textureImage = image ? image->texture(channels, minFilter, magFilter) : nullptr;
+    Texture* const textureReference = reference ? reference->texture(channels, minFilter, magFilter) : nullptr;
 
     const bool hasAlpha = channels.size() > 1 && Channel::isAlpha(channels.back()); // Only count A as alpha if it isn't the only channel.
     const int numColorChannels = channels.size() - (hasAlpha ? 1 : 0);
@@ -590,18 +590,18 @@ void UberShader::draw(
     }
 
     bindCheckerboardData(pixelSize, checkerSize, backgroundColor);
-    bindImageData(textureImage, transformImage, exposure, offset, gamma, tonemap);
-    bindReferenceData(textureReference, transformReference, metric);
+    bindImageData(textureImage ? textureImage : mColorMap.get(), transformImage, exposure, offset, gamma, tonemap);
+    bindReferenceData(textureReference ? textureReference : mColorMap.get(), transformReference, metric);
 
-    mShader->set_uniform("hasImage", (bool)image);
-    mShader->set_uniform("hasReference", (bool)reference);
+    mShader->set_uniform("hasImage", (bool)textureImage);
+    mShader->set_uniform("hasReference", (bool)textureReference);
 
     mShader->set_uniform("channelConfig", (int)channelConfig);
 
     mShader->set_uniform("colorMultiplier", colorMultiplier);
     mShader->set_uniform("clipToLdr", clipToLdr);
 
-    if (crop.has_value()) {
+    if (crop.has_value() && textureImage) {
         mShader->set_uniform("cropMin", Vector2f{crop->min} / Vector2f{textureImage->size()});
         mShader->set_uniform("cropMax", Vector2f{crop->max} / Vector2f{textureImage->size()});
     } else {
@@ -625,6 +625,7 @@ void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f&
 
 void UberShader::bindImageData(Texture* textureImage, const Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap) {
     mShader->set_texture("image", textureImage);
+
     mShader->set_uniform("imageScale", Vector2f{transformImage.m[0][0], transformImage.m[1][1]});
     mShader->set_uniform("imageOffset", Vector2f{transformImage.m[2][0], transformImage.m[2][1]});
 
@@ -638,6 +639,7 @@ void UberShader::bindImageData(Texture* textureImage, const Matrix3f& transformI
 
 void UberShader::bindReferenceData(Texture* textureReference, const Matrix3f& transformReference, EMetric metric) {
     mShader->set_texture("reference", textureReference);
+
     mShader->set_uniform("referenceScale", Vector2f{transformReference.m[0][0], transformReference.m[1][1]});
     mShader->set_uniform("referenceOffset", Vector2f{transformReference.m[2][0], transformReference.m[2][1]});
 
