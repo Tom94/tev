@@ -97,15 +97,27 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
             mAlternateOffset[c] = (double)read<int32_t>(data, &pos) / commonDenominator;
         }
     } else {
-        mBaseHdrHeadroom = (double)read<uint32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
-        mAlternateHdrHeadroom = (double)read<uint32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+        mBaseHdrHeadroom = (double)read<uint32_t>(data, &pos);
+        mBaseHdrHeadroom /= (double)read<uint32_t>(data, &pos);
+
+        mAlternateHdrHeadroom = (double)read<uint32_t>(data, &pos);
+        mAlternateHdrHeadroom /= (double)read<uint32_t>(data, &pos);
 
         for (int c = 0; c < channelCount; ++c) {
-            mGainMapMin[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
-            mGainMapMax[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
-            mGainMapGamma[c] = (double)read<uint32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
-            mBaseOffset[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
-            mAlternateOffset[c] = (double)read<int32_t>(data, &pos) / (double)read<uint32_t>(data, &pos);
+            mGainMapMin[c] = (double)read<int32_t>(data, &pos);
+            mGainMapMin[c] /= (double)read<uint32_t>(data, &pos);
+
+            mGainMapMax[c] = (double)read<int32_t>(data, &pos);
+            mGainMapMax[c] /= (double)read<uint32_t>(data, &pos);
+
+            mGainMapGamma[c] = (double)read<uint32_t>(data, &pos);
+            mGainMapGamma[c] /= (double)read<uint32_t>(data, &pos);
+
+            mBaseOffset[c] = (double)read<int32_t>(data, &pos);
+            mBaseOffset[c] /= (double)read<uint32_t>(data, &pos);
+
+            mAlternateOffset[c] = (double)read<int32_t>(data, &pos);
+            mAlternateOffset[c] /= (double)read<uint32_t>(data, &pos);
         }
     }
 
