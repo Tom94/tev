@@ -371,6 +371,7 @@ target_compile_definitions(clip PRIVATE -DHAVE_PNG_H)
 
 # Compile libraw
 set(LIBRAW_PATH "${CMAKE_CURRENT_SOURCE_DIR}/LibRaw" CACHE PATH " " FORCE)
+set(ENABLE_OPENMP OFF CACHE BOOL " " FORCE)
 set(LCMS2_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Little-CMS/include" CACHE PATH " " FORCE)
 set(LCMS2_LIBRARIES lcms2-tev CACHE STRING " " FORCE)
 add_subdirectory(LibRaw-cmake)
