@@ -427,7 +427,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
         co_return;
     }
 
-    bool swapAxes = orientation >= EOrientation::LeftTop;
+    const bool swapAxes = orientation >= EOrientation::LeftTop;
 
     struct DataDesc {
         EPixelFormat pixelFormat;
@@ -457,12 +457,13 @@ Task<void> ImageData::orientToTopLeft(int priority) {
         co_await tev::orientToTopLeft(c.pixelFormat, *c.data, c.size, orientation, priority);
     }
 
+    const auto referenceWindow = displayWindow.isValid() ? displayWindow : (dataWindow.isValid() ? dataWindow : Box2i{size()});
     if (dataWindow.isValid()) {
-        dataWindow = applyOrientation(orientation, dataWindow);
+        dataWindow = applyOrientation(orientation, dataWindow, referenceWindow);
     }
 
     if (displayWindow.isValid()) {
-        displayWindow = applyOrientation(orientation, displayWindow);
+        displayWindow = applyOrientation(orientation, displayWindow, referenceWindow);
     }
 
     orientation = EOrientation::TopLeft;

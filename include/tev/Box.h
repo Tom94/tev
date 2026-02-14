@@ -103,15 +103,18 @@ using Box2i = Box<int32_t, 2>;
 using Box3i = Box<int32_t, 3>;
 using Box4i = Box<int32_t, 4>;
 
-inline Box2i applyOrientation(EOrientation orientation, const Box2i& box) {
+inline Box2i applyOrientation(EOrientation orientation, Box2i box, const Box2i& reference) {
+    box = box.translate(-reference.min);
+    const auto size = reference.size();
+
     Box2i result = {{{
         // Passing {1, 1} as size has the effect of simply flipping the sign of the axes getting flipped.
-        applyOrientation(orientation, box.min, {1, 1}),
-        applyOrientation(orientation, box.max - nanogui::Vector2i{1}, {1, 1}),
+        applyOrientation(orientation, box.min, size),
+        applyOrientation(orientation, box.max - nanogui::Vector2i{1}, size),
     }}};
     result.max += nanogui::Vector2i{1};
 
-    return result;
+    return result.translate(reference.min);
 };
 
 } // namespace tev

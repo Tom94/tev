@@ -1220,10 +1220,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     ImageData resultData;
     resultData.partName = partName;
-    resultData.dataWindow = resultData.displayWindow = {
-        {0, 0},
-        size
-    };
+    resultData.dataWindow = resultData.displayWindow = size;
 
     uint16_t orientation = 1;
     if (!TIFFGetFieldDefaulted(tif, TIFFTAG_ORIENTATION, &orientation)) {
