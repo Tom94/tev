@@ -1484,7 +1484,7 @@ Task<vector<shared_ptr<Image>>>
 void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
     // If we're trying to open a directory, try loading all the images inside of that directory
     if (fs::exists(path) && fs::is_directory(path)) {
-        tlog::info() << fmt::format("Loading images {} from directory {}", mRecursiveDirectories ? "recursively " : "", path);
+        tlog::info() << fmt::format("Loading images {}from directory {}", mRecursiveDirectories ? "recursively " : "", path);
 
         const fs::path canonicalPath = fs::canonical(path);
         mDirectories[canonicalPath].emplace(channelSelector);
