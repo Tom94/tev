@@ -1502,6 +1502,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                 (uint8_t*)floatRgbaData.data(),
                 resultData.channels.front().floatData(),
                 4,
+                nullopt,
                 priority
             );
 

@@ -430,6 +430,7 @@ Task<void> toLinearSrgbPremul(
     uint8_t* __restrict src,
     float* __restrict rgbaDst,
     int numChannelsOut,
+    std::optional<ERenderingIntent> intentOverride,
     int priority
 );
 
@@ -439,9 +440,7 @@ struct LimitedRange {
 
     static constexpr LimitedRange full() { return {1.0f, 0.0f}; }
 
-    bool operator==(const LimitedRange& other) const {
-        return scale == other.scale && offset == other.offset;
-    }
+    bool operator==(const LimitedRange& other) const { return scale == other.scale && offset == other.offset; }
 };
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample);

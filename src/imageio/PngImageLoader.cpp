@@ -554,6 +554,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         (uint8_t*)iccTmpFloatData.data(),
                         dstData,
                         4,
+                        nullopt,
                         priority
                     );
                     resultData.hasPremultipliedAlpha = true;

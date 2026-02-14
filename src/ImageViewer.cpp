@@ -2258,6 +2258,7 @@ void ImageViewer::openImageDialog() {
                 {"avif",                    "AV1 Image File"                   },
 #endif
                 {"bmp",                     "Bitmap image"                     },
+                {"cur",                     "Microsoft cursor image"           },
 #ifdef _WIN32
                 {"dds",                     "DirectDraw Surface image"         },
 #endif
@@ -2268,6 +2269,7 @@ void ImageViewer::openImageDialog() {
 #ifdef TEV_SUPPORT_HEIC
                 {"heic",                    "High Efficiency Image Container"  },
 #endif
+                {"ico",                     "Microsoft icon image"             },
                 {"jpeg,jpg",                "JPEG image"                       },
                 {"jxl",                     "JPEG-XL image"                    },
                 {"pam,pbm,pfm,pgm,pnm,ppm", "Portable *Map image"              },

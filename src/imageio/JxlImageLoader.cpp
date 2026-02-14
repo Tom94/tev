@@ -511,6 +511,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             (uint8_t*)colorData.data(),
                             data.channels.front().floatData(),
                             4,
+                            nullopt,
                             priority
                         );
 

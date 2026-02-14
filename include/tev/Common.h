@@ -686,6 +686,15 @@ inline size_t nBytes(EPixelFormat format) {
 
 inline size_t nBits(EPixelFormat format) { return nBytes(format) * 8; }
 
+inline constexpr uint32_t fourcc(const char s[5]) {
+    uint32_t result = 0;
+    for (size_t i = 0; i < 4; ++i) {
+        result |= ((uint32_t)s[i]) << (8 * (3 - i));
+    }
+
+    return result;
+}
+
 // Implemented in main.cpp
 void scheduleToMainThread(const std::function<void()>& fun);
 void redrawWindow();
