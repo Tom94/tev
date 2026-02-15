@@ -1725,7 +1725,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         isDng = true;
     }
 
-    enum EDngSubfileType : uint16_t {
+    enum EDngSubfileType : uint32_t {
         Main = 0,
         Reduced = 1,
         Transparency = 4,
@@ -1733,6 +1733,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         Depth = 8,
         DepthReduced = 9,
         Enhanced = 16,
+        AltReduced = 65537,
+        SemanticMask = 65540,
     };
 
     auto dngSubFileTypeToString = [&](uint32_t subFileType) {
@@ -1744,6 +1746,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             case Depth: return "main.depth";
             case DepthReduced: return "reduced.depth";
             case Enhanced: return "main.enhanced";
+            case AltReduced: return "alt.reduced";
+            case SemanticMask: return "main.semantic";
             default: return "unknown";
         }
     };
