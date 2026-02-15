@@ -142,7 +142,8 @@ $ cpack --config build/CPackConfig.cmake
 - __TIFF__, DNG (via [libtiff](https://gitlab.com/libtiff/libtiff); only some DNG files supported)
 - __AVIF__ (including gain maps, e.g. HDR pictures from Android; via [aom](https://aomedia.googlesource.com/aom)+[libheif](https://github.com/strukturag/libheif))
 - __HEIC__ (including gain maps, e.g. HDR pictures from iPhones; via [libde265](https://github.com/strukturag/libde265)+[libheif](https://github.com/strukturag/libheif); disabled in binary release. You must build __tev__ yourself with the `TEV_SUPPORT_HEIC` CMake option. Check patent laws in your jurisdiction before enabling this feature.)
-- __HDR__, BMP, GIF, PIC, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
+- __BMP__, ICO, CUR (including color profiles)
+- __HDR__, GIF, PIC, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 - __RAW__ and various camera-specific RAW formats (via [LibRaw](https://github.com/LibRaw/LibRaw))
 
 ## License
