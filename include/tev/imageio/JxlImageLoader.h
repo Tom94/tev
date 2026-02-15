@@ -22,17 +22,29 @@
 #include <tev/imageio/ImageLoader.h>
 
 #include <istream>
+#include <optional>
 #include <span>
 
 namespace tev {
 
 class JxlImageLoader : public ImageLoader {
 public:
-    Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom) const override;
+    Task<std::vector<ImageData>> load(
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+    ) const override;
 
     Task<std::vector<ImageData>> load(
-        std::span<const uint8_t> data, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom, bool skipColorProcessing
+        std::span<const uint8_t> data,
+        const fs::path& path,
+        std::string_view channelSelector,
+        int priority,
+        const GainmapHeadroom& gainmapHeadroom,
+        bool skipColorProcessing,
+        // Ability to override the true number of bits per sample in the image. E.g. when a 16 bit JXL encodes data with only 12 bits of
+        // precision, as can happen when JXL codestreams are embedded in TIFF files. This argument affects scaling of the decoded float
+        // data: the maximum possible value will be 2^bitsPerSampleOverride-1.
+        // NOTE: this parameter only has an effect if no ICC profile is present
+        std::optional<uint32_t> bitsPerSampleOverride = std::nullopt
     ) const;
 
     std::string name() const override { return "JPEG XL"; }
