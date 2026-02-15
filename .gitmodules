@@ -106,3 +106,7 @@
 	path = dependencies/concurrentqueue
 	url = https://github.com/cameron314/concurrentqueue
 	shallow = true
+[submodule "dependencies/openjpeg"]
+	path = dependencies/openjpeg
+	url = https://github.com/tom94/openjpeg
+	shallow = true

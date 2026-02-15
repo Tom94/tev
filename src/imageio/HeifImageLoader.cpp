@@ -32,6 +32,7 @@
 #include <libheif/heif_sequences.h>
 
 #include <optional>
+#include <unordered_set>
 
 using namespace nanogui;
 using namespace std;
@@ -55,10 +56,25 @@ Task<vector<ImageData>> HeifImageLoader::load(
         throw FormatNotSupported{"Could not determine HEIF mime type."};
     }
 
-    // We support heic, heif and avif formats, with and without sequence.
     const auto format = mimeTypeParts.back();
-    if (format != "heic" && format != "heic-sequence" && format != "heif" && format != "heif-sequence" && format != "avif" &&
-        format != "avif-sequence") {
+    unordered_set<string_view> supportedFormats = {
+        // HEIF with HEVC compression
+        "heic",
+        "heic-sequence",
+        // Generic HEIF format, compression not specified
+        "heif",
+        "heif-sequence",
+        // HEIF with AV1 compression
+        "avif",
+        "avif-sequence",
+        // HEIC with JPEG 2000 compression
+        "hej2k",
+        "j2is", // j2 image sequence
+        // JPEG
+        "jpeg",
+    };
+
+    if (supportedFormats.find(format) == supportedFormats.end()) {
         throw FormatNotSupported{fmt::format("HEIF format '{}' is not supported.", format)};
     }
 
