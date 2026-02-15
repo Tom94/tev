@@ -1420,9 +1420,14 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     const bool isCompressed = compression == ECompression::Rle8 || compression == ECompression::Rle4 ||
         compression == ECompression::Rle24 || compression == ECompression::Huffman;
 
-    // Some BMP files underreport their size... the max operator makes sure that's not a problem. We still limit the allocation to at most
-    // the remaining file size to avoid OOMing on corrupted files that claim to have huge pixel data size.
-    HeapArray<uint8_t> pixelData(std::min(isCompressed ? dib.imageSize : pixelDataSize, pixelDataEnd - pixelDataPos));
+    bytesToRead = isCompressed ? dib.imageSize : pixelDataSize;
+    if (pixelDataEnd - pixelDataPos < bytesToRead) {
+        throw ImageLoadError{fmt::format(
+            "BMP file is too small to contain expected pixel data: {} bytes available, {} bytes expected", pixelDataEnd - pixelDataPos, pixelDataSize
+        )};
+    }
+
+    HeapArray<uint8_t> pixelData(bytesToRead);
     iStream.read((char*)pixelData.data(), pixelData.size());
     if (!iStream) {
         throw ImageLoadError{fmt::format("Failed to read BMP pixel data of size {}", pixelData.size())};

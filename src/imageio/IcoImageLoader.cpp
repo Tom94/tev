@@ -38,6 +38,7 @@ template <typename T> static T read(const uint8_t* data, bool reverseEndianness)
 Task<vector<ImageData>> IcoImageLoader::load(
     istream& iStream, const fs::path& path, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
 ) const {
+    const size_t initialPos = iStream.tellg();
     const bool reverseEndianness = endian::native == endian::big;
 
     struct IconDir {
@@ -119,7 +120,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
         vector<ImageData> imageData;
         try {
             iStream.clear();
-            iStream.seekg(entry.imageOffset, iStream.beg);
+            iStream.seekg(initialPos + entry.imageOffset, iStream.beg);
 
             const auto pngLoader = PngImageLoader{};
             imageData = co_await pngLoader.load(iStream, path, channelSelector, priority, gainmapHeadroom);
@@ -133,7 +134,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
         if (imageData.empty()) {
             try {
                 iStream.clear();
-                iStream.seekg(entry.imageOffset, iStream.beg);
+                iStream.seekg(initialPos + entry.imageOffset, iStream.beg);
 
                 // Potentially modified by loading the image. Will indicate if there is an AND mask following the image data that needs to
                 // be applied to the image's alpha channel.
@@ -156,10 +157,23 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     const auto bytesPerRow = (size_t)nextMultiple(entry.width, 32) / 8;
                     const size_t andMaskSize = bytesPerRow * entry.height;
 
+                    const size_t maskDataPos = iStream.tellg();
+                    iStream.seekg(0, ios::end);
+                    const size_t maskDataEnd = iStream.tellg();
+                    iStream.seekg(maskDataPos, ios_base::beg);
+
+                    if (maskDataEnd - maskDataPos < andMaskSize) {
+                        throw ImageLoadError{fmt::format(
+                            "BMP file is too small to contain expected ICO/CUR image AND mask: {} bytes available, {} bytes expected",
+                            maskDataEnd - maskDataPos,
+                            andMaskSize
+                        )};
+                    }
+
                     HeapArray<uint8_t> andMaskData(andMaskSize);
-                    iStream.read((char*)andMaskData.data(), andMaskSize);
+                    iStream.read((char*)andMaskData.data(), andMaskData.size());
                     if (!iStream) {
-                        throw ImageLoadError{fmt::format("Failed to read ICO/CUR image AND mask of size {}", andMaskSize)};
+                        throw ImageLoadError{fmt::format("Failed to read ICO/CUR image AND mask of size {}", andMaskData.size())};
                     }
 
                     vector<Channel*> alphaChannels;
