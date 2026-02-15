@@ -48,7 +48,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
             uint8_t colorCount;
             uint8_t reserved;
             uint16_t planes;
-            uint16_t bitCount;
+            uint16_t bpp;
             uint32_t bytesInRes;
             uint32_t imageOffset;
         };
@@ -71,11 +71,22 @@ Task<vector<ImageData>> IcoImageLoader::load(
     dir.type = read<uint16_t>(header + 2, reverseEndianness);
     dir.count = read<uint16_t>(header + 4, reverseEndianness);
 
-    if (dir.reserved != 0 || (dir.type != 1 && dir.type != 2) || dir.count == 0) {
+    enum class EType { Ico = 1, Cur = 2 };
+    const auto typeToString = [](EType type) {
+        switch (type) {
+            case EType::Ico: return "ICO";
+            case EType::Cur: return "CUR";
+            default: return "unknown";
+        }
+    };
+
+    const auto type = (EType)dir.type;
+
+    if (dir.reserved != 0 || (type != EType::Cur && type != EType::Ico) || dir.count == 0) {
         throw FormatNotSupported{"Invalid ICO/CUR header"};
     }
 
-    tlog::debug() << fmt::format("Loading {} images from {} container", dir.count, dir.type == 1 ? "ICO" : "CUR");
+    tlog::debug() << fmt::format("Loading {} images from {} container", dir.count, typeToString(type));
 
     dir.entries.resize(dir.count); // No need to sanitize. Worst case we allocate 64k entries, each 16 bytes
     for (uint16_t i = 0; i < dir.count; i++) {
@@ -91,18 +102,31 @@ Task<vector<ImageData>> IcoImageLoader::load(
         entry.colorCount = entryData[2];
         entry.reserved = entryData[3];
         entry.planes = read<uint16_t>(entryData + 4, reverseEndianness);
-        entry.bitCount = read<uint16_t>(entryData + 6, reverseEndianness);
+        entry.bpp = read<uint16_t>(entryData + 6, reverseEndianness);
         entry.bytesInRes = read<uint32_t>(entryData + 8, reverseEndianness);
         entry.imageOffset = read<uint32_t>(entryData + 12, reverseEndianness);
+    }
+
+    if (type == EType::Ico) {
+        tlog::debug() << "Sorting ICO images by bitwidth, largest to smallest";
+        sort(begin(dir.entries), end(dir.entries), [](const auto& a, const auto& b) {
+            return tuple(a.bpp, a.width, a.height) > tuple(b.bpp, b.width, b.height);
+        });
+    }
+
+    for (uint16_t i = 0; i < dir.count; i++) {
+        const auto& entry = dir.entries[i];
 
         tlog::debug() << fmt::format(
-            "  #{}: size={}x{} colorCount={} planes={} bitCount={} bytesInRes={} imageOffset={}",
+            "  #{}: size={}x{} colorCount={} {}={} {}={} bytesInRes={} imageOffset={}",
             i,
             entry.width,
             entry.height,
             entry.colorCount,
+            type == EType::Cur ? "hotspotX" : "planes",
             entry.planes,
-            entry.bitCount,
+            type == EType::Cur ? "hotspotY" : "bpp",
+            entry.bpp,
             entry.bytesInRes,
             entry.imageOffset
         );
@@ -112,22 +136,22 @@ Task<vector<ImageData>> IcoImageLoader::load(
 
     for (uint16_t i = 0; i < dir.count; i++) {
         const auto& entry = dir.entries[i];
-
-        if (!iStream) {
-            throw FormatNotSupported{"Failed to seek to ICO/CUR image data."};
-        }
+        tlog::debug() << fmt::format("Loading image #{} from {} container", i, typeToString(type));
 
         vector<ImageData> imageData;
         try {
             iStream.clear();
             iStream.seekg(initialPos + entry.imageOffset, iStream.beg);
+            if (!iStream) {
+                throw FormatNotSupported{"Failed to seek to image data."};
+            }
 
             const auto pngLoader = PngImageLoader{};
             imageData = co_await pngLoader.load(iStream, path, channelSelector, priority, gainmapHeadroom);
         } catch (const FormatNotSupported&) {
-            tlog::debug() << fmt::format("Image #{} in ICO/CUR container is not a PNG image; trying BMP.", i);
+            tlog::debug() << fmt::format("Not a PNG image; trying BMP.", i);
         } catch (const ImageLoadError& e) {
-            tlog::warning() << fmt::format("Image #{} in ICO/CUR container is a malformed PNG image: {}", i, e.what());
+            tlog::warning() << fmt::format("Malformed PNG image: {}", i, e.what());
             continue;
         }
 
@@ -135,6 +159,9 @@ Task<vector<ImageData>> IcoImageLoader::load(
             try {
                 iStream.clear();
                 iStream.seekg(initialPos + entry.imageOffset, iStream.beg);
+                if (!iStream) {
+                    throw FormatNotSupported{"Failed to seek to image data."};
+                }
 
                 // Potentially modified by loading the image. Will indicate if there is an AND mask following the image data that needs to
                 // be applied to the image's alpha channel.
@@ -147,9 +174,9 @@ Task<vector<ImageData>> IcoImageLoader::load(
 
                 if (size != Vector2i{entry.width, entry.height}) {
                     if (size != Vector2i{entry.width, entry.height * 2}) {
-                        throw ImageLoadError{fmt::format(
-                            "BMP image size {} does not match ICO/CUR entry size + AND mask {}x{}", size, entry.width, entry.height
-                        )};
+                        throw ImageLoadError{
+                            fmt::format("BMP image size {} does not match entry size + AND mask {}x{}", size, entry.width, entry.height)
+                        };
                     }
 
                     tlog::debug() << fmt::format("BMP image size {} indicates presence of AND mask. Applying...", size);
@@ -164,7 +191,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
 
                     if (maskDataEnd - maskDataPos < andMaskSize) {
                         throw ImageLoadError{fmt::format(
-                            "BMP file is too small to contain expected ICO/CUR image AND mask: {} bytes available, {} bytes expected",
+                            "BMP file is too small to contain expected AND mask: {} bytes available, {} bytes expected",
                             maskDataEnd - maskDataPos,
                             andMaskSize
                         )};
@@ -173,17 +200,14 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     HeapArray<uint8_t> andMaskData(andMaskSize);
                     iStream.read((char*)andMaskData.data(), andMaskData.size());
                     if (!iStream) {
-                        throw ImageLoadError{fmt::format("Failed to read ICO/CUR image AND mask of size {}", andMaskData.size())};
+                        throw ImageLoadError{fmt::format("Failed to read AND mask of size {}", andMaskData.size())};
                     }
 
                     vector<Channel*> alphaChannels;
                     for (auto& image : imageData) {
                         auto* const alphaChannel = image.mutableChannel("A");
                         if (!alphaChannel) {
-                            tlog::warning() << fmt::format(
-                                "Image #{} in ICO/CUR container does not have an alpha channel, but it has an AND mask. Skipping AND mask application.",
-                                i
-                            );
+                            tlog::warning() << fmt::format("No alpha channel but AND mask. Skipping AND mask application.", i);
                             continue;
                         }
 
@@ -216,10 +240,10 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     );
                 }
             } catch (const FormatNotSupported&) {
-                tlog::warning() << fmt::format("Image #{} in ICO/CUR container is neither a PNG nor a BMP image", i);
+                tlog::warning() << fmt::format("Neither a PNG nor a BMP image", i);
                 continue;
             } catch (const ImageLoadError& e) {
-                tlog::warning() << fmt::format("Image #{} in ICO/CUR container is a malformed BMP image: {}", i, e.what());
+                tlog::warning() << fmt::format("Malformed BMP image: {}", i, e.what());
                 continue;
             }
         }
