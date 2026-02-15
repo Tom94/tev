@@ -198,6 +198,20 @@ Task<void> ImageData::convertToRec709(int priority) {
     toRec709 = Matrix3f{1.0f};
 }
 
+Task<void> ImageData::matchColorsAndSizeOf(ImageData& other, int priority) {
+    if (channels.empty()) {
+        co_return;
+    }
+
+    updateLayers();
+    other.updateLayers();
+
+    co_await applyColorConversion(inverse(other.toRec709) * toRec709, priority);
+    if (!other.channels.empty()) {
+        co_await ImageLoader::resizeImageData(*this, other.channels.front().size(), priority);
+    }
+}
+
 Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
     if (toRec709 != Matrix3f{1.0f}) {
         throw ImageModifyError{"Cannot derive white level from metadata before converting to Rec709 color space."};

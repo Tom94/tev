@@ -1406,9 +1406,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                         const auto& tmpImage = tmp.front();
 
                         if (tmpImage.channels.size() < (size_t)samplesPerPixel / numPlanes) {
-                            throw ImageLoadError{fmt::format(
-                                "Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size()
-                            )};
+                            throw ImageLoadError{
+                                fmt::format("Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size())
+                            };
                         }
 
                         for (const auto& channel : tmpImage.channels) {
@@ -1737,17 +1737,17 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         SemanticMask = 65540,
     };
 
-    auto dngSubFileTypeToString = [&](uint32_t subFileType) {
+    const auto dngSubFileTypeToString = [&](uint32_t subFileType) {
         switch (subFileType) {
-            case Main: return "main";
+            case Main: return "";
             case Reduced: return "reduced";
-            case Transparency: return "main.transparency";
+            case Transparency: return "transparency";
             case TransparencyReduced: return "reduced.transparency";
-            case Depth: return "main.depth";
+            case Depth: return "depth";
             case DepthReduced: return "reduced.depth";
-            case Enhanced: return "main.enhanced";
-            case AltReduced: return "alt.reduced";
-            case SemanticMask: return "main.semantic";
+            case Enhanced: return "enhanced";
+            case AltReduced: return "reduced.alt";
+            case SemanticMask: return "mask";
             default: return "unknown";
         }
     };
@@ -1780,12 +1780,12 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     // The first directory is already read through TIFFOpen()
     do {
-        tdir_t currentDirNumber = TIFFCurrentDirectory(tif);
+        const tdir_t currentDirNumber = TIFFCurrentDirectory(tif);
 
         co_await tryLoadImage(currentDirNumber, -1, -1);
 
         // Check if there are SubIFD subfiles
-        toff_t* offsets;
+        const toff_t* offsets;
         int numSubIfds = 0;
         if (TIFFGetField(tif, TIFFTAG_SUBIFD, &numSubIfds, &offsets)) {
             // Make a copy of the offsets, as they are only valid until the next TIFFReadDirectory() call
@@ -1814,6 +1814,31 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     if (result.empty()) {
         throw ImageLoadError{"No images found in TIFF file."};
+    }
+
+    // Ensure earlier IFDs appear before later ones, as well as main images before reduced images in DNGs
+    sort(begin(result), end(result), [](const ImageData& a, const ImageData& b) { return a.partName < b.partName; });
+
+    // If we're a DNG, auxiliary images are either extra channels (depth, transparency, semantic mask) or reduced-resolution or enhanced
+    // versions of the main image. They are often smaller-resolution as the main image, but they should nonetheless be treated as extra
+    // channels rather than separate images. Hence: match colors, resize, and flatten into single image.
+    if (isDng) {
+        auto& mainImage = result.front();
+
+        vector<Task<void>> moveTasks;
+        for (size_t i = 1; i < result.size(); ++i) {
+            moveTasks.emplace_back(result[i].matchColorsAndSizeOf(mainImage, priority));
+        }
+
+        co_await awaitAll(moveTasks);
+
+        for (size_t i = 1; i < result.size(); ++i) {
+            mainImage.channels.insert(
+                mainImage.channels.end(), make_move_iterator(result[i].channels.begin()), make_move_iterator(result[i].channels.end())
+            );
+        }
+
+        result.resize(1);
     }
 
     co_return result;

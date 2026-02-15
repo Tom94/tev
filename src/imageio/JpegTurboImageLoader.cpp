@@ -281,7 +281,7 @@ Task<vector<ImageData>>
 
                             // We aren't interested in cluttering tev with thumbnail images. Generic multiframe images are fine, though
                             if (iie.type() == EMpfImageType::LargeThumbnailVga || iie.type() == EMpfImageType::LargeThumbnailFullHd) {
-                                tlog::debug() << fmt::format("Skipping MPF thumbnail image #{}.", i);
+                                tlog::debug() << fmt::format("Skipping MPF thumbnail image #{}", i);
                                 continue;
                             }
 
@@ -289,18 +289,18 @@ Task<vector<ImageData>>
                             const uint8_t* imageData = appN.mpf.data() + iie.offset;
                             const ptrdiff_t imageDataOffset = imageData - buffer.data();
                             if (seenOffsets.find(imageDataOffset) != seenOffsets.end()) {
-                                tlog::warning() << fmt::format("Already seen image at offset {}, skipping.", imageDataOffset);
+                                tlog::warning() << fmt::format("Already seen image at offset {}, skipping", imageDataOffset);
                                 continue;
                             }
 
                             const auto slice = span<const uint8_t>{imageData, iie.size}; // +4 to account for JPEG SOI and EOI marker
                             if (slice.data() + slice.size() > buffer.data() + buffer.size()) {
-                                tlog::warning() << fmt::format("MPF image #{} exceeds buffer bounds, skipping.", i);
+                                tlog::warning() << fmt::format("MPF image #{} exceeds buffer bounds, skipping", i);
                                 continue;
                             }
 
                             tlog::debug() << fmt::format(
-                                "Adding MPF image #{} slice at offset {} of size {} bytes.", i, imageDataOffset, slice.size()
+                                "Adding MPF image #{} slice at offset {} of size {} bytes", i, imageDataOffset, slice.size()
                             );
                             imageInfos.emplace_back(slice, idx, mfpTypeToString(iie.type()));
                         }
