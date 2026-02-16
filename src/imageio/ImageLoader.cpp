@@ -22,6 +22,7 @@
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/IcoImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
+#include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>
@@ -66,6 +67,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new WebpImageLoader());
+        imageLoaders.emplace_back(new Jpeg2000ImageLoader());
         imageLoaders.emplace_back(new JpegTurboImageLoader());
         imageLoaders.emplace_back(new PngImageLoader());
         imageLoaders.emplace_back(new RawImageLoader());

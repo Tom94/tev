@@ -163,6 +163,13 @@ set(OpenJPEG_INCLUDE_DIRS
 set(OpenJPEG_FOUND TRUE CACHE BOOL " " FORCE)
 set(OPENJPEG_FOUND TRUE CACHE BOOL " " FORCE)
 
+add_library(openjpeg-tev INTERFACE IMPORTED GLOBAL)
+add_dependencies(openjpeg-tev openjp2)
+set_target_properties(openjpeg-tev PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${OpenJPEG_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES openjp2
+)
+
 # Compile aom (dependency of libheif, which follows)
 if (TEV_SUPPORT_AVIF)
     set(AOM_TARGET_NAME aom)
@@ -294,8 +301,8 @@ if (TEV_USE_LIBHEIF)
     add_dependencies(heif ${JPEGTURBO_TARGET_NAME})
     target_include_directories(heif PRIVATE "${JPEG_INCLUDE_DIRS}")
 
+    add_dependencies(heif openjp2)
     target_include_directories(heif PRIVATE "${OpenJPEG_INCLUDE_DIRS}")
-    target_link_libraries(heif PRIVATE openjp2)
 
     if (TEV_SUPPORT_AVIF)
         add_dependencies(heif ${AOM_TARGET_NAME})
