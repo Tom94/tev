@@ -20,6 +20,7 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/JxlImageLoader.h>
 #include <tev/imageio/TiffImageLoader.h>
 #include <tev/imageio/Xmp.h>
@@ -1077,9 +1078,9 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
 
-    // We will manually decompress JXL tiles further down the pipeline by invoking tev's JXL decoder directly on the compressed data from
-    // the TIFF file. This returns fp32 data.
-    if (compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL) {
+    // We will manually decompress JXL and JPEG2000 tiles further down the pipeline by invoking tev's JXL decoder directly on the compressed
+    // data from the TIFF file. This returns fp32 data.
+    if (compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL || compression == COMPRESSION_JP2000) {
         bitsPerSample = 32;
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
@@ -1138,6 +1139,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     if (photometric == PHOTOMETRIC_YCBCR) {
         throw ImageLoadError{"YCbCr images are unsupported."};
     }
+
+    // TODO: handle CIELAB, ICCLAB, ITULAB (shouldn't be too tough)
 
     if (all_of(begin(SUPPORTED_PHOTOMETRICS), end(SUPPORTED_PHOTOMETRICS), [&](uint16_t p) { return p != photometric; })) {
         throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
@@ -1422,6 +1425,12 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                             case COMPRESSION_JXL_DNG_1_7:
                             case COMPRESSION_JXL: {
                                 const auto loader = JxlImageLoader{};
+                                tmp = co_await loader.load(
+                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                );
+                            } break;
+                            case COMPRESSION_JP2000: {
+                                const auto loader = Jpeg2000ImageLoader{};
                                 tmp = co_await loader.load(
                                     compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
                                 );
@@ -1714,9 +1723,9 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     TIFFSetErrorHandler(tiffErrorHandler);
     TIFFSetWarningHandler(tiffWarningHandler);
 
-    // Read the entire stream into memory and decompress from there. Technically, we can progressively decode TIFF images, but we want to
-    // additionally load the TIFF image via our EXIF library, which requires the file to be in memory. For the same reason, we also prepend
-    // the EXIF FOURCC to the data ahead of the TIFF header.
+    // Read the entire stream into memory and decompress from there. Technically, we can progressively decode TIFF images, but we want
+    // to additionally load the TIFF image via our EXIF library, which requires the file to be in memory. For the same reason, we also
+    // prepend the EXIF FOURCC to the data ahead of the TIFF header.
     iStream.seekg(0, ios::end);
     const size_t fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
