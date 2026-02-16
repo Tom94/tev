@@ -56,10 +56,7 @@ option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 option(TEV_CREATE_METAINFO "Auto-generate metainfo for flatpak release" OFF)
 option(TEV_VALIDATE_METAINFO "Validate generated metainfo for flatpak release" OFF)
 
-set(TEV_USE_LIBHEIF OFF)
-if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
-    set(TEV_USE_LIBHEIF ON)
-endif()
+set(TEV_USE_LIBHEIF ON)
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
@@ -268,7 +265,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS clip exif_static jpeg-turbo libraw::libraw_r nanogui OpenEXR::OpenEXR openjp2 png_static tiff webpdemux XMPCore)
+set(TEV_LIBS clip exif_static jpeg-turbo libraw::libraw_r nanogui OpenEXR::OpenEXR png_static tiff webpdemux XMPCore)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
