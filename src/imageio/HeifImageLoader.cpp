@@ -51,31 +51,46 @@ Task<vector<ImageData>> HeifImageLoader::load(
         throw FormatNotSupported{"File is too short to be an HEIF image."};
     }
 
-    const auto mimeTypeParts = split(heif_get_file_mime_type(header, 12), "/");
-    if (mimeTypeParts.size() != 2) {
-        throw FormatNotSupported{"Could not determine HEIF mime type."};
+    if (header[4] != 'f' || header[5] != 't' || header[6] != 'y' || header[7] != 'p') {
+        throw FormatNotSupported{"Invalid HEIF file: missing 'ftyp' box."};
     }
 
-    const auto format = mimeTypeParts.back();
-    unordered_set<string_view> supportedFormats = {
-        // HEIF with HEVC compression
-        "heic",
-        "heic-sequence",
-        // Generic HEIF format, compression not specified
-        "heif",
-        "heif-sequence",
-        // HEIF with AV1 compression
-        "avif",
-        "avif-sequence",
-        // HEIC with JPEG 2000 compression
-        "hej2k",
-        "j2is", // j2 image sequence
+    const heif_brand2 brand = heif_read_main_brand(header, 12);
+
+    unordered_set<heif_brand2> supportedFormats = {
+        // HEIC
+        heif_brand2_heic,
+        heif_brand2_heix,
+        heif_brand2_heim,
+        heif_brand2_heis,
+        // HEIF
+        heif_brand2_mif1,
+        heif_brand2_mif2,
+        heif_brand2_mif3,
+        heif_brand2_miaf,
+        // HEIC sequence
+        heif_brand2_hevc,
+        heif_brand2_hevx,
+        heif_brand2_hevm,
+        heif_brand2_hevs,
+        // HEIF sequence
+        heif_brand2_msf1,
+        // AVIF
+        heif_brand2_avif,
+        // AVIF sequence
+        heif_brand2_avis,
+        // JPEG 2000
+        heif_brand2_j2ki,
+        // JPEG 2000 sequence
+        heif_brand2_j2is,
         // JPEG
-        "jpeg",
+        heif_brand2_jpeg,
+        // JPEG sequence
+        heif_brand2_jpgs,
     };
 
-    if (supportedFormats.find(format) == supportedFormats.end()) {
-        throw FormatNotSupported{fmt::format("HEIF format '{}' is not supported.", format)};
+    if (supportedFormats.find(brand) == supportedFormats.end()) {
+        throw FormatNotSupported{fmt::format("HEIF format {:08X} is not supported.", brand)};
     }
 
     iStream.seekg(0, ios_base::end);

@@ -283,6 +283,7 @@ if (TEV_USE_LIBHEIF)
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
 
     set(ENABLE_PLUGIN_LOADING OFF CACHE BOOL " " FORCE)
+    set(ENABLE_EXPERIMENTAL_MINI_FORMAT ON CACHE BOOL " " FORCE)
 
     add_subdirectory(libheif EXCLUDE_FROM_ALL)
     target_include_directories(heif INTERFACE
