@@ -18,7 +18,10 @@
 
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/Jpeg2000ImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #include <openjpeg.h>
 
@@ -101,6 +104,105 @@ static opj_stream_t* makeMemStream(MemStream* m) {
     opj_stream_set_skip_function(s, memSkip);
     opj_stream_set_seek_function(s, memSeek);
     return s;
+}
+
+// EXIF UUID used in JP2 UUID boxes
+inline constexpr array<uint8_t[16], 2> exifUuids = {
+    {
+     // JpgTiffExif->JP2 (standard, used by ExifTool etc.)
+        {0x4A, 0x70, 0x67, 0x54, 0x69, 0x66, 0x66, 0x45, 0x78, 0x69, 0x66, 0x2D, 0x3E, 0x4A, 0x50, 0x32},
+     // Adobe Photoshop JPEG2000 plugin v1.5
+        {0x05, 0x37, 0xCD, 0xAB, 0x9D, 0x0C, 0x44, 0x31, 0xA7, 0x2A, 0xFA, 0x56, 0x1F, 0x2A, 0x11, 0x3E},
+     }
+};
+
+// XMP UUID used in JP2 UUID boxes
+// BE7ACFCB-97A9-42E8-9C71-999491E3AFAC
+static const uint8_t xmpUuid[16] = {0xBE, 0x7A, 0xCF, 0xCB, 0x97, 0xA9, 0x42, 0xE8, 0x9C, 0x71, 0x99, 0x94, 0x91, 0xE3, 0xAF, 0xAC};
+
+struct Jp2Box {
+    uint64_t offset;
+    uint64_t length;
+    span<const uint8_t> data;
+    char type[5];
+};
+
+static uint32_t readU32Be(const uint8_t* p) {
+    return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | uint32_t(p[3]);
+}
+
+static uint64_t readU64Be(const uint8_t* p) { return (uint64_t(readU32Be(p)) << 32) | uint64_t(readU32Be(p + 4)); }
+
+struct Jp2Metadata {
+    span<const uint8_t> genericXml;
+    span<const uint8_t> xmpXml;
+    span<const uint8_t> exifData;
+};
+
+static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t offset) {
+    if (offset + 8 > data.size()) {
+        return nullopt;
+    }
+
+    Jp2Box box;
+    box.offset = offset;
+
+    const uint32_t len32 = readU32Be(data.data() + offset);
+    memcpy(box.type, data.data() + offset + 4, 4);
+    box.type[4] = '\0';
+    offset += 8;
+
+    if (len32 == 1) {
+        if (offset + 8 > data.size()) {
+            tlog::warning() << "Invalid JP2 box: insufficient data for 64-bit length.";
+            return nullopt;
+        }
+
+        box.length = readU64Be(data.data() + offset);
+        offset += 8;
+        box.data = data.subspan(box.offset + 16, box.length - 16);
+    } else if (len32 == 0) {
+        box.length = data.size() - box.offset;
+        box.data = data.subspan(box.offset + 8, box.length - 8);
+    } else {
+        box.length = len32;
+        box.data = data.subspan(box.offset + 8, box.length - 8);
+    }
+
+    return box;
+}
+
+Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
+    Jp2Metadata meta;
+    uint64_t offset = 0;
+
+    while (offset < data.size()) {
+        const auto box = readBoxHeader(data, offset);
+        if (!box.has_value()) {
+            break;
+        }
+
+        if (strcmp(box->type, "xml ") == 0) {
+            meta.genericXml = box->data;
+        } else if (strcmp(box->type, "uuid") == 0) {
+            if (box->data.size() < 16) {
+                offset = box->offset + box->length;
+                continue;
+            }
+
+            if (memcmp(box->data.data(), xmpUuid, 16) == 0) {
+                meta.xmpXml = box->data.subspan(16);
+            } else if (any_of(begin(exifUuids), end(exifUuids), [&box](const uint8_t (&knownUuid)[16]) {
+                           return memcmp(box->data.data(), knownUuid, 16) == 0;
+                       })) {
+                meta.exifData = box->data.subspan(16);
+            }
+        }
+
+        offset = box->offset + box->length;
+    }
+
+    return meta;
 }
 
 Task<vector<ImageData>> Jpeg2000ImageLoader::load(
@@ -231,18 +333,67 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     vector<ImageData> result(1);
     auto& resultData = result.front();
 
+    const auto meta = extractJp2Metadata(data);
+
+    if (!meta.exifData.empty()) {
+        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", meta.exifData.size());
+
+        try {
+            const auto exif = Exif{meta.exifData};
+            resultData.attributes.emplace_back(exif.toAttributes());
+
+            const EOrientation exifOrientation = exif.getOrientation();
+            if (exifOrientation != EOrientation::None) {
+                resultData.orientation = exifOrientation;
+                tlog::debug() << fmt::format("EXIF image orientation: {}", toString(resultData.orientation));
+            }
+        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+    }
+
+    if (!meta.xmpXml.empty() || !meta.genericXml.empty()) {
+        // Prefer a known-xmp box over a generic xml box, but try the generic one if no xmp box is present just in case it contains xmp.
+        const auto xmlData = meta.xmpXml.empty() ? meta.genericXml : meta.xmpXml;
+        if (xmlData.data() == meta.genericXml.data()) {
+            tlog::debug() << fmt::format(
+                "Found generic XML metadata of size {} bytes. No XMP-specific box found, trying to parse as XMP anyway.", xmlData.size()
+            );
+        } else {
+            tlog::debug() << fmt::format("Found XMP metadata of size {} bytes.", xmlData.size());
+        }
+
+        const string_view xmpDataView = string_view{(const char*)xmlData.data(), xmlData.size()};
+
+        try {
+            const auto xmp = Xmp{xmpDataView};
+            resultData.attributes.emplace_back(xmp.attributes());
+
+            const EOrientation xmpOrientation = xmp.orientation();
+            if (xmpOrientation != EOrientation::None) {
+                resultData.orientation = xmpOrientation;
+                tlog::debug() << fmt::format("XMP image orientation: {}", toString(resultData.orientation));
+            }
+        } catch (const invalid_argument& e) {
+            if (xmlData.data() == meta.genericXml.data()) {
+                tlog::debug() << fmt::format("Failed to parse XML data as XMP: {}", e.what());
+            } else {
+                tlog::warning() << fmt::format("Failed to parse XMP metadata: {}", e.what());
+            }
+        }
+    }
+
     resultData.dataWindow = resultData.displayWindow = region;
 
     const bool hasAlpha = numChannels == 2 || numChannels >= 4;
     const auto numInterleavedChannels = numChannels == 1 ? 1 : 4;
-    const auto numColorChannels = hasAlpha ? std::min(numChannels, (size_t)4) - 1 : std::min(numChannels, (size_t)4);
+    const auto numRgbaChannels = std::min(numChannels, (size_t)4);
+    const auto numColorChannels = hasAlpha ? numRgbaChannels - 1 : numRgbaChannels;
     const auto numExtraChannels = numChannels > 4 ? numChannels - 4 : 0;
 
     if (numInterleavedChannels == 1) {
         resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
     } else {
         resultData.channels = co_await makeRgbaInterleavedChannels(
-            numColorChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
     }
 
@@ -255,52 +406,72 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
     const auto numPixels = (size_t)size.x() * size.y();
 
-    const auto toFloat = [&](float* rgba, bool convertSrgbToLinear) -> Task<void> {
+    const auto getChannelValue = [&image](size_t c, int x, int y) -> float {
+        const auto& comp = image->comps[c];
+        const auto xc = ((x - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor;
+        const auto yc = ((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor;
+
+        if (yc >= 0 && yc < (int)comp.h && xc >= 0 && xc < (int)comp.w) {
+            return (float)comp.data[yc * comp.w + xc] / ((1ull << (comp.prec - comp.sgnd)) - 1);
+        } else {
+            return 0.0f;
+        }
+    };
+
+    // First copy over the extra channels -- they are treated the same way, regardless of color space settings
+    if (numExtraChannels > 0) {
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
             size.y(),
-            numPixels * numChannels,
+            numPixels * numExtraChannels,
+            [&](int y) {
+                for (size_t c = 4; c < numChannels; ++c) {
+                    for (int x = 0; x < size.x(); ++x) {
+                        resultData.channels[c].setAt({x, y}, getChannelValue(c, x, y));
+                    }
+                }
+            },
+            priority
+        );
+    }
+
+    // Then we handle RGBA channels together, depending on color space and presence of ICC profile
+    const auto rgbaToFloat = [&](float* rgba, size_t outNumChannels, bool convertSrgbToLinear) -> Task<void> {
+        TEV_ASSERT(numColorChannels > 0 && numColorChannels <= 3, "Invalid number of color channels.");
+        TEV_ASSERT(outNumChannels >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
+        TEV_ASSERT(outNumChannels <= 4, "Output buffer cannot have more than 4 channels.");
+
+        const auto outNumColorChannels = hasAlpha ? outNumChannels - 1 : outNumChannels;
+        TEV_ASSERT(outNumColorChannels >= numColorChannels, "Output buffer must have enough color channels.");
+        TEV_ASSERT(outNumColorChannels > 0, "Output buffer must have at least one color channel.");
+
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            size.y(),
+            numPixels * numRgbaChannels,
             [&](int y) {
                 for (int x = 0; x < size.x(); ++x) {
-                    Vector4f color = {0.0f, 0.0f, 0.0f, 1.0f};
-                    for (size_t c = 0; c < numChannels; ++c) {
-                        const auto& comp = image->comps[c];
-                        const auto xc = ((x - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor;
-                        const auto yc = ((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor;
-
-                        float v = 0.0f;
-                        if (yc >= 0 && yc < (int)image->comps[c].h && xc >= 0 && xc < (int)image->comps[c].w) {
-                            v = (float)image->comps[c].data[yc * image->comps[c].w + xc] /
-                                ((1ull << (image->comps[c].prec - image->comps[c].sgnd)) - 1);
-                        }
-
-                        if (c < 4) {
-                            const auto targetChannel = hasAlpha && c == numColorChannels ? 3 : c;
-                            color[targetChannel] = v;
-                        } else {
-                            resultData.channels[c].setAt({x, y}, v);
-                        }
+                    Vector3f rgb{0.0f};
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        rgb[c] = getChannelValue(c, x, y);
                     }
 
                     if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
-                        Vector3f rgb = yccToRgb(color.x(), color.y(), color.z());
-                        color.x() = rgb.x();
-                        color.y() = rgb.y();
-                        color.z() = rgb.z();
+                        rgb = yccToRgb(rgb.x(), rgb.y(), rgb.z());
                     }
 
                     if (convertSrgbToLinear) {
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            color[c] = toLinear(color[c]);
+                            rgb[c] = toLinear(rgb[c]);
                         }
                     }
 
-                    if (numColorChannels == 1) {
-                        color.y() = color.z() = color.x();
+                    for (size_t c = 0; c < outNumColorChannels; ++c) {
+                        rgba[((size_t)y * size.x() + x) * outNumChannels + c] = rgb[std::min(c, numColorChannels - 1)];
                     }
 
-                    for (size_t c = 0; c < numInterleavedChannels; ++c) {
-                        rgba[((size_t)y * size.x() + x) * numInterleavedChannels + c] = color[c];
+                    if (hasAlpha) {
+                        rgba[((size_t)y * size.x() + x) * outNumChannels + outNumChannels - 1] = getChannelValue(numColorChannels, x, y);
                     }
                 }
             },
@@ -312,15 +483,14 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         try {
             const auto profile = ColorProfile::fromIcc({image->icc_profile_buf, image->icc_profile_len});
 
-            HeapArray<float> iccTmpFloatData(numPixels * numInterleavedChannels);
-            co_await toFloat(iccTmpFloatData.data(), false);
+            HeapArray<float> iccTmpFloatData(numPixels * numRgbaChannels);
+            co_await rgbaToFloat(iccTmpFloatData.data(), numRgbaChannels, false);
 
             co_await toLinearSrgbPremul(
                 profile,
                 size,
-                numInterleavedChannels == 1 ? 1 : 3,
-                numInterleavedChannels == 1 ? EAlphaKind::None :
-                                              (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight),
+                numColorChannels,
+                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
                 EPixelFormat::F32,
                 (uint8_t*)iccTmpFloatData.data(),
                 resultData.channels.front().floatData(),
@@ -335,9 +505,10 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    co_await toFloat(resultData.channels.front().floatData(), !skipColorProcessing);
+    co_await rgbaToFloat(resultData.channels.front().floatData(), numInterleavedChannels, !skipColorProcessing);
 
-    // TODO: figure out how to extract exif and xmp metadata
+    resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
+    resultData.nativeMetadata.chroma = rec709Chroma();
 
     co_return result;
 }
