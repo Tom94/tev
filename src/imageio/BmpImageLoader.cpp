@@ -1445,8 +1445,12 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         throw ImageLoadError{fmt::format("Decoded BMP pixel data size {} is smaller than expected {}", pixelData.size(), pixelDataSize)};
     }
 
+    const auto colorBpp = hasPalette ? paletteEntrySize * 8 : dib.bitsPerPixel;
+
     const size_t numColorChannels = 3;
-    const bool hasAlpha = true;
+
+    // 24 bpp images have no alpha channel, but all others can have one, depending on the color masks.
+    const bool hasAlpha = colorBpp != 24;
     const size_t numChannels = numColorChannels + (hasAlpha ? 1 : 0);
     const size_t numPixels = (size_t)dib.width * dib.height;
 
@@ -1460,7 +1464,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     );
     resultData.hasPremultipliedAlpha = !hasAlpha;
 
-    atomic<bool> allTransparent = true;
+    atomic<bool> allTransparent = hasAlpha;
 
     HeapArray<float> floatData = {(size_t)numPixels * numChannels};
     co_await ThreadPool::global().parallelForAsync<int>(
@@ -1480,7 +1484,6 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                 const size_t pixelByte = rowStart + (size_t)x * dib.bitsPerPixel / 8;
 
                 uint8_t* pixelPtr = pixelData.data() + pixelByte;
-                size_t bpp = dib.bitsPerPixel;
 
                 if (hasPalette) {
                     const size_t pixelBit = (size_t)x * dib.bitsPerPixel;
@@ -1492,10 +1495,9 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                     const auto paletteByteIdx = std::min(paletteIdx * paletteEntrySize, palette.size() - paletteEntrySize);
 
                     pixelPtr = palette.data() + paletteByteIdx;
-                    bpp = paletteEntrySize * 8;
                 }
 
-                switch (bpp) {
+                switch (colorBpp) {
                     case 16: {
                         const auto pixelValue = read<uint16_t>(pixelPtr, reverseEndianness);
                         r = dib.redMask ? (pixelValue & dib.redMask) >> redShift : 0;
@@ -1526,7 +1528,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                         a = read<int16_t>(pixelPtr + 6, reverseEndianness);
                         break;
                     }
-                    default: throw ImageLoadError{fmt::format("Unsupported BMP bits per pixel: {}", bpp)};
+                    default: throw ImageLoadError{fmt::format("Unsupported BMP bits per pixel: {}", colorBpp)};
                 }
 
                 const size_t idx = (size_t)outputY * dib.width + x;
@@ -1534,11 +1536,13 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                     floatData[idx * 4 + c] = scale[c] == 0.0f ? 0.0f : (rgba[c] * scale[c]);
                 }
 
-                const float alpha = scale[3] == 0.0f ? 1.0f : (rgba[3] * scale[3]);
-                floatData[idx * 4 + 3] = alpha;
+                if (hasAlpha) {
+                    const float alpha = scale[3] == 0.0f ? 1.0f : (rgba[3] * scale[3]);
+                    floatData[idx * 4 + 3] = alpha;
 
-                if (alpha != 0.0f) {
-                    allTransparent.store(false, memory_order_relaxed);
+                    if (alpha != 0.0f) {
+                        allTransparent.store(false, memory_order_relaxed);
+                    }
                 }
             }
         },

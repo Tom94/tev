@@ -365,6 +365,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             switch (targetFormat) {
                 case EPixelFormat::U8: co_await typedConvert(typedSrc, (uint8_t*)dst); break;
                 case EPixelFormat::U16: co_await typedConvert(typedSrc, (uint16_t*)dst); break;
+                case EPixelFormat::I8: co_await typedConvert(typedSrc, (int8_t*)dst); break;
+                case EPixelFormat::I16: co_await typedConvert(typedSrc, (int16_t*)dst); break;
                 case EPixelFormat::F16: co_await typedConvert(typedSrc, (half*)dst); break;
                 case EPixelFormat::F32: co_await typedConvert(typedSrc, (float*)dst); break;
             }
@@ -373,6 +375,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
         switch (sourceFormat) {
             case EPixelFormat::U8: co_await typedSrcConvert((const uint8_t*)src); break;
             case EPixelFormat::U16: co_await typedSrcConvert((const uint16_t*)src); break;
+            case EPixelFormat::I8: co_await typedSrcConvert((const int8_t*)src); break;
+            case EPixelFormat::I16: co_await typedSrcConvert((const int16_t*)src); break;
             case EPixelFormat::F16: co_await typedSrcConvert((const half*)src); break;
             case EPixelFormat::F32: co_await typedSrcConvert((const float*)src); break;
         }
@@ -709,6 +713,8 @@ Task<void> prepareTextureChannel(
         switch (chan->pixelFormat()) {
             case EPixelFormat::U8: co_await copyChannel(chan->data()); break;
             case EPixelFormat::U16: co_await copyChannel((const uint16_t*)chan->data()); break;
+            case EPixelFormat::I8: co_await copyChannel((const int8_t*)chan->data()); break;
+            case EPixelFormat::I16: co_await copyChannel((const int16_t*)chan->data()); break;
             case EPixelFormat::F16: co_await copyChannel((const half*)chan->data()); break;
             case EPixelFormat::F32: co_await copyChannel((const float*)chan->data()); break;
         }

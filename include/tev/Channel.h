@@ -112,6 +112,8 @@ public:
         switch (mPixelFormat) {
             case EPixelFormat::U8: return *dataAt(index);
             case EPixelFormat::U16: return *(const uint16_t*)dataAt(index);
+            case EPixelFormat::I8: return *(const int8_t*)dataAt(index);
+            case EPixelFormat::I16: return *(const int16_t*)dataAt(index);
             case EPixelFormat::F16: return *(const half*)dataAt(index);
             case EPixelFormat::F32: return *(const float*)dataAt(index);
         }
@@ -124,6 +126,8 @@ public:
         switch (mPixelFormat) {
             case EPixelFormat::U8: *dataAt(index) = (uint8_t)value; break;
             case EPixelFormat::U16: *(uint16_t*)dataAt(index) = (uint16_t)value; break;
+            case EPixelFormat::I8: *(int8_t*)dataAt(index) = (int8_t)value; break;
+            case EPixelFormat::I16: *(int16_t*)dataAt(index) = (int16_t)value; break;
             case EPixelFormat::F16: *(half*)dataAt(index) = (half)value; break;
             case EPixelFormat::F32: *(float*)dataAt(index) = value; break;
         }

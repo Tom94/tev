@@ -18,11 +18,11 @@
 
 #pragma once
 
+#include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
 
 #include <istream>
-#include <optional>
 #include <span>
 
 namespace tev {
@@ -40,11 +40,8 @@ public:
         int priority,
         const GainmapHeadroom& gainmapHeadroom,
         bool skipColorProcessing,
-        // Ability to override the true number of bits per sample in the image. E.g. when a 16 bit JXL encodes data with only 12 bits of
-        // precision, as can happen when JXL codestreams are embedded in TIFF files. This argument affects scaling of the decoded float
-        // data: the maximum possible value will be 2^bitsPerSampleOverride-1.
-        // NOTE: this parameter only has an effect if no ICC profile is present
-        std::optional<uint32_t> bitsPerSampleOverride = std::nullopt
+        size_t* bitsPerSampleOut = nullptr,
+        EPixelType* pixelTypeOut = nullptr
     ) const;
 
     std::string name() const override { return "JPEG XL"; }

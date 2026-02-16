@@ -289,6 +289,7 @@ void unpackBits(
 
 Task<void> postprocessLinearRawDng(
     TIFF* tif,
+    const uint16_t dataSampleFormat,
     const uint16_t dataBitsPerSample,
     const uint16_t samplesPerPixel,
     const int numColorChannels,
@@ -338,31 +339,35 @@ Task<void> postprocessLinearRawDng(
     const size_t maxVal = (1ull << dataBitsPerSample) - 1;
     const float scale = 1.0f / maxVal;
 
-    // 1. Map colors via linearization table if it exists
+    // 1. Map colors via linearization table if it exists and the data is not already float
     if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &numRead, &linTable)) {
         tlog::debug() << fmt::format("Found linearization table of size {}; applying...", numRead);
 
-        const size_t maxIdx = numRead - 1;
+        if (dataSampleFormat == SAMPLEFORMAT_IEEEFP) {
+            tlog::warning() << "Data is already in floating point format, but a linearization table is present. Skipping.";
+        } else {
+            const size_t maxIdx = numRead - 1;
 
-        co_await ThreadPool::global().parallelForAsync<int>(
-            activeArea.min.y(),
-            activeArea.max.y(),
-            activePixels * numColorChannels,
-            [&](int y) {
-                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                    size_t i = (size_t)y * size.x() + x;
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        const float val = floatRgbaData[i * numRgbaChannels + c];
+            co_await ThreadPool::global().parallelForAsync<int>(
+                activeArea.min.y(),
+                activeArea.max.y(),
+                activePixels * numColorChannels,
+                [&](int y) {
+                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                        size_t i = (size_t)y * size.x() + x;
+                        for (int c = 0; c < numColorChannels; ++c) {
+                            const float val = floatRgbaData[i * numRgbaChannels + c];
 
-                        // Lerp the transfer function
-                        const size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
-                        const float w = val * maxIdx - idx;
-                        floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
+                            // Lerp the transfer function
+                            const size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
+                            const float w = val * maxIdx - idx;
+                            floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
+                        }
                     }
-                }
-            },
-            priority
-        );
+                },
+                priority
+            );
+        }
     }
 
     // 2. Subtract black level
@@ -1043,6 +1048,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     }
 
     const uint16_t dataBitsPerSample = bitsPerSample;
+    const uint16_t dataSampleFormat = sampleFormat;
 
     // Auto-convert LogLUV and LogL to RGB float. See http://www.anyhere.com/gward/pixformat/tiffluv.html
     if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
@@ -1224,6 +1230,24 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     tlog::debug() << fmt::format("numRgbaChannels={}, numNonRgbaChannels={}, ", numRgbaChannels, numNonRgbaChannels);
 
+    const auto formatToPixelType = [](uint16_t sampleFormat) {
+        switch (sampleFormat) {
+            case SAMPLEFORMAT_UINT: return EPixelType::Uint;
+            case SAMPLEFORMAT_INT: return EPixelType::Int;
+            case SAMPLEFORMAT_IEEEFP: return EPixelType::Float;
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
+        }
+    };
+
+    const auto deriveScale = [](EPixelType pixelType, size_t bitsPerSample) {
+        switch (pixelType) {
+            case EPixelType::Uint: return 1.0f / (float)((1ull << bitsPerSample) - 1);
+            case EPixelType::Int: return 1.0f / (float)((1ull << (bitsPerSample - 1)) - 1);
+            case EPixelType::Float: return 1.0f;
+            default: throw ImageLoadError{fmt::format("Unsupported pixel type: {}", toString(pixelType))};
+        }
+    };
+
     ImageData resultData;
     resultData.partName = partName;
     resultData.dataWindow = resultData.displayWindow = size;
@@ -1389,12 +1413,18 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
                     [&, i, compressedTileData = std::move(compressedTileData)]() -> Task<void> {
+                        // Assume the embedded data has the same bits/format as the TIFF wrapper claims (can be overridden by the loader)
+                        size_t nestedBitsPerSample = dataBitsPerSample;
+                        EPixelType nestedPixelType = formatToPixelType(dataSampleFormat);
+
                         vector<ImageData> tmp;
                         switch (compression) {
                             case COMPRESSION_JXL_DNG_1_7:
                             case COMPRESSION_JXL: {
                                 const auto loader = JxlImageLoader{};
-                                tmp = co_await loader.load(compressedTileData, "", "", priority, {}, false, dataBitsPerSample);
+                                tmp = co_await loader.load(
+                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                );
                             } break;
                             default: throw ImageLoadError{fmt::format("Unsupported compression type: {}", compression)};
                         }
@@ -1423,6 +1453,11 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                             }
                         }
 
+                        // Rescale embedded image data according to its true bits per sample. E.g. when a 16 bit JXL encodes data with only
+                        // 10 bits of precision, as can happen when JXL codestreams are embedded in TIFF files.
+                        const float scale = deriveScale(formatToPixelType(dataSampleFormat), dataBitsPerSample) /
+                            deriveScale(nestedPixelType, nestedBitsPerSample);
+
                         const size_t planeTile = i % numTilesPerPlane;
                         const size_t tileX = planeTile % tile.numX;
                         const size_t tileY = planeTile / tile.numX;
@@ -1448,7 +1483,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                                         const int x0 = x - xStart;
                                         for (int c = 0; c < samplesPerPixel; ++c) {
                                             const auto pixel = tmpImage.channels[c].at({x0, y0});
-                                            data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                            data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                         }
                                     }
                                 } else {
@@ -1456,7 +1491,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                                     for (int x = xStart; x < xEnd; ++x) {
                                         const int x0 = x - xStart;
                                         const auto pixel = tmpImage.channels[0].at({x0, y0});
-                                        data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                        data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                     }
                                 }
                             },
@@ -1540,7 +1575,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     co_await awaitAll(decodeTasks);
 
-    float intConversionScale = 1.0f;
+    const float intConversionScale = deriveScale(formatToPixelType(sampleFormat), dataBitsPerSample);
+
     ETiffKind kind = ETiffKind::U32;
     switch (sampleFormat) {
         case SAMPLEFORMAT_IEEEFP: {
@@ -1552,12 +1588,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                 default: throw ImageLoadError{fmt::format("Unsupported fp bps={}", bitsPerSample)};
             }
 
-            intConversionScale = 1.0f;
             break;
         }
         case SAMPLEFORMAT_INT: {
             kind = ETiffKind::I32;
-            intConversionScale = 1.0f / ((1ull << (dataBitsPerSample - 1)) - 1);
             break;
         }
         case SAMPLEFORMAT_UINT: {
@@ -1567,7 +1601,6 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                 kind = ETiffKind::U32;
             }
 
-            intConversionScale = 1.0f / ((1ull << dataBitsPerSample) - 1);
             break;
         }
         default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
@@ -1641,7 +1674,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         }
 
         co_await postprocessLinearRawDng(
-            tif, dataBitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
+            tif, dataSampleFormat, dataBitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.

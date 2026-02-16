@@ -162,7 +162,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
     int priority,
     const GainmapHeadroom& gainmapHeadroom,
     bool skipColorProcessing,
-    optional<uint32_t> bitsPerSampleOverride
+    size_t* bitsPerSampleOut,
+    EPixelType* pixelTypeOut
 ) const {
     if (!isJxlImage(fileData)) {
         throw FormatNotSupported{"Data is not a JPEG XL image."};
@@ -496,6 +497,14 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     data.hdrMetadata.maxCLL = info.intensity_target;
                 }
 
+                if (bitsPerSampleOut) {
+                    *bitsPerSampleOut = info.bits_per_sample;
+                }
+
+                if (pixelTypeOut) {
+                    *pixelTypeOut = info.exponent_bits_per_sample > 0 ? EPixelType::Float : EPixelType::Uint;
+                }
+
                 bool colorChannelsLoaded = false;
                 if (iccProfile && !skipColorProcessing) {
                     tlog::debug() << "Found ICC color profile. Attempting to apply...";
@@ -525,12 +534,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
-                    const float scale = bitsPerSampleOverride ?
-                        (float)((1ull << info.bits_per_sample) - 1) / (float)((1ull << bitsPerSampleOverride.value()) - 1) :
-                        1.0f;
-
                     co_await toFloat32(
-                        (float*)colorData.data(), numColorChannels, data.channels.front().floatData(), 4, size, info.alpha_bits, priority, scale
+                        (float*)colorData.data(), numColorChannels, data.channels.front().floatData(), 4, size, info.alpha_bits, priority
                     );
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
