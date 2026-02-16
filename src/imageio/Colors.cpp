@@ -645,7 +645,15 @@ ERenderingIntent ColorProfile::renderingIntent() const {
     }
 
     if (cmsIsIntentSupported(profile, intent, LCMS_USED_AS_INPUT)) {
-        return (ERenderingIntent)intent;
+        switch (intent) {
+            case INTENT_PERCEPTUAL: return ERenderingIntent::Perceptual;
+            case INTENT_RELATIVE_COLORIMETRIC: return ERenderingIntent::RelativeColorimetric;
+            case INTENT_SATURATION: return ERenderingIntent::Saturation;
+            case INTENT_ABSOLUTE_COLORIMETRIC: return ERenderingIntent::AbsoluteColorimetric;
+            default:
+                tlog::warning() << fmt::format("Unknown rendering intent {} in profile. Falling back to checking other intents.", intent);
+                break; // fall back to checking other intents
+        }
     }
 
     if (cmsIsIntentSupported(profile, INTENT_RELATIVE_COLORIMETRIC, LCMS_USED_AS_INPUT)) {
