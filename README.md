@@ -130,13 +130,14 @@ $ cpack --config build/CPackConfig.cmake
 ## File Formats
 
 - __EXR__ (via [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr))
-- __JPEG XL__ (via [libjxl](https://github.com/libjxl/libjxl). Shoutout to [Johnathon Selstad](https://github.com/zalo) for adding support!)
+- __JPEG XL__ (including gain maps; via [libjxl](https://github.com/libjxl/libjxl))
     - Supports both lossy and lossless compression with full HDR capabilities (natively and with gain maps)
 - __JPEG__ (including gain maps, e.g. HDR pictures from Android; via [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo))
+- __JPEG 2000__ (via [openjpeg](https://github.com/uclouvain/openjpeg))
 - __PNG__, APNG (via [libpng](https://github.com/pnggroup/libpng))
 - __PFM__, PAM, PNM, PBM, PGM, PPM (generally: see [NetPBM](https://netpbm.sourceforge.net/) and [PFM](https://www.pauldebevec.com/Research/HDR/PFM/))
-- __QOI__ (via [qoi](https://github.com/phoboslab/qoi). Shoutout to [Tiago Chaves](https://github.com/laurelkeys) for adding support!)
-- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only. Shoutout to [Craig Kolb](https://github.com/cek) for adding support!)
+- __QOI__ (via [qoi](https://github.com/phoboslab/qoi))
+- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only)
     - Supports BC1-BC7 compressed formats.
 - __WEBP__ (via [libwebp](https://chromium.googlesource.com/webm/libwebp))
 - __TIFF__, DNG (via [libtiff](https://gitlab.com/libtiff/libtiff); only some DNG files supported)
