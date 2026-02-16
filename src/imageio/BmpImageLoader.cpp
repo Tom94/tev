@@ -1533,12 +1533,12 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
                 const size_t idx = (size_t)outputY * dib.width + x;
                 for (size_t c = 0; c < 3; ++c) {
-                    floatData[idx * 4 + c] = scale[c] == 0.0f ? 0.0f : (rgba[c] * scale[c]);
+                    floatData[idx * numChannels + c] = scale[c] == 0.0f ? 0.0f : (rgba[c] * scale[c]);
                 }
 
                 if (hasAlpha) {
                     const float alpha = scale[3] == 0.0f ? 1.0f : (rgba[3] * scale[3]);
-                    floatData[idx * 4 + 3] = alpha;
+                    floatData[idx * numChannels + 3] = alpha;
 
                     if (alpha != 0.0f) {
                         allTransparent.store(false, memory_order_relaxed);
@@ -1591,7 +1591,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
     const auto effectiveGamma = gamma.value_or(Vector3f{0.0f});
     if (effectiveGamma != Vector3f{0.0f}) {
-        resultData.nativeMetadata.gamma = gamma->x();
+        resultData.nativeMetadata.gamma = effectiveGamma.x();
         resultData.nativeMetadata.transfer = ituth273::ETransfer::GenericGamma;
     } else {
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
@@ -1603,9 +1603,9 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         numPixels,
         numPixels * 4,
         [&](size_t i) {
-            for (size_t c = 0; c < 4; ++c) {
+            for (size_t c = 0; c < numChannels; ++c) {
                 float& dst = dstData[i * 4 + c];
-                dst = floatData[i * 4 + c];
+                dst = floatData[i * numChannels + c];
 
                 const bool invertTransfer = c < 3 && dib.bitsPerPixel != 64;
 
