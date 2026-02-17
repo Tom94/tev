@@ -488,9 +488,12 @@ Task<void> ImageData::orientToTopLeft(int priority) {
         }
     }
 
+    vector<Task<nanogui::Vector2i>> tasks;
     for (auto& c : channelData) {
-        co_await tev::orientToTopLeft(c.pixelFormat, *c.data, c.size, orientation, priority);
+        tasks.emplace_back(tev::orientToTopLeft(c.pixelFormat, *c.data, c.size, orientation, priority));
     }
+
+    co_await awaitAll(span{tasks});
 
     const auto referenceWindow = displayWindow.isValid() ? displayWindow : (dataWindow.isValid() ? dataWindow : Box2i{size()});
     if (dataWindow.isValid()) {
@@ -838,10 +841,9 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         join(channelNames, ",")
     );
 
-    using DataBufPtr = shared_ptr<Channel::Data>;
-    DataBufPtr dataPtr = nullptr;
+    shared_ptr<Channel::Data> dataPtr = nullptr;
 
-    // Check if channel layout is already interleaved. If yes, can directly copy onto GPU!
+    // Check if channel layout is already interleaved and in the right format. If yes, can directly copy onto GPU!
     if (directUpload) {
         const Channel* chan = channel(channelNames[0]);
         dataPtr = chan->dataBuf();
@@ -872,13 +874,10 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         waitAll(tasks);
     }
 
-    // If the backend supports it, schedule an async copy that uses DMA to
-    // copy the texture without blocking the host. The operation is part of
-    // the graphics queue and correctly ordered wrt. other display
-    // operations. On Apple M* GPUs, CPU/GPU share the same memory, so this
+    // If the backend supports it, schedule an async copy that uses DMA to copy the texture without blocking the host. The operation is part
+    // of the graphics queue and correctly ordered wrt. other display operations. On Apple M* GPUs, CPU/GPU share the same memory, so this
     // step just converts the texture into a more suitable layout.
-
-    texture->upload_async(dataPtr->data(), [](void* p) { delete (DataBufPtr*)p; }, new DataBufPtr(dataPtr));
+    texture->upload_async(dataPtr->data(), [](void* p) { delete (shared_ptr<Channel::Data>*)p; }, new shared_ptr<Channel::Data>(dataPtr));
 
     if (minFilter == EInterpolationMode::Trilinear) {
         texture->generate_mipmap();

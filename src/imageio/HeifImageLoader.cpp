@@ -130,12 +130,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         .release_error_msg = {},
     };
 
-    struct DecodedImageHandle {
-        heif_image* img;
-        bool hasAlpha;
-    };
-
-    const auto getIccProfileFromImgAndHandle = [](heif_image* img, const heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
+    const auto getIccProfileFromImgAndHandle = [](const heif_image* img, const heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
         if (handle) {
             const size_t handleProfileSize = heif_image_handle_get_raw_color_profile_size(handle);
             if (handleProfileSize > 0) {
@@ -175,7 +170,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     };
 
     const auto decodeImage = [priority, &getIccProfileFromImgAndHandle](
-                                 heif_image* img,
+                                 const heif_image* img,
                                  const heif_image_handle* imgHandle, // may be nullptr
                                  int numChannels,
                                  bool hasAlpha,
