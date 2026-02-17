@@ -93,8 +93,9 @@ public:
         return Awaiter{this, priority};
     }
 
-    template <class F> auto enqueueCoroutine(F&& fun, int priority) -> Task<void> {
-        return [](F&& fun, ThreadPool* pool, int tPriority) -> Task<void> {
+    template <class F> auto enqueueCoroutine(F&& fun, int priority) -> Task<typename std::invoke_result_t<decltype(fun)>::value_type> {
+        using return_type = std::invoke_result_t<decltype(fun)>::value_type;
+        co_return co_await [](F&& fun, ThreadPool* pool, int tPriority) -> Task<return_type> {
             // Makes sure the function's captures have same lifetime as coroutine
             auto exec = std::move(fun);
             co_await pool->enqueueCoroutine(tPriority);

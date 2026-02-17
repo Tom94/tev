@@ -140,6 +140,7 @@ private:
 template <typename T> class Task {
 public:
     using promise_type = TaskPromise<Task<T>, T>;
+    using value_type = T;
 
     Task(std::coroutine_handle<promise_type> handle, std::future<T>&& future, const std::shared_ptr<TaskSharedState>& state) :
         mHandle{handle}, mFuture{std::move(future)}, mState{state} {}
@@ -228,6 +229,29 @@ template <typename F, typename... Args> Task<void> invokeTask(F&& executor, Args
 
 void waitAll(std::span<Task<void>> futures);
 Task<void> awaitAll(std::span<Task<void>> futures);
+
+template <typename T> Task<std::vector<T>> awaitAll(std::span<Task<T>> futures) {
+    std::exception_ptr eptr = {};
+
+    std::vector<T> results;
+    for (auto&& f : futures) {
+        try {
+            results.emplace_back(co_await f);
+        } catch (const std::exception& e) {
+            if (eptr) {
+                tlog::error() << "Multiple exceptions in awaitAll(). Rethrowing first and logging others: " << e.what();
+            } else {
+                eptr = std::current_exception();
+            }
+        }
+    }
+
+    if (eptr) {
+        rethrow_exception(eptr);
+    }
+
+    co_return results;
+}
 
 template <typename T, typename U> Task<void> asyncScopeGuard(T&& cleanup, U&& body) {
     std::exception_ptr exceptionPtr;
