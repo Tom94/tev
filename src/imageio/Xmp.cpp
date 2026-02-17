@@ -69,8 +69,6 @@ Xmp::Xmp(string_view xmpData) {
         SXMPMeta meta;
         meta.ParseFromBuffer(xmpData.data(), xmpData.size());
 
-        // tlog::debug() << xmpData;
-
         SXMPIterator iter{meta};
         string schema, path, value;
 
@@ -104,6 +102,10 @@ Xmp::Xmp(string_view xmpData) {
 
             node->value = value;
             node->type = "string";
+        }
+
+        if (mAttributes.children.empty()) {
+            throw invalid_argument{"Not a valid XMP packet: no properties found."};
         }
 
         if (XMP_Int32 orientation; meta.GetProperty_Int(kXMP_NS_TIFF, "Orientation", &orientation, nullptr)) {
