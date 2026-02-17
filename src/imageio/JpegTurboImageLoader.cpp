@@ -380,8 +380,6 @@ Task<vector<ImageData>>
                     orientation = exifOrientation;
                     tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
                 }
-
-                size = co_await orientToTopLeft(EPixelFormat::U8, imageData, size, orientation, priority);
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
         }
 
