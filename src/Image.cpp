@@ -1336,11 +1336,11 @@ string Image::toString() const {
 // Modifies `data` and returns the new size of the data after reorientation.
 Task<nanogui::Vector2i>
     orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
-    if (orientation == EOrientation::TopLeft) {
+    if (orientation == EOrientation::None || orientation == EOrientation::TopLeft) {
         co_return size;
     }
 
-    bool swapAxes = orientation >= EOrientation::LeftTop;
+    const bool swapAxes = orientation >= EOrientation::LeftTop;
     size = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
     nanogui::Vector2i otherSize = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
 
