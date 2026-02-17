@@ -49,6 +49,7 @@ optional<OPJ_CODEC_FORMAT> detectJ2kFormat(span<const uint8_t> hdr) {
     }
 
     if (memcmp(hdr.data(), jp2Magic, sizeof(jp2Magic)) == 0) {
+        // We could differentiate between JP2 and other codecs, but openjpeg only supports JP2 anyway, so we won't.
         return OPJ_CODEC_JP2;
     }
 
@@ -121,10 +122,8 @@ inline constexpr array<uint8_t[16], 2> exifUuids = {
 static const uint8_t xmpUuid[16] = {0xBE, 0x7A, 0xCF, 0xCB, 0x97, 0xA9, 0x42, 0xE8, 0x9C, 0x71, 0x99, 0x94, 0x91, 0xE3, 0xAF, 0xAC};
 
 struct Jp2Box {
-    uint64_t offset;
-    uint64_t length;
+    string_view type;
     span<const uint8_t> data;
-    char type[5];
 };
 
 static uint32_t readU32Be(const uint8_t* p) {
@@ -139,54 +138,67 @@ struct Jp2Metadata {
     span<const uint8_t> exifData;
 };
 
-static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t offset) {
-    if (offset + 8 > data.size()) {
+static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t* length) {
+    TEV_ASSERT(length, "Length output parameter must not be null.");
+
+    if (data.size() < 8) {
+        tlog::warning() << "Invalid JP2 box: insufficient data for 32-bit length.";
+        *length = data.size();
         return nullopt;
     }
 
-    Jp2Box box;
-    box.offset = offset;
+    span<const uint8_t> boxData;
 
-    const uint32_t len32 = readU32Be(data.data() + offset);
-    memcpy(box.type, data.data() + offset + 4, 4);
-    box.type[4] = '\0';
-    offset += 8;
-
+    const auto len32 = std::min((size_t)readU32Be(data.data()), data.size());
     if (len32 == 1) {
-        if (offset + 8 > data.size()) {
+        if (data.size() < 16) {
             tlog::warning() << "Invalid JP2 box: insufficient data for 64-bit length.";
+            *length = data.size();
             return nullopt;
         }
 
-        box.length = readU64Be(data.data() + offset);
-        offset += 8;
-        box.data = data.subspan(box.offset + 16, box.length - 16);
+        const auto len64 = std::min((size_t)readU64Be(data.data() + 8), data.size());
+        boxData = data.subspan(16, len64 - 16);
+
+        *length = len64;
     } else if (len32 == 0) {
-        box.length = data.size() - box.offset;
-        box.data = data.subspan(box.offset + 8, box.length - 8);
+        boxData = data.subspan(8);
+        *length = data.size();
+    } else if (len32 >= 8) {
+        boxData = data.subspan(8, len32 - 8);
+        *length = len32;
     } else {
-        box.length = len32;
-        box.data = data.subspan(box.offset + 8, box.length - 8);
+        tlog::warning() << fmt::format("Invalid JP2 box: length {} is too small.", len32);
+        *length = data.size();
+        return nullopt;
     }
 
-    return box;
+    return Jp2Box{
+        string_view{(const char*)data.data() + 4, 4},
+        boxData
+    };
 }
 
 Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
     Jp2Metadata meta;
-    uint64_t offset = 0;
 
-    while (offset < data.size()) {
-        const auto box = readBoxHeader(data, offset);
+    tlog::debug() << "Extracting JP2 boxes:";
+
+    while (data.size() > 0) {
+        uint64_t boxLength = 0;
+        const auto box = readBoxHeader(data, &boxLength);
         if (!box.has_value()) {
             break;
         }
 
-        if (strcmp(box->type, "xml ") == 0) {
+        data = data.subspan(boxLength);
+        tlog::debug() << fmt::format("  type='{}' length={}", box->type, boxLength);
+
+        if (box->type == "xml ") {
             meta.genericXml = box->data;
-        } else if (strcmp(box->type, "uuid") == 0) {
+        } else if (box->type == "uuid") {
             if (box->data.size() < 16) {
-                offset = box->offset + box->length;
+                tlog::warning() << "Invalid JP2 UUID box: insufficient data for UUID.";
                 continue;
             }
 
@@ -198,8 +210,6 @@ Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
                 meta.exifData = box->data.subspan(16);
             }
         }
-
-        offset = box->offset + box->length;
     }
 
     return meta;
@@ -333,7 +343,8 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     vector<ImageData> result(1);
     auto& resultData = result.front();
 
-    const auto meta = extractJp2Metadata(data);
+    // Only a box-based jpeg 2000 image can contain metadata.
+    const auto meta = j2kFormat == OPJ_CODEC_JP2 || j2kFormat == OPJ_CODEC_JPX ? extractJp2Metadata(data) : Jp2Metadata{};
 
     if (!meta.exifData.empty()) {
         tlog::debug() << fmt::format("Found EXIF data of size {} bytes", meta.exifData.size());
