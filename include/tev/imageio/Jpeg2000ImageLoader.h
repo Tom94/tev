@@ -18,16 +18,14 @@
 
 #pragma once
 
-#include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
 
 #include <istream>
-#include <span>
 
 namespace tev {
 
-class JxlImageLoader : public ImageLoader {
+class Jpeg2000ImageLoader : public ImageLoader {
 public:
     Task<std::vector<ImageData>> load(
         std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
@@ -44,7 +42,7 @@ public:
         EPixelType* pixelTypeOut = nullptr
     ) const;
 
-    std::string name() const override { return "JPEG XL"; }
+    std::string name() const override { return "JPEG 2000"; }
 };
 
 } // namespace tev

@@ -582,12 +582,35 @@ string_view toString(EOrientation orientation) {
     }
 }
 
+string_view toString(EPixelType kind) {
+    switch (kind) {
+        case EPixelType::Uint: return "uint";
+        case EPixelType::Int: return "int";
+        case EPixelType::Float: return "float";
+        default: throw runtime_error{"Unknown pixel type."};
+    }
+}
+
 string_view toString(EPixelFormat format) {
     switch (format) {
-        case EPixelFormat::U8: return "U8";
-        case EPixelFormat::U16: return "U16";
-        case EPixelFormat::F16: return "F16";
-        case EPixelFormat::F32: return "F32";
+        case EPixelFormat::U8: return "uint8";
+        case EPixelFormat::U16: return "uint16";
+        case EPixelFormat::I8: return "int8";
+        case EPixelFormat::I16: return "int16";
+        case EPixelFormat::F16: return "float16";
+        case EPixelFormat::F32: return "float32";
+        default: throw runtime_error{"Unknown pixel format."};
+    }
+}
+
+EPixelType pixelType(EPixelFormat format) {
+    switch (format) {
+        case EPixelFormat::U8:
+        case EPixelFormat::U16: return EPixelType::Uint;
+        case EPixelFormat::I8:
+        case EPixelFormat::I16: return EPixelType::Int;
+        case EPixelFormat::F16:
+        case EPixelFormat::F32: return EPixelType::Float;
         default: throw runtime_error{"Unknown pixel format."};
     }
 }

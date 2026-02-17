@@ -645,7 +645,15 @@ ERenderingIntent ColorProfile::renderingIntent() const {
     }
 
     if (cmsIsIntentSupported(profile, intent, LCMS_USED_AS_INPUT)) {
-        return (ERenderingIntent)intent;
+        switch (intent) {
+            case INTENT_PERCEPTUAL: return ERenderingIntent::Perceptual;
+            case INTENT_RELATIVE_COLORIMETRIC: return ERenderingIntent::RelativeColorimetric;
+            case INTENT_SATURATION: return ERenderingIntent::Saturation;
+            case INTENT_ABSOLUTE_COLORIMETRIC: return ERenderingIntent::AbsoluteColorimetric;
+            default:
+                tlog::warning() << fmt::format("Unknown rendering intent {} in profile. Falling back to checking other intents.", intent);
+                break; // fall back to checking other intents
+        }
     }
 
     if (cmsIsIntentSupported(profile, INTENT_RELATIVE_COLORIMETRIC, LCMS_USED_AS_INPUT)) {
@@ -827,7 +835,7 @@ Task<void> toLinearSrgbPremul(
             type |= BYTES_SH(4) | FLOAT_SH(1);
             bytesPerSample = 4;
             break;
-        default: throw runtime_error{"Unsupported pixel format."};
+        default: throw runtime_error{fmt::format("Unsupported pixel format {}", toString(pixelFormat))};
     }
 
     if (pixelFormat != EPixelFormat::F32) {
@@ -861,7 +869,7 @@ Task<void> toLinearSrgbPremul(
         case 2: typeOut = TYPE_GRAYA_FLT; break;
         case 3: typeOut = TYPE_RGB_FLT; break;
         case 4: typeOut = TYPE_RGBA_FLT; break;
-        default: throw runtime_error{"Invalid number of output channels."};
+        default: throw runtime_error{fmt::format("Invalid number of output channels {}", numChannelsOut)};
     }
 
     const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
@@ -900,7 +908,7 @@ Task<void> toLinearSrgbPremul(
         );
 
         if (!transform) {
-            throw runtime_error{"Failed to create color transform to Rec.709."};
+            throw runtime_error{"Failed to create color transform to Rec.709"};
         }
     }
 

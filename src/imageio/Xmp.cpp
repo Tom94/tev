@@ -69,8 +69,6 @@ Xmp::Xmp(string_view xmpData) {
         SXMPMeta meta;
         meta.ParseFromBuffer(xmpData.data(), xmpData.size());
 
-        // tlog::debug() << xmpData;
-
         SXMPIterator iter{meta};
         string schema, path, value;
 
@@ -106,9 +104,28 @@ Xmp::Xmp(string_view xmpData) {
             node->type = "string";
         }
 
+        if (mAttributes.children.empty()) {
+            throw invalid_argument{"Not a valid XMP packet: no properties found."};
+        }
+
         if (XMP_Int32 orientation; meta.GetProperty_Int(kXMP_NS_TIFF, "Orientation", &orientation, nullptr)) {
-            mOrientation = static_cast<EOrientation>(orientation);
-            tlog::debug() << fmt::format("Found XMP orientation: {}", orientation);
+            switch (orientation) {
+                case 0: mOrientation = EOrientation::None; break;
+                case 1: mOrientation = EOrientation::TopLeft; break;
+                case 2: mOrientation = EOrientation::TopRight; break;
+                case 3: mOrientation = EOrientation::BottomRight; break;
+                case 4: mOrientation = EOrientation::BottomLeft; break;
+                case 5: mOrientation = EOrientation::LeftTop; break;
+                case 6: mOrientation = EOrientation::RightTop; break;
+                case 7: mOrientation = EOrientation::RightBottom; break;
+                case 8: mOrientation = EOrientation::LeftBottom; break;
+                default:
+                    tlog::warning() << fmt::format("Invalid XMP orientation value: {}", orientation);
+                    mOrientation = EOrientation::None;
+                    break;
+            }
+
+            tlog::debug() << fmt::format("Found XMP orientation: {}", toString(mOrientation));
         }
 
         try {

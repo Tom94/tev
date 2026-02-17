@@ -20,10 +20,13 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/Jpeg2000ImageLoader.h>
+#include <tev/imageio/JxlImageLoader.h>
 #include <tev/imageio/TiffImageLoader.h>
 #include <tev/imageio/Xmp.h>
 
 #include <half.h>
+#include <tiff.h>
 #include <tiffio.h>
 
 #include <span>
@@ -287,6 +290,7 @@ void unpackBits(
 
 Task<void> postprocessLinearRawDng(
     TIFF* tif,
+    const uint16_t dataSampleFormat,
     const uint16_t dataBitsPerSample,
     const uint16_t samplesPerPixel,
     const int numColorChannels,
@@ -336,31 +340,35 @@ Task<void> postprocessLinearRawDng(
     const size_t maxVal = (1ull << dataBitsPerSample) - 1;
     const float scale = 1.0f / maxVal;
 
-    // 1. Map colors via linearization table if it exists
+    // 1. Map colors via linearization table if it exists and the data is not already float
     if (uint16_t* linTable; TIFFGetField(tif, TIFFTAG_LINEARIZATIONTABLE, &numRead, &linTable)) {
-        tlog::debug() << "Found linearization table; applying...";
+        tlog::debug() << fmt::format("Found linearization table of size {}; applying...", numRead);
 
-        const size_t maxIdx = numRead - 1;
+        if (dataSampleFormat == SAMPLEFORMAT_IEEEFP) {
+            tlog::warning() << "Data is already in floating point format, but a linearization table is present. Skipping.";
+        } else {
+            const size_t maxIdx = numRead - 1;
 
-        co_await ThreadPool::global().parallelForAsync<int>(
-            activeArea.min.y(),
-            activeArea.max.y(),
-            activePixels * numColorChannels,
-            [&](int y) {
-                for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
-                    size_t i = (size_t)y * size.x() + x;
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        float val = floatRgbaData[i * numRgbaChannels + c];
+            co_await ThreadPool::global().parallelForAsync<int>(
+                activeArea.min.y(),
+                activeArea.max.y(),
+                activePixels * numColorChannels,
+                [&](int y) {
+                    for (int x = activeArea.min.x(); x < activeArea.max.x(); ++x) {
+                        size_t i = (size_t)y * size.x() + x;
+                        for (int c = 0; c < numColorChannels; ++c) {
+                            const float val = floatRgbaData[i * numRgbaChannels + c];
 
-                        // Lerp the transfer function
-                        size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
-                        float w = val * maxIdx - idx;
-                        floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
+                            // Lerp the transfer function
+                            const size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
+                            const float w = val * maxIdx - idx;
+                            floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
+                        }
                     }
-                }
-            },
-            priority
-        );
+                },
+                priority
+            );
+        }
     }
 
     // 2. Subtract black level
@@ -1035,14 +1043,13 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         compression = COMPRESSION_JPEG;
     }
 
-    if (compression == COMPRESSION_JXL_DNG_1_7) {
-        throw ImageLoadError{"DNG JXL compression is unsupported."};
-    }
-
     uint16_t photometric;
     if (!TIFFGetFieldDefaulted(tif, TIFFTAG_PHOTOMETRIC, &photometric)) {
         throw ImageLoadError{"Failed to read photometric interpretation."};
     }
+
+    const uint16_t dataBitsPerSample = bitsPerSample;
+    const uint16_t dataSampleFormat = sampleFormat;
 
     // Auto-convert LogLUV and LogL to RGB float. See http://www.anyhere.com/gward/pixformat/tiffluv.html
     if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
@@ -1071,7 +1078,13 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
 
-    const uint16_t dataBitsPerSample = bitsPerSample;
+    // We will manually decompress JXL and JPEG2000 tiles further down the pipeline by invoking tev's JXL decoder directly on the compressed
+    // data from the TIFF file. This returns fp32 data.
+    if (compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL || compression == COMPRESSION_JP2000) {
+        bitsPerSample = 32;
+        sampleFormat = SAMPLEFORMAT_IEEEFP;
+    }
+
     if (compression == COMPRESSION_JPEG) {
         // For JPEG decoding, we need to pretend to have more bits per sample than is in the data for the JPEG decoder to work correctly.
         // This is largely fine for the following decoding steps, but we will later need to pass `dataBitsPerSample` to postprocessing for
@@ -1127,6 +1140,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         throw ImageLoadError{"YCbCr images are unsupported."};
     }
 
+    // TODO: handle CIELAB, ICCLAB, ITULAB (shouldn't be too tough)
+
     if (all_of(begin(SUPPORTED_PHOTOMETRICS), end(SUPPORTED_PHOTOMETRICS), [&](uint16_t p) { return p != photometric; })) {
         throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
     }
@@ -1142,7 +1157,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     }
 
     tlog::debug() << fmt::format(
-        "TIFF info: size={}, bps={}/{}/{}, spp={}, photometric={}, planar={}, sampleFormat={}, compression={}",
+        "TIFF info: size={} bps={}/{}/{} spp={} photometric={} planar={} sampleFormat={} compression={}",
         size,
         tiffInternalBitsPerSample,
         dataBitsPerSample,
@@ -1218,6 +1233,24 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     tlog::debug() << fmt::format("numRgbaChannels={}, numNonRgbaChannels={}, ", numRgbaChannels, numNonRgbaChannels);
 
+    const auto formatToPixelType = [](uint16_t sampleFormat) {
+        switch (sampleFormat) {
+            case SAMPLEFORMAT_UINT: return EPixelType::Uint;
+            case SAMPLEFORMAT_INT: return EPixelType::Int;
+            case SAMPLEFORMAT_IEEEFP: return EPixelType::Float;
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
+        }
+    };
+
+    const auto deriveScale = [](EPixelType pixelType, size_t bitsPerSample) {
+        switch (pixelType) {
+            case EPixelType::Uint: return 1.0f / (float)((1ull << bitsPerSample) - 1);
+            case EPixelType::Int: return 1.0f / (float)((1ull << (bitsPerSample - 1)) - 1);
+            case EPixelType::Float: return 1.0f;
+            default: throw ImageLoadError{fmt::format("Unsupported pixel type: {}", toString(pixelType))};
+        }
+    };
+
     ImageData resultData;
     resultData.partName = partName;
     resultData.dataWindow = resultData.displayWindow = size;
@@ -1273,13 +1306,27 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     const bool isTiled = TIFFIsTiled(tif);
 
     struct TileInfo {
-        size_t size, rowSize, count, numX, numY;
+        size_t rawSize, size, rowSize, count, numX, numY;
         uint32_t width, height;
     } tile;
-    auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
+    const auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
+
+    const auto readRawTile = isTiled ? TIFFReadRawTile : TIFFReadRawStrip;
+    const auto getRawTileSize = [isTiled](TIFF* tif, uint32_t tileIndex) -> size_t {
+        const uint64_t* rawTileSize = NULL;
+        if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEBYTECOUNTS : TIFFTAG_STRIPBYTECOUNTS, &rawTileSize) || !rawTileSize) {
+            throw ImageLoadError{fmt::format("Failed to read raw tile size for tile {}", tileIndex)};
+        }
+
+        return (size_t)rawTileSize[tileIndex];
+    };
 
     const size_t numPlanes = planar == PLANARCONFIG_CONTIG ? 1 : samplesPerPixel;
     if (isTiled) {
+        const uint64_t* rawTileSize = NULL;
+        TIFFGetField(tif, TIFFTAG_TILEBYTECOUNTS, &rawTileSize);
+        tile.rawSize = rawTileSize ? *rawTileSize : 0;
+
         tile.size = TIFFTileSize64(tif);
         tile.rowSize = TIFFTileRowSize64(tif);
         tile.count = TIFFNumberOfTiles(tif);
@@ -1343,6 +1390,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
 
+    const bool decodeRaw = compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL;
+
     vector<Task<void>> decodeTasks;
 
     // Read tiled/striped data. Unfortunately, libtiff doesn't support reading all tiles/strips in parallel, so we have to do that
@@ -1350,6 +1399,120 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     HeapArray<uint8_t> imageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
     for (size_t i = 0; i < tile.count; ++i) {
         uint8_t* const td = tileData.data() + tile.size * i;
+
+        if (decodeRaw) {
+            const size_t rawTileSize = getRawTileSize(tif, (uint32_t)i);
+            if (rawTileSize == 0) {
+                co_await awaitAll(decodeTasks);
+                throw ImageLoadError{fmt::format("Raw tile size is 0 for tile {}", i)};
+            }
+
+            HeapArray<uint8_t> compressedTileData(rawTileSize);
+            if (readRawTile(tif, (uint32_t)i, compressedTileData.data(), rawTileSize) < 0) {
+                co_await awaitAll(decodeTasks);
+                throw ImageLoadError{fmt::format("Failed to read raw tile {}", i)};
+            }
+
+            decodeTasks.emplace_back(
+                ThreadPool::global().enqueueCoroutine(
+                    [&, i, compressedTileData = std::move(compressedTileData)]() -> Task<void> {
+                        // Assume the embedded data has the same bits/format as the TIFF wrapper claims (can be overridden by the loader)
+                        size_t nestedBitsPerSample = dataBitsPerSample;
+                        EPixelType nestedPixelType = formatToPixelType(dataSampleFormat);
+
+                        vector<ImageData> tmp;
+                        switch (compression) {
+                            case COMPRESSION_JXL_DNG_1_7:
+                            case COMPRESSION_JXL: {
+                                const auto loader = JxlImageLoader{};
+                                tmp = co_await loader.load(
+                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                );
+                            } break;
+                            case COMPRESSION_JP2000: {
+                                const auto loader = Jpeg2000ImageLoader{};
+                                tmp = co_await loader.load(
+                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                );
+                            } break;
+                            default: throw ImageLoadError{fmt::format("Unsupported compression type: {}", compression)};
+                        }
+
+                        if (tmp.size() != 1) {
+                            throw ImageLoadError{fmt::format("Expected exactly one image from tile, got {}", tmp.size())};
+                        }
+
+                        const auto& tmpImage = tmp.front();
+
+                        if (tmpImage.channels.size() < (size_t)samplesPerPixel / numPlanes) {
+                            throw ImageLoadError{
+                                fmt::format("Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size())
+                            };
+                        }
+
+                        for (const auto& channel : tmpImage.channels) {
+                            const auto tileSize = Vector2i{(int)tile.width, (int)tile.height};
+                            if (channel.size() != tileSize) {
+                                throw ImageLoadError{fmt::format(
+                                    "Tile channel '{}' has unexpected dimensions: expected {}, got {}",
+                                    channel.name(),
+                                    tileSize,
+                                    tmpImage.channels.front().size()
+                                )};
+                            }
+                        }
+
+                        // Rescale embedded image data according to its true bits per sample. E.g. when a 16 bit JXL encodes data with only
+                        // 10 bits of precision, as can happen when JXL codestreams are embedded in TIFF files.
+                        const float scale = deriveScale(formatToPixelType(dataSampleFormat), dataBitsPerSample) /
+                            deriveScale(nestedPixelType, nestedBitsPerSample);
+
+                        const size_t planeTile = i % numTilesPerPlane;
+                        const size_t tileX = planeTile % tile.numX;
+                        const size_t tileY = planeTile / tile.numX;
+
+                        const int xStart = (int)tileX * tile.width;
+                        const int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
+
+                        const int yStart = (int)tileY * tile.height;
+                        const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+
+                        const size_t numPixels = (size_t)tile.width * tile.height;
+
+                        auto* const data = (float*)imageData.data();
+
+                        co_await ThreadPool::global().parallelForAsync<int>(
+                            yStart,
+                            yEnd,
+                            numPixels * samplesPerPixel / numPlanes,
+                            [&](int y) {
+                                const int y0 = y - yStart;
+                                if (planar == PLANARCONFIG_CONTIG) {
+                                    for (int x = xStart; x < xEnd; ++x) {
+                                        const int x0 = x - xStart;
+                                        for (int c = 0; c < samplesPerPixel; ++c) {
+                                            const auto pixel = tmpImage.channels[c].at({x0, y0});
+                                            data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
+                                        }
+                                    }
+                                } else {
+                                    size_t c = i / numTilesPerPlane;
+                                    for (int x = xStart; x < xEnd; ++x) {
+                                        const int x0 = x - xStart;
+                                        const auto pixel = tmpImage.channels[0].at({x0, y0});
+                                        data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
+                                    }
+                                }
+                            },
+                            priority
+                        );
+                    },
+                    priority
+                )
+            );
+
+            continue;
+        }
 
         if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
             co_await awaitAll(decodeTasks);
@@ -1373,7 +1536,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
                     const size_t numPixels = (size_t)tile.width * tile.height;
 
-                    auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
+                    const auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
                         co_await ThreadPool::global().parallelForAsync<int>(
                             yStart,
                             yEnd,
@@ -1421,7 +1584,8 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     co_await awaitAll(decodeTasks);
 
-    float intConversionScale = 1.0f;
+    const float intConversionScale = deriveScale(formatToPixelType(sampleFormat), dataBitsPerSample);
+
     ETiffKind kind = ETiffKind::U32;
     switch (sampleFormat) {
         case SAMPLEFORMAT_IEEEFP: {
@@ -1433,12 +1597,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                 default: throw ImageLoadError{fmt::format("Unsupported fp bps={}", bitsPerSample)};
             }
 
-            intConversionScale = 1.0f;
             break;
         }
         case SAMPLEFORMAT_INT: {
             kind = ETiffKind::I32;
-            intConversionScale = 1.0f / ((1ull << (dataBitsPerSample - 1)) - 1);
             break;
         }
         case SAMPLEFORMAT_UINT: {
@@ -1448,7 +1610,6 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                 kind = ETiffKind::U32;
             }
 
-            intConversionScale = 1.0f / ((1ull << dataBitsPerSample) - 1);
             break;
         }
         default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
@@ -1522,7 +1683,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         }
 
         co_await postprocessLinearRawDng(
-            tif, dataBitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
+            tif, dataSampleFormat, dataBitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
@@ -1562,9 +1723,9 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
     TIFFSetErrorHandler(tiffErrorHandler);
     TIFFSetWarningHandler(tiffWarningHandler);
 
-    // Read the entire stream into memory and decompress from there. Technically, we can progressively decode TIFF images, but we want to
-    // additionally load the TIFF image via our EXIF library, which requires the file to be in memory. For the same reason, we also prepend
-    // the EXIF FOURCC to the data ahead of the TIFF header.
+    // Read the entire stream into memory and decompress from there. Technically, we can progressively decode TIFF images, but we want
+    // to additionally load the TIFF image via our EXIF library, which requires the file to be in memory. For the same reason, we also
+    // prepend the EXIF FOURCC to the data ahead of the TIFF header.
     iStream.seekg(0, ios::end);
     const size_t fileSize = iStream.tellg();
     iStream.seekg(0, ios::beg);
@@ -1606,7 +1767,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         isDng = true;
     }
 
-    enum EDngSubfileType : uint16_t {
+    enum EDngSubfileType : uint32_t {
         Main = 0,
         Reduced = 1,
         Transparency = 4,
@@ -1614,17 +1775,21 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         Depth = 8,
         DepthReduced = 9,
         Enhanced = 16,
+        AltReduced = 65537,
+        SemanticMask = 65540,
     };
 
-    auto dngSubFileTypeToString = [&](uint32_t subFileType) {
+    const auto dngSubFileTypeToString = [&](uint32_t subFileType) {
         switch (subFileType) {
-            case Main: return "main";
+            case Main: return "";
             case Reduced: return "reduced";
-            case Transparency: return "main.transparency";
+            case Transparency: return "transparency";
             case TransparencyReduced: return "reduced.transparency";
-            case Depth: return "main.depth";
+            case Depth: return "depth";
             case DepthReduced: return "reduced.depth";
-            case Enhanced: return "main.enhanced";
+            case Enhanced: return "enhanced";
+            case AltReduced: return "reduced.alt";
+            case SemanticMask: return "mask";
             default: return "unknown";
         }
     };
@@ -1657,12 +1822,12 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     // The first directory is already read through TIFFOpen()
     do {
-        tdir_t currentDirNumber = TIFFCurrentDirectory(tif);
+        const tdir_t currentDirNumber = TIFFCurrentDirectory(tif);
 
         co_await tryLoadImage(currentDirNumber, -1, -1);
 
         // Check if there are SubIFD subfiles
-        toff_t* offsets;
+        const toff_t* offsets;
         int numSubIfds = 0;
         if (TIFFGetField(tif, TIFFTAG_SUBIFD, &numSubIfds, &offsets)) {
             // Make a copy of the offsets, as they are only valid until the next TIFFReadDirectory() call
@@ -1691,6 +1856,31 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     if (result.empty()) {
         throw ImageLoadError{"No images found in TIFF file."};
+    }
+
+    // Ensure earlier IFDs appear before later ones, as well as main images before reduced images in DNGs
+    sort(begin(result), end(result), [](const ImageData& a, const ImageData& b) { return a.partName < b.partName; });
+
+    // If we're a DNG, auxiliary images are either extra channels (depth, transparency, semantic mask) or reduced-resolution or enhanced
+    // versions of the main image. They are often smaller-resolution as the main image, but they should nonetheless be treated as extra
+    // channels rather than separate images. Hence: match colors, resize, and flatten into single image.
+    if (isDng) {
+        auto& mainImage = result.front();
+
+        vector<Task<void>> moveTasks;
+        for (size_t i = 1; i < result.size(); ++i) {
+            moveTasks.emplace_back(result[i].matchColorsAndSizeOf(mainImage, priority));
+        }
+
+        co_await awaitAll(moveTasks);
+
+        for (size_t i = 1; i < result.size(); ++i) {
+            mainImage.channels.insert(
+                mainImage.channels.end(), make_move_iterator(result[i].channels.begin()), make_move_iterator(result[i].channels.end())
+            );
+        }
+
+        result.resize(1);
     }
 
     co_return result;

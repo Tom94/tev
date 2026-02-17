@@ -149,6 +149,29 @@ set_target_properties(jpeg-turbo PROPERTIES
 add_library(JPEG::JPEG ALIAS jpeg-turbo)
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
 
+# Compile OpenJPEG for JPEG 2000 support
+set(BUILD_CODEC OFF CACHE BOOL " " FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
+add_subdirectory(openjpeg EXCLUDE_FROM_ALL)
+
+# The following variables ensure that find_package can find OpenJPEG
+set(OpenJPEG_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/openjpeg/src/lib/openjp2
+    ${CMAKE_CURRENT_BINARY_DIR}/openjpeg/src/lib/openjp2
+)
+
+set(OpenJPEG_FOUND TRUE CACHE BOOL " " FORCE)
+set(OPENJPEG_FOUND TRUE CACHE BOOL " " FORCE)
+
+add_library(openjpeg-tev INTERFACE IMPORTED GLOBAL)
+add_dependencies(openjpeg-tev openjp2)
+set_target_properties(openjpeg-tev PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${OpenJPEG_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES openjp2
+    INTERFACE_COMPILE_DEFINITIONS OPJ_STATIC
+)
+
 # Compile aom (dependency of libheif, which follows)
 if (TEV_SUPPORT_AVIF)
     set(AOM_TARGET_NAME aom)
@@ -261,11 +284,15 @@ if (TEV_USE_LIBHEIF)
     set(WITH_AOM_DECODER ${TEV_SUPPORT_AVIF} CACHE BOOL " " FORCE)
 
     set(WITH_JPEG_DECODER ON CACHE BOOL " " FORCE)
+    set(WITH_OpenJPEG_DECODER ON CACHE BOOL " " FORCE)
 
     # libsharpyuv is not needed for us, because we're not interested in converting from RGB to YUV. tev is primarily an image viewer that
     # goes from YUV to RGB upon loading images, where libsharpyuv does nothing. See https://www.ctrl.blog/entry/webp-sharp-yuv.html for more
     # info.
     set(WITH_LIBSHARPYUV OFF CACHE BOOL " " FORCE)
+
+    set(ENABLE_PLUGIN_LOADING OFF CACHE BOOL " " FORCE)
+    set(ENABLE_EXPERIMENTAL_MINI_FORMAT ON CACHE BOOL " " FORCE)
 
     add_subdirectory(libheif EXCLUDE_FROM_ALL)
     target_include_directories(heif INTERFACE
@@ -275,6 +302,8 @@ if (TEV_USE_LIBHEIF)
 
     add_dependencies(heif ${JPEGTURBO_TARGET_NAME})
     target_include_directories(heif PRIVATE "${JPEG_INCLUDE_DIRS}")
+
+    target_link_libraries(heif PRIVATE openjpeg-tev)
 
     if (TEV_SUPPORT_AVIF)
         add_dependencies(heif ${AOM_TARGET_NAME})
@@ -314,6 +343,7 @@ target_include_directories(webp_wrapper INTERFACE ${WebP_INCLUDE_DIR})
 add_library(WebP::webp ALIAS webp_wrapper)
 
 # Compile OpenEXR
+set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL_PKG_CONFIG OFF CACHE BOOL " " FORCE)
 add_subdirectory(Imath)

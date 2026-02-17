@@ -664,19 +664,32 @@ inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogu
 
 std::string_view toString(EOrientation orientation);
 
+enum class EPixelType {
+    Uint,
+    Int,
+    Float,
+};
+
+std::string_view toString(EPixelType type);
+
 enum class EPixelFormat {
     U8,
     U16,
+    I8,
+    I16,
     F16,
     F32,
 };
 
 std::string_view toString(EPixelFormat format);
+EPixelType pixelType(EPixelFormat format);
 
 inline size_t nBytes(EPixelFormat format) {
     switch (format) {
         case EPixelFormat::U8: return 1;
         case EPixelFormat::U16: return 2;
+        case EPixelFormat::I8: return 1;
+        case EPixelFormat::I16: return 2;
         case EPixelFormat::F16: return 2;
         case EPixelFormat::F32: return 4;
     }

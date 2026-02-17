@@ -259,7 +259,8 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "libwebp", "WEBP image format library");
     addLibrary(about, "NanoGUI", "Small GUI library");
     addLibrary(about, "NanoVG", "Small vector graphics library");
-    addLibrary(about, "OpenEXR", "EXR image file format");
+    addLibrary(about, "OpenEXR", "EXR image format library");
+    addLibrary(about, "OpenJPEG", "JPEG 2000 image format library");
     addLibrary(about, "qoi", "QOI image format library");
     addLibrary(about, "stb_image(_write)", "Single-header library for loading and writing images");
     addLibrary(about, "tinylogger", "Minimal pretty-logging library");

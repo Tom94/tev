@@ -140,6 +140,10 @@ Box2i maskToBox(const int mask[4]) {
 }
 
 Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
+    if (toLower(toString(path.extension())) == ".dng") {
+        throw FormatNotSupported{"DNG files will be handled by TiffImageLoader."};
+    }
+
     LibRaw iProcessor;
 
     struct ExifContext {
@@ -281,7 +285,9 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     ImageData& resultData = result.front();
 
     const int numChannels = 3;
-    resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority);
+    resultData.channels = co_await makeRgbaInterleavedChannels(
+        numChannels, numChannels == 4, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+    );
     resultData.hasPremultipliedAlpha = false;
     // resultData.displayWindow = displayWindow; // This seems to be wrong
 

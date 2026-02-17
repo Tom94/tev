@@ -56,10 +56,7 @@ option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 option(TEV_CREATE_METAINFO "Auto-generate metainfo for flatpak release" OFF)
 option(TEV_VALIDATE_METAINFO "Validate generated metainfo for flatpak release" OFF)
 
-set(TEV_USE_LIBHEIF OFF)
-if (TEV_SUPPORT_AVIF OR TEV_SUPPORT_HEIC)
-    set(TEV_USE_LIBHEIF ON)
-endif()
+set(TEV_USE_LIBHEIF ON)
 
 # Set ourselves as the startup project in visual studio.
 # Not available until cmake 3.6, but doesn't break older versions.
@@ -160,6 +157,7 @@ set(TEV_SOURCES
     include/tev/imageio/ImageSaver.h src/imageio/ImageSaver.cpp
     include/tev/imageio/Ifd.h src/imageio/Ifd.cpp
     include/tev/imageio/IsoGainMapMetadata.h src/imageio/IsoGainMapMetadata.cpp
+    include/tev/imageio/Jpeg2000ImageLoader.h src/imageio/Jpeg2000ImageLoader.cpp
     include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
@@ -268,7 +266,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS clip exif_static jpeg-turbo libraw::libraw_r nanogui OpenEXR::OpenEXR png_static tiff webpdemux XMPCore)
+set(TEV_LIBS clip exif_static jpeg-turbo libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
@@ -338,6 +336,8 @@ execute_process(COMMAND ln -s \"${CMAKE_INSTALL_PREFIX}/Applications/tev.app/Con
     set(CPACK_GENERATOR "DragNDrop")
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
+    set(CPACK_COMPONENTS_ALL Unspecified)
+
     set(CPACK_GENERATOR "WIX")
     set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-installer")
 

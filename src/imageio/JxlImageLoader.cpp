@@ -161,7 +161,9 @@ Task<vector<ImageData>> JxlImageLoader::load(
     string_view channelSelector,
     int priority,
     const GainmapHeadroom& gainmapHeadroom,
-    bool skipColorProcessing
+    bool skipColorProcessing,
+    size_t* bitsPerSampleOut,
+    EPixelType* pixelTypeOut
 ) const {
     if (!isJxlImage(fileData)) {
         throw FormatNotSupported{"Data is not a JPEG XL image."};
@@ -377,7 +379,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 }
 
                 tlog::debug() << fmt::format(
-                    "Frame {}: duration={}, is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName
+                    "Frame {}: duration={} is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName
                 );
             } break;
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
@@ -493,6 +495,14 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     // Some JXL files use the intensity_target field to indicate maxCLL (e.g. https://people.csail.mit.edu/ericchan/hdr/).
                     // Values of 0 and 255 are reserved/meaningless, so ignore those.
                     data.hdrMetadata.maxCLL = info.intensity_target;
+                }
+
+                if (bitsPerSampleOut) {
+                    *bitsPerSampleOut = info.bits_per_sample;
+                }
+
+                if (pixelTypeOut) {
+                    *pixelTypeOut = info.exponent_bits_per_sample > 0 ? EPixelType::Float : EPixelType::Uint;
                 }
 
                 bool colorChannelsLoaded = false;
@@ -633,7 +643,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         size.y(),
                         numPixels,
                         [&](size_t y) {
-                            size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
+                            const size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
                             for (int x = 0; x < size.x(); ++x) {
                                 channel.setAt({x, (int)y}, extraChannel.data[srcOffset + (x >> extraChannel.dimShift)]);
                             }

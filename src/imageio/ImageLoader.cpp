@@ -22,6 +22,7 @@
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/IcoImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
+#include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>
@@ -66,6 +67,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #endif
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new WebpImageLoader());
+        imageLoaders.emplace_back(new Jpeg2000ImageLoader());
         imageLoaders.emplace_back(new JpegTurboImageLoader());
         imageLoaders.emplace_back(new PngImageLoader());
         imageLoaders.emplace_back(new RawImageLoader());
@@ -209,14 +211,14 @@ Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vec
     }
 
     const size_t numSamples = (size_t)targetSize.x() * targetSize.y() * numChannels;
+    const float scaleX = (float)size.x() / targetSize.x();
+    const float scaleY = (float)size.y() / targetSize.y();
+
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         targetSize.y(),
         numSamples,
         [&](int dstY) {
-            const float scaleX = (float)size.x() / targetSize.x();
-            const float scaleY = (float)size.y() / targetSize.y();
-
             for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
                 const float srcX = (dstX + 0.5f) * scaleX - 0.5f;
                 const float srcY = (dstY + 0.5f) * scaleY - 0.5f;
