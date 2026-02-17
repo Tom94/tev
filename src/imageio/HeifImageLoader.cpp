@@ -721,6 +721,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         tlog::debug() << "Found " << auxImgHandles.size() << " auxiliary image(s)";
 
+        // TODO: parallelize decoding of aux images
         for (auto* auxImgHandle : auxImgHandles) {
             const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
 
@@ -829,11 +830,9 @@ Task<vector<ImageData>> HeifImageLoader::load(
             }
 
             if (retainAuxLayer) {
-                // TODO:Handle the case where the auxiliary image has different color space, attributes, alpha premultiplication, etc. as
-                // the main image. Simply copying and attaching the channels is not sufficient in that case -- and we can avoid resizing.
+                co_await auxImgData.matchColorsAndSizeOf(mainImage, priority);
 
-                co_await ImageLoader::resizeImageData(auxImgData, mainImage.channels.front().size(), priority);
-
+                // TODO:Handle the case where the auxiliary image has different attributes
                 mainImage.channels.insert(
                     mainImage.channels.end(), make_move_iterator(auxImgData.channels.begin()), make_move_iterator(auxImgData.channels.end())
                 );

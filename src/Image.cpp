@@ -198,13 +198,18 @@ Task<void> ImageData::convertToRec709(int priority) {
     toRec709 = Matrix3f{1.0f};
 }
 
-Task<void> ImageData::matchColorsAndSizeOf(ImageData& other, int priority) {
+Task<void> ImageData::matchColorsAndSizeOf(const ImageData& other, int priority) {
     if (channels.empty()) {
         co_return;
     }
 
     updateLayers();
-    other.updateLayers();
+
+    if (other.hasPremultipliedAlpha && !hasPremultipliedAlpha) {
+        co_await multiplyAlpha(priority);
+    } else if (!other.hasPremultipliedAlpha && hasPremultipliedAlpha) {
+        co_await unmultiplyAlpha(priority);
+    }
 
     co_await applyColorConversion(inverse(other.toRec709) * toRec709, priority);
     if (!other.channels.empty()) {
