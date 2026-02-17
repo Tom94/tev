@@ -169,6 +169,7 @@ add_dependencies(openjpeg-tev openjp2)
 set_target_properties(openjpeg-tev PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${OpenJPEG_INCLUDE_DIRS}"
     INTERFACE_LINK_LIBRARIES openjp2
+    INTERFACE_COMPILE_DEFINITIONS OPJ_STATIC
 )
 
 # Compile aom (dependency of libheif, which follows)
@@ -302,8 +303,7 @@ if (TEV_USE_LIBHEIF)
     add_dependencies(heif ${JPEGTURBO_TARGET_NAME})
     target_include_directories(heif PRIVATE "${JPEG_INCLUDE_DIRS}")
 
-    add_dependencies(heif openjp2)
-    target_include_directories(heif PRIVATE "${OpenJPEG_INCLUDE_DIRS}")
+    target_link_libraries(heif PRIVATE openjpeg-tev)
 
     if (TEV_SUPPORT_AVIF)
         add_dependencies(heif ${AOM_TARGET_NAME})
