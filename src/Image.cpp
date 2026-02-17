@@ -316,90 +316,102 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
 Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
     // All channels sharing the same data buffer must be converted together to avoid multiple conversions of the same data.
-    multimap<shared_ptr<Channel::Data>, Channel*> channelsByData;
+    using map_t = multimap<shared_ptr<Channel::Data>, Channel*>;
+    map_t channelsByData;
     for (auto& c : channels) {
         channelsByData.emplace(c.dataBuf(), &c);
     }
 
+    vector<pair<map_t::iterator, map_t::iterator>> ranges;
     for (auto it = channelsByData.begin(); it != channelsByData.end();) {
-        const auto rangeEnd = channelsByData.upper_bound(it->first);
-
-        vector<Channel*> channelsToConvert;
-        const Channel* firstChannel = it->second;
-        const EPixelFormat targetFormat = firstChannel->desiredPixelFormat();
-        const EPixelFormat sourceFormat = firstChannel->pixelFormat();
-
-        bool canConvert = true;
-        for (auto it2 = it; it2 != rangeEnd; ++it2) {
-            const Channel* c = it2->second;
-            if (c->pixelFormat() != sourceFormat || c->desiredPixelFormat() != targetFormat) {
-                canConvert = false;
-
-                tlog::warning() << fmt::format(
-                    "Channels sharing the same data buffer must have the same source and target pixel format. ({}: {} -> {}, {}: {} -> {})",
-                    firstChannel->name(),
-                    toString(sourceFormat),
-                    toString(targetFormat),
-                    c->name(),
-                    toString(c->pixelFormat()),
-                    toString(c->desiredPixelFormat())
-                );
-            }
-        }
-
-        if (!canConvert || sourceFormat == targetFormat) {
-            it = rangeEnd;
-            continue;
-        }
-
-        shared_ptr<Channel::Data> data = it->first;
-
-        const size_t nSamples = data->size() / nBytes(sourceFormat);
-        Channel::Data convertedData(nSamples * nBytes(targetFormat));
-
-        const uint8_t* const src = data->data();
-        uint8_t* const dst = convertedData.data();
-
-        const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0, nSamples, nSamples, [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; }, priority
-            );
-        };
-
-        const auto typedSrcConvert = [targetFormat, dst, &typedConvert](const auto* typedSrc) -> Task<void> {
-            switch (targetFormat) {
-                case EPixelFormat::U8: co_await typedConvert(typedSrc, (uint8_t*)dst); break;
-                case EPixelFormat::U16: co_await typedConvert(typedSrc, (uint16_t*)dst); break;
-                case EPixelFormat::I8: co_await typedConvert(typedSrc, (int8_t*)dst); break;
-                case EPixelFormat::I16: co_await typedConvert(typedSrc, (int16_t*)dst); break;
-                case EPixelFormat::F16: co_await typedConvert(typedSrc, (half*)dst); break;
-                case EPixelFormat::F32: co_await typedConvert(typedSrc, (float*)dst); break;
-            }
-        };
-
-        switch (sourceFormat) {
-            case EPixelFormat::U8: co_await typedSrcConvert((const uint8_t*)src); break;
-            case EPixelFormat::U16: co_await typedSrcConvert((const uint16_t*)src); break;
-            case EPixelFormat::I8: co_await typedSrcConvert((const int8_t*)src); break;
-            case EPixelFormat::I16: co_await typedSrcConvert((const int16_t*)src); break;
-            case EPixelFormat::F16: co_await typedSrcConvert((const half*)src); break;
-            case EPixelFormat::F32: co_await typedSrcConvert((const float*)src); break;
-        }
-
-        for (auto it2 = it; it2 != rangeEnd; ++it2) {
-            Channel* c = it2->second;
-            c->setPixelFormat(targetFormat);
-            c->setOffset(c->offset() / nBytes(sourceFormat) * nBytes(targetFormat));
-            c->setStride(c->stride() / nBytes(sourceFormat) * nBytes(targetFormat));
-        }
-
-        *data = std::move(convertedData);
-
-        tlog::debug()
-            << fmt::format("Converted {} channels from {} to {}.", distance(it, rangeEnd), toString(sourceFormat), toString(targetFormat));
-
-        it = rangeEnd;
+        ranges.emplace_back(it, channelsByData.upper_bound(it->first));
+        it = ranges.back().second;
     }
+
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        ranges.size(),
+        numeric_limits<uint32_t>::max(),
+        [&](size_t i) -> Task<void> {
+            const auto rangeBegin = ranges.at(i).first;
+            const auto rangeEnd = ranges.at(i).second;
+
+            vector<Channel*> channelsToConvert;
+            const Channel* firstChannel = rangeBegin->second;
+            const EPixelFormat targetFormat = firstChannel->desiredPixelFormat();
+            const EPixelFormat sourceFormat = firstChannel->pixelFormat();
+
+            bool canConvert = true;
+            for (auto it2 = rangeBegin; it2 != rangeEnd; ++it2) {
+                const Channel* c = it2->second;
+                if (c->pixelFormat() != sourceFormat || c->desiredPixelFormat() != targetFormat) {
+                    canConvert = false;
+
+                    tlog::warning() << fmt::format(
+                        "Channels sharing the same data buffer must have the same source and target pixel format. ({}: {} -> {}, {}: {} -> {})",
+                        firstChannel->name(),
+                        toString(sourceFormat),
+                        toString(targetFormat),
+                        c->name(),
+                        toString(c->pixelFormat()),
+                        toString(c->desiredPixelFormat())
+                    );
+                }
+            }
+
+            if (!canConvert || sourceFormat == targetFormat) {
+                co_return;
+            }
+
+            shared_ptr<Channel::Data> data = rangeBegin->first;
+
+            const size_t nSamples = data->size() / nBytes(sourceFormat);
+            Channel::Data convertedData(nSamples * nBytes(targetFormat));
+
+            const uint8_t* const src = data->data();
+            uint8_t* const dst = convertedData.data();
+
+            const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
+                co_await ThreadPool::global().parallelForAsync<size_t>(
+                    0, nSamples, nSamples, [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; }, priority
+                );
+            };
+
+            const auto typedSrcConvert = [targetFormat, dst, &typedConvert](const auto* typedSrc) -> Task<void> {
+                switch (targetFormat) {
+                    case EPixelFormat::U8: co_await typedConvert(typedSrc, (uint8_t*)dst); break;
+                    case EPixelFormat::U16: co_await typedConvert(typedSrc, (uint16_t*)dst); break;
+                    case EPixelFormat::I8: co_await typedConvert(typedSrc, (int8_t*)dst); break;
+                    case EPixelFormat::I16: co_await typedConvert(typedSrc, (int16_t*)dst); break;
+                    case EPixelFormat::F16: co_await typedConvert(typedSrc, (half*)dst); break;
+                    case EPixelFormat::F32: co_await typedConvert(typedSrc, (float*)dst); break;
+                }
+            };
+
+            switch (sourceFormat) {
+                case EPixelFormat::U8: co_await typedSrcConvert((const uint8_t*)src); break;
+                case EPixelFormat::U16: co_await typedSrcConvert((const uint16_t*)src); break;
+                case EPixelFormat::I8: co_await typedSrcConvert((const int8_t*)src); break;
+                case EPixelFormat::I16: co_await typedSrcConvert((const int16_t*)src); break;
+                case EPixelFormat::F16: co_await typedSrcConvert((const half*)src); break;
+                case EPixelFormat::F32: co_await typedSrcConvert((const float*)src); break;
+            }
+
+            for (auto it2 = rangeBegin; it2 != rangeEnd; ++it2) {
+                Channel* c = it2->second;
+                c->setPixelFormat(targetFormat);
+                c->setOffset(c->offset() / nBytes(sourceFormat) * nBytes(targetFormat));
+                c->setStride(c->stride() / nBytes(sourceFormat) * nBytes(targetFormat));
+            }
+
+            *data = std::move(convertedData);
+
+            tlog::debug() << fmt::format(
+                "Converted {} channels from {} to {}.", distance(rangeBegin, rangeEnd), toString(sourceFormat), toString(targetFormat)
+            );
+        },
+        priority
+    );
 }
 
 void ImageData::alphaOperation(const function<void(Channel&, const Channel&)>& func) {
