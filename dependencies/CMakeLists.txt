@@ -150,8 +150,9 @@ add_library(JPEG::JPEG ALIAS jpeg-turbo)
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
 
 # Compile OpenJPEG for JPEG 2000 support
-set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(BUILD_CODEC OFF CACHE BOOL " " FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
 add_subdirectory(openjpeg EXCLUDE_FROM_ALL)
 
 # The following variables ensure that find_package can find OpenJPEG
@@ -342,6 +343,7 @@ target_include_directories(webp_wrapper INTERFACE ${WebP_INCLUDE_DIR})
 add_library(WebP::webp ALIAS webp_wrapper)
 
 # Compile OpenEXR
+set(BUILD_TESTING OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL OFF CACHE BOOL " " FORCE)
 set(IMATH_INSTALL_PKG_CONFIG OFF CACHE BOOL " " FORCE)
 add_subdirectory(Imath)
