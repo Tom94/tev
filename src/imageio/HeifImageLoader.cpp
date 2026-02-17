@@ -135,7 +135,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         bool hasAlpha;
     };
 
-    const auto getIccProfileFromImgAndHandle = [](heif_image* img, heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
+    const auto getIccProfileFromImgAndHandle = [](heif_image* img, const heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
         if (handle) {
             const size_t handleProfileSize = heif_image_handle_get_raw_color_profile_size(handle);
             if (handleProfileSize > 0) {
@@ -176,7 +176,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
     const auto decodeImage = [priority, &getIccProfileFromImgAndHandle](
                                  heif_image* img,
-                                 heif_image_handle* imgHandle, // may be nullptr
+                                 const heif_image_handle* imgHandle, // may be nullptr
                                  int numChannels,
                                  bool hasAlpha,
                                  bool skipColorProcessing,
@@ -459,9 +459,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
         return clamp(numSamples / (1024 * 1024 * 4), (size_t)1, (size_t)thread::hardware_concurrency());
     };
 
-    const auto decodeImageHandle = [&decodeImage, &idealThreadCount](
-                                       heif_image_handle* imgHandle, bool skipColorProcessing, string_view layer = "", string_view partName = ""
-                                   ) -> Task<ImageData> {
+    const auto decodeImageHandle =
+        [&decodeImage, &idealThreadCount](
+            const heif_image_handle* imgHandle, bool skipColorProcessing, string_view layer = "", string_view partName = ""
+        ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
 
         heif_colorspace preferredColorspace = heif_colorspace_undefined;
@@ -637,16 +638,124 @@ Task<vector<ImageData>> HeifImageLoader::load(
     heif_context_get_list_of_top_level_image_IDs(ctx, imageIds.data(), (int)numImages);
 
     const auto decodeTopLevelImgIdAndAuxImages = [&](heif_item_id id, string partName) -> Task<ImageData> {
-        tlog::debug() << fmt::format("Decoding top-level HEIF image ID '{}'", id);
+        tlog::debug() << fmt::format("Spawning decoding task for top-level HEIF image ID '{}'", id);
 
         heif_image_handle* imgHandle;
         if (const auto error = heif_context_get_image_handle(ctx, id, &imgHandle); error.code != heif_error_Ok) {
             throw ImageLoadError{fmt::format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
         }
 
-        // Read main image
-        auto mainImage = co_await decodeImageHandle(imgHandle, false, partName, partName);
+        Task<ImageData> mainImageTask = [](const auto* imgHandle, const auto& decodeImageHandle, string_view partName, auto priority) -> Task<ImageData> {
+            co_await ThreadPool::global().enqueueCoroutine(priority);
+            co_return co_await decodeImageHandle(imgHandle, false, partName, partName);
+        }(imgHandle, decodeImageHandle, partName, priority);
 
+        // Read auxiliary images
+        vector<heif_item_id> auxIds;
+        vector<heif_image_handle*> auxImgHandles;
+        ScopeGuard auxImgHandlesGuard{[&auxImgHandles] {
+            for (heif_image_handle* handle : auxImgHandles) {
+                heif_image_handle_release(handle);
+            }
+        }};
+
+        if (const int numAux = heif_image_handle_get_number_of_auxiliary_images(imgHandle, 0); numAux > 0) {
+            auxIds.resize((size_t)numAux);
+            heif_image_handle_get_list_of_auxiliary_image_IDs(imgHandle, 0, auxIds.data(), numAux);
+
+            for (const auto auxId : auxIds) {
+                if (heif_image_handle* auxImgHandle;
+                    heif_image_handle_get_auxiliary_image_handle(imgHandle, auxId, &auxImgHandle).code == heif_error_Ok) {
+                    auxImgHandles.emplace_back(auxImgHandle);
+                } else {
+                    tlog::warning() << fmt::format("Failed to get auxiliary image handle for ID {}.", auxId);
+                }
+            }
+        }
+
+        heif_image_handle* gainmapImgHandle = nullptr;
+        if (heif_image_handle_get_gain_map_image_handle(imgHandle, &gainmapImgHandle).code == heif_error_Ok) {
+            const auto gainmapItemId = heif_image_handle_get_item_id(gainmapImgHandle);
+            tlog::debug() << fmt::format(
+                "Found ISO 21496-1 gain map image with ID '{}'. Will be processed while reading auxiliary images.", gainmapItemId
+            );
+
+            // If gainmap isn't an aux image, but a separate item, add it to the aux image list to be processed below.
+            const auto it = find(auxIds.begin(), auxIds.end(), gainmapItemId);
+            if (it == auxIds.end()) {
+                auxIds.emplace_back(gainmapItemId);
+                auxImgHandles.emplace_back(gainmapImgHandle);
+            } else {
+                heif_image_handle_release(gainmapImgHandle);
+                gainmapImgHandle = auxImgHandles.at(distance(auxIds.begin(), it));
+            }
+        }
+
+        tlog::debug() << "Spawning decoding tasks for " << auxImgHandles.size() << " auxiliary image(s)";
+
+        struct AuxImageData {
+            ImageData data;
+            bool isIsoGainmap = false;
+            bool isAppleGainmap = false;
+            bool retain = false;
+            string name = "";
+
+            bool isGainmap() const { return isIsoGainmap || isAppleGainmap; }
+        };
+
+        vector<Task<optional<AuxImageData>>> auxImageDataTasks;
+        for (auto* auxImgHandle : auxImgHandles) {
+            auxImageDataTasks.emplace_back(
+                [](const auto* auxImgHandle,
+                   const auto* gainmapImgHandle,
+                   const auto& decodeImageHandle,
+                   string_view channelSelector,
+                   string_view partName,
+                   auto priority) -> Task<optional<AuxImageData>> {
+                    co_await ThreadPool::global().enqueueCoroutine(priority);
+
+                    const char* auxType = nullptr;
+                    if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
+                        tlog::warning() << fmt::format("Failed to get auxiliary image type: {}", error.message);
+                        co_return nullopt;
+                    }
+
+                    ScopeGuard typeGuard{[auxImgHandle, &auxType] { heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType); }};
+                    string auxLayerName = auxType ? auxType : "";
+                    replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
+
+                    const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
+                    if (auxLayerName.empty()) {
+                        const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
+                        auxLayerName = isIsoGainmap ? "gainmap" : fmt::format("aux.{}", auxId);
+                    }
+
+                    const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
+                    const bool isGainmap = isIsoGainmap || isAppleGainmap;
+                    const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
+
+                    if (!retainAuxLayer && !isGainmap) {
+                        co_return nullopt;
+                    }
+
+                    co_return AuxImageData{
+                        .data = co_await decodeImageHandle(auxImgHandle, isGainmap, Channel::joinIfNonempty(partName, auxLayerName), partName),
+                        .isIsoGainmap = isIsoGainmap,
+                        .isAppleGainmap = isAppleGainmap,
+                        .retain = retainAuxLayer,
+                        .name = auxLayerName,
+                    };
+                }(auxImgHandle, gainmapImgHandle, decodeImageHandle, channelSelector, partName, priority)
+            );
+        }
+
+        // At this point, tasks have been spawned for decoding the main image and all aux images. Wait for them to complete before
+        // postprocessing.
+        auto mainImage = co_await mainImageTask;
+        auto auxImageData = co_await awaitAll(span{auxImageDataTasks});
+
+        // Read metadata before handling aux images that finished decoding. This metadata can be relevant for interpreting the aux images
+        // (e.g. gain map metadata) and we want to make sure we have it before we start applying gain maps or similar.
         optional<Exif> exif;
         optional<IsoGainMapMetadata> isoGainMapMetadata;
 
@@ -723,85 +832,19 @@ Task<vector<ImageData>> HeifImageLoader::load(
             return nullopt;
         };
 
-        // Read auxiliary images
-        vector<heif_item_id> auxIds;
-        vector<heif_image_handle*> auxImgHandles;
-        ScopeGuard auxImgHandlesGuard{[&auxImgHandles] {
-            for (heif_image_handle* handle : auxImgHandles) {
-                heif_image_handle_release(handle);
-            }
-        }};
-
-        if (const int numAux = heif_image_handle_get_number_of_auxiliary_images(imgHandle, 0); numAux > 0) {
-            auxIds.resize((size_t)numAux);
-            heif_image_handle_get_list_of_auxiliary_image_IDs(imgHandle, 0, auxIds.data(), numAux);
-
-            for (const auto auxId : auxIds) {
-                if (heif_image_handle* auxImgHandle;
-                    heif_image_handle_get_auxiliary_image_handle(imgHandle, auxId, &auxImgHandle).code == heif_error_Ok) {
-                    auxImgHandles.emplace_back(auxImgHandle);
-                } else {
-                    tlog::warning() << fmt::format("Failed to get auxiliary image handle for ID {}.", auxId);
-                }
-            }
-        }
-
-        heif_image_handle* gainmapImgHandle = nullptr;
-        if (heif_image_handle_get_gain_map_image_handle(imgHandle, &gainmapImgHandle).code == heif_error_Ok) {
-            const auto gainmapItemId = heif_image_handle_get_item_id(gainmapImgHandle);
-            tlog::debug() << fmt::format(
-                "Found ISO 21496-1 gain map image with ID '{}'. Will be processed while reading auxiliary images.", gainmapItemId
-            );
-
-            // If gainmap isn't an aux image, but a separate item, add it to the aux image list to be processed below.
-            const auto it = find(auxIds.begin(), auxIds.end(), gainmapItemId);
-            if (it == auxIds.end()) {
-                auxIds.emplace_back(gainmapItemId);
-                auxImgHandles.emplace_back(gainmapImgHandle);
-            } else {
-                heif_image_handle_release(gainmapImgHandle);
-                gainmapImgHandle = auxImgHandles.at(distance(auxIds.begin(), it));
-            }
-        }
-
-        tlog::debug() << "Found " << auxImgHandles.size() << " auxiliary image(s)";
-
-        // TODO: parallelize decoding of aux images
-        for (auto* auxImgHandle : auxImgHandles) {
-            const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
-
-            const char* auxType = nullptr;
-            if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
-                tlog::warning() << fmt::format("Failed to get auxiliary image type: {}", error.message);
+        // Handle aux images that finished decoding
+        for (auto& auxDataOpt : auxImageData) {
+            if (!auxDataOpt) {
                 continue;
             }
 
-            ScopeGuard typeGuard{[auxImgHandle, &auxType] { heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType); }};
-            string auxLayerName = auxType ? auxType : "";
-            replace(auxLayerName.begin(), auxLayerName.end(), ':', '.');
+            auto& auxImg = *auxDataOpt;
 
-            const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
-            if (auxLayerName.empty()) {
-                auxLayerName = isIsoGainmap ? "gainmap" : fmt::format("aux.{}", auxId);
-            }
-
-            const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
-
-            const bool isGainmap = isIsoGainmap || isAppleGainmap;
-
-            const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
-
-            if (!retainAuxLayer && !isGainmap) {
-                continue;
-            }
-
-            auto auxImgData = co_await decodeImageHandle(auxImgHandle, isGainmap, Channel::joinIfNonempty(partName, auxLayerName), partName);
-
-            if (isGainmap) {
+            if (auxImg.isGainmap()) {
                 optional<chroma_t> altImgChroma = nullopt;
 
-                if (isIsoGainmap) {
-                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxLayerName);
+                if (auxImg.isIsoGainmap) {
+                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxImg.name);
 
                     HeapArray<uint8_t> metadataData(heif_image_handle_get_gain_map_metadata_size(imgHandle));
                     if (metadataData.size() > 0 &&
@@ -854,30 +897,30 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     }
                 }
 
-                // Prioritize ISO 21496-1 gain map application if both types are present. If the gain map is of Apple's type, we can fall
-                // back to their vendor-specific handling (optionally with maker note parameters, but also handles default).
+                // Prioritize ISO 21496-1 gain map application if both types are present. If the gain map is of Apple's type, we can
+                // fall back to their vendor-specific handling (optionally with maker note parameters, but also handles default).
                 if (isoGainMapMetadata) {
-                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxLayerName);
+                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxImg.name);
                     co_await preprocessAndApplyIsoGainMap(
-                        mainImage, auxImgData, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, gainmapHeadroom, priority
+                        mainImage, auxImg.data, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, gainmapHeadroom, priority
                     );
-                } else if (isAppleGainmap) {
+                } else if (auxImg.isAppleGainmap) {
                     tlog::debug()
-                        << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxLayerName);
-                    co_await preprocessAndApplyAppleGainMap(mainImage, auxImgData, findAppleMakerNote(), gainmapHeadroom, priority);
+                        << fmt::format("Found Apple HDR gain map: {}. Checking EXIF maker notes for application parameters.", auxImg.name);
+                    co_await preprocessAndApplyAppleGainMap(mainImage, auxImg.data, findAppleMakerNote(), gainmapHeadroom, priority);
                 } else {
                     tlog::warning() << fmt::format(
-                        "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxLayerName
+                        "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxImg.name
                     );
                 }
             }
 
-            if (retainAuxLayer) {
-                co_await auxImgData.matchColorsAndSizeOf(mainImage, priority);
+            if (auxImg.retain) {
+                co_await auxImg.data.matchColorsAndSizeOf(mainImage, priority);
 
                 // TODO:Handle the case where the auxiliary image has different attributes
                 mainImage.channels.insert(
-                    mainImage.channels.end(), make_move_iterator(auxImgData.channels.begin()), make_move_iterator(auxImgData.channels.end())
+                    mainImage.channels.end(), make_move_iterator(auxImg.data.channels.begin()), make_move_iterator(auxImg.data.channels.end())
                 );
             }
         }
