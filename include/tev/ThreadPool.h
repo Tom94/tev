@@ -148,7 +148,11 @@ public:
                 tasks.emplace_back([](Int tStart, Int tEnd, F& tBody, int tPriority, ThreadPool* pool) -> Task<void> {
                     co_await pool->enqueueCoroutine(tPriority);
                     for (Int j = tStart; j < tEnd; ++j) {
-                        tBody(j);
+                        if constexpr (is_coroutine_callable_v<F, Int>) {
+                            co_await tBody(j);
+                        } else {
+                            tBody(j);
+                        }
                     }
                 }(taskStart, taskEnd, body, priority, this));
             }

@@ -27,6 +27,13 @@
 
 namespace tev {
 
+template <typename, typename = void> struct is_coroutine_return_type : std::false_type {};
+
+template <typename T> struct is_coroutine_return_type<T, std::void_t<typename std::coroutine_traits<T>::promise_type>> : std::true_type {};
+
+template <typename F, typename... Args>
+constexpr bool is_coroutine_callable_v = is_coroutine_return_type<std::invoke_result_t<F, Args...>>::value;
+
 class Latch {
 public:
     Latch(int val) : mCounter{val} {}
