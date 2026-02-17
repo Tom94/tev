@@ -155,7 +155,19 @@ EOrientation Exif::getOrientation() const {
         return EOrientation::None;
     }
 
-    return (EOrientation)exif_get_short(orientationEntry->data, byteOrder(mReverseEndianess));
+    const uint16_t orientationValue = exif_get_short(orientationEntry->data, byteOrder(mReverseEndianess));
+    switch (orientationValue) {
+        case 0: return EOrientation::None;
+        case 1: return EOrientation::TopLeft;
+        case 2: return EOrientation::TopRight;
+        case 3: return EOrientation::BottomRight;
+        case 4: return EOrientation::BottomLeft;
+        case 5: return EOrientation::LeftTop;
+        case 6: return EOrientation::RightTop;
+        case 7: return EOrientation::RightBottom;
+        case 8: return EOrientation::LeftBottom;
+        default: tlog::warning() << fmt::format("Invalid EXIF orientation value: {}", orientationValue); return EOrientation::None;
+    }
 }
 
 bool Exif::forceSrgb() const {
