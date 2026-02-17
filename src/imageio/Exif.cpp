@@ -21,6 +21,7 @@
 #include <tev/imageio/Ifd.h>
 
 #include <libexif/exif-data.h>
+#include <libexif/exif-mnote-data.h>
 
 #include <span>
 
@@ -216,6 +217,35 @@ AttributeNode Exif::toAttributes() const {
 
             ifdNode.children.push_back({name, value, type, {}});
         }
+    }
+
+    const auto md = exif_data_get_mnote_data(mExif);
+    if (!md) {
+        return result;
+    }
+
+    AttributeNode& mdNode = result.children.emplace_back();
+    mdNode.name = "MakerNote";
+    mdNode.type = "MakerNote";
+
+    const auto c = exif_mnote_data_count(md);
+    for (size_t i = 0; i < c; i++) {
+        const char* name = exif_mnote_data_get_name(md, i);
+        if (!name) {
+            name = "unknown";
+        }
+
+        const char* type = "";
+
+        char buf[256] = {0};
+        string value = exif_mnote_data_get_value(md, i, buf, sizeof(buf));
+        if (value.empty()) {
+            value = "n/a";
+        } else if (value.length() >= 255) {
+            value += "…"s;
+        }
+
+        mdNode.children.push_back({name, value, type, {}});
     }
 
     return result;
