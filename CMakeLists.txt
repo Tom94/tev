@@ -336,6 +336,8 @@ execute_process(COMMAND ln -s \"${CMAKE_INSTALL_PREFIX}/Applications/tev.app/Con
     set(CPACK_GENERATOR "DragNDrop")
 elseif (WIN32)
     install(TARGETS tev RUNTIME DESTINATION "bin")
+    set(CPACK_COMPONENTS_ALL Unspecified)
+
     set(CPACK_GENERATOR "WIX")
     set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-installer")
 
