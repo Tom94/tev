@@ -124,7 +124,7 @@ struct ImageData {
     Task<void> applyColorConversion(const nanogui::Matrix3f& mat, int priority);
     Task<void> convertToRec709(int priority);
 
-    Task<void> matchColorsAndSizeOf(ImageData& other, int priority);
+    Task<void> matchColorsAndSizeOf(const ImageData& other, int priority);
 
     Task<void> deriveWhiteLevelFromMetadata(int priority);
     Task<void> convertToDesiredPixelFormat(int priority);

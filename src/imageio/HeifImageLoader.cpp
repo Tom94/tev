@@ -29,6 +29,7 @@
 #include <nanogui/vector.h>
 
 #include <libheif/heif.h>
+#include <libheif/heif_image_handle.h>
 #include <libheif/heif_sequences.h>
 
 #include <optional>
@@ -42,7 +43,6 @@ namespace tev {
 Task<vector<ImageData>> HeifImageLoader::load(
     istream& iStream, const fs::path&, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
 ) const {
-
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
     uint8_t header[12];
     iStream.read((char*)header, 12);
@@ -57,7 +57,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
     const heif_brand2 brand = heif_read_main_brand(header, 12);
 
-    unordered_set<heif_brand2> supportedFormats = {
+    const unordered_set<heif_brand2> supportedFormats = {
         // HEIC
         heif_brand2_heic,
         heif_brand2_heix,
@@ -499,8 +499,31 @@ Task<vector<ImageData>> HeifImageLoader::load(
         // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
         const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
 
+        heif_decoding_options* decodingOptions = heif_decoding_options_alloc();
+        if (!decodingOptions) {
+            throw ImageLoadError{"Failed to allocate decoding options."};
+        }
+
+        const auto sizeGuess = Vector2i{heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
+        const auto numPixels = sizeGuess.x() * (size_t)sizeGuess.y();
+        const auto numSamples = numChannels * numPixels;
+
+        // 1 thread per 4 million samples (rgba megapixel) seems to be a good heuristic for parallel decoding. Spawning threads is *really*
+        // expensive, so even taking into account that decoding does quite a bit of processing per sample, we still need a much larger chunk
+        // size than our task-based thread pool. Would be better if libheif exposed a way for us to supply a custom thread pool, but oh well.
+        const auto numThreads = clamp(numSamples / (1024 * 1024 * 4), (size_t)1, (size_t)thread::hardware_concurrency());
+
+        tlog::debug() << fmt::format(
+            "Decoding with {} threads (numChannels={} numPixels={} numSamples={})", numThreads, numChannels, numPixels, numSamples
+        );
+
+        const ScopeGuard optionsGuard{[decodingOptions] { heif_decoding_options_free(decodingOptions); }};
+        decodingOptions->num_codec_threads = numThreads;
+        decodingOptions->num_library_threads = numThreads;
+
         heif_image* img = nullptr;
-        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, nullptr); error.code != heif_error_Ok) {
+        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, decodingOptions);
+            error.code != heif_error_Ok) {
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
