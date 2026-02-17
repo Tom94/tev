@@ -180,7 +180,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
                                  int numChannels,
                                  bool hasAlpha,
                                  bool skipColorProcessing,
-                                 const Vector2i& targetSize = {0},
                                  string_view layer = "",
                                  string_view partName = ""
                              ) -> Task<ImageData> {
@@ -453,12 +452,15 @@ Task<vector<ImageData>> HeifImageLoader::load(
         co_return resultData;
     };
 
-    const auto decodeImageHandle = [&decodeImage](
-                                       heif_image_handle* imgHandle,
-                                       bool skipColorProcessing,
-                                       const Vector2i& targetSize = {0},
-                                       string_view layer = "",
-                                       string_view partName = ""
+    const auto idealThreadCount = [](size_t numSamples) {
+        // 1 thread per 4 million samples (rgba megapixel) seems to be a good heuristic for parallel decoding. Spawning threads is *really*
+        // expensive, so even taking into account that decoding does quite a bit of processing per sample, we still need a much larger chunk
+        // size than our task-based thread pool. Would be better if libheif exposed a way for us to supply a custom thread pool, but oh well.
+        return clamp(numSamples / (1024 * 1024 * 4), (size_t)1, (size_t)thread::hardware_concurrency());
+    };
+
+    const auto decodeImageHandle = [&decodeImage, &idealThreadCount](
+                                       heif_image_handle* imgHandle, bool skipColorProcessing, string_view layer = "", string_view partName = ""
                                    ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
 
@@ -504,20 +506,17 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{"Failed to allocate decoding options."};
         }
 
+        const ScopeGuard optionsGuard{[decodingOptions] { heif_decoding_options_free(decodingOptions); }};
+
         const auto sizeGuess = Vector2i{heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
         const auto numPixels = sizeGuess.x() * (size_t)sizeGuess.y();
         const auto numSamples = numChannels * numPixels;
-
-        // 1 thread per 4 million samples (rgba megapixel) seems to be a good heuristic for parallel decoding. Spawning threads is *really*
-        // expensive, so even taking into account that decoding does quite a bit of processing per sample, we still need a much larger chunk
-        // size than our task-based thread pool. Would be better if libheif exposed a way for us to supply a custom thread pool, but oh well.
-        const auto numThreads = clamp(numSamples / (1024 * 1024 * 4), (size_t)1, (size_t)thread::hardware_concurrency());
+        const auto numThreads = idealThreadCount(numSamples);
 
         tlog::debug() << fmt::format(
             "Decoding with {} threads (numChannels={} numPixels={} numSamples={})", numThreads, numChannels, numPixels, numSamples
         );
 
-        const ScopeGuard optionsGuard{[decodingOptions] { heif_decoding_options_free(decodingOptions); }};
         decodingOptions->num_codec_threads = numThreads;
         decodingOptions->num_library_threads = numThreads;
 
@@ -527,11 +526,11 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, targetSize, layer, partName);
+        co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, layer, partName);
     };
 
-    const auto decodeSingleTrackImage =
-        [&decodeImage](heif_track* track, const Vector2i& targetSize = {0}, string_view partName = "") -> Task<optional<ImageData>> {
+    const auto decodeSingleTrackImage = [&decodeImage,
+                                         &idealThreadCount](heif_track* track, string_view partName = "") -> Task<optional<ImageData>> {
         tlog::debug() << fmt::format("Decoding HEIF track '{}'", partName);
 
         const bool hasAlpha = heif_track_has_alpha_channel(track);
@@ -554,8 +553,31 @@ Task<vector<ImageData>> HeifImageLoader::load(
         // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
         const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
 
+        heif_decoding_options* decodingOptions = heif_decoding_options_alloc();
+        if (!decodingOptions) {
+            throw ImageLoadError{"Failed to allocate decoding options."};
+        }
+
+        const ScopeGuard optionsGuard{[decodingOptions] { heif_decoding_options_free(decodingOptions); }};
+
+        uint16_t widthGuess = 1, heightGuess = 1;
+        if (const auto error = heif_track_get_image_resolution(track, &widthGuess, &heightGuess); error.code != heif_error_Ok) {
+            tlog::warning() << fmt::format("Failed to get track image resolution: {}", error.message);
+        }
+
+        const auto numPixels = widthGuess * (size_t)heightGuess;
+        const auto numSamples = numChannels * numPixels;
+        const auto numThreads = idealThreadCount(numSamples);
+
+        tlog::debug() << fmt::format(
+            "Decoding sequence frame with {} threads (numChannels={} numPixels={} numSamples={})", numThreads, numChannels, numPixels, numSamples
+        );
+
+        decodingOptions->num_codec_threads = numThreads;
+        decodingOptions->num_library_threads = numThreads;
+
         heif_image* img = nullptr;
-        if (const auto error = heif_track_decode_next_image(track, &img, decodingColorspace, decodingChroma, nullptr);
+        if (const auto error = heif_track_decode_next_image(track, &img, decodingColorspace, decodingChroma, decodingOptions);
             error.code != heif_error_Ok) {
             if (error.code == heif_error_End_of_sequence) {
                 tlog::debug() << "End of sequence reached for track.";
@@ -565,7 +587,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{fmt::format("Failed to decode track image: {}", error.message)};
         }
 
-        co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, targetSize, partName, partName);
+        co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, partName, partName);
     };
 
     heif_context* ctx = heif_context_alloc();
@@ -579,8 +601,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
         throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 
-    vector<ImageData> result;
-
     // If we're an image *sequence*, load the sequence tracks instead of individual images.
     const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx);
     if (seqTrackCount > 0) {
@@ -589,6 +609,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         vector<int> trackIds(seqTrackCount);
         heif_context_get_track_ids(ctx, reinterpret_cast<uint32_t*>(trackIds.data()));
 
+        vector<ImageData> result;
+
         for (int i = 0; i < seqTrackCount; ++i) {
             const heif_track* track = heif_context_get_track(ctx, trackIds[i]);
 
@@ -596,11 +618,12 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 const auto partName = seqTrackCount > 1 ? fmt::format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
                                                           fmt::format("frames.{}", frameIdx);
 
-                if (auto imageData = co_await decodeSingleTrackImage(const_cast<heif_track*>(track), {0}, partName)) {
-                    result.emplace_back(std::move(*imageData));
-                } else {
+                auto imageData = co_await decodeSingleTrackImage(const_cast<heif_track*>(track), partName);
+                if (!imageData) {
                     break;
                 }
+
+                result.emplace_back(std::move(*imageData));
             }
         }
 
@@ -613,7 +636,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     vector<heif_item_id> imageIds(numImages);
     heif_context_get_list_of_top_level_image_IDs(ctx, imageIds.data(), (int)numImages);
 
-    const auto decodeTopLevelImgIdAndAuxImages = [&](heif_item_id id, string partName) -> Task<void> {
+    const auto decodeTopLevelImgIdAndAuxImages = [&](heif_item_id id, string partName) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding top-level HEIF image ID '{}'", id);
 
         heif_image_handle* imgHandle;
@@ -622,8 +645,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         }
 
         // Read main image
-        result.emplace_back(co_await decodeImageHandle(imgHandle, false, {0}, partName, partName));
-        ImageData& mainImage = result.back();
+        auto mainImage = co_await decodeImageHandle(imgHandle, false, partName, partName);
 
         optional<Exif> exif;
         optional<IsoGainMapMetadata> isoGainMapMetadata;
@@ -773,9 +795,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 continue;
             }
 
-            auto auxImgData = co_await decodeImageHandle(
-                auxImgHandle, isGainmap, mainImage.channels.front().size(), Channel::joinIfNonempty(partName, auxLayerName), partName
-            );
+            auto auxImgData = co_await decodeImageHandle(auxImgHandle, isGainmap, Channel::joinIfNonempty(partName, auxLayerName), partName);
 
             if (isGainmap) {
                 optional<chroma_t> altImgChroma = nullopt;
@@ -865,16 +885,22 @@ Task<vector<ImageData>> HeifImageLoader::load(
         if (isoGainMapMetadata) {
             mainImage.attributes.emplace_back(isoGainMapMetadata->toAttributes());
         }
+
+        co_return mainImage;
     };
 
+    vector<Task<ImageData>> decodeTasks;
     for (size_t i = 0; i < numImages; ++i) {
         const heif_item_id id = imageIds[i];
         const string partName = numImages > 1 ? fmt::format("frames.{}", id) : "";
 
-        co_await decodeTopLevelImgIdAndAuxImages(id, partName);
+        decodeTasks.emplace_back([](auto id, auto partName, auto& decode, auto priority) -> Task<ImageData> {
+            co_await ThreadPool::global().enqueueCoroutine(priority);
+            co_return co_await decode(id, partName);
+        }(id, partName, decodeTopLevelImgIdAndAuxImages, priority));
     }
 
-    co_return result;
+    co_return co_await awaitAll(span{decodeTasks});
 }
 
 } // namespace tev
