@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/RawImageLoader.h>
@@ -284,9 +285,12 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
-    const int numChannels = 3;
+    const size_t numChannels = 3;
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+    const bool hasAlpha = numChannels == 4;
+
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, 4, numChannels == 4, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        numChannels, numInterleavedChannels, hasAlpha, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
     resultData.hasPremultipliedAlpha = false;
     // resultData.displayWindow = displayWindow; // This seems to be wrong
@@ -303,7 +307,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
                 const auto fi = flip_index({x, y}, orientedSize, flip);
                 const size_t j = (size_t)fi.y() * orientedSize.x() + fi.x();
 
-                for (int c = 0; c < numChannels; c++) {
+                for (size_t c = 0; c < numChannels; c++) {
                     resultData.channels[c].setAt(j, imgData[i][c] / 65535.0f);
                 }
             }
