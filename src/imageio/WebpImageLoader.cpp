@@ -102,8 +102,9 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         }
     }
 
-    const int numChannels = 4;
-    const int numColorChannels = 3;
+    const size_t numChannels = 4;
+    const size_t numColorChannels = 3;
+    const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     const uint32_t width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
     const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
@@ -175,7 +176,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
             resultData.partName = isAnimation ? fmt::format("frames.{}", frameIdx++) : "";
             resultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, 4, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+                numChannels, numInterleavedChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );
 
             resultData.hasPremultipliedAlpha = false;
@@ -209,7 +210,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         EPixelFormat::F32,
                         (uint8_t*)iccTmpFloatData.data(),
                         frameData.data(),
-                        4,
+                        numInterleavedChannels,
                         nullopt,
                         priority
                     );
@@ -218,7 +219,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {
                 co_await toFloat32<uint8_t, true, true>(
-                    (uint8_t*)data, numChannels, frameData.data(), 4, frameSize, numChannels == 4, priority
+                    (uint8_t*)data, numChannels, frameData.data(), numInterleavedChannels, frameSize, numChannels == 4, priority
                 );
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
@@ -241,7 +242,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         const Vector2i framePos = {x - iter.x_offset, y - iter.y_offset};
                         const bool isInFrame = Box2i{frameSize}.contains(framePos);
 
-                        for (int c = 0; c < numChannels; ++c) {
+                        for (size_t c = 0; c < numChannels; ++c) {
                             const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
 
                             const float bg = useBg ? bgColor[c] : prevCanvas[canvasSampleIdx];
@@ -250,7 +251,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                             if (isInFrame) {
                                 const size_t framePixelIdx = (size_t)framePos.y() * frameSize.x() + (size_t)framePos.x();
                                 const size_t frameSampleIdx = framePixelIdx * numChannels + c;
-                                const size_t frameAlphaIdx = framePixelIdx * numChannels + 3;
+                                const size_t frameAlphaIdx = framePixelIdx * numChannels + numInterleavedChannels - 1;
 
                                 if (iter.blend_method == WEBP_MUX_NO_BLEND) {
                                     val = frameData[frameSampleIdx];
