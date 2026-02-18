@@ -654,9 +654,9 @@ Task<vector<ImageData>> HeifImageLoader::load(
             }
         }};
 
-        if (const int numAux = heif_image_handle_get_number_of_auxiliary_images(imgHandle, 0); numAux > 0) {
+        if (const int numAux = heif_image_handle_get_number_of_auxiliary_images(imgHandle, LIBHEIF_AUX_IMAGE_FILTER_OMIT_ALPHA); numAux > 0) {
             auxIds.resize((size_t)numAux);
-            heif_image_handle_get_list_of_auxiliary_image_IDs(imgHandle, 0, auxIds.data(), numAux);
+            heif_image_handle_get_list_of_auxiliary_image_IDs(imgHandle, LIBHEIF_AUX_IMAGE_FILTER_OMIT_ALPHA, auxIds.data(), numAux);
 
             for (const auto auxId : auxIds) {
                 if (heif_image_handle* auxImgHandle;
