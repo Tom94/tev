@@ -1451,16 +1451,17 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
     // 24 bpp images have no alpha channel, but all others can have one, depending on the color masks.
     const bool hasAlpha = colorBpp != 24;
-    const size_t numChannels = numColorChannels + (hasAlpha ? 1 : 0);
-    const size_t numPixels = (size_t)dib.width * dib.height;
+    const auto numChannels = numColorChannels + (hasAlpha ? 1 : 0);
+    const auto numPixels = (size_t)dib.width * dib.height;
 
     const auto size = Vector2i{dib.width, dib.height};
 
     vector<ImageData> result(1);
     ImageData& resultData = result[0];
 
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, 4, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
     );
     resultData.hasPremultipliedAlpha = !hasAlpha;
 
@@ -1532,13 +1533,13 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                 }
 
                 const size_t idx = (size_t)outputY * dib.width + x;
-                for (size_t c = 0; c < 3; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     floatData[idx * numChannels + c] = scale[c] == 0.0f ? 0.0f : (rgba[c] * scale[c]);
                 }
 
                 if (hasAlpha) {
                     const float alpha = scale[3] == 0.0f ? 1.0f : (rgba[3] * scale[3]);
-                    floatData[idx * numChannels + 3] = alpha;
+                    floatData[idx * numChannels + numColorChannels] = alpha;
 
                     if (alpha != 0.0f) {
                         allTransparent.store(false, memory_order_relaxed);
@@ -1552,7 +1553,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     if (allTransparent) {
         tlog::debug() << "BMP image is fully transparent; flipping to all opaque";
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numPixels, numPixels * 4, [&](size_t i) { floatData[i * 4 + 3] = 1.0f; }, priority
+            0, numPixels, numPixels, [&](size_t i) { floatData[i * numChannels + numColorChannels] = 1.0f; }, priority
         );
     }
 
@@ -1601,26 +1602,30 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
-        numPixels * 4,
+        numPixels * numChannels,
         [&](size_t i) {
             for (size_t c = 0; c < numChannels; ++c) {
-                float& dst = dstData[i * 4 + c];
-                dst = floatData[i * numChannels + c];
-
-                const bool invertTransfer = c < 3 && dib.bitsPerPixel != 64;
+                float val = floatData[i * numChannels + c];
+                if (hasAlpha && c == numColorChannels) {
+                    dstData[i * numInterleavedChannels + numInterleavedChannels - 1] = val;
+                    continue;
+                }
 
                 // 64bpp seems to be an HDR format with linear channels
+                const bool invertTransfer = dib.bitsPerPixel != 64;
                 if (invertTransfer) {
                     const float g = c < 3 ? effectiveGamma[c] : 0.0f;
 
                     // Modern browsers / image viewers treat untagged BMPs as sRGB, so we do the same. But if a gamma is explicitly
                     // specified in the header, we respect that instead.
                     if (g > 0.0f) {
-                        dst = powf(dst, g);
+                        val = powf(val, g);
                     } else {
-                        dst = toLinear(dst);
+                        val = toLinear(val);
                     }
                 }
+
+                dstData[i * numInterleavedChannels + c] = val;
             }
         },
         priority
