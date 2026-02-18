@@ -395,18 +395,14 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     resultData.dataWindow = resultData.displayWindow = region;
 
     const bool hasAlpha = numChannels == 2 || numChannels >= 4;
-    const auto numInterleavedChannels = numChannels == 1 ? 1 : 4;
     const auto numRgbaChannels = std::min(numChannels, (size_t)4);
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
     const auto numColorChannels = hasAlpha ? numRgbaChannels - 1 : numRgbaChannels;
-    const auto numExtraChannels = numChannels > 4 ? numChannels - 4 : 0;
+    const auto numExtraChannels = numChannels > numRgbaChannels ? numChannels - numRgbaChannels : 0;
 
-    if (numInterleavedChannels == 1) {
-        resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
-    } else {
-        resultData.channels = co_await makeRgbaInterleavedChannels(
-            numRgbaChannels, 4, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
-        );
-    }
+    resultData.channels = co_await makeRgbaInterleavedChannels(
+        numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+    );
 
     for (size_t c = 0; c < numExtraChannels; ++c) {
         resultData.channels.emplace_back(fmt::format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
@@ -436,7 +432,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             size.y(),
             numPixels * numExtraChannels,
             [&](int y) {
-                for (size_t c = 4; c < numChannels; ++c) {
+                for (size_t c = numRgbaChannels; c < numChannels; ++c) {
                     for (int x = 0; x < size.x(); ++x) {
                         resultData.channels[c].setAt({x, y}, getChannelValue(c, x, y));
                     }
@@ -451,10 +447,6 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         TEV_ASSERT(numColorChannels > 0 && numColorChannels <= 3, "Invalid number of color channels.");
         TEV_ASSERT(outNumChannels >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
         TEV_ASSERT(outNumChannels <= 4, "Output buffer cannot have more than 4 channels.");
-
-        const auto outNumColorChannels = hasAlpha ? outNumChannels - 1 : outNumChannels;
-        TEV_ASSERT(outNumColorChannels >= numColorChannels, "Output buffer must have enough color channels.");
-        TEV_ASSERT(outNumColorChannels > 0, "Output buffer must have at least one color channel.");
 
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
@@ -477,7 +469,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                         }
                     }
 
-                    for (size_t c = 0; c < outNumColorChannels; ++c) {
+                    for (size_t c = 0; c < numColorChannels; ++c) {
                         rgba[((size_t)y * size.x() + x) * outNumChannels + c] = rgb[std::min(c, numColorChannels - 1)];
                     }
 
