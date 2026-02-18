@@ -331,15 +331,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         const EPixelFormat desiredFormat = bitsPerChannel == 32 ? EPixelFormat::F32 : EPixelFormat::F16;
 
-        const size_t numInterleavedChannels = numChannels == 1 ? 1 : 4;
+        const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         const bool hasAlpha = numChannels == 2 || numChannels == 4;
-        if (numInterleavedChannels == 1) {
-            resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, desiredFormat);
-        } else {
-            resultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
-            );
-        }
+        resultData.channels = co_await makeRgbaInterleavedChannels(
+            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
+        );
 
         const auto numSamplesPerRow = (size_t)size.x() * numChannels;
         const auto numSamples = numSamplesPerRow * size.y();

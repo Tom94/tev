@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/QoiImageLoader.h>
 
@@ -46,43 +47,48 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     iStream.read(data.data(), dataSize);
 
     qoi_desc desc;
-    void* decodedData = qoi_decode(data.data(), static_cast<int>(dataSize), &desc, 0);
+    void* decodedData = qoi_decode(data.data(), (int)dataSize, &desc, 0);
 
-    ScopeGuard decodedDataGuard{[decodedData] { free(decodedData); }};
+    const ScopeGuard decodedDataGuard{[decodedData] { free(decodedData); }};
 
     if (!decodedData) {
         throw ImageLoadError{"Failed to decode data from the QOI format."};
     }
 
-    Vector2i size{static_cast<int>(desc.width), static_cast<int>(desc.height)};
-    auto numPixels = (size_t)size.x() * size.y();
+    const Vector2i size{(int)desc.width, (int)desc.height};
+    const auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw ImageLoadError{"Image has zero pixels."};
     }
 
-    int numChannels = static_cast<int>(desc.channels);
+    const auto numChannels = (size_t)desc.channels;
     if (numChannels != 4 && numChannels != 3) {
         throw ImageLoadError{fmt::format("Invalid number of channels {}.", numChannels)};
     }
+
+    const bool hasAlpha = numChannels == 4;
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
     // QOI images are 8 bit per pixel which easily fits into F16.
-    resultData.channels = co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
+    resultData.channels = co_await makeRgbaInterleavedChannels(
+        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
+    );
     resultData.hasPremultipliedAlpha = false;
 
     resultData.nativeMetadata.chroma = rec709Chroma();
 
     if (desc.colorspace == QOI_LINEAR) {
         co_await toFloat32<uint8_t, false>(
-            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
+            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
         );
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
         co_await toFloat32<uint8_t, true>(
-            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
+            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
         );
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
@@ -84,8 +85,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     // Determine number of channels
-    int numColorChannels = 0;
-    int numChannels = 0;
+    size_t numColorChannels = 0;
+    size_t numChannels = 0;
     switch (colorType) {
         case PNG_COLOR_TYPE_GRAY: numColorChannels = numChannels = 1; break;
         case PNG_COLOR_TYPE_GRAY_ALPHA:
@@ -309,6 +310,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     const bool hasAlpha = numChannels > numColorChannels;
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     png_bytep iccProfileData = nullptr;
     png_charp iccProfileName = nullptr;
@@ -330,7 +332,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
     HeapArray<png_byte> pngData(numPixels * numBytesPerPixel);
-    HeapArray<float> frameData(numSamples);
+    HeapArray<float> frameData(numPixels * numInterleavedChannels);
     HeapArray<float> iccTmpFloatData;
     if (iccProfileData) {
         // If we have an ICC profile, we need to convert the frame data to float first.
@@ -355,7 +357,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
         resultData.channels = co_await makeRgbaInterleavedChannels(
-            numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
         resultData.orientation = orientation;
@@ -418,17 +420,19 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
         const size_t numFrameSamples = numFramePixels * numChannels;
-        if (numFrameSamples > frameData.size()) {
+        const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
+        if (numInterleavedFrameSamples > frameData.size()) {
             tlog::warning() << fmt::format(
                 "PNG frame data is larger than allocated buffer. Allocating {} bytes instead of {} bytes.",
-                numFrameSamples * sizeof(float),
+                numInterleavedFrameSamples * sizeof(float),
                 frameData.size() * sizeof(float)
             );
 
-            frameData = HeapArray<float>(numFrameSamples);
-            if (iccProfileData) {
-                iccTmpFloatData = HeapArray<float>(numFrameSamples);
-            }
+            frameData = HeapArray<float>(numInterleavedFrameSamples);
+        }
+
+        if (iccProfileData && numFrameSamples > iccTmpFloatData.size()) {
+            iccTmpFloatData = HeapArray<float>(numFrameSamples);
         }
 
         for (int y = 0; y < frameSize.y(); ++y) {
@@ -503,9 +507,11 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (bitDepth == 16) {
-                    co_await toFloat32<uint16_t, false>((uint16_t*)pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                    co_await toFloat32<uint16_t, false>(
+                        (uint16_t*)pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
+                    );
                 } else {
-                    co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                    co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority);
                 }
 
                 co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -513,15 +519,15 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     numPixels,
                     numSamples,
                     [&](size_t i) {
-                        const float alpha = dstData[i * 4 + 3];
-                        Vector3f color;
-                        for (int c = 0; c < 3; ++c) {
-                            color[c] = (dstData[i * 4 + c] - range.offset) * range.scale;
+                        const float alpha = hasAlpha ? dstData[i * numInterleavedChannels + numInterleavedChannels - 1] : 1.0f;
+                        Vector3f color = {0.0f};
+                        for (size_t c = 0; c < numColorChannels; ++c) {
+                            color[c] = (dstData[i * numInterleavedChannels + c] - range.offset) * range.scale;
                         }
 
                         color = ituth273::invTransfer(cicp.transfer, color) * alpha;
-                        for (int c = 0; c < 3; ++c) {
-                            dstData[i * 4 + c] = color[c];
+                        for (size_t c = 0; c < numColorChannels; ++c) {
+                            dstData[i * numInterleavedChannels + c] = color[c];
                         }
                     },
                     priority
@@ -553,7 +559,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                         EPixelFormat::F32,
                         (uint8_t*)iccTmpFloatData.data(),
                         dstData,
-                        4,
+                        numInterleavedChannels,
                         nullopt,
                         priority
                     );
@@ -590,9 +596,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (bitDepth == 16) {
-                    co_await toFloat32<uint16_t, true, true>((uint16_t*)pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                    co_await toFloat32<uint16_t, true, true>(
+                        (uint16_t*)pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
+                    );
                 } else {
-                    co_await toFloat32<uint8_t, true, true>(pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                    co_await toFloat32<uint8_t, true, true>(
+                        pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
+                    );
                 }
 
                 resultData.hasPremultipliedAlpha = true;
@@ -602,9 +612,11 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
             tlog::debug() << fmt::format("Using gamma={}", invGamma64);
             if (bitDepth == 16) {
-                co_await toFloat32<uint16_t, false>((uint16_t*)pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                co_await toFloat32<uint16_t, false>(
+                    (uint16_t*)pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
+                );
             } else {
-                co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, 4, size, hasAlpha, priority);
+                co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority);
             }
 
             co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -612,9 +624,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 numPixels,
                 numSamples,
                 [&](size_t i) {
-                    const float alpha = dstData[i * 4 + 3];
-                    for (int c = 0; c < 3; ++c) {
-                        dstData[i * 4 + c] = pow(dstData[i * 4 + c], gamma) * alpha;
+                    const float alpha = hasAlpha ? dstData[i * numInterleavedChannels + numInterleavedChannels - 1] : 1.0f;
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        dstData[i * numInterleavedChannels + c] = pow(dstData[i * numInterleavedChannels + c], gamma) * alpha;
                     }
                 },
                 priority
@@ -659,21 +671,22 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
                         bool isInFrame = Box2i{frameSize}.contains(framePos);
 
-                        for (int c = 0; c < numChannels; ++c) {
-                            const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
+                        for (size_t c = 0; c < numChannels; ++c) {
+                            const auto canvasSampleIdx = canvasPixelIdx * numInterleavedChannels + c;
                             float val;
 
                             // The background (if no previous canvas is set) is defined as transparent black per the spec.
                             const float bg = prevCanvas ? prevCanvas[canvasSampleIdx] : 0.0f;
                             if (isInFrame) {
-                                const size_t framePixelIdx = (size_t)framePos.y() * frameSize.x() + (size_t)framePos.x();
-                                const size_t frameSampleIdx = framePixelIdx * numChannels + c;
-                                const size_t frameAlphaIdx = framePixelIdx * numChannels + 3;
+                                const auto framePixelIdx = (size_t)framePos.y() * frameSize.x() + framePos.x();
+                                const auto frameSampleIdx = framePixelIdx * numInterleavedChannels + c;
+                                const auto frameAlphaIdx = framePixelIdx * numInterleavedChannels + numInterleavedChannels - 1;
 
                                 if (blendOp == EBlendOp::Source) {
                                     val = dstData[frameSampleIdx];
                                 } else {
-                                    val = dstData[frameSampleIdx] + bg * (1.0f - dstData[frameAlphaIdx]);
+                                    const float alpha = hasAlpha ? dstData[frameAlphaIdx] : 1.0f;
+                                    val = dstData[frameSampleIdx] + bg * (1.0f - alpha);
                                 }
                             } else {
                                 val = bg;

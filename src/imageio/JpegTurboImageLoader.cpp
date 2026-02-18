@@ -299,9 +299,8 @@ Task<vector<ImageData>>
                                 continue;
                             }
 
-                            tlog::debug() << fmt::format(
-                                "Adding MPF image #{} slice at offset {} of size {} bytes", i, imageDataOffset, slice.size()
-                            );
+                            tlog::debug()
+                                << fmt::format("Adding MPF image #{} slice at offset {} of size {} bytes", i, imageDataOffset, slice.size());
                             imageInfos.emplace_back(slice, idx, mfpTypeToString(iie.type()));
                         }
                     }
@@ -436,14 +435,10 @@ Task<vector<ImageData>>
 
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
         // fits into F16.
-        const size_t numInterleavedChannels = numColorChannels == 1 ? 1 : 4;
-        if (numInterleavedChannels == 1) {
-            resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
-        } else {
-            resultData.channels = co_await makeRgbaInterleavedChannels(
-                numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
-            );
-        }
+        const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numColorChannels);
+        resultData.channels = co_await makeRgbaInterleavedChannels(
+            numColorChannels, numInterleavedChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+        );
 
         // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
         resultData.hasPremultipliedAlpha = true;

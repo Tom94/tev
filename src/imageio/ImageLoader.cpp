@@ -126,28 +126,50 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
 }
 
 Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
-    int numChannels, bool hasAlpha, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer, int priority
+    size_t numChannels,
+    size_t numInterleavedDims,
+    bool hasAlpha,
+    const Vector2i& size,
+    EPixelFormat format,
+    EPixelFormat desiredFormat,
+    string_view layer,
+    int priority
 ) {
-    vector<Channel> channels;
-    if (numChannels > 4) {
-        throw ImageLoadError{"Image has too many RGBA channels."};
+    if (numChannels > 4 || numChannels == 0) {
+        throw ImageLoadError{"Invalid number of rgba channels."};
     }
 
-    const int numColorChannels = numChannels - (hasAlpha ? 1 : 0);
+    if (numInterleavedDims < numChannels) {
+        throw ImageLoadError{"Number of interleaved dimensions must be at least the number of channels."};
+    }
+
+    vector<Channel> channels;
+
+    const auto numColorChannels = numChannels - (hasAlpha ? 1 : 0);
     if (numColorChannels <= 0 || numColorChannels > 3) {
         throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
     const size_t numBytesPerSample = nBytes(format);
-    const auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * 4);
+    const auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * numInterleavedDims);
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
-    const auto init = [numPixels, priority](auto* ptr) -> Task<void> {
+    const auto init = [numPixels, numInterleavedDims, hasAlpha, priority](auto* ptr) -> Task<void> {
         using ptr_float_t = remove_pointer_t<decltype(ptr)>;
-        const ptr_float_t pattern[4] = {(ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)0.0, (ptr_float_t)1.0};
+        ptr_float_t pattern[4] = {(ptr_float_t)0.0f, (ptr_float_t)0.0f, (ptr_float_t)0.0f, (ptr_float_t)1.0f};
+        if (hasAlpha) {
+            pattern[numInterleavedDims - 1] = (ptr_float_t)1.0f;
+        }
+
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numPixels, numPixels, [pattern, ptr](size_t i) { memcpy(ptr + i * 4, pattern, sizeof(ptr_float_t) * 4); }, priority
+            0,
+            numPixels,
+            numPixels,
+            [pattern, numInterleavedDims, ptr](size_t i) {
+                memcpy(ptr + i * numInterleavedDims, pattern, sizeof(ptr_float_t) * numInterleavedDims);
+            },
+            priority
         );
     };
 
@@ -161,17 +183,25 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 
     if (numColorChannels > 1) {
         const vector<string_view> channelNames = {"R", "G", "B"};
-        for (int c = 0; c < numColorChannels; ++c) {
+        for (size_t c = 0; c < numColorChannels; ++c) {
             channels.emplace_back(
-                c < (int)channelNames.size() ? channelNames[c] : to_string(c), size, format, desiredFormat, data, c * numBytesPerSample, 4 * numBytesPerSample
+                c < channelNames.size() ? channelNames[c] : to_string(c),
+                size,
+                format,
+                desiredFormat,
+                data,
+                c * numBytesPerSample,
+                numInterleavedDims * numBytesPerSample
             );
         }
     } else {
-        channels.emplace_back("L", size, format, desiredFormat, data, 0, 4 * numBytesPerSample);
+        channels.emplace_back("L", size, format, desiredFormat, data, 0, numInterleavedDims * numBytesPerSample);
     }
 
     if (hasAlpha) {
-        channels.emplace_back("A", size, format, desiredFormat, data, 3 * numBytesPerSample, 4 * numBytesPerSample);
+        channels.emplace_back(
+            "A", size, format, desiredFormat, data, numColorChannels * numBytesPerSample, numInterleavedDims * numBytesPerSample
+        );
     }
 
     for (auto& channel : channels) {
@@ -182,9 +212,9 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 }
 
 vector<Channel>
-    ImageLoader::makeNChannels(int numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
+    ImageLoader::makeNChannels(size_t numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
     vector<Channel> channels;
-    for (int c = 0; c < numChannels; ++c) {
+    for (size_t c = 0; c < numChannels; ++c) {
         channels.emplace_back(to_string(c), size, format, desiredFormat);
     }
 

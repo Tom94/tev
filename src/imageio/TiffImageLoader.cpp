@@ -1198,19 +1198,20 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         numExtraChannels = 0;
     }
 
-    // Determine number of color channels
-    int numColorChannels = samplesPerPixel - numExtraChannels;
-    int numChannels = samplesPerPixel;
+    if (numExtraChannels >= samplesPerPixel) {
+        throw ImageLoadError{fmt::format("Invalid number of extra channels: {}", numExtraChannels)};
+    }
 
-    int numRgbaChannels = numColorChannels + (hasAlpha ? 1 : 0);
+    // Determine number of color channels
+    size_t numColorChannels = samplesPerPixel - numExtraChannels;
+    const size_t numChannels = samplesPerPixel;
+
+    size_t numRgbaChannels = numColorChannels + (hasAlpha ? 1 : 0);
     if (numRgbaChannels < 1 || numRgbaChannels > 4) {
         throw ImageLoadError{fmt::format("Unsupported number of RGBA channels: {}", numRgbaChannels)};
     }
 
-    int numNonRgbaChannels = numChannels - numRgbaChannels;
-    if (numNonRgbaChannels < 0) {
-        throw ImageLoadError{fmt::format("Invalid number of non-RGBA channels: {}", numNonRgbaChannels)};
-    }
+    const size_t numNonRgbaChannels = numChannels - numRgbaChannels;
 
     const uint16_t* palette[3] = {};
     if (photometric == PHOTOMETRIC_PALETTE) {
@@ -1262,11 +1263,13 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     resultData.orientation = static_cast<EOrientation>(orientation);
 
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+
     // Local scope to prevent use-after-move
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
         auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
-            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
+            numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
         auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 
@@ -1615,10 +1618,10 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
     }
 
-    bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
+    const bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
 
     // Convert all the extra channels to float and store them in the result data. No further processing needed.
-    for (int c = numChannels - numExtraChannels + (hasAlpha ? 1 : 0); c < numChannels; ++c) {
+    for (size_t c = numChannels - numExtraChannels + (hasAlpha ? 1 : 0); c < numChannels; ++c) {
         co_await tiffDataToFloat32<false>(
             kind,
             nullptr,
@@ -1635,7 +1638,55 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     }
 
     // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion
-    HeapArray<float> floatRgbaData(size.x() * (size_t)size.y() * numRgbaChannels);
+    // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
+    if (iccProfileData && iccProfileSize > 0) {
+        try {
+            HeapArray<float> iccTmpFloatData(size.x() * (size_t)size.y() * numRgbaChannels);
+            co_await tiffDataToFloat32<false>(
+                kind,
+                palette,
+                (uint32_t*)imageData.data(),
+                numChannels,
+                iccTmpFloatData.data(),
+                numRgbaChannels,
+                size,
+                hasAlpha,
+                priority,
+                intConversionScale,
+                flipWhiteAndBlack
+            );
+
+            const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
+            co_await toLinearSrgbPremul(
+                profile,
+                size,
+                numColorChannels,
+                hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
+                EPixelFormat::F32,
+                (uint8_t*)iccTmpFloatData.data(),
+                resultData.channels.front().floatData(),
+                numInterleavedChannels,
+                nullopt,
+                priority
+            );
+
+            resultData.hasPremultipliedAlpha = true;
+            resultData.readMetadataFromIcc(profile);
+
+            co_return resultData;
+        } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+    }
+
+    // Write directly into the final RGBA buffer if possible to save one copy, otherwise use a staging buffer.
+    HeapArray<float> floatRgbaDataBuffer;
+    span<float> floatRgbaData;
+    if (numRgbaChannels == numInterleavedChannels) {
+        floatRgbaData = {resultData.channels.front().floatData(), (size_t)size.x() * size.y() * numRgbaChannels};
+    } else {
+        floatRgbaDataBuffer.resize((size_t)size.x() * size.y() * numRgbaChannels);
+        floatRgbaData = floatRgbaDataBuffer;
+    }
+
     co_await tiffDataToFloat32<false>(
         kind,
         palette,
@@ -1649,30 +1700,6 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         intConversionScale,
         flipWhiteAndBlack
     );
-
-    // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
-    if (iccProfileData && iccProfileSize > 0) {
-        try {
-            const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
-            co_await toLinearSrgbPremul(
-                profile,
-                size,
-                numColorChannels,
-                hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                EPixelFormat::F32,
-                (uint8_t*)floatRgbaData.data(),
-                resultData.channels.front().floatData(),
-                4,
-                nullopt,
-                priority
-            );
-
-            resultData.hasPremultipliedAlpha = true;
-            resultData.readMetadataFromIcc(profile);
-
-            co_return resultData;
-        } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
-    }
 
     // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.
     if (compression == COMPRESSION_PIXARLOG) {
@@ -1695,9 +1722,11 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     }
 
-    co_await toFloat32<float, false>(
-        (const float*)floatRgbaData.data(), numRgbaChannels, resultData.channels.front().floatData(), 4, size, hasAlpha, priority
-    );
+    if (floatRgbaData.data() != resultData.channels.front().floatData()) {
+        co_await toFloat32<float, false>(
+            (const float*)floatRgbaData.data(), numRgbaChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
+        );
+    }
 
     co_return resultData;
 }

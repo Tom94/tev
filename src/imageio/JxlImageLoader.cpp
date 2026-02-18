@@ -385,13 +385,13 @@ Task<vector<ImageData>> JxlImageLoader::load(
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
                 // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all
                 // other extra channels to be decoded as separate channels.
-                int numColorChannels = info.num_color_channels + (info.alpha_bits ? 1 : 0);
-                int numExtraChannels = info.num_extra_channels;
+                const size_t numChannels = info.num_color_channels + (info.alpha_bits ? 1 : 0);
+                const size_t numExtraChannels = info.num_extra_channels;
 
                 size_t bufferSize;
 
                 // Main image buffer & decode setup
-                JxlPixelFormat imageFormat = {(uint32_t)numColorChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
+                JxlPixelFormat imageFormat = {(uint32_t)numChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(decoder.get(), &imageFormat, &bufferSize)) {
                     throw ImageLoadError{"Failed to get output buffer size."};
                 }
@@ -418,7 +418,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 vector<ExtraChannelInfo> extraChannels(numExtraChannels);
 
                 JxlPixelFormat extraChannelFormat = {1, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
-                for (int i = 0; i < numExtraChannels; ++i) {
+                for (size_t i = 0; i < numExtraChannels; ++i) {
                     ExtraChannelInfo& extraChannel = extraChannels[i];
 
                     JxlExtraChannelInfo extraChannelInfo;
@@ -476,8 +476,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 const Vector2i size{(int)info.xsize, (int)info.ysize};
 
+                const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
                 data.channels = co_await makeRgbaInterleavedChannels(
-                    numColorChannels,
+                    numChannels,
+                    numInterleavedChannels,
                     info.alpha_bits,
                     size,
                     EPixelFormat::F32,
@@ -520,7 +522,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             EPixelFormat::F32,
                             (uint8_t*)colorData.data(),
                             data.channels.front().floatData(),
-                            4,
+                            numInterleavedChannels,
                             nullopt,
                             priority
                         );
@@ -535,7 +537,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
                     co_await toFloat32(
-                        (float*)colorData.data(), numColorChannels, data.channels.front().floatData(), 4, size, info.alpha_bits, priority
+                        (float*)colorData.data(), numChannels, data.channels.front().floatData(), numInterleavedChannels, size, info.alpha_bits, priority
                     );
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
@@ -594,18 +596,19 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         co_await ThreadPool::global().parallelForAsync<size_t>(
                             0,
                             numPixels,
-                            numPixels * 4,
+                            numPixels * numInterleavedChannels,
                             [&](size_t i) {
                                 // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
                                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
                                 // See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
-                                const float alpha = info.alpha_bits ? pixelData[i * 4 + 3] : 1.0f;
+                                const float alpha = info.alpha_bits ? pixelData[i * numInterleavedChannels + numInterleavedChannels - 1] :
+                                                                      1.0f;
                                 const float factor = info.alpha_premultiplied && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                                 const float invFactor = info.alpha_premultiplied && alpha > 0.0001f ? alpha : 1.0f;
 
                                 Vector3f color;
-                                for (size_t c = 0; c < 3; ++c) {
-                                    color[c] = pixelData[i * 4 + c];
+                                for (uint32_t c = 0; c < info.num_color_channels; ++c) {
+                                    color[c] = pixelData[i * numInterleavedChannels + c];
                                 }
 
                                 if (hasGamma) {
@@ -614,8 +617,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                     color = ituth273::invTransfer(cicpTransfer, color * factor) * invFactor;
                                 }
 
-                                for (size_t c = 0; c < 3; ++c) {
-                                    pixelData[i * 4 + c] = color[c];
+                                for (uint32_t c = 0; c < info.num_color_channels; ++c) {
+                                    pixelData[i * numInterleavedChannels + c] = color[c];
                                 }
                             },
                             priority

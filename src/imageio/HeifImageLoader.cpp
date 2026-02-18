@@ -218,16 +218,13 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{"Row size not a multiple of sample size."};
         }
 
+        const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+
         // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
-        if (numChannels == 1) {
-            resultData.channels.emplace_back(Channel::joinIfNonempty(layer, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
-        } else {
-            resultData.channels =
-                co_await makeRgbaInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, layer, priority);
-        }
-
-        const int numInterleavedChannels = numChannels == 1 ? 1 : 4;
+        resultData.channels = co_await makeRgbaInterleavedChannels(
+            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, layer, priority
+        );
 
         const auto tryIccTransform = [&](const HeapArray<uint8_t>& iccProfile) -> Task<void> {
             HeapArray<float> dataF32((size_t)size.x() * size.y() * numChannels);
@@ -402,7 +399,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             [&](size_t i) {
                 // HEIF/AVIF unfortunately tends to have the alpha channel premultiplied in non-linear space (after application of the
                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
-                const float alpha = hasAlpha ? pixelData[i * 4 + 3] : 1.0f;
+                const float alpha = hasAlpha ? pixelData[i * numInterleavedChannels + numInterleavedChannels - 1] : 1.0f;
                 const float factor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                 const float invFactor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? alpha : 1.0f;
 

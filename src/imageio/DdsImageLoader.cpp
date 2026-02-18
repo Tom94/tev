@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/DdsImageLoader.h>
 
@@ -26,7 +27,7 @@ using namespace std;
 
 namespace tev {
 
-static int getDxgiChannelCount(DXGI_FORMAT fmt) {
+static size_t getDxgiChannelCount(DXGI_FORMAT fmt) {
     switch (fmt) {
         case DXGI_FORMAT_R32G32B32A32_TYPELESS:
         case DXGI_FORMAT_R32G32B32A32_FLOAT:
@@ -183,13 +184,12 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     DXGI_FORMAT format;
-    int numChannels = getDxgiChannelCount(metadata.format);
+    const size_t numChannels = getDxgiChannelCount(metadata.format);
     switch (numChannels) {
         case 4: format = DXGI_FORMAT_R32G32B32A32_FLOAT; break;
         case 3: format = DXGI_FORMAT_R32G32B32_FLOAT; break;
         case 2: format = DXGI_FORMAT_R32G32_FLOAT; break;
         case 1: format = DXGI_FORMAT_R32_FLOAT; break;
-        case 0:
         default: throw ImageLoadError{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
     }
 
@@ -217,8 +217,11 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
+    const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+    const bool hasAlpha = DirectX::HasAlpha(metadata.format);
+
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32, EPixelFormat::F32, "", priority
+        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F32, "", priority
     );
 
     const auto numPixels = (size_t)size.x() * size.y();
@@ -231,13 +234,13 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         // Assume that the image data is already in linear space.
         assert(!DirectX::IsSRGB(metadata.format));
         co_await toFloat32(
-            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
+            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
         );
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
         co_await toFloat32<float, true>(
-            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
+            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
         );
     }
 

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/StbiImageLoader.h>
 
@@ -45,7 +46,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     int numChannels;
     int numFrames = 1;
     Vector2i size;
-    bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &iStream) != 0;
+    const bool isHdr = stbi_is_hdr_from_callbacks(&callbacks, &iStream) != 0;
     iStream.clear();
     iStream.seekg(0);
 
@@ -79,6 +80,9 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
         throw ImageLoadError{"Image has zero pixels."};
     }
 
+    const bool hasAlpha = numChannels == 4;
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount((size_t)numChannels);
+
     ScopeGuard dataGuard{[data] { stbi_image_free(data); }};
 
     vector<ImageData> result(numFrames);
@@ -90,7 +94,14 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
         // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
         resultData.channels = co_await makeRgbaInterleavedChannels(
-            numChannels, numChannels == 4, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16, resultData.partName, priority
+            numChannels,
+            numInterleavedChannels,
+            hasAlpha,
+            size,
+            EPixelFormat::F32,
+            isHdr ? EPixelFormat::F32 : EPixelFormat::F16,
+            resultData.partName,
+            priority
         );
         resultData.hasPremultipliedAlpha = false;
         resultData.nativeMetadata.chroma = rec709Chroma();
@@ -101,7 +112,9 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
             resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
 
-            co_await toFloat32((float*)data, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority);
+            co_await toFloat32(
+                (float*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
+            );
             data = (float*)data + numPixels * numChannels;
         } else {
             // Assume sRGB-encoded LDR images are display-referred.
@@ -109,7 +122,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
             co_await toFloat32<uint8_t, true>(
-                (uint8_t*)data, numChannels, resultData.channels.front().floatData(), 4, size, numChannels == 4, priority
+                (uint8_t*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
             );
             data = (uint8_t*)data + numPixels * numChannels;
         }

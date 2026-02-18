@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/ClipboardImageLoader.h>
 
@@ -49,21 +50,23 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         throw ImageLoadError{"Image has zero pixels."};
     }
 
-    const auto numChannels = (int)(spec.bits_per_pixel / 8);
+    const auto numChannels = (size_t)(spec.bits_per_pixel / 8);
     if (numChannels > 4) {
         throw ImageLoadError{"Image has too many channels."};
     }
 
     const size_t numBytesPerRow = spec.bytes_per_row;
     const size_t numBytes = numBytesPerRow * size.y();
-    const int alphaChannelIndex = 3;
+    const size_t alphaChannelIndex = 3;
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
-    resultData.channels =
-        co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
+    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+    resultData.channels = co_await makeRgbaInterleavedChannels(
+        numChannels, numInterleavedChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
+    );
 
     HeapArray<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
@@ -78,8 +81,8 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         (size_t)(spec.alpha_shift / 8),
     };
 
-    for (int c = 0; c < numChannels; ++c) {
-        if (shifts[c] >= (size_t)numChannels) {
+    for (size_t c = 0; c < numChannels; ++c) {
+        if (shifts[c] >= numChannels) {
             throw ImageLoadError{"Invalid shift encountered in clipboard image."};
         }
     }
@@ -90,20 +93,20 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         size.y(),
         numPixels * numChannels,
         [&](int y) {
-            size_t rowIdxIn = y * numBytesPerRow;
-            size_t rowIdxOut = y * size.x() * numChannels;
+            const size_t rowIdxIn = y * numBytesPerRow;
+            const size_t rowIdxOut = y * size.x() * numInterleavedChannels;
 
             for (int x = 0; x < size.x(); ++x) {
                 float alpha = 1.0f;
 
                 const size_t baseIdxIn = rowIdxIn + x * numChannels;
-                const size_t baseIdxOut = rowIdxOut + x * numChannels;
+                const size_t baseIdxOut = rowIdxOut + x * numInterleavedChannels;
 
-                for (int c = numChannels - 1; c >= 0; --c) {
+                for (int c = (int)numChannels - 1; c >= 0; ++c) {
                     const unsigned char val = data[baseIdxIn + shifts[c]];
                     if (c == alphaChannelIndex) {
                         alpha = val / 255.0f;
-                        floatData[baseIdxOut + c] = alpha;
+                        floatData[baseIdxOut + numInterleavedChannels - 1] = alpha;
                     } else {
                         floatData[baseIdxOut + c] = toLinear(val / 255.0f) * alpha;
                     }
