@@ -478,6 +478,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 data.channels = co_await makeRgbaInterleavedChannels(
                     numColorChannels,
+                    4,
                     info.alpha_bits,
                     size,
                     EPixelFormat::F32,

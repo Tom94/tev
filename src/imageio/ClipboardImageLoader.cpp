@@ -63,7 +63,7 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
 
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
     resultData.channels =
-        co_await makeRgbaInterleavedChannels(numChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
+        co_await makeRgbaInterleavedChannels(numChannels, 4, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
     HeapArray<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);

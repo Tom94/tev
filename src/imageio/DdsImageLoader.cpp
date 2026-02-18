@@ -218,7 +218,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     ImageData& resultData = result.front();
 
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32, EPixelFormat::F32, "", priority
+        numChannels, 4, DirectX::HasAlpha(metadata.format), size, EPixelFormat::F32, EPixelFormat::F32, "", priority
     );
 
     const auto numPixels = (size_t)size.x() * size.y();

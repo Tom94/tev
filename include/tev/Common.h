@@ -472,6 +472,7 @@ inline bool matchesFuzzyOrRegex(std::string_view text, std::string_view filter, 
 void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string_view text, float shadowAlpha = 1.0f);
 
 int maxTextureSize();
+size_t nextSupportedTextureChannelCount(size_t channelCount);
 
 inline float toSRGB(float val, float gamma = 2.4f) {
     static constexpr float a = 0.055f;

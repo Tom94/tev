@@ -441,7 +441,7 @@ Task<vector<ImageData>>
             resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
         } else {
             resultData.channels = co_await makeRgbaInterleavedChannels(
-                numColorChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+                numColorChannels, 4, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );
         }
 

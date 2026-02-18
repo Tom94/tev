@@ -1460,7 +1460,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     ImageData& resultData = result[0];
 
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+        numChannels, 4, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
     );
     resultData.hasPremultipliedAlpha = !hasAlpha;
 

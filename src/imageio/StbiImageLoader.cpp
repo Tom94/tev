@@ -90,7 +90,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
         // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
         resultData.channels = co_await makeRgbaInterleavedChannels(
-            numChannels, numChannels == 4, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16, resultData.partName, priority
+            numChannels, 4, numChannels == 4, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16, resultData.partName, priority
         );
         resultData.hasPremultipliedAlpha = false;
         resultData.nativeMetadata.chroma = rec709Chroma();

@@ -337,7 +337,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, desiredFormat);
         } else {
             resultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
+                numChannels, 4, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
             );
         }
 

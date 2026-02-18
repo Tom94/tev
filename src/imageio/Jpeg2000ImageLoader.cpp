@@ -404,7 +404,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         resultData.channels.emplace_back(Channel::joinIfNonempty(resultData.partName, "L"), size, EPixelFormat::F32, EPixelFormat::F16);
     } else {
         resultData.channels = co_await makeRgbaInterleavedChannels(
-            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numRgbaChannels, 4, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
     }
 

@@ -286,7 +286,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     const int numChannels = 3;
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, numChannels == 4, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        numChannels, 4, numChannels == 4, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
     resultData.hasPremultipliedAlpha = false;
     // resultData.displayWindow = displayWindow; // This seems to be wrong

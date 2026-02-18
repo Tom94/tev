@@ -1266,7 +1266,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
         auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
-            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
+            numRgbaChannels, 4, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
         auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 

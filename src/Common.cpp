@@ -366,6 +366,21 @@ int maxTextureSize() {
 #endif
 }
 
+size_t nextSupportedTextureChannelCount(size_t channelCount) {
+    if (channelCount == 0 || channelCount > 4) {
+        throw runtime_error{fmt::format("Unsupported number of texture channels: {}", channelCount)};
+    }
+
+#if NANOGUI_USE_METAL
+    // Metal only supports 1, 2, and 4 channel textures.
+    if (channelCount == 3) {
+        return 4;
+    }
+#endif
+
+    return channelCount;
+}
+
 int lastError() {
 #ifdef _WIN32
     return GetLastError();
