@@ -27,7 +27,7 @@ using namespace std;
 namespace tev {
 
 pair<string_view, string_view> Channel::split(string_view channel) {
-    size_t dotPosition = channel.rfind(".");
+    const size_t dotPosition = channel.rfind(".");
     if (dotPosition != string::npos) {
         return {channel.substr(0, dotPosition + 1), channel.substr(dotPosition + 1)};
     }

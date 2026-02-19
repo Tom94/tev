@@ -33,6 +33,7 @@
 #include <istream>
 #include <map>
 #include <numeric>
+#include <ranges>
 #include <unordered_set>
 #include <vector>
 
@@ -903,7 +904,7 @@ vector<string> Image::channelsInGroup(string_view groupName) const {
 void Image::decomposeChannelGroup(string_view groupName) {
     // Takes all channels of a given group and turns them into individual groups.
 
-    auto group = find_if(mChannelGroups.begin(), mChannelGroups.end(), [&](const auto& g) { return g.name == groupName; });
+    const auto group = ranges::find(mChannelGroups, groupName, [](const auto& g) -> string_view { return g.name; });
     if (group == mChannelGroups.end()) {
         return;
     }
@@ -913,10 +914,8 @@ void Image::decomposeChannelGroup(string_view groupName) {
         return;
     }
 
-    auto groupPos = distance(mChannelGroups.begin(), group);
-    for (const auto& channel : channels) {
-        mChannelGroups.insert(mChannelGroups.begin() + (++groupPos), ChannelGroup{channel, {channel}});
-    }
+    const auto newGroups = channels | views::transform([](const auto& c) { return ChannelGroup{c, {c}}; });
+    mChannelGroups.insert(group + 1, newGroups.begin(), newGroups.end());
 
     // Duplicates may have appeared here. (E.g. when trying to decompose a single channel or when single-color channels appear multiple
     // times in their group to render as RGB rather than pure red.) Don't insert those.
