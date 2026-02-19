@@ -33,6 +33,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <sstream>
 #include <string>
@@ -446,6 +447,11 @@ template <typename T> std::string join(const T& components, std::string_view del
     }
 
     return s.str();
+}
+
+template <typename T> auto viewOptionals(std::span<std::optional<T>> optionals) {
+    return optionals | std::views::filter([](const auto& opt) { return opt.has_value(); }) |
+        std::views::transform([](auto&& opt) -> auto& { return *opt; });
 }
 
 // If `inclusive` is true, trailing delimiters are included in the resulting parts.

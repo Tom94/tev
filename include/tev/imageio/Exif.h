@@ -25,6 +25,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 
 struct _ExifData;
@@ -60,7 +61,7 @@ public:
 
     void reset();
 
-    Ifd tryGetAppleMakerNote() const;
+    std::optional<Ifd> tryGetAppleMakerNote() const;
 
     EOrientation getOrientation() const;
 
