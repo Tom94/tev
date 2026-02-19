@@ -112,7 +112,7 @@ public:
 
     std::shared_ptr<Lazy<std::shared_ptr<CanvasStatistics>>> canvasStatistics();
 
-    void purgeCanvasStatistics(int imageId);
+    void purgeCanvasStatistics(size_t imageId);
 
     float pixelRatio() const { return mPixelRatio; }
     void setPixelRatio(float ratio) { mPixelRatio = ratio; }
