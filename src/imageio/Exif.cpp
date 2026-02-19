@@ -62,11 +62,11 @@ Exif::Exif() {
                 case EXIF_LOG_CODE_DEBUG: tlog::debug() << m; break;
                 case EXIF_LOG_CODE_NO_MEMORY:
                     *error = true;
-                    tlog::error() << m;
+                    tlog::warning() << m;
                     break;
                 case EXIF_LOG_CODE_CORRUPT_DATA:
                     *error = true;
-                    tlog::error() << m;
+                    tlog::warning() << m;
                     break;
             }
         },
