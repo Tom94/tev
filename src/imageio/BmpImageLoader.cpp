@@ -1539,7 +1539,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
                 if (hasAlpha) {
                     const float alpha = scale[3] == 0.0f ? 1.0f : (rgba[3] * scale[3]);
-                    floatData[idx * numChannels + numColorChannels] = alpha;
+                    floatData[idx * numChannels + numChannels - 1] = alpha;
 
                     if (alpha != 0.0f) {
                         allTransparent.store(false, memory_order_relaxed);
@@ -1550,10 +1550,10 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         priority
     );
 
-    if (allTransparent) {
+    if (hasAlpha && allTransparent) {
         tlog::debug() << "BMP image is fully transparent; flipping to all opaque";
         co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numPixels, numPixels, [&](size_t i) { floatData[i * numChannels + numColorChannels] = 1.0f; }, priority
+            0, numPixels, numPixels, [&](size_t i) { floatData[i * numChannels + numChannels - 1] = 1.0f; }, priority
         );
     }
 
@@ -1569,7 +1569,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                 EPixelFormat::F32,
                 (uint8_t*)floatData.data(),
                 dstData,
-                4,
+                numInterleavedChannels,
                 renderingIntent,
                 priority
             );
