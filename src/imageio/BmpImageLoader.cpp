@@ -1474,23 +1474,21 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         numPixels * numChannels,
         [&](int y) {
             const size_t rowStart = y * bytesPerRow;
+            const size_t outputY = flipVertically ? dib.height - 1 - y : y;
 
+            bool rowAllTransparent = true;
             for (int x = 0; x < size.x(); ++x) {
-                const size_t outputY = flipVertically ? dib.height - 1 - y : y;
-
                 int32_t rgba[4] = {};
                 auto& [r, g, b, a] = rgba;
                 a = alphaMax;
 
-                const size_t pixelByte = rowStart + (size_t)x * dib.bitsPerPixel / 8;
-
-                uint8_t* pixelPtr = pixelData.data() + pixelByte;
+                const size_t pixelBit = (size_t)x * dib.bitsPerPixel;
+                const size_t pixelByte = pixelBit / 8;
+                uint8_t* pixelPtr = pixelData.data() + rowStart + pixelByte;
 
                 if (hasPalette) {
-                    const size_t pixelBit = (size_t)x * dib.bitsPerPixel;
-                    const size_t pixelByte = pixelBit / 8;
+                    const size_t byte = *pixelPtr;
                     const size_t pixelBitOffset = pixelBit - pixelByte * 8;
-                    const size_t byte = pixelData[rowStart + pixelByte];
                     const size_t paletteIdx = (byte >> (8 - pixelBitOffset - dib.bitsPerPixel)) & ((1 << dib.bitsPerPixel) - 1);
 
                     const auto paletteByteIdx = std::min(paletteIdx * paletteEntrySize, palette.size() - paletteEntrySize);
@@ -1542,9 +1540,13 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                     floatData[idx * numChannels + numChannels - 1] = alpha;
 
                     if (alpha != 0.0f) {
-                        allTransparent.store(false, memory_order_relaxed);
+                        rowAllTransparent = false;
                     }
                 }
+            }
+
+            if (hasAlpha && !rowAllTransparent) {
+                allTransparent.store(false, memory_order_relaxed);
             }
         },
         priority
