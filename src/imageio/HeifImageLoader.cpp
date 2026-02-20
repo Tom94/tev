@@ -184,7 +184,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const int numColorChannels = hasAlpha ? numChannels - 1 : numChannels;
 
         ImageData resultData;
-        resultData.hasPremultipliedAlpha = hasAlpha && heif_image_is_premultiplied_alpha(img);
+        resultData.hasPremultipliedAlpha = !hasAlpha || heif_image_is_premultiplied_alpha(img);
         resultData.partName = partName;
 
         const Vector2i size = {heif_image_get_primary_width(img), heif_image_get_primary_height(img)};
