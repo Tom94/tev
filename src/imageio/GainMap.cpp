@@ -115,6 +115,7 @@ Task<void> preprocessAndApplyAppleGainMap(
     float maker48 = 8.0f;
 
     if (amn.has_value()) {
+        tlog::debug() << "Apple gain map: found maker note data. Attempting to read maker notes #33 and #48 for gain map weight calculation...";
         maker33 = amn->tryGet<float>(33).value_or(maker33);
         maker48 = amn->tryGet<float>(48).value_or(maker48);
     }

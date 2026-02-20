@@ -28,6 +28,11 @@
 
 #include <jpeglib.h>
 
+#include <optional>
+#include <span>
+#include <unordered_set>
+#include <vector>
+
 using namespace nanogui;
 using namespace std;
 
@@ -56,7 +61,7 @@ Task<vector<ImageData>>
 
     unordered_set<ptrdiff_t> seenOffsets; // to avoid processing the same data multiple times
 
-    struct GainmapInfo {
+    struct IsoGainmapInfo {
         IsoGainMapMetadata metadata;
         optional<chroma_t> chroma = nullopt;
     };
@@ -66,14 +71,17 @@ Task<vector<ImageData>>
         size_t parentIndex = 0;
         string partName = "";
 
-        unique_ptr<GainmapInfo> gainmapInfo = nullptr;
+        optional<Ifd> appleMakerNoteIfd = nullopt;
+        optional<IsoGainmapInfo> isoGainmapInfo = nullopt;
+        bool isAppleGainmap = false;
+
+        bool isGainmap() const { return isoGainmapInfo || isAppleGainmap; }
     };
 
     vector<ImageInfo> imageInfos;
-    imageInfos.emplace_back(span<const uint8_t>{buffer}, 0, "");
+    imageInfos.emplace_back(span<const uint8_t>{buffer}, 0);
 
-    const auto decodeJpeg =
-        [priority, &seenOffsets, &imageInfos, &buffer](span<const uint8_t> data, size_t idx, string partName) -> Task<ImageData> {
+    const auto decodeJpeg = [priority, &seenOffsets, &imageInfos, &buffer](span<const uint8_t> data, size_t idx) -> Task<ImageData> {
         struct jpeg_decompress_struct cinfo;
         struct jpeg_error_mgr jerr;
 
@@ -171,6 +179,42 @@ Task<vector<ImageData>>
             throw ImageLoadError{"Failed to read JPEG header."};
         }
 
+        cinfo.quantize_colors = false;
+
+        jpeg_start_decompress(&cinfo);
+
+        Vector2i size{static_cast<int>(cinfo.output_width), static_cast<int>(cinfo.output_height)};
+        if (size.x() == 0 || size.y() == 0) {
+            throw ImageLoadError{"Image has zero pixels."};
+        }
+
+        // JPEG does not support alpha, so all channels are color channels.
+        int numColorChannels = cinfo.output_components;
+        if (numColorChannels != 1 && numColorChannels != 3) {
+            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
+        }
+
+        tlog::debug() << fmt::format("JPEG image info: size={} numColorChannels={}", size, numColorChannels);
+
+        // Allocate memory for image data
+        auto numPixels = static_cast<size_t>(size.x()) * size.y();
+        auto numBytesPerPixel = numColorChannels;
+        Channel::Data imageData(numPixels * numBytesPerPixel);
+
+        // Create row pointers for libjpeg and then read image
+        HeapArray<JSAMPROW> rowPointers(size.y());
+        for (int y = 0; y < size.y(); ++y) {
+            rowPointers[y] = &imageData[y * size.x() * numBytesPerPixel];
+        }
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        }
+
+        jpeg_finish_decompress(&cinfo);
+
+        ImageData resultData;
+
         if (!appN.mpf.empty()) {
             tlog::debug() << fmt::format("Found MPF data of size {} bytes", appN.mpf.size());
 
@@ -203,13 +247,9 @@ Task<vector<ImageData>>
                     // TODO: extract metadata from attribute tags if present
 
                     const uint16_t numImages = ifd.tryGet<uint16_t>((uint16_t)EMpfTag::NumberOfImages).value_or(0);
-                    if (numImages > 0) {
+                    const auto* iiTag = ifd.tag((uint16_t)EMpfTag::MPEntry);
+                    if (numImages > 0 && iiTag) {
                         tlog::debug() << fmt::format("MPF number of sub-images: {}", numImages);
-
-                        const auto* iiTag = ifd.tag((uint16_t)EMpfTag::MPEntry);
-                        if (!iiTag) {
-                            throw invalid_argument{"MPF: Missing ImageInformationArray tag or zero images."};
-                        }
 
                         enum class EMpfImageType : uint32_t {
                             Undefined = 0x000000,
@@ -269,11 +309,14 @@ Task<vector<ImageData>>
                                 iie.dependentImage2EntryNumber
                             );
 
+                            const string partName = fmt::format("{}.{}", mfpTypeToString(iie.type()), idx + i);
+
                             // Skip images with zero offset: those are the one we're already reading. But: in this case we should overwrite
-                            // the part name if we're not the primary image. (Primary image should have empty part name.)
+                            // the part name if we're not the top-level primary image. (Primary image should have empty part name.)
                             if (iie.offset == 0) {
-                                if (iie.type() != EMpfImageType::Primary) {
-                                    partName = mfpTypeToString(iie.type());
+                                const bool isTopLevelPrimary = idx == 0 && iie.type() == EMpfImageType::Primary;
+                                if (!isTopLevelPrimary) {
+                                    resultData.partName = partName;
                                 }
 
                                 continue;
@@ -293,7 +336,7 @@ Task<vector<ImageData>>
                                 continue;
                             }
 
-                            const auto slice = span<const uint8_t>{imageData, iie.size}; // +4 to account for JPEG SOI and EOI marker
+                            const auto slice = span<const uint8_t>{imageData, iie.size};
                             if (slice.data() + slice.size() > buffer.data() + buffer.size()) {
                                 tlog::warning() << fmt::format("MPF image #{} exceeds buffer bounds, skipping", i);
                                 continue;
@@ -301,7 +344,8 @@ Task<vector<ImageData>>
 
                             tlog::debug()
                                 << fmt::format("Adding MPF image #{} slice at offset {} of size {} bytes", i, imageDataOffset, slice.size());
-                            imageInfos.emplace_back(slice, idx, mfpTypeToString(iie.type()));
+
+                            imageInfos.emplace_back(slice, idx, partName);
                         }
                     }
                 };
@@ -319,48 +363,17 @@ Task<vector<ImageData>>
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read MPF data: {}", e.what()); }
         }
 
-        cinfo.quantize_colors = false;
+        // Important to take this reference *after* processing the MPF data because that may add entries to imageInfos, which would
+        // invalidate references taken beforehand.
+        auto& imageInfo = imageInfos.at(idx);
 
-        jpeg_start_decompress(&cinfo);
-
-        Vector2i size{static_cast<int>(cinfo.output_width), static_cast<int>(cinfo.output_height)};
-        if (size.x() == 0 || size.y() == 0) {
-            throw ImageLoadError{"Image has zero pixels."};
+        if (resultData.partName.empty()) {
+            resultData.partName = imageInfo.partName;
         }
-
-        // JPEG does not support alpha, so all channels are color channels.
-        int numColorChannels = cinfo.output_components;
-        if (numColorChannels != 1 && numColorChannels != 3) {
-            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
-        }
-
-        tlog::debug() << fmt::format("JPEG image info: size={} numColorChannels={}", size, numColorChannels);
-
-        // Allocate memory for image data
-        auto numPixels = static_cast<size_t>(size.x()) * size.y();
-        auto numBytesPerPixel = numColorChannels;
-        Channel::Data imageData(numPixels * numBytesPerPixel);
-
-        // Create row pointers for libjpeg and then read image
-        HeapArray<JSAMPROW> rowPointers(size.y());
-        for (int y = 0; y < size.y(); ++y) {
-            rowPointers[y] = &imageData[y * size.x() * numBytesPerPixel];
-        }
-
-        while (cinfo.output_scanline < cinfo.output_height) {
-            jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-        }
-
-        jpeg_finish_decompress(&cinfo);
-
-        ImageData resultData;
-        resultData.partName = partName.empty() ? "" : fmt::format("{}.{}", partName, idx);
-
-        EOrientation orientation = EOrientation::None;
-        optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
 
         // Per ISO 21496-1, an sRGB color space exif setting takes precedence over ICC profiles
         bool forceSrgb = false;
+        EOrientation orientation = EOrientation::None;
 
         if (!appN.exif.empty()) {
             tlog::debug() << fmt::format("Found EXIF data of size {} bytes", appN.exif.size());
@@ -379,21 +392,12 @@ Task<vector<ImageData>>
                     orientation = exifOrientation;
                     tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
                 }
+
+                imageInfo.appleMakerNoteIfd = exif.tryGetAppleMakerNote();
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
         }
 
-        if (!appN.iso.empty()) {
-            tlog::debug() << fmt::format("Found binary ISO 21496-1 data of size {} bytes", appN.iso.size());
-
-            try {
-                if (appN.iso.size() <= 4) {
-                    const auto isoGainmapVersion = IsoGainMapVersion{appN.iso};
-                    tlog::debug() << fmt::format("ISO 21496-1 version info only: '{}'", isoGainmapVersion.toString());
-                } else {
-                    isoGainmapMetadata = IsoGainMapMetadata{appN.iso};
-                }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read ISO 21496-1 version data: {}", e.what()); }
-        }
+        optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
 
         if (!appN.xmp.empty()) {
             const string_view xmpDataView = string_view{(const char*)appN.xmp.data(), appN.xmp.size()};
@@ -409,8 +413,15 @@ Task<vector<ImageData>>
                     tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
                 }
 
-                if (!isoGainmapMetadata.has_value()) {
-                    isoGainmapMetadata = xmp.isoGainMapMetadata();
+                isoGainmapMetadata = xmp.isoGainMapMetadata();
+
+                if (!xmp.appleAuxImgType().empty()) {
+                    tlog::debug() << fmt::format("Found Apple auxiliary image type in XMP: '{}'", xmp.appleAuxImgType());
+                    resultData.partName = xmp.appleAuxImgType();
+                    ranges::replace(resultData.partName, ':', '.');
+
+                    imageInfo.isAppleGainmap = resultData.partName.find("apple") != string::npos &&
+                        resultData.partName.find("hdrgainmap") != string::npos;
                 }
             } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
         }
@@ -419,18 +430,24 @@ Task<vector<ImageData>>
             size = co_await orientToTopLeft(EPixelFormat::U8, imageData, size, orientation, priority);
         }
 
-        auto& imageInfo = imageInfos.at(idx);
+        if (!appN.iso.empty()) {
+            tlog::debug() << fmt::format("Found binary ISO 21496-1 data of size {} bytes", appN.iso.size());
+
+            try {
+                if (appN.iso.size() <= 4) {
+                    const auto isoGainmapVersion = IsoGainMapVersion{appN.iso};
+                    tlog::debug() << fmt::format("ISO 21496-1 version info only: '{}'", isoGainmapVersion.toString());
+                } else {
+                    isoGainmapMetadata = IsoGainMapMetadata{appN.iso};
+                }
+            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read ISO 21496-1 version data: {}", e.what()); }
+        }
+
         if (isoGainmapMetadata.has_value()) {
             tlog::debug() << fmt::format("Gain map metadata version '{}'", isoGainmapMetadata->version().toString());
             resultData.attributes.emplace_back(isoGainmapMetadata->toAttributes());
-            resultData.partName = fmt::format("gainmap", idx);
-
-            // Gain map images are handled specially later. They will become part of a larger HDR image rather than a separate image.
-            if (imageInfo.parentIndex != idx) {
-                imageInfo.gainmapInfo = make_unique<GainmapInfo>(isoGainmapMetadata.value());
-            } else {
-                tlog::warning() << "Gain map image has itself as parent. Treating as regular image.";
-            }
+            resultData.partName = "gainmap";
+            imageInfo.isoGainmapInfo = make_optional<IsoGainmapInfo>(*isoGainmapMetadata);
         }
 
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
@@ -457,8 +474,10 @@ Task<vector<ImageData>>
 
                     // Per ISO 21496-1, gain maps should be loaded as-is in their encoded color space (except for the conversion from
                     // YCbCr), and their ICC profile should only be used for its chroma at gain map application time.
-                    if (imageInfo.gainmapInfo) {
-                        imageInfo.gainmapInfo->chroma = profile.chroma();
+                    if (imageInfo.isGainmap()) {
+                        if (imageInfo.isoGainmapInfo) {
+                            imageInfo.isoGainmapInfo->chroma = profile.chroma();
+                        }
 
                         co_await toFloat32<uint8_t, false>(
                             imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
@@ -489,7 +508,7 @@ Task<vector<ImageData>>
             }
         }
 
-        if (imageInfo.gainmapInfo) {
+        if (imageInfo.isGainmap()) {
             co_await toFloat32<uint8_t, false>(
                 imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
             );
@@ -509,33 +528,47 @@ Task<vector<ImageData>>
     vector<int> resultIndices;
 
     for (size_t i = 0; i < imageInfos.size(); ++i) {
-        auto imageData = co_await decodeJpeg(imageInfos[i].data, i, imageInfos[i].partName);
+        auto imageData = co_await decodeJpeg(imageInfos[i].data, i);
 
         // Danger: imageInfos may grow due to decodeJpeg adding MPF images!
         const auto& imageInfo = imageInfos[i];
-        if (!imageInfo.gainmapInfo) {
+        if (!imageInfo.isGainmap()) {
             // Non-gainmap images are added directly to the result set and not processed further
             result.emplace_back(std::move(imageData));
             resultIndices.emplace_back(i);
             continue;
-        } else {
-            resultIndices.emplace_back(-1);
         }
 
+        resultIndices.emplace_back(-1);
+
         if (imageInfo.parentIndex >= resultIndices.size() || resultIndices.at(imageInfo.parentIndex) == -1) {
-            tlog::warning() << fmt::format("Gain map image has invalid parent index {}, skipping.", imageInfo.parentIndex);
+            tlog::warning() << fmt::format("Gain map image {} has invalid parent index {}, skipping.", i, imageInfo.parentIndex);
             continue;
         }
 
+        if (imageInfo.parentIndex == i) {
+            tlog::warning() << fmt::format("Gain map image {} has itself as parent. Skipping.", i);
+            continue;
+        }
+
+        tlog::debug() << fmt::format("Applying gain map from image {} to parent image {}.", i, imageInfo.parentIndex);
+
         const auto resultIndex = resultIndices.at(imageInfo.parentIndex);
-
+        const auto& mainImageInfo = imageInfos.at(imageInfo.parentIndex);
         auto& mainImage = result.at(resultIndex);
-        const auto& gainmapInfo = *imageInfo.gainmapInfo;
-        mainImage.attributes.emplace_back(gainmapInfo.metadata.toAttributes());
 
-        co_await preprocessAndApplyIsoGainMap(
-            mainImage, imageData, gainmapInfo.metadata, mainImage.nativeMetadata.chroma, gainmapInfo.chroma, gainmapHeadroom, priority
-        );
+        // ISO gain maps take precedence over Apple gain maps. Former is a newer standard all big companies agreed on, latter is an older
+        // proprietary Apple thing. Many images are dual-encoded for backwards compatibility, so prefer the standardized on in that case.
+        if (imageInfo.isoGainmapInfo) {
+            const auto& isoMetadata = imageInfo.isoGainmapInfo->metadata;
+            mainImage.attributes.emplace_back(isoMetadata.toAttributes());
+
+            co_await preprocessAndApplyIsoGainMap(
+                mainImage, imageData, isoMetadata, mainImage.nativeMetadata.chroma, imageInfo.isoGainmapInfo->chroma, gainmapHeadroom, priority
+            );
+        } else if (imageInfo.isAppleGainmap) {
+            co_await preprocessAndApplyAppleGainMap(mainImage, imageData, mainImageInfo.appleMakerNoteIfd, gainmapHeadroom, priority);
+        }
 
         mainImage.channels.insert(
             mainImage.channels.end(), make_move_iterator(imageData.channels.begin()), make_move_iterator(imageData.channels.end())
