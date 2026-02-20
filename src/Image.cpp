@@ -781,7 +781,6 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         case 1: pixelFormat = Texture::PixelFormat::R; break;
         case 2: pixelFormat = Texture::PixelFormat::RA; break;
         case 3: pixelFormat = Texture::PixelFormat::RGB; break;
-        // case 3: pixelFormat = Texture::PixelFormat::RGBA; break; // Uncomment for faster GPU uploads at the cost of memory
         case 4: pixelFormat = Texture::PixelFormat::RGBA; break;
         default: throw runtime_error{"Unsupported number of channels for texture."};
     }
@@ -840,6 +839,11 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         mName,
         join(channelNames, ",")
     );
+
+    ScopeGuard guard{[now = chrono::system_clock::now()]() {
+        const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
+        tlog::debug() << fmt::format("Upload took {:.03}s", duration.count());
+    }};
 
     shared_ptr<Channel::Data> dataPtr = nullptr;
 
