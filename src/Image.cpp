@@ -406,10 +406,6 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             }
 
             *data = std::move(convertedData);
-
-            tlog::debug() << fmt::format(
-                "Converted {} channels from {} to {}.", distance(rangeBegin, rangeEnd), toString(sourceFormat), toString(targetFormat)
-            );
         },
         priority
     );
@@ -522,12 +518,10 @@ void ImageData::updateLayers() {
 }
 
 Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
+    tlog::debug() << "Ensuring image is valid...";
+
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
-    }
-
-    if (orientation != EOrientation::TopLeft) {
-        co_await orientToTopLeft(taskPriority);
     }
 
     // No data window? Default to the channel size
@@ -584,10 +578,18 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     updateLayers();
 
     if (!hasPremultipliedAlpha) {
+        tlog::debug() << fmt::format("- Multiplying alpha");
         co_await multiplyAlpha(taskPriority);
     }
 
-    co_await convertToRec709(taskPriority);
+    TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
+
+    if (toRec709 != Matrix3f{1.0f}) {
+        tlog::debug() << fmt::format("- Converting to Rec.709 D65");
+        co_await convertToRec709(taskPriority);
+    }
+
+    TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 
     // NOTE: Lossy compression seems to ruin reliable derivations of the white level from maxCLL values. maxFALL values should work in
     // principle, but the only dataset I have with those is https://people.csail.mit.edu/ericchan/hdr/ where the maxFALL values seem to be
@@ -595,10 +597,15 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     // co_await deriveWhiteLevelFromMetadata(taskPriority);
 
+    tlog::debug() << fmt::format("- Converting to desired pixel format");
     co_await convertToDesiredPixelFormat(taskPriority);
 
-    TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
-    TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
+    if (orientation != EOrientation::TopLeft) {
+        tlog::debug() << fmt::format("- Orienting to top-left");
+        co_await orientToTopLeft(taskPriority);
+    }
+
+    TEV_ASSERT(orientation == EOrientation::TopLeft, "tev assumes an internal top-left orientation.");
 
     attributes.emplace_back(hdrMetadata.toAttributes());
 
