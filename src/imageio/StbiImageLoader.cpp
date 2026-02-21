@@ -103,7 +103,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.partName,
             priority
         );
-        resultData.hasPremultipliedAlpha = false;
+        resultData.hasPremultipliedAlpha = !hasAlpha;
         resultData.nativeMetadata.chroma = rec709Chroma();
 
         const auto numPixels = (size_t)size.x() * size.y();

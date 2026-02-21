@@ -292,7 +292,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     resultData.channels = co_await makeRgbaInterleavedChannels(
         numChannels, numInterleavedChannels, hasAlpha, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
-    resultData.hasPremultipliedAlpha = false;
+    resultData.hasPremultipliedAlpha = !hasAlpha;
     // resultData.displayWindow = displayWindow; // This seems to be wrong
 
     const auto* imgData = iProcessor.imgdata.image;

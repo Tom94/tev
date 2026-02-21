@@ -1171,7 +1171,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     // Check if we have an alpha channel
     bool hasAlpha = false;
-    bool hasPremultipliedAlpha = false;
+    bool hasPremultipliedAlpha = true; // No alpha is treated as premultiplied
     uint16_t* extraChannelTypes = nullptr;
     uint16_t numExtraChannels = 0;
 
@@ -1186,14 +1186,15 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
                     throw ImageLoadError{"Alpha channel must be the first extra channel."};
                 }
 
-                hasPremultipliedAlpha = extraChannelTypes[i] == EXTRASAMPLE_ASSOCALPHA;
                 hasAlpha = true;
+                hasPremultipliedAlpha = extraChannelTypes[i] == EXTRASAMPLE_ASSOCALPHA;
             }
         }
     } else if (samplesPerPixel == 2 || samplesPerPixel == 4) {
         tlog::warning() << "Assuming alpha channel for 2 or 4 samples per pixel.";
         numExtraChannels = 1;
         hasAlpha = true;
+        hasPremultipliedAlpha = false; // Assume unassociated alpha if not specified
     } else {
         numExtraChannels = 0;
     }
@@ -1363,7 +1364,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     tile.size = std::max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
 
     tlog::debug() << fmt::format(
-        "tile: size={}, count={}, width={}, height={}, numX={}, numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
+        "tile: size={} count={} width={} height={} numX={} numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
     );
 
     if (planar == PLANARCONFIG_SEPARATE && tile.count % samplesPerPixel != 0) {

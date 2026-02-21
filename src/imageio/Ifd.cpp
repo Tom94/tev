@@ -98,7 +98,7 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
         ofs += 12;
         mTags[entry.tag] = entry;
 
-        tlog::debug() << fmt::format("  tag={} format={} components={}", entry.tag, (int)entry.format, entry.nComponents);
+        tlog::debug() << fmt::format("  tag={:04X}/{} format={} components={}", entry.tag, entry.tag, (int)entry.format, entry.nComponents);
     }
 
     if (ofs + 4 <= data.size()) {

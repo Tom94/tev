@@ -34,11 +34,13 @@ public:
     const AttributeNode& attributes() const { return mAttributes; }
     EOrientation orientation() const { return mOrientation; }
     const std::optional<IsoGainMapMetadata>& isoGainMapMetadata() const { return mIsoGainMapMetadata; }
+    std::string_view appleAuxImgType() const { return mAppleAuxImgType; }
 
 private:
     AttributeNode mAttributes;
     EOrientation mOrientation = EOrientation::None;
     std::optional<IsoGainMapMetadata> mIsoGainMapMetadata;
+    std::string mAppleAuxImgType = "";
 };
 
 } // namespace tev

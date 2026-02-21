@@ -488,7 +488,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     priority
                 );
 
-                data.hasPremultipliedAlpha = info.alpha_premultiplied;
+                // If there's no alpha channel, treat as premultiplied (by 1)
+                data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
 
                 // JXL's orientation values match EXIF orientation tags (which also match our EOrientation enum).
                 data.orientation = (EOrientation)info.orientation;

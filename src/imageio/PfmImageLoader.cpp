@@ -479,7 +479,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         resultData.nativeMetadata.transfer = pfm ? ituth273::ETransfer::Linear : ituth273::ETransfer::SRGB;
         resultData.nativeMetadata.chroma = rec709Chroma();
 
-        resultData.hasPremultipliedAlpha = false;
+        resultData.hasPremultipliedAlpha = !hasAlpha;
 
         co_return result;
     };

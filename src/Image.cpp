@@ -33,6 +33,7 @@
 #include <istream>
 #include <map>
 #include <numeric>
+#include <ranges>
 #include <unordered_set>
 #include <vector>
 
@@ -405,10 +406,6 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             }
 
             *data = std::move(convertedData);
-
-            tlog::debug() << fmt::format(
-                "Converted {} channels from {} to {}.", distance(rangeBegin, rangeEnd), toString(sourceFormat), toString(targetFormat)
-            );
         },
         priority
     );
@@ -521,12 +518,10 @@ void ImageData::updateLayers() {
 }
 
 Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
+    tlog::debug() << "Ensuring image is valid...";
+
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
-    }
-
-    if (orientation != EOrientation::TopLeft) {
-        co_await orientToTopLeft(taskPriority);
     }
 
     // No data window? Default to the channel size
@@ -583,10 +578,18 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     updateLayers();
 
     if (!hasPremultipliedAlpha) {
+        tlog::debug() << fmt::format("- Multiplying alpha");
         co_await multiplyAlpha(taskPriority);
     }
 
-    co_await convertToRec709(taskPriority);
+    TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
+
+    if (toRec709 != Matrix3f{1.0f}) {
+        tlog::debug() << fmt::format("- Converting to Rec.709 D65");
+        co_await convertToRec709(taskPriority);
+    }
+
+    TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
 
     // NOTE: Lossy compression seems to ruin reliable derivations of the white level from maxCLL values. maxFALL values should work in
     // principle, but the only dataset I have with those is https://people.csail.mit.edu/ericchan/hdr/ where the maxFALL values seem to be
@@ -594,10 +597,15 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     // co_await deriveWhiteLevelFromMetadata(taskPriority);
 
+    tlog::debug() << fmt::format("- Converting to desired pixel format");
     co_await convertToDesiredPixelFormat(taskPriority);
 
-    TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
-    TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");
+    if (orientation != EOrientation::TopLeft) {
+        tlog::debug() << fmt::format("- Orienting to top-left");
+        co_await orientToTopLeft(taskPriority);
+    }
+
+    TEV_ASSERT(orientation == EOrientation::TopLeft, "tev assumes an internal top-left orientation.");
 
     attributes.emplace_back(hdrMetadata.toAttributes());
 
@@ -903,7 +911,7 @@ vector<string> Image::channelsInGroup(string_view groupName) const {
 void Image::decomposeChannelGroup(string_view groupName) {
     // Takes all channels of a given group and turns them into individual groups.
 
-    auto group = find_if(mChannelGroups.begin(), mChannelGroups.end(), [&](const auto& g) { return g.name == groupName; });
+    const auto group = ranges::find(mChannelGroups, groupName, [](const auto& g) -> string_view { return g.name; });
     if (group == mChannelGroups.end()) {
         return;
     }
@@ -913,10 +921,8 @@ void Image::decomposeChannelGroup(string_view groupName) {
         return;
     }
 
-    auto groupPos = distance(mChannelGroups.begin(), group);
-    for (const auto& channel : channels) {
-        mChannelGroups.insert(mChannelGroups.begin() + (++groupPos), ChannelGroup{channel, {channel}});
-    }
+    const auto newGroups = channels | views::transform([](const auto& c) { return ChannelGroup{c, {c}}; });
+    mChannelGroups.insert(group + 1, newGroups.begin(), newGroups.end());
 
     // Duplicates may have appeared here. (E.g. when trying to decompose a single channel or when single-color channels appear multiple
     // times in their group to render as RGB rather than pure red.) Don't insert those.

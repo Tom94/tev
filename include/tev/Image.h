@@ -29,6 +29,7 @@
 
 #include <nanogui/texture.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <istream>
@@ -142,7 +143,7 @@ struct ImageData {
     bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }
 
     const Channel* channel(std::string_view channelName) const {
-        auto it = std::find_if(std::begin(channels), std::end(channels), [&channelName](const Channel& c) { return c.name() == channelName; });
+        const auto it = std::ranges::find(channels, channelName, [](const auto& c) { return c.name(); });
         if (it != std::end(channels)) {
             return &(*it);
         } else {
@@ -151,7 +152,7 @@ struct ImageData {
     }
 
     Channel* mutableChannel(std::string_view channelName) {
-        auto it = std::find_if(std::begin(channels), std::end(channels), [&channelName](const Channel& c) { return c.name() == channelName; });
+        const auto it = std::ranges::find(channels, channelName, [](const auto& c) { return c.name(); });
         if (it != std::end(channels)) {
             return &(*it);
         } else {

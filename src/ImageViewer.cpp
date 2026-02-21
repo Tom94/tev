@@ -966,11 +966,12 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
 #else
         } else if (key == GLFW_KEY_F2) {
 #endif
-            if (mCurrentImage) {
-                int id = imageId(mCurrentImage);
-                dynamic_cast<ImageButton*>(mImageButtonContainer->child_at(id))->showTextBox();
+            const auto id = imageId(mCurrentImage);
+            if (id.has_value()) {
+                dynamic_cast<ImageButton*>(mImageButtonContainer->child_at(*id))->showTextBox();
                 requestLayoutUpdate();
             }
+
             return true;
         } else if (key == GLFW_KEY_N) {
             normalizeExposureAndOffset();
@@ -1531,17 +1532,17 @@ void ImageViewer::moveImageInList(size_t oldIndex, size_t newIndex) {
 }
 
 void ImageViewer::removeImage(shared_ptr<Image> image) {
-    int id = imageId(image);
-    if (id == -1) {
+    const auto id = imageId(image);
+    if (!id) {
         return;
     }
 
     if (mDragType == EMouseDragType::ImageButtonDrag) {
         // If we're currently dragging the to-be-removed image, stop.
-        if ((size_t)id == mDraggedImageButtonId) {
+        if (id == mDraggedImageButtonId) {
             requestLayoutUpdate();
             mDragType = EMouseDragType::None;
-        } else if ((size_t)id < mDraggedImageButtonId) {
+        } else if (id < mDraggedImageButtonId) {
             --mDraggedImageButtonId;
         }
     }
@@ -1563,8 +1564,8 @@ void ImageViewer::removeImage(shared_ptr<Image> image) {
     // TODO: Remove once a fix exists.
     request_focus();
 
-    mImages.erase(begin(mImages) + id);
-    mImageButtonContainer->remove_child_at(id);
+    mImages.erase(begin(mImages) + *id);
+    mImageButtonContainer->remove_child_at((int)*id);
 
     if (mImages.empty()) {
         selectImage(nullptr);
@@ -1607,40 +1608,37 @@ void ImageViewer::replaceImage(shared_ptr<Image> image, shared_ptr<Image> replac
         throw runtime_error{"Must not replace image with nullptr."};
     }
 
-    const int currentId = imageId(mCurrentImage);
-    const int id = imageId(image);
-    if (id == -1) {
+    const auto currentId = imageId(mCurrentImage);
+    const auto id = imageId(image);
+    if (!id) {
         addImage(replacement, shallSelect);
         return;
     }
 
     // Preserve image button caption when replacing an image
-    ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[id]);
+    ImageButton* ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children().at(*id));
     const string caption{ib->caption()};
 
     // If we already have the image selected, we must re-select it regardless of the `shallSelect` parameter.
     shallSelect |= currentId == id;
 
-    int referenceId = imageId(mCurrentReference);
+    const auto referenceId = imageId(mCurrentReference);
 
     removeImage(image);
-    insertImage(replacement, id, shallSelect);
+    insertImage(replacement, *id, shallSelect);
 
-    ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children()[id]);
+    ib = dynamic_cast<ImageButton*>(mImageButtonContainer->children().at(*id));
     ib->setCaption(caption);
 
-    if (referenceId != -1) {
-        selectReference(mImages[referenceId]);
+    if (referenceId) {
+        selectReference(mImages.at(*referenceId));
     }
 }
 
 void ImageViewer::reloadImage(shared_ptr<Image> image, bool shallSelect) {
-    int id = imageId(image);
-    if (id == -1) {
-        return;
+    if (imageId(image)) {
+        mImagesLoader->enqueue(image->path(), image->channelSelector(), shallSelect, image);
     }
-
-    mImagesLoader->enqueue(image->path(), image->channelSelector(), shallSelect, image);
 }
 
 void ImageViewer::reloadAllImages() {
@@ -1745,7 +1743,7 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
         return;
     }
 
-    size_t id = (size_t)std::max(0, imageId(image));
+    const auto id = imageId(image).value_or(0);
 
     // Don't do anything if the image that wants to be selected is not visible.
     if (!mImageButtonContainer->child_at((int)id)->visible()) {
@@ -1769,8 +1767,8 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
 
     const size_t numGroups = mCurrentImage->channelGroups().size();
     for (size_t i = 0; i < numGroups; ++i) {
-        auto group = groupName(i);
-        auto button = new ImageButton{mGroupButtonContainer, group, false};
+        const auto group = groupName(i);
+        const auto button = new ImageButton{mGroupButtonContainer, group, false};
         button->set_font_size(15);
         button->setId(i + 1);
 
@@ -1813,9 +1811,9 @@ void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback)
     }
 }
 
-void ImageViewer::selectGroup(string group) {
+void ImageViewer::selectGroup(string_view group) {
     // If the group does not exist, select the first group.
-    size_t id = (size_t)std::max(0, groupId(group));
+    const auto id = groupId(group).value_or(0);
 
     auto& buttons = mGroupButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
@@ -1866,7 +1864,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
         return;
     }
 
-    size_t id = (size_t)std::max(0, imageId(image));
+    const auto id = imageId(image).value_or(0);
 
     auto& buttons = mImageButtonContainer->children();
     for (size_t i = 0; i < buttons.size(); ++i) {
@@ -2770,7 +2768,7 @@ void ImageViewer::updateTitle() {
     set_caption(caption.str());
 }
 
-string ImageViewer::groupName(size_t index) {
+string_view ImageViewer::groupName(size_t index) {
     if (!mCurrentImage) {
         return "";
     }
@@ -2780,45 +2778,37 @@ string ImageViewer::groupName(size_t index) {
     return groups[index].name;
 }
 
-int ImageViewer::groupId(string_view groupName) const {
+optional<size_t> ImageViewer::groupId(string_view groupName) const {
     if (!mCurrentImage) {
         return 0;
     }
 
-    const auto& groups = mCurrentImage->channelGroups();
-    size_t pos = 0;
-    for (; pos < groups.size(); ++pos) {
-        if (groups[pos].name == groupName) {
-            break;
-        }
-    }
-
-    return pos >= groups.size() ? -1 : (int)pos;
+    const auto groups = mCurrentImage->channelGroups();
+    const auto pos = (size_t)distance(begin(groups), ranges::find(groups, groupName, [](const auto& g) -> string_view { return g.name; }));
+    return pos >= groups.size() ? nullopt : optional{pos};
 }
 
-int ImageViewer::imageId(const shared_ptr<Image>& image) const {
-    auto pos = static_cast<size_t>(distance(begin(mImages), find(begin(mImages), end(mImages), image)));
-    return pos >= mImages.size() ? -1 : (int)pos;
+optional<size_t> ImageViewer::imageId(const shared_ptr<Image>& image) const {
+    const auto pos = (size_t)distance(begin(mImages), ranges::find(mImages, image));
+    return pos >= mImages.size() ? nullopt : optional{pos};
 }
 
-int ImageViewer::imageId(string_view imageName) const {
-    auto pos = static_cast<size_t>(distance(begin(mImages), find_if(begin(mImages), end(mImages), [&](const shared_ptr<Image>& image) {
-                                                return image->name() == imageName;
-                                            })));
-    return pos >= mImages.size() ? -1 : (int)pos;
+optional<size_t> ImageViewer::imageId(string_view imageName) const {
+    const auto pos = (size_t)distance(begin(mImages), ranges::find(mImages, imageName, [](const auto& i) { return i->name(); }));
+    return pos >= mImages.size() ? nullopt : optional{pos};
 }
 
-string ImageViewer::nextGroup(string_view group, EDirection direction) {
+string_view ImageViewer::nextGroup(string_view group, EDirection direction) {
     if (mGroupButtonContainer->child_count() == 0) {
         return mCurrentGroup;
     }
 
-    int dir = direction == Forward ? 1 : -1;
+    const auto dir = direction == Forward ? 1 : -1;
 
     // If the group does not exist, start at index 0.
-    int startId = std::max(0, groupId(group));
+    const auto startId = (int)groupId(group).value_or(0);
 
-    int id = startId;
+    auto id = startId;
     do {
         id = (id + mGroupButtonContainer->child_count() + dir) % mGroupButtonContainer->child_count();
     } while (!mGroupButtonContainer->child_at(id)->visible() && id != startId);
@@ -2826,17 +2816,16 @@ string ImageViewer::nextGroup(string_view group, EDirection direction) {
     return groupName(id);
 }
 
-string ImageViewer::nthVisibleGroup(size_t n) {
-    string lastVisible = mCurrentGroup;
-    for (int i = 0; i < mGroupButtonContainer->child_count(); ++i) {
-        if (mGroupButtonContainer->child_at(i)->visible()) {
-            lastVisible = groupName(i);
-            if (n == 0) {
-                break;
-            }
-            --n;
-        }
+string_view ImageViewer::nthVisibleGroup(size_t n) {
+    auto visibleGroups = views::iota(0, mGroupButtonContainer->child_count()) |
+        views::filter([&](int i) { return mGroupButtonContainer->child_at(i)->visible(); }) |
+        views::transform([&](int i) { return groupName((size_t)i); }) | views::take(n + 1);
+
+    string_view lastVisible = mCurrentGroup;
+    for (auto group : visibleGroups) {
+        lastVisible = group;
     }
+
     return lastVisible;
 }
 
@@ -2845,17 +2834,17 @@ shared_ptr<Image> ImageViewer::nextImage(const shared_ptr<Image>& image, EDirect
         return nullptr;
     }
 
-    int dir = direction == Forward ? 1 : -1;
+    const auto dir = direction == Forward ? 1 : -1;
 
     // If the image does not exist, start at image 0.
-    int startId = std::max(0, imageId(image));
+    const auto startId = (int)imageId(image).value_or(0);
 
-    int id = startId;
+    auto id = startId;
     do {
         id = (id + mImageButtonContainer->child_count() + dir) % mImageButtonContainer->child_count();
     } while (!mImageButtonContainer->child_at(id)->visible() && id != startId);
 
-    return mImages[id];
+    return mImages.at(id);
 }
 
 shared_ptr<Image> ImageViewer::nthVisibleImage(size_t n) {
@@ -2869,16 +2858,13 @@ shared_ptr<Image> ImageViewer::nthVisibleImage(size_t n) {
             --n;
         }
     }
+
     return lastVisible;
 }
 
 shared_ptr<Image> ImageViewer::imageByName(string_view imageName) {
-    int id = imageId(imageName);
-    if (id != -1) {
-        return mImages[id];
-    } else {
-        return nullptr;
-    }
+    const auto id = imageId(imageName);
+    return id ? mImages.at(*id) : nullptr;
 }
 
 void ImageViewer::updateCurrentMonitorSize() {

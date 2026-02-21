@@ -100,7 +100,7 @@ public:
 
     void selectImage(const std::shared_ptr<Image>& image, bool stopPlayback = true);
 
-    void selectGroup(std::string name);
+    void selectGroup(std::string_view name);
 
     void selectReference(const std::shared_ptr<Image>& image);
 
@@ -218,14 +218,14 @@ private:
     void updateFilter();
     void updateLayout();
     void updateTitle();
-    std::string groupName(size_t index);
+    std::string_view groupName(size_t index);
 
-    int groupId(std::string_view groupName) const;
-    int imageId(const std::shared_ptr<Image>& image) const;
-    int imageId(std::string_view imageName) const;
+    std::optional<size_t> groupId(std::string_view groupName) const;
+    std::optional<size_t> imageId(const std::shared_ptr<Image>& image) const;
+    std::optional<size_t> imageId(std::string_view imageName) const;
 
-    std::string nextGroup(std::string_view groupName, EDirection direction);
-    std::string nthVisibleGroup(size_t n);
+    std::string_view nextGroup(std::string_view groupName, EDirection direction);
+    std::string_view nthVisibleGroup(size_t n);
 
     std::shared_ptr<Image> nextImage(const std::shared_ptr<Image>& image, EDirection direction);
     std::shared_ptr<Image> nthVisibleImage(size_t n);

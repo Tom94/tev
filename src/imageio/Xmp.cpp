@@ -84,7 +84,7 @@ Xmp::Xmp(string_view xmpData) {
 
             for (const auto& part : parts) {
                 // Search from the back because XMP properties are often nested in order.
-                const auto it = find_if(node->children.rbegin(), node->children.rend(), [&](const auto& child) { return child.name == part; });
+                const auto it = ranges::find(node->children | views::reverse, part, &AttributeNode::name);
 
                 if (it == node->children.rend()) {
                     node->children.emplace_back(AttributeNode{.name = string{part}, .value = "", .type = "", .children = {}});
@@ -128,16 +128,34 @@ Xmp::Xmp(string_view xmpData) {
             tlog::debug() << fmt::format("Found XMP orientation: {}", toString(mOrientation));
         }
 
+        // Metadata indicating this image is an Apple-format gain map. More metadata, like gain, is in Apple's maker note in a separate EXIF
+        // IFD, but the XMP metadata on the child image indicates whether there's a gain map.
+        {
+            const auto hdrGainMapNs = "http://ns.apple.com/HDRGainMap/1.0/";
+            const auto pixelDataNs = "http://ns.apple.com/pixeldatainfo/1.0/";
+            if (string prefix, version;
+                meta.GetNamespacePrefix(hdrGainMapNs, &prefix) && meta.GetProperty(hdrGainMapNs, "HDRGainMapVersion", &version, nullptr)) {
+                tlog::debug() << fmt::format("Found Apple HDR gain map metadata: prefix={} version={}", prefix, version);
+
+                if (string headroom; meta.GetProperty(hdrGainMapNs, "HDRGainMapHeadroom", &headroom, nullptr)) {
+                    tlog::debug() << fmt::format("- HDRGainMapHeadroom: {}", headroom);
+                }
+            }
+
+            if (string prefix; meta.GetNamespacePrefix(pixelDataNs, &prefix) &&
+                meta.GetProperty(pixelDataNs, "AuxiliaryImageType", &mAppleAuxImgType, nullptr)) {
+                tlog::debug() << fmt::format("Apple aux image: prefix={} type={}", prefix, mAppleAuxImgType);
+            }
+        }
+
+        // Adobe's XMP gain map metadata can be converted to ISO 21496-1 gain map metadata (both are compatible)
         try {
             const auto ns = "http://ns.adobe.com/hdr-gain-map/1.0/";
             if (string prefix, version; meta.GetNamespacePrefix(ns, &prefix) && meta.GetProperty(ns, "Version", &version, nullptr)) {
                 tlog::debug() << fmt::format("Found XMP gainmap metadata: prefix={} version={}", prefix, version);
 
-                const auto it = find_if(mAttributes.children.begin(), mAttributes.children.end(), [&](const auto& child) {
-                    return child.name.starts_with(prefix);
-                });
-
-                if (it != mAttributes.children.end() && it->children.size() > 1) {
+                if (const auto it = ranges::find_if(mAttributes.children, [&](const auto& c) { return c.name.starts_with(prefix); });
+                    it != mAttributes.children.end() && it->children.size() > 1) {
                     tlog::debug()
                         << "XMP gainmap metadata contains more entries than just Version. Attempting to convert to ISO 21496-1 format.";
                     mIsoGainMapMetadata = IsoGainMapMetadata{ns, &meta};

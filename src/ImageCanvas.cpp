@@ -733,8 +733,8 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
     return mCanvasStatistics.at(key);
 }
 
-void ImageCanvas::purgeCanvasStatistics(int imageId) {
-    for (const auto& key : mImageIdToCanvasStatisticsKey[imageId]) {
+void ImageCanvas::purgeCanvasStatistics(size_t imageId) {
+    for (const auto& key : mImageIdToCanvasStatisticsKey.at(imageId)) {
         mCanvasStatistics.erase(key);
     }
 
