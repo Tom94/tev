@@ -1394,7 +1394,7 @@ void ImageViewer::updateColorCapabilities() {
     const auto& cs = *mSystemColorSpace;
 
 #if defined(__APPLE__)
-    const auto [supportsWideGamut, supportsHdr] = metal_10bit_edr_support();
+    const auto [supportsWideGamut, supportsHdr] = test_10bit_edr_support();
     const bool supportsAbsoluteBrightness = false;
 #else // Linux and Windows
     const bool supportsExtendedRange = m_float_buffer || cs.transfer == ituth273::ETransfer::PQ || cs.transfer == ituth273::ETransfer::HLG;
