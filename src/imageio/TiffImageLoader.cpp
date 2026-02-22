@@ -62,6 +62,7 @@ string toString(ETiffKind kind) {
 template <bool SRGB_TO_LINEAR = false>
 Task<void> tiffDataToFloat32(
     ETiffKind kind,
+    const Vector2i& interleave,
     const uint16_t* __restrict palette[3],
     uint32_t* __restrict imageData,
     size_t numSppIn,
@@ -73,6 +74,50 @@ Task<void> tiffDataToFloat32(
     float scale,
     bool flipWhiteAndBlack
 ) {
+    HeapArray<uint8_t> interleavedImageData;
+    if (interleave != Vector2i{1, 1}) {
+        const size_t bytesPerSample = kind == ETiffKind::F64 ? 8 : 4;
+        const size_t numPixels = (size_t)size.x() * size.y();
+
+        interleavedImageData = HeapArray<uint8_t>(numPixels * numSppIn * bytesPerSample);
+
+        const auto parallelInterleave = [&](const auto* in, auto* out) -> Task<void> {
+            co_await ThreadPool::global().parallelForAsync<int>(
+                0,
+                size.y(),
+                numPixels * numSppIn,
+                [&](int y) {
+                    const size_t subY = y / interleave.y();
+                    const size_t interleaveY = y - subY * interleave.y();
+                    const size_t srcY = interleaveY * (size.y() / interleave.y()) + subY;
+
+                    for (int x = 0; x < size.x(); ++x) {
+                        const size_t subX = x / interleave.x();
+                        const size_t interleaveX = x - subX * interleave.x();
+                        const size_t srcX = interleaveX * (size.x() / interleave.x()) + subX;
+
+                        const size_t srcIndexBase = (srcY * size.x() + srcX) * numSppIn;
+                        const size_t dstIndexBase = (y * size.x() + x) * numSppIn;
+                        for (size_t c = 0; c < numSppIn; ++c) {
+                            out[dstIndexBase + c] = in[srcIndexBase + c];
+                        }
+                    }
+                },
+                priority
+            );
+        };
+
+        if (bytesPerSample == 8) {
+            co_await parallelInterleave((const uint64_t*)imageData, (uint64_t*)interleavedImageData.data());
+        } else if (bytesPerSample == 4) {
+            co_await parallelInterleave((const uint32_t*)imageData, (uint32_t*)interleavedImageData.data());
+        } else {
+            throw runtime_error{"Unsupported bytes per sample."};
+        }
+
+        imageData = (uint32_t*)interleavedImageData.data();
+    }
+
     // Convert lower-bit depth float formats to 32 bit
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
@@ -1156,8 +1201,45 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         throw ImageLoadError{"Image has zero pixels."};
     }
 
+    static const uint16_t TIFFTAG_COLINTERLEAVEFACTOR = 52547;
+
+    Vector2i interleave = {1, 1};
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_COLINTERLEAVEFACTOR, TIFF_ANY)) {
+        uint32_t numRead = 0;
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
+                    interleave.x() = *f;
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
+                    interleave.x() = (int)*f;
+                }
+                break;
+            default: throw ImageLoadError{"Unsupported col interleave factor type."};
+        }
+    }
+
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, TIFF_ANY)) {
+        uint32_t numRead = 0;
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
+                    interleave.y() = *f;
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
+                    interleave.y() = (int)*f;
+                }
+                break;
+            default: throw ImageLoadError{"Unsupported row interleave factor type."};
+        }
+    }
+
     tlog::debug() << fmt::format(
-        "TIFF info: size={} bps={}/{}/{} spp={} photometric={} planar={} sampleFormat={} compression={}",
+        "TIFF info: size={} bps={}/{}/{} spp={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
         size,
         tiffInternalBitsPerSample,
         dataBitsPerSample,
@@ -1165,6 +1247,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
         samplesPerPixel,
         photometric,
         planar,
+        interleave,
         sampleFormat,
         compression
     );
@@ -1625,6 +1708,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
     for (size_t c = numChannels - numExtraChannels + (hasAlpha ? 1 : 0); c < numChannels; ++c) {
         co_await tiffDataToFloat32<false>(
             kind,
+            interleave,
             nullptr,
             (uint32_t*)(imageData.data() + c * unpackedBitsPerSample / 8),
             numChannels,
@@ -1645,6 +1729,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
             HeapArray<float> iccTmpFloatData(size.x() * (size_t)size.y() * numRgbaChannels);
             co_await tiffDataToFloat32<false>(
                 kind,
+                interleave,
                 palette,
                 (uint32_t*)imageData.data(),
                 numChannels,
@@ -1690,6 +1775,7 @@ Task<ImageData> readTiffImage(TIFF* tif, const bool reverseEndian, string_view p
 
     co_await tiffDataToFloat32<false>(
         kind,
+        interleave,
         palette,
         (uint32_t*)imageData.data(),
         numChannels,
@@ -1836,7 +1922,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         }
 
         try {
-            tlog::debug() << fmt::format("Loading {}", name);
+            tlog::debug() << fmt::format("Loading '{}'", name);
 
             ImageData& data = result.emplace_back(co_await readTiffImage(tif, reverseEndian, name, priority));
             if (exifAttributes) {
