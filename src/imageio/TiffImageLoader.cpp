@@ -1119,14 +1119,14 @@ Task<void> postprocessRgb(
     const Vector2i size = resultData.size();
 
     chroma_t chroma = rec709Chroma();
-    if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries)) {
+    if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries) && primaries) {
         tlog::debug() << "Found custom primaries; applying...";
         chroma[0] = {primaries[0], primaries[1]};
         chroma[1] = {primaries[2], primaries[3]};
         chroma[2] = {primaries[4], primaries[5]};
     }
 
-    if (float* whitePoint; TIFFGetField(tif, TIFFTAG_WHITEPOINT, &whitePoint)) {
+    if (float* whitePoint; TIFFGetField(tif, TIFFTAG_WHITEPOINT, &whitePoint) && whitePoint) {
         tlog::debug() << "Found custom white point; applying...";
         chroma[3] = {whitePoint[0], whitePoint[1]};
     }
@@ -1144,6 +1144,12 @@ Task<void> postprocessRgb(
         // In TIFF, transfer functions are stored as 2**bitsPerSample values in the range [0, 65535] per color channel. The transfer
         // function is a linear interpolation between these values.
         tlog::debug() << "Found custom transfer function; applying...";
+
+        for (int c = 0; c < numColorChannels; ++c) {
+            if (!transferFunction[c]) {
+                throw ImageLoadError{fmt::format("Missing transfer function for channel {}", c)};
+            }
+        }
 
         const float scale = 1.0f / 65535.0f;
 
@@ -1170,12 +1176,12 @@ Task<void> postprocessRgb(
         );
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::LUT;
-    } else if (uint32_t pcsInt; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &pcsInt) && pcsInt > 1) {
+    } else if (uint32_t* pcsInt, count; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &count, &pcsInt) && pcsInt && count >= 1 && *pcsInt > 1) {
         // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
         // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
-        tlog::debug() << fmt::format("Found preview color space: {}", (uint32_t)pcsInt);
+        tlog::debug() << fmt::format("Found preview color space: {}", *pcsInt);
 
-        const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(pcsInt);
+        const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(*pcsInt);
 
         size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -1801,6 +1807,7 @@ Task<ImageData>
     // Read tiled/striped data. Unfortunately, libtiff doesn't support reading all tiles/strips in parallel, so we have to do that
     // sequentially.
     HeapArray<uint8_t> imageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
+
     for (size_t i = 0; i < tile.count; ++i) {
         uint8_t* const td = tileData.data() + tile.size * i;
 
