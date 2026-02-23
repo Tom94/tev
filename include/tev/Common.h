@@ -372,8 +372,14 @@ template <typename T> class HeapArray {
 public:
     HeapArray() : mBuf{nullptr}, mSize{0} {}
     HeapArray(size_t size) : mBuf{std::make_unique<T[]>(size)}, mSize{size} {}
-    HeapArray(HeapArray&& other) = default;
-    HeapArray& operator=(HeapArray&& other) = default;
+    HeapArray(HeapArray&& other) { *this = std::move(other); }
+    HeapArray& operator=(HeapArray&& other) {
+        mBuf = std::move(other.mBuf);
+        mSize = other.mSize;
+        other.mBuf = nullptr;
+        other.mSize = 0;
+        return *this;
+    }
 
     operator bool() const { return mBuf != nullptr; }
     T& operator[](size_t idx) { return mBuf[idx]; }
