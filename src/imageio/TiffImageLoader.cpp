@@ -1330,12 +1330,12 @@ Task<ImageData>
         uint32_t numRead = 0;
         switch (TIFFFieldDataType(field)) {
             case TIFF_SHORT:
-                if (uint16_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
+                if (uint16_t* f; TIFFGetField(tif, TIFFTAG_COLINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
                     interleave.x() = *f;
                 }
                 break;
             case TIFF_LONG:
-                if (uint32_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
+                if (uint32_t* f; TIFFGetField(tif, TIFFTAG_COLINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
                     interleave.x() = (int)*f;
                 }
                 break;
