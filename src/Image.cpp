@@ -550,7 +550,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         // E.g.: foo.bar.R -> foo.bar.1.R, R -> 1.R
         const size_t count = channelNameCounter[c.name()]++;
         if (count > 0) {
-            c.setName(Channel::join(Channel::joinIfNonempty(Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
+            c.setName(Channel::join(fmt::format("{}{}", Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
             tlog::debug() << fmt::format("Renamed duplicate channel to '{}'", c.name());
         }
     }
