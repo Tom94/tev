@@ -62,65 +62,13 @@ string toString(ETiffKind kind) {
     }
 }
 
-template <bool SRGB_TO_LINEAR = false>
-Task<void> tiffDataToFloat32(
+Task<void> convertF16AndF24ToF32(
     ETiffKind kind,
-    const Vector2i& interleave,
-    const uint16_t* __restrict palette[3],
     uint32_t* __restrict imageData,
     size_t numSppIn,
-    float* __restrict floatData,
-    size_t numSppOut,
     const nanogui::Vector2i& size,
-    bool hasAlpha,
-    int priority,
-    float scale,
-    bool flipWhiteAndBlack
+    int priority
 ) {
-    HeapArray<uint8_t> interleavedImageData;
-    if (interleave != Vector2i{1, 1}) {
-        const size_t bytesPerSample = kind == ETiffKind::F64 ? 8 : 4;
-        const size_t numPixels = (size_t)size.x() * size.y();
-
-        interleavedImageData = HeapArray<uint8_t>(numPixels * numSppIn * bytesPerSample);
-
-        const auto parallelInterleave = [&](const auto* in, auto* out) -> Task<void> {
-            co_await ThreadPool::global().parallelForAsync<int>(
-                0,
-                size.y(),
-                numPixels * numSppIn,
-                [&](int y) {
-                    const size_t subY = y / interleave.y();
-                    const size_t interleaveY = y - subY * interleave.y();
-                    const size_t srcY = interleaveY * (size.y() / interleave.y()) + subY;
-
-                    for (int x = 0; x < size.x(); ++x) {
-                        const size_t subX = x / interleave.x();
-                        const size_t interleaveX = x - subX * interleave.x();
-                        const size_t srcX = interleaveX * (size.x() / interleave.x()) + subX;
-
-                        const size_t srcIndexBase = (srcY * size.x() + srcX) * numSppIn;
-                        const size_t dstIndexBase = (y * size.x() + x) * numSppIn;
-                        for (size_t c = 0; c < numSppIn; ++c) {
-                            out[dstIndexBase + c] = in[srcIndexBase + c];
-                        }
-                    }
-                },
-                priority
-            );
-        };
-
-        if (bytesPerSample == 8) {
-            co_await parallelInterleave((const uint64_t*)imageData, (uint64_t*)interleavedImageData.data());
-        } else if (bytesPerSample == 4) {
-            co_await parallelInterleave((const uint32_t*)imageData, (uint32_t*)interleavedImageData.data());
-        } else {
-            throw runtime_error{"Unsupported bytes per sample."};
-        }
-
-        imageData = (uint32_t*)interleavedImageData.data();
-    }
-
     // Convert lower-bit depth float formats to 32 bit
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
@@ -152,6 +100,23 @@ Task<void> tiffDataToFloat32(
         kind = ETiffKind::F32;
     }
 
+}
+
+template <bool SRGB_TO_LINEAR = false>
+Task<void> tiffDataToFloat32(
+    ETiffKind kind,
+    const Vector2i& interleave,
+    const uint16_t* __restrict palette[3],
+    uint32_t* __restrict imageData,
+    size_t numSppIn,
+    float* __restrict floatData,
+    size_t numSppOut,
+    const nanogui::Vector2i& size,
+    bool hasAlpha,
+    int priority,
+    float scale,
+    bool flipWhiteAndBlack
+) {
     if (kind == ETiffKind::F64) {
         co_await toFloat32<double, SRGB_TO_LINEAR>((const double*)imageData, numSppIn, floatData, numSppOut, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::F32) {
@@ -1237,7 +1202,7 @@ Task<void> postprocessRgb(
 Task<ImageData> decodeJpeg(
     span<const uint8_t> compressedData,
     span<const uint8_t> jpegTables,
-    const Vector2i tileSize,
+    const Vector2i& tileSize,
     uint16_t tileNumComponents,
     size_t* nestedBitsPerSample,
     int photometric,
@@ -1254,8 +1219,8 @@ Task<ImageData> decodeJpeg(
         memcpy(stream.data(), compressedData.data(), 2);
         memcpy(stream.data() + 2, tablesPayload, tablesPayloadLen);
         memcpy(stream.data() + 2 + tablesPayloadLen, compressedData.data() + 2, compressedData.size() - 2);
-    } else {
-        stream.assign(compressedData.begin(), compressedData.end());
+
+        compressedData = stream;
     }
 
     struct jpeg_decompress_struct cinfo;
@@ -1271,7 +1236,7 @@ Task<ImageData> decodeJpeg(
     jpeg_create_decompress(&cinfo);
     const ScopeGuard guard{[&]() { jpeg_destroy_decompress(&cinfo); }};
 
-    jpeg_mem_src(&cinfo, stream.data(), stream.size());
+    jpeg_mem_src(&cinfo, compressedData.data(), compressedData.size());
 
     if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
         throw ImageLoadError{"Failed to read JPEG header."};
@@ -1283,17 +1248,17 @@ Task<ImageData> decodeJpeg(
         throw ImageLoadError{"CMYK JPEGs are not supported."};
     }
 
-    *nestedBitsPerSample = (size_t)precision;
-
     // Suppress all color conversion — output in the native colorspace.
     // We'll convert YCbCr→RGB ourselves in float.
     cinfo.out_color_space = cinfo.jpeg_color_space;
     cinfo.quantize_colors = false;
     jpeg_start_decompress(&cinfo);
 
-    const int width = cinfo.output_width;
-    const int height = cinfo.output_height;
-    const int numComponents = cinfo.output_components;
+    const ScopeGuard decompressGuard{[&]() { jpeg_finish_decompress(&cinfo); }};
+
+    const auto width = (size_t)cinfo.output_width;
+    const auto height = (size_t)cinfo.output_height;
+    const auto numComponents = (size_t)cinfo.output_components;
 
     const auto numJpegPixels = (size_t)width * height;
     const auto numTilePixels = (size_t)tileSize.x() * tileSize.y();
@@ -1307,37 +1272,34 @@ Task<ImageData> decodeJpeg(
         )};
     }
 
-    const float scale = 1.0f / (float)((1 << precision) - 1);
-    const int rowStride = width * numComponents;
+    const float scale = 1.0f / (float)((1ull << precision) - 1);
+    const auto rowStride = (size_t)width * numComponents;
 
     ImageData result;
-    result.dataWindow = result.displayWindow = Vector2i{width, height};
     result.channels = co_await ImageLoader::makeRgbaInterleavedChannels(
         tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
-    tlog::debug() << fmt::format(
-        "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
-        width,
-        height,
-        numComponents,
-        precision,
-        (int)cinfo.jpeg_color_space
-    );
+    // tlog::debug() << fmt::format(
+    //     "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
+    //     width,
+    //     height,
+    //     numComponents,
+    //     precision,
+    //     (int)cinfo.jpeg_color_space
+    // );
 
     if (precision > 12) {
         HeapArray<uint16_t> buf(width * height * numComponents);
 
         HeapArray<J16SAMPROW> rowPointers(height);
-        for (int y = 0; y < height; ++y) {
+        for (size_t y = 0; y < height; ++y) {
             rowPointers[y] = &buf[y * rowStride];
         }
 
         while (cinfo.output_scanline < cinfo.output_height) {
             jpeg16_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
         }
-
-        jpeg_finish_decompress(&cinfo);
 
         co_await toFloat32(
             buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
@@ -1346,15 +1308,13 @@ Task<ImageData> decodeJpeg(
         HeapArray<int16_t> buf(width * height * numComponents);
 
         HeapArray<J12SAMPROW> rowPointers(height);
-        for (int y = 0; y < height; ++y) {
+        for (size_t y = 0; y < height; ++y) {
             rowPointers[y] = &buf[y * rowStride];
         }
 
         while (cinfo.output_scanline < cinfo.output_height) {
             jpeg12_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
         }
-
-        jpeg_finish_decompress(&cinfo);
 
         co_await toFloat32(
             (const uint16_t*)buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
@@ -1363,15 +1323,13 @@ Task<ImageData> decodeJpeg(
         HeapArray<uint8_t> buf(width * height * numComponents);
 
         HeapArray<JSAMPROW> rowPointers(height);
-        for (int y = 0; y < height; ++y) {
+        for (size_t y = 0; y < height; ++y) {
             rowPointers[y] = &buf[y * rowStride];
         }
 
         while (cinfo.output_scanline < cinfo.output_height) {
             jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
         }
-
-        jpeg_finish_decompress(&cinfo);
 
         co_await toFloat32(
             buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
@@ -1396,6 +1354,7 @@ Task<ImageData> decodeJpeg(
         }
     }
 
+    *nestedBitsPerSample = (size_t)precision;
     co_return result;
 }
 
@@ -1854,7 +1813,7 @@ Task<ImageData>
                                         compressedTileData,
                                         jpegTables,
                                         {(int)tile.width, (int)tile.height},
-                                        samplesPerPixel,
+                                        samplesPerPixel / numPlanes,
                                         &nestedBitsPerSample,
                                         dataPhotometric,
                                         priority
@@ -1907,7 +1866,7 @@ Task<ImageData>
                         const int yStart = (int)tileY * tile.height;
                         const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
 
-                        const size_t numPixels = (size_t)tile.width * tile.height;
+                        const size_t numPixels = (size_t)(xEnd - xStart) * (yEnd - yStart);
 
                         auto* const data = (float*)imageData.data();
 
@@ -2014,27 +1973,72 @@ Task<ImageData>
 
     co_await awaitAll(decodeTasks);
 
-    if (const auto activeArea = getActiveArea(tif, size); size != activeArea.size()) {
-        const auto rawSize = size;
-        size = activeArea.size();
+    if (interleave != Vector2i{1, 1}) {
+        HeapArray<uint8_t> interleavedImageData;
+        const size_t bytesPerSample = unpackedBitsPerSample / 8;
+        const size_t numPixels = (size_t)size.x() * size.y();
 
-        tlog::debug() << fmt::format("Cropping to active area: [{},{}] -> {}", activeArea.min, activeArea.max, size);
+        interleavedImageData = HeapArray<uint8_t>(numPixels * numChannels * bytesPerSample);
 
-        resultData.dataWindow = resultData.displayWindow = {size.x(), size.y()};
-
-        HeapArray<uint8_t> croppedImageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
-
-        const auto cropTask = [&](auto* const croppedData, auto* const data) -> Task<void> {
+        const auto parallelInterleave = [&](const auto* in, auto* out) -> Task<void> {
             co_await ThreadPool::global().parallelForAsync<int>(
                 0,
                 size.y(),
-                (size_t)size.x() * numChannels,
+                numPixels * numChannels,
+                [&](int y) {
+                    const size_t subY = y / interleave.y();
+                    const size_t interleaveY = y - subY * interleave.y();
+                    const size_t srcY = interleaveY * (size.y() / interleave.y()) + subY;
+
+                    for (int x = 0; x < size.x(); ++x) {
+                        const size_t subX = x / interleave.x();
+                        const size_t interleaveX = x - subX * interleave.x();
+                        const size_t srcX = interleaveX * (size.x() / interleave.x()) + subX;
+
+                        const size_t srcIndexBase = (srcY * size.x() + srcX) * numChannels;
+                        const size_t dstIndexBase = (y * size.x() + x) * numChannels;
+                        for (size_t c = 0; c < numChannels; ++c) {
+                            out[dstIndexBase + c] = in[srcIndexBase + c];
+                        }
+                    }
+                },
+                priority
+            );
+        };
+
+        if (bytesPerSample == 8) {
+            co_await parallelInterleave((const uint64_t*)imageData.data(), (uint64_t*)interleavedImageData.data());
+        } else if (bytesPerSample == 4) {
+            co_await parallelInterleave((const uint32_t*)imageData.data(), (uint32_t*)interleavedImageData.data());
+        } else {
+            throw runtime_error{"Unsupported bytes per sample."};
+        }
+
+        imageData = std::move(interleavedImageData);
+    }
+
+    if (auto activeArea = getActiveArea(tif, size); size != activeArea.size()) {
+        const auto rawSize = size;
+        size = activeArea.size();
+        const auto numPixels = (size_t)size.x() * size.y();
+
+        tlog::debug() << fmt::format("Cropping to active area: [{},{}] -> {}", activeArea.min, activeArea.max, size);
+
+        resultData.dataWindow = resultData.displayWindow = size;
+
+        HeapArray<uint8_t> croppedImageData((size_t)numPixels * samplesPerPixel * unpackedBitsPerSample / 8);
+
+        const auto cropTask = [&](auto* const croppedData, const auto* const data) -> Task<void> {
+            co_await ThreadPool::global().parallelForAsync<int>(
+                0,
+                size.y(),
+                numPixels * numChannels,
                 [&](int y) {
                     const int srcY = y + activeArea.min.y();
                     for (int x = 0; x < size.x(); ++x) {
                         const int srcX = x + activeArea.min.x();
                         for (size_t c = 0; c < numChannels; ++c) {
-                            croppedImageData[(y * size.x() + x) * numChannels + c] = imageData[(srcY * rawSize.x() + srcX) * numChannels + c];
+                            croppedData[((size_t)y * size.x() + x) * numChannels + c] = data[((size_t)srcY * rawSize.x() + srcX) * numChannels + c];
                         }
                     }
                 },
@@ -2101,6 +2105,8 @@ Task<ImageData>
         }
         default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
     }
+
+    co_await convertF16AndF24ToF32(kind, (uint32_t*)imageData.data(), numChannels, size, priority);
 
     const bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
 
