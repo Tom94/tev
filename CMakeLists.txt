@@ -147,6 +147,7 @@ set(TEV_SOURCES
     include/tev/imageio/BmpImageLoader.h src/imageio/BmpImageLoader.cpp
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
     include/tev/imageio/Colors.h src/imageio/Colors.cpp
+    include/tev/imageio/Demosaic.h src/imageio/Demosaic.cpp
     include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
     include/tev/imageio/Exif.h src/imageio/Exif.cpp
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
