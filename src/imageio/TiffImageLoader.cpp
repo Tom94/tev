@@ -940,7 +940,7 @@ Task<void> postprocessLinearRawDng(
         uint32_t numReadGainTableMap = 0;
         if (const uint8_t* gainTableMap; TIFFGetField(tif, TIFFTAG_PROFILEGAINTABLEMAP, &numReadGainTableMap, &gainTableMap)) {
             // TODO: implement profile gain table map
-            tlog::warning() << "Found gain table map, but not implemented yet. Color profile may look wrong.";
+            tlog::debug() << "Found gain table map, but not implemented yet. Color profile may look wrong.";
         }
     }
 
