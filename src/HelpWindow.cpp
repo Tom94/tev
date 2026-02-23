@@ -245,12 +245,12 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "libdeflate", "DEFLATE/zlib/gzip compression library");
     addLibrary(about, "libexif", "EXIF metadata parsing library");
     addLibrary(about, "libexpat", "XML parsing library");
+#ifdef TEV_USE_LIBHEIF
+    addLibrary(about, "libheif", "HEIF and AVIF image format library");
+#endif
 #ifdef TEV_SUPPORT_JXL
     addLibrary(about, "libjpeg-turbo", "Fast JPEG image format library");
     addLibrary(about, "libjxl", "JPEG XL image format library");
-#endif
-#ifdef TEV_USE_LIBHEIF
-    addLibrary(about, "libheif", "HEIF and AVIF image format library");
 #endif
     addLibrary(about, "libpng", "PNG image format library");
     addLibrary(about, "Little-CMS", "Fast transforms between ICC profiles");

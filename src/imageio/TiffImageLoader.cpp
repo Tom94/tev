@@ -21,12 +21,14 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Demosaic.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/JxlImageLoader.h>
 #include <tev/imageio/TiffImageLoader.h>
 #include <tev/imageio/Xmp.h>
 
 #include <half.h>
+#include <jpeglib.h>
 #include <tiff.h>
 #include <tiffio.h>
 
@@ -1160,6 +1162,197 @@ Task<void> postprocessRgb(
     }
 }
 
+Task<ImageData> decodeJpeg(
+    span<const uint8_t> compressedData,
+    span<const uint8_t> jpegTables,
+    const Vector2i tileSize,
+    uint16_t tileNumComponents,
+    size_t* nestedBitsPerSample,
+    int photometric,
+    int priority
+) {
+    vector<uint8_t> stream;
+    if (jpegTables.size() > 4) {
+        tlog::debug() << "JPEG tables found; prepending to compressed data...";
+
+        const uint32_t tablesPayloadLen = jpegTables.size() - 4;
+        const uint8_t* tablesPayload = jpegTables.data() + 2;
+
+        stream.resize(2 + tablesPayloadLen + (compressedData.size() - 2));
+        memcpy(stream.data(), compressedData.data(), 2);
+        memcpy(stream.data() + 2, tablesPayload, tablesPayloadLen);
+        memcpy(stream.data() + 2 + tablesPayloadLen, compressedData.data() + 2, compressedData.size() - 2);
+    } else {
+        stream.assign(compressedData.begin(), compressedData.end());
+    }
+
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+
+    cinfo.err = jpeg_std_error(&jerr);
+    jerr.error_exit = [](j_common_ptr cinfo) {
+        char buf[JMSG_LENGTH_MAX];
+        cinfo->err->format_message(cinfo, buf);
+        throw ImageLoadError{fmt::format("libjpeg error: {}", buf)};
+    };
+
+    jpeg_create_decompress(&cinfo);
+    const ScopeGuard guard{[&]() { jpeg_destroy_decompress(&cinfo); }};
+
+    jpeg_mem_src(&cinfo, stream.data(), stream.size());
+
+    if (jpeg_read_header(&cinfo, TRUE) != JPEG_HEADER_OK) {
+        throw ImageLoadError{"Failed to read JPEG header."};
+    }
+
+    const int width = cinfo.image_width;
+    const int height = cinfo.image_height;
+    const int precision = cinfo.data_precision;
+    const bool isGray = cinfo.jpeg_color_space == JCS_GRAYSCALE;
+    const int numComponents = isGray ? 1 : 3;
+
+    if (cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK) {
+        throw ImageLoadError{"CMYK JPEGs are not supported."};
+    }
+
+    *nestedBitsPerSample = (size_t)precision;
+
+    // Suppress all color conversion — output in the native colorspace.
+    // We'll convert YCbCr→RGB ourselves in float.
+    cinfo.out_color_space = cinfo.jpeg_color_space;
+    jpeg_start_decompress(&cinfo);
+
+    const float scale = 1.0f / (float)((1 << precision) - 1);
+    const int rowStride = width * numComponents;
+
+    ImageData result;
+    result.dataWindow = result.displayWindow = Vector2i{width, height};
+    result.channels = co_await ImageLoader::makeRgbaInterleavedChannels(
+        numComponents, numComponents, false, {width, height}, EPixelFormat::F32, EPixelFormat::F16, "", priority
+    );
+
+    // tlog::debug() << fmt::format(
+    //     "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
+    //     width,
+    //     height,
+    //     numComponents,
+    //     precision,
+    //     (int)cinfo.jpeg_color_space
+    // );
+
+    if (precision > 12) {
+        HeapArray<uint16_t> buf(width * height * numComponents);
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            J16SAMPROW row = (J16SAMPROW)(buf.data() + cinfo.output_scanline * rowStride);
+            jpeg16_read_scanlines(&cinfo, &row, 1);
+        }
+
+        jpeg_finish_decompress(&cinfo);
+
+        co_await toFloat32(
+            buf.data(), numComponents, result.channels.front().floatData(), numComponents, {width, height}, false, priority, scale
+        );
+    } else if (precision > 8) {
+        HeapArray<int16_t> buf(width * height * numComponents);
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            J12SAMPROW row = (J12SAMPROW)(buf.data() + cinfo.output_scanline * rowStride);
+            jpeg12_read_scanlines(&cinfo, &row, 1);
+        }
+
+        jpeg_finish_decompress(&cinfo);
+
+        co_await toFloat32(
+            (const uint16_t*)buf.data(), numComponents, result.channels.front().floatData(), numComponents, {width, height}, false, priority, scale
+        );
+    } else {
+        HeapArray<uint8_t> buf(width * height * numComponents);
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            JSAMPROW row = (JSAMPROW)(buf.data() + cinfo.output_scanline * rowStride);
+            jpeg_read_scanlines(&cinfo, &row, 1);
+        }
+
+        jpeg_finish_decompress(&cinfo);
+
+        co_await toFloat32(
+            buf.data(), numComponents, result.channels.front().floatData(), numComponents, {width, height}, false, priority, scale
+        );
+    }
+
+    // YCbCr→RGB conversion in float, in-place.
+    // After toFloat32, all values are in [0, 1]. Chroma midpoint is 0.5.
+    if (photometric == PHOTOMETRIC_YCBCR) {
+        // tlog::debug() << "Applying YCbCr→RGB conversion...";
+
+        TEV_ASSERT(result.channels.size() == 3, "Expected 3 channels for YCbCr JPEG, got {}", result.channels.size());
+
+        float* const data = result.channels.front().floatData();
+        const int n = width * height;
+        for (int i = 0; i < n; ++i) {
+            const float y = data[i * 3 + 0];
+            const float cb = data[i * 3 + 1] - 0.5f;
+            const float cr = data[i * 3 + 2] - 0.5f;
+            data[i * 3 + 0] = y + 1.402f * cr;
+            data[i * 3 + 1] = y - 0.344136f * cb - 0.714136f * cr;
+            data[i * 3 + 2] = y + 1.772f * cb;
+        }
+    }
+
+    const auto numJpegPixels = (size_t)width * height;
+    const auto numTilePixels = (size_t)tileSize.x() * tileSize.y();
+
+    const auto numJpegSamples = numJpegPixels * numComponents;
+    const auto numTileSamples = numTilePixels * tileNumComponents;
+
+    if (numJpegSamples < numTileSamples) {
+        throw ImageLoadError{fmt::format(
+            "Decompressed JPEG has fewer samples ({}) than expected from the tile size and samples per pixel ({}).", numJpegSamples, numTileSamples
+        )};
+    } else if (numJpegSamples == numTileSamples) {
+        // It can happen that the JPEG data is reshaped in order to compress CFA data better. Undoing the reshape if the total number of
+        // samples is the same is quite easy...
+        for (auto&& c : result.channels) {
+            c.setSize(tileSize);
+        }
+    } else if (height == tileSize.y()) {
+        // ...however, if the total number of samples differs, it's unclear what the best course of action is. What seems to work in
+        // practice is to just read the raw JPEG data row by row into the layout expected by the tile.
+
+        const auto jpegRowSize = (size_t)width * numComponents;
+        const auto tileRowSize = (size_t)tileSize.x() * tileNumComponents;
+
+        TEV_ASSERT(tileRowSize <= jpegRowSize, "Tile row size cannot be larger than JPEG row size.");
+
+        auto newChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
+            tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        );
+
+        co_await ThreadPool::global().parallelForAsync<int>(
+            0,
+            tileSize.y(),
+            numTileSamples,
+            [&](int y) {
+                const auto jpegRowOffset = (size_t)y * width * numComponents;
+                const auto tileRowOffset = (size_t)y * tileSize.x() * tileNumComponents;
+                for (size_t i = 0; i < tileRowSize; ++i) {
+                    newChannels.front().floatData()[tileRowOffset + i] = result.channels.front().floatData()[jpegRowOffset + i];
+                }
+            },
+            priority
+        );
+
+        result.channels = std::move(newChannels);
+    } else {
+        throw ImageLoadError{fmt::format(
+            "Decompressed JPEG has more samples ({}) than expected from the tile size and samples per pixel ({}).", numJpegSamples, numTileSamples
+        )};
+    }
+
+    co_return result;
+}
+
 Task<ImageData>
     readTiffImage(TIFF* tif, const bool isDng, const bool shallDemosaic, const bool reverseEndian, string_view partName, const int priority) {
     uint32_t width, height;
@@ -1200,21 +1393,12 @@ Task<ImageData>
         throw ImageLoadError{"Failed to read compression type."};
     }
 
-    // DNG's lossy JPEG compression can be decoded by libtiff's regular JPEG decoder
-    static const uint16_t COMPRESSION_LOSSY_JPEG = 34892;
-    if (compression == COMPRESSION_LOSSY_JPEG) {
-        if (!TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_JPEG)) {
-            throw ImageLoadError{"Failed to set LossyJPEG->JPEG."};
-        }
-
-        compression = COMPRESSION_JPEG;
-    }
-
     uint16_t photometric;
     if (!TIFFGetFieldDefaulted(tif, TIFFTAG_PHOTOMETRIC, &photometric)) {
         throw ImageLoadError{"Failed to read photometric interpretation."};
     }
 
+    const uint16_t dataPhotometric = photometric;
     const uint16_t dataBitsPerSample = bitsPerSample;
     const uint16_t dataSampleFormat = sampleFormat;
 
@@ -1245,37 +1429,27 @@ Task<ImageData>
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
 
-    // We will manually decompress JXL and JPEG2000 tiles further down the pipeline by invoking tev's JXL decoder directly on the compressed
-    // data from the TIFF file. This returns fp32 data.
-    if (compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL || compression == COMPRESSION_JP2000) {
+    // We will manually decompress JXL and JPEG2000 tiles further down the pipeline by invoking tev's JXL decoder directly on the
+    // compressed data from the TIFF file. This returns fp32 data.
+    static const uint16_t COMPRESSION_LOSSY_JPEG = 34892;
+    const bool decodeRaw = compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL || compression == COMPRESSION_JP2000 ||
+        compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG;
+    if (decodeRaw) {
         bitsPerSample = 32;
         sampleFormat = SAMPLEFORMAT_IEEEFP;
-    }
-
-    if (compression == COMPRESSION_JPEG) {
-        // For JPEG decoding, we need to pretend to have more bits per sample than is in the data for the JPEG decoder to work correctly.
-        // This is largely fine for the following decoding steps, but we will later need to pass `dataBitsPerSample` to postprocessing for
-        // scaling purposes.
-        if (bitsPerSample <= 8) {
-            bitsPerSample = 8;
-        } else if (bitsPerSample <= 12) {
-            bitsPerSample = 12;
-        } else if (bitsPerSample <= 16) {
-            bitsPerSample = 16;
-        }
-
-        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, bitsPerSample);
 
         if (photometric == PHOTOMETRIC_YCBCR) {
             tlog::debug() << "Converting JPEG YCbCr to RGB.";
-
             photometric = PHOTOMETRIC_RGB;
         }
+    }
 
-        // Always set the JPEG color mode, even if it already is RGB, to retrigger libtiff's internal tile size calcs after bitsPerSample
-        // changed.
-        if (!TIFFSetField(tif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB)) {
-            throw ImageLoadError{"Failed to set JPEG color mode."};
+    span<const uint8_t> jpegTables = {};
+    if (compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG) {
+        uint32_t jpegTablesLen = 0;
+        if (uint8_t* jpegTablesPtr; TIFFGetField(tif, TIFFTAG_JPEGTABLES, &jpegTablesLen, &jpegTablesPtr)) {
+            tlog::debug() << "Found JPEG tables; will use for decompression.";
+            jpegTables = {jpegTablesPtr, jpegTablesLen};
         }
     }
 
@@ -1547,8 +1721,8 @@ Task<ImageData>
         tile.numY = (size.y() + tile.height - 1) / tile.height;
     }
 
-    // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory to
-    // fit all data.
+    // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory
+    // to fit all data.
     tile.size = std::max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
 
     tlog::debug() << fmt::format(
@@ -1581,8 +1755,6 @@ Task<ImageData>
     HeapArray<uint8_t> unpackedTile(unpackedTileSize * tile.count);
 
     const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
-
-    const bool decodeRaw = compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL;
 
     vector<Task<void>> decodeTasks;
 
@@ -1627,6 +1799,21 @@ Task<ImageData>
                                     compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
                                 );
                             } break;
+                            case COMPRESSION_JPEG:
+                            case COMPRESSION_LOSSY_JPEG: {
+                                nestedPixelType = EPixelType::Uint;
+                                tmp.emplace_back(
+                                    co_await decodeJpeg(
+                                        compressedTileData,
+                                        jpegTables,
+                                        {(int)tile.width, (int)tile.height},
+                                        samplesPerPixel,
+                                        &nestedBitsPerSample,
+                                        dataPhotometric,
+                                        priority
+                                    )
+                                );
+                            } break;
                             default: throw ImageLoadError{fmt::format("Unsupported compression type: {}", compression)};
                         }
 
@@ -1634,7 +1821,7 @@ Task<ImageData>
                             throw ImageLoadError{fmt::format("Expected exactly one image from tile, got {}", tmp.size())};
                         }
 
-                        const auto& tmpImage = tmp.front();
+                        auto& tmpImage = tmp.front();
 
                         if (tmpImage.channels.size() < (size_t)samplesPerPixel / numPlanes) {
                             throw ImageLoadError{
@@ -1642,8 +1829,8 @@ Task<ImageData>
                             };
                         }
 
-                        for (const auto& channel : tmpImage.channels) {
-                            const auto tileSize = Vector2i{(int)tile.width, (int)tile.height};
+                        const auto tileSize = Vector2i{(int)tile.width, (int)tile.height};
+                        for (auto& channel : tmpImage.channels) {
                             if (channel.size() != tileSize) {
                                 throw ImageLoadError{fmt::format(
                                     "Tile channel '{}' has unexpected dimensions: expected {}, got {}",
@@ -1952,8 +2139,8 @@ Task<ImageData>
         flipWhiteAndBlack
     );
 
-    // Both CFA and linear raw DNG data need to be linearized and normalized prior to color space conversions. Metadata for linearization
-    // assumes *pre* demosaicing data, so this step needs to be done before we convert CFA to RGB.
+    // Both CFA and linear raw DNG data need to be linearized and normalized prior to color space conversions. Metadata for
+    // linearization assumes *pre* demosaicing data, so this step needs to be done before we convert CFA to RGB.
     if ((isDng && photometric == PHOTOMETRIC_CFA) || photometric == PHOTOMETRIC_LINEAR_RAW) {
         co_await linearizeAndNormalizeRawDng(
             tif, dataSampleFormat, dataBitsPerSample, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, size, priority

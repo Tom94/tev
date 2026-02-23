@@ -68,7 +68,7 @@
 	shallow = true
 [submodule "dependencies/libjpeg-turbo"]
 	path = dependencies/libjpeg-turbo
-	url = https://github.com/libjpeg-turbo/libjpeg-turbo
+	url = https://github.com/tom94/libjpeg-turbo
 	shallow = true
 [submodule "dependencies/libjxl"]
 	path = dependencies/libjxl
