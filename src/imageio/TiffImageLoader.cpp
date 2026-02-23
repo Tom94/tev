@@ -62,13 +62,7 @@ string toString(ETiffKind kind) {
     }
 }
 
-Task<void> convertF16AndF24ToF32(
-    ETiffKind kind,
-    uint32_t* __restrict imageData,
-    size_t numSppIn,
-    const nanogui::Vector2i& size,
-    int priority
-) {
+Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, const nanogui::Vector2i& size, int priority) {
     // Convert lower-bit depth float formats to 32 bit
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
@@ -99,7 +93,6 @@ Task<void> convertF16AndF24ToF32(
 
         kind = ETiffKind::F32;
     }
-
 }
 
 template <bool SRGB_TO_LINEAR = false>
@@ -2038,7 +2031,8 @@ Task<ImageData>
                     for (int x = 0; x < size.x(); ++x) {
                         const int srcX = x + activeArea.min.x();
                         for (size_t c = 0; c < numChannels; ++c) {
-                            croppedData[((size_t)y * size.x() + x) * numChannels + c] = data[((size_t)srcY * rawSize.x() + srcX) * numChannels + c];
+                            croppedData[((size_t)y * size.x() + x) * numChannels + c] =
+                                data[((size_t)srcY * rawSize.x() + srcX) * numChannels + c];
                         }
                     }
                 },
@@ -2341,7 +2335,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         SemanticMask = 65540,
     };
 
-    const auto dngSubFileTypeToString = [&](uint32_t subFileType) {
+    const auto dngSubFileTypeToString = [](uint32_t subFileType) -> string {
         switch (subFileType) {
             case Main: return "";
             case Reduced: return "reduced";
@@ -2352,19 +2346,35 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             case Enhanced: return "enhanced";
             case AltReduced: return "reduced.alt";
             case SemanticMask: return "mask";
-            default: return "unknown";
+            default: return fmt::format("unknown.{}", subFileType);
         }
     };
+
+    const auto isThumbnail = [](uint32_t subFileType) { return (subFileType & 1) != 0; };
 
     // The following code reads all images contained in main-IDFs and sub-IDFs of the TIFF file as per https://libtiff.gitlab.io/libtiff/multi_page.html
     vector<ImageData> result;
 
+    EOrientation dngOrientation = EOrientation::None;
     const auto tryLoadImage = [&](tdir_t dir, int subId, int subChainId) -> Task<void> {
-        string name;
-        if (EDngSubfileType type; isDng && TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
-            name = dngSubFileTypeToString(type);
-        } else {
-            name = subId != -1 ? fmt::format("ifd.{}.subifd.{}.{}", dir, subId, subChainId) : fmt::format("ifd.{}", dir);
+        string name = subId != -1 ? fmt::format("ifd.{}.subifd.{}.{}", dir, subId, subChainId) : fmt::format("ifd.{}", dir);
+        if (isDng) {
+            if (dngOrientation == EOrientation::None) {
+                uint16_t orientation = 0;
+                if (TIFFGetField(tif, TIFFTAG_ORIENTATION, &orientation) && orientation <= 8) {
+                    dngOrientation = (EOrientation)orientation;
+                }
+            }
+
+            if (EDngSubfileType type; TIFFGetField(tif, TIFFTAG_SUBFILETYPE, &type)) {
+                // DNGs often come with multiple thumbnail images that act as a loading preview in photo editing software. Uninteresting for
+                // tev to load, except for the main IFD's orientation tag, which is authorative.
+                if (isThumbnail(type)) {
+                    co_return;
+                }
+
+                name = dngSubFileTypeToString(type);
+            }
         }
 
         try {
@@ -2376,8 +2386,8 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             }
 
             // Propagate orientation from the main image to sub-images if loading a DNG
-            if (isDng && result.size() >= 2) {
-                data.orientation = result.at(result.size() - 2).orientation;
+            if (dngOrientation != EOrientation::None) {
+                data.orientation = dngOrientation;
             }
         } catch (const ImageLoadError& e) { tlog::warning() << fmt::format("Failed to load '{}': {}", name, e.what()); }
     };
