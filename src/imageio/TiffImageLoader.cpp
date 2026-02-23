@@ -1271,11 +1271,7 @@ Task<ImageData> decodeJpeg(
         throw ImageLoadError{"Failed to read JPEG header."};
     }
 
-    const int width = cinfo.image_width;
-    const int height = cinfo.image_height;
     const int precision = cinfo.data_precision;
-    const bool isGray = cinfo.jpeg_color_space == JCS_GRAYSCALE;
-    const int numComponents = isGray ? 1 : 3;
 
     if (cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK) {
         throw ImageLoadError{"CMYK JPEGs are not supported."};
@@ -1286,85 +1282,12 @@ Task<ImageData> decodeJpeg(
     // Suppress all color conversion — output in the native colorspace.
     // We'll convert YCbCr→RGB ourselves in float.
     cinfo.out_color_space = cinfo.jpeg_color_space;
+    cinfo.quantize_colors = false;
     jpeg_start_decompress(&cinfo);
 
-    const float scale = 1.0f / (float)((1 << precision) - 1);
-    const int rowStride = width * numComponents;
-
-    ImageData result;
-    result.dataWindow = result.displayWindow = Vector2i{width, height};
-    result.channels = co_await ImageLoader::makeRgbaInterleavedChannels(
-        numComponents, numComponents, false, {width, height}, EPixelFormat::F32, EPixelFormat::F16, "", priority
-    );
-
-    // tlog::debug() << fmt::format(
-    //     "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
-    //     width,
-    //     height,
-    //     numComponents,
-    //     precision,
-    //     (int)cinfo.jpeg_color_space
-    // );
-
-    if (precision > 12) {
-        HeapArray<uint16_t> buf(width * height * numComponents);
-
-        while (cinfo.output_scanline < cinfo.output_height) {
-            J16SAMPROW row = (J16SAMPROW)(buf.data() + cinfo.output_scanline * rowStride);
-            jpeg16_read_scanlines(&cinfo, &row, 1);
-        }
-
-        jpeg_finish_decompress(&cinfo);
-
-        co_await toFloat32(
-            buf.data(), numComponents, result.channels.front().floatData(), numComponents, {width, height}, false, priority, scale
-        );
-    } else if (precision > 8) {
-        HeapArray<int16_t> buf(width * height * numComponents);
-
-        while (cinfo.output_scanline < cinfo.output_height) {
-            J12SAMPROW row = (J12SAMPROW)(buf.data() + cinfo.output_scanline * rowStride);
-            jpeg12_read_scanlines(&cinfo, &row, 1);
-        }
-
-        jpeg_finish_decompress(&cinfo);
-
-        co_await toFloat32(
-            (const uint16_t*)buf.data(), numComponents, result.channels.front().floatData(), numComponents, {width, height}, false, priority, scale
-        );
-    } else {
-        HeapArray<uint8_t> buf(width * height * numComponents);
-
-        while (cinfo.output_scanline < cinfo.output_height) {
-            JSAMPROW row = (JSAMPROW)(buf.data() + cinfo.output_scanline * rowStride);
-            jpeg_read_scanlines(&cinfo, &row, 1);
-        }
-
-        jpeg_finish_decompress(&cinfo);
-
-        co_await toFloat32(
-            buf.data(), numComponents, result.channels.front().floatData(), numComponents, {width, height}, false, priority, scale
-        );
-    }
-
-    // YCbCr→RGB conversion in float, in-place.
-    // After toFloat32, all values are in [0, 1]. Chroma midpoint is 0.5.
-    if (photometric == PHOTOMETRIC_YCBCR) {
-        // tlog::debug() << "Applying YCbCr→RGB conversion...";
-
-        TEV_ASSERT(result.channels.size() == 3, "Expected 3 channels for YCbCr JPEG, got {}", result.channels.size());
-
-        float* const data = result.channels.front().floatData();
-        const int n = width * height;
-        for (int i = 0; i < n; ++i) {
-            const float y = data[i * 3 + 0];
-            const float cb = data[i * 3 + 1] - 0.5f;
-            const float cr = data[i * 3 + 2] - 0.5f;
-            data[i * 3 + 0] = y + 1.402f * cr;
-            data[i * 3 + 1] = y - 0.344136f * cb - 0.714136f * cr;
-            data[i * 3 + 2] = y + 1.772f * cb;
-        }
-    }
+    const int width = cinfo.output_width;
+    const int height = cinfo.output_height;
+    const int numComponents = cinfo.output_components;
 
     const auto numJpegPixels = (size_t)width * height;
     const auto numTilePixels = (size_t)tileSize.x() * tileSize.y();
@@ -1376,44 +1299,95 @@ Task<ImageData> decodeJpeg(
         throw ImageLoadError{fmt::format(
             "Decompressed JPEG has fewer samples ({}) than expected from the tile size and samples per pixel ({}).", numJpegSamples, numTileSamples
         )};
-    } else if (numJpegSamples == numTileSamples) {
-        // It can happen that the JPEG data is reshaped in order to compress CFA data better. Undoing the reshape if the total number of
-        // samples is the same is quite easy...
-        for (auto&& c : result.channels) {
-            c.setSize(tileSize);
+    }
+
+    const float scale = 1.0f / (float)((1 << precision) - 1);
+    const int rowStride = width * numComponents;
+
+    ImageData result;
+    result.dataWindow = result.displayWindow = Vector2i{width, height};
+    result.channels = co_await ImageLoader::makeRgbaInterleavedChannels(
+        tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+    );
+
+    tlog::debug() << fmt::format(
+        "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
+        width,
+        height,
+        numComponents,
+        precision,
+        (int)cinfo.jpeg_color_space
+    );
+
+    if (precision > 12) {
+        HeapArray<uint16_t> buf(width * height * numComponents);
+
+        HeapArray<J16SAMPROW> rowPointers(height);
+        for (int y = 0; y < height; ++y) {
+            rowPointers[y] = &buf[y * rowStride];
         }
-    } else if (height == tileSize.y()) {
-        // ...however, if the total number of samples differs, it's unclear what the best course of action is. What seems to work in
-        // practice is to just read the raw JPEG data row by row into the layout expected by the tile.
 
-        const auto jpegRowSize = (size_t)width * numComponents;
-        const auto tileRowSize = (size_t)tileSize.x() * tileNumComponents;
+        while (cinfo.output_scanline < cinfo.output_height) {
+            jpeg16_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        }
 
-        TEV_ASSERT(tileRowSize <= jpegRowSize, "Tile row size cannot be larger than JPEG row size.");
+        jpeg_finish_decompress(&cinfo);
 
-        auto newChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
-            tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        co_await toFloat32(
+            buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
         );
+    } else if (precision > 8) {
+        HeapArray<int16_t> buf(width * height * numComponents);
 
-        co_await ThreadPool::global().parallelForAsync<int>(
-            0,
-            tileSize.y(),
-            numTileSamples,
-            [&](int y) {
-                const auto jpegRowOffset = (size_t)y * width * numComponents;
-                const auto tileRowOffset = (size_t)y * tileSize.x() * tileNumComponents;
-                for (size_t i = 0; i < tileRowSize; ++i) {
-                    newChannels.front().floatData()[tileRowOffset + i] = result.channels.front().floatData()[jpegRowOffset + i];
-                }
-            },
-            priority
+        HeapArray<J12SAMPROW> rowPointers(height);
+        for (int y = 0; y < height; ++y) {
+            rowPointers[y] = &buf[y * rowStride];
+        }
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            jpeg12_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        }
+
+        jpeg_finish_decompress(&cinfo);
+
+        co_await toFloat32(
+            (const uint16_t*)buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
         );
-
-        result.channels = std::move(newChannels);
     } else {
-        throw ImageLoadError{fmt::format(
-            "Decompressed JPEG has more samples ({}) than expected from the tile size and samples per pixel ({}).", numJpegSamples, numTileSamples
-        )};
+        HeapArray<uint8_t> buf(width * height * numComponents);
+
+        HeapArray<JSAMPROW> rowPointers(height);
+        for (int y = 0; y < height; ++y) {
+            rowPointers[y] = &buf[y * rowStride];
+        }
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        }
+
+        jpeg_finish_decompress(&cinfo);
+
+        co_await toFloat32(
+            buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
+        );
+    }
+
+    // YCbCr→RGB conversion in float, in-place.
+    // After toFloat32, all values are in [0, 1]. Chroma midpoint is 0.5.
+    if (photometric == PHOTOMETRIC_YCBCR) {
+        // tlog::debug() << "Applying YCbCr→RGB conversion...";
+
+        TEV_ASSERT(result.channels.size() == 3, "Expected 3 channels for YCbCr JPEG, got {}", result.channels.size());
+
+        float* const data = result.channels.front().floatData();
+        for (size_t i = 0; i < numTilePixels; ++i) {
+            const float y = data[i * 3 + 0];
+            const float cb = data[i * 3 + 1] - 0.5f;
+            const float cr = data[i * 3 + 2] - 0.5f;
+            data[i * 3 + 0] = y + 1.402f * cr;
+            data[i * 3 + 1] = y - 0.344136f * cb - 0.714136f * cr;
+            data[i * 3 + 2] = y + 1.772f * cb;
+        }
     }
 
     co_return result;
