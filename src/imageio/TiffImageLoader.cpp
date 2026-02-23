@@ -372,6 +372,72 @@ Box2i getActiveArea(TIFF* tif, const Vector2i& size) {
     return activeArea;
 }
 
+// Per DNG spec: relative to top-left corner of active area!
+Box2i getDefaultCrop(TIFF* tif, const Vector2i& size) {
+    Vector2i min{0, 0};
+    Vector2i cropSize{size};
+
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_DEFAULTCROPORIGIN, TIFF_ANY)) {
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPORIGIN, &aa)) {
+                    min.x() = aa[0];
+                    min.y() = aa[1];
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPORIGIN, &aa)) {
+                    min.x() = aa[0];
+                    min.y() = aa[1];
+                }
+                break;
+            case TIFF_RATIONAL:
+                if (float* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPORIGIN, &aa)) {
+                    min.x() = (int)aa[0];
+                    min.y() = (int)aa[1];
+                }
+                break;
+            default: throw ImageLoadError{"Unsupported active area data type."};
+        }
+    }
+
+    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_DEFAULTCROPSIZE, TIFF_ANY)) {
+        switch (TIFFFieldDataType(field)) {
+            case TIFF_SHORT:
+                if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPSIZE, &aa)) {
+                    cropSize.x() = aa[0];
+                    cropSize.y() = aa[1];
+                }
+                break;
+            case TIFF_LONG:
+                if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPSIZE, &aa)) {
+                    cropSize.x() = aa[0];
+                    cropSize.y() = aa[1];
+                }
+                break;
+            case TIFF_RATIONAL:
+                if (float* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPSIZE, &aa)) {
+                    cropSize.x() = (int)aa[0];
+                    cropSize.y() = (int)aa[1];
+                }
+                break;
+            default: throw ImageLoadError{"Unsupported active area data type."};
+        }
+    }
+
+    Box2i cropBox{min, min + cropSize};
+
+    if (!cropBox.isValid() || !Box2i(Vector2i{0, 0}, size).contains(cropBox)) {
+        tlog::warning() << fmt::format("Invalid crop area: min={} max={}; using full area instead.", cropBox.min, cropBox.max);
+        return Box2i{
+            Vector2i{0, 0},
+            size
+        };
+    }
+
+    return cropBox;
+}
+
 Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, const Vector2i size, int priority) {
     // With CFA sensors, it's often the case that differently colored pixels have different sensitivities (captured by white balance), and,
     // as such, RGB==1 doesn't actually correspond to white after conversion to a display color space. To avoid this, we perform demosaicing
@@ -2005,6 +2071,8 @@ Task<ImageData>
 
         imageData = std::move(croppedImageData);
     }
+
+    resultData.displayWindow = getDefaultCrop(tif, size);
 
     size_t numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
 
