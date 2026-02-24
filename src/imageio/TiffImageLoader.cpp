@@ -173,7 +173,7 @@ Task<void> tiffDataToFloat32(
 static void tiffErrorHandler(const char* module, const char* fmt, va_list args) {
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
-    tlog::error() << fmt::format("TIFF error ({}): {}", module ? module : "unknown", buffer);
+    tlog::warning() << fmt::format("TIFF error ({}): {}", module ? module : "unknown", buffer);
 }
 
 static void tiffWarningHandler(const char* module, const char* fmt, va_list args) {
