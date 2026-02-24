@@ -63,7 +63,6 @@ string toString(ETiffKind kind) {
 }
 
 Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, const nanogui::Vector2i& size, int priority) {
-    // Convert lower-bit depth float formats to 32 bit
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -92,6 +91,8 @@ Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData,
         );
 
         kind = ETiffKind::F32;
+    } else {
+        throw ImageLoadError{fmt::format("Unsupported TIFF kind for F16/F24 conversion: {}", toString(kind))};
     }
 }
 
@@ -2100,7 +2101,11 @@ Task<ImageData>
         default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
     }
 
-    co_await convertF16AndF24ToF32(kind, (uint32_t*)imageData.data(), numChannels, size, priority);
+    if (kind == ETiffKind::F16 || kind == ETiffKind::F24) {
+        tlog::debug() << "Converting 16/24 bit float data to 32 bit float.";
+        co_await convertF16AndF24ToF32(kind, (uint32_t*)imageData.data(), numChannels, size, priority);
+        kind = ETiffKind::F32;
+    }
 
     const bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
 
