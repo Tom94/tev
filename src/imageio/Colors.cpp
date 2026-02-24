@@ -86,7 +86,8 @@ Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
 
     // prevent a division that rounds to zero
     if (abs(white.y()) <= 1.f && abs(white.x() * Y) >= abs(white.y()) * numeric_limits<float>::max()) {
-        throw invalid_argument("Bad chromaticities: white.y cannot be zero");
+        tlog::warning() << fmt::format("Bad chromaticities: white.y is too small ({}); returning identity", white.y());
+        return Matrix3f{1.0f};
     }
 
     const float X = white.x() * Y / white.y();
@@ -112,7 +113,8 @@ Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
         // cannot generate matrix if all RGB primaries have the same y value
         // or if they all have the an x value of zero
         // in both cases, the primaries are colinear, which makes them unusable
-        throw invalid_argument("Bad chromaticities: RGBtoXYZ matrix is degenerate");
+        tlog::warning() << fmt::format("Bad chromaticities: RGB primaries are colinear or too close to it (d={}); returning identity", d);
+        return Matrix3f{1.0f};
     }
 
     const float Sr = SrN / d;
