@@ -1242,8 +1242,11 @@ Task<ImageData> decodeJpeg(
         throw ImageLoadError{"CMYK JPEGs are not supported."};
     }
 
-    // Suppress all color conversion — output in the native colorspace.
-    // We'll convert YCbCr→RGB ourselves in float.
+    if (precision < 2 || precision > 16) {
+        throw ImageLoadError{fmt::format("Unsupported JPEG precision: {} bits per sample.", precision)};
+    }
+
+    // Suppress all color conversion; output in the native colorspace. We'll convert outselves.
     cinfo.out_color_space = cinfo.jpeg_color_space;
     cinfo.quantize_colors = false;
     jpeg_start_decompress(&cinfo);
@@ -1266,7 +1269,6 @@ Task<ImageData> decodeJpeg(
     }
 
     const float scale = 1.0f / (float)((1ull << precision) - 1);
-    const auto rowStride = (size_t)width * numComponents;
 
     ImageData result;
     result.channels = co_await ImageLoader::makeRgbaInterleavedChannels(
@@ -1282,51 +1284,35 @@ Task<ImageData> decodeJpeg(
     //     (int)cinfo.jpeg_color_space
     // );
 
-    if (precision > 12) {
-        HeapArray<uint16_t> buf(width * height * numComponents);
+    const auto numBytesPerSample = divRoundUp(precision, 8);
+    const auto rowStride = (size_t)width * numComponents * numBytesPerSample;
+    HeapArray<uint8_t> buf((size_t)width * height * numComponents * numBytesPerSample);
 
-        HeapArray<J16SAMPROW> rowPointers(height);
-        for (size_t y = 0; y < height; ++y) {
-            rowPointers[y] = &buf[y * rowStride];
+    HeapArray<JSAMPROW> rowPointers(height);
+    for (size_t y = 0; y < height; ++y) {
+        rowPointers[y] = &buf[y * rowStride];
+    }
+
+    while (cinfo.output_scanline < cinfo.output_height) {
+        if (precision <= 8) {
+            jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        } else if (precision <= 12) {
+            jpeg12_read_scanlines(&cinfo, (J12SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        } else {
+            jpeg16_read_scanlines(&cinfo, (J16SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
         }
+    }
 
-        while (cinfo.output_scanline < cinfo.output_height) {
-            jpeg16_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-        }
-
+    if (numBytesPerSample == 1) {
         co_await toFloat32(
             buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
         );
-    } else if (precision > 8) {
-        HeapArray<int16_t> buf(width * height * numComponents);
-
-        HeapArray<J12SAMPROW> rowPointers(height);
-        for (size_t y = 0; y < height; ++y) {
-            rowPointers[y] = &buf[y * rowStride];
-        }
-
-        while (cinfo.output_scanline < cinfo.output_height) {
-            jpeg12_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-        }
-
+    } else if (numBytesPerSample == 2) {
         co_await toFloat32(
             (const uint16_t*)buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
         );
     } else {
-        HeapArray<uint8_t> buf(width * height * numComponents);
-
-        HeapArray<JSAMPROW> rowPointers(height);
-        for (size_t y = 0; y < height; ++y) {
-            rowPointers[y] = &buf[y * rowStride];
-        }
-
-        while (cinfo.output_scanline < cinfo.output_height) {
-            jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-        }
-
-        co_await toFloat32(
-            buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
-        );
+        throw ImageLoadError{fmt::format("Unsupported number of bytes per sample: {}", numBytesPerSample)};
     }
 
     decompressGuard.disarm();
