@@ -1104,16 +1104,33 @@ Task<void> postprocessRgb(
         // function is a linear interpolation between these values.
         tlog::debug() << "Found custom transfer function; applying...";
 
+        if (numColorChannels > 3) {
+            throw ImageLoadError{"TIFF images with transfer functions and more than 3 color channels are not supported."};
+        }
+
         for (int c = 0; c < numColorChannels; ++c) {
             if (!transferFunction[c]) {
                 throw ImageLoadError{fmt::format("Missing transfer function for channel {}", c)};
             }
         }
 
-        const float scale = 1.0f / 65535.0f;
-
         const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : dataBitsPerSample;
         const size_t maxIdx = (1ull << bps) - 1;
+
+        Vector3i transferRangeBlack = {0};
+        Vector3i transferRangeWhite = {65535};
+
+        static constexpr uint16_t TIFFTAG_TRANSFERRANGE = 342;
+
+        uint32_t numRead = 0;
+        if (uint16_t* transferRange; TIFFGetField(tif, TIFFTAG_TRANSFERRANGE, &numRead, &transferRange) && transferRange && numRead >= 6) {
+            transferRangeBlack = {transferRange[0], transferRange[2], transferRange[4]};
+            transferRangeWhite = {transferRange[1], transferRange[3], transferRange[5]};
+
+            tlog::debug() << fmt::format("Found transfer range [{}, {}]", transferRangeBlack, transferRangeWhite);
+        }
+
+        const Vector3f scale = Vector3f(1.0f) / Vector3f(transferRangeWhite - transferRangeBlack);
 
         const size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -1122,13 +1139,14 @@ Task<void> postprocessRgb(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (int c = 0; c < numColorChannels; ++c) {
-                    float val = floatRgbaData[i * numRgbaChannels + c];
+                    const float val = floatRgbaData[i * numRgbaChannels + c];
 
                     // Lerp the transfer function
-                    size_t idx = clamp((size_t)(val * maxIdx), (size_t)0, maxIdx - 1);
-                    float w = val * maxIdx - idx;
-                    floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * transferFunction[c][idx] * scale +
-                        w * transferFunction[c][idx + 1] * scale;
+                    const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], (size_t)0, maxIdx - 1);
+                    const float w = val * maxIdx - idx - transferRangeBlack[c];
+                    floatRgbaData[i * numRgbaChannels + c] = ((1.0f - w) * (float)transferFunction[c][idx] +
+                                                              w * (float)transferFunction[c][idx + 1] - transferRangeBlack[c]) *
+                        scale[c];
                 }
             },
             priority
@@ -1413,7 +1431,6 @@ Task<ImageData> readTiffImage(
         sampleFormat = SAMPLEFORMAT_IEEEFP;
 
         if (photometric == PHOTOMETRIC_YCBCR) {
-            tlog::debug() << "Converting JPEG YCbCr to RGB.";
             photometric = PHOTOMETRIC_RGB;
         }
     }
