@@ -2595,18 +2595,15 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
 
     // The first directory is already read through TIFFOpen()
     do {
-        const tdir_t currentDirNumber = TIFFCurrentDirectory(tif);
+        const auto currentDirOffset = TIFFCurrentDirOffset(tif);
+        const auto currentDirNumber = TIFFCurrentDirectory(tif);
 
         co_await tryLoadImage(currentDirNumber, -1, -1);
 
-        // Check if there are SubIFD subfiles
-        const toff_t* offsets;
-        int numSubIfds = 0;
-        if (TIFFGetField(tif, TIFFTAG_SUBIFD, &numSubIfds, &offsets)) {
-            // Make a copy of the offsets, as they are only valid until the next TIFFReadDirectory() call
-            vector<toff_t> subIfdOffsets(offsets, offsets + numSubIfds);
-            for (int i = 0; i < numSubIfds; i++) {
-                // Read first SubIFD directory
+        // Check if the current top-level IFD has sub-IFDs. If so, visit them before moving on to next top-level IDF.
+        if (const auto offsets = tiffGetSpan<toff_t>(tif, TIFFTAG_SUBIFD); !offsets.empty()) {
+            const vector<toff_t> subIfdOffsets(offsets.begin(), offsets.end()); // copy to avoid invalidating the span
+            for (size_t i = 0; i < subIfdOffsets.size(); i++) {
                 if (!TIFFSetSubDirectory(tif, subIfdOffsets[i])) {
                     throw ImageLoadError{"Failed to read sub IFD."};
                 }
@@ -2619,13 +2616,11 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
             }
 
             // Go back to main-IFD chain and re-read that main-IFD directory
-            if (!TIFFSetDirectory(tif, currentDirNumber)) {
+            if (!TIFFSetSubDirectory(tif, currentDirOffset)) {
                 throw ImageLoadError{"Failed to read main IFD."};
             }
         }
-
-        // Read next main-IFD directory (subfile)
-    } while (TIFFReadDirectory(tif));
+    } while (TIFFReadDirectory(tif)); // Read next main-IFD directory (subfile)
 
     if (result.empty()) {
         throw ImageLoadError{"No images found in TIFF file."};
