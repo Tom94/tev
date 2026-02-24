@@ -513,6 +513,8 @@ Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, cons
         }
     }
 
+    const Vector3f invWbScale = Vector3f{1.0f} / wbScale;
+
     const auto dim = tiffGetSpan<uint16_t>(tif, TIFFTAG_EP_CFAREPEATPATTERNDIM);
     if (dim.size() != 2 || dim[0] == 0 || dim[1] == 0) {
         throw ImageLoadError{fmt::format(
@@ -549,7 +551,7 @@ Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, cons
                 const size_t offset = (size_t)y * size.x();
                 for (int x = 0; x < size.x(); ++x) {
                     cfaData[offset + x] =
-                        std::clamp(cfaData[offset + x] / wbScale[pat[(y % cfaSize.y()) * cfaSize.x() + (x % cfaSize.x())]], 0.0f, 1.0f);
+                        std::clamp(cfaData[offset + x] * invWbScale[pat[(y % cfaSize.y()) * cfaSize.x() + (x % cfaSize.x())]], 0.0f, 1.0f);
                 }
             },
             priority
@@ -718,11 +720,11 @@ Task<void> linearizeAndNormalizeRawDng(
             };
         }
 
+        tlog::debug() << "Found white level data";
+
         for (size_t i = 0; i < whiteLevel.size(); ++i) {
             whiteLevel[i] = whiteLevelLong[i] * scale;
         }
-
-        tlog::debug() << "Found white level data";
     }
 
     vector<float> channelScale(samplesPerPixel);
@@ -1519,7 +1521,7 @@ Task<ImageData> decodeJpeg(
 }
 
 Task<ImageData> readTiffImage(
-    const TiffData& tiffData, TIFF* tif, const bool isDng, const bool shallDemosaic, const bool reverseEndian, string_view partName, const int priority
+    const TiffData& tiffData, TIFF* tif, const bool isDng, const bool reverseEndian, string_view partName, const int priority
 ) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
@@ -2396,7 +2398,7 @@ Task<ImageData> readTiffImage(
         );
     }
 
-    if (shallDemosaic && photometric == PHOTOMETRIC_CFA) {
+    if (photometric == PHOTOMETRIC_CFA) {
         if (samplesPerPixel != 1 || numColorChannels != 1 || numRgbaChannels != 1) {
             throw ImageLoadError{"CFA images must have exactly 1 sample per pixel / color / rgba channel."};
         }
@@ -2422,7 +2424,7 @@ Task<ImageData> readTiffImage(
 
         photometric = isDng ? PHOTOMETRIC_LINEAR_RAW : PHOTOMETRIC_RGB;
 
-        resultData.channels.erase(resultData.channels.begin(), resultData.channels.begin() + 1);
+        resultData.channels.front().setName(Channel::joinIfNonempty(partName, "cfa"));
         resultData.channels.insert(
             resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
         );
@@ -2581,7 +2583,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         try {
             tlog::debug() << fmt::format("Loading '{}'", name);
 
-            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, true, reverseEndian, name, priority));
+            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, reverseEndian, name, priority));
             if (exifAttributes) {
                 data.attributes.emplace_back(exifAttributes.value());
             }
