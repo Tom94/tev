@@ -1247,8 +1247,7 @@ Task<ImageData> decodeJpeg(
     cinfo.out_color_space = cinfo.jpeg_color_space;
     cinfo.quantize_colors = false;
     jpeg_start_decompress(&cinfo);
-
-    const ScopeGuard decompressGuard{[&]() { jpeg_finish_decompress(&cinfo); }};
+    ScopeGuard decompressGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
 
     const auto width = (size_t)cinfo.output_width;
     const auto height = (size_t)cinfo.output_height;
@@ -1330,22 +1329,11 @@ Task<ImageData> decodeJpeg(
         );
     }
 
-    // YCbCr→RGB conversion in float, in-place.
-    // After toFloat32, all values are in [0, 1]. Chroma midpoint is 0.5.
-    if (photometric == PHOTOMETRIC_YCBCR) {
-        // tlog::debug() << "Applying YCbCr→RGB conversion...";
+    decompressGuard.disarm();
+    jpeg_finish_decompress(&cinfo);
 
-        TEV_ASSERT(result.channels.size() == 3, "Expected 3 channels for YCbCr JPEG, got {}", result.channels.size());
-
-        float* const data = result.channels.front().floatData();
-        for (size_t i = 0; i < numTilePixels; ++i) {
-            const float y = data[i * 3 + 0];
-            const float cb = data[i * 3 + 1] - 0.5f;
-            const float cr = data[i * 3 + 2] - 0.5f;
-            data[i * 3 + 0] = y + 1.402f * cr;
-            data[i * 3 + 1] = y - 0.344136f * cb - 0.714136f * cr;
-            data[i * 3 + 2] = y + 1.772f * cb;
-        }
+    if (photometric == PHOTOMETRIC_YCBCR && result.channels.size() >= 3) {
+        co_await yCbCrToRgb(result.channels.front().floatData(), result.channels.front().size(), result.channels.size(), priority);
     }
 
     *nestedBitsPerSample = (size_t)precision;

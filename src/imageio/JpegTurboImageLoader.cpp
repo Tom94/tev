@@ -88,12 +88,12 @@ Task<vector<ImageData>>
         cinfo.err = jpeg_std_error(&jerr);
         jerr.error_exit = [](j_common_ptr cinfo) {
             char buf[JMSG_LENGTH_MAX];
-            (*cinfo->err->format_message)(cinfo, buf);
-            throw ImageLoadError{fmt::format("JPEG error: {}", buf)};
+            cinfo->err->format_message(cinfo, buf);
+            throw ImageLoadError{fmt::format("libjpeg error: {}", buf)};
         };
 
         jpeg_create_decompress(&cinfo);
-        ScopeGuard jpegGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
+        const ScopeGuard jpegGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
 
         // Set up source manager to read from memory. In the future we might be able to jury-rig this to read directly from the stream.
         jpeg_mem_src(&cinfo, data.data(), data.size());
@@ -180,25 +180,44 @@ Task<vector<ImageData>>
         }
 
         cinfo.quantize_colors = false;
+        if (cinfo.jpeg_color_space == JCS_UNKNOWN) {
+            cinfo.jpeg_color_space = JCS_RGB;
+        }
 
+        cinfo.out_color_space = cinfo.jpeg_color_space; // Keep the original color space, we'll handle color conversion ourselves if needed
         jpeg_start_decompress(&cinfo);
+        ScopeGuard decompressGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
 
-        Vector2i size{static_cast<int>(cinfo.output_width), static_cast<int>(cinfo.output_height)};
+        if (cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK) {
+            throw ImageLoadError{"CMYK JPEG images are not supported."};
+        }
+
+        Vector2i size{(int)cinfo.output_width, (int)cinfo.output_height};
         if (size.x() == 0 || size.y() == 0) {
             throw ImageLoadError{"Image has zero pixels."};
         }
 
-        // JPEG does not support alpha, so all channels are color channels.
-        int numColorChannels = cinfo.output_components;
-        if (numColorChannels != 1 && numColorChannels != 3) {
-            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numColorChannels)};
+        if (cinfo.data_precision < 2 || cinfo.data_precision > 16) {
+            throw ImageLoadError{fmt::format("Unsupported JPEG data precision: {} bits per channel.", cinfo.data_precision)};
         }
 
-        tlog::debug() << fmt::format("JPEG image info: size={} numColorChannels={}", size, numColorChannels);
+        const auto pixelFormat = cinfo.data_precision <= 8 ? EPixelFormat::U8 : EPixelFormat::U16;
+
+        // JPEG does not support alpha, so all channels are color channels.
+        const size_t numChannels = cinfo.output_components;
+        if (numChannels > 4) {
+            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numChannels)};
+        }
+
+        const bool hasAlpha = numChannels == 4;
+        const auto numColorChannels = numChannels - (hasAlpha ? 1 : 0);
+
+        tlog::debug() << fmt::format("JPEG image info: size={} numColorChannels={} precision={}", size, numChannels, cinfo.data_precision);
 
         // Allocate memory for image data
-        auto numPixels = static_cast<size_t>(size.x()) * size.y();
-        auto numBytesPerPixel = numColorChannels;
+        const auto numPixels = static_cast<size_t>(size.x()) * size.y();
+        const auto bytesPerSample = nBytes(pixelFormat);
+        const auto numBytesPerPixel = numChannels * bytesPerSample;
         Channel::Data imageData(numPixels * numBytesPerPixel);
 
         // Create row pointers for libjpeg and then read image
@@ -208,9 +227,16 @@ Task<vector<ImageData>>
         }
 
         while (cinfo.output_scanline < cinfo.output_height) {
-            jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+            if (cinfo.data_precision <= 8) {
+                jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+            } else if (cinfo.data_precision <= 12) {
+                jpeg12_read_scanlines(&cinfo, (J12SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+            } else {
+                jpeg16_read_scanlines(&cinfo, (J16SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+            }
         }
 
+        decompressGuard.disarm();
         jpeg_finish_decompress(&cinfo);
 
         ImageData resultData;
@@ -427,7 +453,7 @@ Task<vector<ImageData>>
         }
 
         if (orientation != EOrientation::None) {
-            size = co_await orientToTopLeft(EPixelFormat::U8, imageData, size, orientation, priority);
+            size = co_await orientToTopLeft(pixelFormat, imageData, size, orientation, priority);
         }
 
         if (!appN.iso.empty()) {
@@ -452,13 +478,44 @@ Task<vector<ImageData>>
 
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
         // fits into F16.
-        const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numColorChannels);
+        const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         resultData.channels = co_await makeRgbaInterleavedChannels(
-            numColorChannels, numInterleavedChannels, false, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
+        const auto jpegDataToFloat32Typed = [&](auto* src, bool fromSrgb, float* dst, size_t numDstChannels) -> Task<void> {
+            using T = remove_const_t<remove_pointer_t<decltype(src)>>;
+            const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
+
+            const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && numDstChannels >= 3;
+
+            if (fromSrgb && !yCbCrConversionNeeded) {
+                co_await toFloat32<T, true>(src, numChannels, dst, numDstChannels, size, hasAlpha, priority, scale);
+            } else {
+                co_await toFloat32<T, false>(src, numChannels, dst, numDstChannels, size, hasAlpha, priority, scale);
+            }
+
+            if (cinfo.out_color_space == JCS_YCbCr && numDstChannels >= 3) {
+                if (fromSrgb) {
+                    co_await yCbCrToRgb<true>(dst, size, numDstChannels, priority);
+                } else {
+                    co_await yCbCrToRgb<false>(dst, size, numDstChannels, priority);
+                }
+            }
+        };
+
+        const auto jpegDataToFloat32 = [&](bool fromSrgb, float* dst, size_t numDstChannels) -> Task<void> {
+            if (pixelFormat == EPixelFormat::U8) {
+                co_await jpegDataToFloat32Typed((const uint8_t*)imageData.data(), fromSrgb, dst, numDstChannels);
+            } else if (pixelFormat == EPixelFormat::U16) {
+                co_await jpegDataToFloat32Typed((const uint16_t*)imageData.data(), fromSrgb, dst, numDstChannels);
+            } else {
+                throw ImageLoadError{fmt::format("Unsupported pixel format: {}", (int)pixelFormat)};
+            }
+        };
+
         // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
-        resultData.hasPremultipliedAlpha = true;
+        resultData.hasPremultipliedAlpha = !hasAlpha;
 
         // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG
         // spec) and convert it to linear space via inverse sRGB transfer function.
@@ -479,21 +536,18 @@ Task<vector<ImageData>>
                             imageInfo.isoGainmapInfo->chroma = profile.chroma();
                         }
 
-                        co_await toFloat32<uint8_t, false>(
-                            imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
-                        );
-
+                        co_await jpegDataToFloat32(false, resultData.channels.front().floatData(), numInterleavedChannels);
                         co_return resultData;
                     }
 
-                    HeapArray<float> floatData(imageData.size());
-                    co_await toFloat32(imageData.data(), numColorChannels, floatData.data(), numColorChannels, size, false, priority);
+                    HeapArray<float> floatData(numPixels * numChannels);
+                    co_await jpegDataToFloat32(false, floatData.data(), numChannels);
 
                     co_await toLinearSrgbPremul(
                         profile,
                         size,
                         numColorChannels,
-                        EAlphaKind::None,
+                        hasAlpha ? EAlphaKind::Straight : EAlphaKind::None,
                         EPixelFormat::F32,
                         (uint8_t*)floatData.data(),
                         resultData.channels.front().floatData(),
@@ -508,15 +562,9 @@ Task<vector<ImageData>>
             }
         }
 
-        if (imageInfo.isGainmap()) {
-            co_await toFloat32<uint8_t, false>(
-                imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
-            );
-        } else {
-            co_await toFloat32<uint8_t, true>(
-                imageData.data(), numColorChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, false, priority
-            );
+        co_await jpegDataToFloat32(!imageInfo.isGainmap(), resultData.channels.front().floatData(), numInterleavedChannels);
 
+        if (!imageInfo.isGainmap()) {
             resultData.nativeMetadata.chroma = rec709Chroma();
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
         }

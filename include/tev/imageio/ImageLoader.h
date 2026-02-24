@@ -34,6 +34,42 @@
 
 namespace tev {
 
+template <bool SRGB_TO_LINEAR = false>
+Task<void> yCbCrToRgb(float* data, const nanogui::Vector2i& size, size_t numSamplesPerPixel, int priority) {
+    if (numSamplesPerPixel < 3) {
+        tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
+        co_return;
+    }
+
+    const auto numPixels = (size_t)size.x() * size.y();
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        numPixels,
+        numPixels * 3,
+        [numSamplesPerPixel, data](size_t i) {
+            const float Y = data[i * numSamplesPerPixel + 0];
+            const float Cb = data[i * numSamplesPerPixel + 1] - 0.5f;
+            const float Cr = data[i * numSamplesPerPixel + 2] - 0.5f;
+
+            // BT.601 conversion
+            float r = Y + 1.402f * Cr;
+            float g = Y - 0.344136f * Cb - 0.714136f * Cr;
+            float b = Y + 1.772f * Cb;
+
+            if constexpr (SRGB_TO_LINEAR) {
+                r = toLinear(r);
+                g = toLinear(g);
+                b = toLinear(b);
+            }
+
+            data[i * numSamplesPerPixel + 0] = r;
+            data[i * numSamplesPerPixel + 1] = g;
+            data[i * numSamplesPerPixel + 2] = b;
+        },
+        priority
+    );
+}
+
 template <typename T, bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false>
 Task<void> toFloat32(
     const T* __restrict imageData,
@@ -140,8 +176,9 @@ public:
         int priority
     );
 
-    static std::vector<Channel>
-        makeNChannels(size_t numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer);
+    static std::vector<Channel> makeNChannels(
+        size_t numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer
+    );
 
     static Task<void> resizeChannelsAsync(std::span<const Channel> srcChannels, std::vector<Channel>& dstChannels, int priority);
     static Task<void> resizeImageData(ImageData& resultData, const nanogui::Vector2i& targetSize, int priority);
