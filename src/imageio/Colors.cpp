@@ -856,13 +856,25 @@ Task<void> toLinearSrgbPremul(
     //     type |= PREMUL_SH(1);
     // }
 
-    // TODO: differentiate between single channel RGB and gray
-    if (numColorChannels == 1) {
-        type |= COLORSPACE_SH(PT_GRAY);
-    } else if (numColorChannels == 4) {
-        type |= COLORSPACE_SH(PT_CMYK);
-    } else {
-        type |= COLORSPACE_SH(PT_RGB);
+    cmsColorSpaceSignature cs = cmsGetColorSpace(profile.get());
+    switch (cs) {
+        case cmsSigGrayData: type |= COLORSPACE_SH(PT_GRAY); break;
+        case cmsSigRgbData: type |= COLORSPACE_SH(PT_RGB); break;
+        case cmsSigCmykData: type |= COLORSPACE_SH(PT_CMYK); break;
+        case cmsSigLabData: type |= COLORSPACE_SH(PT_Lab); break;
+        case cmsSigXYZData: type |= COLORSPACE_SH(PT_XYZ); break;
+        default:
+            tlog::warning()
+                << fmt::format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (size_t)cs);
+            if (numColorChannels == 1) {
+                type |= COLORSPACE_SH(PT_GRAY);
+            } else if (numColorChannels == 4) {
+                type |= COLORSPACE_SH(PT_CMYK);
+            } else {
+                type |= COLORSPACE_SH(PT_RGB);
+            }
+
+            break;
     }
 
     cmsUInt32Number typeOut = 0;
@@ -937,6 +949,19 @@ Task<void> toLinearSrgbPremul(
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
                     for (int c = 0; c < numChannels - 1; ++c) {
                         *(float*)&srcPtr[(baseIdx + c) * bytesPerSample] *= factor;
+                    }
+                }
+            }
+
+            // L*a*b* values in ICC profiles should be in the range L* in [0, 100], a* and b* in [-128, 127]
+            if (cs == cmsSigLabData) {
+                for (int x = 0; x < size.x(); ++x) {
+                    const auto scale = Vector3f{100.0f, 255.0f, 255.0f};
+                    const auto offset = Vector3f{0.0f, -128.0f, -128.0f};
+                    const auto baseIdx = x * numChannels;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        auto& val = *(float*)&srcPtr[(baseIdx + c) * bytesPerSample];
+                        val = val * scale[c] + offset[c];
                     }
                 }
             }

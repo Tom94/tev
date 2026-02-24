@@ -1259,6 +1259,131 @@ Task<void> postprocessRgb(
     }
 }
 
+Task<void> postprocessLab(
+    TIFF* tif,
+    const uint16_t photometric,
+    const uint16_t dataBitsPerSample,
+    const int numColorChannels,
+    const int numRgbaChannels,
+    span<float> floatRgbaData,
+    ImageData& resultData,
+    const int priority
+) {
+    if (numColorChannels != 3) {
+        throw ImageLoadError{"CIELAB images without 3 color channels are not supported."};
+    }
+
+    const Vector2i size = resultData.size();
+    const size_t numPixels = (size_t)size.x() * size.y();
+
+    const size_t bps = dataBitsPerSample;
+    const size_t maxVal = (1ull << bps) - 1;
+
+    // Step 1: Decode the encoded values to CIE L*a*b* [L: 0..100, a: -128..127, b: -128..127]
+    if (photometric == PHOTOMETRIC_CIELAB) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            numPixels * numColorChannels,
+            [&](size_t i) {
+                const size_t base = i * numRgbaChannels;
+                floatRgbaData[base + 0] = floatRgbaData[base + 0] * 100.0f;
+                for (int c = 1; c < numColorChannels && c < 3; ++c) {
+                    const float v = floatRgbaData[base + c] * 255.0f;
+                    floatRgbaData[base + c] = v >= 128.0f ? v - 256.0f : v;
+                }
+            },
+            priority
+        );
+    } else if (photometric == PHOTOMETRIC_ICCLAB) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            numPixels * numColorChannels,
+            [&](size_t i) {
+                const size_t base = i * numRgbaChannels;
+                floatRgbaData[base + 0] = floatRgbaData[base + 0] * 100.0f;
+                for (int c = 1; c < numColorChannels && c < 3; ++c) {
+                    const float v = floatRgbaData[base + c] * 255.0f;
+                    floatRgbaData[base + c] = v - 128.0f;
+                }
+            },
+            priority
+        );
+    } else if (photometric == PHOTOMETRIC_ITULAB) {
+        Vector3f decodeMin, decodeMax;
+
+        decodeMin = {0.0f, -85.0f, -85.0f};
+        decodeMax = {100.0f, 85.0f, 85.0f};
+
+        uint16_t decodeCount = 0;
+        if (float* decode; TIFFGetField(tif, TIFFTAG_DECODE, &decodeCount, &decode) && decode && decodeCount >= 6) {
+            decodeMin = {decode[0], decode[2], decode[4]};
+            decodeMax = {decode[1], decode[3], decode[5]};
+
+            tlog::debug() << fmt::format("Found ITULAB Decode tag: min={} max={}", decodeMin, decodeMax);
+        }
+
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            numPixels * numColorChannels,
+            [&](size_t i) {
+                const size_t base = i * numRgbaChannels;
+                for (int c = 0; c < numColorChannels && c < 3; ++c) {
+                    const float v = floatRgbaData[base + c];
+                    floatRgbaData[base + c] = decodeMin[c] + v * (decodeMax[c] - decodeMin[c]);
+                }
+            },
+            priority
+        );
+    }
+
+    // Step 2: Convert CIE L*a*b* to CIE XYZ. We can then convert from XYZ to linear sRGB/Rec709 using a simple matrix transform
+    const Vector3f whitePointXYZ = {0.9642f, 1.0f, 0.8249f}; // D50
+
+    static constexpr float kappa = 903.3f; // 24389/27
+    static constexpr float epsilon = 0.008856f; // 216/24389
+
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        numPixels,
+        numPixels * numColorChannels,
+        [&](size_t i) {
+            const size_t base = i * numRgbaChannels;
+
+            const float L = floatRgbaData[base + 0];
+            const float a = floatRgbaData[base + 1];
+            const float b = floatRgbaData[base + 2];
+
+            const float fy = (L + 16.0f) / 116.0f;
+            const float fx = a / 500.0f + fy;
+            const float fz = fy - b / 200.0f;
+
+            const float fx3 = fx * fx * fx;
+            const float fz3 = fz * fz * fz;
+
+            const float xr = (fx3 > epsilon) ? fx3 : (116.0f * fx - 16.0f) / kappa;
+            const float yr = (L > kappa * epsilon) ? ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f) * ((L + 16.0f) / 116.0f) : L / kappa;
+            const float zr = (fz3 > epsilon) ? fz3 : (116.0f * fz - 16.0f) / kappa;
+
+            const float X = xr * whitePointXYZ.x();
+            const float Y = yr * whitePointXYZ.y();
+            const float Z = zr * whitePointXYZ.z();
+
+            floatRgbaData[base + 0] = X;
+            floatRgbaData[base + 1] = Y;
+            floatRgbaData[base + 2] = Z;
+        },
+        priority
+    );
+
+    resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
+    resultData.toRec709 = xyzToChromaMatrix(rec709Chroma()) * adaptWhiteBradford(whiteD50(), whiteD65());
+
+    co_return;
+}
+
 Task<ImageData> decodeJpeg(
     span<const uint8_t> compressedData,
     span<const uint8_t> jpegTables,
@@ -1496,6 +1621,11 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_PALETTE,
         PHOTOMETRIC_MASK,
         PHOTOMETRIC_YCBCR,
+        //
+        PHOTOMETRIC_CIELAB,
+        PHOTOMETRIC_ICCLAB,
+        PHOTOMETRIC_ITULAB,
+        //
         PHOTOMETRIC_LOGLUV,
         PHOTOMETRIC_LOGL,
         PHOTOMETRIC_CFA, // Color Filter Array; displayed as grayscale for now
@@ -1531,8 +1661,6 @@ Task<ImageData> readTiffImage(
             }
         }
     }
-
-    // TODO: handle CIELAB, ICCLAB, ITULAB (shouldn't be too tough)
 
     if (all_of(begin(SUPPORTED_PHOTOMETRICS), end(SUPPORTED_PHOTOMETRICS), [&](uint16_t p) { return p != photometric; })) {
         throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
@@ -2201,9 +2329,16 @@ Task<ImageData> readTiffImage(
         );
     }
 
-    // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion
-    // Try color space conversion using ICC profile if available. This is going to be the most accurate method.
-    if (iccProfileData && iccProfileSize > 0) {
+    const set<uint16_t> labPhotometrics = {
+        PHOTOMETRIC_CIELAB,
+        PHOTOMETRIC_ICCLAB,
+        PHOTOMETRIC_ITULAB,
+    };
+
+    // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion. ICC profiles
+    // are generally most accurate when available, so prefer them. However, if we've got a Lab photometric interpretation, TIFF's data handling
+    // can be tricky and we can reproduce the exact behavior the ICC would have without too much trouble ourselves, so skip ICC in that case.
+    if (iccProfileData && iccProfileSize > 0 && !labPhotometrics.contains(photometric)) {
         try {
             HeapArray<float> iccTmpFloatData(size.x() * (size_t)size.y() * numRgbaChannels);
             co_await tiffDataToFloat32<false>(
@@ -2323,6 +2458,8 @@ Task<ImageData> readTiffImage(
         resultData.toRec709 = xyzToChromaMatrix(rec709Chroma());
     } else if (photometric <= PHOTOMETRIC_PALETTE || photometric == PHOTOMETRIC_YCBCR) {
         co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
+    } else if (labPhotometrics.contains(photometric)) {
+        co_await postprocessLab(tif, photometric, dataBitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
     } else {
         // Other photometric interpretations do not need a transfer
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
