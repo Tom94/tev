@@ -1076,6 +1076,56 @@ Task<void> postprocessRgb(
     const int priority
 ) {
     const Vector2i size = resultData.size();
+    const size_t numPixels = (size_t)size.x() * size.y();
+
+    const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : dataBitsPerSample;
+
+    if (float* referenceBw; TIFFGetField(tif, TIFFTAG_REFERENCEBLACKWHITE, &referenceBw) && referenceBw) {
+        const size_t maxVal = (1ull << bps) - 1;
+
+        const bool isYCbCr = photometric == PHOTOMETRIC_YCBCR;
+        const Vector3f codingRange = {(float)maxVal, isYCbCr ? 127.0f : (float)maxVal, isYCbCr ? 127.0f : (float)maxVal};
+
+        const Vector3f refBlack = Vector3f{referenceBw[0], referenceBw[2], referenceBw[4]};
+        const Vector3f refWhite = Vector3f{referenceBw[1], referenceBw[3], referenceBw[5]};
+        const Vector3f invRange = 1.0f / (refWhite - refBlack);
+
+        const Vector3f offset = isYCbCr ? Vector3f{0.0f, 0.5f, 0.5f} : Vector3f{0.0f};
+
+        const Vector3f totalScale = codingRange * invRange / maxVal;
+
+        tlog::debug() << fmt::format("Found reference black/white: black={} white={}", refBlack, refWhite);
+
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            numPixels * numColorChannels,
+            [&](size_t i) {
+                for (int c = 0; c < numColorChannels; ++c) {
+                    const size_t idx = i * numRgbaChannels + c;
+                    floatRgbaData[idx] = (floatRgbaData[idx] * maxVal - refBlack[c]) * totalScale[c] + offset[c];
+                }
+            },
+            priority
+        );
+    }
+
+    if (photometric == PHOTOMETRIC_YCBCR && numRgbaChannels >= 3) {
+        Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f};
+        if (float* yCbCrCoeffs; TIFFGetField(tif, TIFFTAG_YCBCRCOEFFICIENTS, &yCbCrCoeffs) && yCbCrCoeffs) {
+            const Vector3f K = {yCbCrCoeffs[0], yCbCrCoeffs[1], yCbCrCoeffs[2]};
+            coeffs = {
+                2.0f * (1.0f - K.x()),
+                -2.0f * K.z() * (1.0f - K.z()) / K.y(),
+                -2.0f * K.x() * (1.0f - K.x()) / K.y(),
+                2.0f * (1.0f - K.z()),
+            };
+
+            tlog::debug() << fmt::format("Found YCbCr coefficients: {} -> {}", K, coeffs);
+        }
+
+        co_await yCbCrToRgb(floatRgbaData.data(), size, numRgbaChannels, priority, coeffs);
+    }
 
     chroma_t chroma = rec709Chroma();
     if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries) && primaries) {
@@ -1114,7 +1164,6 @@ Task<void> postprocessRgb(
             }
         }
 
-        const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : dataBitsPerSample;
         const size_t maxIdx = (1ull << bps) - 1;
 
         Vector3i transferRangeBlack = {0};
@@ -1132,7 +1181,6 @@ Task<void> postprocessRgb(
 
         const Vector3f scale = Vector3f(1.0f) / Vector3f(transferRangeWhite - transferRangeBlack);
 
-        const size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
@@ -1222,7 +1270,7 @@ Task<ImageData> decodeJpeg(
 ) {
     vector<uint8_t> stream;
     if (jpegTables.size() > 4) {
-        tlog::debug() << "JPEG tables found; prepending to compressed data...";
+        // tlog::debug() << "JPEG tables found; prepending to compressed data...";
 
         const uint32_t tablesPayloadLen = jpegTables.size() - 4;
         const uint8_t* tablesPayload = jpegTables.data() + 2;
@@ -1336,10 +1384,6 @@ Task<ImageData> decodeJpeg(
     decompressGuard.disarm();
     jpeg_finish_decompress(&cinfo);
 
-    if (photometric == PHOTOMETRIC_YCBCR && result.channels.size() >= 3) {
-        co_await yCbCrToRgb(result.channels.front().floatData(), result.channels.front().size(), result.channels.size(), priority);
-    }
-
     *nestedBitsPerSample = (size_t)precision;
     co_return result;
 }
@@ -1429,10 +1473,6 @@ Task<ImageData> readTiffImage(
     if (decodeRaw) {
         bitsPerSample = 32;
         sampleFormat = SAMPLEFORMAT_IEEEFP;
-
-        if (photometric == PHOTOMETRIC_YCBCR) {
-            photometric = PHOTOMETRIC_RGB;
-        }
     }
 
     span<const uint8_t> jpegTables = {};
@@ -1455,6 +1495,7 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_RGB,
         PHOTOMETRIC_PALETTE,
         PHOTOMETRIC_MASK,
+        PHOTOMETRIC_YCBCR,
         PHOTOMETRIC_LOGLUV,
         PHOTOMETRIC_LOGL,
         PHOTOMETRIC_CFA, // Color Filter Array; displayed as grayscale for now
@@ -1469,7 +1510,26 @@ Task<ImageData> readTiffImage(
     }
 
     if (photometric == PHOTOMETRIC_YCBCR) {
-        throw ImageLoadError{"YCbCr images are unsupported."};
+        if (compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG || compression == COMPRESSION_JP2000) {
+            // Our JPEG decoder upsamples YCbCr data for us
+            TIFFUnsetField(tif, TIFFTAG_YCBCRSUBSAMPLING);
+
+            if (compression == COMPRESSION_JP2000) {
+                // Our JPEG2000 encoder furthermore outputs RGB directly
+                photometric = PHOTOMETRIC_RGB;
+                TIFFUnsetField(tif, TIFFTAG_REFERENCEBLACKWHITE);
+            }
+        }
+
+        if (uint16_t subsampling[2]; TIFFGetField(tif, TIFFTAG_YCBCRSUBSAMPLING, &subsampling[0], &subsampling[1])) {
+            tlog::debug() << fmt::format("Found YCbCr subsampling: {}x{}", subsampling[0], subsampling[1]);
+
+            const bool hasSubsampling = subsampling[0] != 1 || subsampling[1] != 1;
+            if (hasSubsampling) {
+                // TODO: actually handle subsampling
+                throw ImageLoadError{"Subsampled YCbCr images are only supported for JPEG-compressed TIFFs."};
+            }
+        }
     }
 
     // TODO: handle CIELAB, ICCLAB, ITULAB (shouldn't be too tough)
@@ -1546,6 +1606,7 @@ Task<ImageData> readTiffImage(
     uint16_t numExtraChannels = 0;
 
     if (TIFFGetField(tif, TIFFTAG_EXTRASAMPLES, &numExtraChannels, &extraChannelTypes)) {
+        tlog::debug() << fmt::format("Found {} extra channels.", numExtraChannels);
         for (uint16_t i = 0; i < numExtraChannels; ++i) {
             if (extraChannelTypes[i] == EXTRASAMPLE_ASSOCALPHA || extraChannelTypes[i] == EXTRASAMPLE_UNASSALPHA) {
                 if (hasAlpha) {
@@ -2260,7 +2321,7 @@ Task<ImageData> readTiffImage(
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
         resultData.toRec709 = xyzToChromaMatrix(rec709Chroma());
-    } else if (photometric <= PHOTOMETRIC_PALETTE) {
+    } else if (photometric <= PHOTOMETRIC_PALETTE || photometric == PHOTOMETRIC_YCBCR) {
         co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, numRgbaChannels, floatRgbaData, resultData, priority);
     } else {
         // Other photometric interpretations do not need a transfer
@@ -2279,7 +2340,6 @@ Task<ImageData> readTiffImage(
 Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
     // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
     // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
-    // It became quite huge, but there are still many things that are not supported, most notably the photometric specifiers for CIELAB, CIE Lab, and ICC Lab.
     char magic[4] = {0};
     iStream.read(magic, sizeof(magic));
     if (!iStream || (magic[0] != 'I' && magic[0] != 'M') || magic[1] != magic[0]) {

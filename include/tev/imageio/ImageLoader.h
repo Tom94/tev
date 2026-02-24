@@ -35,7 +35,13 @@
 namespace tev {
 
 template <bool SRGB_TO_LINEAR = false>
-Task<void> yCbCrToRgb(float* data, const nanogui::Vector2i& size, size_t numSamplesPerPixel, int priority) {
+Task<void> yCbCrToRgb(
+    float* data,
+    const nanogui::Vector2i& size,
+    size_t numSamplesPerPixel,
+    int priority,
+    const nanogui::Vector4f& coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}
+) {
     if (numSamplesPerPixel < 3) {
         tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
         co_return;
@@ -46,15 +52,15 @@ Task<void> yCbCrToRgb(float* data, const nanogui::Vector2i& size, size_t numSamp
         0,
         numPixels,
         numPixels * 3,
-        [numSamplesPerPixel, data](size_t i) {
+        [&coeffs, numSamplesPerPixel, data](size_t i) {
             const float Y = data[i * numSamplesPerPixel + 0];
             const float Cb = data[i * numSamplesPerPixel + 1] - 0.5f;
             const float Cr = data[i * numSamplesPerPixel + 2] - 0.5f;
 
             // BT.601 conversion
-            float r = Y + 1.402f * Cr;
-            float g = Y - 0.344136f * Cb - 0.714136f * Cr;
-            float b = Y + 1.772f * Cb;
+            float r = Y + coeffs[0] * Cr;
+            float g = Y + coeffs[1] * Cb + coeffs[2] * Cr;
+            float b = Y + coeffs[3] * Cb;
 
             if constexpr (SRGB_TO_LINEAR) {
                 r = toLinear(r);
