@@ -32,7 +32,10 @@
 #include <tiff.h>
 #include <tiffio.h>
 
+#include <array>
+#include <optional>
 #include <span>
+#include <vector>
 
 using namespace nanogui;
 using namespace std;
@@ -90,22 +93,19 @@ template <typename T> constexpr TIFFDataType tiffDataType() {
     }
 }
 
-template <typename T> span<const T> tiffGet(TIFF* tif, ttag_t tag) {
+template <typename T> span<const T> tiffGetSpan(TIFF* tif, ttag_t tag) {
     const TIFFField* field = TIFFFindField(tif, tag, TIFF_ANY);
     if (!field) {
         return {};
     }
 
-    // Validate that the requested C++ type matches what libtiff will return.
-    // TIFFFieldSetGetSize gives the byte size of the element type that
-    // TIFFGetField actually hands back (e.g. 4 for float, 8 for double).
     if (const int size = TIFFFieldSetGetSize(field); size != sizeof(T)) {
         tlog::warning() << fmt::format("TIFF tag {} has unexpected size (expected {}, got {})", tag, sizeof(tiffDataType<T>()), size);
         return {};
     }
 
-    const int count_size = TIFFFieldSetGetCountSize(field);
-    if (count_size == 0) {
+    const int countSize = TIFFFieldSetGetCountSize(field);
+    if (countSize == 0) {
         // Fixed-count tag. ReadCount gives the number of elements.
         const int n = TIFFFieldReadCount(field);
         if (n <= 0) {
@@ -114,27 +114,26 @@ template <typename T> span<const T> tiffGet(TIFF* tif, ttag_t tag) {
 
         const T* data = nullptr;
         if (n == 1) {
-            // Single-value tags are returned by value, not by pointer.
-            // We can't safely return a span to a temporary.
+            tlog::warning() << fmt::format("TIFF tag {} is a single value, but expected an array. Skipping.", tag);
             return {};
         }
 
         if (TIFFGetField(tif, tag, &data) && data) {
             return {data, static_cast<size_t>(n)};
         }
-    } else if (count_size == 2) {
+    } else if (countSize == 2) {
         uint16_t count;
         const T* data;
         if (TIFFGetField(tif, tag, &count, &data) && data) {
             return {data, count};
         }
-    } else if (count_size == 4) {
+    } else if (countSize == 4) {
         uint32_t count;
         const T* data;
         if (TIFFGetField(tif, tag, &count, &data) && data) {
             return {data, count};
         }
-    } else if (count_size == 8) {
+    } else if (countSize == 8) {
         uint64_t count;
         const T* data;
         if (TIFFGetField(tif, tag, &count, &data) && data) {
@@ -143,6 +142,78 @@ template <typename T> span<const T> tiffGet(TIFF* tif, ttag_t tag) {
     }
 
     return {};
+}
+
+template <typename T> optional<T> tiffGetValue(TIFF* tif, ttag_t tag) {
+    const TIFFField* field = TIFFFindField(tif, tag, TIFF_ANY);
+    if (!field) {
+        return nullopt;
+    }
+
+    if (const int size = TIFFFieldSetGetSize(field); size != sizeof(T)) {
+        tlog::warning() << fmt::format("TIFF tag {} has unexpected size (expected {}, got {})", tag, sizeof(tiffDataType<T>()), size);
+        return nullopt;
+    }
+
+    const int countSize = TIFFFieldSetGetCountSize(field);
+    if (countSize > 0) {
+        const auto asSpan = tiffGetSpan<T>(tif, tag);
+        if (asSpan.size() == 1) {
+            return asSpan[0];
+        } else {
+            tlog::warning()
+                << fmt::format("TIFF tag {} is an array of {} elements, but expected a single value. Skipping.", tag, asSpan.size());
+            return nullopt;
+        }
+    } else if (countSize == 0) {
+        T value;
+        if (TIFFGetField(tif, tag, &value)) {
+            return value;
+        }
+    } else {
+        tlog::warning() << fmt::format("TIFF tag {} has unsupported count size {}. Skipping.", tag, countSize);
+        return nullopt;
+    }
+
+    return nullopt;
+}
+
+template <typename T> array<span<const T>, 3> tiffGetRgbSpans(TIFF* tif, ttag_t tag, size_t elementsPerArray) {
+    array<span<const T>, 3> result = {};
+
+    const TIFFField* field = TIFFFindField(tif, tag, TIFF_ANY);
+    if (!field) {
+        return {};
+    }
+
+    // TIFFGetField expects one pointer arg per array.
+    // These tags only ever return 1 or 3 arrays in practice.
+    const T* ptrs[3] = {};
+    if (!TIFFGetField(tif, tag, &ptrs[0], &ptrs[1], &ptrs[2])) {
+        return {};
+    }
+
+    for (size_t i = 0; i < 3; i++) {
+        if (ptrs[i]) {
+            result[i] = {ptrs[i], elementsPerArray};
+        }
+    }
+
+    return result;
+}
+
+array<span<const uint16_t>, 3> tiffGetTransferFunction(TIFF* tif) {
+    uint16_t bitsPerSample = 8;
+    TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &bitsPerSample);
+    size_t n = 1u << bitsPerSample;
+    return tiffGetRgbSpans<uint16_t>(tif, TIFFTAG_TRANSFERFUNCTION, n);
+}
+
+array<span<const uint16_t>, 3> tiffGetColorMap(TIFF* tif) {
+    uint16_t bitsPerSample = 8;
+    TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &bitsPerSample);
+    const size_t n = 1u << bitsPerSample;
+    return tiffGetRgbSpans<uint16_t>(tif, TIFFTAG_COLORMAP, n);
 }
 
 Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, const nanogui::Vector2i& size, int priority) {
@@ -183,7 +254,7 @@ template <bool SRGB_TO_LINEAR = false>
 Task<void> tiffDataToFloat32(
     ETiffKind kind,
     const Vector2i& interleave,
-    const uint16_t* __restrict palette[3],
+    const array<span<const uint16_t>, 3>& palette,
     uint32_t* __restrict imageData,
     size_t numSppIn,
     float* __restrict floatData,
@@ -205,8 +276,8 @@ Task<void> tiffDataToFloat32(
             (const uint32_t*)imageData, numSppIn, floatData, numSppOut, size, hasAlpha, priority, scale
         );
     } else if (kind == ETiffKind::Palette) {
-        if (palette[0] == nullptr || palette[1] == nullptr || palette[2] == nullptr) {
-            throw runtime_error{"Palette data is null."};
+        if (any_of(palette.begin(), palette.end(), [](const auto& c) { return c.empty(); })) {
+            throw runtime_error{"Palette data is empty."};
         }
 
         if (numSppOut < 3) {
@@ -219,10 +290,11 @@ Task<void> tiffDataToFloat32(
             numPixels,
             numPixels * numSppOut,
             [&](size_t i) {
-                const uint32_t index = imageData[i * numSppIn];
+                const size_t index = imageData[i * numSppIn];
                 const float paletteScale = 1.0f / 65535.0f;
                 for (size_t c = 0; c < 3; ++c) {
-                    floatData[i * numSppOut + c] = palette[c][index] * paletteScale;
+                    const size_t localIdx = std::clamp(index, (size_t)0, palette[c].size() - 1);
+                    floatData[i * numSppOut + c] = palette[c][localIdx] * paletteScale;
                 }
 
                 size_t numChannels = std::min(numSppOut, numSppIn + 2);
@@ -381,26 +453,11 @@ void unpackBits(
 Box2i getActiveArea(TIFF* tif, const Vector2i& size) {
     Box2i activeArea{Vector2i(0, 0), size};
 
-    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_ACTIVEAREA, TIFF_ANY)) {
-        switch (TIFFFieldDataType(field)) {
-            case TIFF_SHORT:
-                if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
-                    activeArea.min.y() = aa[0];
-                    activeArea.min.x() = aa[1];
-                    activeArea.max.y() = aa[2];
-                    activeArea.max.x() = aa[3];
-                }
-                break;
-            case TIFF_LONG:
-                if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_ACTIVEAREA, &aa)) {
-                    activeArea.min.y() = aa[0];
-                    activeArea.min.x() = aa[1];
-                    activeArea.max.y() = aa[2];
-                    activeArea.max.x() = aa[3];
-                }
-                break;
-            default: throw ImageLoadError{"Unsupported active area data type."};
-        }
+    if (const auto aa = tiffGetSpan<uint32_t>(tif, TIFFTAG_ACTIVEAREA); aa.size() >= 4) {
+        activeArea.min.y() = aa[0];
+        activeArea.min.x() = aa[1];
+        activeArea.max.y() = aa[2];
+        activeArea.max.x() = aa[3];
     }
 
     if (!activeArea.isValid() || !Box2i(Vector2i{0, 0}, size).contains(activeArea)) {
@@ -416,65 +473,21 @@ Box2i getActiveArea(TIFF* tif, const Vector2i& size) {
 
 // Per DNG spec: relative to top-left corner of active area!
 Box2i getDefaultCrop(TIFF* tif, const Vector2i& size) {
-    Vector2i min{0, 0};
-    Vector2i cropSize{size};
+    Box2i cropBox{Vector2i(0, 0), size};
 
-    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_DEFAULTCROPORIGIN, TIFF_ANY)) {
-        switch (TIFFFieldDataType(field)) {
-            case TIFF_SHORT:
-                if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPORIGIN, &aa)) {
-                    min.x() = aa[0];
-                    min.y() = aa[1];
-                }
-                break;
-            case TIFF_LONG:
-                if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPORIGIN, &aa)) {
-                    min.x() = aa[0];
-                    min.y() = aa[1];
-                }
-                break;
-            case TIFF_RATIONAL:
-                if (float* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPORIGIN, &aa)) {
-                    min.x() = (int)aa[0];
-                    min.y() = (int)aa[1];
-                }
-                break;
-            default: throw ImageLoadError{"Unsupported active area data type."};
-        }
+    if (const auto origin = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPORIGIN); origin.size() >= 2) {
+        cropBox.min.x() = (int)origin[0];
+        cropBox.min.y() = (int)origin[1];
     }
 
-    if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_DEFAULTCROPSIZE, TIFF_ANY)) {
-        switch (TIFFFieldDataType(field)) {
-            case TIFF_SHORT:
-                if (uint16_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPSIZE, &aa)) {
-                    cropSize.x() = aa[0];
-                    cropSize.y() = aa[1];
-                }
-                break;
-            case TIFF_LONG:
-                if (uint32_t* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPSIZE, &aa)) {
-                    cropSize.x() = aa[0];
-                    cropSize.y() = aa[1];
-                }
-                break;
-            case TIFF_RATIONAL:
-                if (float* aa; TIFFGetField(tif, TIFFTAG_DEFAULTCROPSIZE, &aa)) {
-                    cropSize.x() = (int)aa[0];
-                    cropSize.y() = (int)aa[1];
-                }
-                break;
-            default: throw ImageLoadError{"Unsupported active area data type."};
-        }
+    if (const auto size = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPSIZE); size.size() >= 2) {
+        cropBox.max.x() = cropBox.min.x() + (int)size[0];
+        cropBox.max.y() = cropBox.min.y() + (int)size[1];
     }
-
-    Box2i cropBox{min, min + cropSize};
 
     if (!cropBox.isValid() || !Box2i(Vector2i{0, 0}, size).contains(cropBox)) {
         tlog::warning() << fmt::format("Invalid crop area: min={} max={}; using full area instead.", cropBox.min, cropBox.max);
-        return Box2i{
-            Vector2i{0, 0},
-            size
-        };
+        return Box2i{Vector2i(0, 0), size};
     }
 
     return cropBox;
@@ -493,42 +506,33 @@ Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, cons
         TIFFSetDirectory(tif, 0);
         const ScopeGuard guard{[&]() { TIFFSetSubDirectory(tif, prevOffset); }};
 
-        uint32_t numRead = 0;
-        if (float* asn; TIFFGetField(tif, TIFFTAG_ASSHOTNEUTRAL, &numRead, &asn) && asn && numRead >= 3) {
+        if (const auto asn = tiffGetSpan<float>(tif, TIFFTAG_ASSHOTNEUTRAL); asn.size() >= 3) {
             const float maxVal = std::max({asn[0], asn[1], asn[2]});
             wbScale = Vector3f{asn[0], asn[1], asn[2]} / maxVal;
             tlog::debug() << fmt::format("Clipping integer CFA to neutral white {}", wbScale);
         }
     }
 
-    uint16_t* dim = nullptr;
-    if (!TIFFGetField(tif, TIFFTAG_EP_CFAREPEATPATTERNDIM, &dim) || !dim) {
-        throw ImageLoadError{"Missing or invalid CFARepeatPatternDim"};
+    const auto dim = tiffGetSpan<uint16_t>(tif, TIFFTAG_EP_CFAREPEATPATTERNDIM);
+    if (dim.size() != 2 || dim[0] == 0 || dim[1] == 0) {
+        throw ImageLoadError{fmt::format(
+            "Invalid CFA pattern dimensions: expected 2 positive values, got {}",
+            dim.size() == 2 ? fmt::format("{}, {}", dim[0], dim[1]) : fmt::format("{}", dim.size())
+        )};
     }
 
     const auto cfaSize = Vector2i{dim[1], dim[0]};
     const size_t patternSize = (size_t)cfaSize.x() * cfaSize.y();
 
-    uint8_t* pat = nullptr;
-    if (uint16_t readCount; !TIFFGetField(tif, TIFFTAG_EP_CFAPATTERN, &readCount, &pat) || !pat || readCount != patternSize) {
-        throw ImageLoadError{"Missing or invalid CFAPattern"};
+    const auto pat = tiffGetSpan<uint8_t>(tif, TIFFTAG_EP_CFAPATTERN);
+    if (pat.size() < patternSize) {
+        throw ImageLoadError{fmt::format("CFA pattern size is smaller than expected: expected at least {}, got {}", patternSize, pat.size())};
     }
 
-    enum class ELayout : uint16_t {
-        Rect = 1,
-        A,
-        B,
-        C,
-        D,
-        E,
-        F,
-        G,
-        H,
-        I,
-    };
-    ELayout layout = ELayout::Rect;
+    enum class ELayout : uint16_t { Rect = 1, A, B, C, D, E, F, G, H, I };
+    const ELayout layout = tiffGetValue<ELayout>(tif, TIFFTAG_CFALAYOUT).value_or(ELayout::Rect);
 
-    if (TIFFGetField(tif, TIFFTAG_CFALAYOUT, (uint16_t*)&layout) && layout != ELayout::Rect) {
+    if (layout != ELayout::Rect) {
         tlog::warning() << fmt::format("Found CFALayout tag with non-rectangular value {}; not supported yet", (uint16_t)layout);
     }
 
@@ -552,7 +556,7 @@ Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, cons
         );
     }
 
-    co_await demosaic(cfaData, rgbData, size, span<const uint8_t>(pat, patternSize), cfaSize, priority);
+    co_await demosaic(cfaData, rgbData, size, pat, cfaSize, priority);
 
     if (wbScale != Vector3f{1.0f}) {
         co_await ThreadPool::global().parallelForAsync<int>(
@@ -578,8 +582,8 @@ Task<void> linearizeAndNormalizeRawDng(
     const uint16_t dataSampleFormat,
     const uint16_t dataBitsPerSample,
     const uint16_t samplesPerPixel,
-    const int numColorChannels,
-    const int numRgbaChannels,
+    const size_t numColorChannels,
+    const size_t numRgbaChannels,
     span<float> floatRgbaData,
     const Vector2i size,
     const int priority
@@ -591,7 +595,7 @@ Task<void> linearizeAndNormalizeRawDng(
     const float scale = 1.0f / maxVal;
 
     // 1. Map colors via linearization table if it exists and the data is not already float
-    if (const auto linTable = tiffGet<uint16_t>(tif, TIFFTAG_LINEARIZATIONTABLE); !linTable.empty()) {
+    if (const auto linTable = tiffGetSpan<uint16_t>(tif, TIFFTAG_LINEARIZATIONTABLE); !linTable.empty()) {
         tlog::debug() << fmt::format("Found linearization table of size {}; applying...", linTable.size());
 
         if (dataSampleFormat == SAMPLEFORMAT_IEEEFP) {
@@ -604,7 +608,7 @@ Task<void> linearizeAndNormalizeRawDng(
                 numPixels,
                 numPixels * numColorChannels,
                 [&](size_t i) {
-                    for (int c = 0; c < numColorChannels; ++c) {
+                    for (size_t c = 0; c < numColorChannels; ++c) {
                         const float val = floatRgbaData[i * numRgbaChannels + c];
 
                         // Lerp the transfer function
@@ -620,15 +624,19 @@ Task<void> linearizeAndNormalizeRawDng(
 
     // 2. Subtract black level
     vector<float> maxBlackLevel(samplesPerPixel, 0.0f);
-    if (const auto blackLevelFloat = tiffGet<float>(tif, TIFFTAG_BLACKLEVEL); !blackLevelFloat.empty()) {
+    if (const auto blackLevelFloat = tiffGetSpan<float>(tif, TIFFTAG_BLACKLEVEL); !blackLevelFloat.empty()) {
         uint16_t blackLevelRepeatRows = 1;
         uint16_t blackLevelRepeatCols = 1;
-        if (const uint16_t* blackLevelRepeatDim; TIFFGetField(tif, TIFFTAG_BLACKLEVELREPEATDIM, &blackLevelRepeatDim)) {
+        if (const auto blackLevelRepeatDim = tiffGetSpan<uint16_t>(tif, TIFFTAG_BLACKLEVELREPEATDIM); blackLevelRepeatDim.size() >= 2) {
             blackLevelRepeatRows = blackLevelRepeatDim[0];
             blackLevelRepeatCols = blackLevelRepeatDim[1];
         }
 
         const size_t numBlackLevelPixels = blackLevelRepeatRows * blackLevelRepeatCols;
+        if (numBlackLevelPixels == 0) {
+            throw ImageLoadError{"Black level repeat dimensions must not be zero."};
+        }
+
         vector<float> blackLevel(numBlackLevelPixels * samplesPerPixel, 0.0f);
 
         if (blackLevelFloat.size() < blackLevel.size()) {
@@ -647,7 +655,7 @@ Task<void> linearizeAndNormalizeRawDng(
         vector<float> blackLevelDeltaH(size.x(), 0.0f);
         vector<float> blackLevelDeltaV(size.y(), 0.0f);
 
-        if (const auto bldh = tiffGet<float>(tif, TIFFTAG_BLACKLEVELDELTAH); !bldh.empty()) {
+        if (const auto bldh = tiffGetSpan<float>(tif, TIFFTAG_BLACKLEVELDELTAH); !bldh.empty()) {
             tlog::debug() << fmt::format("Found {} black level H entries", bldh.size());
             if (bldh.size() != blackLevelDeltaH.size()) {
                 throw ImageLoadError{"Invalid number of black level delta H pixels."};
@@ -658,7 +666,7 @@ Task<void> linearizeAndNormalizeRawDng(
             }
         }
 
-        if (const auto bldv = tiffGet<float>(tif, TIFFTAG_BLACKLEVELDELTAV); !bldv.empty()) {
+        if (const auto bldv = tiffGetSpan<float>(tif, TIFFTAG_BLACKLEVELDELTAV); !bldv.empty()) {
             tlog::debug() << fmt::format("Found {} black level V entries", bldv.size());
             if (bldv.size() != blackLevelDeltaV.size()) {
                 throw ImageLoadError{"Invalid number of black level delta V pixels."};
@@ -683,7 +691,7 @@ Task<void> linearizeAndNormalizeRawDng(
                     const size_t idx = (size_t)y * size.x() + x;
                     const size_t blIdx = (y % blackLevelRepeatRows) * blackLevelRepeatCols + (x % blackLevelRepeatCols);
 
-                    for (int c = 0; c < numColorChannels; ++c) {
+                    for (size_t c = 0; c < numColorChannels; ++c) {
                         const float bl = blackLevel[blIdx * samplesPerPixel + c] + delta;
                         floatRgbaData[idx * numRgbaChannels + c] -= bl;
                         maxBlackLevelY[y * samplesPerPixel + c] = std::max(maxBlackLevelY[y * samplesPerPixel + c], bl);
@@ -695,7 +703,7 @@ Task<void> linearizeAndNormalizeRawDng(
 
         maxBlackLevel.assign(samplesPerPixel, numeric_limits<float>::lowest());
         for (int y = 0; y < size.y(); ++y) {
-            for (int c = 0; c < numColorChannels; ++c) {
+            for (size_t c = 0; c < numColorChannels; ++c) {
                 maxBlackLevel[c] = std::max(maxBlackLevel[c], maxBlackLevelY[y * samplesPerPixel + c]);
             }
         }
@@ -703,7 +711,7 @@ Task<void> linearizeAndNormalizeRawDng(
 
     // 3. Rescale to 0-1 range per white level
     vector<float> whiteLevel(samplesPerPixel, 1.0f);
-    if (const auto whiteLevelLong = tiffGet<uint32_t>(tif, TIFFTAG_WHITELEVEL); !whiteLevelLong.empty()) {
+    if (const auto whiteLevelLong = tiffGetSpan<uint32_t>(tif, TIFFTAG_WHITELEVEL); !whiteLevelLong.empty()) {
         if (whiteLevelLong.size() != whiteLevel.size()) {
             throw ImageLoadError{
                 fmt::format("Invalid number of long white level pixels: expected {}, got {}", whiteLevel.size(), whiteLevelLong.size())
@@ -732,7 +740,7 @@ Task<void> linearizeAndNormalizeRawDng(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     floatRgbaData[i * numRgbaChannels + c] *= channelScale[c];
                 }
             },
@@ -749,7 +757,7 @@ Task<void> linearizeAndNormalizeRawDng(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     floatRgbaData[i * numRgbaChannels + c] = std::min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
                 }
             },
@@ -761,8 +769,8 @@ Task<void> linearizeAndNormalizeRawDng(
 Task<void> postprocessLinearRawDng(
     TIFF* tif,
     const uint16_t samplesPerPixel,
-    const int numColorChannels,
-    const int numRgbaChannels,
+    const size_t numColorChannels,
+    const size_t numRgbaChannels,
     span<float> floatRgbaData,
     ImageData& resultData,
     const bool reverseEndian,
@@ -784,7 +792,7 @@ Task<void> postprocessLinearRawDng(
     const ScopeGuard guard{[&]() { TIFFSetSubDirectory(tif, prevOffset); }};
 
     Vector3f analogBalance{1.0f};
-    if (const auto abt = tiffGet<float>(tif, TIFFTAG_ANALOGBALANCE); !abt.empty()) {
+    if (const auto abt = tiffGetSpan<float>(tif, TIFFTAG_ANALOGBALANCE); !abt.empty()) {
         if (abt.size() != samplesPerPixel) {
             throw ImageLoadError{"Invalid number of analog balance pixels."};
         }
@@ -798,7 +806,7 @@ Task<void> postprocessLinearRawDng(
 
     const auto readCameraToXyz = [&](int CCTAG, int CMTAG, int CALTAG) {
         Matrix3f colorMatrix{1.0f};
-        if (const auto cmt = tiffGet<float>(tif, CMTAG); !cmt.empty()) {
+        if (const auto cmt = tiffGetSpan<float>(tif, CMTAG); !cmt.empty()) {
             if (cmt.size() != (uint32_t)samplesPerPixel * samplesPerPixel) {
                 throw ImageLoadError{"Invalid number of camera matrix entries."};
             }
@@ -815,7 +823,7 @@ Task<void> postprocessLinearRawDng(
         }
 
         Matrix3f cameraCalibration{1.0f};
-        if (const auto cct = tiffGet<float>(tif, CCTAG); !cct.empty()) {
+        if (const auto cct = tiffGetSpan<float>(tif, CCTAG); !cct.empty()) {
             if (cct.size() != (uint32_t)samplesPerPixel * samplesPerPixel) {
                 throw ImageLoadError{"Invalid number of camera calibration entries."};
             }
@@ -839,7 +847,7 @@ Task<void> postprocessLinearRawDng(
         const auto cameraToXyz = inverse(xyzToCamera);
 
         // Read AsShotNeutral (camera's response to the scene white point, normalized to green=1)
-        if (const auto asn = tiffGet<float>(tif, TIFFTAG_ASSHOTNEUTRAL); !asn.empty()) {
+        if (const auto asn = tiffGetSpan<float>(tif, TIFFTAG_ASSHOTNEUTRAL); !asn.empty()) {
             if (asn.size() != samplesPerPixel) {
                 throw ImageLoadError{"Invalid number of AsShotNeutral entries."};
             }
@@ -852,7 +860,7 @@ Task<void> postprocessLinearRawDng(
             const Vector2f xy = {xyz.x() / sxyz, xyz.y() / sxyz};
 
             chromaticAdaptation = adaptWhiteBradford(xy, whiteD50());
-        } else if (const auto aswp = tiffGet<float>(tif, TIFFTAG_ASSHOTWHITEXY); !aswp.empty()) {
+        } else if (const auto aswp = tiffGetSpan<float>(tif, TIFFTAG_ASSHOTWHITEXY); !aswp.empty()) {
             if (aswp.size() != 2) {
                 throw ImageLoadError{"Invalid number of AsShotNeutral entries."};
             }
@@ -861,9 +869,9 @@ Task<void> postprocessLinearRawDng(
 
             tlog::debug() << fmt::format("Adapting white to D50 based on AsShotWhiteXY={}", cameraNeutralXy);
             chromaticAdaptation = adaptWhiteBradford(cameraNeutralXy, whiteD50());
-        } else if (uint16_t illu; adaptToExifIlluminant && TIFFGetField(tif, CALTAG, &illu)) {
-            EExifLightSource illuminant = static_cast<EExifLightSource>(illu);
-            tlog::debug() << fmt::format("Found illuminant={}/{}", toString(illuminant), illu);
+        } else if (const auto illu = tiffGetValue<uint16_t>(tif, CALTAG); illu && adaptToExifIlluminant) {
+            EExifLightSource illuminant = static_cast<EExifLightSource>(*illu);
+            tlog::debug() << fmt::format("Found illuminant={}/{}", toString(illuminant), *illu);
 
             const auto whitePoint = xy(illuminant);
             if (whitePoint.x() > 0.0f && whitePoint.y() > 0.0f) {
@@ -916,32 +924,26 @@ Task<void> postprocessLinearRawDng(
 
     bool isHdr = 0;
     static constexpr uint16_t TIFFTAG_PROFILEDYNAMICRANGE = 52551;
-    if (ProfileDynamicRange* pdr; TIFFGetField(tif, TIFFTAG_PROFILEDYNAMICRANGE, &pdr)) {
+    if (const auto pdrData = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEDYNAMICRANGE); pdrData.size() >= sizeof(ProfileDynamicRange)) {
+        ProfileDynamicRange pdr = *reinterpret_cast<const ProfileDynamicRange*>(pdrData.data());
         if (reverseEndian) {
-            pdr->version = swapBytes(pdr->version);
-            pdr->dynamicRange = swapBytes(pdr->dynamicRange);
+            pdr.version = swapBytes(pdr.version);
+            pdr.dynamicRange = swapBytes(pdr.dynamicRange);
         }
 
         tlog::debug() << fmt::format(
-            "Found profile dynamic range: version={} dynamicRange={} hintMaxOutputValue={}", pdr->version, pdr->dynamicRange, pdr->hintMaxOutputValue
+            "Found profile dynamic range: version={} dynamicRange={} hintMaxOutputValue={}", pdr.version, pdr.dynamicRange, pdr.hintMaxOutputValue
         );
 
         // Per DNG 1.7.0.0, page 93, a value of 1 refers to HDR images that need to be compressed into 0-1 before the following transforms
         // take place.
-        isHdr = pdr->dynamicRange == 1;
+        isHdr = pdr.dynamicRange == 1;
     }
 
     // NOTE: The order of the following operations is defined on pages 71/72 of the DNG spec.
     float exposureScale = 1.0f;
-    if (float baselineExposure; TIFFGetField(tif, TIFFTAG_BASELINEEXPOSURE, &baselineExposure)) {
-        tlog::debug() << fmt::format("Baseline exposure: {}", baselineExposure);
-        exposureScale *= exp2f(baselineExposure);
-    }
-
-    if (float baselineExposureOffset; TIFFGetField(tif, TIFFTAG_BASELINEEXPOSUREOFFSET, &baselineExposureOffset)) {
-        tlog::debug() << fmt::format("Baseline exposure offset: {}", baselineExposureOffset);
-        exposureScale *= exp2f(baselineExposureOffset);
-    }
+    exposureScale *= exp2f(tiffGetValue<float>(tif, TIFFTAG_BASELINEEXPOSURE).value_or(0.0f));
+    exposureScale *= exp2f(tiffGetValue<float>(tif, TIFFTAG_BASELINEEXPOSUREOFFSET).value_or(0.0f));
 
     if (exposureScale != 1.0f) {
         tlog::debug() << fmt::format("Applying exposure scale: {}", exposureScale);
@@ -950,7 +952,7 @@ Task<void> postprocessLinearRawDng(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     floatRgbaData[i * numRgbaChannels + c] *= exposureScale;
                 }
             },
@@ -967,7 +969,7 @@ Task<void> postprocessLinearRawDng(
         co_return;
     }
 
-    if (const auto str = tiffGet<char>(tif, TIFFTAG_PROFILENAME); !str.empty()) {
+    if (const auto str = tiffGetSpan<char>(tif, TIFFTAG_PROFILENAME); !str.empty()) {
         tlog::debug() << fmt::format("Applying camera profile \"{}\"", str.data());
     }
 
@@ -976,8 +978,7 @@ Task<void> postprocessLinearRawDng(
         TIFFSetSubDirectory(tif, prevOffset);
         ScopeGuard guard2{[&]() { TIFFSetDirectory(tif, 0); }};
 
-        uint32_t numReadGainTableMap = 0;
-        if (const uint8_t* gainTableMap; TIFFGetField(tif, TIFFTAG_PROFILEGAINTABLEMAP, &numReadGainTableMap, &gainTableMap)) {
+        if (const auto gainTableMap = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEGAINTABLEMAP); !gainTableMap.empty()) {
             // TODO: implement profile gain table map
             tlog::debug() << "Found gain table map, but not implemented yet. Color profile may look wrong.";
         }
@@ -990,7 +991,7 @@ Task<void> postprocessLinearRawDng(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const size_t idx = i * numRgbaChannels + c;
                     floatRgbaData[idx] = dngHdrEncodingFunction(floatRgbaData[idx]);
                 }
@@ -999,7 +1000,7 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
-    if (const uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILEHUESATMAPDIMS, &dims)) {
+    if (const auto dims = tiffGetSpan<uint32_t>(tif, TIFFTAG_PROFILEHUESATMAPDIMS); dims.size() >= 3) {
         uint32_t hueDivisions = dims[0];
         uint32_t satDivisions = dims[1];
         uint32_t valueDivisions = dims[2];
@@ -1007,10 +1008,10 @@ Task<void> postprocessLinearRawDng(
         tlog::debug() << fmt::format("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
-        tlog::warning() << "Found hue/sat/val map, but not implemented yet. Color profile may look wrong.";
+        tlog::debug() << "Found hue/sat/val map, but not implemented yet. Color profile may look wrong.";
     }
 
-    if (const uint32_t* dims; TIFFGetField(tif, TIFFTAG_PROFILELOOKTABLEDIMS, &dims)) {
+    if (const auto dims = tiffGetSpan<uint32_t>(tif, TIFFTAG_PROFILELOOKTABLEDIMS); dims.size() >= 3) {
         uint32_t hueDivisions = dims[0];
         uint32_t satDivisions = dims[1];
         uint32_t valueDivisions = dims[2];
@@ -1018,10 +1019,10 @@ Task<void> postprocessLinearRawDng(
         tlog::debug() << fmt::format("Look table dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
-        tlog::warning() << "Found look table, but not implemented yet. Color profile may look wrong.";
+        tlog::debug() << "Found look table, but not implemented yet. Color profile may look wrong.";
     }
 
-    if (const auto tonecurve = tiffGet<float>(tif, TIFFTAG_PROFILETONECURVE); !tonecurve.empty()) {
+    if (const auto tonecurve = tiffGetSpan<float>(tif, TIFFTAG_PROFILETONECURVE); !tonecurve.empty()) {
         if (tonecurve.size() % 2 != 0 || tonecurve.size() < 4) {
             throw ImageLoadError{"Number of tone curve entries must be divisible by 2 and >=4."};
         }
@@ -1050,7 +1051,7 @@ Task<void> postprocessLinearRawDng(
             numPixels,
             numPixels * numColorChannels * 16, // arbitrary factor to estimate pw linear cost
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const size_t idx = i * numRgbaChannels + c;
                     floatRgbaData[idx] = applyPwLinear(tc, floatRgbaData[idx]);
                 }
@@ -1069,7 +1070,7 @@ Task<void> postprocessLinearRawDng(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const size_t idx = i * numRgbaChannels + c;
                     floatRgbaData[idx] = dngHdrDecodingFunction(floatRgbaData[idx]);
                 }
@@ -1083,8 +1084,8 @@ Task<void> postprocessRgb(
     TIFF* tif,
     const uint16_t photometric,
     const uint16_t dataBitsPerSample,
-    const int numColorChannels,
-    const int numRgbaChannels,
+    const size_t numColorChannels,
+    const size_t numRgbaChannels,
     span<float> floatRgbaData,
     ImageData& resultData,
     const int priority
@@ -1094,7 +1095,7 @@ Task<void> postprocessRgb(
 
     const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : dataBitsPerSample;
 
-    if (float* referenceBw; TIFFGetField(tif, TIFFTAG_REFERENCEBLACKWHITE, &referenceBw) && referenceBw) {
+    if (const auto referenceBw = tiffGetSpan<float>(tif, TIFFTAG_REFERENCEBLACKWHITE); referenceBw.size() >= 6) {
         const size_t maxVal = (1ull << bps) - 1;
 
         const bool isYCbCr = photometric == PHOTOMETRIC_YCBCR;
@@ -1115,7 +1116,7 @@ Task<void> postprocessRgb(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const size_t idx = i * numRgbaChannels + c;
                     floatRgbaData[idx] = (floatRgbaData[idx] * maxVal - refBlack[c]) * totalScale[c] + offset[c];
                 }
@@ -1126,7 +1127,7 @@ Task<void> postprocessRgb(
 
     if (photometric == PHOTOMETRIC_YCBCR && numRgbaChannels >= 3) {
         Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f};
-        if (float* yCbCrCoeffs; TIFFGetField(tif, TIFFTAG_YCBCRCOEFFICIENTS, &yCbCrCoeffs) && yCbCrCoeffs) {
+        if (const auto yCbCrCoeffs = tiffGetSpan<float>(tif, TIFFTAG_YCBCRCOEFFICIENTS); yCbCrCoeffs.size() >= 3) {
             const Vector3f K = {yCbCrCoeffs[0], yCbCrCoeffs[1], yCbCrCoeffs[2]};
             coeffs = {
                 2.0f * (1.0f - K.x()),
@@ -1142,14 +1143,14 @@ Task<void> postprocessRgb(
     }
 
     chroma_t chroma = rec709Chroma();
-    if (float* primaries; TIFFGetField(tif, TIFFTAG_PRIMARYCHROMATICITIES, &primaries) && primaries) {
+    if (const auto primaries = tiffGetSpan<float>(tif, TIFFTAG_PRIMARYCHROMATICITIES); primaries.size() >= 6) {
         tlog::debug() << "Found custom primaries; applying...";
         chroma[0] = {primaries[0], primaries[1]};
         chroma[1] = {primaries[2], primaries[3]};
         chroma[2] = {primaries[4], primaries[5]};
     }
 
-    if (float* whitePoint; TIFFGetField(tif, TIFFTAG_WHITEPOINT, &whitePoint) && whitePoint) {
+    if (const auto whitePoint = tiffGetSpan<float>(tif, TIFFTAG_WHITEPOINT); whitePoint.size() >= 2) {
         tlog::debug() << "Found custom white point; applying...";
         chroma[3] = {whitePoint[0], whitePoint[1]};
     }
@@ -1162,18 +1163,17 @@ Task<void> postprocessRgb(
 
     enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
 
-    if (uint16_t* transferFunction[3];
-        TIFFGetField(tif, TIFFTAG_TRANSFERFUNCTION, &transferFunction[0], &transferFunction[1], &transferFunction[2])) {
+    if (const auto transferFunction = tiffGetTransferFunction(tif); !transferFunction.at(0).empty()) {
         // In TIFF, transfer functions are stored as 2**bitsPerSample values in the range [0, 65535] per color channel. The transfer
         // function is a linear interpolation between these values.
         tlog::debug() << "Found custom transfer function; applying...";
 
-        if (numColorChannels > 3) {
+        if (transferFunction.size() < numColorChannels || numColorChannels > 3) {
             throw ImageLoadError{"TIFF images with transfer functions and more than 3 color channels are not supported."};
         }
 
-        for (int c = 0; c < numColorChannels; ++c) {
-            if (!transferFunction[c]) {
+        for (size_t c = 0; c < numColorChannels; ++c) {
+            if (transferFunction.at(c).size() < 2) {
                 throw ImageLoadError{fmt::format("Missing transfer function for channel {}", c)};
             }
         }
@@ -1185,8 +1185,7 @@ Task<void> postprocessRgb(
 
         static constexpr uint16_t TIFFTAG_TRANSFERRANGE = 342;
 
-        uint32_t numRead = 0;
-        if (uint16_t* transferRange; TIFFGetField(tif, TIFFTAG_TRANSFERRANGE, &numRead, &transferRange) && transferRange && numRead >= 6) {
+        if (const auto transferRange = tiffGetSpan<uint16_t>(tif, TIFFTAG_TRANSFERRANGE); transferRange.size() >= 6) {
             transferRangeBlack = {transferRange[0], transferRange[2], transferRange[4]};
             transferRangeWhite = {transferRange[1], transferRange[3], transferRange[5]};
 
@@ -1200,11 +1199,11 @@ Task<void> postprocessRgb(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const float val = floatRgbaData[i * numRgbaChannels + c];
 
                     // Lerp the transfer function
-                    const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], (size_t)0, maxIdx - 1);
+                    const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], (size_t)0, transferFunction[c].size() - 2);
                     const float w = val * maxIdx - idx - transferRangeBlack[c];
                     floatRgbaData[i * numRgbaChannels + c] = ((1.0f - w) * (float)transferFunction[c][idx] +
                                                               w * (float)transferFunction[c][idx + 1] - transferRangeBlack[c]) *
@@ -1215,7 +1214,7 @@ Task<void> postprocessRgb(
         );
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::LUT;
-    } else if (uint32_t* pcsInt, count; TIFFGetField(tif, TIFFTAG_PREVIEWCOLORSPACE, &count, &pcsInt) && pcsInt && count >= 1 && *pcsInt > 1) {
+    } else if (const auto pcsInt = tiffGetValue<uint32_t>(tif, TIFFTAG_PREVIEWCOLORSPACE)) {
         // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
         // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
         tlog::debug() << fmt::format("Found preview color space: {}", *pcsInt);
@@ -1228,7 +1227,7 @@ Task<void> postprocessRgb(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     float v = floatRgbaData[i * numRgbaChannels + c];
                     floatRgbaData[i * numRgbaChannels + c] = toLinear(v);
                 }
@@ -1259,10 +1258,10 @@ Task<void> postprocessRgb(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                for (int c = 0; c < numColorChannels; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
                     // the power behaves like an odd exponent, thereby preserving the range of R.
-                    float v = floatRgbaData[i * numRgbaChannels + c];
+                    const float v = floatRgbaData[i * numRgbaChannels + c];
                     floatRgbaData[i * numRgbaChannels + c] = copysign(pow(abs(v), 2.2f), v);
                 }
             },
@@ -1277,8 +1276,8 @@ Task<void> postprocessLab(
     TIFF* tif,
     const uint16_t photometric,
     const uint16_t dataBitsPerSample,
-    const int numColorChannels,
-    const int numRgbaChannels,
+    const size_t numColorChannels,
+    const size_t numRgbaChannels,
     span<float> floatRgbaData,
     ImageData& resultData,
     const int priority
@@ -1299,7 +1298,7 @@ Task<void> postprocessLab(
             [&](size_t i) {
                 const size_t base = i * numRgbaChannels;
                 floatRgbaData[base + 0] = floatRgbaData[base + 0] * 100.0f;
-                for (int c = 1; c < numColorChannels && c < 3; ++c) {
+                for (size_t c = 1; c < numColorChannels; ++c) {
                     const float v = floatRgbaData[base + c] * 255.0f;
                     floatRgbaData[base + c] = v >= 128.0f ? v - 256.0f : v;
                 }
@@ -1314,7 +1313,7 @@ Task<void> postprocessLab(
             [&](size_t i) {
                 const size_t base = i * numRgbaChannels;
                 floatRgbaData[base + 0] = floatRgbaData[base + 0] * 100.0f;
-                for (int c = 1; c < numColorChannels && c < 3; ++c) {
+                for (size_t c = 1; c < numColorChannels; ++c) {
                     const float v = floatRgbaData[base + c] * 255.0f;
                     floatRgbaData[base + c] = v - 128.0f;
                 }
@@ -1322,13 +1321,8 @@ Task<void> postprocessLab(
             priority
         );
     } else if (photometric == PHOTOMETRIC_ITULAB) {
-        Vector3f decodeMin, decodeMax;
-
-        decodeMin = {0.0f, -85.0f, -85.0f};
-        decodeMax = {100.0f, 85.0f, 85.0f};
-
-        uint16_t decodeCount = 0;
-        if (float* decode; TIFFGetField(tif, TIFFTAG_DECODE, &decodeCount, &decode) && decode && decodeCount >= 6) {
+        Vector3f decodeMin = {0.0f, -85.0f, -85.0f}, decodeMax = {100.0f, 85.0f, 85.0f};
+        if (const auto decode = tiffGetSpan<float>(tif, TIFFTAG_DECODE); decode.size() >= 6) {
             decodeMin = {decode[0], decode[2], decode[4]};
             decodeMax = {decode[1], decode[3], decode[5]};
 
@@ -1341,7 +1335,7 @@ Task<void> postprocessLab(
             numPixels * numColorChannels,
             [&](size_t i) {
                 const size_t base = i * numRgbaChannels;
-                for (int c = 0; c < numColorChannels && c < 3; ++c) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const float v = floatRgbaData[base + c];
                     floatRgbaData[base + c] = decodeMin[c] + v * (decodeMax[c] - decodeMin[c]);
                 }
@@ -1611,13 +1605,9 @@ Task<ImageData> readTiffImage(
         sampleFormat = SAMPLEFORMAT_IEEEFP;
     }
 
-    span<const uint8_t> jpegTables = {};
-    if (compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG) {
-        uint32_t jpegTablesLen = 0;
-        if (uint8_t* jpegTablesPtr; TIFFGetField(tif, TIFFTAG_JPEGTABLES, &jpegTablesLen, &jpegTablesPtr)) {
-            tlog::debug() << "Found JPEG tables; will use for decompression.";
-            jpegTables = {jpegTablesPtr, jpegTablesLen};
-        }
+    span<const uint8_t> jpegTables = tiffGetSpan<uint8_t>(tif, TIFFTAG_JPEGTABLES);
+    if ((compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG) && !jpegTables.empty()) {
+        tlog::debug() << "Found JPEG tables; will use for decompression.";
     }
 
     // DNG-specific photometric interpretations. See https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
@@ -1691,35 +1681,17 @@ Task<ImageData> readTiffImage(
 
     Vector2i interleave = {1, 1};
     if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_COLINTERLEAVEFACTOR, TIFF_ANY)) {
-        uint32_t numRead = 0;
         switch (TIFFFieldDataType(field)) {
-            case TIFF_SHORT:
-                if (uint16_t* f; TIFFGetField(tif, TIFFTAG_COLINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
-                    interleave.x() = *f;
-                }
-                break;
-            case TIFF_LONG:
-                if (uint32_t* f; TIFFGetField(tif, TIFFTAG_COLINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
-                    interleave.x() = (int)*f;
-                }
-                break;
+            case TIFF_SHORT: interleave.x() = tiffGetValue<uint16_t>(tif, TIFFTAG_COLINTERLEAVEFACTOR).value_or(1); break;
+            case TIFF_LONG: interleave.x() = tiffGetValue<uint32_t>(tif, TIFFTAG_COLINTERLEAVEFACTOR).value_or(1); break;
             default: throw ImageLoadError{"Unsupported col interleave factor type."};
         }
     }
 
     if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, TIFF_ANY)) {
-        uint32_t numRead = 0;
         switch (TIFFFieldDataType(field)) {
-            case TIFF_SHORT:
-                if (uint16_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
-                    interleave.y() = *f;
-                }
-                break;
-            case TIFF_LONG:
-                if (uint32_t* f; TIFFGetField(tif, TIFFTAG_ROWINTERLEAVEFACTOR, &numRead, &f) && f && numRead >= 1) {
-                    interleave.y() = (int)*f;
-                }
-                break;
+            case TIFF_SHORT: interleave.y() = tiffGetValue<uint16_t>(tif, TIFFTAG_ROWINTERLEAVEFACTOR).value_or(1); break;
+            case TIFF_LONG: interleave.y() = tiffGetValue<uint32_t>(tif, TIFFTAG_ROWINTERLEAVEFACTOR).value_or(1); break;
             default: throw ImageLoadError{"Unsupported row interleave factor type."};
         }
     }
@@ -1741,12 +1713,11 @@ Task<ImageData> readTiffImage(
     // Check if we have an alpha channel
     bool hasAlpha = false;
     bool hasPremultipliedAlpha = true; // No alpha is treated as premultiplied
-    uint16_t* extraChannelTypes = nullptr;
-    uint16_t numExtraChannels = 0;
+    size_t numExtraChannels = 0;
 
-    if (TIFFGetField(tif, TIFFTAG_EXTRASAMPLES, &numExtraChannels, &extraChannelTypes)) {
+    if (const auto extraChannelTypes = tiffGetSpan<uint16_t>(tif, TIFFTAG_EXTRASAMPLES); !extraChannelTypes.empty()) {
         tlog::debug() << fmt::format("Found {} extra channels.", numExtraChannels);
-        for (uint16_t i = 0; i < numExtraChannels; ++i) {
+        for (size_t i = 0; i < extraChannelTypes.size(); ++i) {
             if (extraChannelTypes[i] == EXTRASAMPLE_ASSOCALPHA || extraChannelTypes[i] == EXTRASAMPLE_UNASSALPHA) {
                 if (hasAlpha) {
                     throw ImageLoadError{"Multiple alpha channels found."};
@@ -1760,6 +1731,8 @@ Task<ImageData> readTiffImage(
                 hasPremultipliedAlpha = extraChannelTypes[i] == EXTRASAMPLE_ASSOCALPHA;
             }
         }
+
+        numExtraChannels = extraChannelTypes.size();
     } else if (samplesPerPixel == 2 || samplesPerPixel == 4) {
         tlog::warning() << "Assuming alpha channel for 2 or 4 samples per pixel.";
         numExtraChannels = 1;
@@ -1784,7 +1757,7 @@ Task<ImageData> readTiffImage(
 
     const size_t numNonRgbaChannels = numChannels - numRgbaChannels;
 
-    const uint16_t* palette[3] = {};
+    const auto palette = tiffGetColorMap(tif);
     if (photometric == PHOTOMETRIC_PALETTE) {
         if (numColorChannels != 1) {
             throw ImageLoadError{"Palette images must have 1 color channel per pixel."};
@@ -1798,9 +1771,11 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"Palette images must have unsigned integer sample format."};
         }
 
-        if (!TIFFGetField(tif, TIFFTAG_COLORMAP, &palette[0], &palette[1], &palette[2])) {
+        if (any_of(begin(palette), end(palette), [](const auto& c) { return c.empty(); })) {
             throw ImageLoadError{"Failed to read color palette."};
         }
+
+        tlog::debug() << fmt::format("Read color palette with {} entries.", palette[0].size());
     }
 
     tlog::debug() << fmt::format("numRgbaChannels={} numNonRgbaChannels={}", numRgbaChannels, numNonRgbaChannels);
@@ -2327,7 +2302,7 @@ Task<ImageData> readTiffImage(
         co_await tiffDataToFloat32<false>(
             kind,
             interleave,
-            nullptr,
+            palette,
             (uint32_t*)(imageData.data() + c * unpackedBitsPerSample / 8),
             numChannels,
             resultData.channels[c].floatData(),
