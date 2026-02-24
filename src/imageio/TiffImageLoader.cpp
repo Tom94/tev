@@ -1352,8 +1352,9 @@ Task<ImageData> decodeJpeg(
     co_return result;
 }
 
-Task<ImageData>
-    readTiffImage(TIFF* tif, const bool isDng, const bool shallDemosaic, const bool reverseEndian, string_view partName, const int priority) {
+Task<ImageData> readTiffImage(
+    const TiffData& tiffData, TIFF* tif, const bool isDng, const bool shallDemosaic, const bool reverseEndian, string_view partName, const int priority
+) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
         throw ImageLoadError{"Failed to read dimensions."};
@@ -1674,18 +1675,6 @@ Task<ImageData>
         size_t rawSize, size, rowSize, count, numX, numY;
         uint32_t width, height;
     } tile;
-    const auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
-
-    const auto readRawTile = isTiled ? TIFFReadRawTile : TIFFReadRawStrip;
-    const auto getRawTileSize = [isTiled](TIFF* tif, uint32_t tileIndex) -> size_t {
-        const uint64_t* rawTileSize = NULL;
-        if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEBYTECOUNTS : TIFFTAG_STRIPBYTECOUNTS, &rawTileSize) || !rawTileSize) {
-            throw ImageLoadError{fmt::format("Failed to read raw tile size for tile {}", tileIndex)};
-        }
-
-        return (size_t)rawTileSize[tileIndex];
-    };
-
     const size_t numPlanes = planar == PLANARCONFIG_CONTIG ? 1 : samplesPerPixel;
     if (isTiled) {
         const uint64_t* rawTileSize = NULL;
@@ -1719,6 +1708,50 @@ Task<ImageData>
         tile.numX = 1;
         tile.numY = (size.y() + tile.height - 1) / tile.height;
     }
+
+    const auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
+
+    const auto getRawTileSpan = [&tiffData, &tile, isTiled](TIFF* tif, uint32_t tileIndex) -> span<const uint8_t> {
+        if (tileIndex >= tile.count) {
+            throw ImageLoadError{fmt::format("Tile index {} out of bounds ({} tiles total)", tileIndex, tile.count)};
+        }
+
+        const auto getRawTileOffset = [isTiled](TIFF* tif, uint32_t tileIndex) -> uint64_t {
+            const uint64_t* rawTileOffset = NULL;
+            if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEOFFSETS : TIFFTAG_STRIPOFFSETS, &rawTileOffset) || !rawTileOffset) {
+                throw ImageLoadError{fmt::format("Failed to read raw tile offset for tile {}", tileIndex)};
+            }
+
+            return rawTileOffset[tileIndex];
+        };
+
+        const auto getRawTileSize = [isTiled](TIFF* tif, uint32_t tileIndex) -> size_t {
+            const uint64_t* rawTileSize = NULL;
+            if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEBYTECOUNTS : TIFFTAG_STRIPBYTECOUNTS, &rawTileSize) || !rawTileSize) {
+                throw ImageLoadError{fmt::format("Failed to read raw tile size for tile {}", tileIndex)};
+            }
+
+            return (size_t)rawTileSize[tileIndex];
+        };
+
+        const size_t offset = getRawTileOffset(tif, tileIndex);
+        if (offset == 0) {
+            throw ImageLoadError{fmt::format("Raw tile offset is 0 for tile {}", tileIndex)};
+        }
+
+        const size_t size = getRawTileSize(tif, tileIndex);
+        if (size == 0) {
+            throw ImageLoadError{fmt::format("Raw tile size is 0 for tile {}", tileIndex)};
+        }
+
+        if ((size_t)tiffData.size < offset + size) {
+            throw ImageLoadError{fmt::format(
+                "Raw tile data for tile {} is out of bounds: offset={} size={} dataSize={}", tileIndex, offset, size, tiffData.size
+            )};
+        }
+
+        return span<const uint8_t>{(const uint8_t*)tiffData.data + offset, size};
+    };
 
     // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory
     // to fit all data.
@@ -1765,18 +1798,7 @@ Task<ImageData>
         uint8_t* const td = tileData.data() + tile.size * i;
 
         if (decodeRaw) {
-            const size_t rawTileSize = getRawTileSize(tif, (uint32_t)i);
-            if (rawTileSize == 0) {
-                co_await awaitAll(decodeTasks);
-                throw ImageLoadError{fmt::format("Raw tile size is 0 for tile {}", i)};
-            }
-
-            HeapArray<uint8_t> compressedTileData(rawTileSize);
-            if (readRawTile(tif, (uint32_t)i, compressedTileData.data(), rawTileSize) < 0) {
-                co_await awaitAll(decodeTasks);
-                throw ImageLoadError{fmt::format("Failed to read raw tile {}", i)};
-            }
-
+            const auto compressedTileData = getRawTileSpan(tif, (uint32_t)i);
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
                     [&, i, compressedTileData = std::move(compressedTileData)]() -> Task<void> {
@@ -2301,11 +2323,11 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         exifAttributes = exif.toAttributes();
     } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
 
-    TiffData data(buffer.data() + sizeof(Exif::FOURCC), fileSize);
+    TiffData tiffData(buffer.data() + sizeof(Exif::FOURCC), fileSize);
     TIFF* tif = TIFFClientOpen(
         toString(path).c_str(),
         "rMc", // read-only w/ memory mapping; no strip chopping
-        reinterpret_cast<thandle_t>(&data),
+        reinterpret_cast<thandle_t>(&tiffData),
         tiffReadProc,
         tiffWriteProc,
         tiffSeekProc,
@@ -2385,7 +2407,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         try {
             tlog::debug() << fmt::format("Loading '{}'", name);
 
-            ImageData& data = result.emplace_back(co_await readTiffImage(tif, isDng, true, reverseEndian, name, priority));
+            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, true, reverseEndian, name, priority));
             if (exifAttributes) {
                 data.attributes.emplace_back(exifAttributes.value());
             }
