@@ -249,15 +249,13 @@ inline uint64_t swapBytes(uint64_t value) {
 }
 
 template <typename T> T swapBytes(T value) {
-    T result;
-    auto valueChars = reinterpret_cast<char*>(&value);
-    auto resultChars = reinterpret_cast<char*>(&result);
-
-    for (size_t i = 0; i < sizeof(T); ++i) {
-        resultChars[i] = valueChars[sizeof(T) - 1 - i];
+    static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8, "Unsupported type for byte swapping.");
+    if constexpr (sizeof(T) == 1) {
+        return value;
+    } else {
+        using uint_t = std::conditional_t<sizeof(T) == 2, uint16_t, std::conditional_t<sizeof(T) == 4, uint32_t, uint64_t>>;
+        return std::bit_cast<T>(swapBytes(std::bit_cast<uint_t>(value)));
     }
-
-    return result;
 }
 
 inline int codePointLength(char first) {
