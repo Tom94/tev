@@ -65,9 +65,8 @@ public:
     bool recursiveDirectories() const { return mRecursiveDirectories; }
     void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
 
-    const ImageLoaderSettings& imageLoaderSettings() const { return mImageLoaderSettings; }
-    ImageLoaderSettings& imageLoaderSettings() { return mImageLoaderSettings; }
-    void setImageLoaderSettings(const ImageLoaderSettings& imageLoaderSettings) { mImageLoaderSettings = imageLoaderSettings; }
+    ImageLoaderSettings& imageLoaderSettings() & { return mImageLoaderSettings; }
+    const ImageLoaderSettings& imageLoaderSettings() const & { return mImageLoaderSettings; }
 
     bool groupChannels() const { return mGroupChannels; }
     void setGroupChannels(bool value) { mGroupChannels = value; }

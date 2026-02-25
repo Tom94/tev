@@ -1929,7 +1929,7 @@ void ImageViewer::normalizeExposureAndOffset() {
         return;
     }
 
-    auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
+    const auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::min();
@@ -1940,7 +1940,7 @@ void ImageViewer::normalizeExposureAndOffset() {
         minimum = std::min(minimum, cmin);
     }
 
-    float factor = 1.0f / (maximum - minimum);
+    const float factor = 1.0f / (maximum - minimum);
     setExposure(log2(factor));
     setOffset(-minimum * factor);
 }
@@ -2724,7 +2724,8 @@ void ImageViewer::updateTitle() {
 
     ostringstream caption;
 
-    auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
+    const auto channelsSpan = mCurrentImage->channelsInGroup(mCurrentGroup);
+    vector<string_view> channels = {begin(channelsSpan), end(channelsSpan)};
 
     // Remove duplicates
     channels.erase(unique(begin(channels), end(channels)), end(channels));

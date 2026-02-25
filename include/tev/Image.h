@@ -144,7 +144,7 @@ struct ImageData {
 
     bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }
 
-    const Channel* channel(std::string_view channelName) const {
+    const Channel* channel(std::string_view channelName) const & {
         const auto it = std::ranges::find(channels, channelName, [](const auto& c) { return c.name(); });
         if (it != std::end(channels)) {
             return &(*it);
@@ -153,7 +153,7 @@ struct ImageData {
         }
     }
 
-    Channel* mutableChannel(std::string_view channelName) {
+    Channel* mutableChannel(std::string_view channelName) & {
         const auto it = std::ranges::find(channels, channelName, [](const auto& c) { return c.name(); });
         if (it != std::end(channels)) {
             return &(*it);
@@ -181,21 +181,21 @@ public:
     Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, std::string_view channelSelector, bool groupChannels);
     virtual ~Image();
 
-    const fs::path& path() const { return mPath; }
+    const fs::path& path() const & { return mPath; }
 
     fs::file_time_type fileLastModified() const { return mFileLastModified; }
 
     void setFileLastModified(fs::file_time_type value) { mFileLastModified = value; }
 
-    std::string_view channelSelector() const { return mChannelSelector; }
+    std::string_view channelSelector() const & { return mChannelSelector; }
 
-    std::string_view name() const { return mName; }
+    std::string_view name() const & { return mName; }
 
     std::string shortName() const;
 
     bool hasChannel(std::string_view channelName) const { return mData.hasChannel(channelName); }
 
-    const Channel* channel(std::string_view channelName) const { return mData.channel(channelName); }
+    const Channel* channel(std::string_view channelName) const & { return mData.channel(channelName); }
     std::vector<const Channel*> channels(std::span<const std::string> channelNames) const {
         std::vector<const Channel*> result;
         for (const auto& channelName : channelNames) {
@@ -207,12 +207,10 @@ public:
 
     bool isInterleaved(std::span<const std::string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const;
 
-    nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
+    nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) &;
 
-    std::vector<std::string> channelsInGroup(std::string_view groupName) const;
+    std::span<const std::string> channelsInGroup(std::string_view groupName) const &;
     void decomposeChannelGroup(std::string_view groupName);
-
-    std::vector<std::string> getExistingChannels(std::span<const std::string> requestedChannels) const;
 
     nanogui::Vector2i size() const { return mData.size(); }
 
@@ -222,8 +220,8 @@ public:
         return pos.x() >= 0 && pos.y() >= 0 && pos.x() < mData.size().x() && pos.y() < mData.size().y();
     }
 
-    const Box2i& dataWindow() const { return mData.dataWindow; }
-    const Box2i& displayWindow() const { return mData.displayWindow; }
+    const Box2i& dataWindow() const & { return mData.dataWindow; }
+    const Box2i& displayWindow() const & { return mData.displayWindow; }
     Box2i toImageCoords(const Box2i& displayWindow) const {
         return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min);
     }
@@ -236,7 +234,7 @@ public:
 
     size_t numPixels() const { return mData.numPixels(); }
 
-    std::span<const ChannelGroup> channelGroups() const { return mChannelGroups; }
+    std::span<const ChannelGroup> channelGroups() const & { return mChannelGroups; }
 
     int id() const { return mId; }
 
@@ -255,7 +253,7 @@ public:
 
     void updateVectorGraphics(bool append, std::span<const VgCommand> commands);
 
-    std::span<const VgCommand> vgCommands() const { return mVgCommands; }
+    std::span<const VgCommand> vgCommands() const & { return mVgCommands; }
 
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
@@ -305,12 +303,12 @@ public:
 
     std::string toString() const;
 
-    std::span<const AttributeNode> attributes() const { return mData.attributes; }
+    std::span<const AttributeNode> attributes() const & { return mData.attributes; }
 
 private:
     static std::atomic<int> sId;
 
-    Channel* mutableChannel(std::string_view channelName) { return mData.mutableChannel(channelName); }
+    Channel* mutableChannel(std::string_view channelName) & { return mData.mutableChannel(channelName); }
 
     std::vector<ChannelGroup> getGroupedChannels(std::string_view layerName) const;
 

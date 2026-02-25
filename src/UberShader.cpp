@@ -573,7 +573,7 @@ void UberShader::draw(
 ) {
     // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
     // values (0 for colors, 1 for alpha).
-    const vector<string> channels = image ? image->channelsInGroup(requestedChannelGroup) : vector<string>{};
+    const auto channels = image ? image->channelsInGroup(requestedChannelGroup) : span<const string>{};
     Texture* const textureImage = image ? image->texture(channels, minFilter, magFilter) : nullptr;
     Texture* const textureReference = reference ? reference->texture(channels, minFilter, magFilter) : nullptr;
 

@@ -760,7 +760,7 @@ Task<void> prepareTextureChannel(
     }
 }
 
-Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) {
+Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) & {
     if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
         tlog::error() << fmt::format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
         return nullptr;
@@ -901,7 +901,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     return texture.get();
 }
 
-vector<string> Image::channelsInGroup(string_view groupName) const {
+span<const string> Image::channelsInGroup(string_view groupName) const & {
     for (const auto& group : mChannelGroups) {
         if (group.name == groupName) {
             return group.channels;
@@ -1005,12 +1005,6 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
 
     TEV_ASSERT(!result.empty(), "Images with no channels should never exist.");
 
-    return result;
-}
-
-vector<string> Image::getExistingChannels(span<const string> requestedChannels) const {
-    vector<string> result;
-    copy_if(begin(requestedChannels), end(requestedChannels), back_inserter(result), [&](string_view c) { return hasChannel(c); });
     return result;
 }
 

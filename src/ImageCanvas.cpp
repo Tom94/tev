@@ -133,7 +133,9 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
     };
 
     if (pixelSize.x() > 50 && pixelSize.x() < 1024) {
-        vector<string> channels = mImage->channelsInGroup(mRequestedChannelGroup);
+        const auto channelsSpan = mImage->channelsInGroup(mRequestedChannelGroup);
+        vector<string_view> channels(begin(channelsSpan), end(channelsSpan));
+
         // Remove duplicates
         channels.erase(unique(begin(channels), end(channels)), end(channels));
         if (channels.empty()) {
@@ -563,13 +565,13 @@ Vector2i ImageCanvas::getDisplayWindowCoords(const Image* image, Vector2i nanoPo
     return imageCoords;
 }
 
-void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, span<const string> channels) {
+void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, span<string_view> channels) {
     result.clear();
     if (!mImage) {
         return;
     }
 
-    auto imageCoords = getImageCoords(mImage.get(), nanoPos);
+    const auto imageCoords = getImageCoords(mImage.get(), nanoPos);
     for (const auto& channel : channels) {
         const Channel* c = mImage->channel(channel);
         TEV_ASSERT(c, "Requested channel must exist.");
