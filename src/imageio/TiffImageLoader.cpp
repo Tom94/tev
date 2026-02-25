@@ -895,53 +895,25 @@ Task<void> postprocessLinearRawDng(
          }
     };
 
+    resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
+    resultData.toRec709 = xyzToChromaMatrix(rec709Chroma()) * adaptWhiteBradford(whiteD50(), whiteD65());
+
     // If present, matrix 3 represents the illuminant used to capture the image. If not, we use the illuminant from matrix 2 which
-    // is supposed to be the colder one (closer to D65). Once a matrix is selected, we construct a transformation to ProPhoto RGB
-    // (aka RIMM space) in which we will apply the camera profile.
+    // is supposed to be the colder one (closer to D65).
     auto toRimm = xyzToChromaMatrix(proPhotoChroma());
     for (size_t i = 0; i < camTags.size(); ++i) {
         if (const auto camToXyz = readCameraToXyz(get<0>(camTags[i]), get<1>(camTags[i]), get<2>(camTags[i]))) {
             tlog::debug() << fmt::format("Applying camToXyz matrix #{}: {}", camTags.size() - i, camToXyz.value());
+            resultData.toRec709 = resultData.toRec709 * camToXyz.value();
             toRimm = toRimm * camToXyz.value();
             break;
         }
     }
 
-    // The remaining camera profile transformation is applied in linear ProPhoto RGB space (aka RIMM space)
-    span<Vector3f> rgbData{reinterpret_cast<Vector3f*>(floatRgbaData.data()), (size_t)size.x() * size.y()};
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, numPixels, numPixels * numColorChannels, [&](size_t i) { rgbData[i] = toRimm * rgbData[i]; }, priority
-    );
-
-    // Once we're done, we want to convert from RIMM space to sRGB/Rec709. We actually have a choice here whether we want to stay in
-    // scene-referred coordinates and set downstream processing to be absolute, or to convert to display-referred coordinates right away.
-    // For now, we choose the latter (to match libraw's behavior and to tev's DNG display look closer to the JPG preview).
-    resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
-    resultData.toRec709 = convertColorspaceMatrix(proPhotoChroma(), rec709Chroma(), resultData.renderingIntent);
-
     struct ProfileDynamicRange {
         uint16_t version, dynamicRange;
         float hintMaxOutputValue;
     };
-
-    bool isHdr = false;
-    static constexpr uint16_t TIFFTAG_PROFILEDYNAMICRANGE = 52551;
-    if (const auto pdrData = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEDYNAMICRANGE); pdrData.size() >= sizeof(ProfileDynamicRange)) {
-        ProfileDynamicRange pdr = *reinterpret_cast<const ProfileDynamicRange*>(pdrData.data());
-        if (reverseEndian) {
-            pdr.version = swapBytes(pdr.version);
-            pdr.dynamicRange = swapBytes(pdr.dynamicRange);
-            pdr.hintMaxOutputValue = swapBytes(pdr.hintMaxOutputValue);
-        }
-
-        tlog::debug() << fmt::format(
-            "Found profile dynamic range: version={} dynamicRange={} hintMaxOutputValue={}", pdr.version, pdr.dynamicRange, pdr.hintMaxOutputValue
-        );
-
-        // Per DNG 1.7.0.0, page 93, a value of 1 refers to HDR images that need to be compressed into 0-1 before the following transforms
-        // take place.
-        isHdr = pdr.dynamicRange == 1;
-    }
 
     // NOTE: The order of the following operations is defined on pages 71/72 of the DNG spec.
     float exposureScale = 1.0f;
@@ -963,13 +935,43 @@ Task<void> postprocessLinearRawDng(
         );
     }
 
-    // At this point, we have the image in linear ProPhoto RGB space. This is most faithful to the readings from the sensor *in theory*, but
-    // the camera may have embedded a (potentially user-chosen) color profile that, per the DNG spec, can be used as a starting point for
-    // further user editing. *In practice*, DNGs from some sources, e.g. iPhone, seem SDR before applying the profile and proper HDR after
-    // applying it, so we do by default.
-    const bool applyCameraProfile = true;
+    // At this point, we have the image in a linear scale, with known conversion to xyz (and thus to rec709) for tev to display. This is
+    // most faithful to the readings from the sensor *in theory*, but the camera may have embedded a (potentially user-chosen) color profile
+    // that, per the DNG spec, can be used as a starting point for further user editing. *In practice*, DNGs from some sources, e.g. iPhone,
+    // look like cleaner (less washed out, but also less dynamic range) when the profile is applied, so it's a judgement call whether to
+    // apply it or not.
+
+    // TODO: make camera profile application optional
+    const bool applyCameraProfile = false;
     if (!applyCameraProfile) {
         co_return;
+    }
+
+    // The remaining camera profile transformation is applied in linear ProPhoto RGB space (aka RIMM space)
+    span<Vector3f> rgbData{reinterpret_cast<Vector3f*>(floatRgbaData.data()), (size_t)size.x() * size.y()};
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0, numPixels, numPixels * numColorChannels, [&](size_t i) { rgbData[i] = toRimm * rgbData[i]; }, priority
+    );
+
+    resultData.toRec709 = resultData.toRec709 * inverse(toRimm);
+
+    bool isHdr = false;
+    static constexpr uint16_t TIFFTAG_PROFILEDYNAMICRANGE = 52551;
+    if (const auto pdrData = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEDYNAMICRANGE); pdrData.size() >= sizeof(ProfileDynamicRange)) {
+        ProfileDynamicRange pdr = *reinterpret_cast<const ProfileDynamicRange*>(pdrData.data());
+        if (reverseEndian) {
+            pdr.version = swapBytes(pdr.version);
+            pdr.dynamicRange = swapBytes(pdr.dynamicRange);
+            pdr.hintMaxOutputValue = swapBytes(pdr.hintMaxOutputValue);
+        }
+
+        tlog::debug() << fmt::format(
+            "Found profile dynamic range: version={} dynamicRange={} hintMaxOutputValue={}", pdr.version, pdr.dynamicRange, pdr.hintMaxOutputValue
+        );
+
+        // Per DNG 1.7.0.0, page 93, a value of 1 refers to HDR images that need to be compressed into 0-1 before the following transforms
+        // take place.
+        isHdr = pdr.dynamicRange == 1;
     }
 
     if (const auto str = tiffGetSpan<char>(tif, TIFFTAG_PROFILENAME); !str.empty()) {
