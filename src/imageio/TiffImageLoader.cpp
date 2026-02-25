@@ -2556,7 +2556,7 @@ Task<ImageData>
 
         photometric = isDng ? PHOTOMETRIC_LINEAR_RAW : PHOTOMETRIC_RGB;
 
-        resultData.channels.front().setName(Channel::joinIfNonempty(partName, "cfa"));
+        resultData.channels.front().setName(Channel::joinIfNonempty(partName, "cfa.L"));
         resultData.channels.insert(
             resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
         );
@@ -2705,7 +2705,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
                 // DNGs often come with multiple thumbnail images that act as a loading preview in photo editing software. Uninteresting for
                 // tev to load, except for the main IFD's orientation tag, which is authorative.
                 if (isThumbnail(type)) {
-                    co_return;
+                    // co_return;
                 }
 
                 name = dngSubFileTypeToString(type);

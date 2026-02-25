@@ -225,7 +225,9 @@ vector<Channel>
     return channels;
 }
 
-Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vector<Channel>& dstChannels, int priority) {
+Task<void> ImageLoader::resizeChannelsAsync(
+    span<const Channel> srcChannels, vector<Channel>& dstChannels, const optional<Box2i>& dstArea, int priority
+) {
     TEV_ASSERT(srcChannels.size() == dstChannels.size(), "Number of source and destination channels must match.");
     if (srcChannels.empty()) {
         co_return;
@@ -235,14 +237,17 @@ Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vec
     const Vector2i targetSize = dstChannels.front().size();
     const int numChannels = (int)srcChannels.size();
 
+    const Box2i box = dstArea.value_or(Box2i{Vector2i(0, 0), targetSize});
+
     for (int i = 1; i < numChannels; ++i) {
         TEV_ASSERT(srcChannels[i].size() == size, "Source channels' size must match.");
         TEV_ASSERT(dstChannels[i].size() == targetSize, "Destination channels' size must match.");
     }
 
     const size_t numSamples = (size_t)targetSize.x() * targetSize.y() * numChannels;
-    const float scaleX = (float)size.x() / targetSize.x();
-    const float scaleY = (float)size.y() / targetSize.y();
+
+    const float scaleX = (float)size.x() / box.size().x();
+    const float scaleY = (float)size.y() / box.size().y();
 
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
@@ -250,8 +255,18 @@ Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vec
         numSamples,
         [&](int dstY) {
             for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
-                const float srcX = (dstX + 0.5f) * scaleX - 0.5f;
-                const float srcY = (dstY + 0.5f) * scaleY - 0.5f;
+                const size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
+
+                if (dstX < box.min.x() || dstX >= box.max.x() || dstY < box.min.y() || dstY >= box.max.y()) {
+                    for (int c = 0; c < numChannels; ++c) {
+                        dstChannels[c].setAt(dstIdx, 0.0f);
+                    }
+
+                    continue;
+                }
+
+                const float srcX = ((dstX - box.min.x()) + 0.5f) * scaleX - 0.5f;
+                const float srcY = ((dstY - box.min.y()) + 0.5f) * scaleY - 0.5f;
 
                 const int x0 = std::max((int)floor(srcX), 0);
                 const int y0 = std::max((int)floor(srcY), 0);
@@ -267,8 +282,6 @@ Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vec
                 const float w01 = wx1 * wy0;
                 const float w10 = wx0 * wy1;
                 const float w11 = wx1 * wy1;
-
-                const size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
 
                 const size_t srcIdx00 = y0 * (size_t)size.x() + x0;
                 const size_t srcIdx01 = y0 * (size_t)size.x() + x1;
@@ -289,7 +302,7 @@ Task<void> ImageLoader::resizeChannelsAsync(span<const Channel> srcChannels, vec
     );
 }
 
-Task<void> ImageLoader::resizeImageData(ImageData& resultData, const Vector2i& targetSize, int priority) {
+Task<void> ImageLoader::resizeImageData(ImageData& resultData, const Vector2i& targetSize, const optional<Box2i>& targetArea, int priority) {
     const Vector2i size = resultData.channels.front().size();
     if (size == targetSize) {
         co_return;
@@ -302,7 +315,7 @@ Task<void> ImageLoader::resizeImageData(ImageData& resultData, const Vector2i& t
         resultData.channels.emplace_back(c.name(), targetSize, c.pixelFormat(), c.desiredPixelFormat());
     }
 
-    co_await resizeChannelsAsync(prevChannels, resultData.channels, priority);
+    co_await resizeChannelsAsync(prevChannels, resultData.channels, targetArea, priority);
 };
 
 } // namespace tev

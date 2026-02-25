@@ -186,8 +186,11 @@ public:
         size_t numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer
     );
 
-    static Task<void> resizeChannelsAsync(std::span<const Channel> srcChannels, std::vector<Channel>& dstChannels, int priority);
-    static Task<void> resizeImageData(ImageData& resultData, const nanogui::Vector2i& targetSize, int priority);
+    static Task<void> resizeChannelsAsync(
+        std::span<const Channel> srcChannels, std::vector<Channel>& dstChannels, const std::optional<Box2i>& dstBox, int priority
+    );
+    static Task<void>
+        resizeImageData(ImageData& resultData, const nanogui::Vector2i& targetSize, const std::optional<Box2i>& targetBox, int priority);
 };
 
 } // namespace tev

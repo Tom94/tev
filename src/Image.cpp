@@ -214,7 +214,10 @@ Task<void> ImageData::matchColorsAndSizeOf(const ImageData& other, int priority)
 
     co_await applyColorConversion(inverse(other.toRec709) * toRec709, priority);
     if (!other.channels.empty()) {
-        co_await ImageLoader::resizeImageData(*this, other.channels.front().size(), priority);
+        optional<Box2i> targetBox = other.displayWindow.isValid() && other.dataWindow.isValid() ?
+            optional{other.displayWindow.translate(-other.dataWindow.min)} :
+            nullopt;
+        co_await ImageLoader::resizeImageData(*this, other.channels.front().size(), targetBox, priority);
     }
 }
 

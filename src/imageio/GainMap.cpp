@@ -101,7 +101,7 @@ Task<void> preprocessAndApplyAppleGainMap(
 
     const auto size = imageChannels.front()->size();
 
-    co_await ImageLoader::resizeImageData(gainMap, size, priority);
+    co_await ImageLoader::resizeImageData(gainMap, size, nullopt, priority);
 
     // Re-fetch channels after resize
     gainMapChannels = getRgbOrLuminanceChannels(gainMap);
@@ -227,7 +227,7 @@ Task<void> preprocessAndApplyIsoGainMap(
 
     const auto size = imageChannels.front()->size();
 
-    co_await ImageLoader::resizeImageData(gainMap, size, priority);
+    co_await ImageLoader::resizeImageData(gainMap, size, nullopt, priority);
 
     // Re-fetch channels after resize
     gainMapChannels = getRgbOrLuminanceChannels(gainMap);
