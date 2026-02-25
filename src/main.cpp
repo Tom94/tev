@@ -133,7 +133,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
                     toPath(info.imageName),
                     imageStream,
                     "",
-                    sImageViewer->imagesLoader().gainmapHeadroom(),
+                    sImageViewer->imagesLoader().imageLoaderSettings(),
                     sImageViewer->imagesLoader().groupChannels()
                 );
                 const auto images = imagesLoadTask.get();
@@ -616,7 +616,7 @@ static int mainFunc(span<const string> arguments) {
     if (gainmapHeadroomFlag) {
         try {
             const auto gainmapHeadroom = GainmapHeadroom{get(gainmapHeadroomFlag)};
-            imagesLoader->setGainmapHeadroom(gainmapHeadroom);
+            imagesLoader->imageLoaderSettings().gainmapHeadroom = gainmapHeadroom;
         } catch (const invalid_argument& e) {
             tlog::error() << fmt::format("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
             return -6;

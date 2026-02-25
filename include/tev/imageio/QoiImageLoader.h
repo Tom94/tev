@@ -28,7 +28,7 @@ namespace tev {
 class QoiImageLoader : public ImageLoader {
 public:
     Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom) const override;
+        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority) const override;
 
     std::string name() const override { return "QOI"; }
 };

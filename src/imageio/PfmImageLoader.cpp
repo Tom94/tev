@@ -97,7 +97,7 @@ static uint8_t version(const PamType pamType) {
     return (uint8_t)pamType;
 }
 
-Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom&) const {
+Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     size_t frameIdx = 0;
 
     const auto loadPam = [&iStream, &frameIdx, priority]() -> Task<vector<ImageData>> {

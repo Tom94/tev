@@ -151,6 +151,11 @@ Task<void> toFloat32(
     );
 }
 
+struct ImageLoaderSettings {
+    GainmapHeadroom gainmapHeadroom = {};
+    bool dngApplyCameraProfile = false;
+};
+
 class ImageLoader {
 public:
     class FormatNotSupported : public std::runtime_error {
@@ -161,7 +166,7 @@ public:
     virtual ~ImageLoader() {}
 
     virtual Task<std::vector<ImageData>> load(
-        std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
     ) const = 0;
 
     virtual std::string name() const = 0;

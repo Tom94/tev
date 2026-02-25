@@ -31,7 +31,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom&) const {
+Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     char magic[16] = {0};
     iStream.read(magic, sizeof(magic));
     if (!iStream || strncmp(magic, "RIFF", 4) != 0 || strncmp(magic + 8, "WEBP", 4) != 0) {

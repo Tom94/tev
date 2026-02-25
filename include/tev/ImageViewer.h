@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <tev/BackgroundImagesLoader.h>
 #include <tev/HelpWindow.h>
 #include <tev/Image.h>
 #include <tev/ImageButton.h>

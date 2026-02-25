@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "tev/imageio/ImageLoader.h"
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
@@ -219,8 +220,8 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     span<const uint8_t> data,
     const fs::path& path,
     string_view channelSelector,
+    const ImageLoaderSettings& settings,
     int priority,
-    const GainmapHeadroom& gainmapHeadroom,
     bool skipColorProcessing,
     size_t* bitsPerSampleOut,
     EPixelType* pixelTypeOut
@@ -517,7 +518,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 }
 
 Task<vector<ImageData>> Jpeg2000ImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     const size_t initialPos = iStream.tellg();
 
@@ -536,7 +537,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     HeapArray<uint8_t> data(dataSize);
     iStream.read((char*)data.data(), dataSize);
 
-    co_return co_await load(data, path, channelSelector, priority, gainmapHeadroom, false);
+    co_return co_await load(data, path, channelSelector, settings, priority, false);
 }
 
 } // namespace tev

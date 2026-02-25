@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "tev/imageio/ImageLoader.h"
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/BmpImageLoader.h>
@@ -783,7 +784,7 @@ done:
 }
 
 Task<vector<ImageData>> BmpImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     const bool reverseEndianness = endian::native == endian::big;
 
@@ -838,7 +839,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
             );
 
             try {
-                auto tmp = co_await load(iStream, path, channelSelector, priority, gainmapHeadroom);
+                auto tmp = co_await load(iStream, path, channelSelector, settings, priority);
                 for (auto& image : tmp) {
                     image.partName = Channel::joinIfNonempty(fmt::format("frames.{}", i), image.partName);
                 }
@@ -881,12 +882,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
     }
 
     co_return co_await loadWithoutFileHeader(
-        iStream,
-        path,
-        channelSelector,
-        priority,
-        gainmapHeadroom,
-        fileHeader.pixelDataOffset > 0 ? make_optional<size_t>(fileHeader.pixelDataOffset) : nullopt
+        iStream, path, channelSelector, settings, priority, fileHeader.pixelDataOffset > 0 ? make_optional<size_t>(fileHeader.pixelDataOffset) : nullopt
     );
 }
 
@@ -894,8 +890,8 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     istream& iStream,
     const fs::path& path,
     string_view channelSelector,
+    const ImageLoaderSettings& settings,
     int priority,
-    const GainmapHeadroom& gainmapHeadroom,
     optional<size_t> pixelDataOffset,
     Vector2i* sizeInOut,
     bool alphaByDefault
@@ -1121,7 +1117,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
         const auto jpegLoader = JpegTurboImageLoader{};
         try {
-            co_return co_await jpegLoader.load(iStream, path, channelSelector, priority, gainmapHeadroom);
+            co_return co_await jpegLoader.load(iStream, path, channelSelector, settings, priority);
         } catch (const FormatNotSupported&) { throw ImageLoadError{"BMP file uses JPEG compression, but JPEG data is not valid."}; }
     }
 
@@ -1137,7 +1133,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
         const auto pngLoader = PngImageLoader{};
         try {
-            co_return co_await pngLoader.load(iStream, path, channelSelector, priority, gainmapHeadroom);
+            co_return co_await pngLoader.load(iStream, path, channelSelector, settings, priority);
         } catch (const FormatNotSupported&) { throw ImageLoadError{"BMP file uses PNG compression, but PNG data is not valid."}; }
     }
 

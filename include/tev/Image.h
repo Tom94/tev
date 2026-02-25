@@ -21,7 +21,6 @@
 #include <tev/Box.h>
 #include <tev/Channel.h>
 #include <tev/Common.h>
-#include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 #include <tev/VectorGraphics.h>
 #include <tev/imageio/Colors.h>
@@ -36,12 +35,13 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <queue>
 #include <span>
 #include <string>
 #include <vector>
 
 namespace tev {
+
+struct ImageLoaderSettings;
 
 static constexpr float DEFAULT_IMAGE_WHITE_LEVEL = 80.0f;
 
@@ -339,75 +339,15 @@ Task<nanogui::Vector2i>
     orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority);
 
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
-    int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+    int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
-    fs::path path, std::istream& iStream, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+    fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels);
+    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(fs::path path, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels);
-
-struct ImageAddition {
-    int loadId;
-    bool shallSelect;
-    std::vector<std::shared_ptr<Image>> images;
-    std::shared_ptr<Image> toReplace;
-
-    struct Comparator {
-        bool operator()(const ImageAddition& a, const ImageAddition& b) { return a.loadId > b.loadId; }
-    };
-};
-
-struct PathAndChannelSelector {
-    fs::path path;
-    std::string channelSelector;
-
-    bool operator<(const PathAndChannelSelector& other) const {
-        return path == other.path ? (channelSelector < other.channelSelector) : (path < other.path);
-    }
-};
-
-class BackgroundImagesLoader {
-public:
-    void enqueue(const fs::path& path, std::string_view channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
-    void checkDirectoriesForNewFilesAndLoadThose();
-
-    std::optional<ImageAddition> tryPop();
-    std::optional<nanogui::Vector2i> firstImageSize() const;
-
-    bool publishSortedLoads();
-    bool hasPendingLoads() const;
-
-    bool recursiveDirectories() const { return mRecursiveDirectories; }
-    void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
-
-    const GainmapHeadroom& gainmapHeadroom() const { return mGainmapHeadroom; }
-    void setGainmapHeadroom(const GainmapHeadroom& gainmapHeadroom) { mGainmapHeadroom = gainmapHeadroom; }
-
-    bool groupChannels() const { return mGroupChannels; }
-    void setGroupChannels(bool value) { mGroupChannels = value; }
-
-private:
-    SharedQueue<ImageAddition> mLoadedImages;
-
-    std::priority_queue<ImageAddition, std::vector<ImageAddition>, ImageAddition::Comparator> mPendingLoadedImages;
-    mutable std::mutex mPendingLoadedImagesMutex;
-
-    std::atomic<int> mLoadCounter{0};
-    std::atomic<int> mUnsortedLoadCounter{0};
-
-    bool mRecursiveDirectories = false;
-    std::map<fs::path, std::set<std::string>> mDirectories;
-    std::set<PathAndChannelSelector> mFilesFoundInDirectories;
-
-    GainmapHeadroom mGainmapHeadroom;
-    bool mGroupChannels = true;
-
-    std::chrono::system_clock::time_point mLoadStartTime;
-    int mLoadStartCounter = 0;
-};
+    tryLoadImage(fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
 
 } // namespace tev
 

@@ -2114,13 +2114,13 @@ Task<ImageData>
                             case COMPRESSION_JXL: {
                                 const auto loader = JxlImageLoader{};
                                 tmp = co_await loader.load(
-                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                    compressedTileData, "", "", {}, priority, false, &nestedBitsPerSample, &nestedPixelType
                                 );
                             } break;
                             case COMPRESSION_JP2000: {
                                 const auto loader = Jpeg2000ImageLoader{};
                                 tmp = co_await loader.load(
-                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                    compressedTileData, "", "", {}, priority, false, &nestedBitsPerSample, &nestedPixelType
                                 );
                             } break;
                             case COMPRESSION_JPEG:
@@ -2573,7 +2573,7 @@ Task<ImageData>
         }
 
         co_await postprocessLinearRawDng(
-            tif, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
+            tif, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, settings.dngApplyCameraProfile, priority
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
@@ -2596,7 +2596,8 @@ Task<ImageData>
     co_return resultData;
 }
 
-Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
+Task<vector<ImageData>>
+    TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings& settings, int priority) const {
     // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
     // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
     char magic[4] = {0};
