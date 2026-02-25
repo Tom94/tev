@@ -924,13 +924,14 @@ Task<void> postprocessLinearRawDng(
         float hintMaxOutputValue;
     };
 
-    bool isHdr = 0;
+    bool isHdr = false;
     static constexpr uint16_t TIFFTAG_PROFILEDYNAMICRANGE = 52551;
     if (const auto pdrData = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEDYNAMICRANGE); pdrData.size() >= sizeof(ProfileDynamicRange)) {
         ProfileDynamicRange pdr = *reinterpret_cast<const ProfileDynamicRange*>(pdrData.data());
         if (reverseEndian) {
             pdr.version = swapBytes(pdr.version);
             pdr.dynamicRange = swapBytes(pdr.dynamicRange);
+            pdr.hintMaxOutputValue = swapBytes(pdr.hintMaxOutputValue);
         }
 
         tlog::debug() << fmt::format(
@@ -980,9 +981,141 @@ Task<void> postprocessLinearRawDng(
         TIFFSetSubDirectory(tif, prevOffset);
         ScopeGuard guard2{[&]() { TIFFSetDirectory(tif, 0); }};
 
+        // TODO: support TIFFTAG_PROFILEGAINTABLEMAP2
+
         if (const auto gainTableMap = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEGAINTABLEMAP); !gainTableMap.empty()) {
-            // TODO: implement profile gain table map
-            tlog::debug() << "Found gain table map, but not implemented yet. Color profile may look wrong.";
+            struct GainTableMapHeader {
+                uint32_t mapPointsV, mapPointsH;
+                double mapSpacingV, mapSpacingH;
+                double mapOriginV, mapOriginH;
+                uint32_t mapPointsN;
+                array<float, 5> mapInputWeights;
+            };
+
+            static_assert(sizeof(GainTableMapHeader) == 64, "Unexpected padding in GainTableMapHeader");
+
+            if (gainTableMap.size() < sizeof(GainTableMapHeader)) {
+                throw ImageLoadError{fmt::format(
+                    "Gain table map is too small to contain header: expected at least {}, got {}",
+                    sizeof(GainTableMapHeader),
+                    gainTableMap.size()
+                )};
+            }
+
+            GainTableMapHeader header = {};
+            memcpy(&header, gainTableMap.data(), sizeof(GainTableMapHeader));
+
+            if (reverseEndian) {
+                header.mapPointsV = swapBytes(header.mapPointsV);
+                header.mapPointsH = swapBytes(header.mapPointsH);
+                header.mapPointsN = swapBytes(header.mapPointsN);
+                header.mapSpacingV = swapBytes(header.mapSpacingV);
+                header.mapSpacingH = swapBytes(header.mapSpacingH);
+                header.mapOriginV = swapBytes(header.mapOriginV);
+                header.mapOriginH = swapBytes(header.mapOriginH);
+                for (float& w : header.mapInputWeights) {
+                    w = swapBytes(w);
+                }
+            }
+
+            const auto numValues = (size_t)header.mapPointsV * (size_t)header.mapPointsH * header.mapPointsN;
+            if (numValues == 0) {
+                throw ImageLoadError{"Gain table map must have non-zero points in all dimensions."};
+            }
+
+            const auto numBytes = sizeof(GainTableMapHeader) + numValues * sizeof(float);
+            if (gainTableMap.size() < numBytes) {
+                throw ImageLoadError{
+                    fmt::format("Gain table map is too small to contain values: expected at least {}, got {}", numBytes, gainTableMap.size())
+                };
+            }
+
+            const span<const float> valueSpan{(const float*)(gainTableMap.data() + sizeof(GainTableMapHeader)), numValues};
+            vector<float> values(valueSpan.begin(), valueSpan.end());
+            if (reverseEndian) {
+                for (float& v : values) {
+                    v = swapBytes(v);
+                }
+            }
+
+            tlog::debug() << fmt::format(
+                "Found gain table map: points={}x{}x{} spacing={}x{} origin={}x{} inputWeights={}",
+                header.mapPointsV,
+                header.mapPointsH,
+                header.mapPointsN,
+                header.mapSpacingV,
+                header.mapSpacingH,
+                header.mapOriginV,
+                header.mapOriginH,
+                join(header.mapInputWeights, ",")
+            );
+
+            const Vector2f invSize = Vector2f{1.0f} / Vector2f{size};
+            const Vector3f invMapSpacing = Vector3f{1.0f / (float)header.mapSpacingH, 1.0f / (float)header.mapSpacingV, 255.0f};
+
+            const Vector3i maxIdx = Vector3i{(int)header.mapPointsH - 1, (int)header.mapPointsV - 1, (int)header.mapPointsN - 1};
+            const auto sample = [&](int ix, int iy, int iz) -> float {
+                return values[(size_t)iy * header.mapPointsH * header.mapPointsN + (size_t)ix * header.mapPointsN + iz];
+            };
+
+            co_await ThreadPool::global().parallelForAsync<int>(
+                0,
+                size.y(),
+                numPixels * numColorChannels,
+                [&](int y) {
+                    const size_t offset = (size_t)y * size.x();
+                    for (int x = 0; x < size.x(); ++x) {
+                        const size_t i = offset + x;
+
+                        // Dot product of (R, G, B, minRGB, maxRGB) and mapInputWeights, clamped to [0, 1]. This will index into mapPointsN.
+                        float input = 0.0f, maxRgb = -numeric_limits<float>::infinity(), minRgb = numeric_limits<float>::infinity();
+                        for (size_t c = 0; c < 3; ++c) {
+                            const float v = floatRgbaData[i * numRgbaChannels + c];
+                            input += v * header.mapInputWeights[c];
+                            maxRgb = std::max(maxRgb, v);
+                            minRgb = std::min(minRgb, v);
+                        }
+
+                        input = std::clamp(input + header.mapInputWeights[3] * minRgb + header.mapInputWeights[4] * maxRgb, 0.0f, 1.0f);
+
+                        const Vector2f relXy = (Vector2f{(float)x, (float)y} + 0.5f) * invSize;
+                        const Vector3f mapXyz = Vector3f{relXy.x() - (float)header.mapOriginH, relXy.y() - (float)header.mapOriginV, input} *
+                            invMapSpacing;
+
+                        const Vector3f clamped = min(max(mapXyz, Vector3f{0.0f}), Vector3f{maxIdx});
+
+                        const Vector3i p0 = min(Vector3i{clamped}, max(maxIdx - 1, Vector3i{0}));
+                        const Vector3i p1 = min(p0 + Vector3i{1}, maxIdx);
+
+                        // Clamped to [0, 1] to make out-of-range values use the gain from the closest valid point
+                        const Vector3f f = min(max(clamped - Vector3f{p0}, Vector3f{0.0f}), Vector3f{1.0f});
+
+                        const float c000 = sample(p0.x(), p0.y(), p0.z());
+                        const float c001 = sample(p0.x(), p0.y(), p1.z());
+                        const float c010 = sample(p0.x(), p1.y(), p0.z());
+                        const float c011 = sample(p0.x(), p1.y(), p1.z());
+                        const float c100 = sample(p1.x(), p0.y(), p0.z());
+                        const float c101 = sample(p1.x(), p0.y(), p1.z());
+                        const float c110 = sample(p1.x(), p1.y(), p0.z());
+                        const float c111 = sample(p1.x(), p1.y(), p1.z());
+
+                        const float c00 = c000 * (1.0f - f.z()) + c001 * f.z();
+                        const float c01 = c010 * (1.0f - f.z()) + c011 * f.z();
+                        const float c10 = c100 * (1.0f - f.z()) + c101 * f.z();
+                        const float c11 = c110 * (1.0f - f.z()) + c111 * f.z();
+
+                        const float c0 = c00 * (1.0f - f.y()) + c01 * f.y();
+                        const float c1 = c10 * (1.0f - f.y()) + c11 * f.y();
+
+                        const float gain = c0 * (1.0f - f.x()) + c1 * f.x();
+
+                        for (size_t c = 0; c < numColorChannels; ++c) {
+                            floatRgbaData[i * numRgbaChannels + c] *= gain;
+                        }
+                    }
+                },
+                priority
+            );
         }
     }
 
@@ -1520,9 +1653,8 @@ Task<ImageData> decodeJpeg(
     co_return result;
 }
 
-Task<ImageData> readTiffImage(
-    const TiffData& tiffData, TIFF* tif, const bool isDng, const bool reverseEndian, string_view partName, const int priority
-) {
+Task<ImageData>
+    readTiffImage(const TiffData& tiffData, TIFF* tif, const bool isDng, const bool reverseEndian, string_view partName, const int priority) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
         throw ImageLoadError{"Failed to read dimensions."};
