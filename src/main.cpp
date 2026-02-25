@@ -314,6 +314,16 @@ static int mainFunc(span<const string> arguments) {
         {'c', "convert-to"},
     };
 
+    Flag dngCameraProfileFlag{
+        parser,
+        "DNG CAMERA PROFILE",
+        "When loading DNG images, apply the embedded camera profile. "
+        "Enabling this setting moves the image farther from the raw sensor response and closer to a pleasing image, but potentially at the cost of colorimetric accuracy. "
+        "Regardless of this setting, the DNG's embedded color space, linearization, and white balance metadata will always be applied. "
+        "Default is off.",
+        {"dng-camera-profile"},
+    };
+
     ValueFlag<float> exposureFlag{
         parser,
         "EXPOSURE",
@@ -612,6 +622,10 @@ static int mainFunc(span<const string> arguments) {
     const shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
     imagesLoader->setRecursiveDirectories(recursiveFlag);
     imagesLoader->setGroupChannels(!channelGroupingFlagOff);
+
+    if (dngCameraProfileFlag) {
+        imagesLoader->imageLoaderSettings().dngApplyCameraProfile = true;
+    }
 
     if (gainmapHeadroomFlag) {
         try {

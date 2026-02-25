@@ -776,6 +776,7 @@ Task<void> postprocessLinearRawDng(
     span<float> floatRgbaData,
     ImageData& resultData,
     const bool reverseEndian,
+    const bool applyCameraProfile,
     const int priority
 ) {
     if (samplesPerPixel != 3) {
@@ -941,8 +942,6 @@ Task<void> postprocessLinearRawDng(
     // look like cleaner (less washed out, but also less dynamic range) when the profile is applied, so it's a judgement call whether to
     // apply it or not.
 
-    // TODO: make camera profile application optional
-    const bool applyCameraProfile = false;
     if (!applyCameraProfile) {
         co_return;
     }
@@ -1655,8 +1654,15 @@ Task<ImageData> decodeJpeg(
     co_return result;
 }
 
-Task<ImageData>
-    readTiffImage(const TiffData& tiffData, TIFF* tif, const bool isDng, const bool reverseEndian, string_view partName, const int priority) {
+Task<ImageData> readTiffImage(
+    const TiffData& tiffData,
+    TIFF* tif,
+    const bool isDng,
+    const bool reverseEndian,
+    string_view partName,
+    const ImageLoaderSettings& settings,
+    const int priority
+) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
         throw ImageLoadError{"Failed to read dimensions."};
@@ -2718,7 +2724,7 @@ Task<vector<ImageData>>
         try {
             tlog::debug() << fmt::format("Loading '{}'", name);
 
-            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, reverseEndian, name, priority));
+            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, reverseEndian, name, settings, priority));
             if (exifAttributes) {
                 data.attributes.emplace_back(exifAttributes.value());
             }
