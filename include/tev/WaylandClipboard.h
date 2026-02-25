@@ -20,9 +20,11 @@
 
 #include <tev/Common.h>
 
+#include <string_view>
+
 namespace tev {
 
-void waylandSetClipboardPngImage(const char* data, size_t size);
-const char* waylandGetClipboardPngImage(size_t* size);
+void waylandSetClipboardPngImage(std::string_view data);
+std::string_view waylandGetClipboardPngImage();
 
 } // namespace tev
