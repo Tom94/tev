@@ -650,7 +650,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         [&](size_t y) {
                             const size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
                             for (int x = 0; x < size.x(); ++x) {
-                                channel.setAt({x, (int)y}, extraChannel.data[srcOffset + (x >> extraChannel.dimShift)]);
+                                channel.dynamicSetAt({x, (int)y}, extraChannel.data[srcOffset + (x >> extraChannel.dimShift)]);
                             }
                         },
                         priority

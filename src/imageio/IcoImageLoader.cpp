@@ -229,7 +229,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
 
                                 if (isTransparent) {
                                     for (auto* c : alphaChannels) {
-                                        c->setAt({x, outputY}, 0.0f);
+                                        c->dynamicSetAt({x, outputY}, 0.0f);
                                     }
                                 }
                             }

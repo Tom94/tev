@@ -435,7 +435,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             [&](int y) {
                 for (size_t c = numRgbaChannels; c < numChannels; ++c) {
                     for (int x = 0; x < size.x(); ++x) {
-                        resultData.channels[c].setAt({x, y}, getChannelValue(c, x, y));
+                        resultData.channels[c].dynamicSetAt({x, y}, getChannelValue(c, x, y));
                     }
                 }
             },

@@ -308,7 +308,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
                 const size_t j = (size_t)fi.y() * orientedSize.x() + fi.x();
 
                 for (size_t c = 0; c < numChannels; c++) {
-                    resultData.channels[c].setAt(j, imgData[i][c] / 65535.0f);
+                    resultData.channels[c].dynamicSetAt(j, imgData[i][c] / 65535.0f);
                 }
             }
         },

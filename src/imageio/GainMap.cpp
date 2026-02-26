@@ -93,7 +93,7 @@ Task<void> preprocessAndApplyAppleGainMap(
                 // NOTE: The docs (above link) say to use the Rec.709 transfer function here, but comparisons with ISO gain maps indicate
                 // that the gain maps are actually encoded with the sRGB transfer function.
                 // const float gain = ituth273::invTransferComponent(ituth273::ETransfer::BT709, gainMapChannels[gainmapChannel].at(i));
-                gainMapChannels[c].setAt(i, toLinear(gainMapChannels[c](i)));
+                gainMapChannels[c].setAt(i, toLinear(gainMapChannels[c][i]));
             }
         },
         priority
@@ -162,8 +162,8 @@ Task<void> preprocessAndApplyAppleGainMap(
             for (size_t c = 0; c < imageChannels.size(); ++c) {
                 const size_t gainmapChannel = std::min(c, gainMapChannels.size() - 1);
 
-                const float sdr = imageChannels[c](i);
-                const float gain = gainMapChannels[gainmapChannel](i);
+                const float sdr = imageChannels[c][i];
+                const float gain = gainMapChannels[gainmapChannel][i];
 
                 imageChannels[c].setAt(i, sdr * (1.0f + (headroom - 1.0f) * gain));
             }
@@ -213,7 +213,7 @@ Task<void> preprocessAndApplyIsoGainMap(
         gainmapNumPixels * gainMapChannels.size(),
         [&](int i) {
             for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
-                const float val = gainMapChannels[c](i);
+                const float val = gainMapChannels[c][i];
 
                 const float logRecovery = copysign(pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
@@ -274,9 +274,9 @@ Task<void> preprocessAndApplyIsoGainMap(
             for (size_t c = 0; c < imageChannels.size(); ++c) {
                 const int gainmapChannel = std::min(c, gainMapChannels.size() - 1);
 
-                const float logBoost = gainMapChannels[gainmapChannel](i);
+                const float logBoost = gainMapChannels[gainmapChannel][i];
 
-                const float sdr = imageChannels[c](i);
+                const float sdr = imageChannels[c][i];
                 const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost * weight) - metadata.alternateOffset()[c];
 
                 imageChannels[c].setAt(i, hdr);
