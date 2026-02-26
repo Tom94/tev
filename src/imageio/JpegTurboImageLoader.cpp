@@ -496,10 +496,11 @@ Task<vector<ImageData>>
             }
 
             if (cinfo.out_color_space == JCS_YCbCr && numDstChannels >= 3) {
+                const auto dataView = MultiChannelView<float>{dst, numDstChannels, size, numDstChannels};
                 if (fromSrgb) {
-                    co_await yCbCrToRgb<true>(dst, size, numDstChannels, priority);
+                    co_await yCbCrToRgb<true>(dataView, priority);
                 } else {
-                    co_await yCbCrToRgb<false>(dst, size, numDstChannels, priority);
+                    co_await yCbCrToRgb<false>(dataView, priority);
                 }
             }
         };

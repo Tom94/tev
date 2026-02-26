@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
@@ -257,7 +258,7 @@ Task<void> tiffDataToFloat32(
     const array<span<const uint16_t>, 3>& palette,
     uint32_t* __restrict imageData,
     size_t numSppIn,
-    float* __restrict floatData,
+    MultiChannelView<float> out,
     size_t numSppOut,
     const nanogui::Vector2i& size,
     bool hasAlpha,
@@ -266,15 +267,13 @@ Task<void> tiffDataToFloat32(
     bool flipWhiteAndBlack
 ) {
     if (kind == ETiffKind::F64) {
-        co_await toFloat32<double, SRGB_TO_LINEAR>((const double*)imageData, numSppIn, floatData, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<double, SRGB_TO_LINEAR>((const double*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::F32) {
-        co_await toFloat32<float, SRGB_TO_LINEAR>((const float*)imageData, numSppIn, floatData, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<float, SRGB_TO_LINEAR>((const float*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::I32) {
-        co_await toFloat32<int32_t, SRGB_TO_LINEAR>((const int32_t*)imageData, numSppIn, floatData, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<int32_t, SRGB_TO_LINEAR>((const int32_t*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::U32) {
-        co_await toFloat32<uint32_t, SRGB_TO_LINEAR>(
-            (const uint32_t*)imageData, numSppIn, floatData, numSppOut, size, hasAlpha, priority, scale
-        );
+        co_await toFloat32<uint32_t, SRGB_TO_LINEAR>((const uint32_t*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::Palette) {
         if (any_of(palette.begin(), palette.end(), [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
@@ -294,12 +293,12 @@ Task<void> tiffDataToFloat32(
                 const float paletteScale = 1.0f / 65535.0f;
                 for (size_t c = 0; c < 3; ++c) {
                     const size_t localIdx = std::clamp(index, (size_t)0, palette[c].size() - 1);
-                    floatData[i * numSppOut + c] = palette[c][localIdx] * paletteScale;
+                    out[c, i] = palette[c][localIdx] * paletteScale;
                 }
 
                 size_t numChannels = std::min(numSppOut, numSppIn + 2);
                 for (size_t c = 3; c < numChannels; ++c) {
-                    floatData[i * numSppOut + c] = imageData[i * numSppIn + c - 2] * scale;
+                    out[c, i] = imageData[i * numSppIn + c - 2] * scale;
                 }
             },
             priority
@@ -316,7 +315,7 @@ Task<void> tiffDataToFloat32(
             numPixels * numSppOut,
             [&](size_t i) {
                 for (size_t c = 0; c < numSppOut; ++c) {
-                    floatData[i * numSppOut + c] = 1.0f - floatData[i * numSppOut + c];
+                    out[c, i] = 1.0f - out[c, i];
                 }
             },
             priority
@@ -493,7 +492,11 @@ Box2i getDefaultCrop(TIFF* tif, const Vector2i& size) {
     return cropBox;
 }
 
-Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, const Vector2i size, int priority) {
+Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, MultiChannelView<float> rgbData, const Vector2i size, int priority) {
+    if (rgbData.numChannels() < 3) {
+        throw ImageLoadError{fmt::format("RGB output must have at least 3 channels, got {}", rgbData.numChannels())};
+    }
+
     // With CFA sensors, it's often the case that differently colored pixels have different sensitivities (captured by white balance), and,
     // as such, RGB==1 doesn't actually correspond to white after conversion to a display color space. To avoid this, we perform demosaicing
     // in a sort of white-divided space with values clipped to [0,1], which has the effect of clipping highlights to display-white as well
@@ -548,17 +551,16 @@ Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, cons
             size.y(),
             numPixels,
             [&](int y) {
-                const size_t offset = (size_t)y * size.x();
                 for (int x = 0; x < size.x(); ++x) {
-                    cfaData[offset + x] =
-                        std::clamp(cfaData[offset + x] * invWbScale[pat[(y % cfaSize.y()) * cfaSize.x() + (x % cfaSize.x())]], 0.0f, 1.0f);
+                    cfaData[x, y] =
+                        std::clamp(cfaData[x, y] * invWbScale[pat[(y % cfaSize.y()) * cfaSize.x() + (x % cfaSize.x())]], 0.0f, 1.0f);
                 }
             },
             priority
         );
     }
 
-    co_await demosaic(cfaData, rgbData, size, pat, cfaSize, priority);
+    co_await demosaic(cfaData, rgbData, pat, cfaSize, priority);
 
     if (wbScale != Vector3f{1.0f}) {
         co_await ThreadPool::global().parallelForAsync<int>(
@@ -566,11 +568,9 @@ Task<void> demosaicCfa(TIFF* tif, span<float> cfaData, span<float> rgbData, cons
             size.y(),
             numPixels,
             [&](int y) {
-                const size_t offset = (size_t)y * size.x();
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t idx = (offset + x) * 3;
                     for (int c = 0; c < 3; ++c) {
-                        rgbData[idx + c] = rgbData[idx + c] * wbScale[c];
+                        rgbData[c, x, y] *= wbScale[c];
                     }
                 }
             },
@@ -586,7 +586,7 @@ Task<void> linearizeAndNormalizeRawDng(
     const uint16_t samplesPerPixel,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    span<float> floatRgbaData,
+    MultiChannelView<float> floatRgbaData,
     const Vector2i size,
     const int priority
 ) {
@@ -611,12 +611,12 @@ Task<void> linearizeAndNormalizeRawDng(
                 numPixels * numColorChannels,
                 [&](size_t i) {
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        const float val = floatRgbaData[i * numRgbaChannels + c];
+                        const float val = floatRgbaData[c, i];
 
                         // Lerp the transfer function
                         const size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
                         const float w = val * maxIdx - idx;
-                        floatRgbaData[i * numRgbaChannels + c] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
+                        floatRgbaData[c, i] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
                     }
                 },
                 priority
@@ -689,13 +689,11 @@ Task<void> linearizeAndNormalizeRawDng(
                 for (int x = 0; x < size.x(); ++x) {
                     const float deltaH = blackLevelDeltaH[x];
                     const float delta = deltaH + deltaV;
-
-                    const size_t idx = (size_t)y * size.x() + x;
                     const size_t blIdx = (y % blackLevelRepeatRows) * blackLevelRepeatCols + (x % blackLevelRepeatCols);
 
                     for (size_t c = 0; c < numColorChannels; ++c) {
                         const float bl = blackLevel[blIdx * samplesPerPixel + c] + delta;
-                        floatRgbaData[idx * numRgbaChannels + c] -= bl;
+                        floatRgbaData[c, x, y] -= bl;
                         maxBlackLevelY[y * samplesPerPixel + c] = std::max(maxBlackLevelY[y * samplesPerPixel + c], bl);
                     }
                 }
@@ -743,7 +741,7 @@ Task<void> linearizeAndNormalizeRawDng(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    floatRgbaData[i * numRgbaChannels + c] *= channelScale[c];
+                    floatRgbaData[c, i] *= channelScale[c];
                 }
             },
             priority
@@ -760,7 +758,7 @@ Task<void> linearizeAndNormalizeRawDng(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    floatRgbaData[i * numRgbaChannels + c] = std::min(floatRgbaData[i * numRgbaChannels + c], 1.0f);
+                    floatRgbaData[c, i] = std::min(floatRgbaData[c, i], 1.0f);
                 }
             },
             priority
@@ -773,7 +771,7 @@ Task<void> postprocessLinearRawDng(
     const uint16_t samplesPerPixel,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    span<float> floatRgbaData,
+    MultiChannelView<float> floatRgbaData,
     ImageData& resultData,
     const bool reverseEndian,
     const bool applyCameraProfile,
@@ -929,7 +927,7 @@ Task<void> postprocessLinearRawDng(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    floatRgbaData[i * numRgbaChannels + c] *= exposureScale;
+                    floatRgbaData[c, i] *= exposureScale;
                 }
             },
             priority
@@ -947,9 +945,18 @@ Task<void> postprocessLinearRawDng(
     }
 
     // The remaining camera profile transformation is applied in linear ProPhoto RGB space (aka RIMM space)
-    span<Vector3f> rgbData{reinterpret_cast<Vector3f*>(floatRgbaData.data()), (size_t)size.x() * size.y()};
     co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, numPixels, numPixels * numColorChannels, [&](size_t i) { rgbData[i] = toRimm * rgbData[i]; }, priority
+        0,
+        numPixels,
+        numPixels * numColorChannels,
+        [&](size_t i) {
+            auto rgb = Vector3f{floatRgbaData[0, i], floatRgbaData[1, i], floatRgbaData[2, i]};
+            rgb = toRimm * rgb;
+            floatRgbaData[0, i] = rgb.x();
+            floatRgbaData[1, i] = rgb.y();
+            floatRgbaData[2, i] = rgb.z();
+        },
+        priority
     );
 
     resultData.toRec709 = resultData.toRec709 * inverse(toRimm);
@@ -1071,7 +1078,7 @@ Task<void> postprocessLinearRawDng(
                         // Dot product of (R, G, B, minRGB, maxRGB) and mapInputWeights, clamped to [0, 1]. This will index into mapPointsN.
                         float input = 0.0f, maxRgb = -numeric_limits<float>::infinity(), minRgb = numeric_limits<float>::infinity();
                         for (size_t c = 0; c < 3; ++c) {
-                            const float v = floatRgbaData[i * numRgbaChannels + c];
+                            const float v = floatRgbaData[c, i];
                             input += v * header.mapInputWeights[c];
                             maxRgb = std::max(maxRgb, v);
                             minRgb = std::min(minRgb, v);
@@ -1111,7 +1118,7 @@ Task<void> postprocessLinearRawDng(
                         const float gain = c0 * (1.0f - f.x()) + c1 * f.x();
 
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            floatRgbaData[i * numRgbaChannels + c] *= gain;
+                            floatRgbaData[c, i] *= gain;
                         }
                     }
                 },
@@ -1128,8 +1135,8 @@ Task<void> postprocessLinearRawDng(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const size_t idx = i * numRgbaChannels + c;
-                    floatRgbaData[idx] = dngHdrEncodingFunction(floatRgbaData[idx]);
+                    float& v = floatRgbaData[c, i];
+                    v = dngHdrEncodingFunction(v);
                 }
             },
             priority
@@ -1188,8 +1195,8 @@ Task<void> postprocessLinearRawDng(
             numPixels * numColorChannels * 16, // arbitrary factor to estimate pw linear cost
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const size_t idx = i * numRgbaChannels + c;
-                    floatRgbaData[idx] = applyPwLinear(tc, floatRgbaData[idx]);
+                    float& v = floatRgbaData[c, i];
+                    v = applyPwLinear(tc, v);
                 }
             },
             priority
@@ -1207,8 +1214,8 @@ Task<void> postprocessLinearRawDng(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const size_t idx = i * numRgbaChannels + c;
-                    floatRgbaData[idx] = dngHdrDecodingFunction(floatRgbaData[idx]);
+                    float& v = floatRgbaData[c, i];
+                    v = dngHdrDecodingFunction(v);
                 }
             },
             priority
@@ -1222,7 +1229,7 @@ Task<void> postprocessRgb(
     const uint16_t dataBitsPerSample,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    span<float> floatRgbaData,
+    MultiChannelView<float> floatRgbaData,
     ImageData& resultData,
     const int priority
 ) {
@@ -1253,8 +1260,7 @@ Task<void> postprocessRgb(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const size_t idx = i * numRgbaChannels + c;
-                    floatRgbaData[idx] = (floatRgbaData[idx] * maxVal - refBlack[c]) * totalScale[c] + offset[c];
+                    floatRgbaData[c, i] = (floatRgbaData[c, i] * maxVal - refBlack[c]) * totalScale[c] + offset[c];
                 }
             },
             priority
@@ -1275,7 +1281,7 @@ Task<void> postprocessRgb(
             tlog::debug() << fmt::format("Found YCbCr coefficients: {} -> {}", K, coeffs);
         }
 
-        co_await yCbCrToRgb(floatRgbaData.data(), size, numRgbaChannels, priority, coeffs);
+        co_await yCbCrToRgb(floatRgbaData, priority, coeffs);
     }
 
     chroma_t chroma = rec709Chroma();
@@ -1336,13 +1342,13 @@ Task<void> postprocessRgb(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const float val = floatRgbaData[i * numRgbaChannels + c];
+                    const float val = floatRgbaData[c, i];
 
                     // Lerp the transfer function
                     const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], (size_t)0, transferFunction[c].size() - 2);
                     const float w = val * maxIdx - idx - transferRangeBlack[c];
-                    floatRgbaData[i * numRgbaChannels + c] = ((1.0f - w) * (float)transferFunction[c][idx] +
-                                                              w * (float)transferFunction[c][idx + 1] - transferRangeBlack[c]) *
+                    floatRgbaData[c, i] = ((1.0f - w) * (float)transferFunction[c][idx] + w * (float)transferFunction[c][idx + 1] -
+                                           transferRangeBlack[c]) *
                         scale[c];
                 }
             },
@@ -1364,8 +1370,8 @@ Task<void> postprocessRgb(
             numPixels * numColorChannels,
             [&](size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    float v = floatRgbaData[i * numRgbaChannels + c];
-                    floatRgbaData[i * numRgbaChannels + c] = toLinear(v);
+                    float& v = floatRgbaData[c, i];
+                    v = toLinear(v);
                 }
             },
             priority
@@ -1397,8 +1403,8 @@ Task<void> postprocessRgb(
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
                     // the power behaves like an odd exponent, thereby preserving the range of R.
-                    const float v = floatRgbaData[i * numRgbaChannels + c];
-                    floatRgbaData[i * numRgbaChannels + c] = copysign(pow(abs(v), 2.2f), v);
+                    float& v = floatRgbaData[c, i];
+                    v = copysign(pow(abs(v), 2.2f), v);
                 }
             },
             priority
@@ -1414,7 +1420,7 @@ Task<void> postprocessLab(
     const uint16_t dataBitsPerSample,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    span<float> floatRgbaData,
+    MultiChannelView<float> floatRgbaData,
     ImageData& resultData,
     const int priority
 ) {
@@ -1432,11 +1438,11 @@ Task<void> postprocessLab(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                const size_t base = i * numRgbaChannels;
-                floatRgbaData[base + 0] = floatRgbaData[base + 0] * 100.0f;
+                floatRgbaData[0, i] *= 100.0f;
                 for (size_t c = 1; c < numColorChannels; ++c) {
-                    const float v = floatRgbaData[base + c] * 255.0f;
-                    floatRgbaData[base + c] = v >= 128.0f ? v - 256.0f : v;
+                    float& v = floatRgbaData[c, i];
+                    v *= 255.0f;
+                    v = v >= 128.0f ? v - 256.0f : v;
                 }
             },
             priority
@@ -1447,11 +1453,10 @@ Task<void> postprocessLab(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                const size_t base = i * numRgbaChannels;
-                floatRgbaData[base + 0] = floatRgbaData[base + 0] * 100.0f;
+                floatRgbaData[0, i] *= 100.0f;
                 for (size_t c = 1; c < numColorChannels; ++c) {
-                    const float v = floatRgbaData[base + c] * 255.0f;
-                    floatRgbaData[base + c] = v - 128.0f;
+                    float& v = floatRgbaData[c, i];
+                    v = v * 255.0f - 128.0f;
                 }
             },
             priority
@@ -1470,10 +1475,9 @@ Task<void> postprocessLab(
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
-                const size_t base = i * numRgbaChannels;
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const float v = floatRgbaData[base + c];
-                    floatRgbaData[base + c] = decodeMin[c] + v * (decodeMax[c] - decodeMin[c]);
+                    float& v = floatRgbaData[c, i];
+                    v = decodeMin[c] + v * (decodeMax[c] - decodeMin[c]);
                 }
             },
             priority
@@ -1491,11 +1495,9 @@ Task<void> postprocessLab(
         numPixels,
         numPixels * numColorChannels,
         [&](size_t i) {
-            const size_t base = i * numRgbaChannels;
-
-            const float L = floatRgbaData[base + 0];
-            const float a = floatRgbaData[base + 1];
-            const float b = floatRgbaData[base + 2];
+            const float L = floatRgbaData[0, i];
+            const float a = floatRgbaData[1, i];
+            const float b = floatRgbaData[2, i];
 
             const float fy = (L + 16.0f) / 116.0f;
             const float fx = a / 500.0f + fy;
@@ -1512,9 +1514,9 @@ Task<void> postprocessLab(
             const float Y = yr * whitePointXYZ.y();
             const float Z = zr * whitePointXYZ.z();
 
-            floatRgbaData[base + 0] = X;
-            floatRgbaData[base + 1] = Y;
-            floatRgbaData[base + 2] = Z;
+            floatRgbaData[0, i] = X;
+            floatRgbaData[1, i] = Y;
+            floatRgbaData[2, i] = Z;
         },
         priority
     );
@@ -2194,8 +2196,7 @@ Task<ImageData> readTiffImage(
 
                         auto* const data = (float*)imageData.data();
 
-                        const auto rng = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); });
-                        const vector<ChannelView<float>> views{begin(rng), end(rng)};
+                        const auto views = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
 
                         co_await ThreadPool::global().parallelForAsync<int>(
                             yStart,
@@ -2450,7 +2451,7 @@ Task<ImageData> readTiffImage(
             palette,
             (uint32_t*)(imageData.data() + c * unpackedBitsPerSample / 8),
             numChannels,
-            resultData.channels[c].floatData(),
+            resultData.channels[c].view<float>(),
             1,
             size,
             false,
@@ -2478,7 +2479,7 @@ Task<ImageData> readTiffImage(
                 palette,
                 (uint32_t*)imageData.data(),
                 numChannels,
-                iccTmpFloatData.data(),
+                MultiChannelView<float>{iccTmpFloatData.data(), numRgbaChannels, size},
                 numRgbaChannels,
                 size,
                 hasAlpha,
@@ -2508,16 +2509,7 @@ Task<ImageData> readTiffImage(
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    // Write directly into the final RGBA buffer if possible to save one copy, otherwise use a staging buffer.
-    // TODO: adapt below routines to write directly into the final buffer
-    HeapArray<float> floatRgbaDataBuffer;
-    span<float> floatRgbaData;
-    if (numRgbaChannels == numInterleavedChannels) {
-        floatRgbaData = {resultData.channels.front().floatData(), (size_t)size.x() * size.y() * numRgbaChannels};
-    } else {
-        floatRgbaDataBuffer.resize((size_t)size.x() * size.y() * numRgbaChannels);
-        floatRgbaData = floatRgbaDataBuffer;
-    }
+    auto floatRgbaData = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
 
     co_await tiffDataToFloat32<false>(
         kind,
@@ -2525,7 +2517,7 @@ Task<ImageData> readTiffImage(
         palette,
         (uint32_t*)imageData.data(),
         numChannels,
-        floatRgbaData.data(),
+        floatRgbaData,
         numRgbaChannels,
         size,
         hasAlpha,
@@ -2547,24 +2539,13 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"CFA images must have exactly 1 sample per pixel / color / rgba channel."};
         }
 
-        // For CFA images, we need to do demosaicing before we can apply any color space conversion, so we have to write into a staging buffer first.
-        HeapArray<float> floatCfaDataBuffer = std::move(floatRgbaDataBuffer);
-        span<float> floatCfaData = floatRgbaData;
-
         numRgbaChannels = numColorChannels = samplesPerPixel = 3;
         numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
         auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
             numRgbaChannels, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
         );
 
-        if (numRgbaChannels == numInterleavedChannels) {
-            floatRgbaData = {rgbaChannels.front().floatData(), (size_t)size.x() * size.y() * numRgbaChannels};
-        } else {
-            floatRgbaDataBuffer.resize((size_t)size.x() * size.y() * numRgbaChannels);
-            floatRgbaData = floatRgbaDataBuffer;
-        }
-
-        co_await demosaicCfa(tif, floatCfaData, floatRgbaData, size, priority);
+        co_await demosaicCfa(tif, resultData.channels.front().view<float>(), MultiChannelView<float>(rgbaChannels), size, priority);
 
         photometric = isDng ? PHOTOMETRIC_LINEAR_RAW : PHOTOMETRIC_RGB;
 
@@ -2572,6 +2553,9 @@ Task<ImageData> readTiffImage(
         resultData.channels.insert(
             resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
         );
+
+        // Update the view to point to the new RGBA channels
+        floatRgbaData = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
     }
 
     // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.
@@ -2595,12 +2579,6 @@ Task<ImageData> readTiffImage(
     } else {
         // Other photometric interpretations do not need a transfer
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
-    }
-
-    if (floatRgbaData.data() != resultData.channels.front().floatData()) {
-        co_await toFloat32<float, false>(
-            (const float*)floatRgbaData.data(), numRgbaChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-        );
     }
 
     co_return resultData;

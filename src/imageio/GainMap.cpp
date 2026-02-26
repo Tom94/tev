@@ -93,7 +93,7 @@ Task<void> preprocessAndApplyAppleGainMap(
                 // NOTE: The docs (above link) say to use the Rec.709 transfer function here, but comparisons with ISO gain maps indicate
                 // that the gain maps are actually encoded with the sRGB transfer function.
                 // const float gain = ituth273::invTransferComponent(ituth273::ETransfer::BT709, gainMapChannels[gainmapChannel].at(i));
-                gainMapChannels[c].setAt(i, toLinear(gainMapChannels[c][i]));
+                gainMapChannels[c][i] = toLinear(gainMapChannels[c][i]);
             }
         },
         priority
@@ -165,7 +165,7 @@ Task<void> preprocessAndApplyAppleGainMap(
                 const float sdr = imageChannels[c][i];
                 const float gain = gainMapChannels[gainmapChannel][i];
 
-                imageChannels[c].setAt(i, sdr * (1.0f + (headroom - 1.0f) * gain));
+                imageChannels[c][i] = sdr * (1.0f + (headroom - 1.0f) * gain);
             }
         },
         priority
@@ -218,7 +218,7 @@ Task<void> preprocessAndApplyIsoGainMap(
                 const float logRecovery = copysign(pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
-                gainMapChannels[c].setAt(i, logBoost);
+                gainMapChannels[c][i] = logBoost;
             }
         },
         priority
@@ -279,7 +279,7 @@ Task<void> preprocessAndApplyIsoGainMap(
                 const float sdr = imageChannels[c][i];
                 const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost * weight) - metadata.alternateOffset()[c];
 
-                imageChannels[c].setAt(i, hdr);
+                imageChannels[c][i] = hdr;
             }
         },
         priority

@@ -26,8 +26,11 @@
 #include <half.h>
 
 #include <memory>
+#include <ranges>
 #include <span>
 #include <string>
+#include <type_traits>
+#include <vector>
 
 namespace tev {
 
@@ -52,19 +55,27 @@ template <typename T> EPixelFormat pixelFormatForType() {
 
 template <typename T> class ChannelView {
 public:
+    ChannelView(const ChannelView<std::remove_const_t<T>>& other) :
+        ChannelView(other.data(), other.dataStride(), other.dataOffset(), other.size()) {}
+
     ChannelView(T* data, size_t dataStride, size_t dataOffset, const nanogui::Vector2i& size) :
         mData{data}, mDataOffset{dataOffset}, mDataStride{dataStride}, mSize{size} {}
 
-    float operator[](size_t i) const {
-        const auto v = mData[mDataOffset + i * mDataStride];
+    std::conditional_t<std::is_same_v<T, float>, float&, float> operator[](size_t i) const & {
         if constexpr (std::is_integral_v<T>) {
+            const auto v = mData[mDataOffset + i * mDataStride];
             return (float)v * (1.0f / (float)std::numeric_limits<T>::max());
         } else {
-            return (float)v;
+            return mData[mDataOffset + i * mDataStride];
         }
     }
 
-    float operator[](int x, int y) const { return operator[](x + y * (size_t)mSize.x()); }
+    // decltype(auto) as opposed to `auto` preserves the reference category
+    decltype(auto) operator[](int x, int y) const & { return operator[](x + y * (size_t)mSize.x()); }
+
+    // `this` is always an lvalue, so these rvalue overloads don't recurse infinitely
+    float operator[](size_t i) const && { return this->operator[](i); }
+    float operator[](int x, int y) const && { return this->operator[](x, y); }
 
     void setAt(size_t i, float value) const {
         T& val = mData[mDataOffset + i * mDataStride];
@@ -78,6 +89,11 @@ public:
     void setAt(int x, int y, float value) const { setAt(x + y * (size_t)mSize.x(), value); }
 
     const nanogui::Vector2i& size() const { return mSize; }
+
+    T* data() const & { return mData; }
+
+    size_t dataOffset() const { return mDataOffset; }
+    size_t dataStride() const { return mDataStride; }
 
 private:
     T* mData = nullptr;
@@ -267,6 +283,93 @@ private:
     std::shared_ptr<Data> mData;
     size_t mDataOffset;
     size_t mDataStride;
+};
+
+template <typename T> class MultiChannelView {
+public:
+    MultiChannelView() = delete;
+
+    MultiChannelView(T* data, size_t dataStride, const nanogui::Vector2i& size, size_t numChannels = 0) {
+        if (numChannels == 0) {
+            numChannels = dataStride;
+        }
+
+        mSize = size;
+        for (size_t c = 0; c < numChannels; ++c) {
+            mChannelViews.emplace_back(data, dataStride, c, size);
+        }
+    }
+
+    MultiChannelView(const ChannelView<T>& channel) :
+        MultiChannelView{
+            std::span{&channel, 1}
+    } {}
+
+    MultiChannelView(std::span<Channel> channels)
+        requires(!std::is_const_v<T>)
+        : MultiChannelView{channels | std::views::transform([](Channel& c) { return c.view<T>(); }) | to_vector} {}
+
+    MultiChannelView(std::span<const Channel> channels)
+        requires(std::is_const_v<T>)
+        : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | to_vector} {}
+
+    MultiChannelView(std::span<const ChannelView<T>> views) : mChannelViews{views.begin(), views.end()} {
+        if (mChannelViews.empty()) {
+            throw std::runtime_error{"MultiChannelView must have at least one channel."};
+        }
+
+        mSize = mChannelViews.front().size();
+        for (const auto& channel : mChannelViews) {
+            if (channel.size() != mSize) {
+                throw std::runtime_error{"All channels in a MultiChannelView must have the same size."};
+            }
+        }
+    }
+
+    // decltype(auto) as opposed to `auto` preserves the reference category
+    decltype(auto) operator[](int c, size_t i) const & { return mChannelViews[c][i]; }
+    decltype(auto) operator[](int c, int x, int y) const & { return mChannelViews[c][x, y]; }
+
+    float operator[](int c, size_t i) const && { return mChannelViews[c][i]; }
+    float operator[](int c, int x, int y) const && { return mChannelViews[c][x, y]; }
+
+    void setAt(int c, size_t i, float value) const { mChannelViews[c].setAt(i, value); }
+    void setAt(int c, int x, int y, float value) const { mChannelViews[c].setAt(x, y, value); }
+
+    bool isInterleaved(size_t desiredStride) const {
+        const auto& front = mChannelViews.front();
+        for (size_t i = 0; i < mChannelViews.size(); ++i) {
+            const auto& channel = mChannelViews[i];
+            if (channel.data() != front.data() || channel.dataOffset() != i || channel.dataStride() != desiredStride) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    const T* interleavedData(size_t desiredStride) const & {
+        if (!isInterleaved(desiredStride)) {
+            throw std::runtime_error{"MultiChannelView::interleavedData() requires interleaved data."};
+        }
+
+        return mChannelViews.front().data();
+    }
+
+    T* interleavedData(size_t desiredStride) & {
+        if (!isInterleaved(desiredStride)) {
+            throw std::runtime_error{"MultiChannelView::interleavedData() requires interleaved data."};
+        }
+
+        return mChannelViews.front().data();
+    }
+
+    nanogui::Vector2i size() const { return mSize; }
+    size_t numChannels() const { return mChannelViews.size(); }
+
+private:
+    std::vector<ChannelView<T>> mChannelViews;
+    nanogui::Vector2i mSize = {0};
 };
 
 } // namespace tev

@@ -174,9 +174,9 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
                 r->numPixels() * 3,
                 [rv, gv, bv, mat](size_t i) mutable {
                     const auto rgb = mat * Vector3f{rv[i], gv[i], bv[i]};
-                    rv.setAt(i, rgb.x());
-                    gv.setAt(i, rgb.y());
-                    bv.setAt(i, rgb.z());
+                    rv[i] = rgb.x();
+                    gv[i] = rgb.y();
+                    bv[i] = rgb.z();
                 },
                 priority
             )
@@ -1073,9 +1073,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), size, EPixelFormat::F32, EPixelFormat::F32);
     }
 
-    const auto rng = result | views::transform([](Channel& c) { return c.view<float>(); });
-    vector<ChannelView<float>> views = {begin(rng), end(rng)};
-
+    const auto views = result | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
     const auto channels = this->channels(channelNames);
     if (!reference) {
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -1084,7 +1082,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
             numPixels * channels.size(),
             [&](size_t j) {
                 for (size_t c = 0; c < channels.size(); ++c) {
-                    views[c].setAt(j, channels[c]->dynamicAt(j));
+                    views[c][j] = channels[c]->dynamicAt(j);
                 }
             },
             priority
@@ -1109,24 +1107,16 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
 
                     if (isAlpha[c]) {
                         for (int x = 0; x < size.x(); ++x) {
-                            views[c].setAt(
-                                x,
-                                y,
-                                0.5f *
-                                    (channel->evalOrZero({x, y}) +
-                                     (referenceChannel ? referenceChannel->evalOrZero({x + offset.x(), y + offset.y()}) : 1.0f))
-                            );
+                            views[c][x, y] = 0.5f *
+                                (channel->evalOrZero({x, y}) +
+                                 (referenceChannel ? referenceChannel->evalOrZero({x + offset.x(), y + offset.y()}) : 1.0f));
                         }
                     } else {
                         for (int x = 0; x < size.x(); ++x) {
-                            views[c].setAt(
-                                x,
-                                y,
-                                applyMetric(
-                                    channel->evalOrZero({x, y}),
-                                    referenceChannel ? referenceChannel->evalOrZero({x + offset.x(), y + offset.y()}) : 0.0f,
-                                    metric
-                                )
+                            views[c][x, y] = applyMetric(
+                                channel->evalOrZero({x, y}),
+                                referenceChannel ? referenceChannel->evalOrZero({x + offset.x(), y + offset.y()}) : 0.0f,
+                                metric
                             );
                         }
                     }

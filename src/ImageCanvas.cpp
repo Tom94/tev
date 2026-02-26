@@ -806,9 +806,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     });
 
     auto flattened = co_await image->getHdrImageData(reference, requestedChannelGroup, metric, priority);
-
-    const auto rng = flattened | views::transform([](Channel& c) { return c.view<float>(); });
-    vector<ChannelView<float>> views{begin(rng), end(rng)};
+    const auto views = flattened | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
 
     const ChannelView<float>* alphaChannel = nullptr;
 
@@ -856,7 +854,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
                     rgb = ituth273::transfer(transfer, mat * rgb);
                     for (size_t c = 0; c < 3; ++c) {
-                        views[c].setAt(x, y, rgb[c]);
+                        views[c][x, y] = rgb[c];
                     }
                 }
             },
@@ -876,7 +874,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
                         for (size_t c = 0; c < nColorChannels; ++c) {
                             const float val = views[c][x, y] * alphaFactor;
-                            views[c].setAt(x, y, ituth273::transferComponent(transfer, val));
+                            views[c][x, y] = ituth273::transferComponent(transfer, val);
                         }
                     }
                 },

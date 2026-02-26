@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/Task.h>
 #include <tev/ThreadPool.h>
@@ -29,16 +30,20 @@ using namespace std;
 namespace tev {
 
 static Task<void> amazeDemosaic(
-    const Vector2i size, span<const float> cfaIn, span<const uint8_t> cfaPattern, span<float> rgbOut, double initGain, int border, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, double initGain, int border, int priority
 );
 
 static Task<void> generalDemosaic(
-    span<const float> cfaIn, span<float> rgbOut, const Vector2i size, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
 );
 
 Task<void> demosaic(
-    span<const float> cfaIn, span<float> rgbOut, const Vector2i size, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
 ) {
+    if (cfaIn.size() != rgbOut.size()) {
+        throw runtime_error{"CFA input and RGB output must have the same size."};
+    }
+
     const auto isBayer = [&]() {
         if (cfaSize.y() != 2 || cfaSize.x() != 2) {
             return false;
@@ -63,22 +68,24 @@ Task<void> demosaic(
     // Use fancy demosaicing algorithm if we have a supported pattern, which generally gives better results than simple weighted interpolation.
     if (isBayer()) {
         co_await amazeDemosaic(
-            size,
             cfaIn,
-            cfaPattern,
             rgbOut,
+            cfaPattern,
             1.0, // initGain
             0, // border
             priority
         );
     } else {
-        co_await generalDemosaic(cfaIn, rgbOut, size, cfaPattern, cfaSize, priority);
+        co_await generalDemosaic(cfaIn, rgbOut, cfaPattern, cfaSize, priority);
     }
 }
 
 static Task<void> generalDemosaic(
-    span<const float> cfaIn, span<float> rgbOut, const Vector2i size, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
 ) {
+    TEV_ASSERT(cfaIn.size() == rgbOut.size(), "CFA input and RGB output must have the same size.");
+    const Vector2i size = cfaIn.size();
+
     // The following is a vibe coded *general* demosaicing algorithm. Its quality is quite poor, but it lets us handle arbitrary CFA
     // patterns while still giving high-quality results for special-cased patterns above.
 
@@ -161,7 +168,7 @@ static Task<void> generalDemosaic(
     };
 
     // [tile_y][tile_x][channel]
-    std::vector<std::vector<std::vector<ChannelSamples>>> tile_samples(
+    std::vector<std::vector<std::vector<ChannelSamples>>> tileSamples(
         cfaSize.y(), std::vector<std::vector<ChannelSamples>>(cfaSize.x(), std::vector<ChannelSamples>(3))
     );
 
@@ -171,7 +178,7 @@ static Task<void> generalDemosaic(
             ColorWeight my_w = cfa_color_weight(my_cfa);
 
             for (int ch = 0; ch < 3; ++ch) {
-                auto& samples = tile_samples[ty][tx][ch];
+                auto& samples = tileSamples[ty][tx][ch];
 
                 // Does this pixel's CFA color contribute to this channel?
                 if (my_w.w[ch] > 0) {
@@ -231,19 +238,17 @@ static Task<void> generalDemosaic(
         numPixels * 3,
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
-                const size_t idx = (size_t)y * w + x;
+                const int ty = (y % cfaSize.y() + cfaSize.y()) % cfaSize.y();
+                const int tx = (x % cfaSize.x() + cfaSize.x()) % cfaSize.x();
 
-                int ty = (y % cfaSize.y() + cfaSize.y()) % cfaSize.y();
-                int tx = (x % cfaSize.x() + cfaSize.x()) % cfaSize.x();
-
-                float center = cfaIn[idx];
+                const float center = cfaIn[x, y];
 
                 for (int ch = 0; ch < 3; ++ch) {
-                    const auto& samples = tile_samples[ty][tx][ch];
+                    const auto& samples = tileSamples[ty][tx][ch];
 
                     if (samples.offsets.size() == 1 && samples.offsets[0].dx == 0 && samples.offsets[0].dy == 0) {
                         // Direct measurement
-                        rgbOut[idx * 3 + ch] = center * samples.offsets[0].baseWeight;
+                        rgbOut[ch, x, y] = center * samples.offsets[0].baseWeight;
                         continue;
                     }
 
@@ -254,22 +259,22 @@ static Task<void> generalDemosaic(
                     constexpr float eps = 1e-10f;
 
                     for (const auto& s : samples.offsets) {
-                        int nx = clamp(x + s.dx, 0, w - 1);
-                        int ny = clamp(y + s.dy, 0, h - 1);
-                        float val = cfaIn[(size_t)ny * w + nx];
+                        const int nx = clamp(x + s.dx, 0, w - 1);
+                        const int ny = clamp(y + s.dy, 0, h - 1);
+                        const float val = cfaIn[(size_t)ny * w + nx];
 
                         // Edge-adaptive weight: penalize if there's a
                         // large gradient between center and this sample.
                         // Use the CFA values along the path.
-                        float gradient = std::abs(val - center);
-                        float edge_weight = 1.0f / (gradient + eps);
+                        const float gradient = std::abs(val - center);
+                        const float edge_weight = 1.0f / (gradient + eps);
 
-                        float final_weight = s.baseWeight * edge_weight;
+                        const float final_weight = s.baseWeight * edge_weight;
                         value_sum += val * final_weight;
                         weight_sum += final_weight;
                     }
 
-                    rgbOut[idx * 3 + ch] = weight_sum > 0 ? value_sum / weight_sum : 0.0f;
+                    rgbOut[ch, x, y] = weight_sum > 0 ? value_sum / weight_sum : 0.0f;
                 }
             }
         },
@@ -278,8 +283,11 @@ static Task<void> generalDemosaic(
 }
 
 static Task<void> amazeDemosaic(
-    const Vector2i size, span<const float> cfaIn, span<const uint8_t> cfaPattern, span<float> rgbOut, double initGain, int border, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, double initGain, int border, int priority
 ) {
+    TEV_ASSERT(cfaIn.size() == rgbOut.size(), "CFA input and RGB output must have the same size.");
+    const Vector2i size = cfaIn.size();
+
     // This is a vibe-coded port (i.e. derivative work) of librtprocess's AMaZE implementation to work within tev's thread pool.
     // https://github.com/CarVac/librtprocess/blob/master/src/demosaic/amaze.cc
     // Redistributed here under tev's GPLv3 license.
@@ -313,10 +321,10 @@ static Task<void> amazeDemosaic(
     }
 
     // Helper lambdas to access cfaIn as row-major 2D and rgbOut as interleaved RGB
-    const auto rawData = [&](int row, int col) -> float { return cfaIn[(size_t)row * size.x() + col]; };
-    const auto setRed = [&](int row, int col, float val) { rgbOut[((size_t)row * size.x() + col) * 3 + 0] = val; };
-    const auto setGreen = [&](int row, int col, float val) { rgbOut[((size_t)row * size.x() + col) * 3 + 1] = val; };
-    const auto setBlue = [&](int row, int col, float val) { rgbOut[((size_t)row * size.x() + col) * 3 + 2] = val; };
+    const auto rawData = [&](int row, int col) -> float { return cfaIn[col, row]; };
+    const auto setRed = [&](int row, int col, float val) { rgbOut[0, col, row] = val; };
+    const auto setGreen = [&](int row, int col, float val) { rgbOut[1, col, row] = val; };
+    const auto setBlue = [&](int row, int col, float val) { rgbOut[2, col, row] = val; };
 
     const float clipPt = 1.0f / (float)initGain;
     const float clipPt8 = 0.8f / (float)initGain;

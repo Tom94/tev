@@ -224,6 +224,29 @@ namespace tev {
 
 namespace fs = std::filesystem;
 
+// TODO: remove this custom to_vector implementation in favor of std::ranges::to<std::vector> once g++ supported it for long enough
+namespace detail {
+
+struct to_vector_fn {
+    template <std::ranges::range R> friend constexpr auto operator|(R&& r, to_vector_fn) {
+        using value_type = std::ranges::range_value_t<R>;
+        if constexpr (std::ranges::sized_range<R>) {
+            std::vector<value_type> v;
+            v.reserve(std::ranges::size(r));
+            for (auto&& e : r) {
+                v.push_back(static_cast<decltype(e)&&>(e));
+            }
+            return v;
+        } else {
+            return std::vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
+        }
+    }
+};
+
+} // namespace detail
+
+inline constexpr detail::to_vector_fn to_vector{};
+
 inline uint16_t swapBytes(uint16_t value) {
 #ifdef _WIN32
     return _byteswap_ushort(value);
