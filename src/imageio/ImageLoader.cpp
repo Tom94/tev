@@ -233,11 +233,8 @@ Task<void> ImageLoader::resizeChannelsAsync(
         co_return;
     }
 
-    const auto srcRng = srcChannels | views::transform([](const Channel& c) { return c.view<const float>(); });
-    const auto dstRng = dstChannels | views::transform([](Channel& c) { return c.view<float>(); });
-
-    const vector<ChannelView<const float>> srcViews = {begin(srcRng), end(srcRng)};
-    vector<ChannelView<float>> dstViews = {begin(dstRng), end(dstRng)};
+    const auto srcViews = srcChannels | views::transform([](const Channel& c) { return c.view<const float>(); }) | to_vector;
+    const auto dstViews = dstChannels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
 
     const Vector2i size = srcChannels.front().size();
     const Vector2i targetSize = dstChannels.front().size();
@@ -261,11 +258,9 @@ Task<void> ImageLoader::resizeChannelsAsync(
         numSamples,
         [&](int dstY) {
             for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
-                const size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
-
                 if (dstX < box.min.x() || dstX >= box.max.x() || dstY < box.min.y() || dstY >= box.max.y()) {
                     for (size_t c = 0; c < numChannels; ++c) {
-                        dstChannels[c].dynamicSetAt(dstIdx, 0.0f);
+                        dstViews[c][dstX, dstY] = 0.0f;
                     }
 
                     continue;
@@ -289,18 +284,13 @@ Task<void> ImageLoader::resizeChannelsAsync(
                 const float w10 = wx0 * wy1;
                 const float w11 = wx1 * wy1;
 
-                const size_t srcIdx00 = y0 * (size_t)size.x() + x0;
-                const size_t srcIdx01 = y0 * (size_t)size.x() + x1;
-                const size_t srcIdx10 = y1 * (size_t)size.x() + x0;
-                const size_t srcIdx11 = y1 * (size_t)size.x() + x1;
-
                 for (size_t c = 0; c < numChannels; ++c) {
-                    const float p00 = srcViews[c][srcIdx00];
-                    const float p01 = srcViews[c][srcIdx01];
-                    const float p10 = srcViews[c][srcIdx10];
-                    const float p11 = srcViews[c][srcIdx11];
+                    const float p00 = srcViews[c][x0, y0];
+                    const float p01 = srcViews[c][x1, y0];
+                    const float p10 = srcViews[c][x0, y1];
+                    const float p11 = srcViews[c][x1, y1];
 
-                    dstViews[c].setAt(dstIdx, w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11);
+                    dstViews[c][dstX, dstY] = w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11;
                 }
             }
         },

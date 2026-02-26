@@ -114,7 +114,7 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
         other.numPixels(),
         [&](size_t i) {
             const float divisor = src[i];
-            dst.setAt(i, divisor != 0.0f ? dst[i] / divisor : 0.0f);
+            dst[i] = divisor != 0.0f ? dst[i] / divisor : 0.0f;
         },
         priority
     );
@@ -129,7 +129,7 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     const auto src = other.view<const float>();
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst.setAt(i, dst[i] * src[i]); }, priority
+        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst[i] *= src[i]; }, priority
     );
 }
 

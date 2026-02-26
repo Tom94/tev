@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/Box.h>
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/Task.h>
 
@@ -27,12 +28,7 @@
 namespace tev {
 
 Task<void> demosaic(
-    std::span<const float> cfaIn,
-    std::span<float> rgbOut,
-    const nanogui::Vector2i size,
-    std::span<const uint8_t> cfaPattern,
-    const nanogui::Vector2i cfaSize,
-    int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, std::span<const uint8_t> cfaPattern, const nanogui::Vector2i cfaSize, int priority
 );
 
 } // namespace tev
