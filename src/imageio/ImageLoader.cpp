@@ -233,13 +233,19 @@ Task<void> ImageLoader::resizeChannelsAsync(
         co_return;
     }
 
+    const auto srcRng = srcChannels | views::transform([](const Channel& c) { return c.view<float>(); });
+    const auto dstRng = dstChannels | views::transform([](Channel& c) { return c.view<float>(); });
+
+    const vector<ChannelView<const float>> srcViews = {begin(srcRng), end(srcRng)};
+    vector<ChannelView<float>> dstViews = {begin(dstRng), end(dstRng)};
+
     const Vector2i size = srcChannels.front().size();
     const Vector2i targetSize = dstChannels.front().size();
-    const int numChannels = (int)srcChannels.size();
+    const size_t numChannels = srcChannels.size();
 
     const Box2i box = dstArea.value_or(Box2i{Vector2i(0, 0), targetSize});
 
-    for (int i = 1; i < numChannels; ++i) {
+    for (size_t i = 1; i < numChannels; ++i) {
         TEV_ASSERT(srcChannels[i].size() == size, "Source channels' size must match.");
         TEV_ASSERT(dstChannels[i].size() == targetSize, "Destination channels' size must match.");
     }
@@ -258,7 +264,7 @@ Task<void> ImageLoader::resizeChannelsAsync(
                 const size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
 
                 if (dstX < box.min.x() || dstX >= box.max.x() || dstY < box.min.y() || dstY >= box.max.y()) {
-                    for (int c = 0; c < numChannels; ++c) {
+                    for (size_t c = 0; c < numChannels; ++c) {
                         dstChannels[c].setAt(dstIdx, 0.0f);
                     }
 
@@ -288,13 +294,13 @@ Task<void> ImageLoader::resizeChannelsAsync(
                 const size_t srcIdx10 = y1 * (size_t)size.x() + x0;
                 const size_t srcIdx11 = y1 * (size_t)size.x() + x1;
 
-                for (int c = 0; c < numChannels; ++c) {
-                    const float p00 = srcChannels[c].at(srcIdx00);
-                    const float p01 = srcChannels[c].at(srcIdx01);
-                    const float p10 = srcChannels[c].at(srcIdx10);
-                    const float p11 = srcChannels[c].at(srcIdx11);
+                for (size_t c = 0; c < numChannels; ++c) {
+                    const float p00 = srcViews[c](srcIdx00);
+                    const float p01 = srcViews[c](srcIdx01);
+                    const float p10 = srcViews[c](srcIdx10);
+                    const float p11 = srcViews[c](srcIdx11);
 
-                    dstChannels[c].setAt(dstIdx, w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11);
+                    dstViews[c].setAt(dstIdx, w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11);
                 }
             }
         },

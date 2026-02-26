@@ -2194,6 +2194,9 @@ Task<ImageData> readTiffImage(
 
                         auto* const data = (float*)imageData.data();
 
+                        const auto rng = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); });
+                        const vector<ChannelView<float>> views{begin(rng), end(rng)};
+
                         co_await ThreadPool::global().parallelForAsync<int>(
                             yStart,
                             yEnd,
@@ -2204,7 +2207,7 @@ Task<ImageData> readTiffImage(
                                     for (int x = xStart; x < xEnd; ++x) {
                                         const int x0 = x - xStart;
                                         for (int c = 0; c < samplesPerPixel; ++c) {
-                                            const auto pixel = tmpImage.channels[c].at({x0, y0});
+                                            const auto pixel = views[c](x0, y0);
                                             data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                         }
                                     }
@@ -2212,7 +2215,7 @@ Task<ImageData> readTiffImage(
                                     size_t c = i / numTilesPerPlane;
                                     for (int x = xStart; x < xEnd; ++x) {
                                         const int x0 = x - xStart;
-                                        const auto pixel = tmpImage.channels[0].at({x0, y0});
+                                        const auto pixel = views[0](x0, y0);
                                         data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                     }
                                 }
@@ -2506,6 +2509,7 @@ Task<ImageData> readTiffImage(
     }
 
     // Write directly into the final RGBA buffer if possible to save one copy, otherwise use a staging buffer.
+    // TODO: adapt below routines to write directly into the final buffer
     HeapArray<float> floatRgbaDataBuffer;
     span<float> floatRgbaData;
     if (numRgbaChannels == numInterleavedChannels) {

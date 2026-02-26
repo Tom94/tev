@@ -101,24 +101,35 @@ Channel::Channel(
 }
 
 Task<void> Channel::divideByAsync(const Channel& other, int priority) {
+    if (pixelFormat() != EPixelFormat::F32 || other.pixelFormat() != EPixelFormat::F32) {
+        throw runtime_error{"divideByAsync only supports F32 channels."};
+    }
+
+    auto dst = view<float>();
+    const auto src = other.view<float>();
+
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         other.numPixels(),
         other.numPixels(),
         [&](size_t i) {
-            if (other.at(i) != 0) {
-                setAt(i, at(i) / other.at(i));
-            } else {
-                setAt(i, 0);
-            }
+            const float divisor = src(i);
+            dst.setAt(i, divisor != 0.0f ? dst(i) / divisor : 0.0f);
         },
         priority
     );
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
+    if (pixelFormat() != EPixelFormat::F32 || other.pixelFormat() != EPixelFormat::F32) {
+        throw runtime_error{"multiplyWithAsync only supports F32 channels."};
+    }
+
+    auto dst = view<float>();
+    const auto src = other.view<float>();
+
     co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, other.numPixels(), other.numPixels(), [&](size_t i) { setAt(i, at(i) * other.at(i)); }, priority
+        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst.setAt(i, dst(i) * src(i)); }, priority
     );
 }
 

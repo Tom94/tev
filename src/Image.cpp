@@ -166,16 +166,17 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
 
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
+        auto rv = r->view<float>(), gv = g->view<float>(), bv = b->view<float>();
         tasks.emplace_back(
             ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 r->numPixels(),
                 r->numPixels() * 3,
-                [r, g, b, mat](size_t i) {
-                    const auto rgb = mat * Vector3f{r->at(i), g->at(i), b->at(i)};
-                    r->setAt(i, rgb.x());
-                    g->setAt(i, rgb.y());
-                    b->setAt(i, rgb.z());
+                [rv, gv, bv, mat](size_t i) mutable {
+                    const auto rgb = mat * Vector3f{rv(i), gv(i), bv(i)};
+                    rv.setAt(i, rgb.x());
+                    gv.setAt(i, rgb.y());
+                    bv.setAt(i, rgb.z());
                 },
                 priority
             )
@@ -261,19 +262,20 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
-        lumPerLayer[i].resize(r->numPixels());
+        auto rv = r->view<float>(), gv = g->view<float>(), bv = b->view<float>();
 
+        lumPerLayer[i].resize(r->numPixels());
         tasks.emplace_back(
             ThreadPool::global().parallelForAsync<size_t>(
                 0,
                 lumPerLayer[i].size(),
                 lumPerLayer[i].size(),
-                [r, g, b, &lumBuf = lumPerLayer[i] /*, &toRec2020*/](size_t px) {
+                [rv, gv, bv, &lumBuf = lumPerLayer[i] /*, &toRec2020*/](size_t px) {
                     // Optional: max RGB in BT.2020 primaries (see comment above)
                     // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
                     // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
 
-                    const float lum = 0.2126 * r->at(px) + 0.7152 * g->at(px) + 0.0722 * b->at(px);
+                    const float lum = 0.2126 * rv(px) + 0.7152 * gv(px) + 0.0722 * bv(px);
                     lumBuf[px] = isfinite(lum) ? lum : 0.0f;
                 },
                 priority
@@ -674,13 +676,17 @@ string Image::shortName() const {
 }
 
 bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const {
+    if (desiredStride == 0) {
+        throw runtime_error{"Desired stride must be greater than 0."};
+    }
+
     if (desiredStride < channelNames.size()) {
         throw runtime_error{"Desired stride must be at least the number of channels."};
     }
 
     // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
     // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
-    const uint8_t* interleavedData = nullptr;
+    shared_ptr<Channel::Data> interleavedData;
     for (size_t i = 0; i < channelNames.size(); ++i) {
         const auto* chan = channel(channelNames[i]);
         if (!chan) {
@@ -688,15 +694,15 @@ bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPe
         }
 
         if (i == 0) {
-            interleavedData = chan->data();
+            interleavedData = chan->dataBuf();
         }
 
-        if (interleavedData != chan->data() - i * desiredBytesPerSample || chan->stride() != desiredStride) {
+        if (interleavedData != chan->dataBuf() || chan->stride() != desiredStride || chan->offset() != i * desiredBytesPerSample) {
             return false;
         }
     }
 
-    return interleavedData;
+    return interleavedData != nullptr;
 }
 
 static size_t numChannelsInPixelFormat(Texture::PixelFormat pixelFormat) {
@@ -726,15 +732,15 @@ Task<void> prepareTextureChannel(
     const size_t numPixels = (size_t)size.x() * size.y();
 
     if (chan) {
-        auto copyChannel = [&](const auto* src) -> Task<void> {
+        auto copyChannel = [&](const auto view) -> Task<void> {
             co_await ThreadPool::global().parallelForAsync<int>(
                 0,
                 size.y(),
                 numPixels,
-                [chan, src, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
+                [view, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
                     for (int x = 0; x < width; ++x) {
                         size_t tileIdx = x + y * (size_t)width;
-                        data[tileIdx * numTextureChannels + channelIdx] = chan->typedDataAt(src, {pos.x() + x, pos.y() + y});
+                        data[tileIdx * numTextureChannels + channelIdx] = view(pos.x() + x, pos.y() + y);
                     }
                 },
                 numeric_limits<int>::max()
@@ -742,12 +748,12 @@ Task<void> prepareTextureChannel(
         };
 
         switch (chan->pixelFormat()) {
-            case EPixelFormat::U8: co_await copyChannel(chan->data()); break;
-            case EPixelFormat::U16: co_await copyChannel((const uint16_t*)chan->data()); break;
-            case EPixelFormat::I8: co_await copyChannel((const int8_t*)chan->data()); break;
-            case EPixelFormat::I16: co_await copyChannel((const int16_t*)chan->data()); break;
-            case EPixelFormat::F16: co_await copyChannel((const half*)chan->data()); break;
-            case EPixelFormat::F32: co_await copyChannel((const float*)chan->data()); break;
+            case EPixelFormat::U8: co_await copyChannel(chan->view<uint8_t>()); break;
+            case EPixelFormat::U16: co_await copyChannel(chan->view<uint16_t>()); break;
+            case EPixelFormat::I8: co_await copyChannel(chan->view<int8_t>()); break;
+            case EPixelFormat::I16: co_await copyChannel(chan->view<int16_t>()); break;
+            case EPixelFormat::F16: co_await copyChannel(chan->view<half>()); break;
+            case EPixelFormat::F32: co_await copyChannel(chan->view<float>()); break;
         }
     } else {
         co_await ThreadPool::global().parallelForAsync<int>(
@@ -1067,6 +1073,9 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), size, EPixelFormat::F32, EPixelFormat::F32);
     }
 
+    const auto rng = result | views::transform([](Channel& c) { return c.view<float>(); });
+    vector<ChannelView<float>> views = {begin(rng), end(rng)};
+
     const auto channels = this->channels(channelNames);
     if (!reference) {
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -1075,7 +1084,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
             numPixels * channels.size(),
             [&](size_t j) {
                 for (size_t c = 0; c < channels.size(); ++c) {
-                    result[c].setAt(j, channels[c]->at(j));
+                    views[c].setAt(j, channels[c]->at(j));
                 }
             },
             priority
@@ -1100,19 +1109,23 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
 
                     if (isAlpha[c]) {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[c].setAt(
-                                {x, y},
+                            views[c].setAt(
+                                x,
+                                y,
                                 0.5f *
-                                    (channel->eval({x, y}) +
-                                     (referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 1.0f))
+                                    (channel->evalOrZero({x, y}) +
+                                     (referenceChannel ? referenceChannel->evalOrZero({x + offset.x(), y + offset.y()}) : 1.0f))
                             );
                         }
                     } else {
                         for (int x = 0; x < size.x(); ++x) {
-                            result[c].setAt(
-                                {x, y},
+                            views[c].setAt(
+                                x,
+                                y,
                                 applyMetric(
-                                    channel->eval({x, y}), referenceChannel ? referenceChannel->eval({x + offset.x(), y + offset.y()}) : 0.0f, metric
+                                    channel->evalOrZero({x, y}),
+                                    referenceChannel ? referenceChannel->evalOrZero({x + offset.x(), y + offset.y()}) : 0.0f,
+                                    metric
                                 )
                             );
                         }
@@ -1166,10 +1179,10 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
                 const auto xoffset = x - imageRegion.min.x();
 
-                const float alpha = alphaChannel ? alphaChannel->eval({x, y}) : 1.0f;
+                const float alpha = alphaChannel ? alphaChannel->evalOrZero({x, y}) : 1.0f;
                 for (size_t c = 0; c < 3; ++c) {
-                    const float val = nColorChannelsToSave == 1 ? channels[0].eval({x, y}) :
-                                                                  (c < nColorChannelsToSave ? channels[c].eval({x, y}) : 0.0f);
+                    const float val = nColorChannelsToSave == 1 ? channels[0].evalOrZero({x, y}) :
+                                                                  (c < nColorChannelsToSave ? channels[c].evalOrZero({x, y}) : 0.0f);
                     result[(yoffset + xoffset) * 4 + c] = val + (1.0f - alpha) * bg[c];
                 }
 
