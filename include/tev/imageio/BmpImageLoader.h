@@ -32,8 +32,8 @@ public:
         std::istream& iStream,
         const fs::path& path,
         std::string_view channelSelector,
+        const ImageLoaderSettings& settings,
         int priority,
-        const GainmapHeadroom& gainmapHeadroom,
         std::optional<size_t> pixelDataOffset,
         // If provided, this will be used as the image size instead of the size specified in the BMP headers. The value will be modified to
         // the size from the bmp header in case of a mismatch, so the caller can detect that and react accordingly. Necessary for loading
@@ -46,7 +46,7 @@ public:
     ) const;
 
     Task<std::vector<ImageData>> load(
-        std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
     ) const override;
 
     std::string name() const override { return "BMP"; }

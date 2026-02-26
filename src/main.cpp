@@ -133,7 +133,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
                     toPath(info.imageName),
                     imageStream,
                     "",
-                    sImageViewer->imagesLoader().gainmapHeadroom(),
+                    sImageViewer->imagesLoader().imageLoaderSettings(),
                     sImageViewer->imagesLoader().groupChannels()
                 );
                 const auto images = imagesLoadTask.get();
@@ -312,6 +312,16 @@ static int mainFunc(span<const string> arguments) {
         "tev --convert-to /output/directory/{file}.jpg image1.exr image2.h\n"
         "tev --convert-to /output/directory/converted_{idx:02}.png image1.exr image2.hdr image3.png\n",
         {'c', "convert-to"},
+    };
+
+    Flag dngCameraProfileFlag{
+        parser,
+        "DNG CAMERA PROFILE",
+        "When loading DNG images, apply the embedded camera profile. "
+        "Enabling this setting moves the image farther from the raw sensor response and closer to a pleasing image, but potentially at the cost of colorimetric accuracy. "
+        "Regardless of this setting, the DNG's embedded color space, linearization, and white balance metadata will always be applied. "
+        "Default is off.",
+        {"dng-camera-profile"},
     };
 
     ValueFlag<float> exposureFlag{
@@ -613,10 +623,14 @@ static int mainFunc(span<const string> arguments) {
     imagesLoader->setRecursiveDirectories(recursiveFlag);
     imagesLoader->setGroupChannels(!channelGroupingFlagOff);
 
+    if (dngCameraProfileFlag) {
+        imagesLoader->imageLoaderSettings().dngApplyCameraProfile = true;
+    }
+
     if (gainmapHeadroomFlag) {
         try {
             const auto gainmapHeadroom = GainmapHeadroom{get(gainmapHeadroomFlag)};
-            imagesLoader->setGainmapHeadroom(gainmapHeadroom);
+            imagesLoader->imageLoaderSettings().gainmapHeadroom = gainmapHeadroom;
         } catch (const invalid_argument& e) {
             tlog::error() << fmt::format("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
             return -6;

@@ -36,7 +36,7 @@ template <typename T> static T read(const uint8_t* data, bool reverseEndianness)
 }
 
 Task<vector<ImageData>> IcoImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     const size_t initialPos = iStream.tellg();
     const bool reverseEndianness = endian::native == endian::big;
@@ -147,7 +147,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
             }
 
             const auto pngLoader = PngImageLoader{};
-            imageData = co_await pngLoader.load(iStream, path, channelSelector, priority, gainmapHeadroom);
+            imageData = co_await pngLoader.load(iStream, path, channelSelector, settings, priority);
         } catch (const FormatNotSupported&) {
             tlog::debug() << fmt::format("Not a PNG image; trying BMP.", i);
         } catch (const ImageLoadError& e) {
@@ -168,9 +168,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                 auto size = Vector2i{entry.width, entry.height};
 
                 const auto bmpLoader = BmpImageLoader{};
-                imageData = co_await bmpLoader.loadWithoutFileHeader(
-                    iStream, path, channelSelector, priority, gainmapHeadroom, nullopt, &size, true
-                );
+                imageData = co_await bmpLoader.loadWithoutFileHeader(iStream, path, channelSelector, settings, priority, nullopt, &size, true);
 
                 if (size != Vector2i{entry.width, entry.height}) {
                     if (size != Vector2i{entry.width, entry.height * 2}) {

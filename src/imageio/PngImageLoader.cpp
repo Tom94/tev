@@ -30,7 +30,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom&) const {
+Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     png_byte header[8] = {0};
     iStream.read(reinterpret_cast<char*>(header), 8);
     if (png_sig_cmp(header, 0, 8)) {

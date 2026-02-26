@@ -21,7 +21,6 @@
 #include <tev/Box.h>
 #include <tev/Channel.h>
 #include <tev/Common.h>
-#include <tev/SharedQueue.h>
 #include <tev/ThreadPool.h>
 #include <tev/VectorGraphics.h>
 #include <tev/imageio/Colors.h>
@@ -36,12 +35,13 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <queue>
 #include <span>
 #include <string>
 #include <vector>
 
 namespace tev {
+
+struct ImageLoaderSettings;
 
 static constexpr float DEFAULT_IMAGE_WHITE_LEVEL = 80.0f;
 
@@ -144,7 +144,7 @@ struct ImageData {
 
     bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }
 
-    const Channel* channel(std::string_view channelName) const {
+    const Channel* channel(std::string_view channelName) const & {
         const auto it = std::ranges::find(channels, channelName, [](const auto& c) { return c.name(); });
         if (it != std::end(channels)) {
             return &(*it);
@@ -153,7 +153,7 @@ struct ImageData {
         }
     }
 
-    Channel* mutableChannel(std::string_view channelName) {
+    Channel* mutableChannel(std::string_view channelName) & {
         const auto it = std::ranges::find(channels, channelName, [](const auto& c) { return c.name(); });
         if (it != std::end(channels)) {
             return &(*it);
@@ -181,21 +181,21 @@ public:
     Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, std::string_view channelSelector, bool groupChannels);
     virtual ~Image();
 
-    const fs::path& path() const { return mPath; }
+    const fs::path& path() const & { return mPath; }
 
     fs::file_time_type fileLastModified() const { return mFileLastModified; }
 
     void setFileLastModified(fs::file_time_type value) { mFileLastModified = value; }
 
-    std::string_view channelSelector() const { return mChannelSelector; }
+    std::string_view channelSelector() const & { return mChannelSelector; }
 
-    std::string_view name() const { return mName; }
+    std::string_view name() const & { return mName; }
 
     std::string shortName() const;
 
     bool hasChannel(std::string_view channelName) const { return mData.hasChannel(channelName); }
 
-    const Channel* channel(std::string_view channelName) const { return mData.channel(channelName); }
+    const Channel* channel(std::string_view channelName) const & { return mData.channel(channelName); }
     std::vector<const Channel*> channels(std::span<const std::string> channelNames) const {
         std::vector<const Channel*> result;
         for (const auto& channelName : channelNames) {
@@ -207,12 +207,10 @@ public:
 
     bool isInterleaved(std::span<const std::string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const;
 
-    nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter);
+    nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) &;
 
-    std::vector<std::string> channelsInGroup(std::string_view groupName) const;
+    std::span<const std::string> channelsInGroup(std::string_view groupName) const &;
     void decomposeChannelGroup(std::string_view groupName);
-
-    std::vector<std::string> getExistingChannels(std::span<const std::string> requestedChannels) const;
 
     nanogui::Vector2i size() const { return mData.size(); }
 
@@ -222,8 +220,8 @@ public:
         return pos.x() >= 0 && pos.y() >= 0 && pos.x() < mData.size().x() && pos.y() < mData.size().y();
     }
 
-    const Box2i& dataWindow() const { return mData.dataWindow; }
-    const Box2i& displayWindow() const { return mData.displayWindow; }
+    const Box2i& dataWindow() const & { return mData.dataWindow; }
+    const Box2i& displayWindow() const & { return mData.displayWindow; }
     Box2i toImageCoords(const Box2i& displayWindow) const {
         return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min);
     }
@@ -236,7 +234,7 @@ public:
 
     size_t numPixels() const { return mData.numPixels(); }
 
-    std::span<const ChannelGroup> channelGroups() const { return mChannelGroups; }
+    std::span<const ChannelGroup> channelGroups() const & { return mChannelGroups; }
 
     int id() const { return mId; }
 
@@ -255,7 +253,7 @@ public:
 
     void updateVectorGraphics(bool append, std::span<const VgCommand> commands);
 
-    std::span<const VgCommand> vgCommands() const { return mVgCommands; }
+    std::span<const VgCommand> vgCommands() const & { return mVgCommands; }
 
     void setStaleIdCallback(const std::function<void(int)>& callback) { mStaleIdCallback = callback; }
 
@@ -305,12 +303,12 @@ public:
 
     std::string toString() const;
 
-    std::span<const AttributeNode> attributes() const { return mData.attributes; }
+    std::span<const AttributeNode> attributes() const & { return mData.attributes; }
 
 private:
     static std::atomic<int> sId;
 
-    Channel* mutableChannel(std::string_view channelName) { return mData.mutableChannel(channelName); }
+    Channel* mutableChannel(std::string_view channelName) & { return mData.mutableChannel(channelName); }
 
     std::vector<ChannelGroup> getGroupedChannels(std::string_view layerName) const;
 
@@ -339,75 +337,15 @@ Task<nanogui::Vector2i>
     orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority);
 
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
-    int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+    int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
 Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
-    fs::path path, std::istream& iStream, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels
+    fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels);
+    tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
 Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(fs::path path, std::string_view channelSelector, const GainmapHeadroom& gainmapHeadroom, bool groupChannels);
-
-struct ImageAddition {
-    int loadId;
-    bool shallSelect;
-    std::vector<std::shared_ptr<Image>> images;
-    std::shared_ptr<Image> toReplace;
-
-    struct Comparator {
-        bool operator()(const ImageAddition& a, const ImageAddition& b) { return a.loadId > b.loadId; }
-    };
-};
-
-struct PathAndChannelSelector {
-    fs::path path;
-    std::string channelSelector;
-
-    bool operator<(const PathAndChannelSelector& other) const {
-        return path == other.path ? (channelSelector < other.channelSelector) : (path < other.path);
-    }
-};
-
-class BackgroundImagesLoader {
-public:
-    void enqueue(const fs::path& path, std::string_view channelSelector, bool shallSelect, const std::shared_ptr<Image>& toReplace = nullptr);
-    void checkDirectoriesForNewFilesAndLoadThose();
-
-    std::optional<ImageAddition> tryPop();
-    std::optional<nanogui::Vector2i> firstImageSize() const;
-
-    bool publishSortedLoads();
-    bool hasPendingLoads() const;
-
-    bool recursiveDirectories() const { return mRecursiveDirectories; }
-    void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }
-
-    const GainmapHeadroom& gainmapHeadroom() const { return mGainmapHeadroom; }
-    void setGainmapHeadroom(const GainmapHeadroom& gainmapHeadroom) { mGainmapHeadroom = gainmapHeadroom; }
-
-    bool groupChannels() const { return mGroupChannels; }
-    void setGroupChannels(bool value) { mGroupChannels = value; }
-
-private:
-    SharedQueue<ImageAddition> mLoadedImages;
-
-    std::priority_queue<ImageAddition, std::vector<ImageAddition>, ImageAddition::Comparator> mPendingLoadedImages;
-    mutable std::mutex mPendingLoadedImagesMutex;
-
-    std::atomic<int> mLoadCounter{0};
-    std::atomic<int> mUnsortedLoadCounter{0};
-
-    bool mRecursiveDirectories = false;
-    std::map<fs::path, std::set<std::string>> mDirectories;
-    std::set<PathAndChannelSelector> mFilesFoundInDirectories;
-
-    GainmapHeadroom mGainmapHeadroom;
-    bool mGroupChannels = true;
-
-    std::chrono::system_clock::time_point mLoadStartTime;
-    int mLoadStartCounter = 0;
-};
+    tryLoadImage(fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
 
 } // namespace tev
 

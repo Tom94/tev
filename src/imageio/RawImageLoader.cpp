@@ -140,7 +140,7 @@ Box2i maskToBox(const int mask[4]) {
     };
 }
 
-Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
+Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
     if (toLower(toString(path.extension())) == ".dng") {
         throw FormatNotSupported{"DNG files will be handled by TiffImageLoader."};
     }

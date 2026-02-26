@@ -172,6 +172,7 @@ set(TEV_SOURCES
     include/tev/imageio/WebpImageLoader.h src/imageio/WebpImageLoader.cpp
     include/tev/imageio/Xmp.h src/imageio/Xmp.cpp
 
+    include/tev/BackgroundImagesLoader.h src/BackgroundImagesLoader.cpp
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp

@@ -776,6 +776,7 @@ Task<void> postprocessLinearRawDng(
     span<float> floatRgbaData,
     ImageData& resultData,
     const bool reverseEndian,
+    const bool applyCameraProfile,
     const int priority
 ) {
     if (samplesPerPixel != 3) {
@@ -941,8 +942,6 @@ Task<void> postprocessLinearRawDng(
     // look like cleaner (less washed out, but also less dynamic range) when the profile is applied, so it's a judgement call whether to
     // apply it or not.
 
-    // TODO: make camera profile application optional
-    const bool applyCameraProfile = false;
     if (!applyCameraProfile) {
         co_return;
     }
@@ -1655,8 +1654,15 @@ Task<ImageData> decodeJpeg(
     co_return result;
 }
 
-Task<ImageData>
-    readTiffImage(const TiffData& tiffData, TIFF* tif, const bool isDng, const bool reverseEndian, string_view partName, const int priority) {
+Task<ImageData> readTiffImage(
+    const TiffData& tiffData,
+    TIFF* tif,
+    const bool isDng,
+    const bool reverseEndian,
+    string_view partName,
+    const ImageLoaderSettings& settings,
+    const int priority
+) {
     uint32_t width, height;
     if (!TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width) || !TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height)) {
         throw ImageLoadError{"Failed to read dimensions."};
@@ -2114,13 +2120,13 @@ Task<ImageData>
                             case COMPRESSION_JXL: {
                                 const auto loader = JxlImageLoader{};
                                 tmp = co_await loader.load(
-                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                    compressedTileData, "", "", {}, priority, false, &nestedBitsPerSample, &nestedPixelType
                                 );
                             } break;
                             case COMPRESSION_JP2000: {
                                 const auto loader = Jpeg2000ImageLoader{};
                                 tmp = co_await loader.load(
-                                    compressedTileData, "", "", priority, {}, false, &nestedBitsPerSample, &nestedPixelType
+                                    compressedTileData, "", "", {}, priority, false, &nestedBitsPerSample, &nestedPixelType
                                 );
                             } break;
                             case COMPRESSION_JPEG:
@@ -2573,7 +2579,7 @@ Task<ImageData>
         }
 
         co_await postprocessLinearRawDng(
-            tif, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, priority
+            tif, samplesPerPixel, numColorChannels, numRgbaChannels, floatRgbaData, resultData, reverseEndian, settings.dngApplyCameraProfile, priority
         );
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
@@ -2596,7 +2602,8 @@ Task<ImageData>
     co_return resultData;
 }
 
-Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, int priority, const GainmapHeadroom&) const {
+Task<vector<ImageData>>
+    TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings& settings, int priority) const {
     // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
     // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
     char magic[4] = {0};
@@ -2717,7 +2724,7 @@ Task<vector<ImageData>> TiffImageLoader::load(istream& iStream, const fs::path& 
         try {
             tlog::debug() << fmt::format("Loading '{}'", name);
 
-            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, reverseEndian, name, priority));
+            ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, reverseEndian, name, settings, priority));
             if (exifAttributes) {
                 data.attributes.emplace_back(exifAttributes.value());
             }

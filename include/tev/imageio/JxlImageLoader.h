@@ -30,15 +30,15 @@ namespace tev {
 class JxlImageLoader : public ImageLoader {
 public:
     Task<std::vector<ImageData>> load(
-        std::istream& iStream, const fs::path& path, std::string_view channelSelector, int priority, const GainmapHeadroom& gainmapHeadroom
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
     ) const override;
 
     Task<std::vector<ImageData>> load(
         std::span<const uint8_t> data,
         const fs::path& path,
         std::string_view channelSelector,
+        const ImageLoaderSettings& settings,
         int priority,
-        const GainmapHeadroom& gainmapHeadroom,
         bool skipColorProcessing,
         size_t* bitsPerSampleOut = nullptr,
         EPixelType* pixelTypeOut = nullptr

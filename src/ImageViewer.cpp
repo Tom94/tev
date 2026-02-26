@@ -1929,7 +1929,7 @@ void ImageViewer::normalizeExposureAndOffset() {
         return;
     }
 
-    auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
+    const auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
 
     float minimum = numeric_limits<float>::max();
     float maximum = numeric_limits<float>::min();
@@ -1940,7 +1940,7 @@ void ImageViewer::normalizeExposureAndOffset() {
         minimum = std::min(minimum, cmin);
     }
 
-    float factor = 1.0f / (maximum - minimum);
+    const float factor = 1.0f / (maximum - minimum);
     setExposure(log2(factor));
     setOffset(-minimum * factor);
 }
@@ -2403,13 +2403,13 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     // TODO: make a dedicated PNG saver via libpng which should be faster than stb_image_write.
     const auto pngImageSaver = make_unique<StbiLdrImageSaver>();
 
-    stringstream pngData;
+    ostringstream pngData;
     try {
         pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4).get();
     } catch (const ImageSaveError& e) { throw runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())}; }
 
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-        waylandSetClipboardPngImage(pngData.view().data(), pngData.view().size());
+        waylandSetClipboardPngImage(pngData.view());
     } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
         clip::lock l;
         if (!l.locked()) {
@@ -2438,13 +2438,13 @@ void ImageViewer::copyImageNameToClipboard() const {
 void ImageViewer::pasteImagesFromClipboard() {
     stringstream imageStream;
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-        size_t size = 0;
-        const char* data = waylandGetClipboardPngImage(&size);
-        if (data == nullptr || size == 0) {
+        const auto data = waylandGetClipboardPngImage();
+        if (data.empty()) {
             throw runtime_error{"No image data found in clipboard."};
         }
 
-        imageStream.write(data, size);
+        // TODO: use spanstream once it is available in C++23 to avoid the copy
+        imageStream = stringstream{string{data}, ios::in};
     } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
         clip::lock l;
         if (!l.locked()) {
@@ -2456,11 +2456,11 @@ void ImageViewer::pasteImagesFromClipboard() {
             throw runtime_error{"Clipboard does not contain image data."};
         }
 
-        size_t len = l.get_data_length(f);
+        const size_t len = l.get_data_length(f);
         string data(len, '\0');
         l.get_data(f, data.data(), len);
 
-        imageStream.write(data.data(), data.size());
+        imageStream = stringstream{std::move(data), ios::in};
     } else {
         clip::image clipImage;
         if (!clip::get_image(clipImage)) {
@@ -2474,7 +2474,7 @@ void ImageViewer::pasteImagesFromClipboard() {
 
     tlog::info() << "Loading image from clipboard...";
     auto imagesLoadTask = tryLoadImage(
-        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->gainmapHeadroom(), mImagesLoader->groupChannels()
+        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
     );
 
     const auto images = imagesLoadTask.get();
@@ -2724,7 +2724,8 @@ void ImageViewer::updateTitle() {
 
     ostringstream caption;
 
-    auto channels = mCurrentImage->channelsInGroup(mCurrentGroup);
+    const auto channelsSpan = mCurrentImage->channelsInGroup(mCurrentGroup);
+    vector<string_view> channels = {begin(channelsSpan), end(channelsSpan)};
 
     // Remove duplicates
     channels.erase(unique(begin(channels), end(channels)), end(channels));

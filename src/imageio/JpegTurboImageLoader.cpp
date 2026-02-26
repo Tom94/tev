@@ -39,7 +39,7 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>>
-    JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, int priority, const GainmapHeadroom& gainmapHeadroom) const {
+    JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings& settings, int priority) const {
     const size_t initialPos = iStream.tellg();
 
     unsigned char header[2] = {0};
@@ -612,10 +612,10 @@ Task<vector<ImageData>>
             mainImage.attributes.emplace_back(isoMetadata.toAttributes());
 
             co_await preprocessAndApplyIsoGainMap(
-                mainImage, imageData, isoMetadata, mainImage.nativeMetadata.chroma, imageInfo.isoGainmapInfo->chroma, gainmapHeadroom, priority
+                mainImage, imageData, isoMetadata, mainImage.nativeMetadata.chroma, imageInfo.isoGainmapInfo->chroma, settings.gainmapHeadroom, priority
             );
         } else if (imageInfo.isAppleGainmap) {
-            co_await preprocessAndApplyAppleGainMap(mainImage, imageData, mainImageInfo.appleMakerNoteIfd, gainmapHeadroom, priority);
+            co_await preprocessAndApplyAppleGainMap(mainImage, imageData, mainImageInfo.appleMakerNoteIfd, settings.gainmapHeadroom, priority);
         }
 
         mainImage.channels.insert(
