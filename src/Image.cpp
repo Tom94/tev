@@ -173,7 +173,7 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
                 r->numPixels(),
                 r->numPixels() * 3,
                 [rv, gv, bv, mat](size_t i) mutable {
-                    const auto rgb = mat * Vector3f{rv(i), gv(i), bv(i)};
+                    const auto rgb = mat * Vector3f{rv[i], gv[i], bv[i]};
                     rv.setAt(i, rgb.x());
                     gv.setAt(i, rgb.y());
                     bv.setAt(i, rgb.z());
@@ -262,7 +262,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
-        auto rv = r->view<float>(), gv = g->view<float>(), bv = b->view<float>();
+        const auto rv = r->view<const float>(), gv = g->view<const float>(), bv = b->view<const float>();
 
         lumPerLayer[i].resize(r->numPixels());
         tasks.emplace_back(
@@ -275,7 +275,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
                     // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
                     // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
 
-                    const float lum = 0.2126 * rv(px) + 0.7152 * gv(px) + 0.0722 * bv(px);
+                    const float lum = 0.2126 * rv[px] + 0.7152 * gv[px] + 0.0722 * bv[px];
                     lumBuf[px] = isfinite(lum) ? lum : 0.0f;
                 },
                 priority
@@ -740,7 +740,7 @@ Task<void> prepareTextureChannel(
                 [view, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
                     for (int x = 0; x < width; ++x) {
                         size_t tileIdx = x + y * (size_t)width;
-                        data[tileIdx * numTextureChannels + channelIdx] = view(pos.x() + x, pos.y() + y);
+                        data[tileIdx * numTextureChannels + channelIdx] = view[pos.x() + x, pos.y() + y];
                     }
                 },
                 numeric_limits<int>::max()
@@ -748,12 +748,12 @@ Task<void> prepareTextureChannel(
         };
 
         switch (chan->pixelFormat()) {
-            case EPixelFormat::U8: co_await copyChannel(chan->view<uint8_t>()); break;
-            case EPixelFormat::U16: co_await copyChannel(chan->view<uint16_t>()); break;
-            case EPixelFormat::I8: co_await copyChannel(chan->view<int8_t>()); break;
-            case EPixelFormat::I16: co_await copyChannel(chan->view<int16_t>()); break;
-            case EPixelFormat::F16: co_await copyChannel(chan->view<half>()); break;
-            case EPixelFormat::F32: co_await copyChannel(chan->view<float>()); break;
+            case EPixelFormat::U8: co_await copyChannel(chan->view<const uint8_t>()); break;
+            case EPixelFormat::U16: co_await copyChannel(chan->view<const uint16_t>()); break;
+            case EPixelFormat::I8: co_await copyChannel(chan->view<const int8_t>()); break;
+            case EPixelFormat::I16: co_await copyChannel(chan->view<const int16_t>()); break;
+            case EPixelFormat::F16: co_await copyChannel(chan->view<const half>()); break;
+            case EPixelFormat::F32: co_await copyChannel(chan->view<const float>()); break;
         }
     } else {
         co_await ThreadPool::global().parallelForAsync<int>(
@@ -1084,7 +1084,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
             numPixels * channels.size(),
             [&](size_t j) {
                 for (size_t c = 0; c < channels.size(); ++c) {
-                    views[c].setAt(j, channels[c]->at(j));
+                    views[c].setAt(j, channels[c]->dynamicAt(j));
                 }
             },
             priority

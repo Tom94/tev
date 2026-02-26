@@ -106,15 +106,15 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
     }
 
     auto dst = view<float>();
-    const auto src = other.view<float>();
+    const auto src = other.view<const float>();
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         other.numPixels(),
         other.numPixels(),
         [&](size_t i) {
-            const float divisor = src(i);
-            dst.setAt(i, divisor != 0.0f ? dst(i) / divisor : 0.0f);
+            const float divisor = src[i];
+            dst.setAt(i, divisor != 0.0f ? dst[i] / divisor : 0.0f);
         },
         priority
     );
@@ -126,10 +126,10 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     }
 
     auto dst = view<float>();
-    const auto src = other.view<float>();
+    const auto src = other.view<const float>();
 
     co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst.setAt(i, dst(i) * src(i)); }, priority
+        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst.setAt(i, dst[i] * src[i]); }, priority
     );
 }
 
@@ -142,7 +142,7 @@ void Channel::updateTile(int x, int y, int width, int height, span<const float> 
 
     for (int posY = 0; posY < height; ++posY) {
         for (int posX = 0; posX < width; ++posX) {
-            setAt({x + posX, y + posY}, newData[posX + posY * (size_t)width]);
+            dynamicSetAt({x + posX, y + posY}, newData[posX + posY * (size_t)width]);
         }
     }
 }

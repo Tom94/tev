@@ -4,7 +4,7 @@
 	shallow = true
 [submodule "dependencies/Imath"]
 	path = dependencies/Imath
-	url = https://github.com/AcademySoftwareFoundation/Imath
+	url = https://github.com/tom94/Imath
 	shallow = true
 [submodule "dependencies/openexr"]
 	path = dependencies/openexr

@@ -233,7 +233,7 @@ Task<void> ImageLoader::resizeChannelsAsync(
         co_return;
     }
 
-    const auto srcRng = srcChannels | views::transform([](const Channel& c) { return c.view<float>(); });
+    const auto srcRng = srcChannels | views::transform([](const Channel& c) { return c.view<const float>(); });
     const auto dstRng = dstChannels | views::transform([](Channel& c) { return c.view<float>(); });
 
     const vector<ChannelView<const float>> srcViews = {begin(srcRng), end(srcRng)};
@@ -265,7 +265,7 @@ Task<void> ImageLoader::resizeChannelsAsync(
 
                 if (dstX < box.min.x() || dstX >= box.max.x() || dstY < box.min.y() || dstY >= box.max.y()) {
                     for (size_t c = 0; c < numChannels; ++c) {
-                        dstChannels[c].setAt(dstIdx, 0.0f);
+                        dstChannels[c].dynamicSetAt(dstIdx, 0.0f);
                     }
 
                     continue;
@@ -295,10 +295,10 @@ Task<void> ImageLoader::resizeChannelsAsync(
                 const size_t srcIdx11 = y1 * (size_t)size.x() + x1;
 
                 for (size_t c = 0; c < numChannels; ++c) {
-                    const float p00 = srcViews[c](srcIdx00);
-                    const float p01 = srcViews[c](srcIdx01);
-                    const float p10 = srcViews[c](srcIdx10);
-                    const float p11 = srcViews[c](srcIdx11);
+                    const float p00 = srcViews[c][srcIdx00];
+                    const float p01 = srcViews[c][srcIdx01];
+                    const float p10 = srcViews[c][srcIdx10];
+                    const float p11 = srcViews[c][srcIdx11];
 
                     dstViews[c].setAt(dstIdx, w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11);
                 }

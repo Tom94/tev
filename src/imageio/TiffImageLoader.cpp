@@ -2207,7 +2207,7 @@ Task<ImageData> readTiffImage(
                                     for (int x = xStart; x < xEnd; ++x) {
                                         const int x0 = x - xStart;
                                         for (int c = 0; c < samplesPerPixel; ++c) {
-                                            const auto pixel = views[c](x0, y0);
+                                            const auto pixel = views[c][x0, y0];
                                             data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                         }
                                     }
@@ -2215,7 +2215,7 @@ Task<ImageData> readTiffImage(
                                     size_t c = i / numTilesPerPlane;
                                     for (int x = xStart; x < xEnd; ++x) {
                                         const int x0 = x - xStart;
-                                        const auto pixel = views[0](x0, y0);
+                                        const auto pixel = views[0][x0, y0];
                                         data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                     }
                                 }

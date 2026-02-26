@@ -846,12 +846,12 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             numSamples,
             [&](int y) {
                 for (int x = region.min.x(); x < region.max.x(); ++x) {
-                    const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)(x, y) : 1.0f;
+                    const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)[x, y] : 1.0f;
                     const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
                     Vector3f rgb;
                     for (size_t c = 0; c < 3; ++c) {
-                        rgb[c] = views[c](x, y) * alphaFactor;
+                        rgb[c] = views[c][x, y] * alphaFactor;
                     }
 
                     rgb = ituth273::transfer(transfer, mat * rgb);
@@ -871,11 +871,11 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                 numSamples,
                 [&](int y) {
                     for (int x = region.min.x(); x < region.max.x(); ++x) {
-                        const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)(x, y) : 1.0f;
+                        const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)[x, y] : 1.0f;
                         const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
                         for (size_t c = 0; c < nColorChannels; ++c) {
-                            const float val = views[c](x, y) * alphaFactor;
+                            const float val = views[c][x, y] * alphaFactor;
                             views[c].setAt(x, y, ituth273::transferComponent(transfer, val));
                         }
                     }
@@ -904,7 +904,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
                 for (int x = region.min.x(); x < region.max.x(); ++x) {
                     for (size_t c = 0; c < nColorChannels; ++c) {
-                        auto v = views[c](x, y);
+                        auto v = views[c][x, y];
                         if (!isfinite(v)) {
                             continue;
                         }
@@ -987,7 +987,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                     const int x = (int)(j % regionSize.x()) + region.min.x();
                     const int y = (int)(j / regionSize.x()) + region.min.y();
 
-                    histogram[valToBin(channel(x, y))] += alphaChannel ? (*alphaChannel)(x, y) : 1;
+                    histogram[valToBin(channel[x, y])] += alphaChannel ? (*alphaChannel)[x, y] : 1;
                 }
             },
             priority

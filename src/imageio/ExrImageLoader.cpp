@@ -398,7 +398,7 @@ public:
             channel.numPixels(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.setAt(
+                    channel.dynamicSetAt(
                         {x, y}, data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled]
                     );
                 }
@@ -443,7 +443,8 @@ private:
     HeapArray<char> mData;
 };
 
-Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
     try {
         if (!isExrImage(iStream)) {
             throw FormatNotSupported{"File is not an EXR image."};

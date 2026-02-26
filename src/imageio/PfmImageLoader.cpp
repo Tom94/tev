@@ -408,7 +408,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                             }
 
                             // Flip image vertically due to PFM format
-                            resultData.channels[c].setAt({x, size.y() - (int)y - 1}, scale * val);
+                            resultData.channels[c].dynamicSetAt({x, size.y() - (int)y - 1}, scale * val);
                         }
                     }
                 },
@@ -460,7 +460,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                                 const size_t c = sampleIdx - x * numChannels;
 
                                 const bool bit = (byte & (1 << (7 - bitIdx))) != 0;
-                                resultData.channels[c].setAt({(int)x, y}, bit ? scale * 0.0f : scale * 1.0f);
+                                resultData.channels[c].dynamicSetAt({(int)x, y}, bit ? scale * 0.0f : scale * 1.0f);
                             }
                         }
                     },
