@@ -482,7 +482,7 @@ Task<vector<ImageData>>
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
-        const auto jpegDataToFloat32Typed = [&](auto* src, bool fromSrgb, MultiChannelView<float> dst) -> Task<void> {
+        const auto jpegDataToFloat32Typed = [&](auto* src, bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             using T = remove_const_t<remove_pointer_t<decltype(src)>>;
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
 
@@ -503,7 +503,7 @@ Task<vector<ImageData>>
             }
         };
 
-        const auto jpegDataToFloat32 = [&](bool fromSrgb, MultiChannelView<float> dst) -> Task<void> {
+        const auto jpegDataToFloat32 = [&](bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             if (pixelFormat == EPixelFormat::U8) {
                 co_await jpegDataToFloat32Typed((const uint8_t*)imageData.data(), fromSrgb, dst);
             } else if (pixelFormat == EPixelFormat::U16) {

@@ -258,7 +258,7 @@ Task<void> tiffDataToFloat32(
     const array<span<const uint16_t>, 3>& palette,
     uint32_t* __restrict imageData,
     size_t numSppIn,
-    MultiChannelView<float> out,
+    const MultiChannelView<float>& out,
     size_t numSppOut,
     const nanogui::Vector2i& size,
     bool hasAlpha,
@@ -491,7 +491,7 @@ Box2i getDefaultCrop(TIFF* tif, const Vector2i& size) {
     return cropBox;
 }
 
-Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, MultiChannelView<float> rgbData, const Vector2i size, int priority) {
+Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannelView<float>& rgbData, const Vector2i size, int priority) {
     if (rgbData.nChannels() < 3) {
         throw ImageLoadError{fmt::format("RGB output must have at least 3 channels, got {}", rgbData.nChannels())};
     }
@@ -585,7 +585,7 @@ Task<void> linearizeAndNormalizeRawDng(
     const uint16_t samplesPerPixel,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    MultiChannelView<float> floatRgbaData,
+    const MultiChannelView<float>& floatRgbaData,
     const Vector2i size,
     const int priority
 ) {
@@ -770,7 +770,7 @@ Task<void> postprocessLinearRawDng(
     const uint16_t samplesPerPixel,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    MultiChannelView<float> floatRgbaData,
+    const MultiChannelView<float>& floatRgbaData,
     ImageData& resultData,
     const bool reverseEndian,
     const bool applyCameraProfile,
@@ -1228,7 +1228,7 @@ Task<void> postprocessRgb(
     const uint16_t dataBitsPerSample,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    MultiChannelView<float> floatRgbaData,
+    const MultiChannelView<float>& floatRgbaData,
     ImageData& resultData,
     const int priority
 ) {
@@ -1419,7 +1419,7 @@ Task<void> postprocessLab(
     const uint16_t dataBitsPerSample,
     const size_t numColorChannels,
     const size_t numRgbaChannels,
-    MultiChannelView<float> floatRgbaData,
+    const MultiChannelView<float>& floatRgbaData,
     ImageData& resultData,
     const int priority
 ) {
@@ -2466,19 +2466,20 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_ITULAB,
     };
 
+    auto floatRgbaData = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+
     // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion. ICC profiles
     // are generally most accurate when available, so prefer them. However, if we've got a Lab photometric interpretation, TIFF's data handling
     // can be tricky and we can reproduce the exact behavior the ICC would have without too much trouble ourselves, so skip ICC in that case.
     if (iccProfileData && iccProfileSize > 0 && !labPhotometrics.contains(photometric)) {
         try {
-            HeapArray<float> iccTmpFloatData(size.x() * (size_t)size.y() * numRgbaChannels);
             co_await tiffDataToFloat32<false>(
                 kind,
                 interleave,
                 palette,
                 (uint32_t*)imageData.data(),
                 numChannels,
-                MultiChannelView<float>{iccTmpFloatData.data(), numRgbaChannels, size},
+                floatRgbaData,
                 numRgbaChannels,
                 size,
                 hasAlpha,
@@ -2490,12 +2491,9 @@ Task<ImageData> readTiffImage(
             const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
             co_await toLinearSrgbPremul(
                 profile,
-                size,
-                numColorChannels,
                 hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                iccTmpFloatData.data(),
-                resultData.channels.front().floatData(),
-                numInterleavedChannels,
+                floatRgbaData,
+                floatRgbaData,
                 nullopt,
                 priority
             );
@@ -2506,8 +2504,6 @@ Task<ImageData> readTiffImage(
             co_return resultData;
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
-
-    auto floatRgbaData = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
 
     co_await tiffDataToFloat32<false>(
         kind,

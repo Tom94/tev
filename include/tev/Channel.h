@@ -352,15 +352,7 @@ public:
 
     bool isInterleaved(size_t desiredStride) const { return interleavedStride() == desiredStride; }
 
-    const T* interleavedData(size_t desiredStride) const & {
-        if (!isInterleaved(desiredStride)) {
-            throw std::runtime_error{"MultiChannelView::interleavedData() requires interleaved data."};
-        }
-
-        return mChannelViews.front().data();
-    }
-
-    T* interleavedData(size_t desiredStride) & {
+    T* interleavedData(size_t desiredStride) const & {
         if (!isInterleaved(desiredStride)) {
             throw std::runtime_error{"MultiChannelView::interleavedData() requires interleaved data."};
         }

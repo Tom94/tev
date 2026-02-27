@@ -437,8 +437,8 @@ Task<void> toLinearSrgbPremul(
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     EAlphaKind alphaKind,
-    MultiChannelView<float> src,
-    MultiChannelView<float> rgbaDst,
+    const MultiChannelView<float>& src,
+    const MultiChannelView<float>& rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
     int priority
 );
