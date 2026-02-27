@@ -765,14 +765,48 @@ Task<void> toLinearSrgbPremul(
     int priority
 ) {
     const size_t numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
+    return toLinearSrgbPremul(
+        profile,
+        alphaKind,
+        MultiChannelView<float>{src, numChannels, size},
+        MultiChannelView<float>{rgbaDst, (size_t)numChannelsOut, size},
+        intentOverride,
+        priority
+    );
+}
 
+Task<void> toLinearSrgbPremul(
+    const ColorProfile& profile,
+    EAlphaKind alphaKind,
+    MultiChannelView<float> src,
+    MultiChannelView<float> rgbaDst,
+    std::optional<ERenderingIntent> intentOverride,
+    int priority
+) {
     if (!profile.isValid()) {
         throw runtime_error{"Color profile must be valid."};
     }
 
-    if (numColorChannels < 1 || numColorChannels > 4) {
-        throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
+    if (src.size() != rgbaDst.size()) {
+        throw runtime_error{"Source and destination sizes must match."};
     }
+
+    const auto size = src.size();
+
+    if (src.nChannels() < 1 || src.nChannels() > 4) {
+        throw runtime_error{"Must have between 1 and 4 channels."};
+    }
+
+    const size_t numColorChannels = alphaKind != EAlphaKind::None ? src.nChannels() - 1 : src.nChannels();
+    if (numColorChannels < 1 || numColorChannels > 4) {
+        throw runtime_error{"Must have between 1 and 4 color channels."};
+    }
+
+    if (rgbaDst.nChannels() < 1 || rgbaDst.nChannels() > 4) {
+        throw runtime_error{"Must output between 1 and 4 channels."};
+    }
+
+    const size_t numColorChannelsOut = rgbaDst.nChannels() == 1 || rgbaDst.nChannels() == 2 ? 1 : 3;
 
     auto cicp = profile.cicp();
     if (cicp) {
@@ -785,7 +819,16 @@ Task<void> toLinearSrgbPremul(
     }
 
     if (cicp && cicp->matrixCoeffs != 0) {
-        tlog::warning() << fmt::format("Unsupported matrix coefficients in cICP chunk: {}. Falling back to LCMS2.", cicp->matrixCoeffs);
+        tlog::warning() << fmt::format("Unsupported matrix coefficients in CICP chunk: {}. Falling back to LCMS2.", cicp->matrixCoeffs);
+        cicp = nullopt;
+    }
+
+    if (cicp && (numColorChannels > 3 || numColorChannelsOut > 3)) {
+        tlog::warning() << fmt::format(
+            "Unsupported channel count for manual CICP conversion: {} input channels, {} output channels. Falling back to LCMS2.",
+            numColorChannels,
+            numColorChannelsOut
+        );
         cicp = nullopt;
     }
 
@@ -830,7 +873,7 @@ Task<void> toLinearSrgbPremul(
         }
     };
 
-    const auto expectedColorChannelCount = [](cmsColorSpaceSignature cs) {
+    const auto expectedColorChannelCount = [](cmsColorSpaceSignature cs) -> size_t {
         switch (cs) {
             case cmsSigCmyData: return 3;
             case cmsSigCmykData: return 4;
@@ -875,7 +918,7 @@ Task<void> toLinearSrgbPremul(
             case cmsSigYxyData: colorSpaceType = COLORSPACE_SH(PT_Yxy); break;
             default:
                 tlog::warning()
-                    << fmt::format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (size_t)cs);
+                    << fmt::format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
                 colorSpaceType = guessColorSpace();
                 break;
         }
@@ -884,15 +927,14 @@ Task<void> toLinearSrgbPremul(
     type |= colorSpaceType;
 
     cmsUInt32Number typeOut = 0;
-    switch (numChannelsOut) {
+    switch (rgbaDst.nChannels()) {
         case 1: typeOut = TYPE_GRAY_FLT; break;
         case 2: typeOut = TYPE_GRAYA_FLT; break;
         case 3: typeOut = TYPE_RGB_FLT; break;
         case 4: typeOut = TYPE_RGBA_FLT; break;
-        default: throw runtime_error{fmt::format("Invalid number of output channels {}", numChannelsOut)};
+        default: throw runtime_error{fmt::format("Invalid number of output channels {}", rgbaDst.nChannels())};
     }
 
-    const int numColorChannelsOut = numChannelsOut == 1 || numChannelsOut == 2 ? 1 : 3;
     const size_t numPixels = (size_t)size.x() * size.y();
 
     cmsHTRANSFORM transform = nullptr;
@@ -902,12 +944,12 @@ Task<void> toLinearSrgbPremul(
         const bool optimize = numPixels >= 512 * 512;
 
         tlog::debug() << fmt::format(
-            "Creating LCMS color transform: numColorChannels={} alphaKind={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={} optimize={}",
+            "Creating LCMS color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={} optimize={}",
             numColorChannels,
             (int)alphaKind,
-            numChannels,
             type,
-            numChannelsOut,
+            src.nChannels(),
+            rgbaDst.nChannels(),
             typeOut,
             toString(intent),
             optimize
@@ -931,34 +973,24 @@ Task<void> toLinearSrgbPremul(
         }
     }
 
-    // const ScopeGuard guard{[now = chrono::system_clock::now()]() {
-    //     const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-    //     tlog::debug() << fmt::format("ICC profile application took {:.03}s", duration.count());
-    // }};
+    const ScopeGuard guard{[now = chrono::system_clock::now()]() {
+        const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
+        tlog::debug() << fmt::format("ICC profile application took {:.03}s", duration.count());
+    }};
 
-    const size_t nSrcSamplesPerRow = size.x() * numChannels;
-    const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
-
-    const size_t numSamples = numPixels * numChannels;
+    const size_t numSamples = numPixels * src.nChannels();
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         size.y(),
         numSamples * 64, // arbitrary factor to reflect increased cost of color conversion
         [&](size_t y) {
-            size_t srcOffset = y * nSrcSamplesPerRow;
-            size_t dstOffset = y * nDstSamplesPerRow;
-
-            float* srcPtr = &src[srcOffset];
-            float* dstPtr = &rgbaDst[dstOffset];
-
             // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = x * numChannels;
-                    const float alpha = srcPtr[baseIdx + numColorChannels];
+                    const float alpha = src[-1, x, y];
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
-                    for (size_t c = 0; c < numChannels - 1; ++c) {
-                        srcPtr[baseIdx + c] *= factor;
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        src[c, x, y] *= factor;
                     }
                 }
             }
@@ -968,47 +1000,69 @@ Task<void> toLinearSrgbPremul(
                 for (int x = 0; x < size.x(); ++x) {
                     const auto scale = Vector3f{100.0f, 255.0f, 255.0f};
                     const auto offset = Vector3f{0.0f, -128.0f, -128.0f};
-                    const auto baseIdx = x * numChannels;
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        auto& val = srcPtr[baseIdx + c];
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        auto& val = src[c, x, y];
                         val = val * scale[c] + offset[c];
                     }
                 }
             } else if (cs == cmsSigCmyData || cs == cmsSigCmykData) {
                 // Ink channels are expected to be in [0, 100]
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = x * numChannels;
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        auto& val = srcPtr[baseIdx + c];
-                        val *= 100.0f;
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        src[c, x, y] *= 100.0f;
                     }
                 }
             }
 
             if (cicp) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdxSrc = x * numChannels;
-                    const size_t baseIdxDst = x * numChannelsOut;
-
                     Vector3f color;
-                    for (int c = 0; c < numColorChannels; ++c) {
-                        color[c] = (srcPtr[baseIdxSrc + c] - range.offset) * range.scale;
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        color[c] = (src[c, x, y] - range.offset) * range.scale;
                     }
 
                     color = toRec709 * ituth273::invTransfer(cicp->transfer, color);
-                    for (int c = 0; c < numColorChannelsOut; ++c) {
-                        dstPtr[baseIdxDst + c] = color[c];
+                    for (size_t c = 0; c < numColorChannelsOut; ++c) {
+                        rgbaDst[c, x, y] = color[c];
                     }
 
                     if (alphaKind != EAlphaKind::None) {
-                        dstPtr[baseIdxDst + numColorChannelsOut] = srcPtr[baseIdxSrc + numColorChannels];
+                        rgbaDst[-1, x, y] = src[-1, x, y];
                     }
                 }
             } else {
-                HeapArray<float> tempIn(size.x() * numChannels);
-                memcpy(tempIn.data(), srcPtr, size.x() * numChannels * sizeof(float));
+                // LCMS2 wants interleaved input data, but we may have arbitrary channel layouts. The following code copies to a temporary
+                // buffer if necessary, but avoids copying if the data is already interleaved in the expected way.
+                const auto srcStride = src.interleavedStride(), dstStride = rgbaDst.interleavedStride();
+                if (srcStride && dstStride) {
+                    cmsDoTransformLineStride(
+                        transform,
+                        src.interleavedData(*srcStride) + y * (*srcStride * size.x()),
+                        rgbaDst.interleavedData(*dstStride) + y * (*dstStride * size.x()),
+                        1,
+                        size.x(),
+                        *srcStride * sizeof(float),
+                        *dstStride * sizeof(float),
+                        sizeof(float),
+                        sizeof(float)
+                    );
+                } else {
+                    HeapArray<float> tmp(size.x() * std::max(src.nChannels(), rgbaDst.nChannels()));
 
-                cmsDoTransform(transform, tempIn.data(), dstPtr, size.x());
+                    for (int x = 0; x < size.x(); ++x) {
+                        for (size_t c = 0, count = src.nChannels(); c < count; ++c) {
+                            tmp[x * count + c] = src[c, x, y];
+                        }
+                    }
+
+                    cmsDoTransform(transform, tmp.data(), tmp.data(), size.x());
+
+                    for (int x = 0; x < size.x(); ++x) {
+                        for (size_t c = 0, count = rgbaDst.nChannels(); c < count; ++c) {
+                            rgbaDst[c, x, y] = tmp[x * count + c];
+                        }
+                    }
+                }
             }
 
             // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the
@@ -1016,15 +1070,13 @@ Task<void> toLinearSrgbPremul(
             // also should not re-multiply those.
             if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdx = x * numChannelsOut;
-
-                    float factor = dstPtr[baseIdx + numChannelsOut - 1];
+                    float factor = rgbaDst[-1, x, y];
                     if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
                         factor = 1.0f;
                     }
 
-                    for (int c = 0; c < numChannelsOut - 1; ++c) {
-                        dstPtr[baseIdx + c] *= factor;
+                    for (size_t c = 0; c < numColorChannelsOut; ++c) {
+                        rgbaDst[c, x, y] *= factor;
                     }
                 }
             }

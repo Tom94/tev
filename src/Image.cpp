@@ -705,7 +705,7 @@ bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPe
     return interleavedData != nullptr;
 }
 
-static size_t numChannelsInPixelFormat(Texture::PixelFormat pixelFormat) {
+static size_t nChannelsInPixelFormat(Texture::PixelFormat pixelFormat) {
     switch (pixelFormat) {
         case Texture::PixelFormat::R: return 1;
         case Texture::PixelFormat::RA: return 2;
@@ -829,7 +829,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
-    const size_t numTextureChannels = numChannelsInPixelFormat(texture->pixel_format());
+    const size_t numTextureChannels = nChannelsInPixelFormat(texture->pixel_format());
     const size_t bitsPerSample = bitsPerSampleInComponentFormat(texture->component_format());
 
     // Important: num channels can be *larger* than the number of channels in the image here!
@@ -1031,7 +1031,7 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
         }
 
         const auto numPixels = (size_t)width * height;
-        const size_t numTextureChannels = numChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
+        const size_t numTextureChannels = nChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
         const size_t bitsPerSample = bitsPerSampleInComponentFormat(imageTexture.nanoguiTexture->component_format());
         HeapArray<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
 

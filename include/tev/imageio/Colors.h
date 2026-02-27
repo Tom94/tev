@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/Task.h>
 
@@ -429,6 +430,15 @@ Task<void> toLinearSrgbPremul(
     float* src,
     float* rgbaDst,
     int numChannelsOut,
+    std::optional<ERenderingIntent> intentOverride,
+    int priority
+);
+
+Task<void> toLinearSrgbPremul(
+    const ColorProfile& profile,
+    EAlphaKind alphaKind,
+    MultiChannelView<float> src,
+    MultiChannelView<float> rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
     int priority
 );

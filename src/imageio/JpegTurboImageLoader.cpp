@@ -210,9 +210,8 @@ Task<vector<ImageData>>
         }
 
         const bool hasAlpha = numChannels == 4;
-        const auto numColorChannels = numChannels - (hasAlpha ? 1 : 0);
 
-        tlog::debug() << fmt::format("JPEG image info: size={} numColorChannels={} precision={}", size, numChannels, cinfo.data_precision);
+        tlog::debug() << fmt::format("JPEG image info: size={} numChannels={} precision={}", size, numChannels, cinfo.data_precision);
 
         // Allocate memory for image data
         const auto numPixels = static_cast<size_t>(size.x()) * size.y();
@@ -483,33 +482,32 @@ Task<vector<ImageData>>
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
-        const auto jpegDataToFloat32Typed = [&](auto* src, bool fromSrgb, float* dst, size_t numDstChannels) -> Task<void> {
+        const auto jpegDataToFloat32Typed = [&](auto* src, bool fromSrgb, MultiChannelView<float> dst) -> Task<void> {
             using T = remove_const_t<remove_pointer_t<decltype(src)>>;
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
 
-            const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && numDstChannels >= 3;
+            const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && dst.nChannels() >= 3;
 
             if (fromSrgb && !yCbCrConversionNeeded) {
-                co_await toFloat32<T, true>(src, numChannels, dst, numDstChannels, size, hasAlpha, priority, scale);
+                co_await toFloat32<T, true>(src, numChannels, dst, size, hasAlpha, priority, scale);
             } else {
-                co_await toFloat32<T, false>(src, numChannels, dst, numDstChannels, size, hasAlpha, priority, scale);
+                co_await toFloat32<T, false>(src, numChannels, dst, size, hasAlpha, priority, scale);
             }
 
-            if (cinfo.out_color_space == JCS_YCbCr && numDstChannels >= 3) {
-                const auto dataView = MultiChannelView<float>{dst, numDstChannels, size, numDstChannels};
+            if (yCbCrConversionNeeded) {
                 if (fromSrgb) {
-                    co_await yCbCrToRgb<true>(dataView, priority);
+                    co_await yCbCrToRgb<true>(dst, priority);
                 } else {
-                    co_await yCbCrToRgb<false>(dataView, priority);
+                    co_await yCbCrToRgb<false>(dst, priority);
                 }
             }
         };
 
-        const auto jpegDataToFloat32 = [&](bool fromSrgb, float* dst, size_t numDstChannels) -> Task<void> {
+        const auto jpegDataToFloat32 = [&](bool fromSrgb, MultiChannelView<float> dst) -> Task<void> {
             if (pixelFormat == EPixelFormat::U8) {
-                co_await jpegDataToFloat32Typed((const uint8_t*)imageData.data(), fromSrgb, dst, numDstChannels);
+                co_await jpegDataToFloat32Typed((const uint8_t*)imageData.data(), fromSrgb, dst);
             } else if (pixelFormat == EPixelFormat::U16) {
-                co_await jpegDataToFloat32Typed((const uint16_t*)imageData.data(), fromSrgb, dst, numDstChannels);
+                co_await jpegDataToFloat32Typed((const uint16_t*)imageData.data(), fromSrgb, dst);
             } else {
                 throw ImageLoadError{fmt::format("Unsupported pixel format: {}", (int)pixelFormat)};
             }
@@ -517,6 +515,8 @@ Task<vector<ImageData>>
 
         // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
         resultData.hasPremultipliedAlpha = !hasAlpha;
+
+        const auto dstView = MultiChannelView<float>{resultData.channels};
 
         // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG
         // spec) and convert it to linear space via inverse sRGB transfer function.
@@ -529,6 +529,7 @@ Task<vector<ImageData>>
             if (!iccProfile.empty()) {
                 try {
                     const auto profile = ColorProfile::fromIcc(iccProfile);
+                    co_await jpegDataToFloat32(false, dstView);
 
                     // Per ISO 21496-1, gain maps should be loaded as-is in their encoded color space (except for the conversion from
                     // YCbCr), and their ICC profile should only be used for its chroma at gain map application time.
@@ -537,23 +538,11 @@ Task<vector<ImageData>>
                             imageInfo.isoGainmapInfo->chroma = profile.chroma();
                         }
 
-                        co_await jpegDataToFloat32(false, resultData.channels.front().floatData(), numInterleavedChannels);
                         co_return resultData;
                     }
 
-                    HeapArray<float> floatData(numPixels * numChannels);
-                    co_await jpegDataToFloat32(false, floatData.data(), numChannels);
-
                     co_await toLinearSrgbPremul(
-                        profile,
-                        size,
-                        numColorChannels,
-                        hasAlpha ? EAlphaKind::Straight : EAlphaKind::None,
-                        floatData.data(),
-                        resultData.channels.front().floatData(),
-                        numInterleavedChannels,
-                        nullopt,
-                        priority
+                        profile, hasAlpha ? EAlphaKind::Straight : EAlphaKind::None, dstView, dstView, nullopt, priority
                     );
 
                     resultData.readMetadataFromIcc(profile);
@@ -562,7 +551,7 @@ Task<vector<ImageData>>
             }
         }
 
-        co_await jpegDataToFloat32(!imageInfo.isGainmap(), resultData.channels.front().floatData(), numInterleavedChannels);
+        co_await jpegDataToFloat32(!imageInfo.isGainmap(), dstView);
 
         if (!imageInfo.isGainmap()) {
             resultData.nativeMetadata.chroma = rec709Chroma();

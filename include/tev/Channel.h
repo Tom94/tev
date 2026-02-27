@@ -326,27 +326,31 @@ public:
         }
     }
 
+    size_t channelIdx(int c) const { return c < 0 ? mChannelViews.size() + c : c; }
+
     // decltype(auto) as opposed to `auto` preserves the reference category
-    decltype(auto) operator[](int c, size_t i) const & { return mChannelViews[c][i]; }
-    decltype(auto) operator[](int c, int x, int y) const & { return mChannelViews[c][x, y]; }
+    decltype(auto) operator[](int c, size_t i) const & { return mChannelViews[channelIdx(c)][i]; }
+    decltype(auto) operator[](int c, int x, int y) const & { return mChannelViews[channelIdx(c)][x, y]; }
 
-    float operator[](int c, size_t i) const && { return mChannelViews[c][i]; }
-    float operator[](int c, int x, int y) const && { return mChannelViews[c][x, y]; }
+    float operator[](int c, size_t i) const && { return mChannelViews[channelIdx(c)][i]; }
+    float operator[](int c, int x, int y) const && { return mChannelViews[channelIdx(c)][x, y]; }
 
-    void setAt(int c, size_t i, float value) const { mChannelViews[c].setAt(i, value); }
-    void setAt(int c, int x, int y, float value) const { mChannelViews[c].setAt(x, y, value); }
+    void setAt(int c, size_t i, float value) const { mChannelViews[channelIdx(c)].setAt(i, value); }
+    void setAt(int c, int x, int y, float value) const { mChannelViews[channelIdx(c)].setAt(x, y, value); }
 
-    bool isInterleaved(size_t desiredStride) const {
+    std::optional<size_t> interleavedStride() const {
         const auto& front = mChannelViews.front();
         for (size_t i = 0; i < mChannelViews.size(); ++i) {
             const auto& channel = mChannelViews[i];
-            if (channel.data() != front.data() || channel.dataOffset() != i || channel.dataStride() != desiredStride) {
-                return false;
+            if (channel.data() != front.data() || channel.dataOffset() != i || channel.dataStride() != front.dataStride()) {
+                return std::nullopt;
             }
         }
 
-        return true;
+        return front.dataStride();
     }
+
+    bool isInterleaved(size_t desiredStride) const { return interleavedStride() == desiredStride; }
 
     const T* interleavedData(size_t desiredStride) const & {
         if (!isInterleaved(desiredStride)) {
@@ -365,7 +369,7 @@ public:
     }
 
     nanogui::Vector2i size() const { return mSize; }
-    size_t numChannels() const { return mChannelViews.size(); }
+    size_t nChannels() const { return mChannelViews.size(); }
 
 private:
     std::vector<ChannelView<T>> mChannelViews;

@@ -267,19 +267,19 @@ Task<void> tiffDataToFloat32(
     bool flipWhiteAndBlack
 ) {
     if (kind == ETiffKind::F64) {
-        co_await toFloat32<double, SRGB_TO_LINEAR>((const double*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<double, SRGB_TO_LINEAR>((const double*)imageData, numSppIn, out, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::F32) {
-        co_await toFloat32<float, SRGB_TO_LINEAR>((const float*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<float, SRGB_TO_LINEAR>((const float*)imageData, numSppIn, out, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::I32) {
-        co_await toFloat32<int32_t, SRGB_TO_LINEAR>((const int32_t*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<int32_t, SRGB_TO_LINEAR>((const int32_t*)imageData, numSppIn, out, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::U32) {
-        co_await toFloat32<uint32_t, SRGB_TO_LINEAR>((const uint32_t*)imageData, numSppIn, out, numSppOut, size, hasAlpha, priority, scale);
+        co_await toFloat32<uint32_t, SRGB_TO_LINEAR>((const uint32_t*)imageData, numSppIn, out, size, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::Palette) {
         if (any_of(palette.begin(), palette.end(), [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
         }
 
-        if (numSppOut < 3) {
+        if (out.nChannels() < 3) {
             throw runtime_error{"Number of output samples per pixel must be at least 3 for palette data."};
         }
 
@@ -287,7 +287,7 @@ Task<void> tiffDataToFloat32(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
-            numPixels * numSppOut,
+            numPixels * out.nChannels(),
             [&](size_t i) {
                 const size_t index = imageData[i * numSppIn];
                 const float paletteScale = 1.0f / 65535.0f;
@@ -296,8 +296,7 @@ Task<void> tiffDataToFloat32(
                     out[c, i] = palette[c][localIdx] * paletteScale;
                 }
 
-                size_t numChannels = std::min(numSppOut, numSppIn + 2);
-                for (size_t c = 3; c < numChannels; ++c) {
+                for (size_t c = 3, count = std::min(out.nChannels(), numSppIn + 2); c < count; ++c) {
                     out[c, i] = imageData[i * numSppIn + c - 2] * scale;
                 }
             },
@@ -312,9 +311,9 @@ Task<void> tiffDataToFloat32(
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
-            numPixels * numSppOut,
+            numPixels * out.nChannels(),
             [&](size_t i) {
-                for (size_t c = 0; c < numSppOut; ++c) {
+                for (size_t c = 0, count = out.nChannels(); c < count; ++c) {
                     out[c, i] = 1.0f - out[c, i];
                 }
             },
@@ -493,8 +492,8 @@ Box2i getDefaultCrop(TIFF* tif, const Vector2i& size) {
 }
 
 Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, MultiChannelView<float> rgbData, const Vector2i size, int priority) {
-    if (rgbData.numChannels() < 3) {
-        throw ImageLoadError{fmt::format("RGB output must have at least 3 channels, got {}", rgbData.numChannels())};
+    if (rgbData.nChannels() < 3) {
+        throw ImageLoadError{fmt::format("RGB output must have at least 3 channels, got {}", rgbData.nChannels())};
     }
 
     // With CFA sensors, it's often the case that differently colored pixels have different sensitivities (captured by white balance), and,

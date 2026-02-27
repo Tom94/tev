@@ -36,7 +36,7 @@ namespace tev {
 
 template <bool SRGB_TO_LINEAR = false>
 Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, const nanogui::Vector4f& coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
-    if (data.numChannels() < 3) {
+    if (data.nChannels() < 3) {
         tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
         co_return;
     }
@@ -77,15 +77,13 @@ Task<void> toFloat32(
     const T* __restrict imageData,
     size_t numSamplesPerPixelIn,
     MultiChannelView<float> floatData,
-    size_t numSamplesPerPixelOut,
     const nanogui::Vector2i& size,
     bool hasAlpha,
     int priority,
     // 0 defaults to 1/(2**bitsPerSample-1)
     float scale = 0.0f,
     // 0 defaults to numSamplesPerPixelIn * size.x()
-    size_t numSamplesPerRowIn = 0,
-    size_t numSamplesPerRowOut = 0
+    size_t numSamplesPerRowIn = 0
 ) {
     if constexpr (std::is_integral_v<T>) {
         if (scale == 0.0f) {
@@ -101,11 +99,7 @@ Task<void> toFloat32(
         numSamplesPerRowIn = numSamplesPerPixelIn * size.x();
     }
 
-    if (numSamplesPerRowOut == 0) {
-        numSamplesPerRowOut = numSamplesPerPixelOut * size.x();
-    }
-
-    const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, numSamplesPerPixelOut);
+    const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, floatData.nChannels());
     const size_t numPixels = (size_t)size.x() * size.y();
 
     co_await ThreadPool::global().parallelForAsync<int>(
@@ -121,7 +115,7 @@ Task<void> toFloat32(
                 for (size_t c = 0; c < numSamplesPerPixel; ++c) {
                     if (hasAlpha && c == numSamplesPerPixelIn - 1) {
                         // Copy alpha channel to the last output channel without conversion
-                        floatData[numSamplesPerPixelOut - 1, x, y] = (float)imageData[baseIdxIn + c] * scale;
+                        floatData[-1, x, y] = (float)imageData[baseIdxIn + c] * scale;
                     } else {
                         float result;
                         if constexpr (SRGB_TO_LINEAR) {
