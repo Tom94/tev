@@ -856,26 +856,68 @@ Task<void> toLinearSrgbPremul(
     //     type |= PREMUL_SH(1);
     // }
 
-    cmsColorSpaceSignature cs = cmsGetColorSpace(profile.get());
-    switch (cs) {
-        case cmsSigGrayData: type |= COLORSPACE_SH(PT_GRAY); break;
-        case cmsSigRgbData: type |= COLORSPACE_SH(PT_RGB); break;
-        case cmsSigCmykData: type |= COLORSPACE_SH(PT_CMYK); break;
-        case cmsSigLabData: type |= COLORSPACE_SH(PT_Lab); break;
-        case cmsSigXYZData: type |= COLORSPACE_SH(PT_XYZ); break;
-        default:
-            tlog::warning()
-                << fmt::format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (size_t)cs);
-            if (numColorChannels == 1) {
-                type |= COLORSPACE_SH(PT_GRAY);
-            } else if (numColorChannels == 4) {
-                type |= COLORSPACE_SH(PT_CMYK);
-            } else {
-                type |= COLORSPACE_SH(PT_RGB);
-            }
+    const auto guessColorSpace = [&]() {
+        if (numColorChannels == 1) {
+            return COLORSPACE_SH(PT_GRAY);
+        } else if (numColorChannels == 4) {
+            return COLORSPACE_SH(PT_CMYK);
+        } else {
+            return COLORSPACE_SH(PT_RGB);
+        }
+    };
 
-            break;
+    const auto expectedColorChannelCount = [](cmsColorSpaceSignature cs) {
+        switch (cs) {
+            case cmsSigCmyData: return 3;
+            case cmsSigCmykData: return 4;
+            case cmsSigGrayData: return 1;
+            case cmsSigHlsData: return 3;
+            case cmsSigHsvData: return 3;
+            case cmsSigLabData: return 3;
+            case cmsSigLuvData: return 3;
+            case cmsSigLuvKData: return 4;
+            case cmsSigRgbData: return 3;
+            case cmsSigXYZData: return 3;
+            case cmsSigYCbCrData: return 3;
+            case cmsSigYxyData: return 3;
+            default: return 0;
+        }
+    };
+
+    cmsUInt32Number colorSpaceType = 0;
+    const cmsColorSpaceSignature cs = cmsGetColorSpace(profile.get());
+    if (const auto expected = expectedColorChannelCount(cs); expected > 0 && numColorChannels != expected) {
+        tlog::warning() << fmt::format(
+            "Profile color space {:08X} indicates {} color channels, but input has {}. Guessing color space based on channel count instead.",
+            (uint32_t)cs,
+            expectedColorChannelCount(cs),
+            numColorChannels
+        );
+
+        colorSpaceType = guessColorSpace();
+    } else {
+        switch (cs) {
+            case cmsSigCmyData: colorSpaceType = COLORSPACE_SH(PT_CMY); break;
+            case cmsSigCmykData: colorSpaceType = COLORSPACE_SH(PT_CMYK); break;
+            case cmsSigGrayData: colorSpaceType = COLORSPACE_SH(PT_GRAY); break;
+            case cmsSigHlsData: colorSpaceType = COLORSPACE_SH(PT_HLS); break;
+            case cmsSigHsvData: colorSpaceType = COLORSPACE_SH(PT_HSV); break;
+            case cmsSigLabData: colorSpaceType = COLORSPACE_SH(PT_Lab); break;
+            case cmsSigLuvData: colorSpaceType = COLORSPACE_SH(PT_YUV); break;
+            case cmsSigLuvKData: colorSpaceType = COLORSPACE_SH(PT_YUVK); break;
+            case cmsSigRgbData: colorSpaceType = COLORSPACE_SH(PT_RGB); break;
+            case cmsSigXYZData: colorSpaceType = COLORSPACE_SH(PT_XYZ); break;
+            case cmsSigYCbCrData: colorSpaceType = COLORSPACE_SH(PT_YCbCr); break;
+            case cmsSigYxyData: colorSpaceType = COLORSPACE_SH(PT_Yxy); break;
+            default:
+                tlog::warning()
+                    << fmt::format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (size_t)cs);
+                colorSpaceType = guessColorSpace();
+                break;
+        }
     }
+
+    type |= colorSpaceType;
 
     cmsUInt32Number typeOut = 0;
     switch (numChannelsOut) {
@@ -953,8 +995,8 @@ Task<void> toLinearSrgbPremul(
                 }
             }
 
-            // L*a*b* values in ICC profiles should be in the range L* in [0, 100], a* and b* in [-128, 127]
             if (cs == cmsSigLabData) {
+                // L*a*b* values in ICC profiles should be in the range L* in [0, 100], a* and b* in [-128, 127]
                 for (int x = 0; x < size.x(); ++x) {
                     const auto scale = Vector3f{100.0f, 255.0f, 255.0f};
                     const auto offset = Vector3f{0.0f, -128.0f, -128.0f};
@@ -962,6 +1004,15 @@ Task<void> toLinearSrgbPremul(
                     for (int c = 0; c < numColorChannels; ++c) {
                         auto& val = *(float*)&srcPtr[(baseIdx + c) * bytesPerSample];
                         val = val * scale[c] + offset[c];
+                    }
+                }
+            } else if (cs == cmsSigCmyData || cs == cmsSigCmykData) {
+                // Ink channels are expected to be in [0, 100]
+                for (int x = 0; x < size.x(); ++x) {
+                    const size_t baseIdx = x * numChannels;
+                    for (int c = 0; c < numColorChannels; ++c) {
+                        auto& val = srcPtr[baseIdx + c];
+                        val *= 100.0f;
                     }
                 }
             }
