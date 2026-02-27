@@ -758,14 +758,13 @@ Task<void> toLinearSrgbPremul(
     const Vector2i& size,
     int numColorChannels,
     EAlphaKind alphaKind,
-    EPixelFormat pixelFormat,
-    uint8_t* __restrict src,
-    float* __restrict rgbaDst,
+    float* src,
+    float* rgbaDst,
     int numChannelsOut,
     optional<ERenderingIntent> intentOverride,
     int priority
 ) {
-    const int numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
+    const size_t numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
 
     if (!profile.isValid()) {
         throw runtime_error{"Color profile must be valid."};
@@ -773,10 +772,6 @@ Task<void> toLinearSrgbPremul(
 
     if (numColorChannels < 1 || numColorChannels > 4) {
         throw runtime_error{"Must have 1, 2, 3, or 4 color channels."};
-    }
-
-    if (alphaKind == EAlphaKind::PremultipliedNonlinear && pixelFormat != EPixelFormat::F32) {
-        throw runtime_error{"Premultiplied nonlinear alpha is only supported for F32 pixel format."};
     }
 
     auto cicp = profile.cicp();
@@ -794,11 +789,6 @@ Task<void> toLinearSrgbPremul(
         cicp = nullopt;
     }
 
-    if (cicp && pixelFormat != EPixelFormat::F32) {
-        tlog::warning() << "Unsupported CICP color conversion from non-F32 pixel format. Falling back to LCMS2.";
-        cicp = nullopt;
-    }
-
     LimitedRange range = LimitedRange::full();
     Matrix3f toRec709 = Matrix3f{1.0f};
 
@@ -812,38 +802,12 @@ Task<void> toLinearSrgbPremul(
             cicp->videoFullRangeFlag == 1 ? "yes" : "no"
         );
 
-        range = cicp->videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(nBits(pixelFormat));
+        range = cicp->videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(nBits(EPixelFormat::F32));
         toRec709 = convertColorspaceMatrix(ituth273::chroma(cicp->primaries), rec709Chroma(), intent);
     }
 
     // Create transform from source profile to Rec.709
-    cmsUInt32Number type = CHANNELS_SH(numColorChannels);
-
-    size_t bytesPerSample = 0;
-    switch (pixelFormat) {
-        case EPixelFormat::U8:
-            type |= BYTES_SH(1);
-            bytesPerSample = 1;
-            break;
-        case EPixelFormat::U16:
-            type |= BYTES_SH(2);
-            bytesPerSample = 2;
-            break;
-        case EPixelFormat::F16:
-            type |= BYTES_SH(2) | FLOAT_SH(1);
-            bytesPerSample = 2;
-            break;
-        case EPixelFormat::F32:
-            type |= BYTES_SH(4) | FLOAT_SH(1);
-            bytesPerSample = 4;
-            break;
-        default: throw runtime_error{fmt::format("Unsupported pixel format {}", toString(pixelFormat))};
-    }
-
-    if (pixelFormat != EPixelFormat::F32) {
-        tlog::warning() << "Color conversion from non-F32 pixel format detected. This can be significantly slower than F32->F32.";
-    }
-
+    cmsUInt32Number type = CHANNELS_SH(numColorChannels) | BYTES_SH(sizeof(float)) | FLOAT_SH(1);
     if (alphaKind != EAlphaKind::None) {
         type |= EXTRA_SH(1);
     }
@@ -938,10 +902,9 @@ Task<void> toLinearSrgbPremul(
         const bool optimize = numPixels >= 512 * 512;
 
         tlog::debug() << fmt::format(
-            "Creating LCMS color transform: numColorChannels={} alphaKind={} pixelFormat={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={} optimize={}",
+            "Creating LCMS color transform: numColorChannels={} alphaKind={} numChannels={} type={:#010x} -> numChannelsOut={} typeOut={:#010x} intent={} optimize={}",
             numColorChannels,
             (int)alphaKind,
-            (int)pixelFormat,
             numChannels,
             type,
             numChannelsOut,
@@ -968,6 +931,11 @@ Task<void> toLinearSrgbPremul(
         }
     }
 
+    // const ScopeGuard guard{[now = chrono::system_clock::now()]() {
+    //     const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
+    //     tlog::debug() << fmt::format("ICC profile application took {:.03}s", duration.count());
+    // }};
+
     const size_t nSrcSamplesPerRow = size.x() * numChannels;
     const size_t nDstSamplesPerRow = size.x() * numChannelsOut;
 
@@ -975,22 +943,22 @@ Task<void> toLinearSrgbPremul(
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         size.y(),
-        numSamples * 4, // arbitrary factor to reflect increased cost of color conversion
+        numSamples * 64, // arbitrary factor to reflect increased cost of color conversion
         [&](size_t y) {
-            size_t srcOffset = y * nSrcSamplesPerRow * bytesPerSample;
+            size_t srcOffset = y * nSrcSamplesPerRow;
             size_t dstOffset = y * nDstSamplesPerRow;
 
-            uint8_t* __restrict srcPtr = &src[srcOffset];
-            float* __restrict dstPtr = &rgbaDst[dstOffset];
+            float* srcPtr = &src[srcOffset];
+            float* dstPtr = &rgbaDst[dstOffset];
 
             // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
                     const size_t baseIdx = x * numChannels;
-                    const float alpha = *(float*)&srcPtr[(baseIdx + numColorChannels) * bytesPerSample];
+                    const float alpha = srcPtr[baseIdx + numColorChannels];
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
-                    for (int c = 0; c < numChannels - 1; ++c) {
-                        *(float*)&srcPtr[(baseIdx + c) * bytesPerSample] *= factor;
+                    for (size_t c = 0; c < numChannels - 1; ++c) {
+                        srcPtr[baseIdx + c] *= factor;
                     }
                 }
             }
@@ -1002,7 +970,7 @@ Task<void> toLinearSrgbPremul(
                     const auto offset = Vector3f{0.0f, -128.0f, -128.0f};
                     const auto baseIdx = x * numChannels;
                     for (int c = 0; c < numColorChannels; ++c) {
-                        auto& val = *(float*)&srcPtr[(baseIdx + c) * bytesPerSample];
+                        auto& val = srcPtr[baseIdx + c];
                         val = val * scale[c] + offset[c];
                     }
                 }
@@ -1024,7 +992,7 @@ Task<void> toLinearSrgbPremul(
 
                     Vector3f color;
                     for (int c = 0; c < numColorChannels; ++c) {
-                        color[c] = (*(float*)&srcPtr[(baseIdxSrc + c) * bytesPerSample] - range.offset) * range.scale;
+                        color[c] = (srcPtr[baseIdxSrc + c] - range.offset) * range.scale;
                     }
 
                     color = toRec709 * ituth273::invTransfer(cicp->transfer, color);
@@ -1033,13 +1001,14 @@ Task<void> toLinearSrgbPremul(
                     }
 
                     if (alphaKind != EAlphaKind::None) {
-                        dstPtr[baseIdxDst + numColorChannelsOut] = *(float*)&srcPtr[(baseIdxSrc + numColorChannels) * bytesPerSample];
+                        dstPtr[baseIdxDst + numColorChannelsOut] = srcPtr[baseIdxSrc + numColorChannels];
                     }
                 }
             } else {
-                // Armchair parallelization of lcms: cmsDoTransform is reentrant per the spec, i.e. it can be called from multiple threads.
-                // So: call cmsDoTransform for each row in parallel.
-                cmsDoTransform(transform, srcPtr, dstPtr, size.x());
+                HeapArray<float> tempIn(size.x() * numChannels);
+                memcpy(tempIn.data(), srcPtr, size.x() * numChannels * sizeof(float));
+
+                cmsDoTransform(transform, tempIn.data(), dstPtr, size.x());
             }
 
             // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the

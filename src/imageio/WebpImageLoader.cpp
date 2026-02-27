@@ -120,14 +120,13 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         bgColor = Color{bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
         if (iccProfileData) {
             try {
-                const auto tmp = bgColor;
+                auto tmp = bgColor;
                 co_await toLinearSrgbPremul(
                     ColorProfile::fromIcc(iccProfileData),
                     {1, 1},
                     numColorChannels,
                     EAlphaKind::Straight,
-                    EPixelFormat::F32,
-                    (uint8_t*)tmp.data(),
+                    tmp.data(),
                     bgColor.data(),
                     4,
                     nullopt,
@@ -207,8 +206,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                         frameSize,
                         numColorChannels,
                         EAlphaKind::Straight,
-                        EPixelFormat::F32,
-                        (uint8_t*)iccTmpFloatData.data(),
+                        iccTmpFloatData.data(),
                         frameData.data(),
                         numInterleavedChannels,
                         nullopt,

@@ -426,9 +426,8 @@ Task<void> toLinearSrgbPremul(
     const nanogui::Vector2i& size,
     int numColorChannels,
     EAlphaKind alphaKind,
-    EPixelFormat pixelFormat,
-    uint8_t* __restrict src,
-    float* __restrict rgbaDst,
+    float* src,
+    float* rgbaDst,
     int numChannelsOut,
     std::optional<ERenderingIntent> intentOverride,
     int priority
