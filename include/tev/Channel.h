@@ -55,8 +55,15 @@ template <typename T> EPixelFormat pixelFormatForType() {
 
 template <typename T> class ChannelView {
 public:
-    ChannelView(const ChannelView<std::remove_const_t<T>>& other) :
-        ChannelView(other.data(), other.dataStride(), other.dataOffset(), other.size()) {}
+    ChannelView(const ChannelView<std::remove_const_t<T>>& other)
+        requires(!std::is_same_v<T, std::remove_const_t<T>>)
+        : ChannelView(other.data(), other.dataStride(), other.dataOffset(), other.size()) {}
+
+    ChannelView(const ChannelView&) = default;
+    ChannelView& operator=(const ChannelView&) = default;
+
+    ChannelView(ChannelView&&) = default;
+    ChannelView& operator=(ChannelView&&) = default;
 
     ChannelView(T* data, size_t dataStride, size_t dataOffset, const nanogui::Vector2i& size) :
         mData{data}, mDataOffset{dataOffset}, mDataStride{dataStride}, mSize{size} {}

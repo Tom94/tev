@@ -329,10 +329,11 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     const auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
     const auto numBytesPerPixel = numBytesPerSample * numChannels;
     const auto numSamples = numPixels * numChannels;
+    const auto numInterleavedSamples = numPixels * numInterleavedChannels;
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
     HeapArray<png_byte> pngData(numPixels * numBytesPerPixel);
-    HeapArray<float> frameData(numPixels * numInterleavedChannels);
+    HeapArray<float> frameData;
 
     // Png wants to read into a 2D array of pointers to rows, so we need to create that as well
     HeapArray<png_bytep> rowPointers(height);
@@ -409,21 +410,21 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             blendOp = EBlendOp::Source;
         }
 
-        const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
-        const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
-        if (numInterleavedFrameSamples > frameData.size()) {
-            tlog::warning() << fmt::format(
-                "PNG frame data is larger than allocated buffer. Allocating {} bytes instead of {} bytes.",
-                numInterleavedFrameSamples * sizeof(float),
-                frameData.size() * sizeof(float)
-            );
-
-            frameData = HeapArray<float>(numInterleavedFrameSamples);
-        }
-
         // If our frame fills the entire canvas and is configured to overwrite the canvas (as is the case for static frames / PNGs), we can
         // directly write onto the canvas and not worry about blending.
-        const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size && blendOp == EBlendOp::Source;
+        const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
+
+        const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+        const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
+        if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
+            const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
+            if (allocationSize > numSamples) {
+                tlog::warning() << fmt::format("PNG frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
+            }
+
+            frameData = HeapArray<float>(allocationSize);
+        }
+
         const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
 
         for (int y = 0; y < frameSize.y(); ++y) {
@@ -628,7 +629,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         co_await applyColorspace();
 
-        if (!directlyOnCanvas) {
+        if (!directlyOnCanvas || blendOp != EBlendOp::Source) {
             tlog::debug() << "Blending frame onto previous canvas";
 
             co_await ThreadPool::global().parallelForAsync<int>(

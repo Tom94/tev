@@ -17,6 +17,7 @@
  */
 
 #include <tev/Box.h>
+#include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
@@ -105,6 +106,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numChannels = 4;
     const size_t numColorChannels = 3;
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+    const bool hasAlpha = numChannels == 4;
 
     const uint32_t width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
     const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
@@ -143,7 +145,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     // Conservatively allocate enough space such that any frame can be decoded into it.
     const size_t numPixels = (size_t)size.x() * size.y();
     const size_t numSamples = numPixels * numChannels;
-    HeapArray<float> frameData(numSamples);
+    const size_t numInterleavedSamples = numPixels * numInterleavedChannels;
+    HeapArray<float> frameData;
 
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
         do {
@@ -153,6 +156,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 throw ImageLoadError{"Failed to decode webp frame."};
             }
 
+            const Vector2i frameOffset{iter.x_offset, iter.y_offset};
+
             const ScopeGuard dataGuard{[data] { WebPFree(data); }};
 
             ImageData& resultData = result.emplace_back();
@@ -161,40 +166,42 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
             resultData.partName = isAnimation ? fmt::format("frames.{}", frameIdx++) : "";
             resultData.channels = co_await makeRgbaInterleavedChannels(
-                numChannels, numInterleavedChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+                numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );
             resultData.hasPremultipliedAlpha = false;
 
             const auto outView = MultiChannelView<float>{resultData.channels};
 
-            const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
-            const size_t numFrameSamples = numFramePixels * numChannels;
-            if (numFrameSamples > frameData.size()) {
-                tlog::warning() << fmt::format(
-                    "WebP frame data is larger than allocated buffer. Allocating {} bytes instead of {} bytes.",
-                    numFrameSamples * sizeof(float),
-                    frameData.size() * sizeof(float)
-                );
+            // If our frame fills the entire canvas and is configured to overwrite the canvas (as is the case for static frames / PNGs), we
+            // can directly write onto the canvas and not worry about blending.
+            const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
 
-                frameData = HeapArray<float>(numFrameSamples);
+            const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+            const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
+            if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
+                const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
+                if (allocationSize > numSamples) {
+                    tlog::warning() << fmt::format("WebP frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
+                }
+
+                frameData = HeapArray<float>(allocationSize);
             }
+
+            const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
 
             if (iccProfileData) {
                 try {
-                    // Color space conversion from float to float is faster than u8 to float, hence we convert first.
-                    co_await toFloat32(data, numChannels, frameData.data(), numChannels, frameSize, true, priority);
+                    co_await toFloat32(data, numChannels, dstView, hasAlpha, priority);
 
                     const auto profile = ColorProfile::fromIcc(iccProfileData);
                     co_await toLinearSrgbPremul(
-                        profile, frameSize, numColorChannels, EAlphaKind::Straight, frameData.data(), frameData.data(), numChannels, nullopt, priority
+                        profile, hasAlpha ? EAlphaKind::Straight : EAlphaKind::None, dstView, dstView, nullopt, priority
                     );
 
                     resultData.readMetadataFromIcc(profile);
                 } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {
-                co_await toFloat32<uint8_t, true, true>(
-                    (uint8_t*)data, numChannels, frameData.data(), numInterleavedChannels, frameSize, numChannels == 4, priority
-                );
+                co_await toFloat32<uint8_t, true, true>((uint8_t*)data, numChannels, dstView, hasAlpha, priority);
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
@@ -206,37 +213,38 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             const bool useBg = disposed || prevCanvas == nullopt;
             disposed = iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND;
 
-            co_await ThreadPool::global().parallelForAsync<int>(
-                0,
-                size.y(),
-                numSamples,
-                [&](int y) {
-                    for (int x = 0; x < size.x(); ++x) {
-                        const Vector2i framePos = {x - iter.x_offset, y - iter.y_offset};
-                        const bool isInFrame = Box2i{frameSize}.contains(framePos);
+            if (!directlyOnCanvas || iter.blend_method != WEBP_MUX_NO_BLEND) {
+                co_await ThreadPool::global().parallelForAsync<int>(
+                    0,
+                    size.y(),
+                    numSamples,
+                    [&](int y) {
+                        Vector2i framePos;
+                        framePos.y() = y - frameOffset.y();
+                        for (int x = 0; x < size.x(); ++x) {
+                            framePos.x() = x - frameOffset.x();
+                            const bool isInFrame = Box2i{frameSize}.contains(framePos);
 
-                        for (size_t c = 0; c < numChannels; ++c) {
-                            const float bg = useBg ? bgColor[c] : (*prevCanvas)[c, x, y];
-                            float val = bg;
+                            for (size_t c = 0; c < numChannels; ++c) {
+                                const float bg = useBg ? bgColor[c] : (*prevCanvas)[c, x, y];
+                                float val = bg;
 
-                            if (isInFrame) {
-                                const size_t framePixelIdx = (size_t)framePos.y() * frameSize.x() + (size_t)framePos.x();
-                                const size_t frameSampleIdx = framePixelIdx * numChannels + c;
-                                const size_t frameAlphaIdx = framePixelIdx * numChannels + numInterleavedChannels - 1;
-
-                                if (iter.blend_method == WEBP_MUX_NO_BLEND) {
-                                    val = frameData[frameSampleIdx];
-                                } else {
-                                    val = frameData[frameSampleIdx] + bg * (1.0f - frameData[frameAlphaIdx]);
+                                if (isInFrame) {
+                                    if (iter.blend_method == WEBP_MUX_NO_BLEND) {
+                                        val = dstView[c, framePos.x(), framePos.y()];
+                                    } else {
+                                        const float alpha = hasAlpha ? dstView[-1, framePos.x(), framePos.y()] : 1.0f;
+                                        val = dstView[c, framePos.x(), framePos.y()] + bg * (1.0f - alpha);
+                                    }
                                 }
-                            }
 
-                            outView[c, x, y] = val;
+                                outView[c, x, y] = val;
+                            }
                         }
-                    }
-                },
-                priority
-            );
+                    },
+                    priority
+                );
+            }
 
             resultData.hasPremultipliedAlpha = true;
         } while (WebPDemuxNextFrame(&iter));
