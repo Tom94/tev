@@ -191,7 +191,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
             // but this approach here scales better to huge numbers of images (n-cores extra threads instead of n-images extra threads).
             static auto jxlPool = ThreadPool();
 
-            const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+            const auto* runnerData = static_cast<RunnerData*>(runnerOpaque);
 
             const uint32_t range = endRange - startRange;
             const uint32_t numTasks = std::min(

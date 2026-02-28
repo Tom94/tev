@@ -344,7 +344,7 @@ struct TiffData {
 };
 
 static tsize_t tiffReadProc(thandle_t handle, tdata_t data, tsize_t size) {
-    auto tiffData = reinterpret_cast<TiffData*>(handle);
+    auto tiffData = static_cast<TiffData*>(handle);
     size = std::min(size, tiffData->size - (tsize_t)tiffData->offset);
     memcpy(data, tiffData->data + tiffData->offset, size);
     tiffData->offset += size;
@@ -356,7 +356,7 @@ static tsize_t tiffWriteProc(thandle_t, tdata_t, tsize_t) {
 }
 
 static toff_t tiffSeekProc(thandle_t handle, toff_t offset, int whence) {
-    auto tiffData = reinterpret_cast<TiffData*>(handle);
+    auto tiffData = static_cast<TiffData*>(handle);
 
     switch (whence) {
         case SEEK_SET: tiffData->offset = offset; break;
@@ -372,13 +372,13 @@ static int tiffCloseProc(thandle_t) {
 }
 
 static toff_t tiffSizeProc(thandle_t handle) {
-    auto tiffData = reinterpret_cast<TiffData*>(handle);
+    auto tiffData = static_cast<TiffData*>(handle);
     return tiffData->size;
 }
 
 static int tiffMapProc(thandle_t handle, tdata_t* pdata, toff_t* psize) {
     // We're not actually using memory mapping -- merely passing a pointer to the in-memory file data.
-    auto tiffData = reinterpret_cast<TiffData*>(handle);
+    auto tiffData = static_cast<TiffData*>(handle);
     *pdata = (tdata_t)tiffData->data;
     *psize = tiffData->size;
     return 1;
@@ -957,7 +957,7 @@ Task<void> postprocessLinearRawDng(
     bool isHdr = false;
     static constexpr uint16_t TIFFTAG_PROFILEDYNAMICRANGE = 52551;
     if (const auto pdrData = tiffGetSpan<uint8_t>(tif, TIFFTAG_PROFILEDYNAMICRANGE); pdrData.size() >= sizeof(ProfileDynamicRange)) {
-        ProfileDynamicRange pdr = *reinterpret_cast<const ProfileDynamicRange*>(pdrData.data());
+        ProfileDynamicRange pdr = fromBytes<ProfileDynamicRange>(pdrData);
         if (reverseEndian) {
             pdr.version = swapBytes(pdr.version);
             pdr.dynamicRange = swapBytes(pdr.dynamicRange);
@@ -1003,9 +1003,7 @@ Task<void> postprocessLinearRawDng(
                 )};
             }
 
-            GainTableMapHeader header = {};
-            memcpy(&header, gainTableMap.data(), sizeof(GainTableMapHeader));
-
+            GainTableMapHeader header = fromBytes<GainTableMapHeader>(gainTableMap);
             if (reverseEndian) {
                 header.mapPointsV = swapBytes(header.mapPointsV);
                 header.mapPointsH = swapBytes(header.mapPointsH);
@@ -1040,7 +1038,7 @@ Task<void> postprocessLinearRawDng(
             }
 
             tlog::debug() << fmt::format(
-                "Found gain table map: points={}x{}x{} spacing={}x{} origin={}x{} inputWeights={}",
+                "Found gain table map: points={}x{}x{} spacing=[{:.4f}, {:.4f}] origin=[{:.4f}, {:.4f}] inputWeights={}",
                 header.mapPointsV,
                 header.mapPointsH,
                 header.mapPointsN,
@@ -1048,7 +1046,7 @@ Task<void> postprocessLinearRawDng(
                 header.mapSpacingH,
                 header.mapOriginV,
                 header.mapOriginH,
-                join(header.mapInputWeights, ",")
+                header.mapInputWeights
             );
 
             const Vector2f invSize = Vector2f{1.0f} / Vector2f{size};
@@ -2582,7 +2580,7 @@ Task<vector<ImageData>>
     TIFF* tif = TIFFClientOpen(
         toString(path).c_str(),
         "rMc", // read-only w/ memory mapping; no strip chopping
-        reinterpret_cast<thandle_t>(&tiffData),
+        static_cast<thandle_t>(&tiffData),
         tiffReadProc,
         tiffWriteProc,
         tiffSeekProc,

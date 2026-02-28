@@ -40,10 +40,14 @@ template <typename T> EPixelFormat pixelFormatForType() {
         return EPixelFormat::U8;
     } else if constexpr (std::is_same_v<base_t, uint16_t>) {
         return EPixelFormat::U16;
+    } else if constexpr (std::is_same_v<base_t, uint32_t>) {
+        return EPixelFormat::U32;
     } else if constexpr (std::is_same_v<base_t, int8_t>) {
         return EPixelFormat::I8;
     } else if constexpr (std::is_same_v<base_t, int16_t>) {
         return EPixelFormat::I16;
+    } else if constexpr (std::is_same_v<base_t, int32_t>) {
+        return EPixelFormat::I32;
     } else if constexpr (std::is_same_v<base_t, half>) {
         return EPixelFormat::F16;
     } else if constexpr (std::is_same_v<base_t, float>) {
@@ -71,7 +75,7 @@ public:
     std::conditional_t<std::is_same_v<T, float>, float&, float> operator[](size_t i) const & {
         if constexpr (std::is_integral_v<T>) {
             const auto v = mData[mDataOffset + i * mDataStride];
-            return (float)v * (1.0f / (float)std::numeric_limits<T>::max());
+            return (float)v / (float)std::numeric_limits<T>::max();
         } else {
             return mData[mDataOffset + i * mDataStride];
         }
@@ -87,7 +91,11 @@ public:
     void setAt(size_t i, float value) const {
         T& val = mData[mDataOffset + i * mDataStride];
         if constexpr (std::is_integral_v<T>) {
-            val = (T)(value * (float)std::numeric_limits<T>::max() + 0.5f);
+            if constexpr (std::is_signed_v<T>) {
+                val = (T)(std::clamp(value, -1.0f, 1.0f) * (float)std::numeric_limits<T>::max() + copysignf(0.5f, value));
+            } else {
+                val = (T)(std::clamp(value, 0.0f, 1.0f) * (float)std::numeric_limits<T>::max() + 0.5f);
+            }
         } else {
             val = (T)value;
         }
@@ -133,12 +141,14 @@ public:
 
     static PixelBuffer alloc(size_t count, EPixelFormat format) {
         switch (format) {
-            case EPixelFormat::F32: return alloc<float>(count, format);
-            case EPixelFormat::F16: return alloc<half>(count, format);
-            case EPixelFormat::U16: return alloc<uint16_t>(count, format);
-            case EPixelFormat::I16: return alloc<int16_t>(count, format);
             case EPixelFormat::U8: return alloc<uint8_t>(count, format);
+            case EPixelFormat::U16: return alloc<uint16_t>(count, format);
+            case EPixelFormat::U32: return alloc<uint32_t>(count, format);
             case EPixelFormat::I8: return alloc<int8_t>(count, format);
+            case EPixelFormat::I16: return alloc<int16_t>(count, format);
+            case EPixelFormat::I32: return alloc<int32_t>(count, format);
+            case EPixelFormat::F16: return alloc<half>(count, format);
+            case EPixelFormat::F32: return alloc<float>(count, format);
         }
         throw std::runtime_error{"Unknown pixel format"};
     }
@@ -253,8 +263,10 @@ public:
         switch (pixelFormat()) {
             case EPixelFormat::U8: return *dataAt<const uint8_t>(index) / (float)std::numeric_limits<uint8_t>::max();
             case EPixelFormat::U16: return *dataAt<const uint16_t>(index) / (float)std::numeric_limits<uint16_t>::max();
+            case EPixelFormat::U32: return (float)(*dataAt<const uint32_t>(index) / (double)std::numeric_limits<uint32_t>::max());
             case EPixelFormat::I8: return *dataAt<const int8_t>(index) / (float)std::numeric_limits<int8_t>::max();
             case EPixelFormat::I16: return *dataAt<const int16_t>(index) / (float)std::numeric_limits<int16_t>::max();
+            case EPixelFormat::I32: return (float)(*dataAt<const int32_t>(index) / (double)std::numeric_limits<int32_t>::max());
             case EPixelFormat::F16: return *dataAt<const half>(index);
             case EPixelFormat::F32: return *dataAt<const float>(index);
         }
@@ -271,11 +283,20 @@ public:
             case EPixelFormat::U16:
                 *dataAt<uint16_t>(index) = (uint16_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint16_t>::max() + 0.5f);
                 break;
+            case EPixelFormat::U32:
+                *dataAt<uint32_t>(index) = (uint32_t)(std::clamp(value, 0.0f, 1.0f) * (double)std::numeric_limits<uint32_t>::max() + 0.5f);
+                break;
             case EPixelFormat::I8:
-                *dataAt<int8_t>(index) = (int8_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int8_t>::max() + 0.5f);
+                *dataAt<int8_t>(index) = (int8_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int8_t>::max() +
+                                                  copysignf(0.5f, value));
                 break;
             case EPixelFormat::I16:
-                *dataAt<int16_t>(index) = (int16_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int16_t>::max() + 0.5f);
+                *dataAt<int16_t>(index) = (int16_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int16_t>::max() +
+                                                    copysignf(0.5f, value));
+                break;
+            case EPixelFormat::I32:
+                *dataAt<int32_t>(index) = (int32_t)(std::clamp(value, -1.0f, 1.0f) * (double)std::numeric_limits<int32_t>::max() +
+                                                    copysignf(0.5f, value));
                 break;
             case EPixelFormat::F16: *dataAt<half>(index) = (half)value; break;
             case EPixelFormat::F32: *dataAt<float>(index) = value; break;

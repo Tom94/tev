@@ -155,10 +155,14 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     const auto init = [numPixels, numInterleavedDims, hasAlpha, priority](auto* ptr) -> Task<void> {
-        using ptr_float_t = remove_pointer_t<decltype(ptr)>;
-        ptr_float_t pattern[4] = {(ptr_float_t)0.0f, (ptr_float_t)0.0f, (ptr_float_t)0.0f, (ptr_float_t)1.0f};
+        using underlying_t = remove_pointer_t<decltype(ptr)>;
+
+        const auto zero = 0;
+        const auto one = is_integral_v<underlying_t> ? numeric_limits<underlying_t>::max() : underlying_t{1};
+
+        array<underlying_t, 4> pattern = {zero, zero, zero, one};
         if (hasAlpha) {
-            pattern[numInterleavedDims - 1] = (ptr_float_t)1.0f;
+            pattern[numInterleavedDims - 1] = one;
         }
 
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -166,18 +170,22 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
             numPixels,
             numPixels,
             [pattern, numInterleavedDims, ptr](size_t i) {
-                memcpy(ptr + i * numInterleavedDims, pattern, sizeof(ptr_float_t) * numInterleavedDims);
+                memcpy(ptr + i * numInterleavedDims, pattern.data(), sizeof(underlying_t) * numInterleavedDims);
             },
             priority
         );
     };
 
-    if (format == EPixelFormat::F32) {
-        co_await init(data->data<float>());
-    } else if (format == EPixelFormat::F16) {
-        co_await init(data->data<half>());
-    } else {
-        throw ImageLoadError{"Unsupported pixel format."};
+    switch (format) {
+        case EPixelFormat::U8: co_await init(data->data<uint8_t>()); break;
+        case EPixelFormat::U16: co_await init(data->data<uint16_t>()); break;
+        case EPixelFormat::U32: co_await init(data->data<uint32_t>()); break;
+        case EPixelFormat::I8: co_await init(data->data<int8_t>()); break;
+        case EPixelFormat::I16: co_await init(data->data<int16_t>()); break;
+        case EPixelFormat::I32: co_await init(data->data<int32_t>()); break;
+        case EPixelFormat::F16: co_await init(data->data<half>()); break;
+        case EPixelFormat::F32: co_await init(data->data<float>()); break;
+        default: throw ImageLoadError{"Unsupported pixel format."};
     }
 
     if (numColorChannels > 1) {

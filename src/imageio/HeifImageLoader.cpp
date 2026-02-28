@@ -105,23 +105,23 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
     static const heif_reader reader = {
         .reader_api_version = 1,
-        .get_position = [](void* context) { return (int64_t)reinterpret_cast<ReaderContext*>(context)->stream.tellg(); },
+        .get_position = [](void* context) { return (int64_t)static_cast<ReaderContext*>(context)->stream.tellg(); },
         .read =
             [](void* data, size_t size, void* context) {
-                auto& stream = reinterpret_cast<ReaderContext*>(context)->stream;
+                auto& stream = static_cast<ReaderContext*>(context)->stream;
                 stream.read((char*)data, size);
                 return stream.good() ? 0 : -1;
             },
         .seek =
             [](int64_t pos, void* context) {
-                auto& stream = reinterpret_cast<ReaderContext*>(context)->stream;
+                auto& stream = static_cast<ReaderContext*>(context)->stream;
                 stream.seekg(pos);
                 return stream.good() ? 0 : -1;
             },
         .wait_for_file_size =
             [](int64_t target_size, void* context) {
-                return reinterpret_cast<ReaderContext*>(context)->size < target_size ? heif_reader_grow_status_size_beyond_eof :
-                                                                                       heif_reader_grow_status_size_reached;
+                return static_cast<ReaderContext*>(context)->size < target_size ? heif_reader_grow_status_size_beyond_eof :
+                                                                                  heif_reader_grow_status_size_reached;
             },
         // Not used by API version 1
         .request_range = {},
@@ -556,8 +556,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
     if (seqTrackCount > 0) {
         tlog::debug() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
 
-        vector<int> trackIds(seqTrackCount);
-        heif_context_get_track_ids(ctx, reinterpret_cast<uint32_t*>(trackIds.data()));
+        vector<uint32_t> trackIds(seqTrackCount);
+        heif_context_get_track_ids(ctx, trackIds.data());
 
         vector<ImageData> result;
 

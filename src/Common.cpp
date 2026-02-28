@@ -610,8 +610,10 @@ string_view toString(EPixelFormat format) {
     switch (format) {
         case EPixelFormat::U8: return "uint8";
         case EPixelFormat::U16: return "uint16";
+        case EPixelFormat::U32: return "uint32";
         case EPixelFormat::I8: return "int8";
         case EPixelFormat::I16: return "int16";
+        case EPixelFormat::I32: return "int32";
         case EPixelFormat::F16: return "float16";
         case EPixelFormat::F32: return "float32";
         default: throw runtime_error{"Unknown pixel format."};
@@ -621,9 +623,11 @@ string_view toString(EPixelFormat format) {
 EPixelType pixelType(EPixelFormat format) {
     switch (format) {
         case EPixelFormat::U8:
-        case EPixelFormat::U16: return EPixelType::Uint;
+        case EPixelFormat::U16:
+        case EPixelFormat::U32: return EPixelType::Uint;
         case EPixelFormat::I8:
-        case EPixelFormat::I16: return EPixelType::Int;
+        case EPixelFormat::I16:
+        case EPixelFormat::I32: return EPixelType::Int;
         case EPixelFormat::F16:
         case EPixelFormat::F32: return EPixelType::Float;
         default: throw runtime_error{"Unknown pixel format."};

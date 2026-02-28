@@ -338,7 +338,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         ranges.size(),
-        numeric_limits<uint32_t>::max(),
+        numeric_limits<uint32_t>::max(), // Ensure each range gets its own task
         [&](size_t i) -> Task<void> {
             const auto rangeBegin = ranges.at(i).first;
             const auto rangeEnd = ranges.at(i).second;
@@ -377,7 +377,29 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
 
             const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
                 co_await ThreadPool::global().parallelForAsync<size_t>(
-                    0, nSamples, nSamples, [typedSrc, typedDst](size_t i) { typedDst[i] = typedSrc[i]; }, priority
+                    0,
+                    nSamples,
+                    nSamples,
+                    [typedSrc, typedDst](size_t i) {
+                        using src_t = remove_pointer_t<decltype(typedSrc)>;
+                        using dst_t = remove_pointer_t<decltype(typedDst)>;
+
+                        float tmp = typedSrc[i];
+                        if constexpr (is_integral_v<src_t>) {
+                            tmp /= (float)numeric_limits<src_t>::max();
+                        }
+
+                        if constexpr (is_integral_v<dst_t>) {
+                            if constexpr (is_signed_v<dst_t>) {
+                                tmp = clamp(tmp, -1.0f, 1.0f) * (float)numeric_limits<dst_t>::max() + copysignf(0.5f, tmp);
+                            } else {
+                                tmp = clamp(tmp, 0.0f, 1.0f) * (float)numeric_limits<dst_t>::max() + 0.5f;
+                            }
+                        }
+
+                        typedDst[i] = tmp;
+                    },
+                    priority
                 );
             };
 
@@ -385,8 +407,10 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                 switch (targetFormat) {
                     case EPixelFormat::U8: co_await typedConvert(typedSrc, convData.data<uint8_t>()); break;
                     case EPixelFormat::U16: co_await typedConvert(typedSrc, convData.data<uint16_t>()); break;
+                    case EPixelFormat::U32: co_await typedConvert(typedSrc, convData.data<uint32_t>()); break;
                     case EPixelFormat::I8: co_await typedConvert(typedSrc, convData.data<int8_t>()); break;
                     case EPixelFormat::I16: co_await typedConvert(typedSrc, convData.data<int16_t>()); break;
+                    case EPixelFormat::I32: co_await typedConvert(typedSrc, convData.data<int32_t>()); break;
                     case EPixelFormat::F16: co_await typedConvert(typedSrc, convData.data<half>()); break;
                     case EPixelFormat::F32: co_await typedConvert(typedSrc, convData.data<float>()); break;
                 }
@@ -395,8 +419,10 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             switch (sourceFormat) {
                 case EPixelFormat::U8: co_await typedSrcConvert(data->data<const uint8_t>()); break;
                 case EPixelFormat::U16: co_await typedSrcConvert(data->data<const uint16_t>()); break;
+                case EPixelFormat::U32: co_await typedSrcConvert(data->data<const uint32_t>()); break;
                 case EPixelFormat::I8: co_await typedSrcConvert(data->data<const int8_t>()); break;
                 case EPixelFormat::I16: co_await typedSrcConvert(data->data<const int16_t>()); break;
+                case EPixelFormat::I32: co_await typedSrcConvert(data->data<const int32_t>()); break;
                 case EPixelFormat::F16: co_await typedSrcConvert(data->data<const half>()); break;
                 case EPixelFormat::F32: co_await typedSrcConvert(data->data<const float>()); break;
             }
@@ -705,6 +731,12 @@ static size_t nChannelsInPixelFormat(Texture::PixelFormat pixelFormat) {
 
 static size_t bitsPerSampleInComponentFormat(Texture::ComponentFormat componentFormat) {
     switch (componentFormat) {
+        case Texture::ComponentFormat::UInt8: return 8;
+        case Texture::ComponentFormat::UInt16: return 16;
+        case Texture::ComponentFormat::UInt32: return 32;
+        case Texture::ComponentFormat::Int8: return 8;
+        case Texture::ComponentFormat::Int16: return 16;
+        case Texture::ComponentFormat::Int32: return 32;
         case Texture::ComponentFormat::Float16: return 16;
         case Texture::ComponentFormat::Float32: return 32;
         default: throw runtime_error{"Unsupported component format for texture."};
@@ -715,8 +747,10 @@ static EPixelFormat pixelFormatForComponentFormat(Texture::ComponentFormat compo
     switch (componentFormat) {
         case Texture::ComponentFormat::UInt8: return EPixelFormat::U8;
         case Texture::ComponentFormat::UInt16: return EPixelFormat::U16;
+        case Texture::ComponentFormat::UInt32: return EPixelFormat::U32;
         case Texture::ComponentFormat::Int8: return EPixelFormat::I8;
         case Texture::ComponentFormat::Int16: return EPixelFormat::I16;
+        case Texture::ComponentFormat::Int32: return EPixelFormat::I32;
         case Texture::ComponentFormat::Float16: return EPixelFormat::F16;
         case Texture::ComponentFormat::Float32: return EPixelFormat::F32;
         default: throw runtime_error{"Unsupported component format for texture."};
@@ -750,8 +784,10 @@ Task<void> prepareTextureChannel(
         switch (chan->pixelFormat()) {
             case EPixelFormat::U8: co_await copyChannel(chan->view<const uint8_t>()); break;
             case EPixelFormat::U16: co_await copyChannel(chan->view<const uint16_t>()); break;
+            case EPixelFormat::U32: co_await copyChannel(chan->view<const uint32_t>()); break;
             case EPixelFormat::I8: co_await copyChannel(chan->view<const int8_t>()); break;
             case EPixelFormat::I16: co_await copyChannel(chan->view<const int16_t>()); break;
+            case EPixelFormat::I32: co_await copyChannel(chan->view<const int32_t>()); break;
             case EPixelFormat::F16: co_await copyChannel(chan->view<const half>()); break;
             case EPixelFormat::F32: co_await copyChannel(chan->view<const float>()); break;
         }
