@@ -16,11 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tev/imageio/ImageLoader.h"
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/BmpImageLoader.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>
 
@@ -1461,9 +1462,10 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     );
     resultData.hasPremultipliedAlpha = !hasAlpha;
 
+    const auto outView = MultiChannelView<float>{resultData.channels};
+
     atomic<bool> allTransparent = hasAlpha;
 
-    HeapArray<float> floatData = {(size_t)numPixels * numChannels};
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
@@ -1526,14 +1528,13 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                     default: throw ImageLoadError{fmt::format("Unsupported BMP bits per pixel: {}", colorBpp)};
                 }
 
-                const size_t idx = (size_t)outputY * dib.width + x;
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    floatData[idx * numChannels + c] = scale[c] == 0.0f ? 0.0f : (rgba[c] * scale[c]);
+                    outView[c, x, outputY] = scale[c] == 0.0f ? 0.0f : (rgba[c] * scale[c]);
                 }
 
                 if (hasAlpha) {
                     const float alpha = scale[3] == 0.0f ? 1.0f : (rgba[3] * scale[3]);
-                    floatData[idx * numChannels + numChannels - 1] = alpha;
+                    outView[-1, x, outputY] = alpha;
 
                     if (alpha != 0.0f) {
                         rowAllTransparent = false;
@@ -1550,25 +1551,14 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
     if (hasAlpha && allTransparent) {
         tlog::debug() << "BMP image is fully transparent; flipping to all opaque";
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numPixels, numPixels, [&](size_t i) { floatData[i * numChannels + numChannels - 1] = 1.0f; }, priority
-        );
+        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, numPixels, [&](size_t i) { outView[-1, i] = 1.0f; }, priority);
     }
 
-    float* const dstData = resultData.channels.front().floatData();
     if (iccProfileData) {
         try {
             const auto profile = ColorProfile::fromIcc(iccProfileData);
             co_await toLinearSrgbPremul(
-                profile,
-                size,
-                numColorChannels,
-                numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
-                floatData.data(),
-                dstData,
-                numInterleavedChannels,
-                renderingIntent,
-                priority
+                profile, numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None, outView, outView, renderingIntent, priority
             );
 
             resultData.hasPremultipliedAlpha = true;
@@ -1595,23 +1585,18 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     }
 
-    // Non-ICC color space handling
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
-        numPixels,
-        numPixels * numChannels,
-        [&](size_t i) {
-            for (size_t c = 0; c < numChannels; ++c) {
-                float val = floatData[i * numChannels + c];
-                if (hasAlpha && c == numColorChannels) {
-                    dstData[i * numInterleavedChannels + numInterleavedChannels - 1] = val;
-                    continue;
-                }
-
-                // 64bpp seems to be an HDR format with linear channels
-                const bool invertTransfer = dib.bitsPerPixel != 64;
-                if (invertTransfer) {
+    // Non-ICC color space handling: 64bpp seems to be an HDR format with linear channels, but other formats need their transfer function
+    // inverted to get linear values.
+    const bool invertTransfer = dib.bitsPerPixel != 64;
+    if (invertTransfer) {
+        co_await ThreadPool::global().parallelForAsync<size_t>(
+            0,
+            numPixels,
+            numPixels * numChannels,
+            [&](size_t i) {
+                for (size_t c = 0; c < numColorChannels; ++c) {
                     const float g = c < 3 ? effectiveGamma[c] : 0.0f;
+                    float& val = outView[c, i];
 
                     // Modern browsers / image viewers treat untagged BMPs as sRGB, so we do the same. But if a gamma is explicitly
                     // specified in the header, we respect that instead.
@@ -1621,12 +1606,10 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                         val = toLinear(val);
                     }
                 }
-
-                dstData[i * numInterleavedChannels + c] = val;
-            }
-        },
-        priority
-    );
+            },
+            priority
+        );
+    }
 
     co_return result;
 }

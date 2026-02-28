@@ -180,7 +180,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
                              ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image '{}'", layer);
 
-        TEV_ASSERT(numChannels >= 1 && numChannels <= 4, "Invalid number of channels.");
+        if (numChannels < 1 || numChannels > 4) {
+            throw ImageLoadError{fmt::format("Unsupported number of channels: {}", numChannels)};
+        }
+
         const int numColorChannels = hasAlpha ? numChannels - 1 : numChannels;
 
         ImageData resultData;
@@ -217,51 +220,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
         if (bytesPerRow % (bitDepth / 8) != 0) {
             throw ImageLoadError{"Row size not a multiple of sample size."};
         }
-
-        const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-
-        // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
-        // such values after conversion to linear space.
-        resultData.channels = co_await makeRgbaInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, layer, priority
-        );
-
-        const auto tryIccTransform = [&](const HeapArray<uint8_t>& iccProfile) -> Task<void> {
-            HeapArray<float> dataF32((size_t)size.x() * size.y() * numChannels);
-            if (bitDepth == 16) {
-                co_await toFloat32(
-                    (const uint16_t*)data,
-                    numChannels,
-                    dataF32.data(),
-                    numChannels,
-                    size,
-                    hasAlpha,
-                    priority,
-                    channelScale,
-                    bytesPerRow / sizeof(uint16_t)
-                );
-            } else {
-                co_await toFloat32<uint8_t>(
-                    data, numChannels, dataF32.data(), numChannels, size, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t)
-                );
-            }
-
-            const auto profile = ColorProfile::fromIcc(iccProfile);
-            co_await toLinearSrgbPremul(
-                profile,
-                size,
-                numColorChannels,
-                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
-                dataF32.data(),
-                resultData.channels.front().floatData(),
-                numInterleavedChannels,
-                nullopt,
-                priority
-            );
-            resultData.hasPremultipliedAlpha = true;
-
-            resultData.readMetadataFromIcc(profile);
-        };
 
         if (heif_image_has_content_light_level(img)) {
             heif_content_light_level cll;
@@ -303,41 +261,42 @@ Task<vector<ImageData>> HeifImageLoader::load(
             }
         }
 
+        const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+
+        // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
+        // such values after conversion to linear space.
+        resultData.channels = co_await makeRgbaInterleavedChannels(
+            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, layer, priority
+        );
+
+        const auto outView = MultiChannelView<float>{resultData.channels};
+
+        if (bitDepth == 16) {
+            co_await toFloat32((const uint16_t*)data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t));
+        } else {
+            co_await toFloat32(data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t));
+        }
+
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
         const auto iccProfileData = skipColorProcessing ? nullopt : getIccProfileFromImgAndHandle(img, imgHandle);
-        if (iccProfileData) {
+        if (!skipColorProcessing && iccProfileData) {
             tlog::debug() << "Found ICC color profile. Attempting to apply...";
 
             try {
-                co_await tryIccTransform(*iccProfileData);
+                const auto profile = ColorProfile::fromIcc(*iccProfileData);
+                co_await toLinearSrgbPremul(
+                    profile,
+                    hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                               EAlphaKind::None,
+                    outView,
+                    outView,
+                    nullopt,
+                    priority
+                );
+                resultData.hasPremultipliedAlpha = true;
+                resultData.readMetadataFromIcc(profile);
                 co_return resultData;
             } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
-        }
-
-        if (bitDepth == 16) {
-            co_await toFloat32(
-                (const uint16_t*)data,
-                numChannels,
-                resultData.channels.front().floatData(),
-                numInterleavedChannels,
-                size,
-                hasAlpha,
-                priority,
-                channelScale,
-                bytesPerRow / sizeof(uint16_t)
-            );
-        } else {
-            co_await toFloat32(
-                data,
-                numChannels,
-                resultData.channels.front().floatData(),
-                numInterleavedChannels,
-                size,
-                hasAlpha,
-                priority,
-                channelScale,
-                bytesPerRow / sizeof(uint8_t)
-            );
         }
 
         if (skipColorProcessing) {
@@ -390,7 +349,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
         }
 
         const size_t numPixels = size.x() * (size_t)size.y();
-        auto* const pixelData = resultData.channels.front().floatData();
         co_await ThreadPool::global().parallelForAsync<size_t>(
             0,
             numPixels,
@@ -398,18 +356,18 @@ Task<vector<ImageData>> HeifImageLoader::load(
             [&](size_t i) {
                 // HEIF/AVIF unfortunately tends to have the alpha channel premultiplied in non-linear space (after application of the
                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
-                const float alpha = hasAlpha ? pixelData[i * numInterleavedChannels + numInterleavedChannels - 1] : 1.0f;
+                const float alpha = hasAlpha ? outView[-1, i] : 1.0f;
                 const float factor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                 const float invFactor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? alpha : 1.0f;
 
                 Vector3f color;
                 for (int c = 0; c < numColorChannels; ++c) {
-                    color[c] = (pixelData[i * numInterleavedChannels + c] - range.offset) * range.scale;
+                    color[c] = (outView[c, i] - range.offset) * range.scale;
                 }
 
                 color = ituth273::invTransfer(cicpTransfer, color * factor) * invFactor;
                 for (int c = 0; c < numColorChannels; ++c) {
-                    pixelData[i * numInterleavedChannels + c] = color[c];
+                    outView[c, i] = color[c];
                 }
             },
             priority

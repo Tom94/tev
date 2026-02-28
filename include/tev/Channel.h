@@ -240,17 +240,6 @@ public:
         return dynamicAt(index);
     }
 
-    // TODO: floatData is currently used in a *very* unsafe manner to access interleaved channel buffers. Better to have a MultiChannelView
-    // class that provides typed access to interleaved buffers. Potentially Data could know about its format and interleaving to make this
-    // seamless.
-    float* floatData() const {
-        if (mPixelFormat != EPixelFormat::F32) {
-            throw std::runtime_error{"Channel is not in F32 format."};
-        }
-
-        return (float*)data();
-    }
-
     void setOffset(size_t offset) { mDataOffset = offset; }
     size_t offset() const { return mDataOffset; }
 

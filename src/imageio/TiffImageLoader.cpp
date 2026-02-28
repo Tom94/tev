@@ -1604,6 +1604,8 @@ Task<ImageData> decodeJpeg(
         tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
+    const auto outView = MultiChannelView<float>{result.channels};
+
     // tlog::debug() << fmt::format(
     //     "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
     //     width,
@@ -1633,13 +1635,9 @@ Task<ImageData> decodeJpeg(
     }
 
     if (numBytesPerSample == 1) {
-        co_await toFloat32(
-            buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
-        );
+        co_await toFloat32(buf.data(), tileNumComponents, outView, false, priority, scale);
     } else if (numBytesPerSample == 2) {
-        co_await toFloat32(
-            (const uint16_t*)buf.data(), tileNumComponents, result.channels.front().floatData(), tileNumComponents, tileSize, false, priority, scale
-        );
+        co_await toFloat32((const uint16_t*)buf.data(), tileNumComponents, outView, false, priority, scale);
     } else {
         throw ImageLoadError{fmt::format("Unsupported number of bytes per sample: {}", numBytesPerSample)};
     }

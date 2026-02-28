@@ -224,6 +224,8 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F32, "", priority
     );
 
+    const auto outView = MultiChannelView<float>{resultData.channels};
+
     const auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw ImageLoadError{"DDS image has zero pixels."};
@@ -233,15 +235,11 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     if (isFloat || numChannels < 3) {
         // Assume that the image data is already in linear space.
         assert(!DirectX::IsSRGB(metadata.format));
-        co_await toFloat32(
-            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-        );
+        co_await toFloat32((float*)scratchImage.GetPixels(), numChannels, outView, hasAlpha, priority);
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
-        co_await toFloat32<float, true>(
-            (float*)scratchImage.GetPixels(), numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-        );
+        co_await toFloat32<float, true>((float*)scratchImage.GetPixels(), numChannels, outView, hasAlpha, priority);
     }
 
     resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();

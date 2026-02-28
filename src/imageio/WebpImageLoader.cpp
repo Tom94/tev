@@ -122,15 +122,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             try {
                 auto tmp = bgColor;
                 co_await toLinearSrgbPremul(
-                    ColorProfile::fromIcc(iccProfileData),
-                    {1, 1},
-                    numColorChannels,
-                    EAlphaKind::Straight,
-                    tmp.data(),
-                    bgColor.data(),
-                    4,
-                    nullopt,
-                    priority
+                    ColorProfile::fromIcc(iccProfileData), {1, 1}, numColorChannels, EAlphaKind::Straight, tmp.data(), bgColor.data(), 4, nullopt, priority
                 );
             } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
         } else {
@@ -152,12 +144,6 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numPixels = (size_t)size.x() * size.y();
     const size_t numSamples = numPixels * numChannels;
     HeapArray<float> frameData(numSamples);
-    HeapArray<float> iccTmpFloatData;
-
-    if (iccProfileData) {
-        // If we don't have an ICC profile, we can use the frame data directly.
-        iccTmpFloatData = HeapArray<float>(numSamples);
-    }
 
     if (WebPDemuxGetFrame(demux, 1, &iter)) {
         do {
@@ -177,8 +163,9 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             resultData.channels = co_await makeRgbaInterleavedChannels(
                 numChannels, numInterleavedChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );
-
             resultData.hasPremultipliedAlpha = false;
+
+            const auto outView = MultiChannelView<float>{resultData.channels};
 
             const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
             const size_t numFrameSamples = numFramePixels * numChannels;
@@ -190,27 +177,16 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 );
 
                 frameData = HeapArray<float>(numFrameSamples);
-                if (iccProfileData) {
-                    iccTmpFloatData = HeapArray<float>(numFrameSamples);
-                }
             }
 
             if (iccProfileData) {
                 try {
                     // Color space conversion from float to float is faster than u8 to float, hence we convert first.
-                    co_await toFloat32(data, numChannels, iccTmpFloatData.data(), numChannels, frameSize, true, priority);
+                    co_await toFloat32(data, numChannels, frameData.data(), numChannels, frameSize, true, priority);
 
                     const auto profile = ColorProfile::fromIcc(iccProfileData);
                     co_await toLinearSrgbPremul(
-                        profile,
-                        frameSize,
-                        numColorChannels,
-                        EAlphaKind::Straight,
-                        iccTmpFloatData.data(),
-                        frameData.data(),
-                        numInterleavedChannels,
-                        nullopt,
-                        priority
+                        profile, frameSize, numColorChannels, EAlphaKind::Straight, frameData.data(), frameData.data(), numChannels, nullopt, priority
                     );
 
                     resultData.readMetadataFromIcc(profile);
@@ -226,8 +202,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             // If we did not dispose the previous canvas, we need to blend the current frame onto it. Otherwise, blend onto background. The
             // first frame is always disposed.
-            const float* prevCanvas = result.size() > 1 ? result.at(result.size() - 2).channels.front().floatData() : nullptr;
-            const bool useBg = disposed || prevCanvas == nullptr;
+            const auto prevCanvas = result.size() > 1 ? optional{MultiChannelView<float>{result.at(result.size() - 2).channels}} : nullopt;
+            const bool useBg = disposed || prevCanvas == nullopt;
             disposed = iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND;
 
             co_await ThreadPool::global().parallelForAsync<int>(
@@ -236,14 +212,11 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 numSamples,
                 [&](int y) {
                     for (int x = 0; x < size.x(); ++x) {
-                        const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;
                         const Vector2i framePos = {x - iter.x_offset, y - iter.y_offset};
                         const bool isInFrame = Box2i{frameSize}.contains(framePos);
 
                         for (size_t c = 0; c < numChannels; ++c) {
-                            const size_t canvasSampleIdx = canvasPixelIdx * numChannels + c;
-
-                            const float bg = useBg ? bgColor[c] : prevCanvas[canvasSampleIdx];
+                            const float bg = useBg ? bgColor[c] : (*prevCanvas)[c, x, y];
                             float val = bg;
 
                             if (isInFrame) {
@@ -258,7 +231,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                                 }
                             }
 
-                            resultData.channels.front().floatData()[canvasSampleIdx] = val;
+                            outView[c, x, y] = val;
                         }
                     }
                 },

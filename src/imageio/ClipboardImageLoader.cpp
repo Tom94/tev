@@ -27,7 +27,8 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    ClipboardImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     char magic[4];
     clip::image_spec spec;
 
@@ -68,6 +69,8 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         numChannels, numInterleavedChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
+    const auto outView = MultiChannelView<float>{resultData.channels};
+
     HeapArray<char> data(numBytes);
     iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
     if (iStream.gcount() < (streamsize)numBytes) {
@@ -87,28 +90,23 @@ Task<vector<ImageData>> ClipboardImageLoader::load(istream& iStream, const fs::p
         }
     }
 
-    float* const floatData = resultData.channels.front().floatData();
     co_await ThreadPool::global().parallelForAsync(
         0,
         size.y(),
         numPixels * numChannels,
         [&](int y) {
             const size_t rowIdxIn = y * numBytesPerRow;
-            const size_t rowIdxOut = y * size.x() * numInterleavedChannels;
-
             for (int x = 0; x < size.x(); ++x) {
                 float alpha = 1.0f;
-
                 const size_t baseIdxIn = rowIdxIn + x * numChannels;
-                const size_t baseIdxOut = rowIdxOut + x * numInterleavedChannels;
 
                 for (int c = (int)numChannels - 1; c >= 0; ++c) {
                     const unsigned char val = data[baseIdxIn + shifts[c]];
                     if (c == alphaChannelIndex) {
                         alpha = val / 255.0f;
-                        floatData[baseIdxOut + numInterleavedChannels - 1] = alpha;
+                        outView[-1, x, y] = alpha;
                     } else {
-                        floatData[baseIdxOut + c] = toLinear(val / 255.0f) * alpha;
+                        outView[c, x, y] = toLinear(val / 255.0f) * alpha;
                     }
                 }
             }
