@@ -140,25 +140,6 @@ Task<void> toFloat32(
     );
 }
 
-template <typename T, bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false>
-Task<void> toFloat32(
-    const T* __restrict imageData,
-    size_t numSamplesPerPixelIn,
-    float* __restrict floatData,
-    size_t numSamplesPerPixelOut,
-    const nanogui::Vector2i& size,
-    bool hasAlpha,
-    int priority,
-    // 0 defaults to 1/(2**bitsPerSample-1)
-    float scale = 0.0f,
-    // 0 defaults to numSamplesPerPixelIn * size.x()
-    size_t numSamplesPerRowIn = 0
-) {
-    co_await toFloat32<T, SRGB_TO_LINEAR, MULTIPLY_ALPHA>(
-        imageData, numSamplesPerPixelIn, MultiChannelView<float>{floatData, numSamplesPerPixelOut, size}, hasAlpha, priority, scale, numSamplesPerRowIn
-    );
-}
-
 struct ImageLoaderSettings {
     GainmapHeadroom gainmapHeadroom = {};
     bool dngApplyCameraProfile = false;

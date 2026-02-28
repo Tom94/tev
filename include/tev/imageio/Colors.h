@@ -424,18 +424,6 @@ private:
 // hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
-    const nanogui::Vector2i& size,
-    int numColorChannels,
-    EAlphaKind alphaKind,
-    float* src,
-    float* rgbaDst,
-    int numChannelsOut,
-    std::optional<ERenderingIntent> intentOverride,
-    int priority
-);
-
-Task<void> toLinearSrgbPremul(
-    const ColorProfile& profile,
     EAlphaKind alphaKind,
     const MultiChannelView<float>& src,
     const MultiChannelView<float>& rgbaDst,

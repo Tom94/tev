@@ -755,28 +755,6 @@ ColorProfile ColorProfile::fromIcc(span<const uint8_t> iccProfile) {
 
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
-    const Vector2i& size,
-    int numColorChannels,
-    EAlphaKind alphaKind,
-    float* src,
-    float* rgbaDst,
-    int numChannelsOut,
-    optional<ERenderingIntent> intentOverride,
-    int priority
-) {
-    const size_t numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
-    co_return co_await toLinearSrgbPremul(
-        profile,
-        alphaKind,
-        MultiChannelView<float>{src, numChannels, size},
-        MultiChannelView<float>{rgbaDst, (size_t)numChannelsOut, size},
-        intentOverride,
-        priority
-    );
-}
-
-Task<void> toLinearSrgbPremul(
-    const ColorProfile& profile,
     EAlphaKind alphaKind,
     const MultiChannelView<float>& src,
     const MultiChannelView<float>& rgbaDst,

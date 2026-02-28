@@ -104,7 +104,6 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     }
 
     const size_t numChannels = 4;
-    const size_t numColorChannels = 3;
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = numChannels == 4;
 
@@ -122,10 +121,10 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
         bgColor = Color{bgColorBytes[2] / 255.0f, bgColorBytes[1] / 255.0f, bgColorBytes[0] / 255.0f, bgColorBytes[3] / 255.0f};
         if (iccProfileData) {
             try {
-                auto tmp = bgColor;
-                co_await toLinearSrgbPremul(
-                    ColorProfile::fromIcc(iccProfileData), {1, 1}, numColorChannels, EAlphaKind::Straight, tmp.data(), bgColor.data(), 4, nullopt, priority
-                );
+                const auto bgView = MultiChannelView<float>{
+                    bgColor.data(), 4, Vector2i{1, 1}
+                };
+                co_await toLinearSrgbPremul(ColorProfile::fromIcc(iccProfileData), EAlphaKind::Straight, bgView, bgView, nullopt, priority);
             } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
         } else {
             for (uint32_t i = 0; i < 3; ++i) {
