@@ -295,6 +295,8 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     resultData.hasPremultipliedAlpha = !hasAlpha;
     // resultData.displayWindow = displayWindow; // This seems to be wrong
 
+    const auto dstView = MultiChannelView<float>{resultData.channels};
+
     const auto* imgData = iProcessor.imgdata.image;
     const size_t numPixels = (size_t)size.x() * size.y();
     co_await ThreadPool::global().parallelForAsync<int>(
@@ -308,7 +310,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
                 const size_t j = (size_t)fi.y() * orientedSize.x() + fi.x();
 
                 for (size_t c = 0; c < numChannels; c++) {
-                    resultData.channels[c].dynamicSetAt(j, imgData[i][c] / 65535.0f);
+                    dstView[c, j] = imgData[i][c] / 65535.0f;
                 }
             }
         },

@@ -489,9 +489,9 @@ Task<vector<ImageData>>
             const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && dst.nChannels() >= 3;
 
             if (fromSrgb && !yCbCrConversionNeeded) {
-                co_await toFloat32<T, true>(src, numChannels, dst, size, hasAlpha, priority, scale);
+                co_await toFloat32<T, true>(src, numChannels, dst, hasAlpha, priority, scale);
             } else {
-                co_await toFloat32<T, false>(src, numChannels, dst, size, hasAlpha, priority, scale);
+                co_await toFloat32<T, false>(src, numChannels, dst, hasAlpha, priority, scale);
             }
 
             if (yCbCrConversionNeeded) {

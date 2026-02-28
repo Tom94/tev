@@ -77,7 +77,6 @@ Task<void> toFloat32(
     const T* __restrict imageData,
     size_t numSamplesPerPixelIn,
     MultiChannelView<float> floatData,
-    const nanogui::Vector2i& size,
     bool hasAlpha,
     int priority,
     // 0 defaults to 1/(2**bitsPerSample-1)
@@ -94,6 +93,8 @@ Task<void> toFloat32(
             scale = 1.0f;
         }
     }
+
+    const auto size = floatData.size();
 
     if (numSamplesPerRowIn == 0) {
         numSamplesPerRowIn = numSamplesPerPixelIn * size.x();
@@ -151,66 +152,10 @@ Task<void> toFloat32(
     // 0 defaults to 1/(2**bitsPerSample-1)
     float scale = 0.0f,
     // 0 defaults to numSamplesPerPixelIn * size.x()
-    size_t numSamplesPerRowIn = 0,
-    size_t numSamplesPerRowOut = 0
+    size_t numSamplesPerRowIn = 0
 ) {
-    if constexpr (std::is_integral_v<T>) {
-        if (scale == 0.0f) {
-            scale = 1.0f / (((size_t)1 << (sizeof(T) * 8)) - 1);
-        }
-    } else {
-        if (scale == 0.0f) {
-            scale = 1.0f;
-        }
-    }
-
-    if (numSamplesPerRowIn == 0) {
-        numSamplesPerRowIn = numSamplesPerPixelIn * size.x();
-    }
-
-    if (numSamplesPerRowOut == 0) {
-        numSamplesPerRowOut = numSamplesPerPixelOut * size.x();
-    }
-
-    const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, numSamplesPerPixelOut);
-    const size_t numPixels = (size_t)size.x() * size.y();
-
-    co_await ThreadPool::global().parallelForAsync<int>(
-        0,
-        size.y(),
-        numPixels * numSamplesPerPixel,
-        [&](int y) {
-            size_t rowIdxIn = y * numSamplesPerRowIn;
-            size_t rowIdxOut = y * numSamplesPerRowOut;
-
-            for (int x = 0; x < size.x(); ++x) {
-                size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
-                size_t baseIdxOut = rowIdxOut + x * numSamplesPerPixelOut;
-
-                for (size_t c = 0; c < numSamplesPerPixel; ++c) {
-                    if (hasAlpha && c == numSamplesPerPixelIn - 1) {
-                        // Copy alpha channel to the last output channel without conversion
-                        floatData[baseIdxOut + numSamplesPerPixelOut - 1] = (float)imageData[baseIdxIn + c] * scale;
-                    } else {
-                        float result;
-                        if constexpr (SRGB_TO_LINEAR) {
-                            result = toLinear((float)imageData[baseIdxIn + c] * scale);
-                        } else {
-                            result = (float)imageData[baseIdxIn + c] * scale;
-                        }
-
-                        if constexpr (MULTIPLY_ALPHA) {
-                            if (hasAlpha) {
-                                result *= (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale;
-                            }
-                        }
-
-                        floatData[baseIdxOut + c] = result;
-                    }
-                }
-            }
-        },
-        priority
+    co_await toFloat32<T, SRGB_TO_LINEAR, MULTIPLY_ALPHA>(
+        imageData, numSamplesPerPixelIn, MultiChannelView<float>{floatData, numSamplesPerPixelOut, size}, hasAlpha, priority, scale, numSamplesPerRowIn
     );
 }
 

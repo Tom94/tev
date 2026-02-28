@@ -765,7 +765,7 @@ Task<void> toLinearSrgbPremul(
     int priority
 ) {
     const size_t numChannels = numColorChannels + (alphaKind != EAlphaKind::None ? 1 : 0);
-    return toLinearSrgbPremul(
+    co_return co_await toLinearSrgbPremul(
         profile,
         alphaKind,
         MultiChannelView<float>{src, numChannels, size},
@@ -938,14 +938,23 @@ Task<void> toLinearSrgbPremul(
     const size_t numPixels = (size_t)size.x() * size.y();
 
     cmsHTRANSFORM transform = nullptr;
-    if (!cicp) {
+    if (cicp) {
+        tlog::debug() << fmt::format(
+            "Performing CICP color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={}",
+            (int)alphaKind,
+            type,
+            src.nChannels(),
+            rgbaDst.nChannels(),
+            typeOut,
+            toString(intent)
+        );
+    } else {
         // LCMS's fast float optimizations require a certain degree of precomputation which can be harmful for small images that would
         // convert quickly anyway. We'll disable optimizations arbitrarily for images with fewer than 512x512 pixels.
         const bool optimize = numPixels >= 512 * 512;
 
         tlog::debug() << fmt::format(
             "Creating LCMS color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={} optimize={}",
-            numColorChannels,
             (int)alphaKind,
             type,
             src.nChannels(),

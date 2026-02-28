@@ -388,19 +388,18 @@ public:
     }
 
     template <typename T> Task<void> copyToTyped(Channel& channel, int priority) const {
-        int width = channel.size().x();
-        int widthSubsampled = width / mImfChannel.ySampling;
+        const int width = channel.size().x();
+        const int widthSubsampled = width / mImfChannel.ySampling;
 
         auto data = reinterpret_cast<const T*>(mData.data());
+        const auto view = channel.view<float>();
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
             channel.size().y(),
             channel.numPixels(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.dynamicSetAt(
-                        {x, y}, data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled]
-                    );
+                    view[x, y] = data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * widthSubsampled];
                 }
             },
             priority
