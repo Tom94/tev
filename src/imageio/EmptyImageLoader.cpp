@@ -25,7 +25,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int) const {
+Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     char magic[6];
     iStream.read(magic, 6);
     string magicString(magic, 6);
@@ -38,7 +38,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     int nChannels;
     iStream >> size.x() >> size.y() >> nChannels;
 
-    auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = (size_t)size.x() * size.y();
     if (numPixels == 0) {
         throw ImageLoadError{"Image has zero pixels."};
     }
@@ -57,8 +57,21 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
 
         string channelName = channelNameData.data();
 
-        data.channels.emplace_back(Channel{channelName, size, EPixelFormat::F32, EPixelFormat::F32}).setZero();
+        data.channels.emplace_back(Channel{channelName, size, EPixelFormat::F32, EPixelFormat::F32});
     }
+
+    const auto outView = MultiChannelView<float>{data.channels};
+    co_await ThreadPool::global().parallelForAsync<size_t>(
+        0,
+        numPixels,
+        numPixels * nChannels,
+        [&outView](size_t i) {
+            for (size_t c = 0, count = outView.nChannels(); c < count; ++c) {
+                outView[c, i] = 0.0f;
+            }
+        },
+        priority
+    );
 
     data.hasPremultipliedAlpha = true;
 

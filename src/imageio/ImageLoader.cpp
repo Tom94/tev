@@ -151,8 +151,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
-    const size_t numBytesPerSample = nBytes(format);
-    const auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * numInterleavedDims);
+    const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, format));
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     const auto init = [numPixels, numInterleavedDims, hasAlpha, priority](auto* ptr) -> Task<void> {
@@ -174,9 +173,9 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     };
 
     if (format == EPixelFormat::F32) {
-        co_await init((float*)data->data());
+        co_await init(data->data<float>());
     } else if (format == EPixelFormat::F16) {
-        co_await init((half*)data->data());
+        co_await init(data->data<half>());
     } else {
         throw ImageLoadError{"Unsupported pixel format."};
     }
@@ -185,23 +184,15 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
         const vector<string_view> channelNames = {"R", "G", "B"};
         for (size_t c = 0; c < numColorChannels; ++c) {
             channels.emplace_back(
-                c < channelNames.size() ? channelNames[c] : to_string(c),
-                size,
-                format,
-                desiredFormat,
-                data,
-                c * numBytesPerSample,
-                numInterleavedDims * numBytesPerSample
+                c < channelNames.size() ? channelNames[c] : to_string(c), size, format, desiredFormat, data, c, numInterleavedDims
             );
         }
     } else {
-        channels.emplace_back("L", size, format, desiredFormat, data, 0, numInterleavedDims * numBytesPerSample);
+        channels.emplace_back("L", size, format, desiredFormat, data, 0, numInterleavedDims);
     }
 
     if (hasAlpha) {
-        channels.emplace_back(
-            "A", size, format, desiredFormat, data, numColorChannels * numBytesPerSample, numInterleavedDims * numBytesPerSample
-        );
+        channels.emplace_back("A", size, format, desiredFormat, data, numColorChannels, numInterleavedDims);
     }
 
     for (auto& channel : channels) {

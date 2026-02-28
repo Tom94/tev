@@ -84,19 +84,23 @@ Channel::Channel(
     const nanogui::Vector2i& size,
     EPixelFormat format,
     EPixelFormat desiredFormat,
-    shared_ptr<Channel::Data> data,
+    shared_ptr<PixelBuffer> data,
     size_t dataOffset,
     size_t dataStride
 ) :
-    mName{name}, mSize{size}, mPixelFormat{format}, mDesiredPixelFormat{desiredFormat} {
+    mName{name}, mSize{size}, mDesiredPixelFormat{desiredFormat} {
     if (data) {
+        if (format != data->format()) {
+            throw runtime_error{"Provided data has wrong pixel format."};
+        }
+
         mData = data;
         mDataOffset = dataOffset;
         mDataStride = dataStride;
     } else {
-        mData = make_shared<Channel::Data>(nBytes(format) * (size_t)size.x() * size.y());
+        mData = make_shared<PixelBuffer>(PixelBuffer::alloc((size_t)size.x() * size.y(), format));
         mDataOffset = 0;
-        mDataStride = nBytes(format);
+        mDataStride = 1;
     }
 }
 

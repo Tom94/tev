@@ -216,13 +216,14 @@ Task<vector<ImageData>>
         // Allocate memory for image data
         const auto numPixels = static_cast<size_t>(size.x()) * size.y();
         const auto bytesPerSample = nBytes(pixelFormat);
+        auto imageData = PixelBuffer::alloc(numPixels * numChannels, pixelFormat);
+
         const auto numBytesPerPixel = numChannels * bytesPerSample;
-        Channel::Data imageData(numPixels * numBytesPerPixel);
 
         // Create row pointers for libjpeg and then read image
         HeapArray<JSAMPROW> rowPointers(size.y());
         for (int y = 0; y < size.y(); ++y) {
-            rowPointers[y] = &imageData[y * size.x() * numBytesPerPixel];
+            rowPointers[y] = imageData.dataBytes() + y * size.x() * numBytesPerPixel;
         }
 
         while (cinfo.output_scanline < cinfo.output_height) {
@@ -452,7 +453,7 @@ Task<vector<ImageData>>
         }
 
         if (orientation != EOrientation::None) {
-            size = co_await orientToTopLeft(pixelFormat, imageData, size, orientation, priority);
+            size = co_await orientToTopLeft(imageData, size, orientation, priority);
         }
 
         if (!appN.iso.empty()) {
@@ -505,9 +506,9 @@ Task<vector<ImageData>>
 
         const auto jpegDataToFloat32 = [&](bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             if (pixelFormat == EPixelFormat::U8) {
-                co_await jpegDataToFloat32Typed((const uint8_t*)imageData.data(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(imageData.data<const uint8_t>(), fromSrgb, dst);
             } else if (pixelFormat == EPixelFormat::U16) {
-                co_await jpegDataToFloat32Typed((const uint16_t*)imageData.data(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(imageData.data<const uint16_t>(), fromSrgb, dst);
             } else {
                 throw ImageLoadError{fmt::format("Unsupported pixel format: {}", (int)pixelFormat)};
             }

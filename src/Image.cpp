@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
@@ -322,7 +323,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
 Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
     // All channels sharing the same data buffer must be converted together to avoid multiple conversions of the same data.
-    using map_t = multimap<shared_ptr<Channel::Data>, Channel*>;
+    using map_t = multimap<shared_ptr<PixelBuffer>, Channel*>;
     map_t channelsByData;
     for (auto& c : channels) {
         channelsByData.emplace(c.dataBuf(), &c);
@@ -369,13 +370,10 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                 co_return;
             }
 
-            shared_ptr<Channel::Data> data = rangeBegin->first;
+            const auto data = rangeBegin->first;
 
-            const size_t nSamples = data->size() / nBytes(sourceFormat);
-            Channel::Data convertedData(nSamples * nBytes(targetFormat));
-
-            const uint8_t* const src = data->data();
-            uint8_t* const dst = convertedData.data();
+            const size_t nSamples = data->size();
+            auto convData = PixelBuffer::alloc(nSamples, targetFormat);
 
             const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
                 co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -383,34 +381,27 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                 );
             };
 
-            const auto typedSrcConvert = [targetFormat, dst, &typedConvert](const auto* typedSrc) -> Task<void> {
+            const auto typedSrcConvert = [targetFormat, &convData, &typedConvert](const auto* typedSrc) -> Task<void> {
                 switch (targetFormat) {
-                    case EPixelFormat::U8: co_await typedConvert(typedSrc, (uint8_t*)dst); break;
-                    case EPixelFormat::U16: co_await typedConvert(typedSrc, (uint16_t*)dst); break;
-                    case EPixelFormat::I8: co_await typedConvert(typedSrc, (int8_t*)dst); break;
-                    case EPixelFormat::I16: co_await typedConvert(typedSrc, (int16_t*)dst); break;
-                    case EPixelFormat::F16: co_await typedConvert(typedSrc, (half*)dst); break;
-                    case EPixelFormat::F32: co_await typedConvert(typedSrc, (float*)dst); break;
+                    case EPixelFormat::U8: co_await typedConvert(typedSrc, convData.data<uint8_t>()); break;
+                    case EPixelFormat::U16: co_await typedConvert(typedSrc, convData.data<uint16_t>()); break;
+                    case EPixelFormat::I8: co_await typedConvert(typedSrc, convData.data<int8_t>()); break;
+                    case EPixelFormat::I16: co_await typedConvert(typedSrc, convData.data<int16_t>()); break;
+                    case EPixelFormat::F16: co_await typedConvert(typedSrc, convData.data<half>()); break;
+                    case EPixelFormat::F32: co_await typedConvert(typedSrc, convData.data<float>()); break;
                 }
             };
 
             switch (sourceFormat) {
-                case EPixelFormat::U8: co_await typedSrcConvert((const uint8_t*)src); break;
-                case EPixelFormat::U16: co_await typedSrcConvert((const uint16_t*)src); break;
-                case EPixelFormat::I8: co_await typedSrcConvert((const int8_t*)src); break;
-                case EPixelFormat::I16: co_await typedSrcConvert((const int16_t*)src); break;
-                case EPixelFormat::F16: co_await typedSrcConvert((const half*)src); break;
-                case EPixelFormat::F32: co_await typedSrcConvert((const float*)src); break;
+                case EPixelFormat::U8: co_await typedSrcConvert(data->data<const uint8_t>()); break;
+                case EPixelFormat::U16: co_await typedSrcConvert(data->data<const uint16_t>()); break;
+                case EPixelFormat::I8: co_await typedSrcConvert(data->data<const int8_t>()); break;
+                case EPixelFormat::I16: co_await typedSrcConvert(data->data<const int16_t>()); break;
+                case EPixelFormat::F16: co_await typedSrcConvert(data->data<const half>()); break;
+                case EPixelFormat::F32: co_await typedSrcConvert(data->data<const float>()); break;
             }
 
-            for (auto it2 = rangeBegin; it2 != rangeEnd; ++it2) {
-                Channel* c = it2->second;
-                c->setPixelFormat(targetFormat);
-                c->setOffset(c->offset() / nBytes(sourceFormat) * nBytes(targetFormat));
-                c->setStride(c->stride() / nBytes(sourceFormat) * nBytes(targetFormat));
-            }
-
-            *data = std::move(convertedData);
+            *data = std::move(convData);
         },
         priority
     );
@@ -467,24 +458,21 @@ Task<void> ImageData::orientToTopLeft(int priority) {
     const bool swapAxes = orientation >= EOrientation::LeftTop;
 
     struct DataDesc {
-        EPixelFormat pixelFormat;
-        shared_ptr<Channel::Data> data;
+        shared_ptr<PixelBuffer> data;
         Vector2i size;
 
         struct Hash {
-            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<Channel::Data>>()(interval.data); }
+            size_t operator()(const DataDesc& interval) const { return hash<shared_ptr<PixelBuffer>>()(interval.data); }
         };
 
-        bool operator==(const DataDesc& other) const {
-            return pixelFormat == other.pixelFormat && data == other.data && size == other.size;
-        }
+        bool operator==(const DataDesc& other) const { return data == other.data && size == other.size; }
     };
 
     unordered_set<DataDesc, DataDesc::Hash> channelData;
     for (auto& c : channels) {
         // TODO: ensure channel data is interleaved if multiple channels share the same data buffer
 
-        channelData.insert({c.pixelFormat(), c.dataBuf(), c.size()});
+        channelData.insert({c.dataBuf(), c.size()});
         if (swapAxes) {
             c.setSize({c.size().y(), c.size().x()});
         }
@@ -492,7 +480,7 @@ Task<void> ImageData::orientToTopLeft(int priority) {
 
     vector<Task<nanogui::Vector2i>> tasks;
     for (auto& c : channelData) {
-        tasks.emplace_back(tev::orientToTopLeft(c.pixelFormat, *c.data, c.size, orientation, priority));
+        tasks.emplace_back(tev::orientToTopLeft(*c.data, c.size, orientation, priority));
     }
 
     co_await awaitAll(span{tasks});
@@ -686,7 +674,7 @@ bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPe
 
     // It's fine if there are fewer than 4 channels -- they may still have been allocated as part of an interleaved RGBA buffer where some
     // of these 4 channels have default values. The following loop checks that the stride is 4 and that all present channels are adjacent.
-    shared_ptr<Channel::Data> interleavedData;
+    shared_ptr<PixelBuffer> interleavedData;
     for (size_t i = 0; i < channelNames.size(); ++i) {
         const auto* chan = channel(channelNames[i]);
         if (!chan) {
@@ -719,6 +707,18 @@ static size_t bitsPerSampleInComponentFormat(Texture::ComponentFormat componentF
     switch (componentFormat) {
         case Texture::ComponentFormat::Float16: return 16;
         case Texture::ComponentFormat::Float32: return 32;
+        default: throw runtime_error{"Unsupported component format for texture."};
+    }
+}
+
+static EPixelFormat pixelFormatForComponentFormat(Texture::ComponentFormat componentFormat) {
+    switch (componentFormat) {
+        case Texture::ComponentFormat::UInt8: return EPixelFormat::U8;
+        case Texture::ComponentFormat::UInt16: return EPixelFormat::U16;
+        case Texture::ComponentFormat::Int8: return EPixelFormat::I8;
+        case Texture::ComponentFormat::Int16: return EPixelFormat::I16;
+        case Texture::ComponentFormat::Float16: return EPixelFormat::F16;
+        case Texture::ComponentFormat::Float32: return EPixelFormat::F32;
         default: throw runtime_error{"Unsupported component format for texture."};
     }
 }
@@ -862,7 +862,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         tlog::debug() << fmt::format("Upload took {:.03}s", duration.count());
     }};
 
-    shared_ptr<Channel::Data> dataPtr = nullptr;
+    shared_ptr<PixelBuffer> dataPtr = nullptr;
 
     // Check if channel layout is already interleaved and in the right format. If yes, can directly copy onto GPU!
     if (directUpload) {
@@ -876,17 +876,20 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
         const auto numPixels = this->numPixels();
         const auto size = this->size();
-        dataPtr = make_shared<Channel::Data>(numPixels * numTextureChannels * (bitsPerSample / 8));
+
+        dataPtr = make_shared<PixelBuffer>(
+            PixelBuffer::alloc(numPixels * numTextureChannels, pixelFormatForComponentFormat(texture->component_format()))
+        );
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
             const Channel* chan = i < channelNames.size() ? channel(channelNames[i]) : nullptr;
             switch (texture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel((half*)dataPtr->data(), chan, {0, 0}, size, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<half>(), chan, {0, 0}, size, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel((float*)dataPtr->data(), chan, {0, 0}, size, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<float>(), chan, {0, 0}, size, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
@@ -898,7 +901,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     // If the backend supports it, schedule an async copy that uses DMA to copy the texture without blocking the host. The operation is part
     // of the graphics queue and correctly ordered wrt. other display operations. On Apple M* GPUs, CPU/GPU share the same memory, so this
     // step just converts the texture into a more suitable layout.
-    texture->upload_async(dataPtr->data(), [](void* p) { delete (shared_ptr<Channel::Data>*)p; }, new shared_ptr<Channel::Data>(dataPtr));
+    texture->upload_async(dataPtr->dataBytes(), [](void* p) { delete (shared_ptr<PixelBuffer>*)p; }, new shared_ptr<PixelBuffer>(dataPtr));
 
     if (minFilter == EInterpolationMode::Trilinear) {
         texture->generate_mipmap();
@@ -1032,25 +1035,26 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
 
         const auto numPixels = (size_t)width * height;
         const size_t numTextureChannels = nChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
-        const size_t bitsPerSample = bitsPerSampleInComponentFormat(imageTexture.nanoguiTexture->component_format());
-        HeapArray<uint8_t> textureData(numPixels * numTextureChannels * (bitsPerSample / 8));
+        auto textureData = PixelBuffer::alloc(
+            numPixels * numTextureChannels, pixelFormatForComponentFormat(imageTexture.nanoguiTexture->component_format())
+        );
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
             const Channel* chan = i < imageTexture.channels.size() ? channel(imageTexture.channels[i]) : nullptr;
             switch (imageTexture.nanoguiTexture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel((half*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(textureData.data<half>(), chan, {x, y}, {width, height}, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel((float*)textureData.data(), chan, {x, y}, {width, height}, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(textureData.data<float>(), chan, {x, y}, {width, height}, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
         }
 
         waitAll(tasks);
-        imageTexture.nanoguiTexture->upload_sub_region(textureData.data(), {x, y}, {width, height});
+        imageTexture.nanoguiTexture->upload_sub_region(textureData.dataBytes(), {x, y}, {width, height});
         imageTexture.mipmapDirty = true;
     }
 }
@@ -1360,8 +1364,7 @@ string Image::toString() const {
 }
 
 // Modifies `data` and returns the new size of the data after reorientation.
-Task<nanogui::Vector2i>
-    orientToTopLeft(EPixelFormat format, Channel::Data& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
+Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i size, EOrientation orientation, int priority) {
     if (orientation == EOrientation::None || orientation == EOrientation::TopLeft) {
         co_return size;
     }
@@ -1370,19 +1373,19 @@ Task<nanogui::Vector2i>
     size = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
     nanogui::Vector2i otherSize = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
 
-    const size_t numBytesPerSample = nBytes(format);
+    const size_t numBytesPerSample = nBytes(data.format());
     const size_t numPixels = (size_t)size.x() * size.y();
 
     if (numPixels == 0) {
         co_return size;
-    } else if (data.size() % (numPixels * numBytesPerSample) != 0) {
+    } else if (data.size() % numPixels != 0) {
         throw ImageModifyError{"Image data size is not a multiple of the number of pixels."};
     }
 
-    const size_t numSamplesPerPixel = data.size() / numPixels / numBytesPerSample;
+    const size_t numSamplesPerPixel = data.size() / numPixels;
     const size_t numBytesPerPixel = numSamplesPerPixel * numBytesPerSample;
 
-    Channel::Data reorientedData(data.size());
+    auto reorientedData = PixelBuffer::alloc(data.size(), data.format());
     co_await ThreadPool::global().parallelForAsync<int>(
         0,
         size.y(),
@@ -1394,7 +1397,7 @@ Task<nanogui::Vector2i>
                 const auto other = applyOrientation(orientation, nanogui::Vector2i{x, y}, size);
                 const size_t j = other.y() * (size_t)otherSize.x() + other.x();
 
-                memcpy(&reorientedData[i * numBytesPerPixel], &data[j * numBytesPerPixel], numBytesPerPixel);
+                memcpy(reorientedData.dataBytes() + i * numBytesPerPixel, data.dataBytes() + j * numBytesPerPixel, numBytesPerPixel);
             }
         },
         priority

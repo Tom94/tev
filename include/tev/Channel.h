@@ -109,10 +109,65 @@ private:
     nanogui::Vector2i mSize = {0};
 };
 
+class PixelBuffer {
+    struct Deleter {
+        void (*fn)(void*);
+        void operator()(void* p) const { fn(p); }
+    };
+
+    std::unique_ptr<void, Deleter> mStorage;
+    size_t mSizeBytes = 0;
+    size_t mSizeElems = 0;
+    EPixelFormat mFormat;
+
+public:
+    template <typename T> static PixelBuffer alloc(size_t count, EPixelFormat format) {
+        T* ptr = new T[count];
+        PixelBuffer buf;
+        buf.mStorage = {ptr, Deleter{[](void* p) { delete[] static_cast<T*>(p); }}};
+        buf.mSizeBytes = count * sizeof(T);
+        buf.mSizeElems = count;
+        buf.mFormat = format;
+        return buf;
+    }
+
+    static PixelBuffer alloc(size_t count, EPixelFormat format) {
+        switch (format) {
+            case EPixelFormat::F32: return alloc<float>(count, format);
+            case EPixelFormat::F16: return alloc<half>(count, format);
+            case EPixelFormat::U16: return alloc<uint16_t>(count, format);
+            case EPixelFormat::I16: return alloc<int16_t>(count, format);
+            case EPixelFormat::U8: return alloc<uint8_t>(count, format);
+            case EPixelFormat::I8: return alloc<int8_t>(count, format);
+        }
+        throw std::runtime_error{"Unknown pixel format"};
+    }
+
+    template <typename T> T* data() const & {
+        if (UNLIKELY(pixelFormatForType<T>() != format())) {
+            throw std::runtime_error{"Pixel format does not match requested type."};
+        }
+
+        return static_cast<T*>(mStorage.get());
+    }
+
+    size_t size() const { return mSizeElems; }
+
+    uint8_t* dataBytes() const { return static_cast<uint8_t*>(mStorage.get()); }
+    size_t sizeBytes() const { return mSizeBytes; }
+    EPixelFormat format() const { return mFormat; }
+
+    // re-seat the buffer (e.g. F32 → F16 conversion)
+    PixelBuffer& operator=(PixelBuffer&& other) = default;
+    PixelBuffer(PixelBuffer&&) = default;
+
+    PixelBuffer() = default;
+    PixelBuffer(const PixelBuffer&) = delete;
+    PixelBuffer& operator=(const PixelBuffer&) = delete;
+};
+
 class Channel {
 public:
-    using Data = HeapArray<uint8_t>;
-
     static std::pair<std::string_view, std::string_view> split(std::string_view fullChannel);
     static std::string join(std::string_view layer, std::string_view channel);
     static std::string joinIfNonempty(std::string_view layer, std::string_view channel);
@@ -130,7 +185,7 @@ public:
         const nanogui::Vector2i& size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
-        std::shared_ptr<Data> data = nullptr,
+        std::shared_ptr<PixelBuffer> data = nullptr,
         size_t dataOffset = 0,
         size_t dataStride = 1
     );
@@ -171,35 +226,23 @@ public:
     Task<void> divideByAsync(const Channel& other, int priority);
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
-    void setZero() {
-        const size_t nBytesPerPixel = nBytes(mPixelFormat);
-        if (mDataStride == 1) {
-            std::memset(data(), 0, numPixels() * nBytesPerPixel);
-        } else {
-            const size_t nPixels = numPixels();
-            for (size_t i = 0; i < nPixels; ++i) {
-                std::memset(data() + i * mDataStride, 0, nBytesPerPixel);
-            }
-        }
-    }
-
     void updateTile(int x, int y, int width, int height, std::span<const float> newData);
 
     template <typename T> ChannelView<T> view() const & {
         static_assert(std::is_const_v<T>, "ChannelView must be const when returned from a const Channel.");
-        if (pixelFormatForType<T>() != mPixelFormat) {
+        if (UNLIKELY(pixelFormatForType<T>() != pixelFormat())) {
             throw std::runtime_error{"Channel pixel format does not match requested type."};
         }
 
-        return ChannelView<T>{reinterpret_cast<T*>(mData->data()), mDataStride / sizeof(T), mDataOffset / sizeof(T), mSize};
+        return ChannelView<T>{data<T>(), mDataStride, mDataOffset, mSize};
     }
 
     template <typename T> ChannelView<T> view() & {
-        if (pixelFormatForType<T>() != mPixelFormat) {
+        if (UNLIKELY(pixelFormatForType<T>() != pixelFormat())) {
             throw std::runtime_error{"Channel pixel format does not match requested type."};
         }
 
-        return ChannelView<T>{reinterpret_cast<T*>(mData->data()), mDataStride / sizeof(T), mDataOffset / sizeof(T), mSize};
+        return ChannelView<T>{data<T>(), mDataStride, mDataOffset, mSize};
     }
 
     // NOTE: Prefer using view<T>() for better performance when the type of the channel is known. E.g. most of tev's image loading routines
@@ -207,13 +250,13 @@ public:
     // members when accessing channels of images that have already completed loading (e.g. for UI or statistics purposes).
     float dynamicAt(nanogui::Vector2i index) const { return dynamicAt(index.x() + index.y() * (size_t)mSize.x()); }
     float dynamicAt(size_t index) const {
-        switch (mPixelFormat) {
-            case EPixelFormat::U8: return *dataAt(index) / (float)std::numeric_limits<uint8_t>::max();
-            case EPixelFormat::U16: return *(const uint16_t*)dataAt(index) / (float)std::numeric_limits<uint16_t>::max();
-            case EPixelFormat::I8: return *(const int8_t*)dataAt(index) / (float)std::numeric_limits<int8_t>::max();
-            case EPixelFormat::I16: return *(const int16_t*)dataAt(index) / (float)std::numeric_limits<int16_t>::max();
-            case EPixelFormat::F16: return *(const half*)dataAt(index);
-            case EPixelFormat::F32: return *(const float*)dataAt(index);
+        switch (pixelFormat()) {
+            case EPixelFormat::U8: return *dataAt<const uint8_t>(index) / (float)std::numeric_limits<uint8_t>::max();
+            case EPixelFormat::U16: return *dataAt<const uint16_t>(index) / (float)std::numeric_limits<uint16_t>::max();
+            case EPixelFormat::I8: return *dataAt<const int8_t>(index) / (float)std::numeric_limits<int8_t>::max();
+            case EPixelFormat::I16: return *dataAt<const int16_t>(index) / (float)std::numeric_limits<int16_t>::max();
+            case EPixelFormat::F16: return *dataAt<const half>(index);
+            case EPixelFormat::F32: return *dataAt<const float>(index);
         }
 
         return 0;
@@ -221,21 +264,21 @@ public:
 
     void dynamicSetAt(nanogui::Vector2i index, float value) { dynamicSetAt(index.x() + index.y() * (size_t)mSize.x(), value); }
     void dynamicSetAt(size_t index, float value) {
-        switch (mPixelFormat) {
+        switch (pixelFormat()) {
             case EPixelFormat::U8:
-                *dataAt(index) = (uint8_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint8_t>::max() + 0.5f);
+                *dataAt<uint8_t>(index) = (uint8_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint8_t>::max() + 0.5f);
                 break;
             case EPixelFormat::U16:
-                *(uint16_t*)dataAt(index) = (uint16_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint16_t>::max() + 0.5f);
+                *dataAt<uint16_t>(index) = (uint16_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint16_t>::max() + 0.5f);
                 break;
             case EPixelFormat::I8:
-                *(int8_t*)dataAt(index) = (int8_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int8_t>::max() + 0.5f);
+                *dataAt<int8_t>(index) = (int8_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int8_t>::max() + 0.5f);
                 break;
             case EPixelFormat::I16:
-                *(int16_t*)dataAt(index) = (int16_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int16_t>::max() + 0.5f);
+                *dataAt<int16_t>(index) = (int16_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int16_t>::max() + 0.5f);
                 break;
-            case EPixelFormat::F16: *(half*)dataAt(index) = (half)value; break;
-            case EPixelFormat::F32: *(float*)dataAt(index) = value; break;
+            case EPixelFormat::F16: *dataAt<half>(index) = (half)value; break;
+            case EPixelFormat::F32: *dataAt<float>(index) = value; break;
         }
     }
 
@@ -247,36 +290,28 @@ public:
         return dynamicAt(index);
     }
 
-    void setOffset(size_t offset) { mDataOffset = offset; }
     size_t offset() const { return mDataOffset; }
-
-    void setStride(size_t stride) { mDataStride = stride; }
     size_t stride() const { return mDataStride; }
 
-    std::shared_ptr<Data>& dataBuf() { return mData; }
-    const std::shared_ptr<Data>& dataBuf() const { return mData; }
+    std::shared_ptr<PixelBuffer>& dataBuf() { return mData; }
+    const std::shared_ptr<PixelBuffer>& dataBuf() const { return mData; }
 
     EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
-
-    void setPixelFormat(EPixelFormat format) { mPixelFormat = format; }
-    EPixelFormat pixelFormat() const { return mPixelFormat; }
+    EPixelFormat pixelFormat() const { return mData->format(); }
 
 private:
-    uint8_t* data() const { return mData->data() + mDataOffset; }
-
-    uint8_t* dataAt(nanogui::Vector2i index) const { return dataAt(index.x() + index.y() * (size_t)mSize.x()); }
-    uint8_t* dataAt(size_t index) const { return data() + index * mDataStride; }
+    template <typename T> T* data() const { return mData->data<T>(); }
+    template <typename T> T* dataAt(nanogui::Vector2i index) const { return dataAt<T>(index.x() + index.y() * (size_t)mSize.x()); }
+    template <typename T> T* dataAt(size_t index) const { return data<T>() + mDataOffset + index * mDataStride; }
 
     std::string mName;
     nanogui::Vector2i mSize;
-
-    EPixelFormat mPixelFormat = EPixelFormat::F32;
 
     // tev defaults to storing images in fp32 for maximum precision. However, many images only require fp16 to be displayed as good as
     // losslessly. For such images, loaders can set this to F16 to save memory.
     EPixelFormat mDesiredPixelFormat = EPixelFormat::F32;
 
-    std::shared_ptr<Data> mData;
+    std::shared_ptr<PixelBuffer> mData;
     size_t mDataOffset;
     size_t mDataStride;
 };
