@@ -72,8 +72,8 @@ Task<vector<ImageData>>
     const auto outView = MultiChannelView<float>{resultData.channels};
 
     HeapArray<char> data(numBytes);
-    iStream.read(reinterpret_cast<char*>(data.data()), numBytes);
-    if (iStream.gcount() < (streamsize)numBytes) {
+    iStream.read(data.data(), numBytes);
+    if ((size_t)iStream.gcount() < numBytes) {
         throw ImageLoadError{fmt::format("Insufficient bytes to read image data ({} vs {}).", iStream.gcount(), numBytes)};
     }
 

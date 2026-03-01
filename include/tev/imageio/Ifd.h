@@ -83,7 +83,7 @@ public:
     Ifd(std::span<const uint8_t> data, size_t initialOffset = 0, bool tiffHeader = false, std::optional<bool> reverseEndianess = std::nullopt);
 
     template <typename T> T read(const uint8_t* data) const {
-        T result = *reinterpret_cast<const T*>(data);
+        auto result = fromBytes<T>(data);
         if (mReverseEndianess) {
             result = swapBytes(result);
         }
@@ -138,7 +138,7 @@ public:
                 const auto denominator = read<uint32_t>(data + sizeof(uint32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
-            case TiffTag::EFormat::Sbyte: return static_cast<T>(*reinterpret_cast<const int8_t*>(data));
+            case TiffTag::EFormat::Sbyte: return static_cast<T>(fromBytes<int8_t>(data));
             case TiffTag::EFormat::Sshort: return static_cast<T>(read<int16_t>(data));
             case TiffTag::EFormat::Slong: return static_cast<T>(read<int32_t>(data));
             case TiffTag::EFormat::Srational: {
@@ -146,8 +146,8 @@ public:
                 const auto denominator = read<int32_t>(data + sizeof(int32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
-            case TiffTag::EFormat::Float: return static_cast<T>(*reinterpret_cast<const float*>(data));
-            case TiffTag::EFormat::Double: return static_cast<T>(*reinterpret_cast<const double*>(data));
+            case TiffTag::EFormat::Float: return static_cast<T>(fromBytes<float>(data));
+            case TiffTag::EFormat::Double: return static_cast<T>(fromBytes<double>(data));
             case TiffTag::EFormat::Ascii:
             case TiffTag::EFormat::Undefined: return std::nullopt;
         }

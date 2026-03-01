@@ -206,7 +206,8 @@ Task<vector<ImageData>>
             throw ImageLoadError{fmt::format("Unsupported JPEG data precision: {} bits per channel.", cinfo.data_precision)};
         }
 
-        const auto pixelFormat = cinfo.data_precision <= 8 ? EPixelFormat::U8 : EPixelFormat::U16;
+        const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 :
+                                                            EPixelFormat::U8;
 
         // JPEG does not support alpha, so all channels are color channels.
         const size_t numChannels = cinfo.output_components;
@@ -219,25 +220,36 @@ Task<vector<ImageData>>
         tlog::debug() << fmt::format("JPEG image info: size={} numChannels={} precision={}", size, numChannels, cinfo.data_precision);
 
         // Allocate memory for image data
-        const auto numPixels = static_cast<size_t>(size.x()) * size.y();
-        const auto bytesPerSample = nBytes(pixelFormat);
-        auto imageData = PixelBuffer::alloc(numPixels * numChannels, pixelFormat);
-
-        const auto numBytesPerPixel = numChannels * bytesPerSample;
+        const auto numPixels = (size_t)size.x() * size.y();
+        auto buf = PixelBuffer::alloc(numPixels * numChannels, pixelFormat);
 
         // Create row pointers for libjpeg and then read image
-        HeapArray<JSAMPROW> rowPointers(size.y());
-        for (int y = 0; y < size.y(); ++y) {
-            rowPointers[y] = imageData.dataBytes() + y * size.x() * numBytesPerPixel;
-        }
+        if (cinfo.data_precision <= 8) {
+            HeapArray<JSAMPROW> rowPointers(size.y());
+            for (int y = 0; y < size.y(); ++y) {
+                rowPointers[y] = buf.data<uint8_t>() + y * size.x() * numChannels;
+            }
 
-        while (cinfo.output_scanline < cinfo.output_height) {
-            if (cinfo.data_precision <= 8) {
+            while (cinfo.output_scanline < cinfo.output_height) {
                 jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-            } else if (cinfo.data_precision <= 12) {
-                jpeg12_read_scanlines(&cinfo, (J12SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-            } else {
-                jpeg16_read_scanlines(&cinfo, (J16SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+            }
+        } else if (cinfo.data_precision <= 12) {
+            HeapArray<J12SAMPROW> rowPointers(size.y());
+            for (int y = 0; y < size.y(); ++y) {
+                rowPointers[y] = buf.data<int16_t>() + y * size.x() * numChannels;
+            }
+
+            while (cinfo.output_scanline < cinfo.output_height) {
+                jpeg12_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+            }
+        } else {
+            HeapArray<J16SAMPROW> rowPointers(size.y());
+            for (int y = 0; y < size.y(); ++y) {
+                rowPointers[y] = buf.data<uint16_t>() + y * size.x() * numChannels;
+            }
+
+            while (cinfo.output_scanline < cinfo.output_height) {
+                jpeg16_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
             }
         }
 
@@ -421,7 +433,7 @@ Task<vector<ImageData>>
                 const EOrientation exifOrientation = exif.getOrientation();
                 if (exifOrientation != EOrientation::None) {
                     orientation = exifOrientation;
-                    tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+                    tlog::debug() << fmt::format("EXIF image orientation: {}", toString(orientation));
                 }
 
                 imageInfo.appleMakerNoteIfd = exif.tryGetAppleMakerNote();
@@ -441,7 +453,7 @@ Task<vector<ImageData>>
                 const EOrientation xmpOrientation = xmp.orientation();
                 if (xmpOrientation != EOrientation::None) {
                     orientation = xmpOrientation;
-                    tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
+                    tlog::debug() << fmt::format("XMP image orientation: {}", toString(orientation));
                 }
 
                 isoGainmapMetadata = xmp.isoGainMapMetadata();
@@ -458,7 +470,7 @@ Task<vector<ImageData>>
         }
 
         if (orientation != EOrientation::None) {
-            size = co_await orientToTopLeft(imageData, size, orientation, priority);
+            size = co_await orientToTopLeft(buf, size, orientation, priority);
         }
 
         if (!appN.iso.empty()) {
@@ -511,11 +523,13 @@ Task<vector<ImageData>>
 
         const auto jpegDataToFloat32 = [&](bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             if (pixelFormat == EPixelFormat::U8) {
-                co_await jpegDataToFloat32Typed(imageData.data<const uint8_t>(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(buf.data<const uint8_t>(), fromSrgb, dst);
+            } else if (pixelFormat == EPixelFormat::I16) {
+                co_await jpegDataToFloat32Typed(buf.data<const int16_t>(), fromSrgb, dst);
             } else if (pixelFormat == EPixelFormat::U16) {
-                co_await jpegDataToFloat32Typed(imageData.data<const uint16_t>(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(buf.data<const uint16_t>(), fromSrgb, dst);
             } else {
-                throw ImageLoadError{fmt::format("Unsupported pixel format: {}", (int)pixelFormat)};
+                throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
             }
         };
 

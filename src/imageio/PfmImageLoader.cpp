@@ -352,20 +352,28 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         const auto numBytesPerRow = (numSamplesPerRow * bitsPerChannel + 7) / 8;
         const auto numBytes = numBytesPerRow * size.y();
 
-        const auto dataPtr = make_unique<uint8_t[]>(numBytes);
-        uint8_t* const data = dataPtr.get();
+        EPixelFormat pixelFormat;
+        switch (bitsPerChannel) {
+            case 1:
+            case 8: pixelFormat = EPixelFormat::U8; break;
+            case 16: pixelFormat = EPixelFormat::U16; break;
+            case 32: pixelFormat = pfm ? EPixelFormat::F32 : EPixelFormat::U32; break;
+            default: throw ImageLoadError{fmt::format("Unsupported bits per channel: {}", bitsPerChannel)};
+        }
+
+        auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
 
         if (isBinary) {
-            iStream.read(reinterpret_cast<char*>(data), numBytes);
+            iStream.read(reinterpret_cast<char*>(buf.dataBytes()), numBytes);
             if (iStream.gcount() < (streamsize)numBytes) {
                 throw ImageLoadError{fmt::format("Insufficient bytes to read ({} vs {})", iStream.gcount(), numBytes)};
             }
         } else {
             TEV_ASSERT(bitsPerChannel == 32, "ASCII PNM with non-32 bits per channel not supported.");
             TEV_ASSERT(ver >= 1 && ver <= 3, "ASCII PNM with invalid version.");
+            TEV_ASSERT(!pfm, "ASCII PFM not supported.");
 
-            uint32_t* const uintData = reinterpret_cast<uint32_t*>(data);
-
+            uint32_t* const uintData = buf.data<uint32_t>();
             if (ver == 1) {
                 // Special case for P1 bitmaps where spaces are optional and the only allowed values are 0 (white) and 1 (black)
                 char c;
@@ -393,7 +401,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         const bool shallSwapBytes = isBinary && (endian::native == endian::little) != isLittleEndian;
 
         if (pfm) {
-            const float* const floatData = reinterpret_cast<const float*>(data);
+            const auto* const floatData = buf.data<const float>();
             co_await ThreadPool::global().parallelForAsync(
                 0,
                 size.y(),
@@ -415,24 +423,27 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             );
         } else {
             if (bitsPerChannel == 32) {
+                auto* const uintData = buf.data<uint32_t>();
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0, numSamples, numSamples, [&](size_t i) { ((uint32_t*)data)[i] = swapBytes(((uint32_t*)data)[i]); }, priority
+                        0, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
                     );
                 }
 
-                co_await toFloat32<uint32_t, true>((const uint32_t*)data, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<uint32_t, true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 16) {
+                auto* const uintData = buf.data<uint16_t>();
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0, numSamples, numSamples, [&](size_t i) { ((uint16_t*)data)[i] = swapBytes(((uint16_t*)data)[i]); }, priority
+                        0, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
                     );
                 }
 
-                co_await toFloat32<uint16_t, true>((const uint16_t*)data, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<uint16_t, true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 8) {
-                co_await toFloat32<uint8_t, true>((const uint8_t*)data, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<uint8_t, true>(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 1) {
+                auto* const data = buf.data<uint8_t>();
                 co_await ThreadPool::global().parallelForAsync(
                     0,
                     size.y(),

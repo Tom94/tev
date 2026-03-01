@@ -227,6 +227,7 @@ namespace tev {
 namespace fs = std::filesystem;
 
 // TODO: remove this custom to_vector implementation in favor of std::ranges::to<std::vector> once g++ supported it for long enough
+//       Same for fixed_chunks once std::ranges::views::chunk becomes available.
 namespace detail {
 
 struct to_vector_fn {
@@ -245,9 +246,17 @@ struct to_vector_fn {
     }
 };
 
+template <size_t N> struct fixed_chunks_fn {
+    template <typename T, std::size_t Extent> friend constexpr auto operator|(std::span<T, Extent> s, fixed_chunks_fn) {
+        return std::views::iota(std::size_t{0}, s.size() / N) |
+            std::views::transform([s](std::size_t i) { return s.subspan(i * N).template first<N>(); });
+    }
+};
+
 } // namespace detail
 
 inline constexpr detail::to_vector_fn to_vector{};
+template <std::size_t N> inline constexpr detail::fixed_chunks_fn<N> fixed_chunks{};
 
 template <typename T>
     requires std::is_trivially_copyable_v<T>

@@ -58,7 +58,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     png_set_read_fn(pngPtr, &iStream, [](png_structp png_ptr, png_bytep data, png_size_t length) {
-        auto stream = reinterpret_cast<istream*>(png_get_io_ptr(png_ptr));
+        auto stream = static_cast<istream*>(png_get_io_ptr(png_ptr));
         size_t totalRead = 0;
         while (stream && totalRead < length) {
             stream->read(reinterpret_cast<char*>(data) + totalRead, length - totalRead);
@@ -136,10 +136,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
+    const auto pixelFormat = bitDepth > 8 ? EPixelFormat::U16 : EPixelFormat::U8;
+
     tlog::debug() << fmt::format("PNG image info: size={} numChannels={} bitDepth={} colorType={}", size, numChannels, bitDepth, colorType);
 
     // 16 bit channels are big endian by default, but we want little endian on little endian systems
-    if (bitDepth == 16 && endian::little == endian::native) {
+    if (bitDepth > 8 && endian::little == endian::native) {
         png_set_swap(pngPtr);
     }
 
@@ -322,13 +324,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     const auto numPixels = static_cast<size_t>(size.x()) * size.y();
-    const auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
-    const auto numBytesPerPixel = numBytesPerSample * numChannels;
     const auto numSamples = numPixels * numChannels;
     const auto numInterleavedSamples = numPixels * numInterleavedChannels;
+    const auto numBytesPerPixel = numChannels * nBytes(pixelFormat);
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
-    HeapArray<png_byte> pngData(numPixels * numBytesPerPixel);
+    auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
     HeapArray<float> frameData;
 
     // Png wants to read into a 2D array of pointers to rows, so we need to create that as well
@@ -424,7 +425,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
 
         for (int y = 0; y < frameSize.y(); ++y) {
-            rowPointers[y] = &pngData[y * frameSize.x() * numBytesPerPixel];
+            rowPointers[y] = buf.dataBytes() + y * frameSize.x() * numBytesPerPixel;
         }
 
         png_read_image(pngPtr, rowPointers.data());
@@ -494,10 +495,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                if (bitDepth == 16) {
-                    co_await toFloat32((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
-                } else {
-                    co_await toFloat32(pngData.data(), numChannels, dstView, hasAlpha, priority);
+                if (pixelFormat == EPixelFormat::U16) {
+                    co_await toFloat32(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
+                } else if (pixelFormat == EPixelFormat::U8) {
+                    co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -529,10 +530,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_return;
             } else if (iccProfileData) {
                 try {
-                    if (bitDepth == 16) {
-                        co_await toFloat32((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
+                    if (pixelFormat == EPixelFormat::U16) {
+                        co_await toFloat32(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
                     } else {
-                        co_await toFloat32(pngData.data(), numChannels, dstView, hasAlpha, priority);
+                        co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                     }
 
                     const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
@@ -571,10 +572,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     tlog::debug() << "No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
                 }
 
-                if (bitDepth == 16) {
-                    co_await toFloat32<uint16_t, true, true>((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
+                if (pixelFormat == EPixelFormat::U16) {
+                    co_await toFloat32<uint16_t, true, true>(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
                 } else {
-                    co_await toFloat32<uint8_t, true, true>(pngData.data(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32<uint8_t, true, true>(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 resultData.hasPremultipliedAlpha = true;
@@ -583,10 +584,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             }
 
             tlog::debug() << fmt::format("Using gamma={}", invGamma64);
-            if (bitDepth == 16) {
-                co_await toFloat32((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
+            if (pixelFormat == EPixelFormat::U16) {
+                co_await toFloat32(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
             } else {
-                co_await toFloat32(pngData.data(), numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
             }
 
             co_await ThreadPool::global().parallelForAsync<size_t>(

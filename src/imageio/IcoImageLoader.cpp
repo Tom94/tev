@@ -27,7 +27,7 @@ using namespace std;
 namespace tev {
 
 template <typename T> static T read(const uint8_t* data, bool reverseEndianness) {
-    T result = *reinterpret_cast<const T*>(data);
+    auto result = fromBytes<T>(data);
     if (reverseEndianness) {
         result = swapBytes(result);
     }

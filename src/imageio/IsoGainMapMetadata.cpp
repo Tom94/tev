@@ -135,7 +135,8 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
 }
 
 IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
-    SXMPMeta* meta = reinterpret_cast<SXMPMeta*>(xmpMeta);
+    // TODO: find a way to put SXMPMeta into the type signature...
+    SXMPMeta* meta = static_cast<SXMPMeta*>(xmpMeta);
 
     try {
         string version;

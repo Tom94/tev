@@ -58,7 +58,7 @@ public:
             *pos += sizeof(T);
         }
 
-        T result = *reinterpret_cast<const T*>(ptr);
+        auto result = fromBytes<T>(ptr);
         if (reverseEndianess) {
             result = swapBytes(result);
         }

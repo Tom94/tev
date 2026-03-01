@@ -32,14 +32,14 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     static const stbi_io_callbacks callbacks = {
         // Read
         [](void* context, char* data, int size) {
-            auto stream = reinterpret_cast<istream*>(context);
+            auto stream = static_cast<istream*>(context);
             stream->read(data, size);
             return (int)stream->gcount();
         },
         // Seek
-        [](void* context, int size) { reinterpret_cast<istream*>(context)->seekg(size, ios_base::cur); },
+        [](void* context, int size) { static_cast<istream*>(context)->seekg(size, ios_base::cur); },
         // EOF
-        [](void* context) { return (int)!!(*reinterpret_cast<istream*>(context)); },
+        [](void* context) { return (int)!!(*static_cast<istream*>(context)); },
     };
 
     void* data;

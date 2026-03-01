@@ -1163,7 +1163,7 @@ Task<void> postprocessLinearRawDng(
 
         tlog::debug() << fmt::format("Applying profile tone curve of length {}", tonecurve.size());
 
-        span<const Vector2f> tc{reinterpret_cast<const Vector2f*>(tonecurve.data()), tonecurve.size() / 2};
+        const auto tc = tonecurve | fixed_chunks<2> | views::transform([](auto c) { return Vector2f{c[0], c[1]}; }) | to_vector;
         if (tc.front().x() != 0.0f || tc.back().x() != 1.0f) {
             throw ImageLoadError{"Tone curve must start at 0."};
         }
@@ -1578,6 +1578,8 @@ Task<ImageData> decodeJpeg(
         throw ImageLoadError{fmt::format("Unsupported JPEG precision: {} bits per sample.", precision)};
     }
 
+    const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 : EPixelFormat::U8;
+
     // Suppress all color conversion; output in the native colorspace. We'll convert outselves.
     cinfo.out_color_space = cinfo.jpeg_color_space;
     cinfo.quantize_colors = false;
@@ -1618,31 +1620,45 @@ Task<ImageData> decodeJpeg(
     //     (int)cinfo.jpeg_color_space
     // );
 
-    const auto numBytesPerSample = divRoundUp(precision, 8);
-    const auto rowStride = (size_t)width * numComponents * numBytesPerSample;
-    HeapArray<uint8_t> buf((size_t)width * height * numComponents * numBytesPerSample);
+    auto buf = PixelBuffer::alloc((size_t)width * height * numComponents, pixelFormat);
 
-    HeapArray<JSAMPROW> rowPointers(height);
-    for (size_t y = 0; y < height; ++y) {
-        rowPointers[y] = &buf[y * rowStride];
-    }
+    if (cinfo.data_precision <= 8) {
+        HeapArray<JSAMPROW> rowPointers(height);
+        for (size_t y = 0; y < height; ++y) {
+            rowPointers[y] = buf.data<uint8_t>() + y * width * numComponents;
+        }
 
-    while (cinfo.output_scanline < cinfo.output_height) {
-        if (precision <= 8) {
+        while (cinfo.output_scanline < cinfo.output_height) {
             jpeg_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-        } else if (precision <= 12) {
-            jpeg12_read_scanlines(&cinfo, (J12SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
-        } else {
-            jpeg16_read_scanlines(&cinfo, (J16SAMPARRAY)&rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        }
+    } else if (cinfo.data_precision <= 12) {
+        HeapArray<J12SAMPROW> rowPointers(height);
+        for (size_t y = 0; y < height; ++y) {
+            rowPointers[y] = buf.data<int16_t>() + y * width * numComponents;
+        }
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            jpeg12_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
+        }
+    } else {
+        HeapArray<J16SAMPROW> rowPointers(height);
+        for (size_t y = 0; y < height; ++y) {
+            rowPointers[y] = buf.data<uint16_t>() + y * width * numComponents;
+        }
+
+        while (cinfo.output_scanline < cinfo.output_height) {
+            jpeg16_read_scanlines(&cinfo, &rowPointers[cinfo.output_scanline], cinfo.output_height - cinfo.output_scanline);
         }
     }
 
-    if (numBytesPerSample == 1) {
-        co_await toFloat32(buf.data(), tileNumComponents, outView, false, priority, scale);
-    } else if (numBytesPerSample == 2) {
-        co_await toFloat32((const uint16_t*)buf.data(), tileNumComponents, outView, false, priority, scale);
+    if (pixelFormat == EPixelFormat::U8) {
+        co_await toFloat32(buf.data<const uint8_t>(), tileNumComponents, outView, false, priority, scale);
+    } else if (pixelFormat == EPixelFormat::I16) {
+        co_await toFloat32(buf.data<const int16_t>(), tileNumComponents, outView, false, priority, scale);
+    } else if (pixelFormat == EPixelFormat::U16) {
+        co_await toFloat32(buf.data<const uint16_t>(), tileNumComponents, outView, false, priority, scale);
     } else {
-        throw ImageLoadError{fmt::format("Unsupported number of bytes per sample: {}", numBytesPerSample)};
+        throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
     }
 
     decompressGuard.disarm();
