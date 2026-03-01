@@ -1223,8 +1223,10 @@ Task<void> postprocessRgb(
     ImageData& resultData,
     const int priority
 ) {
-    if (numColorChannels < rgbaView.nChannels()) {
-        throw ImageLoadError{"Not enough color channels in the image."};
+    if (numColorChannels > rgbaView.nChannels()) {
+        throw ImageLoadError{
+            fmt::format("Too many color channels in the image: expected at most {}, got {}", rgbaView.nChannels(), numColorChannels)
+        };
     }
 
     const Vector2i size = resultData.size();
