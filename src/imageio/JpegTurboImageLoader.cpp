@@ -91,6 +91,11 @@ Task<vector<ImageData>>
             cinfo->err->format_message(cinfo, buf);
             throw ImageLoadError{fmt::format("libjpeg error: {}", buf)};
         };
+        jerr.output_message = [](j_common_ptr cinfo) {
+            char buf[JMSG_LENGTH_MAX];
+            (*cinfo->err->format_message)(cinfo, buf);
+            tlog::warning() << fmt::format("libjpeg warning: {}", buf);
+        };
 
         jpeg_create_decompress(&cinfo);
         const ScopeGuard jpegGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
