@@ -44,6 +44,7 @@
 
 #include <chrono>
 #include <limits>
+#include <spanstream>
 #include <stdexcept>
 
 using namespace nanogui;
@@ -2439,15 +2440,14 @@ void ImageViewer::copyImageNameToClipboard() const {
 }
 
 void ImageViewer::pasteImagesFromClipboard() {
-    stringstream imageStream;
+    unique_ptr<istream> imageStream;
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
         const auto data = waylandGetClipboardPngImage();
         if (data.empty()) {
             throw runtime_error{"No image data found in clipboard."};
         }
 
-        // TODO: use spanstream once it is available in C++23 to avoid the copy
-        imageStream = stringstream{string{data}, ios::in};
+        imageStream = make_unique<ispanstream>(data);
     } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
         clip::lock l;
         if (!l.locked()) {
@@ -2463,21 +2463,23 @@ void ImageViewer::pasteImagesFromClipboard() {
         string data(len, '\0');
         l.get_data(f, data.data(), len);
 
-        imageStream = stringstream{std::move(data), ios::in};
+        imageStream = make_unique<istringstream>(std::move(data));
     } else {
         clip::image clipImage;
         if (!clip::get_image(clipImage)) {
             throw runtime_error{"No image data found in clipboard."};
         }
 
-        imageStream << "clip";
-        imageStream.write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
-        imageStream.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
+        auto s = make_unique<stringstream>();
+        (*s) << "clip";
+        s->write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
+        s->write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
+        imageStream = std::move(s);
     }
 
     tlog::info() << "Loading image from clipboard...";
     auto imagesLoadTask = tryLoadImage(
-        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
+        fmt::format("clipboard ({})", ++mClipboardIndex), *imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
     );
 
     const auto images = imagesLoadTask.get();
