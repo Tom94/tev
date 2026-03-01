@@ -163,8 +163,6 @@ public:
 
     size_t numThreads() const { return mNumThreads; }
 
-    std::recursive_mutex& taskQueueMutex() { return mTaskQueueMutex; }
-
 private:
     bool mShuttingDown = false;
 

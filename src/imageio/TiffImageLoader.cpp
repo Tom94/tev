@@ -614,7 +614,7 @@ Task<void> linearizeAndNormalizeRawDng(
                         const float val = rgbaView[c, i];
 
                         // Lerp the transfer function
-                        const size_t idx = clamp((size_t)(val * maxVal), (size_t)0, maxIdx - 1);
+                        const size_t idx = clamp((size_t)(val * maxVal), 0uz, maxIdx - 1);
                         const float w = val * maxIdx - idx;
                         rgbaView[c, i] = (1.0f - w) * linTable[idx] * scale + w * linTable[idx + 1] * scale;
                     }
@@ -1339,7 +1339,7 @@ Task<void> postprocessRgb(
                     const float val = rgbaView[c, i];
 
                     // Lerp the transfer function
-                    const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], (size_t)0, transferFunction[c].size() - 2);
+                    const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], 0uz, transferFunction[c].size() - 2);
                     const float w = val * maxIdx - idx - transferRangeBlack[c];
                     rgbaView[c, i] = ((1.0f - w) * (float)transferFunction[c][idx] + w * (float)transferFunction[c][idx + 1] -
                                       transferRangeBlack[c]) *

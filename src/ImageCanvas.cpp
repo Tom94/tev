@@ -818,19 +818,19 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     const auto result = make_shared<CanvasStatistics>();
-    const size_t nColorChannels = alphaChannel ? (flattened.size() - 1) : flattened.size();
+    const auto nColorChannels = alphaChannel ? (flattened.size() - 1) : flattened.size();
     result->nChannels = (int)nColorChannels;
 
     result->histogramColors.resize(nColorChannels);
     for (size_t i = 0; i < nColorChannels; ++i) {
         string rgba[] = {"R", "G", "B", "A"};
-        string colorName = nColorChannels == 1 ? "L" : rgba[std::min(i, (size_t)3)];
+        string colorName = nColorChannels == 1 ? "L" : rgba[std::min(i, 3uz)];
         result->histogramColors[i] = Channel::color(colorName, false);
     }
 
     const auto regionSize = region.size();
-    const size_t numPixels = region.area();
-    const size_t numSamples = nColorChannels * numPixels;
+    const auto numPixels = region.area();
+    const auto numSamples = nColorChannels * numPixels;
 
     // If we have 3 color channels, apply alpha, the inspection chroma, and transfer function
     if (nColorChannels >= 3) {
@@ -928,7 +928,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     result->minimum = stats.minimum;
 
     // The more pixels we have, the finer we can make the histogram without becoming noisy
-    // const size_t numBins = clamp(numPixels / 512, (size_t)16, (size_t)512);
+    // const size_t numBins = clamp(numPixels / 512, 16uz, 512uz);
     const size_t numBins = 400;
     result->histogram.resize(numBins * nColorChannels);
 
@@ -961,7 +961,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     {
         const size_t approxCost = numSamples *
             8; // constant factor to represent the increased workload of log/exp and somewhat random memory writes
-        const size_t numTasks = nextMultiple(ThreadPool::global().nTasks<size_t>(0, numPixels, approxCost), (size_t)nColorChannels);
+        const size_t numTasks = nextMultiple(ThreadPool::global().nTasks<size_t>(0, numPixels, approxCost), nColorChannels);
         const size_t numTasksPerChannel = numTasks / nColorChannels;
 
         vector<float> perTaskHistograms(numBins * nColorChannels * numTasks);

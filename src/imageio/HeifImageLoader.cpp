@@ -405,7 +405,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         // 1 thread per 4 million samples (rgba megapixel) seems to be a good heuristic for parallel decoding. Spawning threads is *really*
         // expensive, so even taking into account that decoding does quite a bit of processing per sample, we still need a much larger chunk
         // size than our task-based thread pool. Would be better if libheif exposed a way for us to supply a custom thread pool, but oh well.
-        return clamp(numSamples / (1024 * 1024 * 4), (size_t)1, (size_t)thread::hardware_concurrency());
+        return clamp(numSamples / (1024 * 1024 * 4), 1uz, (size_t)thread::hardware_concurrency());
     };
 
     const auto decodeImageHandle =

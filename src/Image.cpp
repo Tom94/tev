@@ -1194,7 +1194,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
     const size_t nColorChannels = alphaChannel ? (channels.size() - 1) : channels.size();
 
     const auto numPixels = (size_t)imageRegion.size().x() * imageRegion.size().y();
-    const auto nColorChannelsToSave = std::min(nColorChannels, (size_t)3);
+    const auto nColorChannelsToSave = std::min(nColorChannels, 3uz);
 
     // Flatten image into vector
     HeapArray<float> result{4 * numPixels};
@@ -1224,7 +1224,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
         co_await ThreadPool::global().parallelForAsync(
-            (size_t)0,
+            0uz,
             numPixels,
             numPixels * 4,
             [&result](size_t j) {

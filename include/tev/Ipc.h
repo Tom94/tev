@@ -151,7 +151,7 @@ private:
         IStream(std::span<const char> data) : mData{data} {
             uint32_t size;
             *this >> size;
-            if ((size_t)size != data.size()) {
+            if (size != data.size()) {
                 throw std::runtime_error{"Trying to read IPC packet with incorrect size."};
             }
         }
