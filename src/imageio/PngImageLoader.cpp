@@ -102,7 +102,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             png_set_palette_to_rgb(pngPtr);
             numColorChannels = numChannels = 3;
             break;
-        default: numColorChannels = numChannels = 0; break;
+        default: throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
     }
 
     if (interlaceType != PNG_INTERLACE_NONE) {
@@ -127,10 +127,6 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         numChannels = numColorChannels + 1;
-    }
-
-    if (numColorChannels == 0 || numChannels == 0) {
-        throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
     }
 
     png_read_update_info(pngPtr, infoPtr);

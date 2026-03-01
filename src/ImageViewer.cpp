@@ -22,7 +22,7 @@
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/ImageSaver.h>
-#include <tev/imageio/StbiLdrImageSaver.h>
+#include <tev/imageio/PngImageSaver.h>
 
 #include <clip.h>
 
@@ -2375,6 +2375,8 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw runtime_error{"Image canvas has no image data to copy to clipboard."};
     }
 
+    const auto start = chrono::steady_clock::now();
+
     const auto imageData = mImageCanvas->getRgbaLdrImageData(true, numeric_limits<int>::max()).get();
 
 #if defined(__APPLE__) or defined(_WIN32)
@@ -2400,8 +2402,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         throw runtime_error{"clip::set_image failed."};
     }
 #else
-    // TODO: make a dedicated PNG saver via libpng which should be faster than stb_image_write.
-    const auto pngImageSaver = make_unique<StbiLdrImageSaver>();
+    const auto pngImageSaver = make_unique<PngImageSaver>();
 
     ostringstream pngData;
     try {
@@ -2422,8 +2423,10 @@ void ImageViewer::copyImageCanvasToClipboard() const {
         }
     }
 #endif
+    const auto end = chrono::steady_clock::now();
+    const auto duration = chrono::duration<float>(end - start).count();
 
-    tlog::success() << "Image copied to clipboard.";
+    tlog::success() << fmt::format("Image copied to clipboard after {:.3f} seconds.", duration);
 }
 
 void ImageViewer::copyImageNameToClipboard() const {

@@ -847,7 +847,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             if (auxImg.retain) {
                 co_await auxImg.data.matchColorsAndSizeOf(mainImage, priority);
 
-                // TODO:Handle the case where the auxiliary image has different attributes
+                // TODO: Handle the case where the auxiliary image has different attributes
                 ranges::move(auxImg.data.channels, back_inserter(mainImage.channels));
             }
         }

@@ -162,6 +162,7 @@ set(TEV_SOURCES
     include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
+    include/tev/imageio/PngImageSaver.h src/imageio/PngImageSaver.cpp
     include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp
     include/tev/imageio/QoiImageSaver.h src/imageio/QoiImageSaver.cpp
     include/tev/imageio/RawImageLoader.h src/imageio/RawImageLoader.cpp
