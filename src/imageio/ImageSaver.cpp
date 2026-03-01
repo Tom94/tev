@@ -19,6 +19,7 @@
 #include <tev/imageio/ImageSaver.h>
 
 #include <tev/imageio/ExrImageSaver.h>
+#include <tev/imageio/JpegTurboImageSaver.h>
 #include <tev/imageio/PngImageSaver.h>
 #include <tev/imageio/QoiImageSaver.h>
 #include <tev/imageio/StbiHdrImageSaver.h>
@@ -40,6 +41,7 @@ const vector<unique_ptr<ImageSaver>>& ImageSaver::getSavers() {
         imageSavers.emplace_back(make_unique<ExrImageSaver>());
         imageSavers.emplace_back(make_unique<QoiImageSaver>());
         imageSavers.emplace_back(make_unique<PngImageSaver>());
+        imageSavers.emplace_back(make_unique<JpegTurboImageSaver>());
 #ifdef TEV_SUPPORT_JXL
         imageSavers.emplace_back(make_unique<JxlImageSaver>());
 #endif

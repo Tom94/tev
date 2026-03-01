@@ -160,6 +160,7 @@ set(TEV_SOURCES
     include/tev/imageio/IsoGainMapMetadata.h src/imageio/IsoGainMapMetadata.cpp
     include/tev/imageio/Jpeg2000ImageLoader.h src/imageio/Jpeg2000ImageLoader.cpp
     include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
+    include/tev/imageio/JpegTurboImageSaver.h src/imageio/JpegTurboImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
     include/tev/imageio/PngImageSaver.h src/imageio/PngImageSaver.cpp
