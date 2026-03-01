@@ -22,7 +22,7 @@ Or install __tev__ via package managers:
 - [brew](https://formulae.brew.sh/cask/tev): `brew install tev`
 - [flathub](https://flathub.org/en/apps/io.github.tom94.tev): `flatpak install flathub io.github.tom94.tev`
 - [scoop](https://scoop.sh/#/apps?q=tev&id=a2ccab649627072fcfa357924d93478e0f1f3f16): `scoop install extras/tev`
-- [winget](https://winget.run/pkg/Tom94/tev): `winget install tev`
+- [winget](https://winstall.app/apps/Tom94.tev): `winget install tev`
 - [nix](https://mynixos.com/nixpkgs/package/tev):
 
 ```nix
