@@ -638,7 +638,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         throw ImageSaveError{"There is no image to save."};
     }
 
-    tlog::info() << "Saving currently displayed image as " << path << ".";
+    tlog::info() << fmt::format("Saving currently displayed image as {}.", toString(path));
 
     const auto start = chrono::steady_clock::now();
 

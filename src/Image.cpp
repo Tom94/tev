@@ -1334,6 +1334,8 @@ Task<void> Image::save(
             continue;
         }
 
+        const auto start = chrono::steady_clock::now();
+
         const auto* hdrSaver = dynamic_cast<const TypedImageSaver<float>*>(saver.get());
         const auto* ldrSaver = dynamic_cast<const TypedImageSaver<uint8_t>*>(saver.get());
 
@@ -1348,6 +1350,9 @@ Task<void> Image::save(
         } else {
             TEV_ASSERT(false, "Each image saver must either be a HDR or an LDR saver.");
         }
+
+        const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::steady_clock::now() - start).count();
+        tlog::debug() << fmt::format("Saved {} bytes to {} after {:.3f} seconds", (size_t)f.tellp(), path, duration);
 
         co_return;
     }
