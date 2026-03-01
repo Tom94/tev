@@ -575,7 +575,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, sp
     for (const auto& channel : channels) {
         const Channel* c = mImage->channel(channel);
         TEV_ASSERT(c, "Requested channel must exist.");
-        result.push_back(c->eval(imageCoords));
+        result.push_back(c->evalOrZero(imageCoords));
     }
 
     // Subtract reference if it exists.
@@ -586,7 +586,7 @@ void ImageCanvas::getValuesAtNanoPos(Vector2i nanoPos, vector<float>& result, sp
             const float defaultVal = isAlpha && mReference->contains(referenceCoords) ? 1.0f : 0.0f;
 
             const Channel* c = mReference->channel(channels[i]);
-            const float reference = c ? c->eval(referenceCoords) : defaultVal;
+            const float reference = c ? c->evalOrZero(referenceCoords) : defaultVal;
 
             result[i] = isAlpha ? 0.5f * (result[i] + reference) : applyMetric(result[i], reference, mMetric);
         }
@@ -638,7 +638,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         throw ImageSaveError{"There is no image to save."};
     }
 
-    tlog::info() << "Saving currently displayed image as " << path << ".";
+    tlog::info() << fmt::format("Saving currently displayed image as {}.", toString(path));
 
     const auto start = chrono::steady_clock::now();
 
@@ -806,13 +806,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     });
 
     auto flattened = co_await image->getHdrImageData(reference, requestedChannelGroup, metric, priority);
+    const auto views = flattened | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
 
-    const Channel* alphaChannel = nullptr;
+    const ChannelView<float>* alphaChannel = nullptr;
 
     // Only treat the alpha channel specially if it is not the only channel of the image.
     if (!all_of(begin(flattened), end(flattened), [](const Channel& c) { return c.isAlpha(); })) {
         if (flattened.back().isAlpha()) {
-            alphaChannel = &flattened.back();
+            alphaChannel = &views.back();
         }
     }
 
@@ -843,17 +844,17 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             numSamples,
             [&](int y) {
                 for (int x = region.min.x(); x < region.max.x(); ++x) {
-                    const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
+                    const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)[x, y] : 1.0f;
                     const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
                     Vector3f rgb;
                     for (size_t c = 0; c < 3; ++c) {
-                        rgb[c] = flattened[c].at({x, y}) * alphaFactor;
+                        rgb[c] = views[c][x, y] * alphaFactor;
                     }
 
                     rgb = ituth273::transfer(transfer, mat * rgb);
                     for (size_t c = 0; c < 3; ++c) {
-                        flattened[c].setAt({x, y}, rgb[c]);
+                        views[c][x, y] = rgb[c];
                     }
                 }
             },
@@ -868,13 +869,12 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                 numSamples,
                 [&](int y) {
                     for (int x = region.min.x(); x < region.max.x(); ++x) {
-                        const float alpha = alphaChannel && !premultipliedAlpha ? alphaChannel->at({x, y}) : 1.0f;
+                        const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)[x, y] : 1.0f;
                         const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
 
                         for (size_t c = 0; c < nColorChannels; ++c) {
-                            auto& channel = flattened[c];
-                            const float val = channel.at({x, y}) * alphaFactor;
-                            channel.setAt({x, y}, ituth273::transferComponent(transfer, val));
+                            const float val = views[c][x, y] * alphaFactor;
+                            views[c][x, y] = ituth273::transferComponent(transfer, val);
                         }
                     }
                 },
@@ -902,8 +902,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
                 for (int x = region.min.x(); x < region.max.x(); ++x) {
                     for (size_t c = 0; c < nColorChannels; ++c) {
-                        const auto& channel = flattened[c];
-                        auto v = channel.at({x, y});
+                        auto v = views[c][x, y];
                         if (!isfinite(v)) {
                             continue;
                         }
@@ -979,14 +978,14 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                 const size_t taskEnd = numPixels * (taskPerChannelIndex + 1) / numTasksPerChannel;
 
                 float* const histogram = perTaskHistograms.data() + numBins * i;
-                const auto& channel = flattened[c];
+                const auto& channel = views[c];
 
                 const auto regionSize = region.size();
                 for (size_t j = taskStart; j < taskEnd; ++j) {
                     const int x = (int)(j % regionSize.x()) + region.min.x();
                     const int y = (int)(j / regionSize.x()) + region.min.y();
 
-                    histogram[valToBin(channel.at({x, y}))] += alphaChannel ? alphaChannel->at({x, y}) : 1;
+                    histogram[valToBin(channel[x, y])] += alphaChannel ? (*alphaChannel)[x, y] : 1;
                 }
             },
             priority

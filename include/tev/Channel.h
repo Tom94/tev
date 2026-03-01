@@ -26,15 +26,158 @@
 #include <half.h>
 
 #include <memory>
+#include <ranges>
 #include <span>
 #include <string>
+#include <type_traits>
+#include <vector>
 
 namespace tev {
 
+template <typename T> EPixelFormat pixelFormatForType() {
+    using base_t = std::remove_cv_t<T>;
+    if constexpr (std::is_same_v<base_t, uint8_t>) {
+        return EPixelFormat::U8;
+    } else if constexpr (std::is_same_v<base_t, uint16_t>) {
+        return EPixelFormat::U16;
+    } else if constexpr (std::is_same_v<base_t, uint32_t>) {
+        return EPixelFormat::U32;
+    } else if constexpr (std::is_same_v<base_t, int8_t>) {
+        return EPixelFormat::I8;
+    } else if constexpr (std::is_same_v<base_t, int16_t>) {
+        return EPixelFormat::I16;
+    } else if constexpr (std::is_same_v<base_t, int32_t>) {
+        return EPixelFormat::I32;
+    } else if constexpr (std::is_same_v<base_t, half>) {
+        return EPixelFormat::F16;
+    } else if constexpr (std::is_same_v<base_t, float>) {
+        return EPixelFormat::F32;
+    } else {
+        static_assert(false, "Unsupported type for pixel format.");
+    }
+}
+
+template <typename T> class ChannelView {
+public:
+    ChannelView(const ChannelView<std::remove_const_t<T>>& other)
+        requires(!std::is_same_v<T, std::remove_const_t<T>>)
+        : ChannelView(other.data(), other.dataStride(), other.dataOffset(), other.size()) {}
+
+    ChannelView(const ChannelView&) = default;
+    ChannelView& operator=(const ChannelView&) = default;
+
+    ChannelView(ChannelView&&) = default;
+    ChannelView& operator=(ChannelView&&) = default;
+
+    ChannelView(T* data, size_t dataStride, size_t dataOffset, const nanogui::Vector2i& size) :
+        mData{data}, mDataOffset{dataOffset}, mDataStride{dataStride}, mSize{size} {}
+
+    std::conditional_t<std::is_same_v<T, float>, float&, float> operator[](size_t i) const & {
+        if constexpr (std::is_integral_v<T>) {
+            const auto v = mData[mDataOffset + i * mDataStride];
+            return (float)v / (float)std::numeric_limits<T>::max();
+        } else {
+            return mData[mDataOffset + i * mDataStride];
+        }
+    }
+
+    // decltype(auto) as opposed to `auto` preserves the reference category
+    decltype(auto) operator[](int x, int y) const & { return operator[](x + y * (size_t)mSize.x()); }
+
+    // `this` is always an lvalue, so these rvalue overloads don't recurse infinitely
+    float operator[](size_t i) const && { return this->operator[](i); }
+    float operator[](int x, int y) const && { return this->operator[](x, y); }
+
+    void setAt(size_t i, float value) const {
+        T& val = mData[mDataOffset + i * mDataStride];
+        if constexpr (std::is_integral_v<T>) {
+            if constexpr (std::is_signed_v<T>) {
+                val = (T)(std::clamp(value, -1.0f, 1.0f) * (float)std::numeric_limits<T>::max() + copysignf(0.5f, value));
+            } else {
+                val = (T)(std::clamp(value, 0.0f, 1.0f) * (float)std::numeric_limits<T>::max() + 0.5f);
+            }
+        } else {
+            val = (T)value;
+        }
+    }
+
+    void setAt(int x, int y, float value) const { setAt(x + y * (size_t)mSize.x(), value); }
+
+    const nanogui::Vector2i& size() const { return mSize; }
+
+    T* data() const & { return mData; }
+
+    size_t dataOffset() const { return mDataOffset; }
+    size_t dataStride() const { return mDataStride; }
+
+private:
+    T* mData = nullptr;
+    size_t mDataOffset = 0;
+    size_t mDataStride = 1;
+    nanogui::Vector2i mSize = {0};
+};
+
+class PixelBuffer {
+    struct Deleter {
+        void (*fn)(void*);
+        void operator()(void* p) const { fn(p); }
+    };
+
+    std::unique_ptr<void, Deleter> mStorage;
+    size_t mSizeBytes = 0;
+    size_t mSizeElems = 0;
+    EPixelFormat mFormat;
+
+public:
+    template <typename T> static PixelBuffer alloc(size_t count, EPixelFormat format) {
+        T* ptr = new T[count];
+        PixelBuffer buf;
+        buf.mStorage = {ptr, Deleter{[](void* p) { delete[] static_cast<T*>(p); }}};
+        buf.mSizeBytes = count * sizeof(T);
+        buf.mSizeElems = count;
+        buf.mFormat = format;
+        return buf;
+    }
+
+    static PixelBuffer alloc(size_t count, EPixelFormat format) {
+        switch (format) {
+            case EPixelFormat::U8: return alloc<uint8_t>(count, format);
+            case EPixelFormat::U16: return alloc<uint16_t>(count, format);
+            case EPixelFormat::U32: return alloc<uint32_t>(count, format);
+            case EPixelFormat::I8: return alloc<int8_t>(count, format);
+            case EPixelFormat::I16: return alloc<int16_t>(count, format);
+            case EPixelFormat::I32: return alloc<int32_t>(count, format);
+            case EPixelFormat::F16: return alloc<half>(count, format);
+            case EPixelFormat::F32: return alloc<float>(count, format);
+        }
+        throw std::runtime_error{"Unknown pixel format"};
+    }
+
+    template <typename T> T* data() const & {
+        if (UNLIKELY(pixelFormatForType<T>() != format())) {
+            throw std::runtime_error{"Pixel format does not match requested type."};
+        }
+
+        return static_cast<T*>(mStorage.get());
+    }
+
+    size_t size() const { return mSizeElems; }
+
+    uint8_t* dataBytes() const { return static_cast<uint8_t*>(mStorage.get()); }
+    size_t sizeBytes() const { return mSizeBytes; }
+    EPixelFormat format() const { return mFormat; }
+
+    // re-seat the buffer (e.g. F32 → F16 conversion)
+    PixelBuffer& operator=(PixelBuffer&& other) = default;
+    PixelBuffer(PixelBuffer&&) = default;
+
+    PixelBuffer() = default;
+    PixelBuffer(const PixelBuffer&) = delete;
+    PixelBuffer& operator=(const PixelBuffer&) = delete;
+};
+
 class Channel {
 public:
-    using Data = HeapArray<uint8_t>;
-
     static std::pair<std::string_view, std::string_view> split(std::string_view fullChannel);
     static std::string join(std::string_view layer, std::string_view channel);
     static std::string joinIfNonempty(std::string_view layer, std::string_view channel);
@@ -52,7 +195,7 @@ public:
         const nanogui::Vector2i& size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
-        std::shared_ptr<Data> data = nullptr,
+        std::shared_ptr<PixelBuffer> data = nullptr,
         size_t dataOffset = 0,
         size_t dataStride = 1
     );
@@ -75,7 +218,7 @@ public:
 
         const size_t nPixels = numPixels();
         for (size_t i = 0; i < nPixels; ++i) {
-            const float f = at(i);
+            const float f = dynamicAt(i);
 
             mean += f;
             if (f < min) {
@@ -93,108 +236,188 @@ public:
     Task<void> divideByAsync(const Channel& other, int priority);
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
-    void setZero() {
-        const size_t nBytesPerPixel = nBytes(mPixelFormat);
-        if (mDataStride == 1) {
-            std::memset(data(), 0, numPixels() * nBytesPerPixel);
-        } else {
-            const size_t nPixels = numPixels();
-            for (size_t i = 0; i < nPixels; ++i) {
-                std::memset(data() + i * mDataStride, 0, nBytesPerPixel);
-            }
-        }
-    }
-
     void updateTile(int x, int y, int width, int height, std::span<const float> newData);
 
-    float at(nanogui::Vector2i index) const { return at(index.x() + index.y() * (size_t)mSize.x()); }
-    float at(size_t index) const {
-        switch (mPixelFormat) {
-            case EPixelFormat::U8: return *dataAt(index);
-            case EPixelFormat::U16: return *(const uint16_t*)dataAt(index);
-            case EPixelFormat::I8: return *(const int8_t*)dataAt(index);
-            case EPixelFormat::I16: return *(const int16_t*)dataAt(index);
-            case EPixelFormat::F16: return *(const half*)dataAt(index);
-            case EPixelFormat::F32: return *(const float*)dataAt(index);
+    template <typename T> ChannelView<T> view() const & {
+        static_assert(std::is_const_v<T>, "ChannelView must be const when returned from a const Channel.");
+        if (UNLIKELY(pixelFormatForType<T>() != pixelFormat())) {
+            throw std::runtime_error{"Channel pixel format does not match requested type."};
+        }
+
+        return ChannelView<T>{data<T>(), mDataStride, mDataOffset, mSize};
+    }
+
+    template <typename T> ChannelView<T> view() & {
+        if (UNLIKELY(pixelFormatForType<T>() != pixelFormat())) {
+            throw std::runtime_error{"Channel pixel format does not match requested type."};
+        }
+
+        return ChannelView<T>{data<T>(), mDataStride, mDataOffset, mSize};
+    }
+
+    // NOTE: Prefer using view<T>() for better performance when the type of the channel is known. E.g. most of tev's image loading routines
+    // use view<float>(), because that's the format that tev used until an image is finished loading. Only use the dynamicAt()/dynamicSetAt()/evalOrZero()
+    // members when accessing channels of images that have already completed loading (e.g. for UI or statistics purposes).
+    float dynamicAt(nanogui::Vector2i index) const { return dynamicAt(index.x() + index.y() * (size_t)mSize.x()); }
+    float dynamicAt(size_t index) const {
+        switch (pixelFormat()) {
+            case EPixelFormat::U8: return *dataAt<const uint8_t>(index) / (float)std::numeric_limits<uint8_t>::max();
+            case EPixelFormat::U16: return *dataAt<const uint16_t>(index) / (float)std::numeric_limits<uint16_t>::max();
+            case EPixelFormat::U32: return (float)(*dataAt<const uint32_t>(index) / (double)std::numeric_limits<uint32_t>::max());
+            case EPixelFormat::I8: return *dataAt<const int8_t>(index) / (float)std::numeric_limits<int8_t>::max();
+            case EPixelFormat::I16: return *dataAt<const int16_t>(index) / (float)std::numeric_limits<int16_t>::max();
+            case EPixelFormat::I32: return (float)(*dataAt<const int32_t>(index) / (double)std::numeric_limits<int32_t>::max());
+            case EPixelFormat::F16: return *dataAt<const half>(index);
+            case EPixelFormat::F32: return *dataAt<const float>(index);
         }
 
         return 0;
     }
 
-    void setAt(nanogui::Vector2i index, float value) { setAt(index.x() + index.y() * (size_t)mSize.x(), value); }
-    void setAt(size_t index, float value) {
-        switch (mPixelFormat) {
-            case EPixelFormat::U8: *dataAt(index) = (uint8_t)value; break;
-            case EPixelFormat::U16: *(uint16_t*)dataAt(index) = (uint16_t)value; break;
-            case EPixelFormat::I8: *(int8_t*)dataAt(index) = (int8_t)value; break;
-            case EPixelFormat::I16: *(int16_t*)dataAt(index) = (int16_t)value; break;
-            case EPixelFormat::F16: *(half*)dataAt(index) = (half)value; break;
-            case EPixelFormat::F32: *(float*)dataAt(index) = value; break;
+    void dynamicSetAt(nanogui::Vector2i index, float value) { dynamicSetAt(index.x() + index.y() * (size_t)mSize.x(), value); }
+    void dynamicSetAt(size_t index, float value) {
+        switch (pixelFormat()) {
+            case EPixelFormat::U8:
+                *dataAt<uint8_t>(index) = (uint8_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint8_t>::max() + 0.5f);
+                break;
+            case EPixelFormat::U16:
+                *dataAt<uint16_t>(index) = (uint16_t)(std::clamp(value, 0.0f, 1.0f) * std::numeric_limits<uint16_t>::max() + 0.5f);
+                break;
+            case EPixelFormat::U32:
+                *dataAt<uint32_t>(index) = (uint32_t)(std::clamp(value, 0.0f, 1.0f) * (double)std::numeric_limits<uint32_t>::max() + 0.5f);
+                break;
+            case EPixelFormat::I8:
+                *dataAt<int8_t>(index) = (int8_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int8_t>::max() +
+                                                  copysignf(0.5f, value));
+                break;
+            case EPixelFormat::I16:
+                *dataAt<int16_t>(index) = (int16_t)(std::clamp(value, -1.0f, 1.0f) * std::numeric_limits<int16_t>::max() +
+                                                    copysignf(0.5f, value));
+                break;
+            case EPixelFormat::I32:
+                *dataAt<int32_t>(index) = (int32_t)(std::clamp(value, -1.0f, 1.0f) * (double)std::numeric_limits<int32_t>::max() +
+                                                    copysignf(0.5f, value));
+                break;
+            case EPixelFormat::F16: *dataAt<half>(index) = (half)value; break;
+            case EPixelFormat::F32: *dataAt<float>(index) = value; break;
         }
     }
 
-    float eval(nanogui::Vector2i index) const {
+    float evalOrZero(nanogui::Vector2i index) const {
         if (index.x() < 0 || index.x() >= mSize.x() || index.y() < 0 || index.y() >= mSize.y()) {
             return 0;
         }
 
-        return at(index.x() + (size_t)index.y() * (size_t)mSize.x());
+        return dynamicAt(index);
     }
 
-    uint8_t* data() const { return mData->data() + mDataOffset; }
-
-    uint8_t* dataAt(nanogui::Vector2i index) const { return dataAt(index.x() + index.y() * (size_t)mSize.x()); }
-    uint8_t* dataAt(size_t index) const { return data() + index * mDataStride; }
-
-    template <typename T> T typedDataAt(T* src, nanogui::Vector2i index) const {
-        return typedDataAt(src, index.x() + index.y() * (size_t)mSize.x());
-    }
-
-    template <typename T> T typedDataAt(T* src, size_t index) const { return src[index * mDataStride / sizeof(T)]; }
-
-    float* floatData() const {
-        if (mPixelFormat != EPixelFormat::F32) {
-            throw std::runtime_error{"Channel is not in F32 format."};
-        }
-
-        return (float*)data();
-    }
-
-    half* halfData() const {
-        if (mPixelFormat != EPixelFormat::F16) {
-            throw std::runtime_error{"Channel is not in F16 format."};
-        }
-
-        return (half*)data();
-    }
-
-    void setOffset(size_t offset) { mDataOffset = offset; }
     size_t offset() const { return mDataOffset; }
-
-    void setStride(size_t stride) { mDataStride = stride; }
     size_t stride() const { return mDataStride; }
 
-    std::shared_ptr<Data>& dataBuf() { return mData; }
-    const std::shared_ptr<Data>& dataBuf() const { return mData; }
+    std::shared_ptr<PixelBuffer>& dataBuf() { return mData; }
+    const std::shared_ptr<PixelBuffer>& dataBuf() const { return mData; }
 
     EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
-
-    void setPixelFormat(EPixelFormat format) { mPixelFormat = format; }
-    EPixelFormat pixelFormat() const { return mPixelFormat; }
+    EPixelFormat pixelFormat() const { return mData->format(); }
 
 private:
+    template <typename T> T* data() const { return mData->data<T>(); }
+    template <typename T> T* dataAt(nanogui::Vector2i index) const { return dataAt<T>(index.x() + index.y() * (size_t)mSize.x()); }
+    template <typename T> T* dataAt(size_t index) const { return data<T>() + mDataOffset + index * mDataStride; }
+
     std::string mName;
     nanogui::Vector2i mSize;
-
-    EPixelFormat mPixelFormat = EPixelFormat::F32;
 
     // tev defaults to storing images in fp32 for maximum precision. However, many images only require fp16 to be displayed as good as
     // losslessly. For such images, loaders can set this to F16 to save memory.
     EPixelFormat mDesiredPixelFormat = EPixelFormat::F32;
 
-    std::shared_ptr<Data> mData;
+    std::shared_ptr<PixelBuffer> mData;
     size_t mDataOffset;
     size_t mDataStride;
+};
+
+template <typename T> class MultiChannelView {
+public:
+    MultiChannelView() = delete;
+
+    MultiChannelView(T* data, size_t dataStride, const nanogui::Vector2i& size, size_t numChannels = 0) {
+        if (numChannels == 0) {
+            numChannels = dataStride;
+        }
+
+        mSize = size;
+        for (size_t c = 0; c < numChannels; ++c) {
+            mChannelViews.emplace_back(data, dataStride, c, size);
+        }
+    }
+
+    MultiChannelView(const ChannelView<T>& channel) :
+        MultiChannelView{
+            std::span{&channel, 1}
+    } {}
+
+    MultiChannelView(std::span<Channel> channels)
+        requires(!std::is_const_v<T>)
+        : MultiChannelView{channels | std::views::transform([](Channel& c) { return c.view<T>(); }) | to_vector} {}
+
+    MultiChannelView(std::span<const Channel> channels)
+        requires(std::is_const_v<T>)
+        : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | to_vector} {}
+
+    MultiChannelView(std::span<const ChannelView<T>> views) : mChannelViews{views.begin(), views.end()} {
+        if (mChannelViews.empty()) {
+            throw std::runtime_error{"MultiChannelView must have at least one channel."};
+        }
+
+        mSize = mChannelViews.front().size();
+        for (const auto& channel : mChannelViews) {
+            if (channel.size() != mSize) {
+                throw std::runtime_error{"All channels in a MultiChannelView must have the same size."};
+            }
+        }
+    }
+
+    size_t channelIdx(int c) const { return c < 0 ? mChannelViews.size() + c : c; }
+
+    // decltype(auto) as opposed to `auto` preserves the reference category
+    decltype(auto) operator[](int c, size_t i) const & { return mChannelViews[channelIdx(c)][i]; }
+    decltype(auto) operator[](int c, int x, int y) const & { return mChannelViews[channelIdx(c)][x, y]; }
+
+    float operator[](int c, size_t i) const && { return mChannelViews[channelIdx(c)][i]; }
+    float operator[](int c, int x, int y) const && { return mChannelViews[channelIdx(c)][x, y]; }
+
+    void setAt(int c, size_t i, float value) const { mChannelViews[channelIdx(c)].setAt(i, value); }
+    void setAt(int c, int x, int y, float value) const { mChannelViews[channelIdx(c)].setAt(x, y, value); }
+
+    std::optional<size_t> interleavedStride() const {
+        const auto& front = mChannelViews.front();
+        for (size_t i = 0; i < mChannelViews.size(); ++i) {
+            const auto& channel = mChannelViews[i];
+            if (channel.data() != front.data() || channel.dataOffset() != i || channel.dataStride() != front.dataStride()) {
+                return std::nullopt;
+            }
+        }
+
+        return front.dataStride();
+    }
+
+    bool isInterleaved(size_t desiredStride) const { return interleavedStride() == desiredStride; }
+
+    T* interleavedData(size_t desiredStride) const & {
+        if (!isInterleaved(desiredStride)) {
+            throw std::runtime_error{"MultiChannelView::interleavedData() requires interleaved data."};
+        }
+
+        return mChannelViews.front().data();
+    }
+
+    nanogui::Vector2i size() const { return mSize; }
+    size_t nChannels() const { return mChannelViews.size(); }
+
+private:
+    std::vector<ChannelView<T>> mChannelViews;
+    nanogui::Vector2i mSize = {0};
 };
 
 } // namespace tev

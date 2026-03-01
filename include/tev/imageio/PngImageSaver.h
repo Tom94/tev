@@ -18,17 +18,23 @@
 
 #pragma once
 
-#include <tev/Box.h>
-#include <tev/Channel.h>
 #include <tev/Common.h>
-#include <tev/Task.h>
+#include <tev/imageio/ImageSaver.h>
 
-#include <span>
+#include <ostream>
+#include <string_view>
 
 namespace tev {
 
-Task<void> demosaic(
-    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, std::span<const uint8_t> cfaPattern, const nanogui::Vector2i cfaSize, int priority
-);
+class PngImageSaver : public TypedImageSaver<uint8_t> {
+public:
+    Task<void> save(
+        std::ostream& oStream, const fs::path& path, std::span<const uint8_t> data, const nanogui::Vector2i& imageSize, int nChannels
+    ) const override;
+
+    EAlphaKind alphaKind(std::string_view extension) const override { return EAlphaKind::Straight; }
+
+    virtual bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".png"; }
+};
 
 } // namespace tev

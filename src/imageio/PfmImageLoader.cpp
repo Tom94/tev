@@ -337,6 +337,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
         );
 
+        const auto dstView = MultiChannelView<float>{resultData.channels};
+
         const auto numSamplesPerRow = (size_t)size.x() * numChannels;
         const auto numSamples = numSamplesPerRow * size.y();
 
@@ -391,7 +393,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         const bool shallSwapBytes = isBinary && (endian::native == endian::little) != isLittleEndian;
 
         if (pfm) {
-            const float* const floatData = reinterpret_cast<float*>(data);
+            const float* const floatData = reinterpret_cast<const float*>(data);
             co_await ThreadPool::global().parallelForAsync(
                 0,
                 size.y(),
@@ -401,14 +403,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                         const int baseIdx = (y * size.x() + x) * numChannels;
                         for (size_t c = 0; c < numChannels; ++c) {
                             float val = floatData[baseIdx + c];
-
-                            // Thankfully, due to branch prediction, the "if" in the inner loop is no significant overhead.
                             if (shallSwapBytes) {
                                 val = swapBytes(val);
                             }
 
-                            // Flip image vertically due to PFM format
-                            resultData.channels[c].setAt({x, size.y() - (int)y - 1}, scale * val);
+                            dstView[c, x, size.y() - y - 1] = scale * val;
                         }
                     }
                 },
@@ -422,9 +421,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32<uint32_t, true>(
-                    (const uint32_t*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority, scale
-                );
+                co_await toFloat32<uint32_t, true>((const uint32_t*)data, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 16) {
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -432,13 +429,9 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32<uint16_t, true>(
-                    (const uint16_t*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority, scale
-                );
+                co_await toFloat32<uint16_t, true>((const uint16_t*)data, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 8) {
-                co_await toFloat32<uint8_t, true>(
-                    (const uint8_t*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority, scale
-                );
+                co_await toFloat32<uint8_t, true>((const uint8_t*)data, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 1) {
                 co_await ThreadPool::global().parallelForAsync(
                     0,
@@ -460,7 +453,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                                 const size_t c = sampleIdx - x * numChannels;
 
                                 const bool bit = (byte & (1 << (7 - bitIdx))) != 0;
-                                resultData.channels[c].setAt({(int)x, y}, bit ? scale * 0.0f : scale * 1.0f);
+                                dstView[c, x, y] = bit ? 0.0f : scale;
                             }
                         }
                     },

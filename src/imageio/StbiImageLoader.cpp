@@ -106,24 +106,22 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
         resultData.hasPremultipliedAlpha = !hasAlpha;
         resultData.nativeMetadata.chroma = rec709Chroma();
 
+        const auto outView = MultiChannelView<float>{resultData.channels};
+
         const auto numPixels = (size_t)size.x() * size.y();
         if (isHdr) {
             // Treated like EXR: scene-referred by nature. Usually corresponds to linear light, so should not get its white point adjusted.
             resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
             resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
 
-            co_await toFloat32(
-                (float*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-            );
+            co_await toFloat32((float*)data, numChannels, outView, hasAlpha, priority);
             data = (float*)data + numPixels * numChannels;
         } else {
             // Assume sRGB-encoded LDR images are display-referred.
             resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
-            co_await toFloat32<uint8_t, true>(
-                (uint8_t*)data, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-            );
+            co_await toFloat32<uint8_t, true>((uint8_t*)data, numChannels, outView, hasAlpha, priority);
             data = (uint8_t*)data + numPixels * numChannels;
         }
     }

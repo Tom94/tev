@@ -428,14 +428,17 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
     // First copy over the extra channels -- they are treated the same way, regardless of color space settings
     if (numExtraChannels > 0) {
+        const auto extraView = MultiChannelView<float>{span{resultData.channels}.subspan(numRgbaChannels)};
+        TEV_ASSERT(extraView.nChannels() == numExtraChannels, "Not enough channels allocated for extra channels.");
+
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
             size.y(),
             numPixels * numExtraChannels,
             [&](int y) {
-                for (size_t c = numRgbaChannels; c < numChannels; ++c) {
+                for (size_t c = 0; c < numExtraChannels; ++c) {
                     for (int x = 0; x < size.x(); ++x) {
-                        resultData.channels[c].setAt({x, y}, getChannelValue(c, x, y));
+                        extraView[c, x, y] = getChannelValue(c, x, y);
                     }
                 }
             },
@@ -444,10 +447,9 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     }
 
     // Then we handle RGBA channels together, depending on color space and presence of ICC profile
-    const auto rgbaToFloat = [&](float* rgba, size_t outNumChannels, bool convertSrgbToLinear) -> Task<void> {
+    const auto rgbaToFloat = [&](const MultiChannelView<float>& rgbaOut, bool convertSrgbToLinear) -> Task<void> {
         TEV_ASSERT(numColorChannels > 0 && numColorChannels <= 3, "Invalid number of color channels.");
-        TEV_ASSERT(outNumChannels >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
-        TEV_ASSERT(outNumChannels <= 4, "Output buffer cannot have more than 4 channels.");
+        TEV_ASSERT(rgbaOut.nChannels() >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
 
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
@@ -471,11 +473,11 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                     }
 
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        rgba[((size_t)y * size.x() + x) * outNumChannels + c] = rgb[std::min(c, numColorChannels - 1)];
+                        rgbaOut[c, x, y] = rgb[std::min(c, numColorChannels - 1)];
                     }
 
                     if (hasAlpha) {
-                        rgba[((size_t)y * size.x() + x) * outNumChannels + outNumChannels - 1] = getChannelValue(numColorChannels, x, y);
+                        rgbaOut[-1, x, y] = getChannelValue(numColorChannels, x, y);
                     }
                 }
             },
@@ -483,22 +485,19 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         );
     };
 
+    const auto dstView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+
     if (!skipColorProcessing && image->icc_profile_buf && image->icc_profile_len > 0) {
         try {
             const auto profile = ColorProfile::fromIcc({image->icc_profile_buf, image->icc_profile_len});
 
-            HeapArray<float> iccTmpFloatData(numPixels * numRgbaChannels);
-            co_await rgbaToFloat(iccTmpFloatData.data(), numRgbaChannels, false);
+            co_await rgbaToFloat(dstView, false);
 
             co_await toLinearSrgbPremul(
                 profile,
-                size,
-                numColorChannels,
                 hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
-                EPixelFormat::F32,
-                (uint8_t*)iccTmpFloatData.data(),
-                resultData.channels.front().floatData(),
-                numInterleavedChannels,
+                dstView,
+                dstView,
                 nullopt,
                 priority
             );
@@ -509,7 +508,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    co_await rgbaToFloat(resultData.channels.front().floatData(), numInterleavedChannels, !skipColorProcessing);
+    co_await rgbaToFloat(dstView, !skipColorProcessing);
 
     resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     resultData.nativeMetadata.chroma = rec709Chroma();

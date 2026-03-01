@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/Task.h>
 
@@ -423,13 +424,9 @@ private:
 // hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
-    const nanogui::Vector2i& size,
-    int numColorChannels,
     EAlphaKind alphaKind,
-    EPixelFormat pixelFormat,
-    uint8_t* __restrict src,
-    float* __restrict rgbaDst,
-    int numChannelsOut,
+    const MultiChannelView<float>& src,
+    const MultiChannelView<float>& rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
     int priority
 );

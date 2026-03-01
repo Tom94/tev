@@ -191,7 +191,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
             // but this approach here scales better to huge numbers of images (n-cores extra threads instead of n-images extra threads).
             static auto jxlPool = ThreadPool();
 
-            const auto* runnerData = reinterpret_cast<RunnerData*>(runnerOpaque);
+            const auto* runnerData = static_cast<RunnerData*>(runnerOpaque);
 
             const uint32_t range = endRange - startRange;
             const uint32_t numTasks = std::min(
@@ -489,6 +489,9 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     priority
                 );
 
+                const auto inView = MultiChannelView<float>{colorData.data(), numChannels, size};
+                const auto outView = MultiChannelView<float>{data.channels};
+
                 // If there's no alpha channel, treat as premultiplied (by 1)
                 data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
 
@@ -517,14 +520,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         const auto profile = ColorProfile::fromIcc(iccProfile);
                         co_await toLinearSrgbPremul(
                             profile,
-                            size,
-                            info.num_color_channels,
                             info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
                                               EAlphaKind::None,
-                            EPixelFormat::F32,
-                            (uint8_t*)colorData.data(),
-                            data.channels.front().floatData(),
-                            numInterleavedChannels,
+                            inView,
+                            outView,
                             nullopt,
                             priority
                         );
@@ -538,9 +537,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
-                    co_await toFloat32(
-                        (float*)colorData.data(), numChannels, data.channels.front().floatData(), numInterleavedChannels, size, info.alpha_bits, priority
-                    );
+                    co_await toFloat32(colorData.data(), numChannels, outView, info.alpha_bits, priority);
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
@@ -593,7 +590,6 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         data.nativeMetadata.transfer = cicpTransfer;
                         data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
-                        auto* const pixelData = data.channels.front().floatData();
                         const size_t numPixels = size.x() * (size_t)size.y();
                         co_await ThreadPool::global().parallelForAsync<size_t>(
                             0,
@@ -603,14 +599,13 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                 // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
                                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
                                 // See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
-                                const float alpha = info.alpha_bits ? pixelData[i * numInterleavedChannels + numInterleavedChannels - 1] :
-                                                                      1.0f;
+                                const float alpha = info.alpha_bits ? outView[-1, i] : 1.0f;
                                 const float factor = info.alpha_premultiplied && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
                                 const float invFactor = info.alpha_premultiplied && alpha > 0.0001f ? alpha : 1.0f;
 
                                 Vector3f color;
                                 for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                    color[c] = pixelData[i * numInterleavedChannels + c];
+                                    color[c] = outView[c, i];
                                 }
 
                                 if (hasGamma) {
@@ -620,7 +615,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                 }
 
                                 for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                    pixelData[i * numInterleavedChannels + c] = color[c];
+                                    outView[c, i] = color[c];
                                 }
                             },
                             priority
@@ -635,22 +630,20 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         continue;
                     }
 
-                    // Resize the channel to the image size
                     auto& channel = data.channels.emplace_back(
-                        Channel{
-                            extraChannel.name, size, EPixelFormat::F32, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
-                        }
+                        extraChannel.name, size, EPixelFormat::F32, extraChannel.bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16
                     );
+                    const auto view = channel.view<float>();
 
                     const size_t numPixels = (size_t)size.x() * size.y();
-                    co_await ThreadPool::global().parallelForAsync<size_t>(
+                    co_await ThreadPool::global().parallelForAsync<int>(
                         0,
                         size.y(),
                         numPixels,
-                        [&](size_t y) {
-                            const size_t srcOffset = y * (size.x() >> extraChannel.dimShift);
+                        [&](int y) {
+                            const size_t srcOffset = (size_t)y * (size.x() >> extraChannel.dimShift);
                             for (int x = 0; x < size.x(); ++x) {
-                                channel.setAt({x, (int)y}, extraChannel.data[srcOffset + (x >> extraChannel.dimShift)]);
+                                view[x, y] = extraChannel.data[srcOffset + (x >> extraChannel.dimShift)];
                             }
                         },
                         priority

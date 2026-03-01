@@ -77,19 +77,16 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
         numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
     resultData.hasPremultipliedAlpha = false;
-
     resultData.nativeMetadata.chroma = rec709Chroma();
 
+    const auto outView = MultiChannelView<float>{resultData.channels};
+
     if (desc.colorspace == QOI_LINEAR) {
-        co_await toFloat32<uint8_t, false>(
-            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-        );
+        co_await toFloat32<uint8_t, false>((uint8_t*)decodedData, numChannels, outView, hasAlpha, priority);
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
-        co_await toFloat32<uint8_t, true>(
-            (uint8_t*)decodedData, numChannels, resultData.channels.front().floatData(), numInterleavedChannels, size, hasAlpha, priority
-        );
+        co_await toFloat32<uint8_t, true>((uint8_t*)decodedData, numChannels, outView, hasAlpha, priority);
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     }

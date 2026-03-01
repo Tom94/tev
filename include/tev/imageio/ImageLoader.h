@@ -35,27 +35,23 @@
 namespace tev {
 
 template <bool SRGB_TO_LINEAR = false>
-Task<void> yCbCrToRgb(
-    float* data,
-    const nanogui::Vector2i& size,
-    size_t numSamplesPerPixel,
-    int priority,
-    const nanogui::Vector4f& coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}
-) {
-    if (numSamplesPerPixel < 3) {
+Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, const nanogui::Vector4f& coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
+    if (data.nChannels() < 3) {
         tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
         co_return;
     }
+
+    const nanogui::Vector2i size = data.size();
 
     const auto numPixels = (size_t)size.x() * size.y();
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         numPixels,
         numPixels * 3,
-        [&coeffs, numSamplesPerPixel, data](size_t i) {
-            const float Y = data[i * numSamplesPerPixel + 0];
-            const float Cb = data[i * numSamplesPerPixel + 1] - 0.5f;
-            const float Cr = data[i * numSamplesPerPixel + 2] - 0.5f;
+        [&coeffs, &data](size_t i) {
+            const float Y = data[0, i];
+            const float Cb = data[1, i] - 0.5f;
+            const float Cr = data[2, i] - 0.5f;
 
             // BT.601 conversion
             float r = Y + coeffs[0] * Cr;
@@ -68,9 +64,9 @@ Task<void> yCbCrToRgb(
                 b = toLinear(b);
             }
 
-            data[i * numSamplesPerPixel + 0] = r;
-            data[i * numSamplesPerPixel + 1] = g;
-            data[i * numSamplesPerPixel + 2] = b;
+            data[0, i] = r;
+            data[1, i] = g;
+            data[2, i] = b;
         },
         priority
     );
@@ -80,16 +76,13 @@ template <typename T, bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false>
 Task<void> toFloat32(
     const T* __restrict imageData,
     size_t numSamplesPerPixelIn,
-    float* __restrict floatData,
-    size_t numSamplesPerPixelOut,
-    const nanogui::Vector2i& size,
+    MultiChannelView<float> floatData,
     bool hasAlpha,
     int priority,
     // 0 defaults to 1/(2**bitsPerSample-1)
     float scale = 0.0f,
     // 0 defaults to numSamplesPerPixelIn * size.x()
-    size_t numSamplesPerRowIn = 0,
-    size_t numSamplesPerRowOut = 0
+    size_t numSamplesPerRowIn = 0
 ) {
     if constexpr (std::is_integral_v<T>) {
         if (scale == 0.0f) {
@@ -101,15 +94,13 @@ Task<void> toFloat32(
         }
     }
 
+    const auto size = floatData.size();
+
     if (numSamplesPerRowIn == 0) {
         numSamplesPerRowIn = numSamplesPerPixelIn * size.x();
     }
 
-    if (numSamplesPerRowOut == 0) {
-        numSamplesPerRowOut = numSamplesPerPixelOut * size.x();
-    }
-
-    const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, numSamplesPerPixelOut);
+    const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, floatData.nChannels());
     const size_t numPixels = (size_t)size.x() * size.y();
 
     co_await ThreadPool::global().parallelForAsync<int>(
@@ -117,17 +108,15 @@ Task<void> toFloat32(
         size.y(),
         numPixels * numSamplesPerPixel,
         [&](int y) {
-            size_t rowIdxIn = y * numSamplesPerRowIn;
-            size_t rowIdxOut = y * numSamplesPerRowOut;
+            const size_t rowIdxIn = y * numSamplesPerRowIn;
 
             for (int x = 0; x < size.x(); ++x) {
-                size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
-                size_t baseIdxOut = rowIdxOut + x * numSamplesPerPixelOut;
+                const size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
 
                 for (size_t c = 0; c < numSamplesPerPixel; ++c) {
                     if (hasAlpha && c == numSamplesPerPixelIn - 1) {
                         // Copy alpha channel to the last output channel without conversion
-                        floatData[baseIdxOut + numSamplesPerPixelOut - 1] = (float)imageData[baseIdxIn + c] * scale;
+                        floatData[-1, x, y] = (float)imageData[baseIdxIn + c] * scale;
                     } else {
                         float result;
                         if constexpr (SRGB_TO_LINEAR) {
@@ -142,7 +131,7 @@ Task<void> toFloat32(
                             }
                         }
 
-                        floatData[baseIdxOut + c] = result;
+                        floatData[c, x, y] = result;
                     }
                 }
             }

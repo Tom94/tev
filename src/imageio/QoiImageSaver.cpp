@@ -51,7 +51,7 @@ Task<void> QoiImageSaver::save(ostream& oStream, const fs::path&, span<const uin
         throw ImageSaveError{"Failed to encode data into the QOI format."};
     }
 
-    oStream.write(reinterpret_cast<char*>(encodedData), sizeInBytes);
+    oStream.write(static_cast<char*>(encodedData), sizeInBytes);
 
     co_return;
 }

@@ -77,7 +77,7 @@ if (APPLE)
     set(CMAKE_MACOSX_RPATH ON)
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (MSVC)
@@ -160,8 +160,10 @@ set(TEV_SOURCES
     include/tev/imageio/IsoGainMapMetadata.h src/imageio/IsoGainMapMetadata.cpp
     include/tev/imageio/Jpeg2000ImageLoader.h src/imageio/Jpeg2000ImageLoader.cpp
     include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
+    include/tev/imageio/JpegTurboImageSaver.h src/imageio/JpegTurboImageSaver.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
+    include/tev/imageio/PngImageSaver.h src/imageio/PngImageSaver.cpp
     include/tev/imageio/QoiImageLoader.h src/imageio/QoiImageLoader.cpp
     include/tev/imageio/QoiImageSaver.h src/imageio/QoiImageSaver.cpp
     include/tev/imageio/RawImageLoader.h src/imageio/RawImageLoader.cpp

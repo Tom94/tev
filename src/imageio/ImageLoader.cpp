@@ -151,15 +151,18 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
-    const size_t numBytesPerSample = nBytes(format);
-    const auto data = make_shared<Channel::Data>(numBytesPerSample * numPixels * numInterleavedDims);
+    const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, format));
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     const auto init = [numPixels, numInterleavedDims, hasAlpha, priority](auto* ptr) -> Task<void> {
-        using ptr_float_t = remove_pointer_t<decltype(ptr)>;
-        ptr_float_t pattern[4] = {(ptr_float_t)0.0f, (ptr_float_t)0.0f, (ptr_float_t)0.0f, (ptr_float_t)1.0f};
+        using underlying_t = remove_pointer_t<decltype(ptr)>;
+
+        const auto zero = 0;
+        const auto one = is_integral_v<underlying_t> ? numeric_limits<underlying_t>::max() : underlying_t{1};
+
+        array<underlying_t, 4> pattern = {zero, zero, zero, one};
         if (hasAlpha) {
-            pattern[numInterleavedDims - 1] = (ptr_float_t)1.0f;
+            pattern[numInterleavedDims - 1] = one;
         }
 
         co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -167,41 +170,37 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
             numPixels,
             numPixels,
             [pattern, numInterleavedDims, ptr](size_t i) {
-                memcpy(ptr + i * numInterleavedDims, pattern, sizeof(ptr_float_t) * numInterleavedDims);
+                memcpy(ptr + i * numInterleavedDims, pattern.data(), sizeof(underlying_t) * numInterleavedDims);
             },
             priority
         );
     };
 
-    if (format == EPixelFormat::F32) {
-        co_await init((float*)data->data());
-    } else if (format == EPixelFormat::F16) {
-        co_await init((half*)data->data());
-    } else {
-        throw ImageLoadError{"Unsupported pixel format."};
+    switch (format) {
+        case EPixelFormat::U8: co_await init(data->data<uint8_t>()); break;
+        case EPixelFormat::U16: co_await init(data->data<uint16_t>()); break;
+        case EPixelFormat::U32: co_await init(data->data<uint32_t>()); break;
+        case EPixelFormat::I8: co_await init(data->data<int8_t>()); break;
+        case EPixelFormat::I16: co_await init(data->data<int16_t>()); break;
+        case EPixelFormat::I32: co_await init(data->data<int32_t>()); break;
+        case EPixelFormat::F16: co_await init(data->data<half>()); break;
+        case EPixelFormat::F32: co_await init(data->data<float>()); break;
+        default: throw ImageLoadError{"Unsupported pixel format."};
     }
 
     if (numColorChannels > 1) {
         const vector<string_view> channelNames = {"R", "G", "B"};
         for (size_t c = 0; c < numColorChannels; ++c) {
             channels.emplace_back(
-                c < channelNames.size() ? channelNames[c] : to_string(c),
-                size,
-                format,
-                desiredFormat,
-                data,
-                c * numBytesPerSample,
-                numInterleavedDims * numBytesPerSample
+                c < channelNames.size() ? channelNames[c] : to_string(c), size, format, desiredFormat, data, c, numInterleavedDims
             );
         }
     } else {
-        channels.emplace_back("L", size, format, desiredFormat, data, 0, numInterleavedDims * numBytesPerSample);
+        channels.emplace_back("L", size, format, desiredFormat, data, 0, numInterleavedDims);
     }
 
     if (hasAlpha) {
-        channels.emplace_back(
-            "A", size, format, desiredFormat, data, numColorChannels * numBytesPerSample, numInterleavedDims * numBytesPerSample
-        );
+        channels.emplace_back("A", size, format, desiredFormat, data, numColorChannels, numInterleavedDims);
     }
 
     for (auto& channel : channels) {
@@ -233,13 +232,16 @@ Task<void> ImageLoader::resizeChannelsAsync(
         co_return;
     }
 
+    const auto srcViews = srcChannels | views::transform([](const Channel& c) { return c.view<const float>(); }) | to_vector;
+    const auto dstViews = dstChannels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
+
     const Vector2i size = srcChannels.front().size();
     const Vector2i targetSize = dstChannels.front().size();
-    const int numChannels = (int)srcChannels.size();
+    const size_t numChannels = srcChannels.size();
 
     const Box2i box = dstArea.value_or(Box2i{Vector2i(0, 0), targetSize});
 
-    for (int i = 1; i < numChannels; ++i) {
+    for (size_t i = 1; i < numChannels; ++i) {
         TEV_ASSERT(srcChannels[i].size() == size, "Source channels' size must match.");
         TEV_ASSERT(dstChannels[i].size() == targetSize, "Destination channels' size must match.");
     }
@@ -255,11 +257,9 @@ Task<void> ImageLoader::resizeChannelsAsync(
         numSamples,
         [&](int dstY) {
             for (int dstX = 0; dstX < targetSize.x(); ++dstX) {
-                const size_t dstIdx = dstY * (size_t)targetSize.x() + dstX;
-
                 if (dstX < box.min.x() || dstX >= box.max.x() || dstY < box.min.y() || dstY >= box.max.y()) {
-                    for (int c = 0; c < numChannels; ++c) {
-                        dstChannels[c].setAt(dstIdx, 0.0f);
+                    for (size_t c = 0; c < numChannels; ++c) {
+                        dstViews[c][dstX, dstY] = 0.0f;
                     }
 
                     continue;
@@ -283,18 +283,13 @@ Task<void> ImageLoader::resizeChannelsAsync(
                 const float w10 = wx0 * wy1;
                 const float w11 = wx1 * wy1;
 
-                const size_t srcIdx00 = y0 * (size_t)size.x() + x0;
-                const size_t srcIdx01 = y0 * (size_t)size.x() + x1;
-                const size_t srcIdx10 = y1 * (size_t)size.x() + x0;
-                const size_t srcIdx11 = y1 * (size_t)size.x() + x1;
+                for (size_t c = 0; c < numChannels; ++c) {
+                    const float p00 = srcViews[c][x0, y0];
+                    const float p01 = srcViews[c][x1, y0];
+                    const float p10 = srcViews[c][x0, y1];
+                    const float p11 = srcViews[c][x1, y1];
 
-                for (int c = 0; c < numChannels; ++c) {
-                    const float p00 = srcChannels[c].at(srcIdx00);
-                    const float p01 = srcChannels[c].at(srcIdx01);
-                    const float p10 = srcChannels[c].at(srcIdx10);
-                    const float p11 = srcChannels[c].at(srcIdx11);
-
-                    dstChannels[c].setAt(dstIdx, w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11);
+                    dstViews[c][dstX, dstY] = w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11;
                 }
             }
         },

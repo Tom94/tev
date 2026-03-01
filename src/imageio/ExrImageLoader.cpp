@@ -369,7 +369,7 @@ public:
     RawChannel(size_t partId, string_view name, string_view imfName, Imf::Channel imfChannel, const Vector2i& size) :
         mPartId{partId}, mName{name}, mImfName{imfName}, mImfChannel{imfChannel}, mSize{size} {}
 
-    void resize() { mData = HeapArray<char>{(size_t)mSize.x() * mSize.y() * bytesPerPixel()}; }
+    void resize() { mData = PixelBuffer::alloc((size_t)mSize.x() * mSize.y(), pixelFormat()); }
 
     void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
         int width = dw.max.x - dw.min.x + 1;
@@ -377,7 +377,7 @@ public:
             mImfName.c_str(),
             Imf::Slice(
                 mImfChannel.type,
-                mData.data() - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
+                reinterpret_cast<char*>(mData.dataBytes()) - (dw.min.x + dw.min.y * width) * bytesPerPixel(),
                 bytesPerPixel(),
                 bytesPerPixel() * (width / mImfChannel.xSampling),
                 mImfChannel.xSampling,
@@ -388,19 +388,18 @@ public:
     }
 
     template <typename T> Task<void> copyToTyped(Channel& channel, int priority) const {
-        int width = channel.size().x();
-        int widthSubsampled = width / mImfChannel.ySampling;
+        const int width = channel.size().x();
+        const int widthSubsampled = width / mImfChannel.ySampling;
 
-        auto data = reinterpret_cast<const T*>(mData.data());
+        auto data = mData.data<T>();
+        const auto view = channel.view<float>();
         co_await ThreadPool::global().parallelForAsync<int>(
             0,
             channel.size().y(),
             channel.numPixels(),
             [&, data](int y) {
                 for (int x = 0; x < width; ++x) {
-                    channel.setAt(
-                        {x, y}, data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * (size_t)widthSubsampled]
-                    );
+                    view[x, y] = data[(size_t)(x / mImfChannel.xSampling) + (size_t)(y / mImfChannel.ySampling) * widthSubsampled];
                 }
             },
             priority
@@ -423,6 +422,15 @@ public:
     const Vector2i& size() const { return mSize; }
     size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
+    EPixelFormat pixelFormat() const {
+        switch (mImfChannel.type) {
+            case Imf::HALF: return EPixelFormat::F16;
+            case Imf::FLOAT: return EPixelFormat::F32;
+            case Imf::UINT: return EPixelFormat::U32;
+            default: throw runtime_error("Invalid pixel type encountered.");
+        }
+    }
+
     EPixelFormat desiredPixelFormat() const { return mImfChannel.type == Imf::HALF ? EPixelFormat::F16 : EPixelFormat::F32; }
 
 private:
@@ -440,10 +448,11 @@ private:
     string mImfName;
     Imf::Channel mImfChannel;
     Vector2i mSize;
-    HeapArray<char> mData;
+    PixelBuffer mData;
 };
 
-Task<vector<ImageData>> ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
     try {
         if (!isExrImage(iStream)) {
             throw FormatNotSupported{"File is not an EXR image."};

@@ -84,41 +84,56 @@ Channel::Channel(
     const nanogui::Vector2i& size,
     EPixelFormat format,
     EPixelFormat desiredFormat,
-    shared_ptr<Channel::Data> data,
+    shared_ptr<PixelBuffer> data,
     size_t dataOffset,
     size_t dataStride
 ) :
-    mName{name}, mSize{size}, mPixelFormat{format}, mDesiredPixelFormat{desiredFormat} {
+    mName{name}, mSize{size}, mDesiredPixelFormat{desiredFormat} {
     if (data) {
+        if (format != data->format()) {
+            throw runtime_error{"Provided data has wrong pixel format."};
+        }
+
         mData = data;
         mDataOffset = dataOffset;
         mDataStride = dataStride;
     } else {
-        mData = make_shared<Channel::Data>(nBytes(format) * (size_t)size.x() * size.y());
+        mData = make_shared<PixelBuffer>(PixelBuffer::alloc((size_t)size.x() * size.y(), format));
         mDataOffset = 0;
-        mDataStride = nBytes(format);
+        mDataStride = 1;
     }
 }
 
 Task<void> Channel::divideByAsync(const Channel& other, int priority) {
+    if (pixelFormat() != EPixelFormat::F32 || other.pixelFormat() != EPixelFormat::F32) {
+        throw runtime_error{"divideByAsync only supports F32 channels."};
+    }
+
+    auto dst = view<float>();
+    const auto src = other.view<const float>();
+
     co_await ThreadPool::global().parallelForAsync<size_t>(
         0,
         other.numPixels(),
         other.numPixels(),
         [&](size_t i) {
-            if (other.at(i) != 0) {
-                setAt(i, at(i) / other.at(i));
-            } else {
-                setAt(i, 0);
-            }
+            const float divisor = src[i];
+            dst[i] = divisor != 0.0f ? dst[i] / divisor : 0.0f;
         },
         priority
     );
 }
 
 Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
+    if (pixelFormat() != EPixelFormat::F32 || other.pixelFormat() != EPixelFormat::F32) {
+        throw runtime_error{"multiplyWithAsync only supports F32 channels."};
+    }
+
+    auto dst = view<float>();
+    const auto src = other.view<const float>();
+
     co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, other.numPixels(), other.numPixels(), [&](size_t i) { setAt(i, at(i) * other.at(i)); }, priority
+        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst[i] *= src[i]; }, priority
     );
 }
 
@@ -131,7 +146,7 @@ void Channel::updateTile(int x, int y, int width, int height, span<const float> 
 
     for (int posY = 0; posY < height; ++posY) {
         for (int posX = 0; posX < width; ++posX) {
-            setAt({x + posX, y + posY}, newData[posX + posY * (size_t)width]);
+            dynamicSetAt({x + posX, y + posY}, newData[posX + posY * (size_t)width]);
         }
     }
 }

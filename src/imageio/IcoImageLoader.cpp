@@ -201,7 +201,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                         throw ImageLoadError{fmt::format("Failed to read AND mask of size {}", andMaskData.size())};
                     }
 
-                    vector<Channel*> alphaChannels;
+                    vector<ChannelView<float>> alphaChannels;
                     for (auto& image : imageData) {
                         auto* const alphaChannel = image.mutableChannel("A");
                         if (!alphaChannel) {
@@ -209,7 +209,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                             continue;
                         }
 
-                        alphaChannels.emplace_back(alphaChannel);
+                        alphaChannels.emplace_back(alphaChannel->view<float>());
                     }
 
                     const bool flipVertically = size.y() > 0;
@@ -228,8 +228,8 @@ Task<vector<ImageData>> IcoImageLoader::load(
                                 const bool isTransparent = (andMaskData[rowStart + pixelByte] >> (7 - pixelBitOffset)) & 1;
 
                                 if (isTransparent) {
-                                    for (auto* c : alphaChannels) {
-                                        c->setAt({x, outputY}, 0.0f);
+                                    for (const auto& c : alphaChannels) {
+                                        c[x, outputY] = 0.0f;
                                     }
                                 }
                             }

@@ -394,6 +394,13 @@ static int mainFunc(span<const string> arguments) {
         {"ldr"},
     };
 
+    ValueFlag<size_t> maxThreadsFlag{
+        parser,
+        "MAX THREADS",
+        "Maximum number of threads to use for loading and processing images. Default is the number of hardware threads available on the system.",
+        {"max-threads"},
+    };
+
     Flag maximizeFlagOn{
         parser,
         "MAXIMIZE",
@@ -578,6 +585,11 @@ static int mainFunc(span<const string> arguments) {
         return -3;
     }
 
+    const size_t maxNumThreads = maxThreadsFlag ? get(maxThreadsFlag) : thread::hardware_concurrency();
+    if (const size_t numThreads = ThreadPool::global().numThreads(); numThreads > maxNumThreads) {
+        ThreadPool::global().shutdownThreads(std::min(numThreads - maxNumThreads, numThreads - 1));
+    }
+
     // If we don't have any images to load, create new windows regardless of flag. (In this case, the user likely wants to open a new
     // instance of tev rather than focusing the existing one.)
     const bool newWindow = (!imageFiles && !newWindowFlagOff) || newWindowFlagOn;
@@ -617,7 +629,7 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    Imf::setGlobalThreadCount(thread::hardware_concurrency());
+    Imf::setGlobalThreadCount(maxNumThreads);
 
     const shared_ptr<BackgroundImagesLoader> imagesLoader = make_shared<BackgroundImagesLoader>();
     imagesLoader->setRecursiveDirectories(recursiveFlag);

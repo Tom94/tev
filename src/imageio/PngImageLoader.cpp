@@ -102,7 +102,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             png_set_palette_to_rgb(pngPtr);
             numColorChannels = numChannels = 3;
             break;
-        default: numColorChannels = numChannels = 0; break;
+        default: throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
     }
 
     if (interlaceType != PNG_INTERLACE_NONE) {
@@ -127,10 +127,6 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         numChannels = numColorChannels + 1;
-    }
-
-    if (numColorChannels == 0 || numChannels == 0) {
-        throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
     }
 
     png_read_update_info(pngPtr, infoPtr);
@@ -329,22 +325,18 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     const auto numBytesPerSample = static_cast<size_t>(bitDepth / 8);
     const auto numBytesPerPixel = numBytesPerSample * numChannels;
     const auto numSamples = numPixels * numChannels;
+    const auto numInterleavedSamples = numPixels * numInterleavedChannels;
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
     HeapArray<png_byte> pngData(numPixels * numBytesPerPixel);
-    HeapArray<float> frameData(numPixels * numInterleavedChannels);
-    HeapArray<float> iccTmpFloatData;
-    if (iccProfileData) {
-        // If we have an ICC profile, we need to convert the frame data to float first.
-        iccTmpFloatData = HeapArray<float>(numSamples);
-    }
+    HeapArray<float> frameData;
 
     // Png wants to read into a 2D array of pointers to rows, so we need to create that as well
     HeapArray<png_bytep> rowPointers(height);
 
     vector<ImageData> result;
 
-    const float* prevCanvas = nullptr;
+    optional<MultiChannelView<float>> prevCanvas = nullopt;
 
     const auto readFrame = [&](int frameIdx) -> Task<ImageData> {
         ImageData resultData;
@@ -359,9 +351,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         resultData.channels = co_await makeRgbaInterleavedChannels(
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
-
         resultData.orientation = orientation;
         resultData.hasPremultipliedAlpha = false;
+
+        const auto outView = MultiChannelView<float>{resultData.channels};
 
         enum class EDisposeOp : png_byte { None = 0, Background = 1, Previous = 2 };
         enum class EBlendOp : png_byte { Source = 0, Over = 1 };
@@ -415,25 +408,20 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         // If our frame fills the entire canvas and is configured to overwrite the canvas (as is the case for static frames / PNGs), we can
         // directly write onto the canvas and not worry about blending.
-        const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size && blendOp == EBlendOp::Source;
-        float* const dstData = directlyOnCanvas ? resultData.channels.front().floatData() : frameData.data();
+        const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
 
         const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
-        const size_t numFrameSamples = numFramePixels * numChannels;
         const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
-        if (numInterleavedFrameSamples > frameData.size()) {
-            tlog::warning() << fmt::format(
-                "PNG frame data is larger than allocated buffer. Allocating {} bytes instead of {} bytes.",
-                numInterleavedFrameSamples * sizeof(float),
-                frameData.size() * sizeof(float)
-            );
+        if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
+            const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
+            if (allocationSize > numSamples) {
+                tlog::warning() << fmt::format("PNG frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
+            }
 
-            frameData = HeapArray<float>(numInterleavedFrameSamples);
+            frameData = HeapArray<float>(allocationSize);
         }
 
-        if (iccProfileData && numFrameSamples > iccTmpFloatData.size()) {
-            iccTmpFloatData = HeapArray<float>(numFrameSamples);
-        }
+        const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
 
         for (int y = 0; y < frameSize.y(); ++y) {
             rowPointers[y] = &pngData[y * frameSize.x() * numBytesPerPixel];
@@ -507,11 +495,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (bitDepth == 16) {
-                    co_await toFloat32<uint16_t, false>(
-                        (uint16_t*)pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
-                    );
+                    co_await toFloat32((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
                 } else {
-                    co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority);
+                    co_await toFloat32(pngData.data(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -519,15 +505,16 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     numPixels,
                     numSamples,
                     [&](size_t i) {
-                        const float alpha = hasAlpha ? dstData[i * numInterleavedChannels + numInterleavedChannels - 1] : 1.0f;
+                        const float alpha = hasAlpha ? dstView[-1, i] : 1.0f;
+
                         Vector3f color = {0.0f};
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            color[c] = (dstData[i * numInterleavedChannels + c] - range.offset) * range.scale;
+                            color[c] = (dstView[c, i] - range.offset) * range.scale;
                         }
 
                         color = ituth273::invTransfer(cicp.transfer, color) * alpha;
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            dstData[i * numInterleavedChannels + c] = color[c];
+                            dstView[c, i] = color[c];
                         }
                     },
                     priority
@@ -543,25 +530,14 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             } else if (iccProfileData) {
                 try {
                     if (bitDepth == 16) {
-                        co_await toFloat32(
-                            (uint16_t*)pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority
-                        );
+                        co_await toFloat32((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
                     } else {
-                        co_await toFloat32(pngData.data(), numChannels, iccTmpFloatData.data(), numChannels, size, hasAlpha, priority);
+                        co_await toFloat32(pngData.data(), numChannels, dstView, hasAlpha, priority);
                     }
 
                     const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
                     co_await toLinearSrgbPremul(
-                        profile,
-                        size,
-                        numColorChannels,
-                        numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None,
-                        EPixelFormat::F32,
-                        (uint8_t*)iccTmpFloatData.data(),
-                        dstData,
-                        numInterleavedChannels,
-                        nullopt,
-                        priority
+                        profile, numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None, dstView, dstView, nullopt, priority
                     );
                     resultData.hasPremultipliedAlpha = true;
                     resultData.readMetadataFromIcc(profile);
@@ -596,13 +572,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (bitDepth == 16) {
-                    co_await toFloat32<uint16_t, true, true>(
-                        (uint16_t*)pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
-                    );
+                    co_await toFloat32<uint16_t, true, true>((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
                 } else {
-                    co_await toFloat32<uint8_t, true, true>(
-                        pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
-                    );
+                    co_await toFloat32<uint8_t, true, true>(pngData.data(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 resultData.hasPremultipliedAlpha = true;
@@ -612,11 +584,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
             tlog::debug() << fmt::format("Using gamma={}", invGamma64);
             if (bitDepth == 16) {
-                co_await toFloat32<uint16_t, false>(
-                    (uint16_t*)pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority
-                );
+                co_await toFloat32((const uint16_t*)pngData.data(), numChannels, dstView, hasAlpha, priority);
             } else {
-                co_await toFloat32<uint8_t, false>(pngData.data(), numChannels, dstData, numInterleavedChannels, size, hasAlpha, priority);
+                co_await toFloat32(pngData.data(), numChannels, dstView, hasAlpha, priority);
             }
 
             co_await ThreadPool::global().parallelForAsync<size_t>(
@@ -624,9 +594,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 numPixels,
                 numSamples,
                 [&](size_t i) {
-                    const float alpha = hasAlpha ? dstData[i * numInterleavedChannels + numInterleavedChannels - 1] : 1.0f;
+                    const float alpha = hasAlpha ? dstView[-1, i] : 1.0f;
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        dstData[i * numInterleavedChannels + c] = pow(dstData[i * numInterleavedChannels + c], gamma) * alpha;
+                        dstView[c, i] = pow(dstView[c, i], gamma) * alpha;
                     }
                 },
                 priority
@@ -655,7 +625,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         co_await applyColorspace();
 
-        if (!directlyOnCanvas) {
+        if (!directlyOnCanvas || blendOp != EBlendOp::Source) {
             tlog::debug() << "Blending frame onto previous canvas";
 
             co_await ThreadPool::global().parallelForAsync<int>(
@@ -666,33 +636,24 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     Vector2i framePos;
                     framePos.y() = y - frameOffset.y();
                     for (int x = 0; x < size.x(); ++x) {
-                        const size_t canvasPixelIdx = (size_t)y * size.x() + (size_t)x;
                         framePos.x() = x - frameOffset.x();
 
-                        bool isInFrame = Box2i{frameSize}.contains(framePos);
-
+                        const bool isInFrame = Box2i{frameSize}.contains(framePos);
                         for (size_t c = 0; c < numChannels; ++c) {
-                            const auto canvasSampleIdx = canvasPixelIdx * numInterleavedChannels + c;
-                            float val;
-
                             // The background (if no previous canvas is set) is defined as transparent black per the spec.
-                            const float bg = prevCanvas ? prevCanvas[canvasSampleIdx] : 0.0f;
-                            if (isInFrame) {
-                                const auto framePixelIdx = (size_t)framePos.y() * frameSize.x() + framePos.x();
-                                const auto frameSampleIdx = framePixelIdx * numInterleavedChannels + c;
-                                const auto frameAlphaIdx = framePixelIdx * numInterleavedChannels + numInterleavedChannels - 1;
+                            const float bg = prevCanvas ? (*prevCanvas)[c, x, y] : 0.0f;
 
+                            float val = bg;
+                            if (isInFrame) {
                                 if (blendOp == EBlendOp::Source) {
-                                    val = dstData[frameSampleIdx];
+                                    val = dstView[c, framePos.x(), framePos.y()];
                                 } else {
-                                    const float alpha = hasAlpha ? dstData[frameAlphaIdx] : 1.0f;
-                                    val = dstData[frameSampleIdx] + bg * (1.0f - alpha);
+                                    const float alpha = hasAlpha ? dstView[-1, framePos.x(), framePos.y()] : 1.0f;
+                                    val = dstView[c, framePos.x(), framePos.y()] + bg * (1.0f - alpha);
                                 }
-                            } else {
-                                val = bg;
                             }
 
-                            resultData.channels.front().floatData()[canvasSampleIdx] = val;
+                            outView[c, x, y] = val;
                         }
                     }
                 },
@@ -703,8 +664,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         // Depending on the dispose operation, the next frame will be blended either onto the current frame (none), onto no frame at all
         // (background), or the previous frame (previous).
         switch (disposeOp) {
-            case EDisposeOp::None: prevCanvas = resultData.channels.front().floatData(); break;
-            case EDisposeOp::Background: prevCanvas = nullptr; break;
+            case EDisposeOp::None: prevCanvas = std::move(outView); break;
+            case EDisposeOp::Background: prevCanvas = nullopt; break;
             case EDisposeOp::Previous: break; // Previous frame is already set as the previous canvas
             default: throw ImageLoadError{fmt::format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};
         }

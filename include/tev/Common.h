@@ -30,8 +30,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -223,6 +225,49 @@ struct NVGcontext;
 namespace tev {
 
 namespace fs = std::filesystem;
+
+// TODO: remove this custom to_vector implementation in favor of std::ranges::to<std::vector> once g++ supported it for long enough
+namespace detail {
+
+struct to_vector_fn {
+    template <std::ranges::range R> friend constexpr auto operator|(R&& r, to_vector_fn) {
+        using value_type = std::ranges::range_value_t<R>;
+        if constexpr (std::ranges::sized_range<R>) {
+            std::vector<value_type> v;
+            v.reserve(std::ranges::size(r));
+            for (auto&& e : r) {
+                v.push_back(static_cast<decltype(e)&&>(e));
+            }
+            return v;
+        } else {
+            return std::vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
+        }
+    }
+};
+
+} // namespace detail
+
+inline constexpr detail::to_vector_fn to_vector{};
+
+template <typename T>
+    requires std::is_trivially_copyable_v<T>
+T fromBytes(std::span<const uint8_t> data) {
+    if (data.size() < sizeof(T)) {
+        throw std::runtime_error{"Not enough data to read value of type."};
+    }
+
+    T val = {};
+    std::memcpy(&val, data.data(), sizeof(T));
+    return val;
+}
+
+template <typename T>
+    requires std::is_trivially_copyable_v<T>
+T fromBytes(const uint8_t* data) {
+    T val = {};
+    std::memcpy(&val, data, sizeof(T));
+    return val;
+}
 
 inline uint16_t swapBytes(uint16_t value) {
 #ifdef _WIN32
@@ -686,8 +731,10 @@ std::string_view toString(EPixelType type);
 enum class EPixelFormat {
     U8,
     U16,
+    U32,
     I8,
     I16,
+    I32,
     F16,
     F32,
 };
@@ -699,8 +746,10 @@ inline size_t nBytes(EPixelFormat format) {
     switch (format) {
         case EPixelFormat::U8: return 1;
         case EPixelFormat::U16: return 2;
+        case EPixelFormat::U32: return 4;
         case EPixelFormat::I8: return 1;
         case EPixelFormat::I16: return 2;
+        case EPixelFormat::I32: return 4;
         case EPixelFormat::F16: return 2;
         case EPixelFormat::F32: return 4;
     }
