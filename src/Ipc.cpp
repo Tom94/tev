@@ -437,19 +437,19 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
         struct sockaddr_un unixAddr = {};
 
         visit(
-            [&](auto&& hostInfo) {
-                using T = decay_t<decltype(hostInfo)>;
-                if constexpr (is_same_v<T, IpHost>) {
+            visitor{
+                [&](const IpHost& ipHostInfo) {
                     addrinfo.ai_family = PF_UNSPEC;
                     addrinfo.ai_socktype = SOCK_STREAM;
 
-                    const int err = getaddrinfo(hostInfo.ip.c_str(), hostInfo.port.c_str(), &addrinfo, &heapaddrinfo);
+                    const int err = getaddrinfo(ipHostInfo.ip.c_str(), ipHostInfo.port.c_str(), &addrinfo, &heapaddrinfo);
                     if (err != 0) {
                         throw runtime_error{fmt::format("getaddrinfo() failed: {}", gai_strerror(err))};
                     }
 
                     addrinfo = *heapaddrinfo;
-                } else if constexpr (is_same_v<T, UnixHost>) {
+                },
+                [&](const UnixHost& unixHostInfo) {
                     // Note: if the socket file does not exist, connect() will fail, so we do not need to separately check for its existence
                     // here. Furthermore, on Windows, checking for the existence of a unix socket file raises an error.
 
@@ -459,10 +459,8 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
                     addrinfo.ai_addr = (struct sockaddr*)&unixAddr;
 
                     unixAddr.sun_family = AF_UNIX;
-                    strncpy(unixAddr.sun_path, hostInfo.socketPath.string().c_str(), sizeof(unixAddr.sun_path) - 1);
-                } else {
-                    TEV_ASSERT(false, "Non-exhaustive visitor");
-                }
+                    strncpy(unixAddr.sun_path, unixHostInfo.socketPath.string().c_str(), sizeof(unixAddr.sun_path) - 1);
+                },
             },
             mHostInfo
         );
@@ -661,23 +659,21 @@ bool Ipc::attemptToBecomePrimaryInstance() {
     const size_t addrLen = holds_alternative<IpHost>(mHostInfo) ? sizeof(addr.in) : sizeof(addr.un);
 
     visit(
-        [&](auto&& hostInfo) {
-            using T = decay_t<decltype(hostInfo)>;
-            if constexpr (is_same_v<T, IpHost>) {
+        visitor{
+            [&](const IpHost& ipHostInfo) {
                 addr.in.sin_family = AF_INET;
-                addr.in.sin_port = htons((uint16_t)atoi(hostInfo.port.c_str()));
+                addr.in.sin_port = htons((uint16_t)atoi(ipHostInfo.port.c_str()));
 #ifdef _WIN32
-                InetPton(AF_INET, hostInfo.ip.c_str(), &addr.in.sin_addr);
+                InetPton(AF_INET, ipHostInfo.ip.c_str(), &addr.in.sin_addr);
 #else
-                inet_aton(hostInfo.ip.c_str(), &addr.in.sin_addr);
+                inet_aton(ipHostInfo.ip.c_str(), &addr.in.sin_addr);
 #endif
-            } else if constexpr (is_same_v<T, UnixHost>) {
+            },
+            [&](const UnixHost& unixHostInfo) {
                 addr.un.sun_family = AF_UNIX;
-                strncpy(addr.un.sun_path, hostInfo.socketPath.string().c_str(), sizeof(addr.un.sun_path) - 1);
-                fs::remove(hostInfo.socketPath); // remove previous socket file if it exists
-            } else {
-                TEV_ASSERT(false, "Non-exhaustive visitor");
-            }
+                strncpy(addr.un.sun_path, unixHostInfo.socketPath.string().c_str(), sizeof(addr.un.sun_path) - 1);
+                fs::remove(unixHostInfo.socketPath); // remove previous socket file if it exists
+            },
         },
         mHostInfo
     );
@@ -734,17 +730,13 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     } else {
         string name = "";
         visit(
-            [&](auto&& hostInfo) {
-                using T = decay_t<decltype(hostInfo)>;
-                if constexpr (is_same_v<T, UnixHost>) {
-                    name = fmt::format("{}", hostInfo.socketPath);
-                } else if constexpr (is_same_v<T, IpHost>) {
+            visitor{
+                [&](const IpHost&) {
                     const uint32_t ip = ntohl(client.in.sin_addr.s_addr);
                     const uint16_t port = ntohs(client.in.sin_port);
                     name = fmt::format("{}.{}.{}.{}:{}", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
-                } else {
-                    TEV_ASSERT(false, "Non-exhaustive visitor");
-                }
+                },
+                [&](const UnixHost& unixHostInfo) { name = fmt::format("{}", unixHostInfo.socketPath); },
             },
             mHostInfo
         );
@@ -768,15 +760,9 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
 string Ipc::hostname() const {
     string result = "";
     visit(
-        [&](auto&& arg) {
-            using T = decay_t<decltype(arg)>;
-            if constexpr (is_same_v<T, IpHost>) {
-                result = fmt::format("{}:{}", arg.ip, arg.port);
-            } else if constexpr (is_same_v<T, UnixHost>) {
-                result = fmt::format("{}", arg.socketPath);
-            } else {
-                TEV_ASSERT(false, "Non-exhaustive visitor");
-            }
+        visitor{
+            [&](const IpHost& arg) { result = fmt::format("{}:{}", arg.ip, arg.port); },
+            [&](const UnixHost& arg) { result = fmt::format("{}", arg.socketPath); },
         },
         mHostInfo
     );

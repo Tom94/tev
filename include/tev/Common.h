@@ -258,6 +258,11 @@ template <size_t N> struct fixed_chunks_fn {
 inline constexpr detail::to_vector_fn to_vector{};
 template <std::size_t N> inline constexpr detail::fixed_chunks_fn<N> fixed_chunks{};
 
+// Helper for std::visit on multiple lambdas
+template <typename... Callable> struct visitor : Callable... {
+    using Callable::operator()...;
+};
+
 template <typename T>
     requires std::is_trivially_copyable_v<T>
 T fromBytes(std::span<const uint8_t> data) {
