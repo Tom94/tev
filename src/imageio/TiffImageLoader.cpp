@@ -2100,28 +2100,22 @@ Task<ImageData> readTiffImage(
         )};
     }
 
-    HeapArray<uint8_t> tileData(tile.size * tile.count);
-
-    const size_t numTilesPerPlane = tile.count / numPlanes;
     // We'll unpack the bits into 32-bit or 64-bit unsigned integers first, then convert to float. This simplifies the bit unpacking
     const int unpackedBitsPerSample = bitsPerSample > 32 ? 64 : 32;
-
-    const size_t unpackedTileRowSamples = tile.width * samplesPerPixel / numPlanes;
-    const size_t unpackedTileSize = tile.height * unpackedTileRowSamples * unpackedBitsPerSample / 8;
-    HeapArray<uint8_t> unpackedTile(unpackedTileSize * tile.count);
-
-    const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
+    const size_t numTilesPerPlane = tile.count / numPlanes;
 
     vector<Task<void>> decodeTasks;
 
-    // Read tiled/striped data. Unfortunately, libtiff doesn't support reading all tiles/strips in parallel, so we have to do that
-    // sequentially.
+    // TODO: use PixelBuffer
     HeapArray<uint8_t> imageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
 
-    for (size_t i = 0; i < tile.count; ++i) {
-        uint8_t* const td = tileData.data() + tile.size * i;
+    if (decodeRaw) {
+        if (bitsPerSample > 32) {
+            throw ImageLoadError{fmt::format("Compression type {} unsupported with {} bits per sample.", compression, bitsPerSample)};
+        }
 
-        if (decodeRaw) {
+        // Get tile data and decode ourselves if the compression method is not supported by libtiff or much slower than our own code.
+        for (size_t i = 0; i < tile.count; ++i) {
             const auto compressedTileData = getRawTileSpan(tif, (uint32_t)i);
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
@@ -2241,79 +2235,93 @@ Task<ImageData> readTiffImage(
                     priority
                 )
             );
-
-            continue;
         }
 
-        if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
-            co_await awaitAll(decodeTasks);
-            throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
-        }
+        co_await awaitAll(decodeTasks);
+    } else {
+        // Have libtiff decode the tiles for us if the compression method is supported
+        const size_t unpackedTileRowSamples = tile.width * samplesPerPixel / numPlanes;
+        const size_t unpackedTileSize = tile.height * unpackedTileRowSamples * unpackedBitsPerSample / 8;
 
-        decodeTasks.emplace_back(
-            ThreadPool::global().enqueueCoroutine(
-                [&, i, td]() -> Task<void> {
-                    uint8_t* const utd = unpackedTile.data() + unpackedTileSize * i;
+        const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
 
-                    const size_t planeTile = i % numTilesPerPlane;
-                    const size_t tileX = planeTile % tile.numX;
-                    const size_t tileY = planeTile / tile.numX;
+        HeapArray<uint8_t> unpackedTile(unpackedTileSize * tile.count);
+        HeapArray<uint8_t> tileData(tile.size * tile.count);
 
-                    const int xStart = (int)tileX * tile.width;
-                    const int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
+        for (size_t i = 0; i < tile.count; ++i) {
+            // Read tiled/striped data. Unfortunately, libtiff doesn't support decompressing all tiles/strips in parallel, so we have to do
+            // that sequentially.
+            uint8_t* const td = tileData.data() + tile.size * i;
+            if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
+                co_await awaitAll(decodeTasks);
+                throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
+            }
 
-                    const int yStart = (int)tileY * tile.height;
-                    const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+            decodeTasks.emplace_back(
+                ThreadPool::global().enqueueCoroutine(
+                    [&, i, td]() -> Task<void> {
+                        uint8_t* const utd = unpackedTile.data() + unpackedTileSize * i;
 
-                    const size_t numPixels = (size_t)tile.width * tile.height;
+                        const size_t planeTile = i % numTilesPerPlane;
+                        const size_t tileX = planeTile % tile.numX;
+                        const size_t tileY = planeTile / tile.numX;
 
-                    const auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
-                        co_await ThreadPool::global().parallelForAsync<int>(
-                            yStart,
-                            yEnd,
-                            numPixels * samplesPerPixel / numPlanes,
-                            [&](int y) {
-                                int y0 = y - yStart;
-                                unpackBits(
-                                    td + tile.rowSize * y0,
-                                    tile.rowSize,
-                                    bitsPerSample,
-                                    utd + unpackedTileRowSamples * y0,
-                                    unpackedTileRowSamples,
-                                    handleSign
-                                );
+                        const int xStart = (int)tileX * tile.width;
+                        const int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
 
-                                if (planar == PLANARCONFIG_CONTIG) {
-                                    for (int x = xStart; x < xEnd; ++x) {
-                                        for (int c = 0; c < samplesPerPixel; ++c) {
-                                            auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
+                        const int yStart = (int)tileY * tile.height;
+                        const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+
+                        const size_t numPixels = (size_t)tile.width * tile.height;
+
+                        const auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
+                            co_await ThreadPool::global().parallelForAsync<int>(
+                                yStart,
+                                yEnd,
+                                numPixels * samplesPerPixel / numPlanes,
+                                [&](int y) {
+                                    int y0 = y - yStart;
+                                    unpackBits(
+                                        td + tile.rowSize * y0,
+                                        tile.rowSize,
+                                        bitsPerSample,
+                                        utd + unpackedTileRowSamples * y0,
+                                        unpackedTileRowSamples,
+                                        handleSign
+                                    );
+
+                                    if (planar == PLANARCONFIG_CONTIG) {
+                                        for (int x = xStart; x < xEnd; ++x) {
+                                            for (int c = 0; c < samplesPerPixel; ++c) {
+                                                auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
+                                                data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                            }
+                                        }
+                                    } else {
+                                        size_t c = i / numTilesPerPlane;
+                                        for (int x = xStart; x < xEnd; ++x) {
+                                            auto pixel = utd[y0 * tile.width + x - xStart];
                                             data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
                                         }
                                     }
-                                } else {
-                                    size_t c = i / numTilesPerPlane;
-                                    for (int x = xStart; x < xEnd; ++x) {
-                                        auto pixel = utd[y0 * tile.width + x - xStart];
-                                        data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
-                                    }
-                                }
-                            },
-                            priority
-                        );
-                    };
+                                },
+                                priority
+                            );
+                        };
 
-                    if (unpackedBitsPerSample > 32) {
-                        co_await unpackTask((uint64_t*)utd, (uint64_t*)imageData.data());
-                    } else {
-                        co_await unpackTask((uint32_t*)utd, (uint32_t*)imageData.data());
-                    }
-                },
-                priority
-            )
-        );
+                        if (unpackedBitsPerSample > 32) {
+                            co_await unpackTask((uint64_t*)utd, (uint64_t*)imageData.data());
+                        } else {
+                            co_await unpackTask((uint32_t*)utd, (uint32_t*)imageData.data());
+                        }
+                    },
+                    priority
+                )
+            );
+        }
+
+        co_await awaitAll(decodeTasks);
     }
-
-    co_await awaitAll(decodeTasks);
 
     if (interleave != Vector2i{1, 1}) {
         HeapArray<uint8_t> interleavedImageData;

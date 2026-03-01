@@ -676,8 +676,7 @@ static int mainFunc(span<const string> arguments) {
     }};
 
     // HACK: It is unfortunately not easily possible to poll/timeout on cin in a portable manner, so instead we resort to simply detaching
-    // this thread, causing it to be forcefully terminated as the main thread terminates. Also, on some Linux systems, this will still not
-    // terminate, so we schedule exit(0) to be called as well.
+    // this thread, causing it to be forcefully terminated as the main thread terminates.
     stdinThread.detach();
 
     // Spawn another background thread, this one dealing with images passed to us via inter-process communication (IPC). This happens when a
