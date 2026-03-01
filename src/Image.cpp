@@ -689,7 +689,7 @@ string Image::shortName() const {
     return result;
 }
 
-bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const {
+bool Image::isInterleaved(span<const string> channelNames, size_t desiredStride) const {
     if (desiredStride == 0) {
         throw runtime_error{"Desired stride must be greater than 0."};
     }
@@ -711,7 +711,7 @@ bool Image::isInterleaved(span<const string> channelNames, size_t desiredBytesPe
             interleavedData = chan->dataBuf();
         }
 
-        if (interleavedData != chan->dataBuf() || chan->stride() != desiredStride || chan->offset() != i * desiredBytesPerSample) {
+        if (interleavedData != chan->dataBuf() || chan->stride() != desiredStride || chan->offset() != i) {
             return false;
         }
     }
@@ -880,8 +880,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         )};
     }
 
-    const size_t bytesPerSample = bitsPerSample / 8;
-    const bool directUpload = isInterleaved(channelNames, bytesPerSample, numTextureChannels * bytesPerSample);
+    const bool directUpload = isInterleaved(channelNames, numTextureChannels);
 
     tlog::debug() << fmt::format(
         "Uploading texture: direct={} bps={} filter={}-{} img={}:{}",

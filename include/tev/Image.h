@@ -205,7 +205,7 @@ public:
         return result;
     }
 
-    bool isInterleaved(std::span<const std::string> channelNames, size_t desiredBytesPerSample, size_t desiredStride) const;
+    bool isInterleaved(std::span<const std::string> channelNames, size_t desiredStride) const;
 
     nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) &;
 
