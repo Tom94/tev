@@ -634,4 +634,18 @@ EPixelType pixelType(EPixelFormat format) {
     }
 }
 
+std::string CompoundException::buildMessage(std::span<const std::exception_ptr> exceptions) {
+    ostringstream oss;
+    oss << fmt::format("{} exception(s) occurred:", exceptions.size());
+    for (size_t i = 0; i < exceptions.size(); ++i) {
+        try {
+            rethrow_exception(exceptions[i]);
+        } catch (const exception& e) { oss << fmt::format("\n  #{}: {}", i, e.what()); } catch (...) {
+            oss << fmt::format("\n  #{}: <unknown exception>", i);
+        }
+    }
+
+    return oss.str();
+}
+
 } // namespace tev

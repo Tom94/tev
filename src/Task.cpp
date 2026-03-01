@@ -23,42 +23,34 @@ using namespace std;
 namespace tev {
 
 void waitAll(span<Task<void>> futures) {
-    exception_ptr eptr = {};
+    vector<exception_ptr> eptr = {};
 
     for (auto&& f : futures) {
         try {
             f.get();
-        } catch (const exception& e) {
-            if (eptr) {
-                tlog::error() << "Multiple exceptions in waitAll(). Rethrowing first and logging others: " << e.what();
-            } else {
-                eptr = current_exception();
-            }
-        }
+        } catch (const exception& e) { eptr.emplace_back(current_exception()); }
     }
 
-    if (eptr) {
-        rethrow_exception(eptr);
+    if (eptr.size() == 1) {
+        rethrow_exception(eptr.front());
+    } else if (eptr.size() > 1) {
+        throw CompoundException{eptr};
     }
 }
 
 Task<void> awaitAll(span<Task<void>> futures) {
-    exception_ptr eptr = {};
+    vector<exception_ptr> eptr = {};
 
     for (auto&& f : futures) {
         try {
             co_await f;
-        } catch (const exception& e) {
-            if (eptr) {
-                tlog::error() << "Multiple exceptions in awaitAll(). Rethrowing first and logging others: " << e.what();
-            } else {
-                eptr = current_exception();
-            }
-        }
+        } catch (const exception& e) { eptr.emplace_back(current_exception()); }
     }
 
-    if (eptr) {
-        rethrow_exception(eptr);
+    if (eptr.size() == 1) {
+        rethrow_exception(eptr.front());
+    } else if (eptr.size() > 1) {
+        throw CompoundException{eptr};
     }
 }
 

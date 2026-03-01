@@ -1541,9 +1541,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
 
         co_return images;
-    } catch (const ImageLoadError& e) { handleException(e); } catch (const ImageModifyError& e) {
-        handleException(e);
-    }
+    } catch (const runtime_error& e) { handleException(e); }
 
     co_return {};
 }

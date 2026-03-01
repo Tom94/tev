@@ -792,4 +792,17 @@ public:
     ImageSaveError(const std::string& message) : std::runtime_error{message} {}
 };
 
+class CompoundException : public std::runtime_error {
+public:
+    CompoundException(std::span<const std::exception_ptr> exceptions) :
+        runtime_error{buildMessage(exceptions)}, mExceptions{std::begin(exceptions), std::end(exceptions)} {}
+
+    std::span<const std::exception_ptr> exceptions() const noexcept { return mExceptions; }
+
+private:
+    static std::string buildMessage(std::span<const std::exception_ptr> exceptions);
+
+    std::vector<std::exception_ptr> mExceptions;
+};
+
 } // namespace tev
