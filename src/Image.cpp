@@ -1203,7 +1203,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
         imageRegion.min.y(),
         imageRegion.max.y(),
         numPixels * 4,
-        [nColorChannelsToSave, &bg, &channels, alphaChannel, &result, &imageRegion](int y) {
+        [nColorChannelsToSave, &bg, &channels, alphaChannel, divideAlpha, &result, &imageRegion](int y) {
             const auto yoffset = (size_t)(y - imageRegion.min.y()) * imageRegion.size().x();
             for (int x = imageRegion.min.x(); x < imageRegion.max.x(); ++x) {
                 const auto xoffset = x - imageRegion.min.x();
@@ -1212,7 +1212,9 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
                 for (size_t c = 0; c < 3; ++c) {
                     const float val = nColorChannelsToSave == 1 ? channels[0].evalOrZero({x, y}) :
                                                                   (c < nColorChannelsToSave ? channels[c].evalOrZero({x, y}) : 0.0f);
-                    result[(yoffset + xoffset) * 4 + c] = val + (1.0f - alpha) * bg[c];
+
+                    const float blended = val + (1.0f - alpha) * bg[c];
+                    result[(yoffset + xoffset) * 4 + c] = divideAlpha ? (alpha != 0 ? blended / alpha : 0) : blended;
                 }
 
                 result[(yoffset + xoffset) * 4 + 3] = alpha + (1.0f - alpha) * bg[3];
@@ -1220,23 +1222,6 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
         },
         priority
     );
-
-    // Divide alpha out if needed (for storing in non-premultiplied formats)
-    if (divideAlpha) {
-        co_await ThreadPool::global().parallelFor(
-            0uz,
-            numPixels,
-            numPixels * 4,
-            [&result](size_t j) {
-                const float alpha = result[j * 4 + 3];
-                const float factor = alpha == 0 ? 0 : 1 / alpha;
-                for (int c = 0; c < 3; ++c) {
-                    result[j * 4 + c] *= factor;
-                }
-            },
-            priority
-        );
-    }
 
     co_return result;
 }
