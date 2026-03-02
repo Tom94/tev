@@ -346,10 +346,6 @@ Task<std::vector<std::shared_ptr<Image>>>
 
 } // namespace tev
 
-namespace std {
-
-template <> struct hash<tev::ChannelGroup> {
+template <> struct std::hash<tev::ChannelGroup> {
     size_t operator()(const tev::ChannelGroup& g) const { return hash<string>()(g.name); }
 };
-
-} // namespace std
