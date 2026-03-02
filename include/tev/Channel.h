@@ -154,7 +154,7 @@ public:
     }
 
     template <typename T> T* data() const & {
-        if (UNLIKELY(pixelFormatForType<T>() != format())) {
+        if (pixelFormatForType<T>() != format()) [[unlikely]] {
             throw std::runtime_error{"Pixel format does not match requested type."};
         }
 
@@ -240,7 +240,7 @@ public:
 
     template <typename T> ChannelView<T> view() const & {
         static_assert(std::is_const_v<T>, "ChannelView must be const when returned from a const Channel.");
-        if (UNLIKELY(pixelFormatForType<T>() != pixelFormat())) {
+        if (pixelFormatForType<T>() != pixelFormat()) [[unlikely]] {
             throw std::runtime_error{"Channel pixel format does not match requested type."};
         }
 
@@ -248,7 +248,7 @@ public:
     }
 
     template <typename T> ChannelView<T> view() & {
-        if (UNLIKELY(pixelFormatForType<T>() != pixelFormat())) {
+        if (pixelFormatForType<T>() != pixelFormat()) [[unlikely]] {
             throw std::runtime_error{"Channel pixel format does not match requested type."};
         }
 
