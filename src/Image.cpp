@@ -169,8 +169,8 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
 
         auto rv = r->view<float>(), gv = g->view<float>(), bv = b->view<float>();
         tasks.emplace_back(
-            ThreadPool::global().parallelForAsync<size_t>(
-                0,
+            ThreadPool::global().parallelFor(
+                0uz,
                 r->numPixels(),
                 r->numPixels() * 3,
                 [rv, gv, bv, mat](size_t i) mutable {
@@ -267,8 +267,8 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
         lumPerLayer[i].resize(r->numPixels());
         tasks.emplace_back(
-            ThreadPool::global().parallelForAsync<size_t>(
-                0,
+            ThreadPool::global().parallelFor(
+                0uz,
                 lumPerLayer[i].size(),
                 lumPerLayer[i].size(),
                 [rv, gv, bv, &lumBuf = lumPerLayer[i] /*, &toRec2020*/](size_t px) {
@@ -335,8 +335,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
         it = ranges.back().second;
     }
 
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         ranges.size(),
         numeric_limits<uint32_t>::max(), // Ensure each range gets its own task
         [&](size_t i) -> Task<void> {
@@ -376,8 +376,8 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             auto convData = PixelBuffer::alloc(nSamples, targetFormat);
 
             const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
-                co_await ThreadPool::global().parallelForAsync<size_t>(
-                    0,
+                co_await ThreadPool::global().parallelFor(
+                    0uz,
                     nSamples,
                     nSamples,
                     [typedSrc, typedDst](size_t i) {
@@ -767,7 +767,7 @@ Task<void> prepareTextureChannel(
 
     if (chan) {
         auto copyChannel = [&](const auto view) -> Task<void> {
-            co_await ThreadPool::global().parallelForAsync<int>(
+            co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
                 numPixels,
@@ -792,8 +792,8 @@ Task<void> prepareTextureChannel(
             case EPixelFormat::F32: co_await copyChannel(chan->view<const float>()); break;
         }
     } else {
-        co_await ThreadPool::global().parallelForAsync<int>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels,
             [&data, defaultVal, numTextureChannels, channelIdx](size_t j) { data[j * numTextureChannels + channelIdx] = defaultVal; },
@@ -1115,8 +1115,8 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
     const auto views = result | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
     const auto channels = this->channels(channelNames);
     if (!reference) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * channels.size(),
             [&](size_t j) {
@@ -1135,7 +1135,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
             isAlpha[i] = Channel::isAlpha(channelNames[i]);
         }
 
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             numPixels * channels.size(),
@@ -1199,7 +1199,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
     // Flatten image into vector
     HeapArray<float> result{4 * numPixels};
 
-    co_await ThreadPool::global().parallelForAsync(
+    co_await ThreadPool::global().parallelFor(
         imageRegion.min.y(),
         imageRegion.max.y(),
         numPixels * 4,
@@ -1223,7 +1223,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
 
     // Divide alpha out if needed (for storing in non-premultiplied formats)
     if (divideAlpha) {
-        co_await ThreadPool::global().parallelForAsync(
+        co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
             numPixels * 4,
@@ -1244,10 +1244,14 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
 Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
     const HeapArray<float>& rgbaHdrData, ETonemap tonemap, float gamma, float exposure, float offset, int priority
 ) const {
+    if (rgbaHdrData.size() % 4 != 0) {
+        throw runtime_error{"RGBA HDR data must have a size that is a multiple of 4."};
+    }
+
     HeapArray<uint8_t> result(rgbaHdrData.size());
 
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         rgbaHdrData.size() / 4,
         rgbaHdrData.size(),
         [&](const size_t i) {
@@ -1426,7 +1430,7 @@ Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i siz
     const size_t numBytesPerPixel = numSamplesPerPixel * numBytesPerSample;
 
     auto reorientedData = PixelBuffer::alloc(data.size(), data.format());
-    co_await ThreadPool::global().parallelForAsync<int>(
+    co_await ThreadPool::global().parallelFor(
         0,
         size.y(),
         numPixels,

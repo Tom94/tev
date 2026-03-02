@@ -165,8 +165,8 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
             pattern[numInterleavedDims - 1] = one;
         }
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels,
             [pattern, numInterleavedDims, ptr](size_t i) {
@@ -251,7 +251,7 @@ Task<void> ImageLoader::resizeChannelsAsync(
     const float scaleX = (float)size.x() / box.size().x();
     const float scaleY = (float)size.y() / box.size().y();
 
-    co_await ThreadPool::global().parallelForAsync<int>(
+    co_await ThreadPool::global().parallelFor(
         0,
         targetSize.y(),
         numSamples,

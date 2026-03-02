@@ -292,8 +292,8 @@ IpcPacketUpdateImage IpcPacket::interpretAsUpdateImage() const {
 
     const float* stridedImageData = (const float*)payload.get();
     ThreadPool::global()
-        .parallelForAsync<size_t>(
-            0,
+        .parallelFor(
+            0uz,
             nPixels,
             nPixels * result.nChannels,
             [&](size_t px) {

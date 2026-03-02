@@ -61,8 +61,8 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     }
 
     const auto outView = MultiChannelView<float>{data.channels};
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         numPixels,
         numPixels * nChannels,
         [&outView](size_t i) {

@@ -393,7 +393,7 @@ public:
 
         auto data = mData.data<T>();
         const auto view = channel.view<float>();
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             channel.size().y(),
             channel.numPixels(),
@@ -515,8 +515,8 @@ Task<vector<ImageData>>
             totalNumPixels += rawChannel.numPixels();
         }
 
-        co_await ThreadPool::global().parallelForAsync(
-            0, (int)rawChannels.size(), totalNumPixels, [&](int i) { rawChannels.at(i).resize(); }, priority
+        co_await ThreadPool::global().parallelFor(
+            0uz, rawChannels.size(), totalNumPixels, [&](size_t i) { rawChannels.at(i).resize(); }, priority
         );
 
         for (auto& rawChannel : rawChannels) {

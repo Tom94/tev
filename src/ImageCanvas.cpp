@@ -838,7 +838,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             rec709Chroma(), chroma, adaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
         );
 
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             region.min.y(),
             region.max.y(),
             numSamples,
@@ -863,7 +863,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     } else {
         // Otherwise, apply just alpha and transfer function
         if (transfer != ituth273::ETransfer::Linear || (alphaChannel && !premultipliedAlpha)) {
-            co_await ThreadPool::global().parallelForAsync<int>(
+            co_await ThreadPool::global().parallelFor(
                 region.min.y(),
                 region.max.y(),
                 numSamples,
@@ -893,7 +893,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     {
         vector<Stats> perLineStats(regionSize.y());
 
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             region.min.y(),
             region.max.y(),
             numSamples,
@@ -966,8 +966,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
         vector<float> perTaskHistograms(numBins * nColorChannels * numTasks);
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numTasks,
             approxCost,
             [&](size_t i) {
@@ -991,8 +991,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             priority
         );
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numBins * nColorChannels,
             numBins * nColorChannels * numTasks,
             [&](size_t i) {

@@ -966,7 +966,7 @@ Task<void> toLinearSrgbPremul(
     }};
 
     const size_t numSamples = numPixels * src.nChannels();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
+    co_await ThreadPool::global().parallelFor(
         0,
         size.y(),
         numSamples * 64, // arbitrary factor to reflect increased cost of color conversion

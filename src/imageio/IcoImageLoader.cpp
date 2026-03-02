@@ -213,7 +213,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     }
 
                     const bool flipVertically = size.y() > 0;
-                    co_await ThreadPool::global().parallelForAsync<int>(
+                    co_await ThreadPool::global().parallelFor(
                         0,
                         entry.height,
                         (size_t)entry.width * entry.height * alphaChannels.size(),

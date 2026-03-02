@@ -90,7 +90,7 @@ Task<vector<ImageData>>
         }
     }
 
-    co_await ThreadPool::global().parallelForAsync(
+    co_await ThreadPool::global().parallelFor(
         0,
         size.y(),
         numPixels * numChannels,

@@ -299,7 +299,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     const auto* imgData = iProcessor.imgdata.image;
     const size_t numPixels = (size_t)size.x() * size.y();
-    co_await ThreadPool::global().parallelForAsync<int>(
+    co_await ThreadPool::global().parallelFor(
         0,
         size.y(),
         numPixels * numChannels,

@@ -349,8 +349,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         }
 
         const size_t numPixels = size.x() * (size_t)size.y();
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numInterleavedChannels,
             [&](size_t i) {

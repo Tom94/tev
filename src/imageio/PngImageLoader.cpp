@@ -501,8 +501,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                 }
 
-                co_await ThreadPool::global().parallelForAsync<size_t>(
-                    0,
+                co_await ThreadPool::global().parallelFor(
+                    0uz,
                     numPixels,
                     numSamples,
                     [&](size_t i) {
@@ -590,8 +590,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
             }
 
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
+            co_await ThreadPool::global().parallelFor(
+                0uz,
                 numPixels,
                 numSamples,
                 [&](size_t i) {
@@ -629,7 +629,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         if (!directlyOnCanvas || blendOp != EBlendOp::Source) {
             tlog::debug() << "Blending frame onto previous canvas";
 
-            co_await ThreadPool::global().parallelForAsync<int>(
+            co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
                 numSamples,

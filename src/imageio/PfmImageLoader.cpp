@@ -23,7 +23,6 @@
 #include <tev/imageio/PfmImageLoader.h>
 
 #include <bit>
-#include <memory>
 #include <optional>
 #include <sstream>
 #include <vector>
@@ -402,7 +401,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         if (pfm) {
             const auto* const floatData = buf.data<const float>();
-            co_await ThreadPool::global().parallelForAsync(
+            co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
                 numSamples,
@@ -425,8 +424,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             if (bitsPerChannel == 32) {
                 auto* const uintData = buf.data<uint32_t>();
                 if (shallSwapBytes) {
-                    co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
+                    co_await ThreadPool::global().parallelFor(
+                        0uz, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
                     );
                 }
 
@@ -434,8 +433,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             } else if (bitsPerChannel == 16) {
                 auto* const uintData = buf.data<uint16_t>();
                 if (shallSwapBytes) {
-                    co_await ThreadPool::global().parallelForAsync<size_t>(
-                        0, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
+                    co_await ThreadPool::global().parallelFor(
+                        0uz, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
                     );
                 }
 
@@ -444,7 +443,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 co_await toFloat32<uint8_t, true>(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 1) {
                 auto* const data = buf.data<uint8_t>();
-                co_await ThreadPool::global().parallelForAsync(
+                co_await ThreadPool::global().parallelFor(
                     0,
                     size.y(),
                     numSamples,

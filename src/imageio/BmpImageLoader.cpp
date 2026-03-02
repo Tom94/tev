@@ -1466,7 +1466,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
     atomic<bool> allTransparent = hasAlpha;
 
-    co_await ThreadPool::global().parallelForAsync<int>(
+    co_await ThreadPool::global().parallelFor(
         0,
         size.y(),
         numPixels * numChannels,
@@ -1551,7 +1551,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
     if (hasAlpha && allTransparent) {
         tlog::debug() << "BMP image is fully transparent; flipping to all opaque";
-        co_await ThreadPool::global().parallelForAsync<size_t>(0, numPixels, numPixels, [&](size_t i) { outView[-1, i] = 1.0f; }, priority);
+        co_await ThreadPool::global().parallelFor(0uz, numPixels, numPixels, [&](size_t i) { outView[-1, i] = 1.0f; }, priority);
     }
 
     if (iccProfileData) {
@@ -1589,8 +1589,8 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     // inverted to get linear values.
     const bool invertTransfer = dib.bitsPerPixel != 64;
     if (invertTransfer) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels,
             [&](size_t i) {

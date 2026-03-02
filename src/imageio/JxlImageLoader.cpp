@@ -195,8 +195,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
             const uint32_t range = endRange - startRange;
             const uint32_t numTasks = std::min(
-                jxlPool.nTasks<uint32_t>(
-                    0,
+                jxlPool.nTasks(
+                    0u,
                     range,
                     numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
                 ),
@@ -209,8 +209,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
             }
 
             jxlPool
-                .parallelForAsync<uint32_t>(
-                    0,
+                .parallelFor(
+                    0u,
                     numTasks,
                     numeric_limits<uint32_t>::max(), // Maximum parallelism up to numTasks threads
                     [&](uint32_t i) {
@@ -591,8 +591,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
                         const size_t numPixels = size.x() * (size_t)size.y();
-                        co_await ThreadPool::global().parallelForAsync<size_t>(
-                            0,
+                        co_await ThreadPool::global().parallelFor(
+                            0uz,
                             numPixels,
                             numPixels * numInterleavedChannels,
                             [&](size_t i) {
@@ -636,7 +636,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     const auto view = channel.view<float>();
 
                     const size_t numPixels = (size_t)size.x() * size.y();
-                    co_await ThreadPool::global().parallelForAsync<int>(
+                    co_await ThreadPool::global().parallelFor(
                         0,
                         size.y(),
                         numPixels,

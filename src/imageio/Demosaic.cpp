@@ -232,7 +232,7 @@ static Task<void> generalDemosaic(
     // At each pixel, for each missing channel, weight contributions
     // by both the precomputed base weight and an edge-sensitivity
     // term (penalize samples across strong gradients).
-    co_await ThreadPool::global().parallelForAsync<int>(
+    co_await ThreadPool::global().parallelFor(
         0,
         size.y(),
         numPixels * 3,
@@ -391,7 +391,7 @@ static Task<void> amazeDemosaic(
     constexpr int cldf = 2;
     const size_t bufferSize = 14 * sizeof(float) * ts * ts + sizeof(unsigned char) * ts * tsh + 18 * cldf * 64 + 63;
 
-    co_await ThreadPool::global().parallelForAsync<int>(
+    co_await ThreadPool::global().parallelFor(
         0,
         (int)tiles.size(),
         (int)tiles.size() * ts * ts, // cost estimate
@@ -1225,7 +1225,7 @@ static Task<void> amazeDemosaic(
 
     // ===== Border demosaicing (simple bilinear) =====
     if (border < 4) {
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             (size_t)size.x() * size.y(),

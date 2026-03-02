@@ -220,15 +220,15 @@ array<span<const uint16_t>, 3> tiffGetColorMap(TIFF* tif) {
 Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, const nanogui::Vector2i& size, int priority) {
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0, numSamples, numSamples, [&](size_t i) { *(float*)&imageData[i] = *(half*)&imageData[i]; }, priority
+        co_await ThreadPool::global().parallelFor(
+            0uz, numSamples, numSamples, [&](size_t i) { *(float*)&imageData[i] = *(half*)&imageData[i]; }, priority
         );
 
         kind = ETiffKind::F32;
     } else if (kind == ETiffKind::F24) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numSamples,
             numSamples,
             [&](size_t i) {
@@ -284,8 +284,8 @@ Task<void> tiffDataToFloat32(
             throw runtime_error{"Number of output samples per pixel must be at least 3 for palette data."};
         }
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * rgbaView.nChannels(),
             [&](size_t i) {
@@ -307,8 +307,8 @@ Task<void> tiffDataToFloat32(
     }
 
     if (flipWhiteAndBlack) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * rgbaView.nChannels(),
             [&](size_t i) {
@@ -551,7 +551,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
     const auto numPixels = (size_t)size.x() * size.y();
 
     if (wbScale != Vector3f{1.0f}) {
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             numPixels,
@@ -568,7 +568,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
     co_await demosaic(cfaData, rgbData, pat, cfaSize, priority);
 
     if (wbScale != Vector3f{1.0f}) {
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             numPixels,
@@ -605,8 +605,8 @@ Task<void> linearizeAndNormalizeRawDng(
         } else {
             const size_t maxIdx = linTable.size() - 1;
 
-            co_await ThreadPool::global().parallelForAsync<size_t>(
-                0,
+            co_await ThreadPool::global().parallelFor(
+                0uz,
                 numPixels,
                 numPixels * numChannels,
                 [&](size_t i) {
@@ -680,7 +680,7 @@ Task<void> linearizeAndNormalizeRawDng(
         }
 
         vector<float> maxBlackLevelY(numChannels * size.y(), 0.0f);
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             numPixels * numChannels,
@@ -735,8 +735,8 @@ Task<void> linearizeAndNormalizeRawDng(
     if (any_of(channelScale.begin(), channelScale.end(), [](float s) { return s != 1.0f; })) {
         tlog::debug() << fmt::format("Non-1.0 channel scale [{}]", join(channelScale, ","));
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels,
             [&](size_t i) {
@@ -752,8 +752,8 @@ Task<void> linearizeAndNormalizeRawDng(
     // clipping just in case there's HDR data in there. Per DNG 1.7, this can be the case, so we err on the safe side.
     const bool clipToOne = false;
     if (clipToOne) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels,
             [&](size_t i) {
@@ -914,8 +914,8 @@ Task<void> postprocessLinearRawDng(
 
     if (exposureScale != 1.0f) {
         tlog::debug() << fmt::format("Applying exposure scale: {}", exposureScale);
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels,
             [&](size_t i) {
@@ -938,8 +938,8 @@ Task<void> postprocessLinearRawDng(
     }
 
     // The remaining camera profile transformation is applied in linear ProPhoto RGB space (aka RIMM space)
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         numPixels,
         numPixels * numChannels,
         [&](size_t i) {
@@ -1057,7 +1057,7 @@ Task<void> postprocessLinearRawDng(
                 return values[(size_t)iy * header.mapPointsH * header.mapPointsN + (size_t)ix * header.mapPointsN + iz];
             };
 
-            co_await ThreadPool::global().parallelForAsync<int>(
+            co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
                 numPixels * numChannels,
@@ -1120,8 +1120,8 @@ Task<void> postprocessLinearRawDng(
 
     // Profile application has to happen in SDR space if the image is HDR
     if (isHdr) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels,
             [&](size_t i) {
@@ -1180,8 +1180,8 @@ Task<void> postprocessLinearRawDng(
             return (1.0f - w) * tc[i].y() + w * tc[i + 1].y();
         };
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels * 16, // arbitrary factor to estimate pw linear cost
             [&](size_t i) {
@@ -1199,8 +1199,8 @@ Task<void> postprocessLinearRawDng(
     }
 
     if (isHdr) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numChannels,
             [&](size_t i) {
@@ -1250,8 +1250,8 @@ Task<void> postprocessRgb(
 
         tlog::debug() << fmt::format("Found reference black/white: black={} white={}", refBlack, refWhite);
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1332,8 +1332,8 @@ Task<void> postprocessRgb(
 
         const Vector3f scale = Vector3f(1.0f) / Vector3f(transferRangeWhite - transferRangeBlack);
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1360,8 +1360,8 @@ Task<void> postprocessRgb(
         const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(*pcsInt);
 
         size_t numPixels = (size_t)size.x() * size.y();
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1391,8 +1391,8 @@ Task<void> postprocessRgb(
         tlog::debug() << "No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.";
 
         size_t numPixels = (size_t)size.x() * size.y();
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1428,8 +1428,8 @@ Task<void> postprocessLab(
 
     // Step 1: Decode the encoded values to CIE L*a*b* [L: 0..100, a: -128..127, b: -128..127]
     if (photometric == PHOTOMETRIC_CIELAB) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1443,8 +1443,8 @@ Task<void> postprocessLab(
             priority
         );
     } else if (photometric == PHOTOMETRIC_ICCLAB) {
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1465,8 +1465,8 @@ Task<void> postprocessLab(
             tlog::debug() << fmt::format("Found ITULAB Decode tag: min={} max={}", decodeMin, decodeMax);
         }
 
-        co_await ThreadPool::global().parallelForAsync<size_t>(
-            0,
+        co_await ThreadPool::global().parallelFor(
+            0uz,
             numPixels,
             numPixels * numColorChannels,
             [&](size_t i) {
@@ -1485,8 +1485,8 @@ Task<void> postprocessLab(
     static constexpr float kappa = 903.3f; // 24389/27
     static constexpr float epsilon = 0.008856f; // 216/24389
 
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         numPixels,
         numPixels * numColorChannels,
         [&](size_t i) {
@@ -2206,7 +2206,7 @@ Task<ImageData> readTiffImage(
 
                         const auto views = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
 
-                        co_await ThreadPool::global().parallelForAsync<int>(
+                        co_await ThreadPool::global().parallelFor(
                             yStart,
                             yEnd,
                             numPixels * samplesPerPixel / numPlanes,
@@ -2275,7 +2275,7 @@ Task<ImageData> readTiffImage(
                         const size_t numPixels = (size_t)tile.width * tile.height;
 
                         const auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
-                            co_await ThreadPool::global().parallelForAsync<int>(
+                            co_await ThreadPool::global().parallelFor(
                                 yStart,
                                 yEnd,
                                 numPixels * samplesPerPixel / numPlanes,
@@ -2331,7 +2331,7 @@ Task<ImageData> readTiffImage(
         interleavedImageData = HeapArray<uint8_t>(numPixels * numChannels * bytesPerSample);
 
         const auto parallelInterleave = [&](const auto* in, auto* out) -> Task<void> {
-            co_await ThreadPool::global().parallelForAsync<int>(
+            co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
                 numPixels * numChannels,
@@ -2379,7 +2379,7 @@ Task<ImageData> readTiffImage(
         HeapArray<uint8_t> croppedImageData((size_t)numPixels * samplesPerPixel * unpackedBitsPerSample / 8);
 
         const auto cropToActiveArea = [&](auto* const croppedData, const auto* const data) -> Task<void> {
-            co_await ThreadPool::global().parallelForAsync<int>(
+            co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
                 numPixels * numChannels,

@@ -213,7 +213,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             disposed = iter.dispose_method == WEBP_MUX_DISPOSE_BACKGROUND;
 
             if (!directlyOnCanvas || iter.blend_method != WEBP_MUX_NO_BLEND) {
-                co_await ThreadPool::global().parallelForAsync<int>(
+                co_await ThreadPool::global().parallelFor(
                     0,
                     size.y(),
                     numSamples,

@@ -84,8 +84,8 @@ Task<void> preprocessAndApplyAppleGainMap(
     // First: linearize per the spec, then resize to image size
     const auto gainmapSize = gainMapChannels.front().size();
     const size_t gainmapNumPixels = (size_t)gainmapSize.x() * gainmapSize.y();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         gainmapNumPixels,
         gainmapNumPixels * gainMapChannels.size(),
         [&](int i) {
@@ -154,8 +154,8 @@ Task<void> preprocessAndApplyAppleGainMap(
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         numPixels,
         numPixels * imageChannels.size(),
         [&](size_t i) {
@@ -207,8 +207,8 @@ Task<void> preprocessAndApplyIsoGainMap(
     // Per the spec, unnormalize and then resize (in log space) to image size
     const auto gainmapSize = gainMapChannels.front().size();
     const size_t gainmapNumPixels = (size_t)gainmapSize.x() * gainmapSize.y();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         gainmapNumPixels,
         gainmapNumPixels * gainMapChannels.size(),
         [&](int i) {
@@ -266,8 +266,8 @@ Task<void> preprocessAndApplyIsoGainMap(
 
     // Actual gainmap application
     const size_t numPixels = (size_t)size.x() * size.y();
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         numPixels,
         numPixels * imageChannels.size(),
         [&](size_t i) {

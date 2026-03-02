@@ -112,8 +112,8 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
     auto dst = view<float>();
     const auto src = other.view<const float>();
 
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0,
+    co_await ThreadPool::global().parallelFor(
+        0uz,
         other.numPixels(),
         other.numPixels(),
         [&](size_t i) {
@@ -132,9 +132,7 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     auto dst = view<float>();
     const auto src = other.view<const float>();
 
-    co_await ThreadPool::global().parallelForAsync<size_t>(
-        0, other.numPixels(), other.numPixels(), [&](size_t i) { dst[i] *= src[i]; }, priority
-    );
+    co_await ThreadPool::global().parallelFor(0uz, other.numPixels(), other.numPixels(), [&](size_t i) { dst[i] *= src[i]; }, priority);
 }
 
 void Channel::updateTile(int x, int y, int width, int height, span<const float> newData) {

@@ -431,7 +431,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         const auto extraView = MultiChannelView<float>{span{resultData.channels}.subspan(numRgbaChannels)};
         TEV_ASSERT(extraView.nChannels() == numExtraChannels, "Not enough channels allocated for extra channels.");
 
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             numPixels * numExtraChannels,
@@ -451,7 +451,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         TEV_ASSERT(numColorChannels > 0 && numColorChannels <= 3, "Invalid number of color channels.");
         TEV_ASSERT(rgbaOut.nChannels() >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
 
-        co_await ThreadPool::global().parallelForAsync<int>(
+        co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
             numPixels * numRgbaChannels,

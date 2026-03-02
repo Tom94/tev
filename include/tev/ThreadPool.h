@@ -129,7 +129,7 @@ public:
         return nTasks;
     }
 
-    template <typename Int, typename F> Task<void> parallelForAsync(Int start, Int end, size_t approxCost, F body, int priority) {
+    template <typename Int, typename F> Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
         const Int range = end - start;
         const Int n = nTasks(start, end, approxCost);
 
