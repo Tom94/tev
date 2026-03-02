@@ -143,7 +143,7 @@ Matrix3f xyzToRgb(const chroma_t& chroma, float Y) { return inverse(rgbToXyz(chr
 Matrix3f xyzToChromaMatrix(const chroma_t& chroma) { return xyzToRgb(chroma, 1); }
 
 // Adapted from LittleCMS's AdaptToXYZD50 function
-Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) {
+Matrix3f adaptWhiteBradford(Vector2f srcWhite, Vector2f dstWhite) {
     if (srcWhite == dstWhite) {
         return Matrix3f{1.0f};
     }
@@ -162,7 +162,7 @@ Matrix3f adaptWhiteBradford(const Vector2f& srcWhite, const Vector2f& dstWhite) 
     };
     const auto kBradfordInv = toMatrix3(brInv);
 
-    const auto xyToXYZ = [](const Vector2f& c) { return Vector3f{c.x() / c.y(), 1.0f, (1.0f - c.x() - c.y()) / c.y()}; };
+    const auto xyToXYZ = [](Vector2f c) { return Vector3f{c.x() / c.y(), 1.0f, (1.0f - c.x() - c.y()) / c.y()}; };
 
     const auto lmsSrc = kBradford * xyToXYZ(srcWhite);
     const auto lmsDst = kBradford * xyToXYZ(dstWhite);
@@ -622,7 +622,7 @@ ColorProfile::~ColorProfile() {
 }
 
 optional<ColorProfile::CICP> ColorProfile::cicp() const {
-    const auto* cicp = (const cmsVideoSignalType*)cmsReadTag(get(), cmsSigcicpTag);
+    const auto* cicp = static_cast<const cmsVideoSignalType*>(cmsReadTag(get(), cmsSigcicpTag));
     if (!cicp) {
         return nullopt;
     }

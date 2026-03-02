@@ -34,7 +34,7 @@ static Task<void> amazeDemosaic(
 );
 
 static Task<void> generalDemosaic(
-    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, Vector2i cfaSize, int priority
 );
 
 Task<void> demosaic(

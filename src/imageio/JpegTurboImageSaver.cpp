@@ -28,7 +28,7 @@ using namespace std;
 
 namespace tev {
 
-Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<const uint8_t> data, const Vector2i& imageSize, int nChannels) const {
+Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<const uint8_t> data, Vector2i imageSize, int nChannels) const {
     J_COLOR_SPACE colorSpace;
     switch (nChannels) {
         case 1: colorSpace = JCS_GRAYSCALE; break;

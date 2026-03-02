@@ -49,7 +49,7 @@ namespace tev {
 class ImageViewer : public nanogui::Screen {
 public:
     ImageViewer(
-        const nanogui::Vector2i& size,
+        nanogui::Vector2i size,
         const std::shared_ptr<BackgroundImagesLoader>& imagesLoader,
         std::weak_ptr<Ipc> ipc,
         bool maximize,
@@ -93,9 +93,7 @@ public:
     void reloadAllImages();
     void reloadImagesWhoseFileChanged();
 
-    void updateImage(
-        std::string_view imageName, bool shallSelect, std::string_view channel, int x, int y, int width, int height, std::span<const float> imageData
-    );
+    void updateImage(std::string_view imageName, bool shallSelect, std::string_view channel, Box2i bounds, std::span<const float> imageData);
 
     void updateImageVectorGraphics(std::string_view imageName, bool shallSelect, bool append, std::span<const VgCommand> commands);
 
@@ -133,7 +131,7 @@ public:
     EMetric metric() const { return mImageCanvas->metric(); }
     void setMetric(EMetric metric);
 
-    void setBackgroundColorStraight(const nanogui::Color& color);
+    void setBackgroundColorStraight(nanogui::Color color);
 
     float displayWhiteLevel() const;
     void setDisplayWhiteLevel(float value);
@@ -232,7 +230,7 @@ private:
     std::shared_ptr<Image> nthVisibleImage(size_t n);
     std::shared_ptr<Image> imageByName(std::string_view imageName);
 
-    bool canDragSidebarFrom(const nanogui::Vector2i& p) {
+    bool canDragSidebarFrom(nanogui::Vector2i p) {
         return mSidebar->visible() && p.x() - mSidebar->fixed_width() < 10 && p.x() - mSidebar->fixed_width() > -5;
     }
 

@@ -216,19 +216,17 @@ public:
 
     nanogui::Vector2i displaySize() const { return mData.displaySize(); }
 
-    bool contains(const nanogui::Vector2i& pos) const {
+    bool contains(nanogui::Vector2i pos) const {
         return pos.x() >= 0 && pos.y() >= 0 && pos.x() < mData.size().x() && pos.y() < mData.size().y();
     }
 
-    const Box2i& dataWindow() const & { return mData.dataWindow; }
-    const Box2i& displayWindow() const & { return mData.displayWindow; }
-    Box2i toImageCoords(const Box2i& displayWindow) const {
-        return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min);
-    }
+    Box2i dataWindow() const { return mData.dataWindow; }
+    Box2i displayWindow() const { return mData.displayWindow; }
+    Box2i toImageCoords(Box2i displayWindow) const { return displayWindow.translate(mData.displayWindow.min - mData.dataWindow.min); }
 
     float whiteLevel() const { return mData.hdrMetadata.bestGuessWhiteLevel; }
 
-    nanogui::Vector2f centerDisplayOffset(const Box2i& displayWindow) const {
+    nanogui::Vector2f centerDisplayOffset(Box2i displayWindow) const {
         return Box2f{dataWindow()}.middle() - Box2f{displayWindow}.middle();
     }
 
@@ -249,7 +247,7 @@ public:
 
     static int drawId() { return sId++; }
 
-    void updateChannel(std::string_view channelName, int x, int y, int width, int height, std::span<const float> data);
+    void updateChannel(std::string_view channelName, Box2i bounds, std::span<const float> data);
 
     void updateVectorGraphics(bool append, std::span<const VgCommand> commands);
 
@@ -262,10 +260,10 @@ public:
 
     Task<HeapArray<float>> getRgbaHdrImageData(
         std::shared_ptr<Image> reference,
-        const Box2i& imageRegion,
+        Box2i imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
-        const nanogui::Color& bg,
+        nanogui::Color bg,
         bool divideAlpha,
         int priority
     ) const;
@@ -275,10 +273,10 @@ public:
 
     Task<HeapArray<uint8_t>> getRgbaLdrImageData(
         std::shared_ptr<Image> reference,
-        const Box2i& imageRegion,
+        Box2i imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
-        const nanogui::Color& bg,
+        nanogui::Color bg,
         bool divideAlpha,
         ETonemap tonemap,
         float gamma,
@@ -290,10 +288,10 @@ public:
     Task<void> save(
         const fs::path& path,
         std::shared_ptr<Image> reference,
-        const Box2i& imageRegion,
+        Box2i imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
-        const nanogui::Color& bg,
+        nanogui::Color bg,
         ETonemap tonemap,
         float gamma,
         float exposure,

@@ -107,7 +107,7 @@ static bool isExrImage(istream& iStream) {
     return result;
 }
 
-AttributeNode createVec2fNode(string_view name, const Imath::V2f& value) {
+AttributeNode createVec2fNode(string_view name, Imath::V2f value) {
     AttributeNode node;
     node.name = name;
     node.type = "v2f";
@@ -115,7 +115,7 @@ AttributeNode createVec2fNode(string_view name, const Imath::V2f& value) {
     return node;
 }
 
-AttributeNode createVec2iNode(string_view name, const Imath::V2i& value) {
+AttributeNode createVec2iNode(string_view name, Imath::V2i value) {
     AttributeNode node;
     node.name = name;
     node.type = "v2i";
@@ -366,12 +366,12 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
 // Helper class for dealing with the raw channels loaded from an exr file.
 class RawChannel {
 public:
-    RawChannel(size_t partId, string_view name, string_view imfName, Imf::Channel imfChannel, const Vector2i& size) :
+    RawChannel(size_t partId, string_view name, string_view imfName, Imf::Channel imfChannel, Vector2i size) :
         mPartId{partId}, mName{name}, mImfName{imfName}, mImfChannel{imfChannel}, mSize{size} {}
 
     void resize() { mData = PixelBuffer::alloc((size_t)mSize.x() * mSize.y(), pixelFormat()); }
 
-    void registerWith(Imf::FrameBuffer& frameBuffer, const Imath::Box2i& dw) {
+    void registerWith(Imf::FrameBuffer& frameBuffer, Imath::Box2i dw) {
         int width = dw.max.x - dw.min.x + 1;
         frameBuffer.insert(
             mImfName.c_str(),
@@ -417,9 +417,9 @@ public:
 
     size_t partId() const { return mPartId; }
 
-    string_view name() const { return mName; }
+    string_view name() const & { return mName; }
 
-    const Vector2i& size() const { return mSize; }
+    Vector2i size() const { return mSize; }
     size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
     EPixelFormat pixelFormat() const {

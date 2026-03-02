@@ -89,7 +89,7 @@ static const vector<pair<ituth273::ETransfer, string_view>> TRANSFERS = {
 };
 
 ImageViewer::ImageViewer(
-    const Vector2i& size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, weak_ptr<Ipc> ipc, bool maximize, bool showUi, bool floatBuffer
+    Vector2i size, const shared_ptr<BackgroundImagesLoader>& imagesLoader, weak_ptr<Ipc> ipc, bool maximize, bool showUi, bool floatBuffer
 ) :
     Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc}, mMaximizedLaunch{maximize} {
 
@@ -425,7 +425,7 @@ ImageViewer::ImageViewer(
 
             new Label{popup, "Background color", "sans-bold", 20};
             mBackgroundColorWheel = new ColorWheel{popup};
-            mBackgroundColorWheel->set_callback([this](const Color& value) {
+            mBackgroundColorWheel->set_callback([this](Color value) {
                 const float a = mBackgroundAlphaSlider->value();
                 mImageCanvas->setBackgroundColor(Color{value.r() * a, value.g() * a, value.b() * a, a});
             });
@@ -1670,16 +1670,14 @@ void ImageViewer::reloadImagesWhoseFileChanged() {
     }
 }
 
-void ImageViewer::updateImage(
-    string_view imageName, bool shallSelect, string_view channel, int x, int y, int width, int height, span<const float> imageData
-) {
+void ImageViewer::updateImage(string_view imageName, bool shallSelect, string_view channel, Box2i bounds, span<const float> imageData) {
     auto image = imageByName(imageName);
     if (!image) {
         tlog::warning() << "Image " << imageName << " could not be updated, because it does not exist.";
         return;
     }
 
-    image->updateChannel(channel, x, y, width, height, imageData);
+    image->updateChannel(channel, bounds, imageData);
     if (shallSelect) {
         selectImage(image);
     }
@@ -1973,7 +1971,7 @@ void ImageViewer::setMetric(EMetric metric) {
     }
 }
 
-void ImageViewer::setBackgroundColorStraight(const Color& color) {
+void ImageViewer::setBackgroundColorStraight(Color color) {
     mBackgroundColorWheel->set_color(color);
     mBackgroundAlphaSlider->set_value(color.a());
 

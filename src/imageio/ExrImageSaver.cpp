@@ -70,7 +70,7 @@ private:
     ostream& mStream;
 };
 
-Task<void> ExrImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
+Task<void> ExrImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, Vector2i imageSize, int nChannels) const {
     const vector<string> channelNames = {"R", "G", "B", "A"};
 
     if (nChannels <= 0 || nChannels > 4) {

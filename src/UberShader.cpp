@@ -552,8 +552,8 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 UberShader::~UberShader() {}
 
 void UberShader::draw(
-    const Vector2f& pixelSize,
-    const Vector2f& checkerSize,
+    Vector2f pixelSize,
+    Vector2f checkerSize,
     Image* image,
     const Matrix3f& transformImage,
     Image* reference,
@@ -566,7 +566,7 @@ void UberShader::draw(
     float gamma,
     float colorMultiplier,
     bool clipToLdr,
-    const Color& backgroundColor,
+    Color backgroundColor,
     ETonemap tonemap,
     EMetric metric,
     const optional<Box2i>& crop
@@ -617,7 +617,7 @@ void UberShader::draw(
     mShader->end();
 }
 
-void UberShader::bindCheckerboardData(const Vector2f& pixelSize, const Vector2f& checkerSize, const Color& backgroundColor) {
+void UberShader::bindCheckerboardData(Vector2f pixelSize, Vector2f checkerSize, Color backgroundColor) {
     mShader->set_uniform("pixelSize", pixelSize);
     mShader->set_uniform("checkerSize", checkerSize);
     mShader->set_uniform("bgColor", backgroundColor);

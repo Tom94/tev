@@ -81,7 +81,7 @@ Color Channel::color(string_view channel, bool pastel) {
 
 Channel::Channel(
     string_view name,
-    const nanogui::Vector2i& size,
+    Vector2i size,
     EPixelFormat format,
     EPixelFormat desiredFormat,
     shared_ptr<PixelBuffer> data,
@@ -135,16 +135,16 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     co_await ThreadPool::global().parallelFor(0uz, other.numPixels(), other.numPixels(), [&](size_t i) { dst[i] *= src[i]; }, priority);
 }
 
-void Channel::updateTile(int x, int y, int width, int height, span<const float> newData) {
-    if (x < 0 || y < 0 || x + width > size().x() || y + height > size().y()) {
-        tlog::warning() << "Tile [" << x << "," << y << "," << width << "," << height
-                        << "] could not be updated because it does not fit into the channel's size " << size();
+void Channel::updateTile(const Box2i bounds, const span<const float> newData) {
+    if (!Box2i{size()}.contains(bounds)) {
+        tlog::warning() << fmt::format("Tile [{}, {}] does not fit into channel of size {}", bounds.min, bounds.max, size());
         return;
     }
 
-    for (int posY = 0; posY < height; ++posY) {
-        for (int posX = 0; posX < width; ++posX) {
-            dynamicSetAt({x + posX, y + posY}, newData[posX + posY * (size_t)width]);
+    const auto width = bounds.max.x() - bounds.min.x();
+    for (int y = bounds.min.y(); y < bounds.max.y(); ++y) {
+        for (int x = bounds.min.x(); x < bounds.max.x(); ++x) {
+            dynamicSetAt({x, y}, newData[(x - bounds.min.x()) + (y - bounds.min.y()) * (size_t)width]);
         }
     }
 }

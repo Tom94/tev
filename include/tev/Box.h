@@ -27,8 +27,8 @@ namespace tev {
 template <typename T, uint32_t N_DIMS> struct Box {
     using Vector = nanogui::Array<T, N_DIMS>;
 
-    Box(const Vector& _min, const Vector& _max) : min{_min}, max{_max} {}
-    Box(const Vector& _max) : Box{Vector{(T)0}, _max} {}
+    Box(Vector _min, const Vector _max) : min{_min}, max{_max} {}
+    Box(Vector _max) : Box{Vector{(T)0}, _max} {}
     Box() : Box{Vector{std::numeric_limits<T>::max()}, Vector{std::numeric_limits<T>::min()}} {}
 
     // Casting boxes of other types to this one
@@ -65,7 +65,7 @@ template <typename T, uint32_t N_DIMS> struct Box {
         return result;
     }
 
-    bool contains(const Vector& pos) const {
+    bool contains(Vector pos) const {
         bool result = true;
         for (uint32_t i = 0; i < N_DIMS; ++i) {
             result &= pos[i] >= min[i] && pos[i] < max[i];
@@ -74,7 +74,7 @@ template <typename T, uint32_t N_DIMS> struct Box {
         return result;
     }
 
-    bool contains_inclusive(const Vector& pos) const {
+    bool contains_inclusive(Vector pos) const {
         bool result = true;
         for (uint32_t i = 0; i < N_DIMS; ++i) {
             result &= pos[i] >= min[i] && pos[i] <= max[i];
@@ -83,13 +83,13 @@ template <typename T, uint32_t N_DIMS> struct Box {
         return result;
     }
 
-    bool contains(const Box& other) const { return contains_inclusive(other.min) && contains_inclusive(other.max); }
+    bool contains(Box other) const { return contains_inclusive(other.min) && contains_inclusive(other.max); }
 
-    Box intersect(const Box& other) const { return {nanogui::max(min, other.min), nanogui::min(max, other.max)}; }
+    Box intersect(Box other) const { return {nanogui::max(min, other.min), nanogui::min(max, other.max)}; }
 
-    Box translate(const Vector& offset) const { return {min + offset, max + offset}; }
+    Box translate(Vector offset) const { return {min + offset, max + offset}; }
 
-    bool operator==(const Box& other) const { return min == other.min && max == other.max; }
+    bool operator==(Box other) const { return min == other.min && max == other.max; }
 
     Box<T, N_DIMS> inflate(T amount) const { return {min - Vector{amount}, max + Vector{amount}}; }
 
@@ -103,7 +103,7 @@ using Box2i = Box<int32_t, 2>;
 using Box3i = Box<int32_t, 3>;
 using Box4i = Box<int32_t, 4>;
 
-inline Box2i applyOrientation(EOrientation orientation, Box2i box, const Box2i& reference) {
+inline Box2i applyOrientation(EOrientation orientation, Box2i box, Box2i reference) {
     box = box.translate(-reference.min);
     const auto size = reference.size();
 

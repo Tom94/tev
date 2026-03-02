@@ -217,7 +217,7 @@ array<span<const uint16_t>, 3> tiffGetColorMap(TIFF* tif) {
     return tiffGetRgbSpans<uint16_t>(tif, TIFFTAG_COLORMAP, n);
 }
 
-Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, const nanogui::Vector2i& size, int priority) {
+Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, nanogui::Vector2i size, int priority) {
     if (kind == ETiffKind::F16) {
         size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
         co_await ThreadPool::global().parallelFor(
@@ -254,7 +254,7 @@ Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData,
 template <bool SRGB_TO_LINEAR = false>
 Task<void> tiffDataToFloat32(
     ETiffKind kind,
-    const Vector2i& interleave,
+    const Vector2i interleave,
     const array<span<const uint16_t>, 3>& palette,
     uint32_t* __restrict imageData,
     size_t numSppIn,
@@ -447,7 +447,7 @@ void unpackBits(
     }
 }
 
-Box2i getActiveArea(TIFF* tif, const Vector2i& size) {
+Box2i getActiveArea(TIFF* tif, const Vector2i size) {
     Box2i activeArea{Vector2i(0, 0), size};
 
     if (const auto aa = tiffGetSpan<uint32_t>(tif, TIFFTAG_ACTIVEAREA); aa.size() >= 4) {
@@ -469,7 +469,7 @@ Box2i getActiveArea(TIFF* tif, const Vector2i& size) {
 }
 
 // Per DNG spec: relative to top-left corner of active area!
-Box2i getDefaultCrop(TIFF* tif, const Vector2i& size) {
+Box2i getDefaultCrop(TIFF* tif, const Vector2i size) {
     Box2i cropBox{Vector2i(0, 0), size};
 
     if (const auto origin = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPORIGIN); origin.size() >= 2) {
@@ -1525,7 +1525,7 @@ Task<void> postprocessLab(
 Task<ImageData> decodeJpeg(
     span<const uint8_t> compressedData,
     span<const uint8_t> jpegTables,
-    const Vector2i& tileSize,
+    Vector2i tileSize,
     uint16_t tileNumComponents,
     size_t* nestedBitsPerSample,
     int photometric,

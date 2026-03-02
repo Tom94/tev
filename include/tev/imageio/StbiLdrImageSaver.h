@@ -29,7 +29,7 @@ namespace tev {
 class StbiLdrImageSaver : public TypedImageSaver<uint8_t> {
 public:
     Task<void> save(
-        std::ostream& oStream, const fs::path& path, std::span<const uint8_t> data, const nanogui::Vector2i& imageSize, int nChannels
+        std::ostream& oStream, const fs::path& path, std::span<const uint8_t> data, nanogui::Vector2i imageSize, int nChannels
     ) const override;
 
     EAlphaKind alphaKind(std::string_view extension) const override {

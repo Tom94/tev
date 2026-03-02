@@ -34,7 +34,7 @@ using namespace std;
 
 namespace tev {
 
-Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, const Vector2i& imageSize, int nChannels) const {
+Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, Vector2i imageSize, int nChannels) const {
     if (nChannels <= 0 || nChannels > 4098) {
         throw invalid_argument{fmt::format("Invalid number of channels {}.", nChannels)};
     }

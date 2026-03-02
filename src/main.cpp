@@ -76,14 +76,14 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
     switch (packet.type()) {
         case IpcPacket::OpenImage:
         case IpcPacket::OpenImageV2: {
-            auto info = packet.interpretAsOpenImage();
+            const auto info = packet.interpretAsOpenImage();
             imagesLoader->enqueue(toPath(info.imagePath), ensureUtf8(info.channelSelector), info.grabFocus);
             break;
         }
 
         case IpcPacket::ReloadImage: {
             while (!imageViewerIsReady) {}
-            auto info = packet.interpretAsReloadImage();
+            const auto info = packet.interpretAsReloadImage();
             sImageViewer->scheduleToUiThread([&, info] { sImageViewer->reloadImage(ensureUtf8(info.imageName), info.grabFocus); });
 
             sImageViewer->redraw();
@@ -92,7 +92,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
 
         case IpcPacket::CloseImage: {
             while (!imageViewerIsReady) {}
-            auto info = packet.interpretAsCloseImage();
+            const auto info = packet.interpretAsCloseImage();
             sImageViewer->scheduleToUiThread([&, info] { sImageViewer->removeImage(ensureUtf8(info.imageName)); });
 
             sImageViewer->redraw();
@@ -103,13 +103,16 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
         case IpcPacket::UpdateImageV2:
         case IpcPacket::UpdateImageV3: {
             while (!imageViewerIsReady) {}
-            auto info = packet.interpretAsUpdateImage();
+            const auto info = packet.interpretAsUpdateImage();
             sImageViewer->scheduleToUiThread([&, info] {
-                string imageString = ensureUtf8(info.imageName);
+                const string imageString = ensureUtf8(info.imageName);
+                const Box2i bounds = {
+                    {info.x,              info.y              },
+                    {info.x + info.width, info.y + info.height},
+                };
+
                 for (int i = 0; i < info.nChannels; ++i) {
-                    sImageViewer->updateImage(
-                        imageString, info.grabFocus, info.channelNames[i], info.x, info.y, info.width, info.height, info.imageData[i]
-                    );
+                    sImageViewer->updateImage(imageString, info.grabFocus, info.channelNames[i], bounds, info.imageData[i]);
                 }
             });
 
@@ -119,7 +122,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
 
         case IpcPacket::CreateImage: {
             while (!imageViewerIsReady) {}
-            auto info = packet.interpretAsCreateImage();
+            const auto info = packet.interpretAsCreateImage();
             sImageViewer->scheduleToUiThread([&, info] {
                 stringstream imageStream;
                 imageStream << "empty" << " " << info.width << " " << info.height << " " << info.nChannels << " ";
@@ -150,7 +153,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
 
         case IpcPacket::VectorGraphics: {
             while (!imageViewerIsReady) {}
-            auto info = packet.interpretAsVectorGraphics();
+            const auto info = packet.interpretAsVectorGraphics();
             sImageViewer->scheduleToUiThread([&, info] {
                 sImageViewer->updateImageVectorGraphics(ensureUtf8(info.imageName), info.grabFocus, info.append, info.commands);
             });

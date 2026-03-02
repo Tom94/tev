@@ -28,7 +28,7 @@
 namespace tev {
 
 Task<void> demosaic(
-    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, std::span<const uint8_t> cfaPattern, const nanogui::Vector2i cfaSize, int priority
+    ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, std::span<const uint8_t> cfaPattern, nanogui::Vector2i cfaSize, int priority
 );
 
 } // namespace tev

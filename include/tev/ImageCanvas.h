@@ -52,8 +52,8 @@ public:
 
     void draw(NVGcontext* ctx) override;
 
-    void translate(const nanogui::Vector2f& amount);
-    void scale(float amount, const nanogui::Vector2f& origin);
+    void translate(nanogui::Vector2f amount);
+    void scale(float amount, nanogui::Vector2f origin);
     float scale() const { return extractScale(mTransform); }
 
     void setExposure(float exposure) { mExposure = exposure; }
@@ -80,7 +80,7 @@ public:
     EMetric metric() const { return mMetric; }
     void setMetric(EMetric metric) { mMetric = metric; }
 
-    std::optional<Box2i> crop() { return mCrop; }
+    const std::optional<Box2i>& crop() const & { return mCrop; }
     void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
     Box2i cropInImageCoords() const;
 
@@ -150,7 +150,7 @@ private:
     void drawCoordinateSystem(NVGcontext* ctx);
     void drawEdgeShadows(NVGcontext* ctx);
 
-    nanogui::Vector2f pixelOffset(const nanogui::Vector2i& size) const;
+    nanogui::Vector2f pixelOffset(nanogui::Vector2i size) const;
 
     // Assembles the transform from canonical space to the [-1, 1] square for the current image.
     nanogui::Matrix3f transform(const Image* image);

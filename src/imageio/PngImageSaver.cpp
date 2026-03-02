@@ -29,7 +29,7 @@ using namespace std;
 
 namespace tev {
 
-Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uint8_t> data, const Vector2i& imageSize, int nChannels) const {
+Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uint8_t> data, Vector2i imageSize, int nChannels) const {
     int colorType;
     switch (nChannels) {
         case 1: colorType = PNG_COLOR_TYPE_GRAY; break;

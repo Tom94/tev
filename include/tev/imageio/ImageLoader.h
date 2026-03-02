@@ -35,7 +35,7 @@
 namespace tev {
 
 template <bool SRGB_TO_LINEAR = false>
-Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, const nanogui::Vector4f& coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
+Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
     if (data.nChannels() < 3) {
         tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
         co_return;
@@ -169,22 +169,20 @@ public:
         size_t numChannels,
         size_t numInterleavedDims,
         bool hasAlpha,
-        const nanogui::Vector2i& size,
+        nanogui::Vector2i size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
         std::string_view layer,
         int priority
     );
 
-    static std::vector<Channel> makeNChannels(
-        size_t numChannels, const nanogui::Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer
-    );
+    static std::vector<Channel>
+        makeNChannels(size_t numChannels, nanogui::Vector2i size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer);
 
     static Task<void> resizeChannelsAsync(
-        std::span<const Channel> srcChannels, std::vector<Channel>& dstChannels, const std::optional<Box2i>& dstBox, int priority
+        std::span<const Channel> srcChannels, std::span<Channel> dstChannels, const std::optional<Box2i>& dstBox, int priority
     );
-    static Task<void>
-        resizeImageData(ImageData& resultData, const nanogui::Vector2i& targetSize, const std::optional<Box2i>& targetBox, int priority);
+    static Task<void> resizeImageData(ImageData& resultData, nanogui::Vector2i targetSize, const std::optional<Box2i>& targetBox, int priority);
 };
 
 } // namespace tev

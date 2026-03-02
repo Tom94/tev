@@ -44,7 +44,7 @@ std::string_view toString(ERenderingIntent intent);
 chroma_t zeroChroma();
 
 nanogui::Matrix3f xyzToChromaMatrix(const chroma_t& chroma);
-nanogui::Matrix3f adaptWhiteBradford(const nanogui::Vector2f& srcWhite, const nanogui::Vector2f& dstWhite);
+nanogui::Matrix3f adaptWhiteBradford(nanogui::Vector2f srcWhite, nanogui::Vector2f dstWhite);
 
 nanogui::Matrix3f convertColorspaceMatrix(
     const chroma_t& srcChroma, const chroma_t& dstChroma, ERenderingIntent intent, std::optional<nanogui::Vector2f> adoptedNeutral = std::nullopt
@@ -254,12 +254,12 @@ static constexpr float b = 0.28466892f;
 static constexpr float c = 0.55991073f;
 } // namespace hlg
 
-inline nanogui::Vector3f hlgToLinear(const nanogui::Vector3f& val) {
+inline nanogui::Vector3f hlgToLinear(nanogui::Vector3f val) {
     const auto invOetf = [](const float val) {
         return val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - hlg::c) / hlg::a) + hlg::b) / 12.0f);
     };
 
-    const auto ootf = [](const nanogui::Vector3f& val) {
+    const auto ootf = [](nanogui::Vector3f val) {
         // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
         const float lum = 0.2627f * val.x() + 0.6780f * val.y() + 0.0593f * val.z();
         return hlg::gain * pow(lum, hlg::gamma - 1.0f) * val;
@@ -268,12 +268,12 @@ inline nanogui::Vector3f hlgToLinear(const nanogui::Vector3f& val) {
     return ootf({invOetf(val.x()), invOetf(val.y()), invOetf(val.z())}) / 203.0f; // Convert to linear units where SDR white is 1.0
 }
 
-inline nanogui::Vector3f linearToHlg(const nanogui::Vector3f& val) {
+inline nanogui::Vector3f linearToHlg(nanogui::Vector3f val) {
     const auto oetf = [](const float val) {
         return val <= 1.0f / 12.0f ? std::sqrt(3.0f * val) : (hlg::a * std::log(12.0f * val - hlg::b) + hlg::c);
     };
 
-    const auto invOotf = [](const nanogui::Vector3f& val) {
+    const auto invOotf = [](nanogui::Vector3f val) {
         const auto tmp = val / hlg::gain;
 
         // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
@@ -310,7 +310,7 @@ inline float invTransferComponent(const ETransfer transfer, float val) noexcept 
     }
 }
 
-inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
+inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f val) noexcept {
     if (transfer == ETransfer::HLG) {
         return hlgToLinear(val);
     } else {
@@ -347,7 +347,7 @@ inline float transferComponent(const ETransfer transfer, float val) noexcept {
     }
 }
 
-inline nanogui::Vector3f transfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
+inline nanogui::Vector3f transfer(const ETransfer transfer, const nanogui::Vector3f val) noexcept {
     if (transfer == ETransfer::HLG) {
         return linearToHlg(val);
     } else {

@@ -384,7 +384,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
 
         auto displayWindowToNano = displayWindowToNanogui(mImage.get());
 
-        auto vgToNano = [&](const Vector2f& p) { return Vector2f{m_pos} + displayWindowToNano * p; };
+        auto vgToNano = [&](const Vector2f p) { return Vector2f{m_pos} + displayWindowToNano * p; };
 
         auto applyVgCommand = [&](const VgCommand& command) {
             const float* f = command.data.data();
@@ -535,9 +535,9 @@ void ImageCanvas::draw(NVGcontext* ctx) {
     }
 }
 
-void ImageCanvas::translate(const Vector2f& amount) { mTransform = Matrix3f::translate(amount) * mTransform; }
+void ImageCanvas::translate(Vector2f amount) { mTransform = Matrix3f::translate(amount) * mTransform; }
 
-void ImageCanvas::scale(float amount, const Vector2f& origin) {
+void ImageCanvas::scale(float amount, Vector2f origin) {
     static const double BASE_SCALE = sqrt(sqrt(sqrt(2.0)));
     const float scaleFactor = (float)pow(BASE_SCALE, (double)amount);
 
@@ -1028,7 +1028,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     co_return result;
 }
 
-Vector2f ImageCanvas::pixelOffset(const Vector2i& /*size*/) const {
+Vector2f ImageCanvas::pixelOffset(Vector2i /*size*/) const {
     // Translate by half of a pixel to avoid pixel boundaries aligning perfectly with texels. The translation only needs to happen for axes
     // with even resolution. Odd-resolution axes are implicitly shifted by half a pixel due to the centering operation. Additionally, add
     // 0.1111111 such that our final position is almost never 0 modulo our pixel ratio, which again avoids aligned pixel boundaries with

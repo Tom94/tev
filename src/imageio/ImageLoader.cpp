@@ -129,7 +129,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     size_t numChannels,
     size_t numInterleavedDims,
     bool hasAlpha,
-    const Vector2i& size,
+    Vector2i size,
     EPixelFormat format,
     EPixelFormat desiredFormat,
     string_view layer,
@@ -211,7 +211,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 }
 
 vector<Channel>
-    ImageLoader::makeNChannels(size_t numChannels, const Vector2i& size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
+    ImageLoader::makeNChannels(size_t numChannels, Vector2i size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
     vector<Channel> channels;
     for (size_t c = 0; c < numChannels; ++c) {
         channels.emplace_back(to_string(c), size, format, desiredFormat);
@@ -225,7 +225,7 @@ vector<Channel>
 }
 
 Task<void> ImageLoader::resizeChannelsAsync(
-    span<const Channel> srcChannels, vector<Channel>& dstChannels, const optional<Box2i>& dstArea, int priority
+    span<const Channel> srcChannels, span<Channel> dstChannels, const optional<Box2i>& dstArea, int priority
 ) {
     TEV_ASSERT(srcChannels.size() == dstChannels.size(), "Number of source and destination channels must match.");
     if (srcChannels.empty()) {
@@ -297,7 +297,7 @@ Task<void> ImageLoader::resizeChannelsAsync(
     );
 }
 
-Task<void> ImageLoader::resizeImageData(ImageData& resultData, const Vector2i& targetSize, const optional<Box2i>& targetArea, int priority) {
+Task<void> ImageLoader::resizeImageData(ImageData& resultData, Vector2i targetSize, const optional<Box2i>& targetArea, int priority) {
     const Vector2i size = resultData.channels.front().size();
     if (size == targetSize) {
         co_return;

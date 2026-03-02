@@ -36,8 +36,8 @@ public:
     virtual ~UberShader();
 
     void draw(
-        const nanogui::Vector2f& pixelSize,
-        const nanogui::Vector2f& checkerSize,
+        nanogui::Vector2f pixelSize,
+        nanogui::Vector2f checkerSize,
         Image* textureImage,
         const nanogui::Matrix3f& transformImage,
         Image* textureReference,
@@ -50,14 +50,14 @@ public:
         float gamma,
         float colorMultiplier,
         bool clipToLdr,
-        const nanogui::Color& backgroundColor,
+        nanogui::Color backgroundColor,
         ETonemap tonemap,
         EMetric metric,
         const std::optional<Box2i>& crop
     );
 
 private:
-    void bindCheckerboardData(const nanogui::Vector2f& pixelSize, const nanogui::Vector2f& checkerSize, const nanogui::Color& backgroundColor);
+    void bindCheckerboardData(nanogui::Vector2f pixelSize, nanogui::Vector2f checkerSize, nanogui::Color backgroundColor);
 
     void bindImageData(
         nanogui::Texture* textureImage, const nanogui::Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap

@@ -146,7 +146,7 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
 
         mVersion = IsoGainMapVersion{fmt::format("XMP v{}", version)};
 
-        const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f& out) {
+        const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f* out) {
             if (XMP_OptionBits options; meta->GetProperty(ns, name, nullptr, &options)) {
                 if (options & kXMP_PropValueIsArray) {
                     XMP_Index count = meta->CountArrayItems(ns, name);
@@ -215,29 +215,29 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
             return false;
         };
 
-        if (!getMaybeRgbFloat("GainMapMin", mGainMapMin)) {
+        if (!getMaybeRgbFloat("GainMapMin", &mGainMapMin)) {
             mGainMapMin = nanogui::Vector3f{0.0f};
         }
 
-        if (!getMaybeRgbFloat("GainMapMax", mGainMapMax)) {
+        if (!getMaybeRgbFloat("GainMapMax", &mGainMapMax)) {
             throw invalid_argument{"XMP gainmap property GainMapMax is required."};
         }
 
         mGainMapMax = max(mGainMapMax, mGainMapMin);
 
-        if (!getMaybeRgbFloat("Gamma", mGainMapGamma)) {
+        if (!getMaybeRgbFloat("Gamma", &mGainMapGamma)) {
             mGainMapGamma = nanogui::Vector3f{1.0f};
         }
 
         mGainMapGamma = max(mGainMapGamma, nanogui::Vector3f{0.001f});
 
-        if (!getMaybeRgbFloat("OffsetSDR", mBaseOffset)) {
+        if (!getMaybeRgbFloat("OffsetSDR", &mBaseOffset)) {
             mBaseOffset = nanogui::Vector3f{1.0f / 64.0f};
         }
 
         mBaseOffset = max(mBaseOffset, nanogui::Vector3f{0.0f});
 
-        if (!getMaybeRgbFloat("OffsetHDR", mAlternateOffset)) {
+        if (!getMaybeRgbFloat("OffsetHDR", &mAlternateOffset)) {
             mAlternateOffset = nanogui::Vector3f{1.0f / 64.0f};
         }
 

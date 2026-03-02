@@ -62,10 +62,10 @@ public:
         std::unique_lock lock{mMutex};
 
         if (mRawQueue.empty()) {
-            return {};
+            return std::nullopt;
         }
 
-        T result = std::move(mRawQueue.front());
+        std::optional result = std::move(mRawQueue.front());
         mRawQueue.pop_front();
 
         return result;

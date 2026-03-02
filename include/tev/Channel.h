@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <tev/Box.h>
 #include <tev/Common.h>
 #include <tev/Task.h>
 
@@ -69,7 +70,7 @@ public:
     ChannelView(ChannelView&&) = default;
     ChannelView& operator=(ChannelView&&) = default;
 
-    ChannelView(T* data, size_t dataStride, size_t dataOffset, const nanogui::Vector2i& size) :
+    ChannelView(T* data, size_t dataStride, size_t dataOffset, nanogui::Vector2i size) :
         mData{data}, mDataOffset{dataOffset}, mDataStride{dataStride}, mSize{size} {}
 
     std::conditional_t<std::is_same_v<T, float>, float&, float> operator[](size_t i) const & {
@@ -103,7 +104,7 @@ public:
 
     void setAt(int x, int y, float value) const { setAt(x + y * (size_t)mSize.x(), value); }
 
-    const nanogui::Vector2i& size() const { return mSize; }
+    nanogui::Vector2i size() const { return mSize; }
 
     T* data() const & { return mData; }
 
@@ -192,7 +193,7 @@ public:
 
     Channel(
         std::string_view name,
-        const nanogui::Vector2i& size,
+        nanogui::Vector2i size,
         EPixelFormat format,
         EPixelFormat desiredFormat,
         std::shared_ptr<PixelBuffer> data = nullptr,
@@ -200,7 +201,7 @@ public:
         size_t dataStride = 1
     );
 
-    std::string_view name() const { return mName; }
+    std::string_view name() const & { return mName; }
     void setName(std::string_view name) { mName = name; }
 
     bool isAlpha() const { return Channel::isAlpha(mName); }
@@ -208,8 +209,8 @@ public:
 
     size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
 
-    const nanogui::Vector2i& size() const { return mSize; }
-    void setSize(const nanogui::Vector2i& size) { mSize = size; }
+    nanogui::Vector2i size() const { return mSize; }
+    void setSize(nanogui::Vector2i size) { mSize = size; }
 
     std::tuple<float, float, float> minMaxMean() const {
         float min = std::numeric_limits<float>::infinity();
@@ -236,7 +237,7 @@ public:
     Task<void> divideByAsync(const Channel& other, int priority);
     Task<void> multiplyWithAsync(const Channel& other, int priority);
 
-    void updateTile(int x, int y, int width, int height, std::span<const float> newData);
+    void updateTile(Box2i bounds, std::span<const float> newData);
 
     template <typename T> ChannelView<T> view() const & {
         static_assert(std::is_const_v<T>, "ChannelView must be const when returned from a const Channel.");
@@ -314,8 +315,8 @@ public:
     size_t offset() const { return mDataOffset; }
     size_t stride() const { return mDataStride; }
 
-    std::shared_ptr<PixelBuffer>& dataBuf() { return mData; }
-    const std::shared_ptr<PixelBuffer>& dataBuf() const { return mData; }
+    std::shared_ptr<PixelBuffer>& dataBuf() & { return mData; }
+    const std::shared_ptr<PixelBuffer>& dataBuf() const & { return mData; }
 
     EPixelFormat desiredPixelFormat() const { return mDesiredPixelFormat; }
     EPixelFormat pixelFormat() const { return mData->format(); }
@@ -341,7 +342,7 @@ template <typename T> class MultiChannelView {
 public:
     MultiChannelView() = delete;
 
-    MultiChannelView(T* data, size_t dataStride, const nanogui::Vector2i& size, size_t numChannels = 0) {
+    MultiChannelView(T* data, size_t dataStride, nanogui::Vector2i size, size_t numChannels = 0) {
         if (numChannels == 0) {
             numChannels = dataStride;
         }

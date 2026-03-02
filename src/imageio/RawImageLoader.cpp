@@ -110,7 +110,7 @@ private:
 #endif
 };
 
-Vector2i flip_index(Vector2i idx, const Vector2i& size, int flip) {
+Vector2i flip_index(Vector2i idx, const Vector2i size, const int flip) {
     if (flip & 4) {
         swap(idx.x(), idx.y());
     }

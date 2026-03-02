@@ -758,11 +758,11 @@ static EPixelFormat pixelFormatForComponentFormat(Texture::ComponentFormat compo
 }
 
 template <typename T>
-Task<void> prepareTextureChannel(
-    T* data, const Channel* chan, const Vector2i& pos, const Vector2i& size, size_t channelIdx, size_t numTextureChannels
-) {
+Task<void> prepareTextureChannel(T* data, const Channel* chan, Box2i box, size_t channelIdx, size_t numTextureChannels) {
     const bool isAlpha = channelIdx == 3 || (chan && Channel::isAlpha(chan->name()));
     const T defaultVal = isAlpha ? (T)1.0f : (T)0.0f;
+
+    const auto size = box.size();
     const size_t numPixels = (size_t)size.x() * size.y();
 
     if (chan) {
@@ -771,7 +771,7 @@ Task<void> prepareTextureChannel(
                 0,
                 size.y(),
                 numPixels,
-                [view, &data, numTextureChannels, channelIdx, width = size.x(), pos](int y) {
+                [view, &data, numTextureChannels, channelIdx, width = size.x(), pos = box.min](int y) {
                     for (int x = 0; x < width; ++x) {
                         size_t tileIdx = x + y * (size_t)width;
                         data[tileIdx * numTextureChannels + channelIdx] = view[pos.x() + x, pos.y() + y];
@@ -921,10 +921,10 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
             const Channel* chan = i < channelNames.size() ? channel(channelNames[i]) : nullptr;
             switch (texture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<half>(), chan, {0, 0}, size, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<half>(), chan, {size}, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<float>(), chan, {0, 0}, size, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<float>(), chan, {size}, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
@@ -1052,14 +1052,14 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     return result;
 }
 
-void Image::updateChannel(string_view channelName, int x, int y, int width, int height, span<const float> data) {
+void Image::updateChannel(const string_view channelName, const Box2i bounds, span<const float> data) {
     Channel* const chan = mutableChannel(channelName);
     if (!chan) {
         tlog::warning() << "Channel " << channelName << " could not be updated, because it does not exist.";
         return;
     }
 
-    chan->updateTile(x, y, width, height, data);
+    chan->updateTile(bounds, data);
 
     // Update textures that are cached for this channel
     for (auto&& kv : mTextures) {
@@ -1068,7 +1068,7 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
             continue;
         }
 
-        const auto numPixels = (size_t)width * height;
+        const auto numPixels = bounds.area();
         const size_t numTextureChannels = nChannelsInPixelFormat(imageTexture.nanoguiTexture->pixel_format());
         auto textureData = PixelBuffer::alloc(
             numPixels * numTextureChannels, pixelFormatForComponentFormat(imageTexture.nanoguiTexture->component_format())
@@ -1079,17 +1079,17 @@ void Image::updateChannel(string_view channelName, int x, int y, int width, int 
             const Channel* chan = i < imageTexture.channels.size() ? channel(imageTexture.channels[i]) : nullptr;
             switch (imageTexture.nanoguiTexture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel(textureData.data<half>(), chan, {x, y}, {width, height}, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(textureData.data<half>(), chan, bounds, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel(textureData.data<float>(), chan, {x, y}, {width, height}, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(textureData.data<float>(), chan, bounds, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
         }
 
         waitAll(tasks);
-        imageTexture.nanoguiTexture->upload_sub_region(textureData.dataBytes(), {x, y}, {width, height});
+        imageTexture.nanoguiTexture->upload_sub_region(textureData.dataBytes(), bounds.min, bounds.size());
         imageTexture.mipmapDirty = true;
     }
 }
@@ -1169,13 +1169,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
 }
 
 Task<HeapArray<float>> Image::getRgbaHdrImageData(
-    shared_ptr<Image> reference,
-    const Box2i& imageRegion,
-    string_view requestedChannelGroup,
-    EMetric metric,
-    const Color& bg,
-    bool divideAlpha,
-    int priority
+    shared_ptr<Image> reference, Box2i imageRegion, string_view requestedChannelGroup, EMetric metric, Color bg, bool divideAlpha, int priority
 ) const {
     const auto channels = co_await getHdrImageData(reference, requestedChannelGroup, metric, priority);
     if (channels.empty()) {
@@ -1265,10 +1259,10 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
 
 Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
     shared_ptr<Image> reference,
-    const Box2i& imageRegion,
+    Box2i imageRegion,
     string_view requestedChannelGroup,
     EMetric metric,
-    const Color& bg,
+    Color bg,
     bool divideAlpha,
     ETonemap tonemap,
     float gamma,
@@ -1289,10 +1283,10 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
 Task<void> Image::save(
     const fs::path& path,
     shared_ptr<Image> reference,
-    const Box2i& imageRegion,
+    Box2i imageRegion,
     string_view requestedChannelGroup,
     EMetric metric,
-    const Color& bg,
+    Color bg,
     ETonemap tonemap,
     float gamma,
     float exposure,

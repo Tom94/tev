@@ -68,14 +68,14 @@ public:
 
     AttributeNode toAttributes() const;
 
-    const IsoGainMapVersion& version() const { return mVersion; }
+    const IsoGainMapVersion& version() const & { return mVersion; }
 
-    const nanogui::Vector3f& gainMapMin() const { return mGainMapMin; }
-    const nanogui::Vector3f& gainMapMax() const { return mGainMapMax; }
-    const nanogui::Vector3f& gainMapGamma() const { return mGainMapGamma; }
+    nanogui::Vector3f gainMapMin() const { return mGainMapMin; }
+    nanogui::Vector3f gainMapMax() const { return mGainMapMax; }
+    nanogui::Vector3f gainMapGamma() const { return mGainMapGamma; }
 
-    const nanogui::Vector3f& baseOffset() const { return mBaseOffset; }
-    const nanogui::Vector3f& alternateOffset() const { return mAlternateOffset; }
+    nanogui::Vector3f baseOffset() const { return mBaseOffset; }
+    nanogui::Vector3f alternateOffset() const { return mAlternateOffset; }
 
     float baseHdrHeadroom() const { return mBaseHdrHeadroom; }
     float alternateHdrHeadroom() const { return mAlternateHdrHeadroom; }

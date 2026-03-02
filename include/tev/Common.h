@@ -638,7 +638,7 @@ enum class ETonemap : int {
 
 ETonemap toTonemap(std::string_view name);
 
-inline nanogui::Vector3f applyTonemap(const nanogui::Vector3f& value, float gamma, ETonemap tonemap) {
+inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETonemap tonemap) {
     nanogui::Vector3f result;
     switch (tonemap) {
         case ETonemap::SRGB: {
@@ -713,7 +713,7 @@ enum EOrientation : int {
     LeftBottom = 8,
 };
 
-inline nanogui::Vector2i applyOrientation(EOrientation orientation, const nanogui::Vector2i& pos, const nanogui::Vector2i& size) {
+inline nanogui::Vector2i applyOrientation(EOrientation orientation, nanogui::Vector2i pos, nanogui::Vector2i size) {
     switch (orientation) {
         case None: return pos;
         case TopLeft: return pos;

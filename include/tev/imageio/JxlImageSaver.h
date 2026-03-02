@@ -29,7 +29,7 @@ namespace tev {
 class JxlImageSaver : public TypedImageSaver<float> {
 public:
     Task<void> save(
-        std::ostream& oStream, const fs::path& path, std::span<const float> data, const nanogui::Vector2i& imageSize, int nChannels
+        std::ostream& oStream, const fs::path& path, std::span<const float> data, nanogui::Vector2i imageSize, int nChannels
     ) const override;
 
     // JXL images technically support straight alpha. And, if a non-linear transfer function is used, premultiplied alpha is of the
