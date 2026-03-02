@@ -36,6 +36,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <source_location>
 #include <span>
 #include <sstream>
 #include <string>
@@ -61,17 +62,13 @@
 #    define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
 #endif
 
-#ifdef __GNUC__
-#    define LIKELY(condition) __builtin_expect(static_cast<bool>(condition), 1)
-#    define UNLIKELY(condition) __builtin_expect(static_cast<bool>(condition), 0)
-#else
-#    define LIKELY(condition) condition
-#    define UNLIKELY(condition) condition
-#endif
-
-#define TEV_ASSERT(cond, description, ...) \
-    if (UNLIKELY(!(cond)))                 \
-        throw std::runtime_error { fmt::format(description, ##__VA_ARGS__) }
+#define TEV_ASSERT(cond, description, ...)                                                                                     \
+    if (!(cond)) [[unlikely]] {                                                                                                \
+        const auto s = std::source_location::current();                                                                        \
+        throw std::runtime_error{                                                                                              \
+            fmt::format("{}({}:{}) `{}`: " description, s.file_name(), s.line(), s.column(), s.function_name(), ##__VA_ARGS__) \
+        };                                                                                                                     \
+    }
 
 #ifndef TEV_VERSION
 #    define TEV_VERSION "undefined"

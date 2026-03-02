@@ -59,6 +59,7 @@ Task<vector<ImageData>>
     const size_t numBytesPerRow = spec.bytes_per_row;
     const size_t numBytes = numBytesPerRow * size.y();
     const size_t alphaChannelIndex = 3;
+    const bool hasAlpha = numChannels == 4;
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
@@ -66,7 +67,7 @@ Task<vector<ImageData>>
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
     const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     resultData.channels = co_await makeRgbaInterleavedChannels(
-        numChannels, numInterleavedChannels, numChannels == 4, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
     const auto outView = MultiChannelView<float>{resultData.channels};
@@ -100,7 +101,7 @@ Task<vector<ImageData>>
                 float alpha = 1.0f;
                 const size_t baseIdxIn = rowIdxIn + x * numChannels;
 
-                for (int c = (int)numChannels - 1; c >= 0; ++c) {
+                for (int c = (int)numChannels - 1; c >= 0; --c) {
                     const unsigned char val = data[baseIdxIn + shifts[c]];
                     if (c == alphaChannelIndex) {
                         alpha = val / 255.0f;
