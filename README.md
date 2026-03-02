@@ -100,7 +100,7 @@ There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that sh
 
 ## Building tev
 
-All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++20-compatible compiler. On Windows, that's Visual Studio 2019 and newer. On Linux and macOS, your system's GCC or Clang compiler is likely sufficient.
+All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++23-compatible compiler.
 
 Most Linux distributions additionally require _xorg_, _wayland_, _gl_, and _dbus_. On Ubuntu/Debian simply call
 ```sh
