@@ -256,7 +256,7 @@ static Task<void> generalDemosaic(
                     float value_sum = 0;
 
                     // Epsilon to avoid division by zero
-                    constexpr float eps = 1e-10f;
+                    static constexpr float eps = 1e-10f;
 
                     for (const auto& s : samples.offsets) {
                         const int nx = clamp(x + s.dx, 0, w - 1);
@@ -329,8 +329,8 @@ static Task<void> amazeDemosaic(
     const float clipPt = 1.0f / (float)initGain;
     const float clipPt8 = 0.8f / (float)initGain;
 
-    constexpr int ts = 160;
-    constexpr int tsh = ts / 2;
+    static constexpr int ts = 160;
+    static constexpr int tsh = ts / 2;
 
     // Offset of R pixel within a Bayer quartet
     int ex, ey;
@@ -352,16 +352,16 @@ static Task<void> amazeDemosaic(
         }
     }
 
-    constexpr int v1 = ts, v2 = 2 * ts, v3 = 3 * ts;
-    constexpr int p1 = -ts + 1, p2 = -2 * ts + 2, p3 = -3 * ts + 3;
-    constexpr int m1 = ts + 1, m2 = 2 * ts + 2, m3 = 3 * ts + 3;
+    static constexpr int v1 = ts, v2 = 2 * ts, v3 = 3 * ts;
+    static constexpr int p1 = -ts + 1, p2 = -2 * ts + 2, p3 = -3 * ts + 3;
+    static constexpr int m1 = ts + 1, m2 = 2 * ts + 2, m3 = 3 * ts + 3;
 
-    constexpr float eps = 1e-5f, epssq = 1e-10f;
-    constexpr float arthresh = 0.75f;
+    static constexpr float eps = 1e-5f, epssq = 1e-10f;
+    static constexpr float arthresh = 0.75f;
 
-    constexpr float gaussodd[4] = {0.14659727707323927f, 0.103592713382435f, 0.0732036125103057f, 0.0365543548389495f};
-    constexpr float nyqthresh = 0.5f;
-    constexpr float gaussgrad[6] = {
+    static constexpr float gaussodd[4] = {0.14659727707323927f, 0.103592713382435f, 0.0732036125103057f, 0.0365543548389495f};
+    static constexpr float nyqthresh = 0.5f;
+    static constexpr float gaussgrad[6] = {
         nyqthresh * 0.07384411893421103f,
         nyqthresh * 0.06207511968171489f,
         nyqthresh * 0.0521818194747806f,
@@ -369,8 +369,8 @@ static Task<void> amazeDemosaic(
         nyqthresh * 0.03099732204057846f,
         nyqthresh * 0.018413194161458882f
     };
-    constexpr float gausseven[2] = {0.13719494435797422f, 0.05640252782101291f};
-    constexpr float gquinc[4] = {0.169917f, 0.108947f, 0.069855f, 0.0287182f};
+    static constexpr float gausseven[2] = {0.13719494435797422f, 0.05640252782101291f};
+    static constexpr float gquinc[4] = {0.169917f, 0.108947f, 0.069855f, 0.0287182f};
 
     const auto median3 = [](float a, float b, float c) -> float { return std::max(std::min(a, b), std::min(std::max(a, b), c)); };
     const auto intp = [](float wt, float a, float b) -> float { return wt * a + (1.0f - wt) * b; };
@@ -388,7 +388,7 @@ static Task<void> amazeDemosaic(
         }
     }
 
-    constexpr int cldf = 2;
+    static constexpr int cldf = 2;
     const size_t bufferSize = 14 * sizeof(float) * ts * ts + sizeof(unsigned char) * ts * tsh + 18 * cldf * 64 + 63;
 
     co_await ThreadPool::global().parallelFor(
