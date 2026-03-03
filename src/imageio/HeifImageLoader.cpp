@@ -562,13 +562,13 @@ Task<vector<ImageData>> HeifImageLoader::load(
         vector<ImageData> result;
 
         for (int i = 0; i < seqTrackCount; ++i) {
-            const heif_track* track = heif_context_get_track(ctx, trackIds[i]);
+            heif_track* track = heif_context_get_track(ctx, trackIds[i]);
 
             for (size_t frameIdx = 0;; ++frameIdx) {
                 const auto partName = seqTrackCount > 1 ? fmt::format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
                                                           fmt::format("frames.{}", frameIdx);
 
-                auto imageData = co_await decodeSingleTrackImage(const_cast<heif_track*>(track), partName);
+                auto imageData = co_await decodeSingleTrackImage(track, partName);
                 if (!imageData) {
                     break;
                 }

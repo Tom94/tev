@@ -234,7 +234,7 @@ struct to_vector_fn {
             std::vector<value_type> v;
             v.reserve(std::ranges::size(r));
             for (auto&& e : r) {
-                v.push_back(static_cast<decltype(e)&&>(e));
+                v.emplace_back(static_cast<decltype(e)&&>(e));
             }
             return v;
         } else {

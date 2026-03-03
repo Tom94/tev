@@ -303,14 +303,13 @@ Task<void> ImageLoader::resizeImageData(ImageData& resultData, Vector2i targetSi
         co_return;
     }
 
-    const auto prevChannels = std::move(resultData.channels);
-    resultData.channels.clear();
+    auto resizedChannels = resultData.channels |
+        views::transform([targetSize](const Channel& c) { return Channel{c.name(), targetSize, c.pixelFormat(), c.desiredPixelFormat()}; }) |
+        to_vector;
 
-    for (auto& c : prevChannels) {
-        resultData.channels.emplace_back(c.name(), targetSize, c.pixelFormat(), c.desiredPixelFormat());
-    }
+    co_await resizeChannelsAsync(resultData.channels, resizedChannels, targetArea, priority);
 
-    co_await resizeChannelsAsync(prevChannels, resultData.channels, targetArea, priority);
+    resultData.channels = std::move(resizedChannels);
 };
 
 } // namespace tev

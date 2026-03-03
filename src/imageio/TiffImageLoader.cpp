@@ -2116,10 +2116,9 @@ Task<ImageData> readTiffImage(
 
         // Get tile data and decode ourselves if the compression method is not supported by libtiff or much slower than our own code.
         for (size_t i = 0; i < tile.count; ++i) {
-            const auto compressedTileData = getRawTileSpan(tif, (uint32_t)i);
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
-                    [&, i, compressedTileData = std::move(compressedTileData)]() -> Task<void> {
+                    [&, i, compressedTileData = getRawTileSpan(tif, (uint32_t)i)]() -> Task<void> {
                         // Assume the embedded data has the same bits/format as the TIFF wrapper claims (can be overridden by the loader)
                         size_t nestedBitsPerSample = dataBitsPerSample;
                         EPixelType nestedPixelType = formatToPixelType(dataSampleFormat);

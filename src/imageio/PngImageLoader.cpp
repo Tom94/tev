@@ -665,7 +665,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         // Depending on the dispose operation, the next frame will be blended either onto the current frame (none), onto no frame at all
         // (background), or the previous frame (previous).
         switch (disposeOp) {
-            case EDisposeOp::None: prevCanvas = std::move(outView); break;
+            case EDisposeOp::None: prevCanvas = outView; break;
             case EDisposeOp::Background: prevCanvas = nullopt; break;
             case EDisposeOp::Previous: break; // Previous frame is already set as the previous canvas
             default: throw ImageLoadError{fmt::format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};

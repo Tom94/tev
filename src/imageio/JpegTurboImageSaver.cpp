@@ -72,13 +72,13 @@ Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<con
     jpeg_start_compress(&cinfo, TRUE);
 
     const auto stride = (size_t)imageSize.x() * nChannels;
-    HeapArray<JSAMPROW> rowPointers(imageSize.y());
+    HeapArray<const JSAMPLE*> rowPointers(imageSize.y());
     for (int y = 0; y < imageSize.y(); ++y) {
-        rowPointers[y] = const_cast<JSAMPROW>(data.data() + y * stride);
+        rowPointers[y] = data.data() + y * stride;
     }
 
     while (cinfo.next_scanline < cinfo.image_height) {
-        jpeg_write_scanlines(&cinfo, &rowPointers[cinfo.next_scanline], cinfo.image_height - cinfo.next_scanline);
+        jpeg_write_scanlines(&cinfo, const_cast<JSAMPARRAY>(&rowPointers[cinfo.next_scanline]), cinfo.image_height - cinfo.next_scanline);
     }
 
     jpeg_finish_compress(&cinfo);

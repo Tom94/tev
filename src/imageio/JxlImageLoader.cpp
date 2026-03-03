@@ -801,7 +801,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                 }
 
                                 gainMapInfo = GainMapInfo{
-                                    .metadata = std::move(isoGainMapMetadata),
+                                    .metadata = isoGainMapMetadata,
                                     .altChroma = altChroma,
                                     .imageData = std::move(gainMap),
                                 };
