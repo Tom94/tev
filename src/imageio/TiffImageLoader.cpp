@@ -1168,7 +1168,7 @@ Task<void> postprocessLinearRawDng(
             throw ImageLoadError{"Tone curve must start at 0."};
         }
 
-        const auto applyPwLinear = [](span<const Vector2f> tc, float x) {
+        static constexpr auto applyPwLinear = [](span<const Vector2f> tc, float x) {
             const auto it = lower_bound(tc.begin(), tc.end(), x, [](auto a, float b) { return a.x() < b; });
 
             // The spec says to extend the slope of the last segment.
@@ -1755,7 +1755,7 @@ Task<ImageData> readTiffImage(
 
     // We will manually decompress JXL and JPEG2000 tiles further down the pipeline by invoking tev's JXL decoder directly on the
     // compressed data from the TIFF file. This returns fp32 data.
-    static const uint16_t COMPRESSION_LOSSY_JPEG = 34892;
+    static constexpr uint16_t COMPRESSION_LOSSY_JPEG = 34892;
     const bool decodeRaw = compression == COMPRESSION_JXL_DNG_1_7 || compression == COMPRESSION_JXL || compression == COMPRESSION_JP2000 ||
         compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG;
     if (decodeRaw) {
@@ -1769,11 +1769,11 @@ Task<ImageData> readTiffImage(
     }
 
     // DNG-specific photometric interpretations. See https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
-    static const uint16_t PHOTOMETRIC_LINEAR_RAW = 34892;
-    static const uint16_t PHOTOMETRIC_DEPTH = 51177;
-    static const uint16_t PHOTOMETRIC_SEMANTIC = 52527;
+    static constexpr uint16_t PHOTOMETRIC_LINEAR_RAW = 34892;
+    static constexpr uint16_t PHOTOMETRIC_DEPTH = 51177;
+    static constexpr uint16_t PHOTOMETRIC_SEMANTIC = 52527;
 
-    static const uint16_t SUPPORTED_PHOTOMETRICS[] = {
+    static constexpr uint16_t SUPPORTED_PHOTOMETRICS[] = {
         PHOTOMETRIC_MINISBLACK,
         PHOTOMETRIC_MINISWHITE,
         PHOTOMETRIC_RGB,
@@ -1835,7 +1835,7 @@ Task<ImageData> readTiffImage(
         throw ImageLoadError{"Image has zero pixels."};
     }
 
-    static const uint16_t TIFFTAG_COLINTERLEAVEFACTOR = 52547;
+    static constexpr uint16_t TIFFTAG_COLINTERLEAVEFACTOR = 52547;
 
     Vector2i interleave = {1, 1};
     if (const TIFFField* field = TIFFFindField(tif, TIFFTAG_COLINTERLEAVEFACTOR, TIFF_ANY)) {
@@ -1938,7 +1938,7 @@ Task<ImageData> readTiffImage(
 
     tlog::debug() << fmt::format("numRgbaChannels={} numNonRgbaChannels={}", numRgbaChannels, numNonRgbaChannels);
 
-    const auto formatToPixelType = [](uint16_t sampleFormat) {
+    static constexpr auto formatToPixelType = [](uint16_t sampleFormat) {
         switch (sampleFormat) {
             case SAMPLEFORMAT_UINT: return EPixelType::Uint;
             case SAMPLEFORMAT_INT: return EPixelType::Int;
@@ -1947,7 +1947,7 @@ Task<ImageData> readTiffImage(
         }
     };
 
-    const auto deriveScale = [](EPixelType pixelType, size_t bitsPerSample) {
+    static constexpr auto deriveScale = [](EPixelType pixelType, size_t bitsPerSample) {
         switch (pixelType) {
             case EPixelType::Uint: return 1.0f / (float)((1ull << bitsPerSample) - 1);
             case EPixelType::Int: return 1.0f / (float)((1ull << (bitsPerSample - 1)) - 1);
@@ -2645,7 +2645,7 @@ Task<vector<ImageData>>
         SemanticMask = 65540,
     };
 
-    const auto dngSubFileTypeToString = [](uint32_t subFileType) -> string {
+    static constexpr auto dngSubFileTypeToString = [](uint32_t subFileType) -> string {
         switch (subFileType) {
             case Main: return "";
             case Reduced: return "reduced";
@@ -2660,7 +2660,7 @@ Task<vector<ImageData>>
         }
     };
 
-    const auto isThumbnail = [](uint32_t subFileType) { return (subFileType & 1) != 0; };
+    static constexpr auto isThumbnail = [](uint32_t subFileType) { return (subFileType & 1) != 0; };
 
     // The following code reads all images contained in main-IDFs and sub-IDFs of the TIFF file as per https://libtiff.gitlab.io/libtiff/multi_page.html
     vector<ImageData> result;

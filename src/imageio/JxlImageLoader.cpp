@@ -183,7 +183,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
         .jxlSuggestedNumThreads = thread::hardware_concurrency(),
     };
 
-    const auto jxlRunParallel =
+    static constexpr auto jxlRunParallel =
         [](void* runnerOpaque, void* jpegxlOpaque, JxlParallelRunInit init, JxlParallelRunFunction func, uint32_t startRange, uint32_t endRange) {
             // We use a separate thread pool from the global one (still a singleton), because the JXL API does not allow jxlRunParallel to be a
             // co-routine. I.e. we need to synchronously wait for the work to finish, which could deadlock the global threadpool. Other mitigation

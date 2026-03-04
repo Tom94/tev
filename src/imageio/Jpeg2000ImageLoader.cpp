@@ -270,7 +270,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         throw ImageLoadError{"Failed to finalize JPEG 2000 decompression."};
     }
 
-    const auto colorSpaceToString = [](OPJ_COLOR_SPACE cs) -> string_view {
+    static constexpr auto colorSpaceToString = [](OPJ_COLOR_SPACE cs) -> string_view {
         switch (cs) {
             case OPJ_CLRSPC_UNKNOWN: return "unknown";
             case OPJ_CLRSPC_UNSPECIFIED: return "unspecified";
@@ -335,7 +335,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         }
     }
 
-    const auto yccToRgb = [](float y, float cb, float cr) {
+    static constexpr auto yccToRgb = [](float y, float cb, float cr) {
         cb -= 0.5f;
         cr -= 0.5f;
         return Vector3f{y + (1.402f * cr), y - (0.344136f * cb + 0.714136f * cr), y + (1.772f * cb)};

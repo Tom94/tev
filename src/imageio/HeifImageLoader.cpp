@@ -103,7 +103,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         int64_t size;
     } readerContext = {iStream, fileSize};
 
-    static const heif_reader reader = {
+    static constexpr heif_reader reader = {
         .reader_api_version = 1,
         .get_position = [](void* context) { return (int64_t)static_cast<ReaderContext*>(context)->stream.tellg(); },
         .read =
@@ -130,7 +130,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         .release_error_msg = {},
     };
 
-    const auto getIccProfileFromImgAndHandle = [](const heif_image* img, const heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
+    static constexpr auto getIccProfileFromImgAndHandle = [](const heif_image* img,
+                                                             const heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
         if (handle) {
             const size_t handleProfileSize = heif_image_handle_get_raw_color_profile_size(handle);
             if (handleProfileSize > 0) {
@@ -169,7 +170,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         return nullopt;
     };
 
-    const auto decodeImage = [priority, &getIccProfileFromImgAndHandle](
+    const auto decodeImage = [priority](
                                  const heif_image* img,
                                  const heif_image_handle* imgHandle, // may be nullptr
                                  int numChannels,
@@ -401,7 +402,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         co_return resultData;
     };
 
-    const auto idealThreadCount = [](size_t numSamples) {
+    static constexpr auto idealThreadCount = [](size_t numSamples) {
         // 1 thread per 4 million samples (rgba megapixel) seems to be a good heuristic for parallel decoding. Spawning threads is *really*
         // expensive, so even taking into account that decoding does quite a bit of processing per sample, we still need a much larger chunk
         // size than our task-based thread pool. Would be better if libheif exposed a way for us to supply a custom thread pool, but oh well.
@@ -409,7 +410,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     };
 
     const auto decodeImageHandle =
-        [&decodeImage, &idealThreadCount](
+        [&decodeImage](
             const heif_image_handle* imgHandle, bool skipColorProcessing, string_view layer = "", string_view partName = ""
         ) -> Task<ImageData> {
         tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
@@ -479,8 +480,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, layer, partName);
     };
 
-    const auto decodeSingleTrackImage = [&decodeImage,
-                                         &idealThreadCount](heif_track* track, string_view partName = "") -> Task<optional<ImageData>> {
+    const auto decodeSingleTrackImage = [&decodeImage](heif_track* track, string_view partName = "") -> Task<optional<ImageData>> {
         tlog::debug() << fmt::format("Decoding HEIF track '{}'", partName);
 
         const bool hasAlpha = heif_track_has_alpha_channel(track);

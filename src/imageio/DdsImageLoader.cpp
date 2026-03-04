@@ -175,7 +175,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{"Failed to initialize COM."};
     }
 
-    ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
+    const ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;

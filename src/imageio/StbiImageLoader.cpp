@@ -29,7 +29,7 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
-    static const stbi_io_callbacks callbacks = {
+    static constexpr stbi_io_callbacks callbacks = {
         // Read
         [](void* context, char* data, int size) {
             auto stream = static_cast<istream*>(context);

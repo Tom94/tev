@@ -44,7 +44,7 @@ Task<void> demosaic(
         throw runtime_error{"CFA input and RGB output must have the same size."};
     }
 
-    const auto isBayer = [&]() {
+    static constexpr auto isBayer = [](auto cfaPattern, auto cfaSize) {
         if (cfaSize.y() != 2 || cfaSize.x() != 2) {
             return false;
         }
@@ -66,7 +66,7 @@ Task<void> demosaic(
     };
 
     // Use fancy demosaicing algorithm if we have a supported pattern, which generally gives better results than simple weighted interpolation.
-    if (isBayer()) {
+    if (isBayer(cfaPattern, cfaSize)) {
         co_await amazeDemosaic(
             cfaIn,
             rgbOut,
@@ -101,7 +101,7 @@ static Task<void> generalDemosaic(
         float w[3]; // RGB contribution weights
     };
 
-    const auto cfa_color_weight = [](uint8_t cfa_idx) -> ColorWeight {
+    static constexpr auto cfa_color_weight = [](uint8_t cfa_idx) -> ColorWeight {
         switch (cfa_idx) {
             case 0:
                 return {
@@ -174,16 +174,16 @@ static Task<void> generalDemosaic(
 
     for (int ty = 0; ty < cfaSize.y(); ++ty) {
         for (int tx = 0; tx < cfaSize.x(); ++tx) {
-            uint8_t my_cfa = cfaPattern[ty * cfaSize.x() + tx];
-            ColorWeight my_w = cfa_color_weight(my_cfa);
+            uint8_t myCfa = cfaPattern[ty * cfaSize.x() + tx];
+            ColorWeight myW = cfa_color_weight(myCfa);
 
             for (int ch = 0; ch < 3; ++ch) {
                 auto& samples = tileSamples[ty][tx][ch];
 
                 // Does this pixel's CFA color contribute to this channel?
-                if (my_w.w[ch] > 0) {
+                if (myW.w[ch] > 0) {
                     // This pixel directly measures this channel
-                    samples.offsets.push_back({0, 0, my_w.w[ch]});
+                    samples.offsets.push_back({0, 0, myW.w[ch]});
                     continue;
                 }
 
@@ -211,15 +211,15 @@ static Task<void> generalDemosaic(
                 // excessive blurring. Sort by distance and keep those
                 // within 1.5x the minimum distance.
                 if (!samples.offsets.empty()) {
-                    float min_dist = std::numeric_limits<float>::max();
+                    float minDist = std::numeric_limits<float>::max();
                     for (auto& s : samples.offsets) {
                         float d = std::sqrt((float)(s.dx * s.dx + s.dy * s.dy));
-                        min_dist = std::min(min_dist, d);
+                        minDist = std::min(minDist, d);
                     }
 
-                    float max_dist = min_dist * 1.6f;
+                    const float maxDist = minDist * 1.6f;
                     std::erase_if(samples.offsets, [&](const SampleOffset& s) {
-                        return std::sqrt((float)(s.dx * s.dx + s.dy * s.dy)) > max_dist;
+                        return std::sqrt((float)(s.dx * s.dx + s.dy * s.dy)) > maxDist;
                     });
                 }
             }
@@ -252,8 +252,8 @@ static Task<void> generalDemosaic(
                         continue;
                     }
 
-                    float weight_sum = 0;
-                    float value_sum = 0;
+                    float weightSum = 0;
+                    float valueSum = 0;
 
                     // Epsilon to avoid division by zero
                     static constexpr float eps = 1e-10f;
@@ -270,11 +270,11 @@ static Task<void> generalDemosaic(
                         const float edge_weight = 1.0f / (gradient + eps);
 
                         const float final_weight = s.baseWeight * edge_weight;
-                        value_sum += val * final_weight;
-                        weight_sum += final_weight;
+                        valueSum += val * final_weight;
+                        weightSum += final_weight;
                     }
 
-                    rgbOut[ch, x, y] = weight_sum > 0 ? value_sum / weight_sum : 0.0f;
+                    rgbOut[ch, x, y] = weightSum > 0 ? valueSum / weightSum : 0.0f;
                 }
             }
         },
@@ -372,9 +372,9 @@ static Task<void> amazeDemosaic(
     static constexpr float gausseven[2] = {0.13719494435797422f, 0.05640252782101291f};
     static constexpr float gquinc[4] = {0.169917f, 0.108947f, 0.069855f, 0.0287182f};
 
-    const auto median3 = [](float a, float b, float c) -> float { return std::max(std::min(a, b), std::min(std::max(a, b), c)); };
-    const auto intp = [](float wt, float a, float b) -> float { return wt * a + (1.0f - wt) * b; };
-    const auto SQR = [](float x) -> float { return x * x; };
+    static constexpr auto median3 = [](float a, float b, float c) -> float { return std::max(std::min(a, b), std::min(std::max(a, b), c)); };
+    static constexpr auto intp = [](float wt, float a, float b) -> float { return wt * a + (1.0f - wt) * b; };
+    static constexpr auto SQR = [](float x) -> float { return x * x; };
 
     // Build tile list
     struct Tile {

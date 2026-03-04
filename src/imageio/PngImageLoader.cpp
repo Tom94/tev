@@ -43,7 +43,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     png_infop infoPtr = nullptr;
-    ScopeGuard pngGuard{[&]() { png_destroy_read_struct(&pngPtr, &infoPtr, nullptr); }};
+    const ScopeGuard pngGuard{[&]() { png_destroy_read_struct(&pngPtr, &infoPtr, nullptr); }};
 
     png_set_error_fn(
         pngPtr,
@@ -360,7 +360,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         enum class EDisposeOp : png_byte { None = 0, Background = 1, Previous = 2 };
         enum class EBlendOp : png_byte { Source = 0, Over = 1 };
 
-        const auto disposeOpToString = [](EDisposeOp op) {
+        static constexpr auto disposeOpToString = [](EDisposeOp op) {
             switch (op) {
                 case EDisposeOp::None: return "none";
                 case EDisposeOp::Background: return "background";
@@ -369,7 +369,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             }
         };
 
-        const auto blendOpToString = [](EBlendOp op) {
+        static constexpr auto blendOpToString = [](EBlendOp op) {
             switch (op) {
                 case EBlendOp::Source: return "source";
                 case EBlendOp::Over: return "over";
@@ -430,7 +430,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         png_read_image(pngPtr, rowPointers.data());
 
-        auto applyColorspace = [&]() -> Task<void> {
+        const auto applyColorspace = [&]() -> Task<void> {
             if (double maxCLL, maxFALL; png_get_cLLI(pngPtr, infoPtr, &maxCLL, &maxFALL) == PNG_INFO_cLLI) {
                 tlog::info() << fmt::format("cLLI: maxCLL={} maxFALL={}", maxCLL, maxFALL);
 

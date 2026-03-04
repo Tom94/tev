@@ -131,7 +131,7 @@ optional<Ifd> Exif::tryGetAppleMakerNote() const {
     static constexpr uint8_t APPLE_SIGNATURE[] = {0x41, 0x70, 0x70, 0x6C, 0x65, 0x20, 0x69, 0x4F, 0x53, 0x00}; // "Apple iOS\0"
     static constexpr size_t SIG_LENGTH = sizeof(APPLE_SIGNATURE);
 
-    const auto isAppleMakernote = [](const uint8_t* data, size_t length) {
+    static constexpr auto isAppleMakernote = [](const uint8_t* data, size_t length) {
         return length >= SIG_LENGTH + 2 && memcmp(data, APPLE_SIGNATURE, SIG_LENGTH) == 0;
     };
 

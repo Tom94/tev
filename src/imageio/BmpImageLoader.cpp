@@ -403,7 +403,7 @@ HeapArray<uint8_t> decode_huffman1d(const uint8_t* src, size_t src_size, int wid
     };
 
     // White terminating codes (run 0..63)
-    static const HuffEntry white_term[] = {
+    static constexpr HuffEntry white_term[] = {
         {0b00110101, 8, 0 },
         {0b000111,   6, 1 },
         {0b0111,     4, 2 },
@@ -471,7 +471,7 @@ HeapArray<uint8_t> decode_huffman1d(const uint8_t* src, size_t src_size, int wid
     };
 
     // White makeup codes (run 64..1728)
-    static const HuffEntry white_makeup[] = {
+    static constexpr HuffEntry white_makeup[] = {
         {0b11011,     5, 64  },
         {0b10010,     5, 128 },
         {0b010111,    6, 192 },
@@ -502,7 +502,7 @@ HeapArray<uint8_t> decode_huffman1d(const uint8_t* src, size_t src_size, int wid
     };
 
     // Black terminating codes (run 0..63)
-    static const HuffEntry black_term[] = {
+    static constexpr HuffEntry black_term[] = {
         {0b0000110111,   10, 0 },
         {0b010,          3,  1 },
         {0b11,           2,  2 },
@@ -570,7 +570,7 @@ HeapArray<uint8_t> decode_huffman1d(const uint8_t* src, size_t src_size, int wid
     };
 
     // Black makeup codes (run 64..1728)
-    static const HuffEntry black_makeup[] = {
+    static constexpr HuffEntry black_makeup[] = {
         {0b0000001111,    10, 64  },
         {0b000011001000,  12, 128 },
         {0b000011001001,  12, 192 },
@@ -601,7 +601,7 @@ HeapArray<uint8_t> decode_huffman1d(const uint8_t* src, size_t src_size, int wid
     };
 
     // Extended makeup codes (shared for black and white, run 1792..2560)
-    static const HuffEntry ext_makeup[] = {
+    static constexpr HuffEntry ext_makeup[] = {
         {0b00000001000,  11, 1792},
         {0b00000001100,  11, 1856},
         {0b00000001101,  11, 1920},
@@ -618,8 +618,8 @@ HeapArray<uint8_t> decode_huffman1d(const uint8_t* src, size_t src_size, int wid
     };
 
     // EOL = 000000000001 (12 bits)
-    static const uint16_t EOL_CODE = 0b000000000001;
-    static const int EOL_LEN = 12;
+    static constexpr uint16_t EOL_CODE = 0b000000000001;
+    static constexpr int EOL_LEN = 12;
 
     // Bit reader: reads bits MSB-first from the byte stream
     size_t byte_pos = 0;
@@ -1066,7 +1066,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         Rle24,
     };
 
-    const auto compressionToString = [](ECompression compression) -> string_view {
+    static constexpr auto compressionToString = [](ECompression compression) -> string_view {
         switch (compression) {
             case ECompression::Rgb: return "rgb";
             case ECompression::Rle8: return "rle8";
@@ -1084,7 +1084,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     };
 
-    const auto convertCompression = [&](uint32_t compression) -> ECompression {
+    static constexpr auto convertCompression = [](uint32_t compression, EType type) -> ECompression {
         switch (compression) {
             case 0: return ECompression::Rgb;
             case 1: return ECompression::Rle8;
@@ -1100,7 +1100,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     };
 
-    const ECompression compression = convertCompression(dib.compression);
+    const ECompression compression = convertCompression(dib.compression, type);
 
     if (compression == ECompression::Cmyk || compression == ECompression::CmykRle8 || compression == ECompression::CmykRle4) {
         throw ImageLoadError{fmt::format("Unsupported BMP compression method: {}", compressionToString(compression))};
@@ -1327,7 +1327,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     }
 
-    const auto convertIntent = [](uint32_t dibIntent) -> optional<ERenderingIntent> {
+    static constexpr auto convertIntent = [](uint32_t dibIntent) -> optional<ERenderingIntent> {
         switch (dibIntent) {
             case 0x00000000: return nullopt;
             case 0x00000001: return ERenderingIntent::Saturation;

@@ -72,7 +72,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
     dir.count = read<uint16_t>(header + 4, reverseEndianness);
 
     enum class EType { Ico = 1, Cur = 2 };
-    const auto typeToString = [](EType type) {
+    static constexpr auto typeToString = [](EType type) {
         switch (type) {
             case EType::Ico: return "ICO";
             case EType::Cur: return "CUR";

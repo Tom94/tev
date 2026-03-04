@@ -650,8 +650,8 @@ inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETon
             break;
         }
         case ETonemap::FalseColor: {
-            static const auto falseColor = [](float linear) {
-                static const auto& fcd = colormap::turbo();
+            static constexpr auto falseColor = [](float linear) {
+                static const auto fcd = colormap::turbo();
                 int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
                 return nanogui::Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
             };

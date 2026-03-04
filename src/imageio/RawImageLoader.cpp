@@ -165,7 +165,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
         ExifData* data = nullptr;
     } exif;
 
-    const auto handleExif = [](void* context, int tag, int type, int len, unsigned int ord, void* ifp, INT64 base) {
+    static constexpr auto handleExif = [](void* context, int tag, int type, int len, unsigned int ord, void* ifp, INT64 base) {
         ExifContext& exif = *(ExifContext*)context;
 
         ExifEntry* entry = exif_entry_new();

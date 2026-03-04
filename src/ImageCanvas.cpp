@@ -215,14 +215,14 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
     TEV_ASSERT(mImage, "Can only draw coordinate system if there exists an image.");
 
-    auto displayWindowToNano = displayWindowToNanogui(mImage.get());
+    const auto displayWindowToNano = displayWindowToNanogui(mImage.get());
 
     enum DrawFlags {
         Label = 1,
         Region = 2,
     };
 
-    auto drawWindow = [&](Box2f window, Color color, bool top, bool right, string_view name, DrawFlags flags) {
+    const auto drawWindow = [&](Box2f window, Color color, bool top, bool right, string_view name, DrawFlags flags) {
         float fontSize = 20;
         float strokeWidth = 3.0f;
 
@@ -307,7 +307,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
         nvgRestore(ctx);
     };
 
-    auto draw = [&](DrawFlags flags) {
+    const auto draw = [&](DrawFlags flags) {
         if (mReference) {
             if (mReference->dataWindow() != mImage->dataWindow()) {
                 drawWindow(
@@ -361,7 +361,7 @@ void ImageCanvas::drawCoordinateSystem(NVGcontext* ctx) {
 }
 
 void ImageCanvas::drawEdgeShadows(NVGcontext* ctx) {
-    int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
+    const int ds = m_theme->m_window_drop_shadow_size, cr = m_theme->m_window_corner_radius;
     NVGpaint shadowPaint =
         nvgBoxGradient(ctx, m_pos.x(), m_pos.y(), m_size.x(), m_size.y(), cr * 2, ds * 2, m_theme->m_transparent, m_theme->m_drop_shadow);
 
@@ -382,11 +382,10 @@ void ImageCanvas::draw(NVGcontext* ctx) {
     if (mImage) {
         drawPixelValuesAsText(ctx);
 
-        auto displayWindowToNano = displayWindowToNanogui(mImage.get());
+        const auto displayWindowToNano = displayWindowToNanogui(mImage.get());
 
-        auto vgToNano = [&](const Vector2f p) { return Vector2f{m_pos} + displayWindowToNano * p; };
-
-        auto applyVgCommand = [&](const VgCommand& command) {
+        const auto vgToNano = [&](const Vector2f p) { return Vector2f{m_pos} + displayWindowToNano * p; };
+        const auto applyVgCommand = [&](const VgCommand& command) {
             const float* f = command.data.data();
             switch (command.type) {
                 // State
@@ -480,7 +479,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         };
 
         // Draw image-specific vector graphics overlay for both the currently selected image as well as the reference.
-        auto applyVgCommandsSandboxed = [&](const Color& defaultColor, span<const VgCommand> commands) {
+        const auto applyVgCommandsSandboxed = [&](const Color& defaultColor, span<const VgCommand> commands) {
             nvgSave(ctx);
 
             nvgFillColor(ctx, defaultColor);
@@ -937,24 +936,26 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     result->histogram.resize(numBins * nColorChannels);
 
     // We're going to draw our histogram in log space.
-    static const float addition = 0.001f;
+    static constexpr float addition = 0.001f;
     static const float smallest = log(addition);
 
-    const auto symmetricLog = [](const float val) { return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest); };
-    const auto symmetricLogInverse = [](const float val) {
+    static constexpr auto symmetricLog = [](const float val) {
+        return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest);
+    };
+    static constexpr auto symmetricLogInverse = [](const float val) {
         return val > 0 ? (exp(val + smallest) - addition) : -(exp(-val + smallest) - addition);
     };
 
     const float minLog = symmetricLog(stats.minimum);
     const float diffLog = symmetricLog(stats.maximum) - minLog;
 
-    const auto valToBin = [&](const float val) {
+    const auto valToBin = [minLog, diffLog](const float val) {
         return clamp((int)(numBins * (symmetricLog(val) - minLog) / diffLog), 0, (int)numBins - 1);
     };
 
     result->histogramZero = valToBin(0);
 
-    const auto binToVal = [&](const float val) { return symmetricLogInverse((diffLog * val / numBins) + minLog); };
+    const auto binToVal = [minLog, diffLog](const float val) { return symmetricLogInverse((diffLog * val / numBins) + minLog); };
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
     if (nColorChannels == 0) {

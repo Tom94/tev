@@ -88,14 +88,14 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSe
 }
 
 void BackgroundImagesLoader::checkDirectoriesForNewFilesAndLoadThose() {
-    for (const auto& dir : mDirectories) {
-        forEachFileInDir(mRecursiveDirectories, dir.first, [&](const auto& entry) {
+    for (const auto& [dir, channelSelectors] : mDirectories) {
+        forEachFileInDir(mRecursiveDirectories, dir, [&](const auto& entry) {
             if (!entry.is_directory()) {
-                for (const auto& channelSelector : dir.second) {
-                    const PathAndChannelSelector p = {entry, channelSelector};
+                for (const auto& cs : channelSelectors) {
+                    const PathAndChannelSelector p = {entry, cs};
                     if (!mFilesFoundInDirectories.contains(p)) {
                         mFilesFoundInDirectories.emplace(p);
-                        enqueue(entry, channelSelector, false);
+                        enqueue(entry, cs, false);
                     }
                 }
             }

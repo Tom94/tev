@@ -114,7 +114,7 @@ Task<vector<ImageData>>
 
         cinfo.client_data = &appN;
 
-        const auto processMarker = [](j_decompress_ptr cinfo) -> boolean {
+        static constexpr auto processMarker = [](j_decompress_ptr cinfo) -> boolean {
             // Because we're reading from memory, cinfo->src points directly into `buffer`
 
             // Read marker length (2 bytes, big-endian)
@@ -304,7 +304,7 @@ Task<vector<ImageData>>
                             Primary = 0x030000,
                         };
 
-                        const auto mfpTypeToString = [](EMpfImageType type) -> string {
+                        static constexpr auto mfpTypeToString = [](EMpfImageType type) -> string {
                             switch (type) {
                                 case EMpfImageType::Undefined: return "undefined";
                                 case EMpfImageType::LargeThumbnailVga: return "large_thumbnail_vga";

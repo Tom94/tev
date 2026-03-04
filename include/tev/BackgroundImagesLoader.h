@@ -24,8 +24,10 @@
 #include <tev/imageio/ImageLoader.h>
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -81,7 +83,7 @@ private:
     std::atomic<int> mUnsortedLoadCounter{0};
 
     bool mRecursiveDirectories = false;
-    std::map<fs::path, std::set<std::string>> mDirectories;
+    std::map<fs::path, std::set<std::string>> mDirectories; // dir -> channel selectors
     std::set<PathAndChannelSelector> mFilesFoundInDirectories;
 
     ImageLoaderSettings mImageLoaderSettings;

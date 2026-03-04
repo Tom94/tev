@@ -162,7 +162,7 @@ Matrix3f adaptWhiteBradford(Vector2f srcWhite, Vector2f dstWhite) {
     };
     const auto kBradfordInv = toMatrix3(brInv);
 
-    const auto xyToXYZ = [](Vector2f c) { return Vector3f{c.x() / c.y(), 1.0f, (1.0f - c.x() - c.y()) / c.y()}; };
+    static constexpr auto xyToXYZ = [](Vector2f c) { return Vector3f{c.x() / c.y(), 1.0f, (1.0f - c.x() - c.y()) / c.y()}; };
 
     const auto lmsSrc = kBradford * xyToXYZ(srcWhite);
     const auto lmsDst = kBradford * xyToXYZ(dstWhite);
@@ -841,7 +841,7 @@ Task<void> toLinearSrgbPremul(
     //     type |= PREMUL_SH(1);
     // }
 
-    const auto guessColorSpace = [&]() {
+    static constexpr auto guessColorSpace = [](size_t numColorChannels) {
         if (numColorChannels == 1) {
             return COLORSPACE_SH(PT_GRAY);
         } else if (numColorChannels == 4) {
@@ -851,7 +851,7 @@ Task<void> toLinearSrgbPremul(
         }
     };
 
-    const auto expectedColorChannelCount = [](cmsColorSpaceSignature cs) -> size_t {
+    static constexpr auto expectedColorChannelCount = [](cmsColorSpaceSignature cs) -> size_t {
         switch (cs) {
             case cmsSigCmyData: return 3;
             case cmsSigCmykData: return 4;
@@ -879,7 +879,7 @@ Task<void> toLinearSrgbPremul(
             numColorChannels
         );
 
-        colorSpaceType = guessColorSpace();
+        colorSpaceType = guessColorSpace(numColorChannels);
     } else {
         switch (cs) {
             case cmsSigCmyData: colorSpaceType = COLORSPACE_SH(PT_CMY); break;
@@ -897,7 +897,7 @@ Task<void> toLinearSrgbPremul(
             default:
                 tlog::warning()
                     << fmt::format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
-                colorSpaceType = guessColorSpace();
+                colorSpaceType = guessColorSpace(numColorChannels);
                 break;
         }
     }

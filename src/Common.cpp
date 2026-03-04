@@ -473,7 +473,7 @@ bool shuttingDown() { return sShuttingDown; }
 void setShuttingDown() { sShuttingDown = true; }
 
 const optional<FlatpakInfo>& flatpakInfo() {
-    const auto getFlatpakInfo = []() -> optional<FlatpakInfo> {
+    static constexpr auto getFlatpakInfo = [] -> optional<FlatpakInfo> {
         const char* flatpakId = getenv("FLATPAK_ID");
         if (!flatpakId || !*flatpakId) {
             return nullopt;
@@ -510,7 +510,7 @@ const optional<FlatpakInfo>& flatpakInfo() {
         return info;
     };
 
-    static optional<FlatpakInfo> sFlatpakInfo = getFlatpakInfo();
+    static const optional<FlatpakInfo> sFlatpakInfo = getFlatpakInfo();
     return sFlatpakInfo;
 }
 

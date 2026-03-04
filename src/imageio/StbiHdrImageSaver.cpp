@@ -29,7 +29,7 @@ using namespace std;
 namespace tev {
 
 Task<void> StbiHdrImageSaver::save(ostream& oStream, const fs::path&, span<const float> data, Vector2i imageSize, int nChannels) const {
-    static const auto stbiOStreamWrite = [](void* context, void* stbidata, int size) {
+    static constexpr auto stbiOStreamWrite = [](void* context, void* stbidata, int size) {
         static_cast<ostream*>(context)->write(static_cast<char*>(stbidata), size);
     };
 

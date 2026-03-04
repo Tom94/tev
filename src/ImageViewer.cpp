@@ -51,41 +51,45 @@ using namespace std;
 
 namespace tev {
 
-static const int SIDEBAR_MIN_WIDTH = 230;
-static const float CROP_MIN_SIZE = 3;
+static constexpr int SIDEBAR_MIN_WIDTH = 230;
+static constexpr float CROP_MIN_SIZE = 3;
 
-static const vector<pair<EWpPrimaries, string_view>> PRIMARIES = {
-    {EWpPrimaries::SRGB,        "sRGB"        },
-    {EWpPrimaries::BT2020,      "BT.2020"     },
-    {EWpPrimaries::DCIP3,       "DCI P3"      },
-    {EWpPrimaries::DisplayP3,   "Display P3"  },
-    {EWpPrimaries::AdobeRGB,    "Adobe RGB"   },
-    {EWpPrimaries::ProPhotoRGB, "ProPhoto RGB"},
-    {EWpPrimaries::NTSC,        "NTSC"        },
-    {EWpPrimaries::PAL,         "PAL"         },
-    {EWpPrimaries::PALM,        "PAL-M"       },
-    {EWpPrimaries::Film,        "Generic Film"},
-    {EWpPrimaries::CIE1931XYZ,  "CIE 1931 XYZ"},
+static constexpr array<pair<EWpPrimaries, string_view>, 11> PRIMARIES = {
+    {
+     {EWpPrimaries::SRGB, "sRGB"},
+     {EWpPrimaries::BT2020, "BT.2020"},
+     {EWpPrimaries::DCIP3, "DCI P3"},
+     {EWpPrimaries::DisplayP3, "Display P3"},
+     {EWpPrimaries::AdobeRGB, "Adobe RGB"},
+     {EWpPrimaries::ProPhotoRGB, "ProPhoto RGB"},
+     {EWpPrimaries::NTSC, "NTSC"},
+     {EWpPrimaries::PAL, "PAL"},
+     {EWpPrimaries::PALM, "PAL-M"},
+     {EWpPrimaries::Film, "Generic Film"},
+     {EWpPrimaries::CIE1931XYZ, "CIE 1931 XYZ"},
+     }
 };
 
-static const vector<pair<ituth273::ETransfer, string_view>> TRANSFERS = {
-    {ituth273::ETransfer::Linear,         "Linear"         },
-    {ituth273::ETransfer::SRGB,           "sRGB"           },
-    {ituth273::ETransfer::PQ,             "PQ"             },
-    {ituth273::ETransfer::HLG,            "HLG"            },
-    {ituth273::ETransfer::Gamma22,        "Gamma 2.2"      },
-    {ituth273::ETransfer::Gamma28,        "Gamma 2.8"      },
-    {ituth273::ETransfer::Log100,         "Log100"         },
-    {ituth273::ETransfer::Log100Sqrt10,   "Log100 Sqrt10"  },
-    {ituth273::ETransfer::BT709,          "BT.709/601/2020"},
-    // Same as above
+static constexpr array<pair<ituth273::ETransfer, string_view>, 13> TRANSFERS = {
+    {
+     {ituth273::ETransfer::Linear, "Linear"},
+     {ituth273::ETransfer::SRGB, "sRGB"},
+     {ituth273::ETransfer::PQ, "PQ"},
+     {ituth273::ETransfer::HLG, "HLG"},
+     {ituth273::ETransfer::Gamma22, "Gamma 2.2"},
+     {ituth273::ETransfer::Gamma28, "Gamma 2.8"},
+     {ituth273::ETransfer::Log100, "Log100"},
+     {ituth273::ETransfer::Log100Sqrt10, "Log100 Sqrt10"},
+     {ituth273::ETransfer::BT709, "BT.709/601/2020"},
+     // Same as above
     // {ituth273::ETransfer::BT601,          "BT.601"          },
     // {ituth273::ETransfer::BT202010bit,    "BT.2020 10-bit"  },
     // {ituth273::ETransfer::BT202012bit,    "BT.2020"         },
-    {ituth273::ETransfer::BT1361Extended, "BT.1361 Ext."   },
-    {ituth273::ETransfer::SMPTE240,       "SMPTE 240M"     },
-    {ituth273::ETransfer::SMPTE428,       "SMPTE ST 428-1" },
-    {ituth273::ETransfer::IEC61966_2_4,   "IEC 61966-2-4"  },
+        {ituth273::ETransfer::BT1361Extended, "BT.1361 Ext."},
+     {ituth273::ETransfer::SMPTE240, "SMPTE 240M"},
+     {ituth273::ETransfer::SMPTE428, "SMPTE ST 428-1"},
+     {ituth273::ETransfer::IEC61966_2_4, "IEC 61966-2-4"},
+     }
 };
 
 ImageViewer::ImageViewer(
@@ -204,7 +208,7 @@ ImageViewer::ImageViewer(
         auto buttonContainer = new Widget{mSidebarLayout};
         buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
-        auto makeButton = [&](string_view name, function<void()> callback, int icon = 0, string_view tooltip = "") {
+        const auto makeButton = [&](string_view name, function<void()> callback, int icon = 0, string_view tooltip = "") {
             auto button = new Button{buttonContainer, name, icon};
             button->set_font_size(15);
             button->set_callback(callback);
@@ -225,7 +229,7 @@ ImageViewer::ImageViewer(
         mHdrPopupButton->set_font_size(15);
         mHdrPopupButton->set_chevron_icon(0);
 
-        auto addSpacer = [](Widget* current, int space) {
+        static constexpr auto addSpacer = [](Widget* current, int space) {
             auto row = new Widget{current};
             row->set_height(space);
         };
@@ -343,7 +347,7 @@ ImageViewer::ImageViewer(
             mInspectionTransferComboBox->set_font_size(16);
             mInspectionTransferComboBox->set_callback([this](int value) {
                 TEV_ASSERT(value >= 0 && (size_t)value < TRANSFERS.size(), "Invalid transfer function index");
-                setInspectionTransfer(ituth273::ETransfer(TRANSFERS[value].first));
+                setInspectionTransfer(ituth273::ETransfer(TRANSFERS.at(value).first));
             });
 
             vector<string> primariesNames;
@@ -395,7 +399,7 @@ ImageViewer::ImageViewer(
                     return;
                 }
 
-                setInspectionChroma(chroma(PRIMARIES[value].first));
+                setInspectionChroma(chroma(PRIMARIES.at(value).first));
             });
 
             addSpacer(xy, 1);
@@ -447,7 +451,7 @@ ImageViewer::ImageViewer(
         mTonemapButtonContainer = new Widget{mSidebarLayout};
         mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
 
-        auto makeTonemapButton = [&](string_view name, function<void()> callback) {
+        const auto makeTonemapButton = [&](string_view name, function<void()> callback) {
             auto button = new Button{mTonemapButtonContainer, name};
             button->set_flags(Button::RadioButton);
             button->set_font_size(15);
@@ -486,7 +490,7 @@ ImageViewer::ImageViewer(
         mMetricButtonContainer = new Widget{mSidebarLayout};
         mMetricButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
 
-        auto makeMetricButton = [&](string_view name, function<void()> callback) {
+        const auto makeMetricButton = [&](string_view name, function<void()> callback) {
             auto button = new Button{mMetricButtonContainer, name};
             button->set_flags(Button::RadioButton);
             button->set_font_size(15);
@@ -581,15 +585,16 @@ ImageViewer::ImageViewer(
             auto playback = new Widget{mSidebarLayout};
             playback->set_layout(new GridLayout{Orientation::Horizontal, 6, Alignment::Fill, 5, 2});
 
-            auto makePlaybackButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
-                auto button = new Button{playback, name, icon};
-                button->set_callback(callback);
-                button->set_tooltip(tooltip);
-                button->set_font_size(15);
-                button->set_enabled(enabled);
-                button->set_padding({10, 10});
-                return button;
-            };
+            const auto makePlaybackButton =
+                [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
+                    auto button = new Button{playback, name, icon};
+                    button->set_callback(callback);
+                    button->set_tooltip(tooltip);
+                    button->set_font_size(15);
+                    button->set_enabled(enabled);
+                    button->set_padding({10, 10});
+                    return button;
+                };
 
             mPlayButton = makePlaybackButton("", true, [] {}, FA_PLAY, "Play (Space)");
             mPlayButton->set_flags(Button::ToggleButton);
@@ -628,15 +633,16 @@ ImageViewer::ImageViewer(
             auto tools = new Widget{mSidebarLayout};
             tools->set_layout(new GridLayout{Orientation::Horizontal, 7, Alignment::Fill, 5, 1});
 
-            auto makeImageButton = [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
-                auto button = new Button{tools, name, icon};
-                button->set_callback(callback);
-                button->set_tooltip(tooltip);
-                button->set_font_size(15);
-                button->set_enabled(enabled);
-                button->set_padding({10, 10});
-                return button;
-            };
+            const auto makeImageButton =
+                [&](string_view name, bool enabled, function<void()> callback, int icon = 0, string_view tooltip = "") {
+                    auto button = new Button{tools, name, icon};
+                    button->set_callback(callback);
+                    button->set_tooltip(tooltip);
+                    button->set_font_size(15);
+                    button->set_enabled(enabled);
+                    button->set_padding({10, 10});
+                    return button;
+                };
 
             makeImageButton("", true, [this] { openImageDialog(); }, FA_FOLDER, fmt::format("Open ({}+O)", HelpWindow::COMMAND));
 
@@ -1314,7 +1320,7 @@ void ImageViewer::draw_contents() {
         mRequiresFilterUpdate = false;
     }
 
-    bool anyImageVisible = mCurrentImage || mCurrentReference ||
+    const bool anyImageVisible = mCurrentImage || mCurrentReference ||
         any_of(begin(mImageButtonContainer->children()), end(mImageButtonContainer->children()), [](const auto& c) { return c->visible(); });
 
     for (auto button : mAnyImageButtons) {
@@ -1338,11 +1344,9 @@ void ImageViewer::draw_contents() {
 
     updateTitle();
 
-    // Update histogram
-    static const string histogramTooltipBase =
+    static constexpr string_view histogramTooltipBase =
         "Histogram of color values with logarithmic x-axis. Adapts to the currently chosen channel group, error metric, and inspection color space.";
-    auto lazyCanvasStatistics = mImageCanvas->canvasStatistics();
-    if (lazyCanvasStatistics) {
+    if (auto lazyCanvasStatistics = mImageCanvas->canvasStatistics()) {
         if (lazyCanvasStatistics->isReady()) {
             auto statistics = lazyCanvasStatistics->get();
             mHistogram->setNChannels(statistics->nChannels);
@@ -1375,7 +1379,7 @@ void ImageViewer::draw_contents() {
         mHistogram->setMean(0);
         mHistogram->setMaximum(0);
         mHistogram->setZero(0);
-        mHistogram->set_tooltip(fmt::format("{}", histogramTooltipBase));
+        mHistogram->set_tooltip(histogramTooltipBase);
     }
 }
 
@@ -2519,7 +2523,7 @@ void ImageViewer::setInspectionChroma(const chroma_t& chr) {
     }
 
     for (size_t i = 0; i < PRIMARIES.size(); ++i) {
-        if (chr == chroma(PRIMARIES[i].first)) {
+        if (chr == chroma(PRIMARIES.at(i).first)) {
             mInspectionPrimariesComboBox->set_selected_index((int)i);
             return;
         }
@@ -2540,7 +2544,7 @@ void ImageViewer::setInspectionTransfer(const ituth273::ETransfer transfer) {
     mImageCanvas->setInspectionTransfer(transfer);
 
     for (size_t i = 0; i < TRANSFERS.size(); ++i) {
-        if (transfer == TRANSFERS[i].first) {
+        if (transfer == TRANSFERS.at(i).first) {
             mInspectionTransferComboBox->set_selected_index((int)i);
             return;
         }
@@ -2578,7 +2582,7 @@ void ImageViewer::updateFilter() {
     {
         // Checks whether an image matches the filter. This is the case if the image name matches the image part and at least one of the
         // image's groups matches the group part.
-        auto doesImageMatch = [&](const auto& name, const auto& channelGroups) {
+        const auto doesImageMatch = [&](const auto& name, const auto& channelGroups) {
             bool doesMatch = matchesFuzzyOrRegex(name, imagePart, useRegex());
             if (doesMatch) {
                 bool anyGroupsMatch = false;

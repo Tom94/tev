@@ -25,7 +25,7 @@ using namespace std;
 
 namespace tev {
 
-static const size_t DITHER_MATRIX_SIZE = 8;
+static constexpr size_t DITHER_MATRIX_SIZE = 8;
 using DitherMatrix = array<float, DITHER_MATRIX_SIZE * DITHER_MATRIX_SIZE>;
 
 static DitherMatrix ditherMatrix(float scale) {

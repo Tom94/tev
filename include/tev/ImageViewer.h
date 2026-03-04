@@ -41,7 +41,7 @@
 #include <chrono>
 #include <memory>
 #include <optional>
-#include <set>
+#include <unordered_set>
 #include <vector>
 
 namespace tev {
@@ -275,7 +275,7 @@ private:
     std::vector<std::shared_ptr<Image>> mImages;
 
     MultiGraph* mHistogram = nullptr;
-    std::set<std::shared_ptr<Image>> mToBump;
+    std::unordered_set<std::shared_ptr<Image>> mToBump;
 
     nanogui::TextBox* mFilter = nullptr;
     nanogui::Button* mRegexButton = nullptr;

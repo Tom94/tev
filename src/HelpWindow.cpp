@@ -54,8 +54,8 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
-    static const int WINDOW_WIDTH = 640;
-    static const int WINDOW_HEIGHT = 640;
+    static constexpr int WINDOW_WIDTH = 640;
+    static constexpr int WINDOW_HEIGHT = 640;
 
     set_layout(new GroupLayout{});
     set_fixed_width(WINDOW_WIDTH);
@@ -71,7 +71,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     Widget* shortcuts = new Widget(mScrollPanel);
     shortcuts->set_layout(new GroupLayout{});
 
-    auto addRow = [](Widget* current, string keys, string desc) {
+    static constexpr auto addRow = [](Widget* current, string keys, string desc) {
         auto row = new Widget{current};
         row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 0, 10});
         auto descWidget = new Label{row, desc, "sans"};
@@ -159,13 +159,13 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addRow(ui, "Escape", "Reset find string");
     addRow(ui, COMMAND + "+Q", "Quit");
 
-    auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
+    static constexpr auto addText = [](Widget* current, string text, string font = "sans", int fontSize = 18) {
         auto row = new Widget{current};
         row->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Middle, 0, 10});
         new Label{row, text, font, fontSize};
     };
 
-    auto addSpacer = [](Widget* current, int space) {
+    static constexpr auto addSpacer = [](Widget* current, int space) {
         auto row = new Widget{current};
         row->set_height(space);
     };
@@ -204,7 +204,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     about->set_layout(new GroupLayout{});
     // about->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 0, 0});
 
-    auto addLibrary = [](Widget* current, string name, string desc) {
+    static constexpr auto addLibrary = [](Widget* current, string name, string desc) {
         auto row = new Widget{current};
         row->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 3, 4});
         auto leftColumn = new Widget{row};

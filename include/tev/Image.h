@@ -317,7 +317,7 @@ private:
 
     std::string mName;
 
-    std::map<std::string, ImageTexture> mTextures;
+    std::unordered_map<std::string, ImageTexture> mTextures;
 
     ImageData mData;
 

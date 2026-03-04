@@ -70,7 +70,7 @@ public:
     }
 
     auto enqueueStopToken() {
-        return enqueueTask([]() {}, std::numeric_limits<int>::max(), true);
+        return enqueueTask([] {}, std::numeric_limits<int>::max(), true);
     }
 
     inline auto enqueueCoroutine(int priority) noexcept {

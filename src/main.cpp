@@ -753,7 +753,7 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    const auto errorCallback = [](int error, const char* description) {
+    static constexpr auto errorCallback = [](int error, const char* description) {
         tlog::warning() << fmt::format("GLFW error {}: {}", error, description);
     };
     nanogui::init(!get(ldrFlag), errorCallback);

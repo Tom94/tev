@@ -60,8 +60,8 @@ ImageInfoWindow::ImageInfoWindow(Widget* parent, const shared_ptr<Image>& image,
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
-    static const int WINDOW_WIDTH = 700;
-    static const int WINDOW_HEIGHT = 680;
+    static constexpr int WINDOW_WIDTH = 700;
+    static constexpr int WINDOW_HEIGHT = 680;
 
     set_layout(new GroupLayout{});
     set_fixed_width(WINDOW_WIDTH);

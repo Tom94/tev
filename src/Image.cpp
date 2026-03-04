@@ -44,7 +44,7 @@ using namespace std;
 namespace tev {
 
 AttributeNode HdrMetadata::toAttributes() const {
-    const auto floatToStringZeroMeansNA = [](float v) {
+    static constexpr auto floatToStringZeroMeansNA = [](float v) {
         if (v <= 0.0f) {
             return string{"n/a"};
         } else {
@@ -766,7 +766,7 @@ Task<void> prepareTextureChannel(T* data, const Channel* chan, Box2i box, size_t
     const size_t numPixels = (size_t)size.x() * size.y();
 
     if (chan) {
-        auto copyChannel = [&](const auto view) -> Task<void> {
+        const auto copyChannel = [&](const auto view) -> Task<void> {
             co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
@@ -809,9 +809,8 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     }
 
     const string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
-    const auto iter = mTextures.find(lookup);
-    if (iter != end(mTextures)) {
-        auto& texture = iter->second;
+    if (const auto it = mTextures.find(lookup); it != end(mTextures)) {
+        auto& texture = it->second;
         if (texture.mipmapDirty && minFilter == EInterpolationMode::Trilinear) {
             texture.nanoguiTexture->generate_mipmap();
             texture.mipmapDirty = false;
@@ -820,7 +819,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         return texture.nanoguiTexture.get();
     }
 
-    const auto toNanogui = [](EInterpolationMode mode) {
+    static constexpr auto toNanogui = [](EInterpolationMode mode) {
         switch (mode) {
             case EInterpolationMode::Nearest: return Texture::InterpolationMode::Nearest;
             case EInterpolationMode::Bilinear: return Texture::InterpolationMode::Bilinear;
@@ -988,7 +987,7 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
         {"z"},
     };
 
-    auto createChannelGroup = [](string_view layer, vector<string> channels) {
+    static constexpr auto createChannelGroup = [](string_view layer, vector<string> channels) {
         TEV_ASSERT(!channels.empty(), "Can't create a channel group without channels.");
 
         vector<string_view> channelTails = {channels.begin(), channels.end()};
