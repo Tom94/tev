@@ -506,7 +506,7 @@ template <typename T> std::string join(const T& components, std::string_view del
         s << component;
     }
 
-    return s.str();
+    return std::move(s).str();
 }
 
 template <typename T> auto viewOptionals(std::span<std::optional<T>> optionals) {

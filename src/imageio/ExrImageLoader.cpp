@@ -130,15 +130,18 @@ template <typename T> string toString(const Imath::Matrix33<T>& value) {
         if (i > 0) {
             oss << "], [";
         }
+
         for (uint32_t j = 0; j < 3; ++j) {
             if (j > 0) {
                 oss << ", ";
             }
+
             oss << value[i][j];
         }
     }
+
     oss << "])";
-    return oss.str();
+    return std::move(oss).str();
 }
 
 template <typename T> string toString(const Imath::Matrix44<T>& value) {
@@ -159,7 +162,7 @@ template <typename T> string toString(const Imath::Matrix44<T>& value) {
     }
 
     oss << "])";
-    return oss.str();
+    return std::move(oss).str();
 }
 
 AttributeNode toAttributeNode(const Imf::Header& header) {

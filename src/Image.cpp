@@ -1350,7 +1350,7 @@ template <typename T> time_t to_time_t(T timePoint) {
 }
 
 string Image::toString() const {
-    stringstream sstream;
+    ostringstream sstream;
     sstream << mName << "\n\n";
 
     {
@@ -1383,7 +1383,7 @@ string Image::toString() const {
     });
 
     sstream << join(localLayers, "\n");
-    return sstream.str();
+    return std::move(sstream).str();
 }
 
 // Modifies `data` and returns the new size of the data after reorientation.

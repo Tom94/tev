@@ -667,29 +667,33 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         return nullptr;
     }
 
-    const string channels = join(mImage->channelsInGroup(mRequestedChannelGroup), ",");
+    const auto buildKey = [this]() {
+        const string channels = join(mImage->channelsInGroup(mRequestedChannelGroup), ",");
 
-    ostringstream keyStream;
-    keyStream << fmt::format(
-        "{}-{}-{}-{}-{}-{}",
-        (int)mInspectionTransfer,
-        mInspectionChroma,
-        mInspectionAdaptWhitePoint,
-        mInspectionPremultipliedAlpha,
-        mImage->id(),
-        channels
-    );
+        ostringstream keyStream;
+        keyStream << fmt::format(
+            "{}-{}-{}-{}-{}-{}",
+            (int)mInspectionTransfer,
+            mInspectionChroma,
+            mInspectionAdaptWhitePoint,
+            mInspectionPremultipliedAlpha,
+            mImage->id(),
+            channels
+        );
 
-    if (mReference) {
-        keyStream << fmt::format("-{}-{}", mReference->id(), (int)mMetric);
-    }
+        if (mReference) {
+            keyStream << fmt::format("-{}-{}", mReference->id(), (int)mMetric);
+        }
 
-    if (mCrop.has_value()) {
-        keyStream << fmt::format("-crop-{}-{}", mCrop->min, mCrop->max);
-    }
+        if (mCrop.has_value()) {
+            keyStream << fmt::format("-crop-{}-{}", mCrop->min, mCrop->max);
+        }
 
-    const string key = keyStream.str();
+        return keyStream;
+    };
 
+    // Indirection through lambda to ensure str()&& overload moves out of stringstream
+    const string key = buildKey().str();
     const auto iter = mCanvasStatistics.find(key);
     if (iter != end(mCanvasStatistics)) {
         return iter->second;

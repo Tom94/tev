@@ -2767,7 +2767,7 @@ void ImageViewer::updateTitle() {
         caption << fmt::format("{:02X}", discretizedValue);
     }
 
-    set_caption(caption.str());
+    set_caption(caption.view());
 }
 
 string_view ImageViewer::groupName(size_t index) {

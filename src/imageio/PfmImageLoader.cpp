@@ -281,12 +281,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             }
         }
 
-        const string commentStr = comment.str();
-        if (!commentStr.empty()) {
+        if (!comment.view().empty()) {
             global.children.emplace_back(
                 AttributeNode{
                     .name = "Comment",
-                    .value = string{trim(commentStr)},
+                    .value = string{trim(comment.view())},
                     .type = "string",
                     .children = {},
                 }

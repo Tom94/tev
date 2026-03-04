@@ -191,6 +191,7 @@ string_view trim(string_view s) { return trimRight(trimLeft(s)); }
 
 string substituteCurly(string_view str, const function<string(string_view)>& replacer) {
     ostringstream result;
+
     size_t pos = 0;
     while (true) {
         const size_t openBrace = str.find('{', pos);
@@ -213,7 +214,7 @@ string substituteCurly(string_view str, const function<string(string_view)>& rep
         pos = closeBrace + 1;
     }
 
-    return result.str();
+    return std::move(result).str();
 }
 
 Color parseColor(string_view str) {
@@ -645,7 +646,7 @@ std::string CompoundException::buildMessage(std::span<const std::exception_ptr> 
         }
     }
 
-    return oss.str();
+    return std::move(oss).str();
 }
 
 } // namespace tev
