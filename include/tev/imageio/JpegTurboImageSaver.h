@@ -34,7 +34,7 @@ public:
 
     EAlphaKind alphaKind(std::string_view extension) const override { return EAlphaKind::None; }
 
-    virtual bool canSaveFile(std::string_view extension) const override {
+    bool canSaveFile(std::string_view extension) const override {
         const auto lowerExt = toLower(extension);
         return lowerExt == ".jpg" || lowerExt == ".jpeg";
     }

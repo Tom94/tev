@@ -37,7 +37,7 @@ public:
     // premultiplied alpha.
     EAlphaKind alphaKind(std::string_view) const override { return EAlphaKind::Premultiplied; }
 
-    virtual bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".jxl"; }
+    bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".jxl"; }
 };
 
 } // namespace tev

@@ -34,7 +34,7 @@ public:
 
     EAlphaKind alphaKind(std::string_view extension) const override { return EAlphaKind::Straight; }
 
-    virtual bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".png"; }
+    bool canSaveFile(std::string_view extension) const override { return toLower(extension) == ".png"; }
 };
 
 } // namespace tev

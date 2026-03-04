@@ -40,7 +40,7 @@ public:
         }
     }
 
-    virtual bool canSaveFile(std::string_view extension) const override {
+    bool canSaveFile(std::string_view extension) const override {
         std::string lowerExtension = toLower(extension);
         return lowerExtension == ".jpg" || lowerExtension == ".jpeg" || lowerExtension == ".png" || lowerExtension == ".bmp" ||
             lowerExtension == ".tga";
