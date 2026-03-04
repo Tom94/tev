@@ -46,7 +46,7 @@
 
 namespace tev {
 
-class ImageViewer : public nanogui::Screen {
+class ImageViewer final : public nanogui::Screen {
 public:
     ImageViewer(
         nanogui::Vector2i size,

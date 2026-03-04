@@ -27,7 +27,7 @@
 
 namespace tev {
 
-class ImageButton : public nanogui::Widget {
+class ImageButton final : public nanogui::Widget {
 public:
     ImageButton(nanogui::Widget* parent, std::string_view caption, bool canBeReference);
 

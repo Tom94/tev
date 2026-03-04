@@ -30,7 +30,7 @@
 
 namespace tev {
 
-class HelpWindow : public nanogui::Window {
+class HelpWindow final : public nanogui::Window {
 public:
     HelpWindow(nanogui::Widget* parent, std::weak_ptr<Ipc> ipc, std::function<void()> closeCallback);
 

@@ -788,22 +788,22 @@ static const nanogui::Color REFERENCE_COLOR = {0.7f, 0.4f, 0.4f, 1.0f};
 static const nanogui::Color CROP_COLOR = {0.2f, 0.5f, 0.2f, 1.0f};
 
 // Exceptions
-class ImageLoadError : public std::runtime_error {
+class ImageLoadError final : public std::runtime_error {
 public:
     ImageLoadError(const std::string& message) : std::runtime_error{message} {}
 };
 
-class ImageModifyError : public std::runtime_error {
+class ImageModifyError final : public std::runtime_error {
 public:
     ImageModifyError(const std::string& message) : std::runtime_error{message} {}
 };
 
-class ImageSaveError : public std::runtime_error {
+class ImageSaveError final : public std::runtime_error {
 public:
     ImageSaveError(const std::string& message) : std::runtime_error{message} {}
 };
 
-class CompoundException : public std::runtime_error {
+class CompoundException final : public std::runtime_error {
 public:
     CompoundException(std::span<const std::exception_ptr> exceptions) :
         runtime_error{buildMessage(exceptions)}, mExceptions{std::begin(exceptions), std::end(exceptions)} {}

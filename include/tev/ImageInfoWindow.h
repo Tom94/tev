@@ -31,7 +31,7 @@
 
 namespace tev {
 
-class ImageInfoWindow : public nanogui::Window {
+class ImageInfoWindow final : public nanogui::Window {
 public:
     ImageInfoWindow(nanogui::Widget* parent, const std::shared_ptr<Image>& image, std::function<void()> closeCallback);
 

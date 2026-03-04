@@ -147,7 +147,7 @@ struct ImageLoaderSettings {
 
 class ImageLoader {
 public:
-    class FormatNotSupported : public std::runtime_error {
+    class FormatNotSupported final : public std::runtime_error {
     public:
         FormatNotSupported(const std::string& message) : std::runtime_error{message} {}
     };

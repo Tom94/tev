@@ -26,7 +26,7 @@
 
 namespace tev {
 
-class JxlImageSaver : public TypedImageSaver<float> {
+class JxlImageSaver final : public TypedImageSaver<float> {
 public:
     Task<void> save(
         std::ostream& oStream, const fs::path& path, std::span<const float> data, nanogui::Vector2i imageSize, int nChannels

@@ -26,7 +26,7 @@
 
 namespace tev {
 
-class BmpImageLoader : public ImageLoader {
+class BmpImageLoader final : public ImageLoader {
 public:
     Task<std::vector<ImageData>> loadWithoutFileHeader(
         std::istream& iStream,

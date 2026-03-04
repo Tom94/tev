@@ -49,7 +49,7 @@ using namespace std;
 
 namespace tev {
 
-class StdIStream : public Imf::IStream {
+class StdIStream final : public Imf::IStream {
 public:
     StdIStream(istream& stream, const char fileName[]) : Imf::IStream{fileName}, mStream{stream} {}
 

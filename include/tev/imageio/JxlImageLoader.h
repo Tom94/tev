@@ -27,7 +27,7 @@
 
 namespace tev {
 
-class JxlImageLoader : public ImageLoader {
+class JxlImageLoader final : public ImageLoader {
 public:
     Task<std::vector<ImageData>> load(
         std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority

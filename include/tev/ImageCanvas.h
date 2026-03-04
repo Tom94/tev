@@ -42,7 +42,7 @@ struct CanvasStatistics {
     int histogramZero;
 };
 
-class ImageCanvas : public nanogui::Canvas {
+class ImageCanvas final : public nanogui::Canvas {
 public:
     ImageCanvas(nanogui::Widget* parent);
 

@@ -26,7 +26,7 @@
 
 namespace tev {
 
-class PngImageSaver : public TypedImageSaver<uint8_t> {
+class PngImageSaver final : public TypedImageSaver<uint8_t> {
 public:
     Task<void> save(
         std::ostream& oStream, const fs::path& path, std::span<const uint8_t> data, nanogui::Vector2i imageSize, int nChannels

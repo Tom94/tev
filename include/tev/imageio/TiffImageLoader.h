@@ -25,10 +25,11 @@
 
 namespace tev {
 
-class TiffImageLoader : public ImageLoader {
+class TiffImageLoader final : public ImageLoader {
 public:
-    Task<std::vector<ImageData>>
-        load(std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority) const override;
+    Task<std::vector<ImageData>> load(
+        std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
+    ) const override;
 
     std::string name() const override { return "TIFF"; }
 };

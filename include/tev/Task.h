@@ -108,7 +108,7 @@ struct TaskSharedState {
     Latch latch{2};
 };
 
-template <typename future_t, typename data_t> class TaskPromise : public TaskPromiseBase<data_t> {
+template <typename future_t, typename data_t> class TaskPromise final : public TaskPromiseBase<data_t> {
 public:
     future_t get_return_object() noexcept {
         return {std::coroutine_handle<TaskPromise<future_t, data_t>>::from_promise(*this), this->mPromise.get_future(), mState};

@@ -30,7 +30,7 @@
 
 namespace tev {
 
-class MultiGraph : public nanogui::Widget {
+class MultiGraph final : public nanogui::Widget {
 public:
     MultiGraph(nanogui::Widget* parent, std::string_view caption = "Untitled");
 

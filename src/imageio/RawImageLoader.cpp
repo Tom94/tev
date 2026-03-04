@@ -33,7 +33,7 @@ using namespace std;
 
 namespace tev {
 
-class LibRawDataStream : public LibRaw_abstract_datastream {
+class LibRawDataStream final : public LibRaw_abstract_datastream {
 public:
     LibRawDataStream(istream& stream, const fs::path& path) : stream{stream} {
         const auto pathStr = toString(path);
