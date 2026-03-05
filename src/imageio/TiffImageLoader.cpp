@@ -36,6 +36,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 using namespace nanogui;
@@ -46,10 +47,7 @@ namespace tev {
 enum class ETiffKind {
     U32 = 0,
     I32,
-    F16,
-    F24,
     F32,
-    F64,
     Palette,
 };
 
@@ -57,10 +55,7 @@ string toString(ETiffKind kind) {
     switch (kind) {
         case ETiffKind::U32: return "U32";
         case ETiffKind::I32: return "I32";
-        case ETiffKind::F16: return "F16";
-        case ETiffKind::F24: return "F24";
         case ETiffKind::F32: return "F32";
-        case ETiffKind::F64: return "F64";
         case ETiffKind::Palette: return "Palette";
         default: throw runtime_error{"Unknown TIFF kind."};
     }
@@ -217,46 +212,12 @@ array<span<const uint16_t>, 3> tiffGetColorMap(TIFF* tif) {
     return tiffGetRgbSpans<uint16_t>(tif, TIFFTAG_COLORMAP, n);
 }
 
-Task<void> convertF16AndF24ToF32(ETiffKind kind, uint32_t* __restrict imageData, size_t numSppIn, nanogui::Vector2i size, int priority) {
-    if (kind == ETiffKind::F16) {
-        size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
-        co_await ThreadPool::global().parallelFor(
-            0uz, numSamples, numSamples, [&](size_t i) { *(float*)&imageData[i] = *(half*)&imageData[i]; }, priority
-        );
-
-        kind = ETiffKind::F32;
-    } else if (kind == ETiffKind::F24) {
-        size_t numSamples = (size_t)size.x() * size.y() * numSppIn;
-        co_await ThreadPool::global().parallelFor(
-            0uz,
-            numSamples,
-            numSamples,
-            [&](size_t i) {
-                uint32_t packed = imageData[i];
-                // 1-7-16 layout:
-                uint32_t sign = (packed >> 23) & 0x1;      // 1-bit sign
-                uint32_t exponent = (packed >> 16) & 0x7F; // 7-bit exponent
-                uint16_t mantissa = packed & 0xFFFF;       // 16-bit mantissa
-                // Convert to ieee (1-8-23 layout):
-                uint32_t ieee_exponent = exponent == 0 ? 0 : (exponent - 63 + 127); // Twice the bias range
-                uint32_t ieee_mantissa = mantissa << 7;                             // Pad with 7 zeros
-                imageData[i] = (sign << 31) | (ieee_exponent << 23) | ieee_mantissa;
-            },
-            priority
-        );
-
-        kind = ETiffKind::F32;
-    } else {
-        throw ImageLoadError{fmt::format("Unsupported TIFF kind for F16/F24 conversion: {}", toString(kind))};
-    }
-}
-
-template <bool SRGB_TO_LINEAR = false>
 Task<void> tiffDataToFloat32(
     ETiffKind kind,
     const Vector2i interleave,
     const array<span<const uint16_t>, 3>& palette,
-    uint32_t* __restrict imageData,
+    const PixelBuffer& imageData,
+    size_t offset,
     size_t numSppIn,
     const MultiChannelView<float>& rgbaView,
     bool hasAlpha,
@@ -267,14 +228,12 @@ Task<void> tiffDataToFloat32(
     const auto size = rgbaView.size();
     const auto numPixels = (size_t)size.x() * size.y();
 
-    if (kind == ETiffKind::F64) {
-        co_await toFloat32<double, SRGB_TO_LINEAR>((const double*)imageData, numSppIn, rgbaView, hasAlpha, priority, scale);
-    } else if (kind == ETiffKind::F32) {
-        co_await toFloat32<float, SRGB_TO_LINEAR>((const float*)imageData, numSppIn, rgbaView, hasAlpha, priority, scale);
+    if (kind == ETiffKind::F32) {
+        co_await toFloat32(imageData.data<float>() + offset, numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::I32) {
-        co_await toFloat32<int32_t, SRGB_TO_LINEAR>((const int32_t*)imageData, numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.data<int32_t>() + offset, numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::U32) {
-        co_await toFloat32<uint32_t, SRGB_TO_LINEAR>((const uint32_t*)imageData, numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.data<uint32_t>() + offset, numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::Palette) {
         if (any_of(palette.begin(), palette.end(), [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
@@ -284,12 +243,13 @@ Task<void> tiffDataToFloat32(
             throw runtime_error{"Number of output samples per pixel must be at least 3 for palette data."};
         }
 
+        const auto* indices = imageData.data<uint32_t>() + offset;
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
             numPixels * rgbaView.nChannels(),
             [&](size_t i) {
-                const size_t index = imageData[i * numSppIn];
+                const size_t index = indices[i * numSppIn];
                 const float paletteScale = 1.0f / 65535.0f;
                 for (size_t c = 0; c < 3; ++c) {
                     const size_t localIdx = std::clamp(index, (size_t)0, palette[c].size() - 1);
@@ -297,7 +257,7 @@ Task<void> tiffDataToFloat32(
                 }
 
                 for (size_t c = 3, count = std::min(rgbaView.nChannels(), numSppIn + 2); c < count; ++c) {
-                    rgbaView[c, i] = imageData[i * numSppIn + c - 2] * scale;
+                    rgbaView[c, i] = indices[i * numSppIn + c - 2] * scale;
                 }
             },
             priority
@@ -394,31 +354,54 @@ float dngHdrDecodingFunction(const float x) { return 16.0f * (8.0f * x - 8.0f + 
 
 template <trivially_copyable T>
 void unpackBits(
-    const uint8_t* const __restrict input,
-    const size_t inputSize,
-    const int bitwidth,
-    T* const __restrict output,
-    const size_t outputSize,
-    const bool handleSign
+    const uint8_t* const __restrict input, const size_t inputSize, const int bitwidth, T* const __restrict output, const size_t outputSize
 ) {
+    const auto writeSample = [](T* target, uint64_t sample, int bitwidth) {
+        if constexpr (is_integral_v<T>) {
+            if constexpr (is_signed_v<T>) {
+                // If signbit is set, set all bits to the left to 1
+                if (sample & (1ull << (bitwidth - 1))) {
+                    sample |= ~((1ull << bitwidth) - 1);
+                }
+
+                *target = static_cast<T>(bit_cast<int64_t>(sample));
+            } else {
+                *target = static_cast<T>(sample);
+            }
+        } else {
+            static_assert(is_floating_point_v<T>, "Unsupported float type for bit unpacking.");
+            switch (bitwidth) {
+                case 16: *target = static_cast<T>(bit_cast<half>(static_cast<uint16_t>(sample))); break;
+                case 24: {
+                    const uint32_t sign = (sample >> 23) & 0x1;      // 1-bit sign
+                    const uint32_t exponent = (sample >> 16) & 0x7F; // 7-bit exponent
+                    const uint32_t mantissa = sample & 0xFFFF;       // 16-bit mantissa
+                    // Convert to fp32's 1-8-23 layout
+                    const uint32_t ieee_exponent = exponent == 0 ? 0 : (exponent + 64); // Twice the bias range
+                    *target = static_cast<T>(bit_cast<float>((sign << 31) | (ieee_exponent << 23) | (mantissa << 7)));
+                } break;
+                case 32: *target = static_cast<T>(bit_cast<float>(static_cast<uint32_t>(sample))); break;
+                case 64: *target = static_cast<T>(bit_cast<double>(sample)); break;
+                default: TEV_ASSERT(false, "Unsupported bitwidth for float unpacking: {}", bitwidth);
+            }
+        }
+    };
+
     // If the bitwidth is byte aligned (multiple of 8), libtiff already arranged the data in our machine's endianness
     if (bitwidth % 8 == 0) {
         const uint32_t bytesPerSample = bitwidth / 8;
 
         for (size_t i = 0; i < outputSize; ++i) {
-            output[i] = 0;
+            uint64_t sample = 0;
             for (uint32_t j = 0; j < bytesPerSample; ++j) {
                 if constexpr (endian::native == endian::little) {
-                    output[i] |= (T)input[i * bytesPerSample + j] << (8 * j);
+                    sample |= (uint64_t)input[i * bytesPerSample + j] << (8 * j);
                 } else {
-                    output[i] |= (T)input[i * bytesPerSample + j] << ((sizeof(T) * 8 - 8) - 8 * j);
+                    sample |= (uint64_t)input[i * bytesPerSample + j] << ((sizeof(T) * 8 - 8) - 8 * j);
                 }
             }
 
-            // If signbit is set, set all bits to the left to 1
-            if (handleSign && (output[i] & (1ull << (bitwidth - 1)))) {
-                output[i] |= ~(T)((1ull << bitwidth) - 1);
-            }
+            writeSample(output + i, sample, bitwidth);
         }
 
         return;
@@ -435,12 +418,9 @@ void unpackBits(
 
         while (bitsAvailable >= bitwidth && i < outputSize) {
             bitsAvailable -= bitwidth;
-            output[i] = (currentBits >> bitsAvailable) & ((1ull << bitwidth) - 1);
 
-            // If signbit is set, set all bits to the left to 1
-            if (handleSign && (output[i] & (1ull << (bitwidth - 1)))) {
-                output[i] |= ~(T)((1ull << bitwidth) - 1);
-            }
+            const uint64_t sample = (currentBits >> bitsAvailable) & ((1ull << bitwidth) - 1);
+            writeSample(output + i, sample, bitwidth);
 
             ++i;
         }
@@ -1691,8 +1671,6 @@ Task<ImageData> readTiffImage(
         throw ImageLoadError{"Failed to read bits per sample."};
     }
 
-    uint16_t tiffInternalBitsPerSample = bitsPerSample;
-
     uint16_t samplesPerPixel;
     if (!TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLESPERPIXEL, &samplesPerPixel)) {
         throw ImageLoadError{"Failed to read samples per pixel."};
@@ -1855,9 +1833,8 @@ Task<ImageData> readTiffImage(
     }
 
     tlog::debug() << fmt::format(
-        "TIFF info: size={} bps={}/{}/{} spp={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
+        "TIFF info: size={} bps={}/{} spp={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
         size,
-        tiffInternalBitsPerSample,
         dataBitsPerSample,
         bitsPerSample,
         samplesPerPixel,
@@ -2100,19 +2077,58 @@ Task<ImageData> readTiffImage(
         )};
     }
 
-    // We'll unpack the bits into 32-bit or 64-bit unsigned integers first, then convert to float. This simplifies the bit unpacking
-    const int unpackedBitsPerSample = bitsPerSample > 32 ? 64 : 32;
+    // We'll unpack all values into 32 bits per sample (int, uint, or float), regardless of original bit depth
+    const size_t unpackedBitsPerSample = 32;
     const size_t numTilesPerPlane = tile.count / numPlanes;
 
     vector<Task<void>> decodeTasks;
 
-    // TODO: use PixelBuffer
-    HeapArray<uint8_t> imageData((size_t)size.x() * size.y() * samplesPerPixel * unpackedBitsPerSample / 8);
+    const auto getTiffKind = [sampleFormat, bitsPerSample, photometric]() {
+        switch (sampleFormat) {
+            case SAMPLEFORMAT_IEEEFP: {
+                if (bitsPerSample != 16 && bitsPerSample != 24 && bitsPerSample != 32 && bitsPerSample != 64) {
+                    throw ImageLoadError{fmt::format("Unsupported floating point bits per sample: {}", bitsPerSample)};
+                }
+
+                if (bitsPerSample == 64) {
+                    tlog::warning() << "TIFF image has 64 bits per sample; tev will downcast to 32 bits per sample and precision will be lost.";
+                }
+
+                // We'll unpack all float data into 32-bit floats regardless of original precision
+                return ETiffKind::F32;
+            }
+            case SAMPLEFORMAT_INT: {
+                return ETiffKind::I32;
+            }
+            case SAMPLEFORMAT_UINT: {
+                if (photometric == PHOTOMETRIC_PALETTE) {
+                    return ETiffKind::Palette;
+                }
+
+                return ETiffKind::U32;
+            }
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
+        }
+    };
+
+    const ETiffKind kind = getTiffKind();
+
+    // At least at the moment, tev does not support displaying or handling >32-bit data, so we'll have to deal with f64 data being downcast
+    // to f32 and precision thus being lost. Warn the user about this.
+    const auto tiffKindToPixelFormat = [](ETiffKind kind) {
+        switch (kind) {
+            case ETiffKind::U32: return EPixelFormat::U32;
+            case ETiffKind::I32: return EPixelFormat::I32;
+            case ETiffKind::F32: return EPixelFormat::F32;
+            case ETiffKind::Palette: return EPixelFormat::U32;
+            default: throw ImageLoadError{fmt::format("Unsupported TIFF kind: {}", (int)kind)};
+        }
+    };
+
+    auto buf = PixelBuffer::alloc((size_t)size.x() * size.y() * samplesPerPixel, tiffKindToPixelFormat(kind));
 
     if (decodeRaw) {
-        if (bitsPerSample > 32) {
-            throw ImageLoadError{fmt::format("Compression type {} unsupported with {} bits per sample.", compression, bitsPerSample)};
-        }
+        TEV_ASSERT(buf.format() == EPixelFormat::F32, "Expected unpacked tile data to be in 32-bit float format.");
 
         // Get tile data and decode ourselves if the compression method is not supported by libtiff or much slower than our own code.
         for (size_t i = 0; i < tile.count; ++i) {
@@ -2201,7 +2217,7 @@ Task<ImageData> readTiffImage(
 
                         const size_t numPixels = (size_t)(xEnd - xStart) * (yEnd - yStart);
 
-                        auto* const data = (float*)imageData.data();
+                        auto* const data = buf.data<float>();
 
                         const auto views = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
 
@@ -2240,11 +2256,8 @@ Task<ImageData> readTiffImage(
     } else {
         // Have libtiff decode the tiles for us if the compression method is supported
         const size_t unpackedTileRowSamples = tile.width * samplesPerPixel / numPlanes;
-        const size_t unpackedTileSize = tile.height * unpackedTileRowSamples * unpackedBitsPerSample / 8;
+        const size_t unpackedTileSize = tile.height * unpackedTileRowSamples;
 
-        const bool handleSign = sampleFormat == SAMPLEFORMAT_INT;
-
-        HeapArray<uint8_t> unpackedTile(unpackedTileSize * tile.count);
         HeapArray<uint8_t> tileData(tile.size * tile.count);
 
         for (size_t i = 0; i < tile.count; ++i) {
@@ -2259,8 +2272,6 @@ Task<ImageData> readTiffImage(
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
                     [&, i, td]() -> Task<void> {
-                        uint8_t* const utd = unpackedTile.data() + unpackedTileSize * i;
-
                         const size_t planeTile = i % numTilesPerPlane;
                         const size_t tileX = planeTile % tile.numX;
                         const size_t tileY = planeTile / tile.numX;
@@ -2273,7 +2284,7 @@ Task<ImageData> readTiffImage(
 
                         const size_t numPixels = (size_t)tile.width * tile.height;
 
-                        const auto unpackTask = [&](auto* const utd, auto* const data) -> Task<void> {
+                        const auto unpackTask = [&](auto& utd, auto* const data) -> Task<void> {
                             co_await ThreadPool::global().parallelFor(
                                 yStart,
                                 yEnd,
@@ -2281,12 +2292,7 @@ Task<ImageData> readTiffImage(
                                 [&](int y) {
                                     int y0 = y - yStart;
                                     unpackBits(
-                                        td + tile.rowSize * y0,
-                                        tile.rowSize,
-                                        bitsPerSample,
-                                        utd + unpackedTileRowSamples * y0,
-                                        unpackedTileRowSamples,
-                                        handleSign
+                                        td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd.data() + unpackedTileRowSamples * y0, unpackedTileRowSamples
                                     );
 
                                     if (planar == PLANARCONFIG_CONTIG) {
@@ -2308,10 +2314,17 @@ Task<ImageData> readTiffImage(
                             );
                         };
 
-                        if (unpackedBitsPerSample > 32) {
-                            co_await unpackTask((uint64_t*)utd, (uint64_t*)imageData.data());
+                        if (buf.format() == EPixelFormat::F32) {
+                            HeapArray<float> unpackedTile(unpackedTileSize);
+                            co_await unpackTask(unpackedTile, buf.data<float>());
+                        } else if (buf.format() == EPixelFormat::U32) {
+                            HeapArray<uint32_t> unpackedTile(unpackedTileSize);
+                            co_await unpackTask(unpackedTile, buf.data<uint32_t>());
+                        } else if (buf.format() == EPixelFormat::I32) {
+                            HeapArray<int32_t> unpackedTile(unpackedTileSize);
+                            co_await unpackTask(unpackedTile, buf.data<int32_t>());
                         } else {
-                            co_await unpackTask((uint32_t*)utd, (uint32_t*)imageData.data());
+                            TEV_ASSERT(false, "Unsupported pixel format {}", toString(buf.format()));
                         }
                     },
                     priority
@@ -2323,13 +2336,12 @@ Task<ImageData> readTiffImage(
     }
 
     if (interleave != Vector2i{1, 1}) {
-        HeapArray<uint8_t> interleavedImageData;
-        const size_t bytesPerSample = unpackedBitsPerSample / 8;
-        const size_t numPixels = (size_t)size.x() * size.y();
+        const auto numPixels = (size_t)size.x() * size.y();
+        const auto bytesPerSample = unpackedBitsPerSample / 8;
+        const auto bytesPerPixel = numChannels * bytesPerSample;
 
-        interleavedImageData = HeapArray<uint8_t>(numPixels * numChannels * bytesPerSample);
-
-        const auto parallelInterleave = [&](const auto* in, auto* out) -> Task<void> {
+        auto interleavedBuf = PixelBuffer::alloc(buf.size(), buf.format());
+        const auto parallelInterleave = [&](const auto* __restrict in, auto* __restrict out) -> Task<void> {
             co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
@@ -2344,40 +2356,33 @@ Task<ImageData> readTiffImage(
                         const size_t interleaveX = x - subX * interleave.x();
                         const size_t srcX = interleaveX * (size.x() / interleave.x()) + subX;
 
-                        const size_t srcIndexBase = (srcY * size.x() + srcX) * numChannels;
-                        const size_t dstIndexBase = (y * size.x() + x) * numChannels;
-                        for (size_t c = 0; c < numChannels; ++c) {
-                            out[dstIndexBase + c] = in[srcIndexBase + c];
-                        }
+                        const size_t srcIndex = (srcY * size.x() + srcX) * bytesPerPixel;
+                        const size_t dstIndex = (y * size.x() + x) * bytesPerPixel;
+
+                        memcpy(out + dstIndex, in + srcIndex, bytesPerPixel);
                     }
                 },
                 priority
             );
         };
 
-        if (bytesPerSample == 8) {
-            co_await parallelInterleave((const uint64_t*)imageData.data(), (uint64_t*)interleavedImageData.data());
-        } else if (bytesPerSample == 4) {
-            co_await parallelInterleave((const uint32_t*)imageData.data(), (uint32_t*)interleavedImageData.data());
-        } else {
-            throw runtime_error{"Unsupported bytes per sample."};
-        }
-
-        imageData = std::move(interleavedImageData);
+        co_await parallelInterleave(buf.dataBytes(), interleavedBuf.dataBytes());
+        buf = std::move(interleavedBuf);
     }
 
     if (const auto activeArea = getActiveArea(tif, size); size != activeArea.size()) {
         const auto rawSize = size;
         size = activeArea.size();
         const auto numPixels = (size_t)size.x() * size.y();
+        const auto bytesPerSample = unpackedBitsPerSample / 8;
+        const auto bytesPerPixel = numChannels * bytesPerSample;
 
         tlog::debug() << fmt::format("Cropping to active area: [{},{}] -> {}", activeArea.min, activeArea.max, size);
 
         resultData.dataWindow = resultData.displayWindow = size;
 
-        HeapArray<uint8_t> croppedImageData((size_t)numPixels * samplesPerPixel * unpackedBitsPerSample / 8);
-
-        const auto cropToActiveArea = [&](auto* const croppedData, const auto* const data) -> Task<void> {
+        auto croppedBuf = PixelBuffer::alloc(numPixels * samplesPerPixel, buf.format());
+        const auto cropToActiveArea = [&](auto* __restrict const croppedData, const auto* __restrict const data) -> Task<void> {
             co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
@@ -2386,25 +2391,18 @@ Task<ImageData> readTiffImage(
                     const int srcY = y + activeArea.min.y();
                     for (int x = 0; x < size.x(); ++x) {
                         const int srcX = x + activeArea.min.x();
-                        for (size_t c = 0; c < numChannels; ++c) {
-                            croppedData[((size_t)y * size.x() + x) * numChannels + c] =
-                                data[((size_t)srcY * rawSize.x() + srcX) * numChannels + c];
-                        }
+                        const auto srcIndex = (srcY * rawSize.x() + srcX) * bytesPerPixel;
+                        const auto dstIndex = (y * size.x() + x) * bytesPerPixel;
+
+                        memcpy(croppedData + dstIndex, data + srcIndex, bytesPerPixel);
                     }
                 },
                 priority
             );
         };
 
-        if (unpackedBitsPerSample == 64) {
-            co_await cropToActiveArea((uint64_t*)croppedImageData.data(), (const uint64_t*)imageData.data());
-        } else if (unpackedBitsPerSample == 32) {
-            co_await cropToActiveArea((uint32_t*)croppedImageData.data(), (const uint32_t*)imageData.data());
-        } else {
-            throw ImageLoadError{fmt::format("Unsupported unpacked bits per sample: {}", unpackedBitsPerSample)};
-        }
-
-        imageData = std::move(croppedImageData);
+        co_await cropToActiveArea(croppedBuf.dataBytes(), buf.dataBytes());
+        buf = std::move(croppedBuf);
     }
 
     resultData.displayWindow = getDefaultCrop(tif, size);
@@ -2426,57 +2424,12 @@ Task<ImageData> readTiffImage(
     }
 
     const float intConversionScale = deriveScale(formatToPixelType(sampleFormat), dataBitsPerSample);
-
-    ETiffKind kind = ETiffKind::U32;
-    switch (sampleFormat) {
-        case SAMPLEFORMAT_IEEEFP: {
-            switch (bitsPerSample) {
-                case 16: kind = ETiffKind::F16; break;
-                case 24: kind = ETiffKind::F24; break;
-                case 32: kind = ETiffKind::F32; break;
-                case 64: kind = ETiffKind::F64; break;
-                default: throw ImageLoadError{fmt::format("Unsupported fp bps={}", bitsPerSample)};
-            }
-
-            break;
-        }
-        case SAMPLEFORMAT_INT: {
-            kind = ETiffKind::I32;
-            break;
-        }
-        case SAMPLEFORMAT_UINT: {
-            if (photometric == PHOTOMETRIC_PALETTE) {
-                kind = ETiffKind::Palette;
-            } else {
-                kind = ETiffKind::U32;
-            }
-
-            break;
-        }
-        default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
-    }
-
-    if (kind == ETiffKind::F16 || kind == ETiffKind::F24) {
-        tlog::debug() << "Converting 16/24 bit float data to 32 bit float.";
-        co_await convertF16AndF24ToF32(kind, (uint32_t*)imageData.data(), numChannels, size, priority);
-        kind = ETiffKind::F32;
-    }
-
     const bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
 
     // Convert all the extra channels to float and store them in the result data. No further processing needed.
     for (size_t c = numChannels - numExtraChannels + (hasAlpha ? 1 : 0); c < numChannels; ++c) {
-        co_await tiffDataToFloat32<false>(
-            kind,
-            interleave,
-            palette,
-            (uint32_t*)(imageData.data() + c * unpackedBitsPerSample / 8),
-            numChannels,
-            resultData.channels[c].view<float>(),
-            false,
-            priority,
-            intConversionScale,
-            flipWhiteAndBlack
+        co_await tiffDataToFloat32(
+            kind, interleave, palette, buf, c, numChannels, resultData.channels[c].view<float>(), false, priority, intConversionScale, flipWhiteAndBlack
         );
     }
 
@@ -2493,8 +2446,8 @@ Task<ImageData> readTiffImage(
     // can be tricky and we can reproduce the exact behavior the ICC would have without too much trouble ourselves, so skip ICC in that case.
     if (iccProfileData && iccProfileSize > 0 && !labPhotometrics.contains(photometric)) {
         try {
-            co_await tiffDataToFloat32<false>(
-                kind, interleave, palette, (uint32_t*)imageData.data(), numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
+            co_await tiffDataToFloat32(
+                kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
             );
 
             const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
@@ -2514,8 +2467,8 @@ Task<ImageData> readTiffImage(
         } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
-    co_await tiffDataToFloat32<false>(
-        kind, interleave, palette, (uint32_t*)imageData.data(), numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
+    co_await tiffDataToFloat32(
+        kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
     );
 
     // Both CFA and linear raw DNG data need to be linearized and normalized prior to color space conversions. Metadata for
