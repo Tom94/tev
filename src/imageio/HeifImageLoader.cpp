@@ -196,8 +196,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{"Image has zero pixels."};
         }
 
-        const ScopeGuard imgGuard{[img] { heif_image_release(img); }};
-
         const heif_channel channelType = numChannels == 1 ? heif_channel_Y : heif_channel_interleaved;
 
         const int bitDepth = heif_image_get_bits_per_pixel(img, channelType) / numChannels;
@@ -322,11 +320,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             tlog::debug() << "Found NCLX color profile. Deriving CICP from it.";
         }
 
-        const ScopeGuard nclxGuard{[nclx] {
-            if (nclx) {
-                heif_nclx_color_profile_free(nclx);
-            }
-        }};
+        const auto nclxGuard = ScopeGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
 
         LimitedRange range = LimitedRange::full();
         if (nclx && nclx->full_range_flag == 0) {
@@ -409,6 +403,9 @@ Task<vector<ImageData>> HeifImageLoader::load(
         return clamp(numSamples / (1024 * 1024 * 4), 1uz, (size_t)thread::hardware_concurrency());
     };
 
+    using HeifDecodingOptionsPtr = unique_ptr<heif_decoding_options, decltype(&heif_decoding_options_free)>;
+    using HeifImageHandlePtr = unique_ptr<heif_image_handle, decltype(&heif_image_handle_release)>;
+
     const auto decodeImageHandle =
         [&decodeImage](
             const heif_image_handle* imgHandle, bool skipColorProcessing, string_view layer = "", string_view partName = ""
@@ -452,12 +449,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
         // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
         const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
 
-        heif_decoding_options* decodingOptions = heif_decoding_options_alloc();
+        const auto decodingOptions = HeifDecodingOptionsPtr{heif_decoding_options_alloc(), heif_decoding_options_free};
         if (!decodingOptions) {
             throw ImageLoadError{"Failed to allocate decoding options."};
         }
-
-        const ScopeGuard optionsGuard{[decodingOptions] { heif_decoding_options_free(decodingOptions); }};
 
         const auto sizeGuess = Vector2i{heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
         const auto numPixels = sizeGuess.x() * (size_t)sizeGuess.y();
@@ -472,7 +467,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         decodingOptions->num_library_threads = numThreads;
 
         heif_image* img = nullptr;
-        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, decodingOptions);
+        const auto imgGuard = ScopeGuard{[img] { heif_image_release(img); }};
+        if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, decodingOptions.get());
             error.code != heif_error_Ok) {
             throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
@@ -503,12 +499,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
         // If the preferred colorspace isn't monochrome (even if undefined or YCC), we specify RGB and let libheif handle the conversion.
         const heif_colorspace decodingColorspace = isMonochrome ? heif_colorspace_monochrome : heif_colorspace_RGB;
 
-        heif_decoding_options* decodingOptions = heif_decoding_options_alloc();
+        const auto decodingOptions = HeifDecodingOptionsPtr{heif_decoding_options_alloc(), heif_decoding_options_free};
         if (!decodingOptions) {
             throw ImageLoadError{"Failed to allocate decoding options."};
         }
-
-        const ScopeGuard optionsGuard{[decodingOptions] { heif_decoding_options_free(decodingOptions); }};
 
         uint16_t widthGuess = 1, heightGuess = 1;
         if (const auto error = heif_track_get_image_resolution(track, &widthGuess, &heightGuess); error.code != heif_error_Ok) {
@@ -527,7 +521,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         decodingOptions->num_library_threads = numThreads;
 
         heif_image* img = nullptr;
-        if (const auto error = heif_track_decode_next_image(track, &img, decodingColorspace, decodingChroma, decodingOptions);
+        const auto imgGuard = ScopeGuard{[img] { heif_image_release(img); }};
+        if (const auto error = heif_track_decode_next_image(track, &img, decodingColorspace, decodingChroma, decodingOptions.get());
             error.code != heif_error_Ok) {
             if (error.code == heif_error_End_of_sequence) {
                 tlog::debug() << "End of sequence reached for track.";
@@ -540,29 +535,29 @@ Task<vector<ImageData>> HeifImageLoader::load(
         co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, partName, partName);
     };
 
-    heif_context* ctx = heif_context_alloc();
+    using HeifCtxPtr = unique_ptr<heif_context, decltype(&heif_context_free)>;
+
+    const auto ctx = HeifCtxPtr{heif_context_alloc(), heif_context_free};
     if (!ctx) {
         throw ImageLoadError{"Failed to allocate libheif context."};
     }
 
-    const ScopeGuard contextGuard{[ctx] { heif_context_free(ctx); }};
-
-    if (const auto error = heif_context_read_from_reader(ctx, &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
+    if (const auto error = heif_context_read_from_reader(ctx.get(), &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
         throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 
     // If we're an image *sequence*, load the sequence tracks instead of individual images.
-    const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx);
+    const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx.get());
     if (seqTrackCount > 0) {
         tlog::debug() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
 
         vector<uint32_t> trackIds(seqTrackCount);
-        heif_context_get_track_ids(ctx, trackIds.data());
+        heif_context_get_track_ids(ctx.get(), trackIds.data());
 
         vector<ImageData> result;
 
         for (int i = 0; i < seqTrackCount; ++i) {
-            heif_track* track = heif_context_get_track(ctx, trackIds[i]);
+            heif_track* track = heif_context_get_track(ctx.get(), trackIds[i]);
 
             for (size_t frameIdx = 0;; ++frameIdx) {
                 const auto partName = seqTrackCount > 1 ? fmt::format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
@@ -582,15 +577,15 @@ Task<vector<ImageData>> HeifImageLoader::load(
         co_return result;
     }
 
-    const size_t numImages = heif_context_get_number_of_top_level_images(ctx);
+    const size_t numImages = heif_context_get_number_of_top_level_images(ctx.get());
     vector<heif_item_id> imageIds(numImages);
-    heif_context_get_list_of_top_level_image_IDs(ctx, imageIds.data(), (int)numImages);
+    heif_context_get_list_of_top_level_image_IDs(ctx.get(), imageIds.data(), (int)numImages);
 
     const auto decodeTopLevelImgIdAndAuxImages = [&](heif_item_id id, string partName) -> Task<ImageData> {
         tlog::debug() << fmt::format("Spawning decoding task for top-level HEIF image ID '{}'", id);
 
         heif_image_handle* imgHandle;
-        if (const auto error = heif_context_get_image_handle(ctx, id, &imgHandle); error.code != heif_error_Ok) {
+        if (const auto error = heif_context_get_image_handle(ctx.get(), id, &imgHandle); error.code != heif_error_Ok) {
             throw ImageLoadError{fmt::format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
         }
 
@@ -601,15 +596,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         struct AuxInfo {
             heif_item_id id;
-            heif_image_handle* handle;
+            HeifImageHandlePtr handle;
         };
 
         vector<AuxInfo> aux;
-        ScopeGuard auxImgHandlesGuard{[&aux] {
-            for (const auto& a : aux) {
-                heif_image_handle_release(a.handle);
-            }
-        }};
 
         if (const int numAux = heif_image_handle_get_number_of_auxiliary_images(imgHandle, LIBHEIF_AUX_IMAGE_FILTER_OMIT_ALPHA); numAux > 0) {
             vector<heif_item_id> auxIds((size_t)numAux);
@@ -618,7 +608,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             for (const auto auxId : auxIds) {
                 if (heif_image_handle* auxImgHandle;
                     heif_image_handle_get_auxiliary_image_handle(imgHandle, auxId, &auxImgHandle).code == heif_error_Ok) {
-                    aux.emplace_back(auxId, auxImgHandle);
+                    aux.emplace_back(auxId, HeifImageHandlePtr{auxImgHandle, heif_image_handle_release});
                 } else {
                     tlog::warning() << fmt::format("Failed to get auxiliary image handle for ID {}.", auxId);
                 }
@@ -635,10 +625,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
             // If gainmap isn't an aux image, but a separate item, add it to the aux image list to be processed below.
             const auto it = ranges::find(aux, gainmapItemId, [](const auto& a) { return a.id; });
             if (it == aux.end()) {
-                aux.emplace_back(gainmapItemId, gainmapImgHandle);
+                aux.emplace_back(gainmapItemId, HeifImageHandlePtr{gainmapImgHandle, heif_image_handle_release});
             } else {
                 heif_image_handle_release(gainmapImgHandle);
-                gainmapImgHandle = it->handle;
+                gainmapImgHandle = it->handle.get();
             }
         }
 
@@ -666,12 +656,15 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     co_await ThreadPool::global().enqueueCoroutine(priority);
 
                     const char* auxType = nullptr;
+                    const auto typeGuard = ScopeGuard{[auxImgHandle, &auxType] {
+                        heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType);
+                    }};
+
                     if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
                         tlog::warning() << fmt::format("Failed to get auxiliary image type: {}", error.message);
                         co_return nullopt;
                     }
 
-                    ScopeGuard typeGuard{[auxImgHandle, &auxType] { heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType); }};
                     string auxLayerName = auxType ? auxType : "";
                     ranges::replace(auxLayerName, ':', '.');
 
@@ -696,7 +689,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                         .retain = retainAuxLayer,
                         .name = auxLayerName,
                     };
-                }(a.handle, gainmapImgHandle, decodeImageHandle, channelSelector, partName, priority)
+                }(a.handle.get(), gainmapImgHandle, decodeImageHandle, channelSelector, partName, priority)
             );
         }
 
@@ -811,7 +804,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                                heif_image_handle_get_derived_image_nclx_color_profile(imgHandle, &nclx).code == heif_error_Ok &&
                                nclx->color_primaries != heif_color_primaries_unspecified) {
 
-                        const ScopeGuard nclxGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
+                        const auto nclxGuard = ScopeGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
 
                         altImgChroma = {
                             {
