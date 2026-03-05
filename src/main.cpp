@@ -182,7 +182,7 @@ static void convertTo(
     unordered_set<fs::path> writtenPaths;
 
     const auto start = chrono::steady_clock::now();
-    const ScopeGuard guard{[&]() {
+    const auto guard = ScopeGuard{[&]() {
         if (writtenPaths.empty()) {
             return;
         }
@@ -706,7 +706,7 @@ static int mainFunc(span<const string> arguments) {
         } catch (const runtime_error& e) { tlog::warning() << "Uncaught exception in IPC thread: " << e.what(); }
     }};
 
-    const ScopeGuard backgroundThreadShutdownGuard{[&]() {
+    const auto backgroundThreadShutdownGuard = ScopeGuard{[&]() {
         setShuttingDown();
 
         ThreadPool::global().waitUntilFinished();
@@ -758,7 +758,7 @@ static int mainFunc(span<const string> arguments) {
     };
     nanogui::init(!get(ldrFlag), errorCallback);
 
-    const ScopeGuard nanoguiShutdownGuard{[&]() {
+    const auto nanoguiShutdownGuard = ScopeGuard{[&]() {
     // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our
     // program here anyways, let's let the OS clean up after us.
 #if defined(__APPLE__) or defined(_WIN32)

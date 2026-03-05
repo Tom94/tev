@@ -232,41 +232,38 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         throw FormatNotSupported{"Data is not a JPEG 2000 image or codestream."};
     }
 
-    opj_codec_t* codec = opj_create_decompress(*j2kFormat);
+    using CodecPtr = unique_ptr<opj_codec_t, decltype(&opj_destroy_codec)>;
+    const auto codec = CodecPtr{opj_create_decompress(*j2kFormat), opj_destroy_codec};
     if (!codec) {
         throw ImageLoadError{"Failed to create JPEG 2000 codec."};
     }
 
-    const ScopeGuard codecGuard{[&] { opj_destroy_codec(codec); }};
-
     opj_dparameters_t params;
     opj_set_default_decoder_parameters(&params);
-    opj_setup_decoder(codec, &params);
+    opj_setup_decoder(codec.get(), &params);
 
     MemStream ms{data, 0};
-    opj_stream_t* stream = makeMemStream(&ms);
+
+    using StreamPtr = unique_ptr<opj_stream_t, decltype(&opj_stream_destroy)>;
+    const auto stream = StreamPtr{makeMemStream(&ms), opj_stream_destroy};
     if (!stream) {
         throw ImageLoadError{"Failed to create JPEG 2000 stream."};
     }
 
-    const ScopeGuard streamGuard{[&] { opj_stream_destroy(stream); }};
+    using ImagePtr = unique_ptr<opj_image_t, decltype(&opj_image_destroy)>;
+    auto image = ImagePtr{nullptr, opj_image_destroy};
 
-    opj_image_t* image = nullptr;
-    const ScopeGuard imageGuard{[&] {
-        if (image) {
-            opj_image_destroy(image);
-        }
-    }};
-
-    if (!opj_read_header(stream, codec, &image) || !image) {
+    if (opj_image_t* img; opj_read_header(stream.get(), codec.get(), &img) && img) {
+        image.reset(img);
+    } else {
         throw ImageLoadError{"Failed to read JPEG 2000 header."};
     }
 
-    if (!opj_decode(codec, stream, image)) {
+    if (!opj_decode(codec.get(), stream.get(), image.get())) {
         throw ImageLoadError{"Failed to decode JPEG 2000 image."};
     }
 
-    if (!opj_end_decompress(codec, stream)) {
+    if (!opj_end_decompress(codec.get(), stream.get())) {
         throw ImageLoadError{"Failed to finalize JPEG 2000 decompression."};
     }
 

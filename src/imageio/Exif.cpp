@@ -34,7 +34,7 @@ ExifByteOrder byteOrder(bool reverseEndianness) { return reverseEndianness ? EXI
 } // namespace
 
 Exif::Exif() {
-    ScopeGuard guard{[this]() { reset(); }};
+    auto guard = ScopeGuard{[this]() { reset(); }};
 
     mExif = exif_data_new();
     if (!mExif) {
@@ -79,7 +79,7 @@ Exif::Exif() {
 }
 
 Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
-    ScopeGuard guard{[this]() { reset(); }};
+    auto guard = ScopeGuard{[this]() { reset(); }};
 
     // If data doesn't already start with fourcc, prepend
     HeapArray<uint8_t> newExifData;

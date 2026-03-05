@@ -511,7 +511,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
     {
         const uint64_t prevOffset = TIFFCurrentDirOffset(tif);
         TIFFSetDirectory(tif, 0);
-        const ScopeGuard guard{[&]() { TIFFSetSubDirectory(tif, prevOffset); }};
+        const auto guard = ScopeGuard{[&]() { TIFFSetSubDirectory(tif, prevOffset); }};
 
         if (const auto asn = tiffGetSpan<float>(tif, TIFFTAG_ASSHOTNEUTRAL); asn.size() >= 3) {
             const float maxVal = std::max({asn[0], asn[1], asn[2]});
@@ -783,7 +783,7 @@ Task<void> postprocessLinearRawDng(
     // Camera parameters are stored in IFD 0, so let's switch to it temporarily.
     const uint64_t prevOffset = TIFFCurrentDirOffset(tif);
     TIFFSetDirectory(tif, 0);
-    const ScopeGuard guard{[&]() { TIFFSetSubDirectory(tif, prevOffset); }};
+    const auto guard = ScopeGuard{[&]() { TIFFSetSubDirectory(tif, prevOffset); }};
 
     Vector3f analogBalance{1.0f};
     if (const auto abt = tiffGetSpan<float>(tif, TIFFTAG_ANALOGBALANCE); !abt.empty()) {
@@ -980,7 +980,7 @@ Task<void> postprocessLinearRawDng(
     {
         // Temporarily switch back to the raw's IFD to read gain table map, if present.
         TIFFSetSubDirectory(tif, prevOffset);
-        ScopeGuard guard2{[&]() { TIFFSetDirectory(tif, 0); }};
+        const auto dirGuard = ScopeGuard{[&]() { TIFFSetDirectory(tif, 0); }};
 
         // TODO: support TIFFTAG_PROFILEGAINTABLEMAP2
 
@@ -1562,7 +1562,7 @@ Task<ImageData> decodeJpeg(
     };
 
     jpeg_create_decompress(&cinfo);
-    const ScopeGuard guard{[&]() { jpeg_destroy_decompress(&cinfo); }};
+    const auto guard = ScopeGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
 
     jpeg_mem_src(&cinfo, compressedData.data(), compressedData.size());
 
@@ -1586,7 +1586,7 @@ Task<ImageData> decodeJpeg(
     cinfo.out_color_space = cinfo.jpeg_color_space;
     cinfo.quantize_colors = false;
     jpeg_start_decompress(&cinfo);
-    ScopeGuard decompressGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
+    auto decompressGuard = ScopeGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
 
     const auto width = (size_t)cinfo.output_width;
     const auto height = (size_t)cinfo.output_height;
@@ -2624,7 +2624,7 @@ Task<vector<ImageData>>
         throw ImageLoadError{"Failed to open TIFF image."};
     }
 
-    ScopeGuard tiffGuard{[tif] { TIFFClose(tif); }};
+    const auto tiffGuard = ScopeGuard{[tif] { TIFFClose(tif); }};
 
     bool isDng = false;
     uint8_t* dngVersion = nullptr;

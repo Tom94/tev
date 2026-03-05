@@ -891,7 +891,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         join(channelNames, ",")
     );
 
-    ScopeGuard guard{[now = chrono::system_clock::now()]() {
+    const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
         tlog::debug() << fmt::format("Upload took {:.03}s", duration.count());
     }};
@@ -903,7 +903,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         const Channel* chan = channel(channelNames[0]);
         dataPtr = chan->dataBuf();
     } else {
-        ScopeGuard guard{[now = chrono::system_clock::now()]() {
+        const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
             const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
             tlog::debug() << fmt::format("Upload buffer generation took {:.03}s", duration.count());
         }};

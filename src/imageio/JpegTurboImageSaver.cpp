@@ -53,13 +53,13 @@ Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<con
     };
 
     jpeg_create_compress(&cinfo);
-    const ScopeGuard cinfoGuard{[&]() { jpeg_destroy_compress(&cinfo); }};
+    const auto cinfoGuard = ScopeGuard{[&]() { jpeg_destroy_compress(&cinfo); }};
 
     // Use libjpeg's memory destination; we'll copy to the ostream afterward.
     unsigned char* outBuffer = nullptr;
     unsigned long outSize = 0;
     jpeg_mem_dest(&cinfo, &outBuffer, &outSize);
-    const ScopeGuard outBufferGuard{[&]() { free(outBuffer); }};
+    const auto outBufferGuard = ScopeGuard{[&]() { free(outBuffer); }};
 
     cinfo.image_width = imageSize.x();
     cinfo.image_height = imageSize.y();

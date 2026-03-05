@@ -1711,7 +1711,7 @@ void ImageViewer::updateImageVectorGraphics(string_view imageName, bool shallSel
 
 void ImageViewer::selectImage(const shared_ptr<Image>& image, bool stopPlayback) {
     // Once the selected image has been updated, reflect that in the image info window.
-    ScopeGuard imageInfoGuard{[this]() {
+    const auto imageInfoGuard = ScopeGuard{[this]() {
         if (mImageInfoWindow) {
             updateImageInfoWindow();
         }

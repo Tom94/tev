@@ -43,15 +43,14 @@ Task<void> QoiImageSaver::save(ostream& oStream, const fs::path&, span<const uin
     };
 
     int sizeInBytes = 0;
-    void* const encodedData = qoi_encode(data.data(), &desc, &sizeInBytes);
 
-    const ScopeGuard encodedDataGuard{[encodedData] { free(encodedData); }};
-
+    using DataPtr = unique_ptr<char, decltype(&free)>;
+    const auto encodedData = DataPtr{static_cast<char*>(qoi_encode(data.data(), &desc, &sizeInBytes)), &free};
     if (!encodedData) {
         throw ImageSaveError{"Failed to encode data into the QOI format."};
     }
 
-    oStream.write(static_cast<char*>(encodedData), sizeInBytes);
+    oStream.write(encodedData.get(), sizeInBytes);
 
     co_return;
 }

@@ -47,21 +47,21 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     iStream.read((char*)buffer.data(), fileSize);
 
     WebPData data = {buffer.data(), buffer.size()};
-    WebPDemuxer* demux = WebPDemux(&data);
+
+    using DemuxPtr = unique_ptr<WebPDemuxer, decltype(&WebPDemuxDelete)>;
+    const DemuxPtr demux = DemuxPtr{WebPDemux(&data), &WebPDemuxDelete};
     if (!demux) {
         throw ImageLoadError{"Failed to demux webp image."};
     }
 
-    ScopeGuard demuxGuard{[demux] { WebPDemuxDelete(demux); }};
-
-    const uint32_t flags = WebPDemuxGetI(demux, WEBP_FF_FORMAT_FLAGS);
+    const uint32_t flags = WebPDemuxGetI(demux.get(), WEBP_FF_FORMAT_FLAGS);
 
     WebPChunkIterator chunkIter;
 
     HeapArray<uint8_t> iccProfileData;
     if (flags & ICCP_FLAG) {
-        if (WebPDemuxGetChunk(demux, "ICCP", 1, &chunkIter)) {
-            ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
+        if (WebPDemuxGetChunk(demux.get(), "ICCP", 1, &chunkIter)) {
+            const auto chunkGuard = ScopeGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
             try {
                 tlog::debug() << "Found ICC color profile.";
                 iccProfileData = HeapArray<uint8_t>(chunkIter.chunk.size);
@@ -74,8 +74,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
     vector<AttributeNode> attributes;
     if (flags & EXIF_FLAG) {
-        if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunkIter)) {
-            ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
+        if (WebPDemuxGetChunk(demux.get(), "EXIF", 1, &chunkIter)) {
+            const auto chunkGuard = ScopeGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
 
             try {
                 auto exif = Exif{
@@ -89,8 +89,8 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     }
 
     if (flags & XMP_FLAG) {
-        if (WebPDemuxGetChunk(demux, "XMP ", 1, &chunkIter)) {
-            ScopeGuard chunkGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
+        if (WebPDemuxGetChunk(demux.get(), "XMP ", 1, &chunkIter)) {
+            const auto chunkGuard = ScopeGuard{[&chunkIter] { WebPDemuxReleaseChunkIterator(&chunkIter); }};
 
             try {
                 auto xmp = Xmp{
@@ -107,13 +107,13 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = numChannels == 4;
 
-    const uint32_t width = WebPDemuxGetI(demux, WEBP_FF_CANVAS_WIDTH);
-    const uint32_t height = WebPDemuxGetI(demux, WEBP_FF_CANVAS_HEIGHT);
+    const uint32_t width = WebPDemuxGetI(demux.get(), WEBP_FF_CANVAS_WIDTH);
+    const uint32_t height = WebPDemuxGetI(demux.get(), WEBP_FF_CANVAS_HEIGHT);
     Color bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
 
     const bool isAnimation = (flags & ANIMATION_FLAG) != 0;
     if (isAnimation) {
-        const uint32_t bgColor8bit = WebPDemuxGetI(demux, WEBP_FF_BACKGROUND_COLOR);
+        const uint32_t bgColor8bit = WebPDemuxGetI(demux.get(), WEBP_FF_BACKGROUND_COLOR);
 
         // Byte order: BGRA (https://developers.google.com/speed/webp/docs/riff_container#animation)
         const uint8_t* bgColorBytes = (const uint8_t*)&bgColor8bit;
@@ -147,17 +147,17 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numInterleavedSamples = numPixels * numInterleavedChannels;
     HeapArray<float> frameData;
 
-    if (WebPDemuxGetFrame(demux, 1, &iter)) {
+    if (WebPDemuxGetFrame(demux.get(), 1, &iter)) {
         do {
             Vector2i frameSize;
-            uint8_t* const data = WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y());
+
+            using DataPtr = unique_ptr<uint8_t, decltype(&WebPFree)>;
+            const auto data = DataPtr{WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y()), &WebPFree};
             if (!data) {
                 throw ImageLoadError{"Failed to decode webp frame."};
             }
 
             const Vector2i frameOffset{iter.x_offset, iter.y_offset};
-
-            const ScopeGuard dataGuard{[data] { WebPFree(data); }};
 
             ImageData& resultData = result.emplace_back();
             resultData.attributes = attributes;
@@ -190,7 +190,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             if (iccProfileData) {
                 try {
-                    co_await toFloat32(data, numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(data.get(), numChannels, dstView, hasAlpha, priority);
 
                     const auto profile = ColorProfile::fromIcc(iccProfileData);
                     co_await toLinearSrgbPremul(
@@ -200,7 +200,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     resultData.readMetadataFromIcc(profile);
                 } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {
-                co_await toFloat32<uint8_t, true, true>((uint8_t*)data, numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32<uint8_t, true, true>(data.get(), numChannels, dstView, hasAlpha, priority);
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;

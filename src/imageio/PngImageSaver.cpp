@@ -41,7 +41,7 @@ Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uin
 
     png_infop info = nullptr;
     png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
-    const ScopeGuard pngGuard{[&]() { png_destroy_write_struct(&png, &info); }};
+    const auto pngGuard = ScopeGuard{[&]() { png_destroy_write_struct(&png, &info); }};
     if (!png) {
         throw ImageSaveError{"Failed to create PNG write struct."};
     }

@@ -960,7 +960,7 @@ Task<void> toLinearSrgbPremul(
         }
     }
 
-    const ScopeGuard guard{[now = chrono::system_clock::now()]() {
+    const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
         tlog::debug() << fmt::format("ICC profile application took {:.03}s", duration.count());
     }};

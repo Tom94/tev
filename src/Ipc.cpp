@@ -465,7 +465,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
             mHostInfo
         );
 
-        ScopeGuard addrinfoGuard{[heapaddrinfo] { freeaddrinfo(heapaddrinfo); }};
+        const auto addrinfoGuard = ScopeGuard{[heapaddrinfo] { freeaddrinfo(heapaddrinfo); }};
 
         mSocketFd = INVALID_SOCKET;
         for (struct addrinfo* ptr = &addrinfo; ptr; ptr = ptr->ai_next) {

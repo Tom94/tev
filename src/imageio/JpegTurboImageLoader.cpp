@@ -98,7 +98,7 @@ Task<vector<ImageData>>
         };
 
         jpeg_create_decompress(&cinfo);
-        const ScopeGuard jpegGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
+        const auto jpegGuard = ScopeGuard{[&]() { jpeg_destroy_decompress(&cinfo); }};
 
         // Set up source manager to read from memory. In the future we might be able to jury-rig this to read directly from the stream.
         jpeg_mem_src(&cinfo, data.data(), data.size());
@@ -191,7 +191,7 @@ Task<vector<ImageData>>
 
         cinfo.out_color_space = cinfo.jpeg_color_space; // Keep the original color space, we'll handle color conversion ourselves if needed
         jpeg_start_decompress(&cinfo);
-        ScopeGuard decompressGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
+        auto decompressGuard = ScopeGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
 
         if (cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK) {
             throw ImageLoadError{"CMYK JPEG images are not supported."};

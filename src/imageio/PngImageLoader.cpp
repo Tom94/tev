@@ -43,7 +43,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     png_infop infoPtr = nullptr;
-    const ScopeGuard pngGuard{[&]() { png_destroy_read_struct(&pngPtr, &infoPtr, nullptr); }};
+    const auto pngGuard = ScopeGuard{[&]() { png_destroy_read_struct(&pngPtr, &infoPtr, nullptr); }};
 
     png_set_error_fn(
         pngPtr,

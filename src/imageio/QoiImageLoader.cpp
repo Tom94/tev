@@ -47,10 +47,9 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     iStream.read(data.data(), dataSize);
 
     qoi_desc desc;
-    void* decodedData = qoi_decode(data.data(), (int)dataSize, &desc, 0);
 
-    const ScopeGuard decodedDataGuard{[decodedData] { free(decodedData); }};
-
+    using DataPtr = unique_ptr<uint8_t, decltype(&free)>;
+    const auto decodedData = DataPtr{static_cast<uint8_t*>(qoi_decode(data.data(), (int)dataSize, &desc, 0)), &free};
     if (!decodedData) {
         throw ImageLoadError{"Failed to decode data from the QOI format."};
     }
@@ -82,11 +81,11 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     const auto outView = MultiChannelView<float>{resultData.channels};
 
     if (desc.colorspace == QOI_LINEAR) {
-        co_await toFloat32<uint8_t, false>((uint8_t*)decodedData, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<uint8_t, false>(decodedData.get(), numChannels, outView, hasAlpha, priority);
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
-        co_await toFloat32<uint8_t, true>((uint8_t*)decodedData, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<uint8_t, true>(decodedData.get(), numChannels, outView, hasAlpha, priority);
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     }
