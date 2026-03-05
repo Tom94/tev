@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <concepts>
 #include <cstring>
 #include <filesystem>
 #include <functional>
@@ -260,9 +261,9 @@ template <typename... Callable> struct visitor : Callable... {
     using Callable::operator()...;
 };
 
-template <typename T>
-    requires std::is_trivially_copyable_v<T>
-T fromBytes(std::span<const uint8_t> data) {
+template <typename T> concept trivially_copyable = std::is_trivially_copyable_v<T>;
+
+template <trivially_copyable T> T fromBytes(std::span<const uint8_t> data) {
     if (data.size() < sizeof(T)) {
         throw std::runtime_error{"Not enough data to read value of type."};
     }
@@ -272,45 +273,19 @@ T fromBytes(std::span<const uint8_t> data) {
     return val;
 }
 
-template <typename T>
-    requires std::is_trivially_copyable_v<T>
-T fromBytes(const uint8_t* data) {
+template <trivially_copyable T> T fromBytes(const uint8_t* data) {
     T val = {};
     std::memcpy(&val, data, sizeof(T));
     return val;
 }
 
-inline uint16_t swapBytes(uint16_t value) {
-#ifdef _WIN32
-    return _byteswap_ushort(value);
-#else
-    return __builtin_bswap16(value);
-#endif
-}
-
-inline uint32_t swapBytes(uint32_t value) {
-#ifdef _WIN32
-    return _byteswap_ulong(value);
-#else
-    return __builtin_bswap32(value);
-#endif
-}
-
-inline uint64_t swapBytes(uint64_t value) {
-#ifdef _WIN32
-    return _byteswap_uint64(value);
-#else
-    return __builtin_bswap64(value);
-#endif
-}
-
-template <typename T> T swapBytes(T value) {
+template <trivially_copyable T> T swapBytes(T value) {
     static_assert(sizeof(T) == 1 || sizeof(T) == 2 || sizeof(T) == 4 || sizeof(T) == 8, "Unsupported type for byte swapping.");
     if constexpr (sizeof(T) == 1) {
         return value;
     } else {
         using uint_t = std::conditional_t<sizeof(T) == 2, uint16_t, std::conditional_t<sizeof(T) == 4, uint32_t, uint64_t>>;
-        return std::bit_cast<T>(swapBytes(std::bit_cast<uint_t>(value)));
+        return std::bit_cast<T>(std::byteswap(std::bit_cast<uint_t>(value)));
     }
 }
 
@@ -396,14 +371,14 @@ template <typename F> void forEachFileInDir(bool recursive, const fs::path& path
     }
 }
 
-template <typename T> class ScopeGuard {
+template <std::invocable F> class ScopeGuard {
 public:
-    ScopeGuard(const T& callback) : mCallback{callback} {}
-    ScopeGuard(T&& callback) : mCallback{std::move(callback)} {}
-    ScopeGuard(const ScopeGuard<T>& other) = delete;
-    ScopeGuard& operator=(const ScopeGuard<T>& other) = delete;
-    ScopeGuard(ScopeGuard<T>&& other) { *this = std::move(other); }
-    ScopeGuard& operator=(ScopeGuard<T>&& other) {
+    ScopeGuard(const F& callback) : mCallback{callback} {}
+    ScopeGuard(F&& callback) : mCallback{std::move(callback)} {}
+    ScopeGuard(const ScopeGuard<F>& other) = delete;
+    ScopeGuard& operator=(const ScopeGuard<F>& other) = delete;
+    ScopeGuard(ScopeGuard<F>&& other) { *this = std::move(other); }
+    ScopeGuard& operator=(ScopeGuard<F>&& other) {
         mCallback = std::move(other.mCallback);
         other.mCallback = {};
         return *this;
@@ -418,7 +393,7 @@ public:
     void disarm() { mArmed = false; }
 
 private:
-    T mCallback;
+    F mCallback;
     bool mArmed = true;
 };
 

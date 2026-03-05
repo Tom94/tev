@@ -44,7 +44,7 @@ public:
     IsoGainMapMetadata(std::span<const uint8_t> data); // Construct from bytes per ISO 21496-1
     IsoGainMapMetadata(const char* ns, void* xmpMeta); // Construct from Adobe XMP metadata
 
-    template <typename T> static T read(std::span<const uint8_t> data, size_t* pos = nullptr) {
+    template <trivially_copyable T> static T read(std::span<const uint8_t> data, size_t* pos = nullptr) {
         static constexpr bool reverseEndianess = std::endian::native == std::endian::little;
 
         const size_t offset = pos ? *pos : 0;

@@ -130,7 +130,11 @@ class PixelBuffer {
     EPixelFormat mFormat;
 
 public:
-    template <typename T> static PixelBuffer alloc(size_t count, EPixelFormat format) {
+    template <trivially_copyable T> static PixelBuffer alloc(size_t count, EPixelFormat format) {
+        if (pixelFormatForType<T>() != format) [[unlikely]] {
+            throw std::runtime_error{"Pixel format does not match type."};
+        }
+
         T* ptr = new T[count];
         PixelBuffer buf;
         buf.mStorage = {ptr, Deleter{[](void* p) { delete[] static_cast<T*>(p); }}};
@@ -151,6 +155,7 @@ public:
             case EPixelFormat::F16: return alloc<half>(count, format);
             case EPixelFormat::F32: return alloc<float>(count, format);
         }
+
         throw std::runtime_error{"Unknown pixel format"};
     }
 

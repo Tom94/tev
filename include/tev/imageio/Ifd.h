@@ -82,7 +82,7 @@ class Ifd {
 public:
     Ifd(std::span<const uint8_t> data, size_t initialOffset = 0, bool tiffHeader = false, std::optional<bool> reverseEndianess = std::nullopt);
 
-    template <typename T> T read(const uint8_t* data) const {
+    template <trivially_copyable T> T read(const uint8_t* data) const {
         auto result = fromBytes<T>(data);
         if (mReverseEndianess) {
             result = swapBytes(result);
@@ -120,7 +120,7 @@ public:
         return entry.data.data();
     }
 
-    template <typename T> std::optional<T> tryGet(uint16_t tag) const {
+    template <trivially_copyable T> std::optional<T> tryGet(uint16_t tag) const {
         const auto it = mTags.find(tag);
         if (it == mTags.end()) {
             return std::nullopt;
@@ -138,7 +138,7 @@ public:
                 const auto denominator = read<uint32_t>(data + sizeof(uint32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
-            case TiffTag::EFormat::Sbyte: return static_cast<T>(fromBytes<int8_t>(data));
+            case TiffTag::EFormat::Sbyte: return static_cast<T>(read<int8_t>(data));
             case TiffTag::EFormat::Sshort: return static_cast<T>(read<int16_t>(data));
             case TiffTag::EFormat::Slong: return static_cast<T>(read<int32_t>(data));
             case TiffTag::EFormat::Srational: {
@@ -146,8 +146,8 @@ public:
                 const auto denominator = read<int32_t>(data + sizeof(int32_t));
                 return static_cast<T>(numerator) / static_cast<T>(denominator);
             }
-            case TiffTag::EFormat::Float: return static_cast<T>(fromBytes<float>(data));
-            case TiffTag::EFormat::Double: return static_cast<T>(fromBytes<double>(data));
+            case TiffTag::EFormat::Float: return static_cast<T>(read<float>(data));
+            case TiffTag::EFormat::Double: return static_cast<T>(read<double>(data));
             case TiffTag::EFormat::Ascii:
             case TiffTag::EFormat::Undefined: return std::nullopt;
         }

@@ -23,7 +23,6 @@
 
 #include <list>
 #include <span>
-#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -33,16 +32,6 @@
 #endif
 
 namespace tev {
-
-template <typename T, bool = std::is_enum_v<T>> struct underlying_or_identity {
-    using type = T;
-};
-
-template <typename T> struct underlying_or_identity<T, true> {
-    using type = std::underlying_type_t<T>;
-};
-
-template <typename T> using underlying_or_identity_t = typename underlying_or_identity<T>::type;
 
 struct IpcPacketOpenImage {
     std::string imagePath;
@@ -192,19 +181,15 @@ private:
             return *this;
         }
 
-        template <typename T> IStream& operator>>(T& var) {
+        template <trivially_copyable T> IStream& operator>>(T& var) {
             if (mData.size() < mIdx + sizeof(T)) {
                 throw std::runtime_error{"Trying to read generic type beyond the bounds of the IPC packet payload."};
             }
 
-            using U = underlying_or_identity_t<T>;
-            auto tmp = *(T*)&mData[mIdx];
-
-            if constexpr (std::is_integral_v<U> && std::endian::native == std::endian::big) {
-                tmp = swapBytes(tmp);
+            std::memcpy(&var, &mData[mIdx], sizeof(T));
+            if constexpr (std::endian::native == std::endian::big) {
+                var = swapBytes(var);
             }
-
-            var = (T)tmp;
 
             mIdx += sizeof(T);
             return *this;
@@ -265,19 +250,16 @@ private:
             return *this;
         }
 
-        template <typename T> OStream& operator<<(T var) {
+        template <trivially_copyable T> OStream& operator<<(T var) {
             if (mData.size() < mIdx + sizeof(T)) {
                 mData.resize(mIdx + sizeof(T));
             }
 
-            using U = underlying_or_identity_t<T>;
-            auto tmp = (U)var;
-
-            if constexpr (std::is_integral_v<U> && std::endian::native == std::endian::big) {
-                tmp = swapBytes(tmp);
+            if constexpr (std::endian::native == std::endian::big) {
+                var = swapBytes(var);
             }
 
-            *(T*)&mData[mIdx] = (T)tmp;
+            std::memcpy(&mData[mIdx], &var, sizeof(T));
             mIdx += sizeof(T);
             updateSize();
             return *this;
@@ -290,7 +272,7 @@ private:
                 size = swapBytes(size);
             }
 
-            *((uint32_t*)mData.data()) = size;
+            std::memcpy(mData.data(), &size, sizeof(uint32_t));
         }
 
         std::vector<char>& mData;

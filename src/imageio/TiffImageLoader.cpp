@@ -392,7 +392,7 @@ static void tiffUnmapProc(thandle_t, tdata_t, toff_t) {
 float dngHdrEncodingFunction(const float x) { return x * (256.0f + x) / (256.0f * (1 + x)); }
 float dngHdrDecodingFunction(const float x) { return 16.0f * (8.0f * x - 8.0f + sqrt(64.0f * x * x - 127.0f * x + 64.0f)); }
 
-template <typename T>
+template <trivially_copyable T>
 void unpackBits(
     const uint8_t* const __restrict input,
     const size_t inputSize,

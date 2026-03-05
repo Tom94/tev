@@ -25,6 +25,7 @@
 #include <concurrentqueue/lightweightsemaphore.h>
 
 #include <atomic>
+#include <concepts>
 #include <functional>
 #include <future>
 #include <queue>
@@ -44,7 +45,7 @@ public:
         return pool;
     }
 
-    template <class F> auto enqueueTask(F&& f, int priority, bool stopToken = false) {
+    template <std::invocable F> auto enqueueTask(F&& f, int priority, bool stopToken = false) {
         using return_type = std::invoke_result_t<decltype(f)>;
 
         const auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
@@ -93,7 +94,8 @@ public:
         return Awaiter{this, priority};
     }
 
-    template <class F> auto enqueueCoroutine(F&& fun, int priority) -> Task<typename std::invoke_result_t<decltype(fun)>::value_type> {
+    template <std::invocable F>
+    auto enqueueCoroutine(F&& fun, int priority) -> Task<typename std::invoke_result_t<decltype(fun)>::value_type> {
         using return_type = std::invoke_result_t<decltype(fun)>::value_type;
         co_return co_await [](F&& fun, ThreadPool* pool, int tPriority) -> Task<return_type> {
             // Makes sure the function's captures have same lifetime as coroutine
@@ -112,7 +114,7 @@ public:
     void waitUntilFinished();
     void waitUntilFinishedFor(const std::chrono::microseconds Duration);
 
-    template <typename Int>
+    template <std::integral Int>
     Int nTasks(
         Int start,
         Int end,
@@ -129,7 +131,8 @@ public:
         return nTasks;
     }
 
-    template <typename Int, typename F> Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
+    template <std::integral Int, std::invocable<Int> F>
+    Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
         const Int range = end - start;
         const Int n = nTasks(start, end, approxCost);
 
