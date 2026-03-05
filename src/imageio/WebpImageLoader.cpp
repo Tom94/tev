@@ -176,6 +176,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
 
             const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+            const size_t numFrameSamples = numFramePixels * numChannels;
             const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
             if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
                 const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
@@ -188,9 +189,10 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
 
             const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
 
+            const auto dataSpan = span<const uint8_t>{data.get(), numFrameSamples};
             if (iccProfileData) {
                 try {
-                    co_await toFloat32(data.get(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(dataSpan, numChannels, dstView, hasAlpha, priority);
 
                     const auto profile = ColorProfile::fromIcc(iccProfileData);
                     co_await toLinearSrgbPremul(
@@ -200,7 +202,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     resultData.readMetadataFromIcc(profile);
                 } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
             } else {
-                co_await toFloat32<uint8_t, true, true>(data.get(), numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32<uint8_t, true, true>(dataSpan, numChannels, dstView, hasAlpha, priority);
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;

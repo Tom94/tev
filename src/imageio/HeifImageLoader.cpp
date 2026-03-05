@@ -210,15 +210,28 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{fmt::format("Image has {} bits per sample, but expected at most {} bits.", bitsPerSample, bitDepth)};
         }
 
-        int bytesPerRow = 0;
-        const uint8_t* data = heif_image_get_plane_readonly(img, channelType, &bytesPerRow);
-        if (!data) {
-            throw ImageLoadError{"Faild to get image data."};
-        }
+        struct PlaneData {
+            size_t bytesPerRow;
+            span<const uint8_t> data;
+        };
 
-        if (bytesPerRow % (bitDepth / 8) != 0) {
-            throw ImageLoadError{"Row size not a multiple of sample size."};
-        }
+        const auto getPlaneData = [&]() -> PlaneData {
+            int bytesPerRowInt = 0;
+            const uint8_t* d = heif_image_get_plane_readonly(img, channelType, &bytesPerRowInt);
+            if (!d) {
+                throw ImageLoadError{"Faild to get image data."};
+            }
+
+            if (bytesPerRowInt % (bitDepth / 8) != 0 || bytesPerRowInt <= 0) {
+                throw ImageLoadError{"Invalid bytes per row"};
+            }
+
+            return PlaneData{
+                .bytesPerRow = (size_t)bytesPerRowInt, .data = span<const uint8_t>{d, (size_t)bytesPerRowInt * size.y()}
+            };
+        };
+
+        const auto [bytesPerRow, data] = getPlaneData();
 
         if (heif_image_has_content_light_level(img)) {
             heif_content_light_level cll;
@@ -271,7 +284,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const auto outView = MultiChannelView<float>{resultData.channels};
 
         if (bitDepth == 16) {
-            co_await toFloat32((const uint16_t*)data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t));
+            // libheif returns 16-byte aligned uint8_t* data, regardless of the actual bit depth. The alignment and uint8_t type mean it's
+            // well-defined behavior to reinterpret the data as uint16_t.
+            const auto uint16Data = span<const uint16_t>{reinterpret_cast<const uint16_t*>(data.data()), data.size() / sizeof(uint16_t)};
+            co_await toFloat32(uint16Data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t));
         } else {
             co_await toFloat32(data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t));
         }

@@ -500,12 +500,12 @@ Task<vector<ImageData>>
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
-        const auto jpegDataToFloat32Typed = [&](auto* src, bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
-            using T = remove_const_t<remove_pointer_t<decltype(src)>>;
+        const auto jpegDataToFloat32Typed = [&](auto src, bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
 
             const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && dst.nChannels() >= 3;
 
+            using T = remove_const_t<typename decltype(src)::value_type>;
             if (fromSrgb && !yCbCrConversionNeeded) {
                 co_await toFloat32<T, true>(src, numChannels, dst, hasAlpha, priority, scale);
             } else {
@@ -523,11 +523,11 @@ Task<vector<ImageData>>
 
         const auto jpegDataToFloat32 = [&](bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             if (pixelFormat == EPixelFormat::U8) {
-                co_await jpegDataToFloat32Typed(buf.data<const uint8_t>(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(buf.span<const uint8_t>(), fromSrgb, dst);
             } else if (pixelFormat == EPixelFormat::I16) {
-                co_await jpegDataToFloat32Typed(buf.data<const int16_t>(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(buf.span<const int16_t>(), fromSrgb, dst);
             } else if (pixelFormat == EPixelFormat::U16) {
-                co_await jpegDataToFloat32Typed(buf.data<const uint16_t>(), fromSrgb, dst);
+                co_await jpegDataToFloat32Typed(buf.span<const uint16_t>(), fromSrgb, dst);
             } else {
                 throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
             }

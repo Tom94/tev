@@ -242,15 +242,23 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{"DDS image has zero pixels."};
     }
 
+    const auto numSamples = numPixels * numChannels;
+
     const bool isFloat = DirectX::FormatDataType(metadata.format) == DirectX::FORMAT_TYPE_FLOAT;
+    const auto s = span{(const float*)scratchImage.GetPixels(), numSamples};
+
     if (isFloat || numChannels < 3) {
-        // Assume that the image data is already in linear space.
-        assert(!DirectX::IsSRGB(metadata.format));
-        co_await toFloat32((float*)scratchImage.GetPixels(), numChannels, outView, hasAlpha, priority);
+        TEV_ASSERT(
+            !DirectX::IsSRGB(metadata.format),
+            "DXGI format {} is in sRGB space, but has a floating point data type.",
+            static_cast<int>(metadata.format)
+        );
+
+        co_await toFloat32(s, numChannels, outView, hasAlpha, priority);
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
-        co_await toFloat32<float, true>((float*)scratchImage.GetPixels(), numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<float, true>(s, numChannels, outView, hasAlpha, priority);
     }
 
     co_return result;

@@ -228,12 +228,17 @@ Task<void> tiffDataToFloat32(
     const auto size = rgbaView.size();
     const auto numPixels = (size_t)size.x() * size.y();
 
+    const auto expectedSize = numPixels * numSppIn;
+    if (imageData.size() < expectedSize) {
+        throw ImageLoadError{fmt::format("Image data is too small: expected at least {} elements, got {}", expectedSize, imageData.size())};
+    }
+
     if (kind == ETiffKind::F32) {
-        co_await toFloat32(imageData.data<float>() + offset, numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.span<const float>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::I32) {
-        co_await toFloat32(imageData.data<int32_t>() + offset, numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.span<const int32_t>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::U32) {
-        co_await toFloat32(imageData.data<uint32_t>() + offset, numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.span<const uint32_t>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::Palette) {
         if (any_of(palette.begin(), palette.end(), [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
@@ -243,7 +248,7 @@ Task<void> tiffDataToFloat32(
             throw runtime_error{"Number of output samples per pixel must be at least 3 for palette data."};
         }
 
-        const auto* indices = imageData.data<uint32_t>() + offset;
+        const auto indices = imageData.span<const uint32_t>().subspan(offset);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -1634,11 +1639,11 @@ Task<ImageData> decodeJpeg(
     }
 
     if (pixelFormat == EPixelFormat::U8) {
-        co_await toFloat32(buf.data<const uint8_t>(), tileNumComponents, outView, false, priority, scale);
+        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, false, priority, scale);
     } else if (pixelFormat == EPixelFormat::I16) {
-        co_await toFloat32(buf.data<const int16_t>(), tileNumComponents, outView, false, priority, scale);
+        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, false, priority, scale);
     } else if (pixelFormat == EPixelFormat::U16) {
-        co_await toFloat32(buf.data<const uint16_t>(), tileNumComponents, outView, false, priority, scale);
+        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, false, priority, scale);
     } else {
         throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
     }

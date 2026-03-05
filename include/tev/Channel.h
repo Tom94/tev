@@ -167,6 +167,8 @@ public:
         return static_cast<T*>(mStorage.get());
     }
 
+    template <typename T> std::span<T> span() const { return {data<T>(), size()}; }
+
     size_t size() const { return mSizeElems; }
 
     uint8_t* dataBytes() const { return static_cast<uint8_t*>(mStorage.get()); }

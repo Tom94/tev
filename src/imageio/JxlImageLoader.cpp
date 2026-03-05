@@ -537,7 +537,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
-                    co_await toFloat32(colorData.data(), numChannels, outView, info.alpha_bits, priority);
+                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, info.alpha_bits, priority);
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.

@@ -118,15 +118,15 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.renderingIntent = ERenderingIntent::AbsoluteColorimetric;
             resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
 
-            co_await toFloat32(static_cast<float*>(data.get()) + numSamples * frameIdx, numChannels, outView, hasAlpha, priority);
+            const auto s = span{static_cast<const float*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
+            co_await toFloat32(s, numChannels, outView, hasAlpha, priority);
         } else {
             // Assume sRGB-encoded LDR images are display-referred.
             resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
-            co_await toFloat32<uint8_t, true>(
-                static_cast<uint8_t*>(data.get()) + numSamples * frameIdx, numChannels, outView, hasAlpha, priority
-            );
+            const auto s = span{static_cast<const uint8_t*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
+            co_await toFloat32<uint8_t, true>(s, numChannels, outView, hasAlpha, priority);
         }
     }
 

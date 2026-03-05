@@ -421,7 +421,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             );
         } else {
             if (bitsPerChannel == 32) {
-                auto* const uintData = buf.data<uint32_t>();
+                const auto uintData = buf.span<uint32_t>();
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelFor(
                         0uz, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
@@ -430,7 +430,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
                 co_await toFloat32<uint32_t, true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 16) {
-                auto* const uintData = buf.data<uint16_t>();
+                const auto uintData = buf.span<uint16_t>();
                 if (shallSwapBytes) {
                     co_await ThreadPool::global().parallelFor(
                         0uz, numSamples, numSamples, [&](size_t i) { uintData[i] = swapBytes(uintData[i]); }, priority
@@ -439,7 +439,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
                 co_await toFloat32<uint16_t, true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 8) {
-                co_await toFloat32<uint8_t, true>(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<uint8_t, true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 1) {
                 auto* const data = buf.data<uint8_t>();
                 co_await ThreadPool::global().parallelFor(

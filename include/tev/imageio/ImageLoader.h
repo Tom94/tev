@@ -74,7 +74,7 @@ Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vecto
 
 template <typename T, bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false>
 Task<void> toFloat32(
-    const T* __restrict imageData,
+    std::span<const T> imageData,
     size_t numSamplesPerPixelIn,
     MultiChannelView<float> floatData,
     bool hasAlpha,
@@ -102,6 +102,13 @@ Task<void> toFloat32(
 
     const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, floatData.nChannels());
     const size_t numPixels = (size_t)size.x() * size.y();
+
+    const size_t expectedDataSize = numSamplesPerRowIn * size.y();
+    if (imageData.size() < expectedDataSize) {
+        throw std::runtime_error{
+            fmt::format("Not enough image data provided: expected at least {} samples, got {}", expectedDataSize, imageData.size())
+        };
+    }
 
     co_await ThreadPool::global().parallelFor(
         0,

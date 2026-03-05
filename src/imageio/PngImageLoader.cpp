@@ -496,9 +496,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (pixelFormat == EPixelFormat::U16) {
-                    co_await toFloat32(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
                 } else if (pixelFormat == EPixelFormat::U8) {
-                    co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 co_await ThreadPool::global().parallelFor(
@@ -531,9 +531,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             } else if (iccProfileData) {
                 try {
                     if (pixelFormat == EPixelFormat::U16) {
-                        co_await toFloat32(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
+                        co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
                     } else {
-                        co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
+                        co_await toFloat32(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                     }
 
                     const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
@@ -573,9 +573,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (pixelFormat == EPixelFormat::U16) {
-                    co_await toFloat32<uint16_t, true, true>(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32<uint16_t, true, true>(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
                 } else {
-                    co_await toFloat32<uint8_t, true, true>(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32<uint8_t, true, true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 resultData.hasPremultipliedAlpha = true;
@@ -585,9 +585,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
             tlog::debug() << fmt::format("Using gamma={}", invGamma64);
             if (pixelFormat == EPixelFormat::U16) {
-                co_await toFloat32(buf.data<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
             } else {
-                co_await toFloat32(buf.data<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
             }
 
             co_await ThreadPool::global().parallelFor(

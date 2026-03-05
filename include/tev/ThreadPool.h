@@ -184,6 +184,8 @@ private:
 
     std::priority_queue<QueuedTask, std::vector<QueuedTask>, QueuedTask::Comparator> mTaskQueue;
     std::recursive_mutex mTaskQueueMutex;
+
+    // Significantly faster than C++20's std::semaphore implementation on some platforms
     moodycamel::LightweightSemaphore mTaskQueueSemaphore;
 
     std::recursive_mutex mThreadsMutex;
