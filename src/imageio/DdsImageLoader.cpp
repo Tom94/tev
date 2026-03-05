@@ -170,12 +170,21 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     iStream.read(data.data() + 4, dataSize - 4);
 
-    // COM must be initialized on the thread executing load().
-    if (CoInitializeEx(nullptr, COINIT_MULTITHREADED) != S_OK) {
+    // COM must be initialized on the thread executing the following DirectX calls. Thus: when editing this file *make sure* that no
+    // co_await calls are made before the last DirectX call! Note that it is not a problem that CoInitializeEx will potentially get called
+    // multiple times across different threads, or even multiple times by the same thread pool thread. Both situations are explicitly
+    // allowed (and in the latter case, the return value is S_FALSE). See
+    // https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex
+    if (const auto res = CoInitializeEx(nullptr, COINIT_MULTITHREADED); res != S_OK && res != S_FALSE) {
         throw ImageLoadError{"Failed to initialize COM."};
     }
 
-    const ScopeGuard comScopeGuard{[]() { CoUninitialize(); }};
+    // The correct way to clean up would be to call CoUninitialize() on every task pool thread on shutdown. Using a scope guard here
+    // wouldn't work for multiple reasons: (i) the coroutine might have been scheduled to another thread once the scope ends, and (ii) it
+    // would be wasteful to repeatedly initialize and uninitialize COM for every loaded image. Instead, we'll just accept that COM won't be
+    // gracefully cleaned up on shutdown -- we don't care much about its cleanup anyway, which involved mostly handling of pending messages
+    // in the application's message queue.
+    // const auto comScopeGuard = ScopeGuard{[]() { CoUninitialize(); }};
 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
@@ -217,6 +226,8 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
+    resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
+
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = DirectX::HasAlpha(metadata.format);
 
@@ -241,8 +252,6 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
         co_await toFloat32<float, true>((float*)scratchImage.GetPixels(), numChannels, outView, hasAlpha, priority);
     }
-
-    resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
 
     co_return result;
 }
