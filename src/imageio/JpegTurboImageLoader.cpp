@@ -89,12 +89,12 @@ Task<vector<ImageData>>
         jerr.error_exit = [](j_common_ptr cinfo) {
             char buf[JMSG_LENGTH_MAX];
             cinfo->err->format_message(cinfo, buf);
-            throw ImageLoadError{format("libjpeg error: {}", buf)};
+            throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
         };
         jerr.output_message = [](j_common_ptr cinfo) {
             char buf[JMSG_LENGTH_MAX];
             (*cinfo->err->format_message)(cinfo, buf);
-            tlog::warning("libjpeg warning: {}", buf);
+            tlog::warning("libjpeg warning: {}", static_cast<const char*>(buf));
         };
 
         jpeg_create_decompress(&cinfo);

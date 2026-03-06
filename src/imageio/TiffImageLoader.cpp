@@ -287,15 +287,23 @@ Task<void> tiffDataToFloat32(
 
 // Custom TIFF error and warning handlers to avoid console output
 static void tiffErrorHandler(const char* module, const char* fmt, va_list args) {
-    char buffer[1024];
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    tlog::warning("TIFF error ({}): {}", module ? module : "unknown", buffer);
+    char buf[1024];
+    const int res = vsnprintf(buf, sizeof(buf), fmt, args);
+    tlog::warning(
+        "TIFF error ({}): {}",
+        module ? module : "unknown",
+        res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : format("format error {}", res)
+    );
 }
 
 static void tiffWarningHandler(const char* module, const char* fmt, va_list args) {
-    char buffer[1024];
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    tlog::warning("TIFF warning ({}): {}", module ? module : "unknown", buffer);
+    char buf[1024];
+    const int res = vsnprintf(buf, sizeof(buf), fmt, args);
+    tlog::warning(
+        "TIFF warning ({}): {}",
+        module ? module : "unknown",
+        res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : format("format error {}", res)
+    );
 }
 
 // Custom TIFF I/O functions for reading from an istream
@@ -1537,12 +1545,12 @@ Task<ImageData> decodeJpeg(
     jerr.error_exit = [](j_common_ptr cinfo) {
         char buf[JMSG_LENGTH_MAX];
         cinfo->err->format_message(cinfo, buf);
-        throw ImageLoadError{format("libjpeg error: {}", buf)};
+        throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
     };
     jerr.output_message = [](j_common_ptr cinfo) {
         char buf[JMSG_LENGTH_MAX];
         (*cinfo->err->format_message)(cinfo, buf);
-        tlog::warning("libjpeg warning: {}", buf);
+        tlog::warning("libjpeg warning: {}", static_cast<const char*>(buf));
     };
 
     jpeg_create_decompress(&cinfo);

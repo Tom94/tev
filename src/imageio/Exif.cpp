@@ -54,8 +54,12 @@ Exif::Exif() {
             bool* error = static_cast<bool*>(userData);
 
             char buf[1024];
-            vsnprintf(buf, sizeof(buf), format, args);
-            const string msg = std::format("{}: {}", domain, buf);
+            const auto res = vsnprintf(buf, sizeof(buf), format, args);
+
+            // Some std::format implementations have a char[N] overload that ignores zero termination => cast to char*
+            const string msg = std::format(
+                "{}: {}", domain, res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : std::format("format error {}", res)
+            );
             const auto m = trimRight(msg);
             switch (kind) {
                 case EXIF_LOG_CODE_NONE: tlog::info(m); break;

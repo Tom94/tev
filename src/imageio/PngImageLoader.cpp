@@ -48,8 +48,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_set_error_fn(
         pngPtr,
         nullptr,
-        [](png_structp, png_const_charp error_msg) { throw ImageLoadError{format("PNG error: {}", error_msg)}; },
-        [](png_structp, png_const_charp warning_msg) { tlog::warning("PNG warning: {}", warning_msg); }
+        [](png_structp, png_const_charp errorMsg) { throw ImageLoadError{format("PNG error: {}", errorMsg)}; },
+        [](png_structp, png_const_charp warningMsg) { tlog::warning("PNG warning: {}", warningMsg); }
     );
 
     infoPtr = png_create_info_struct(pngPtr);
@@ -57,8 +57,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{"Failed to create PNG info struct."};
     }
 
-    png_set_read_fn(pngPtr, &iStream, [](png_structp png_ptr, png_bytep data, png_size_t length) {
-        auto stream = static_cast<istream*>(png_get_io_ptr(png_ptr));
+    png_set_read_fn(pngPtr, &iStream, [](png_structp pngPtr, png_bytep data, png_size_t length) {
+        auto stream = static_cast<istream*>(png_get_io_ptr(pngPtr));
         size_t totalRead = 0;
         while (stream && totalRead < length) {
             stream->read(reinterpret_cast<char*>(data) + totalRead, length - totalRead);
@@ -66,7 +66,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         if (totalRead < length) {
-            png_error(png_ptr, "Read error");
+            png_error(pngPtr, "Read error");
         }
     });
 
