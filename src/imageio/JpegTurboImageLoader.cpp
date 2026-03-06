@@ -89,12 +89,12 @@ Task<vector<ImageData>>
         jerr.error_exit = [](j_common_ptr cinfo) {
             char buf[JMSG_LENGTH_MAX];
             cinfo->err->format_message(cinfo, buf);
-            throw ImageLoadError{fmt::format("libjpeg error: {}", buf)};
+            throw ImageLoadError{format("libjpeg error: {}", buf)};
         };
         jerr.output_message = [](j_common_ptr cinfo) {
             char buf[JMSG_LENGTH_MAX];
             (*cinfo->err->format_message)(cinfo, buf);
-            tlog::warning() << fmt::format("libjpeg warning: {}", buf);
+            tlog::warning() << format("libjpeg warning: {}", buf);
         };
 
         jpeg_create_decompress(&cinfo);
@@ -155,15 +155,15 @@ Task<vector<ImageData>>
                     const uint8_t seqNo = (*iccPart)[0];
                     const uint8_t numSeq = (*iccPart)[1];
 
-                    tlog::debug() << fmt::format("Found ICC profile part {}/{} of size {} bytes", seqNo, numSeq, iccPart->size());
+                    tlog::debug() << format("Found ICC profile part {}/{} of size {} bytes", seqNo, numSeq, iccPart->size());
 
                     if (numSeq != appN->iccChunks.size() && appN->iccChunks.size() != 0) {
                         tlog::warning()
-                            << fmt::format("Inconsistent ICC profile sequence count: expected {}, got {}.", appN->iccChunks.size(), numSeq);
+                            << format("Inconsistent ICC profile sequence count: expected {}, got {}.", appN->iccChunks.size(), numSeq);
                     }
 
                     if (seqNo < 1 || seqNo > numSeq) {
-                        tlog::warning() << fmt::format("Invalid ICC profile sequence number: {} of {}.", seqNo, numSeq);
+                        tlog::warning() << format("Invalid ICC profile sequence number: {} of {}.", seqNo, numSeq);
                     }
 
                     appN->iccChunks.resize(numSeq);
@@ -203,7 +203,7 @@ Task<vector<ImageData>>
         }
 
         if (cinfo.data_precision < 2 || cinfo.data_precision > 16) {
-            throw ImageLoadError{fmt::format("Unsupported JPEG data precision: {} bits per channel.", cinfo.data_precision)};
+            throw ImageLoadError{format("Unsupported JPEG data precision: {} bits per channel.", cinfo.data_precision)};
         }
 
         const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 :
@@ -212,12 +212,12 @@ Task<vector<ImageData>>
         // JPEG does not support alpha, so all channels are color channels.
         const size_t numChannels = cinfo.output_components;
         if (numChannels > 4) {
-            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numChannels)};
+            throw ImageLoadError{format("Unsupported number of color channels: {}", numChannels)};
         }
 
         const bool hasAlpha = numChannels == 4;
 
-        tlog::debug() << fmt::format("JPEG image info: size={} numChannels={} precision={}", size, numChannels, cinfo.data_precision);
+        tlog::debug() << format("JPEG image info: size={} numChannels={} precision={}", size, numChannels, cinfo.data_precision);
 
         // Allocate memory for image data
         const auto numPixels = (size_t)size.x() * size.y();
@@ -259,7 +259,7 @@ Task<vector<ImageData>>
         ImageData resultData;
 
         if (!appN.mpf.empty()) {
-            tlog::debug() << fmt::format("Found MPF data of size {} bytes", appN.mpf.size());
+            tlog::debug() << format("Found MPF data of size {} bytes", appN.mpf.size());
 
             try {
                 const auto handleIfd = [&](const Ifd& ifd) {
@@ -292,7 +292,7 @@ Task<vector<ImageData>>
                     const uint16_t numImages = ifd.tryGet<uint16_t>((uint16_t)EMpfTag::NumberOfImages).value_or(0);
                     const auto* iiTag = ifd.tag((uint16_t)EMpfTag::MPEntry);
                     if (numImages > 0 && iiTag) {
-                        tlog::debug() << fmt::format("MPF number of sub-images: {}", numImages);
+                        tlog::debug() << format("MPF number of sub-images: {}", numImages);
 
                         enum class EMpfImageType : uint32_t {
                             Undefined = 0x000000,
@@ -341,7 +341,7 @@ Task<vector<ImageData>>
                             iie.dependentImage1EntryNumber = ifd.read<uint16_t>(iiData + 12);
                             iie.dependentImage2EntryNumber = ifd.read<uint16_t>(iiData + 14);
 
-                            tlog::debug() << fmt::format(
+                            tlog::debug() << format(
                                 "  #{}: flags={:02X} type={} size={} offset={} dep1={} dep2={}",
                                 i,
                                 iie.flags(),
@@ -352,7 +352,7 @@ Task<vector<ImageData>>
                                 iie.dependentImage2EntryNumber
                             );
 
-                            const string partName = fmt::format("{}.{}", mfpTypeToString(iie.type()), idx + i);
+                            const string partName = format("{}.{}", mfpTypeToString(iie.type()), idx + i);
 
                             // Skip images with zero offset: those are the one we're already reading. But: in this case we should overwrite
                             // the part name if we're not the top-level primary image. (Primary image should have empty part name.)
@@ -367,7 +367,7 @@ Task<vector<ImageData>>
 
                             // We aren't interested in cluttering tev with thumbnail images. Generic multiframe images are fine, though
                             if (iie.type() == EMpfImageType::LargeThumbnailVga || iie.type() == EMpfImageType::LargeThumbnailFullHd) {
-                                tlog::debug() << fmt::format("Skipping MPF thumbnail image #{}", i);
+                                tlog::debug() << format("Skipping MPF thumbnail image #{}", i);
                                 continue;
                             }
 
@@ -375,18 +375,18 @@ Task<vector<ImageData>>
                             const uint8_t* imageData = appN.mpf.data() + iie.offset;
                             const ptrdiff_t imageDataOffset = imageData - buffer.data();
                             if (seenOffsets.find(imageDataOffset) != seenOffsets.end()) {
-                                tlog::warning() << fmt::format("Already seen image at offset {}, skipping", imageDataOffset);
+                                tlog::warning() << format("Already seen image at offset {}, skipping", imageDataOffset);
                                 continue;
                             }
 
                             const auto slice = span<const uint8_t>{imageData, iie.size};
                             if (slice.data() + slice.size() > buffer.data() + buffer.size()) {
-                                tlog::warning() << fmt::format("MPF image #{} exceeds buffer bounds, skipping", i);
+                                tlog::warning() << format("MPF image #{} exceeds buffer bounds, skipping", i);
                                 continue;
                             }
 
                             tlog::debug()
-                                << fmt::format("Adding MPF image #{} slice at offset {} of size {} bytes", i, imageDataOffset, slice.size());
+                                << format("Adding MPF image #{} slice at offset {} of size {} bytes", i, imageDataOffset, slice.size());
 
                             imageInfos.emplace_back(slice, idx, partName);
                         }
@@ -400,10 +400,10 @@ Task<vector<ImageData>>
                         break;
                     }
 
-                    tlog::debug() << fmt::format("Found sub-IFD in MPF data at offset {}", *ifd->nextIfdOffset());
+                    tlog::debug() << format("Found sub-IFD in MPF data at offset {}", *ifd->nextIfdOffset());
                     ifd = Ifd{appN.mpf, *ifd->nextIfdOffset(), false, ifd->reverseEndianess()};
                 }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read MPF data: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read MPF data: {}", e.what()); }
         }
 
         // Important to take this reference *after* processing the MPF data because that may add entries to imageInfos, which would
@@ -419,7 +419,7 @@ Task<vector<ImageData>>
         EOrientation orientation = EOrientation::None;
 
         if (!appN.exif.empty()) {
-            tlog::debug() << fmt::format("Found EXIF data of size {} bytes", appN.exif.size());
+            tlog::debug() << format("Found EXIF data of size {} bytes", appN.exif.size());
 
             try {
                 const auto exif = Exif{appN.exif};
@@ -433,18 +433,18 @@ Task<vector<ImageData>>
                 const EOrientation exifOrientation = exif.getOrientation();
                 if (exifOrientation != EOrientation::None) {
                     orientation = exifOrientation;
-                    tlog::debug() << fmt::format("EXIF image orientation: {}", toString(orientation));
+                    tlog::debug() << format("EXIF image orientation: {}", toString(orientation));
                 }
 
                 imageInfo.appleMakerNoteIfd = exif.tryGetAppleMakerNote();
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read EXIF metadata: {}", e.what()); }
         }
 
         optional<IsoGainMapMetadata> isoGainmapMetadata = nullopt;
 
         if (!appN.xmp.empty()) {
             const string_view xmpDataView = string_view{(const char*)appN.xmp.data(), appN.xmp.size()};
-            tlog::debug() << fmt::format("Found XMP data of size {} bytes", xmpDataView.size());
+            tlog::debug() << format("Found XMP data of size {} bytes", xmpDataView.size());
 
             try {
                 const auto xmp = Xmp{xmpDataView};
@@ -453,20 +453,20 @@ Task<vector<ImageData>>
                 const EOrientation xmpOrientation = xmp.orientation();
                 if (xmpOrientation != EOrientation::None) {
                     orientation = xmpOrientation;
-                    tlog::debug() << fmt::format("XMP image orientation: {}", toString(orientation));
+                    tlog::debug() << format("XMP image orientation: {}", toString(orientation));
                 }
 
                 isoGainmapMetadata = xmp.isoGainMapMetadata();
 
                 if (!xmp.appleAuxImgType().empty()) {
-                    tlog::debug() << fmt::format("Found Apple auxiliary image type in XMP: '{}'", xmp.appleAuxImgType());
+                    tlog::debug() << format("Found Apple auxiliary image type in XMP: '{}'", xmp.appleAuxImgType());
                     resultData.partName = xmp.appleAuxImgType();
                     ranges::replace(resultData.partName, ':', '.');
 
                     imageInfo.isAppleGainmap = resultData.partName.find("apple") != string::npos &&
                         resultData.partName.find("hdrgainmap") != string::npos;
                 }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read XMP metadata: {}", e.what()); }
         }
 
         if (orientation != EOrientation::None) {
@@ -474,20 +474,20 @@ Task<vector<ImageData>>
         }
 
         if (!appN.iso.empty()) {
-            tlog::debug() << fmt::format("Found binary ISO 21496-1 data of size {} bytes", appN.iso.size());
+            tlog::debug() << format("Found binary ISO 21496-1 data of size {} bytes", appN.iso.size());
 
             try {
                 if (appN.iso.size() <= 4) {
                     const auto isoGainmapVersion = IsoGainMapVersion{appN.iso};
-                    tlog::debug() << fmt::format("ISO 21496-1 version info only: '{}'", isoGainmapVersion.toString());
+                    tlog::debug() << format("ISO 21496-1 version info only: '{}'", isoGainmapVersion.toString());
                 } else {
                     isoGainmapMetadata = IsoGainMapMetadata{appN.iso};
                 }
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read ISO 21496-1 version data: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read ISO 21496-1 version data: {}", e.what()); }
         }
 
         if (isoGainmapMetadata.has_value()) {
-            tlog::debug() << fmt::format("Gain map metadata version '{}'", isoGainmapMetadata->version().toString());
+            tlog::debug() << format("Gain map metadata version '{}'", isoGainmapMetadata->version().toString());
             resultData.attributes.emplace_back(isoGainmapMetadata->toAttributes());
             resultData.partName = "gainmap";
             imageInfo.isoGainmapInfo = make_optional<IsoGainmapInfo>(*isoGainmapMetadata);
@@ -529,7 +529,7 @@ Task<vector<ImageData>>
             } else if (pixelFormat == EPixelFormat::U16) {
                 co_await jpegDataToFloat32Typed(buf.span<const uint16_t>(), fromSrgb, dst);
             } else {
-                throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
+                throw ImageLoadError{format("Unsupported pixel format: {}", toString(pixelFormat))};
             }
         };
 
@@ -567,7 +567,7 @@ Task<vector<ImageData>>
 
                     resultData.readMetadataFromIcc(profile);
                     co_return resultData;
-                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+                } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC color profile: {}", e.what()); }
             }
         }
 
@@ -599,16 +599,16 @@ Task<vector<ImageData>>
         resultIndices.emplace_back(-1);
 
         if (imageInfo.parentIndex >= resultIndices.size() || resultIndices.at(imageInfo.parentIndex) == -1) {
-            tlog::warning() << fmt::format("Gain map image {} has invalid parent index {}, skipping.", i, imageInfo.parentIndex);
+            tlog::warning() << format("Gain map image {} has invalid parent index {}, skipping.", i, imageInfo.parentIndex);
             continue;
         }
 
         if (imageInfo.parentIndex == i) {
-            tlog::warning() << fmt::format("Gain map image {} has itself as parent. Skipping.", i);
+            tlog::warning() << format("Gain map image {} has itself as parent. Skipping.", i);
             continue;
         }
 
-        tlog::debug() << fmt::format("Applying gain map from image {} to parent image {}.", i, imageInfo.parentIndex);
+        tlog::debug() << format("Applying gain map from image {} to parent image {}.", i, imageInfo.parentIndex);
 
         const auto resultIndex = resultIndices.at(imageInfo.parentIndex);
         const auto& mainImageInfo = imageInfos.at(imageInfo.parentIndex);

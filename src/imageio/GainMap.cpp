@@ -40,9 +40,9 @@ GainmapHeadroom::GainmapHeadroom(string_view str) {
 
 string GainmapHeadroom::toString() const {
     if (unit == EUnit::Percent) {
-        return fmt::format("{}%", value * 100.0f);
+        return format("{}%", value * 100.0f);
     } else {
-        return fmt::format("{} stops", value);
+        return format("{} stops", value);
     }
 }
 
@@ -145,7 +145,7 @@ Task<void> preprocessAndApplyAppleGainMap(
         co_return;
     }
 
-    tlog::debug() << fmt::format(
+    tlog::debug() << format(
         "Apple gain map: derived weight {} from headroom {} and maker note #33={} #48={}", headroom, targetHeadroom.toString(), maker33, maker48
     );
 
@@ -240,7 +240,7 @@ Task<void> preprocessAndApplyIsoGainMap(
     const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : (altChroma ? altChroma : baseChroma);
 
     if (chroma) {
-        tlog::debug() << fmt::format("ISO gain map: converting image to chroma '{}' prior to application", *chroma);
+        tlog::debug() << format("ISO gain map: converting image to chroma '{}' prior to application", *chroma);
 
         const auto rec709ToChroma = convertColorspaceMatrix(rec709Chroma(), *chroma, image.renderingIntent);
         const auto imageToChroma = rec709ToChroma * image.toRec709;
@@ -256,7 +256,7 @@ Task<void> preprocessAndApplyIsoGainMap(
         co_return;
     }
 
-    tlog::debug() << fmt::format(
+    tlog::debug() << format(
         "ISO gain map: applying with baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}",
         metadata.baseHdrHeadroom(),
         metadata.alternateHdrHeadroom(),

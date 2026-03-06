@@ -31,7 +31,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     string magicString(magic, 6);
 
     if (!iStream || magicString != "empty ") {
-        throw FormatNotSupported{fmt::format("Invalid magic empty string {}.", magic)};
+        throw FormatNotSupported{format("Invalid magic empty string {}.", magic)};
     }
 
     Vector2i size;

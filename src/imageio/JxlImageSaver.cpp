@@ -36,7 +36,7 @@ namespace tev {
 
 Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<const float> data, Vector2i imageSize, int nChannels) const {
     if (nChannels <= 0 || nChannels > 4098) {
-        throw invalid_argument{fmt::format("Invalid number of channels {}.", nChannels)};
+        throw invalid_argument{format("Invalid number of channels {}.", nChannels)};
     }
 
     auto encoder = JxlEncoderMake(nullptr);
@@ -96,7 +96,7 @@ Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<cons
 
         if (JXL_ENC_SUCCESS != JxlEncoderSetExtraChannelInfo(encoder.get(), 0, &alphaChannelInfo)) {
             throw ImageSaveError{
-                fmt::format("Failed to set extra channel info for the alpha channel: {}.", (size_t)JxlEncoderGetError(encoder.get()))
+                format("Failed to set extra channel info for the alpha channel: {}.", (size_t)JxlEncoderGetError(encoder.get()))
             };
         }
     }
@@ -130,18 +130,18 @@ Task<void> JxlImageSaver::save(ostream& oStream, const fs::path& path, span<cons
         size_t availableOut = compressed.size();
         processResult = JxlEncoderProcessOutput(encoder.get(), &nextOut, &availableOut);
         if (processResult == JXL_ENC_ERROR) {
-            throw ImageSaveError{fmt::format("Failed to process output: {}.", (size_t)JxlEncoderGetError(encoder.get()))};
+            throw ImageSaveError{format("Failed to process output: {}.", (size_t)JxlEncoderGetError(encoder.get()))};
         }
 
         oStream.write(reinterpret_cast<const char*>(compressed.data()), compressed.size() - availableOut);
         if (!oStream) {
-            throw ImageSaveError{fmt::format("Failed to write data to {}.", path)};
+            throw ImageSaveError{format("Failed to write data to {}.", path)};
         }
 
         switch (processResult) {
             case JXL_ENC_SUCCESS: goto l_done;
             case JXL_ENC_NEED_MORE_OUTPUT: continue;
-            default: throw ImageSaveError{fmt::format("Unexpected encoder process result: {}.", (size_t)processResult)};
+            default: throw ImageSaveError{format("Unexpected encoder process result: {}.", (size_t)processResult)};
         }
     }
 l_done:

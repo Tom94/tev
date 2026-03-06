@@ -55,7 +55,7 @@ Exif::Exif() {
 
             char buf[1024];
             vsnprintf(buf, sizeof(buf), format, args);
-            const string msg = fmt::format("{}: {}", domain, buf);
+            const string msg = std::format("{}: {}", domain, buf);
             const auto m = trimRight(msg);
             switch (kind) {
                 case EXIF_LOG_CODE_NONE: tlog::info() << m; break;
@@ -163,7 +163,7 @@ EOrientation Exif::getOrientation() const {
         case 6: return EOrientation::RightTop;
         case 7: return EOrientation::RightBottom;
         case 8: return EOrientation::LeftBottom;
-        default: tlog::warning() << fmt::format("Invalid EXIF orientation value: {}", orientationValue); return EOrientation::None;
+        default: tlog::warning() << format("Invalid EXIF orientation value: {}", orientationValue); return EOrientation::None;
     }
 }
 

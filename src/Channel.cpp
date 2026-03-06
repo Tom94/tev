@@ -35,7 +35,7 @@ pair<string_view, string_view> Channel::split(string_view channel) {
     return {"", channel};
 }
 
-string Channel::join(string_view layer, string_view channel) { return fmt::format("{}.{}", layer, channel); }
+string Channel::join(string_view layer, string_view channel) { return format("{}.{}", layer, channel); }
 
 string Channel::joinIfNonempty(string_view layer, string_view channel) {
     if (layer.empty()) {
@@ -137,7 +137,7 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
 
 void Channel::updateTile(const Box2i bounds, const span<const float> newData) {
     if (!Box2i{size()}.contains(bounds)) {
-        tlog::warning() << fmt::format("Tile [{}, {}] does not fit into channel of size {}", bounds.min, bounds.max, size());
+        tlog::warning() << format("Tile [{}, {}] does not fit into channel of size {}", bounds.min, bounds.max, size());
         return;
     }
 

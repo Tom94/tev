@@ -90,7 +90,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     };
 
     if (!supportedFormats.contains(brand)) {
-        throw FormatNotSupported{fmt::format("HEIF format {:08X} is not supported.", brand)};
+        throw FormatNotSupported{format("HEIF format {:08X} is not supported.", brand)};
     }
 
     iStream.seekg(0, ios_base::end);
@@ -141,7 +141,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     if (error.code == heif_error_Color_profile_does_not_exist) {
                         tlog::warning() << "ICC color profile does not exist in handle.";
                     } else {
-                        tlog::warning() << fmt::format("Failed to read ICC profile from handle: {}", error.message);
+                        tlog::warning() << format("Failed to read ICC profile from handle: {}", error.message);
                     }
 
                     return nullopt;
@@ -158,7 +158,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 if (error.code == heif_error_Color_profile_does_not_exist) {
                     tlog::warning() << "ICC color profile does not exist in img.";
                 } else {
-                    tlog::warning() << fmt::format("Failed to read ICC profile from img: {}", error.message);
+                    tlog::warning() << format("Failed to read ICC profile from img: {}", error.message);
                 }
 
                 return nullopt;
@@ -179,10 +179,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
                                  string_view layer = "",
                                  string_view partName = ""
                              ) -> Task<ImageData> {
-        tlog::debug() << fmt::format("Decoding HEIF image '{}'", layer);
+        tlog::debug() << format("Decoding HEIF image '{}'", layer);
 
         if (numChannels < 1 || numChannels > 4) {
-            throw ImageLoadError{fmt::format("Unsupported number of channels: {}", numChannels)};
+            throw ImageLoadError{format("Unsupported number of channels: {}", numChannels)};
         }
 
         const int numColorChannels = hasAlpha ? numChannels - 1 : numChannels;
@@ -200,14 +200,14 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         const int bitDepth = heif_image_get_bits_per_pixel(img, channelType) / numChannels;
         if (bitDepth != 8 && bitDepth != 16) {
-            throw ImageLoadError{fmt::format("Unsupported HEIF bit depth: {}", bitDepth)};
+            throw ImageLoadError{format("Unsupported HEIF bit depth: {}", bitDepth)};
         }
 
         const int bitsPerSample = heif_image_get_bits_per_pixel_range(img, channelType);
         const float channelScale = 1.0f / float((1 << bitsPerSample) - 1);
 
         if (bitsPerSample > bitDepth) {
-            throw ImageLoadError{fmt::format("Image has {} bits per sample, but expected at most {} bits.", bitsPerSample, bitDepth)};
+            throw ImageLoadError{format("Image has {} bits per sample, but expected at most {} bits.", bitsPerSample, bitDepth)};
         }
 
         struct PlaneData {
@@ -240,7 +240,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             resultData.hdrMetadata.maxCLL = cll.max_content_light_level;
             resultData.hdrMetadata.maxFALL = cll.max_pic_average_light_level;
 
-            tlog::debug() << fmt::format(
+            tlog::debug() << format(
                 "Found content light level information: maxCLL={} maxFALL={}", resultData.hdrMetadata.maxCLL, resultData.hdrMetadata.maxFALL
             );
         }
@@ -251,7 +251,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             heif_image_get_mastering_display_colour_volume(img, &codedMdcv);
 
             if (const auto error = heif_mastering_display_colour_volume_decode(&codedMdcv, &mdcv); error.code != heif_error_Ok) {
-                tlog::debug() << fmt::format("Failed to decode mastering display color volume: {}", error.message);
+                tlog::debug() << format("Failed to decode mastering display color volume: {}", error.message);
             } else {
                 resultData.hdrMetadata.masteringChroma = {
                     {
@@ -264,7 +264,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 resultData.hdrMetadata.masteringMinLum = (float)mdcv.min_display_mastering_luminance;
                 resultData.hdrMetadata.masteringMaxLum = (float)mdcv.max_display_mastering_luminance;
 
-                tlog::debug() << fmt::format(
+                tlog::debug() << format(
                     "Found mastering display color volume: minLum={} maxLum={} chroma={}",
                     resultData.hdrMetadata.masteringMinLum,
                     resultData.hdrMetadata.masteringMaxLum,
@@ -311,7 +311,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 resultData.hasPremultipliedAlpha = true;
                 resultData.readMetadataFromIcc(profile);
                 co_return resultData;
-            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+            } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC color profile: {}", e.what()); }
         }
 
         if (skipColorProcessing) {
@@ -347,7 +347,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         const auto primaries = (ituth273::EColorPrimaries)(nclx ? nclx->color_primaries : heif_color_primaries_ITU_R_BT_709_5);
 
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "CICP: primaries={}, transfer={}, full_range={}",
             ituth273::toString(primaries),
             ituth273::toString(cicpTransfer),
@@ -355,7 +355,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         );
 
         if (!ituth273::isTransferImplemented(cicpTransfer)) {
-            tlog::warning() << fmt::format("Unsupported transfer '{}' in NCLX. Using sRGB instead.", ituth273::toString(cicpTransfer));
+            tlog::warning() << format("Unsupported transfer '{}' in NCLX. Using sRGB instead.", ituth273::toString(cicpTransfer));
             cicpTransfer = ituth273::ETransfer::SRGB;
         }
 
@@ -426,13 +426,13 @@ Task<vector<ImageData>> HeifImageLoader::load(
         [&decodeImage](
             const heif_image_handle* imgHandle, bool skipColorProcessing, string_view layer = "", string_view partName = ""
         ) -> Task<ImageData> {
-        tlog::debug() << fmt::format("Decoding HEIF image handle '{}'", layer);
+        tlog::debug() << format("Decoding HEIF image handle '{}'", layer);
 
         heif_colorspace preferredColorspace = heif_colorspace_undefined;
         heif_chroma preferredChroma = heif_chroma_undefined;
         if (auto error = heif_image_handle_get_preferred_decoding_colorspace(imgHandle, &preferredColorspace, &preferredChroma);
             error.code != heif_error_Ok) {
-            throw ImageLoadError{fmt::format("Failed to get preferred decoding colorspace: {}", error.message)};
+            throw ImageLoadError{format("Failed to get preferred decoding colorspace: {}", error.message)};
         }
 
         const bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
@@ -475,7 +475,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const auto numSamples = numChannels * numPixels;
         const auto numThreads = idealThreadCount(numSamples);
 
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "Decoding with {} threads (numChannels={} numPixels={} numSamples={})", numThreads, numChannels, numPixels, numSamples
         );
 
@@ -486,14 +486,14 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const auto imgGuard = ScopeGuard{[img] { heif_image_release(img); }};
         if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, decodingOptions.get());
             error.code != heif_error_Ok) {
-            throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
+            throw ImageLoadError{format("Failed to decode image: {}", error.message)};
         }
 
         co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, layer, partName);
     };
 
     const auto decodeSingleTrackImage = [&decodeImage](heif_track* track, string_view partName = "") -> Task<optional<ImageData>> {
-        tlog::debug() << fmt::format("Decoding HEIF track '{}'", partName);
+        tlog::debug() << format("Decoding HEIF track '{}'", partName);
 
         const bool hasAlpha = heif_track_has_alpha_channel(track);
         const bool isMonochrome = false; // TODO: libheif doesn't seem to support monochrome tracks
@@ -522,14 +522,14 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         uint16_t widthGuess = 1, heightGuess = 1;
         if (const auto error = heif_track_get_image_resolution(track, &widthGuess, &heightGuess); error.code != heif_error_Ok) {
-            tlog::warning() << fmt::format("Failed to get track image resolution: {}", error.message);
+            tlog::warning() << format("Failed to get track image resolution: {}", error.message);
         }
 
         const auto numPixels = widthGuess * (size_t)heightGuess;
         const auto numSamples = numChannels * numPixels;
         const auto numThreads = idealThreadCount(numSamples);
 
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "Decoding sequence frame with {} threads (numChannels={} numPixels={} numSamples={})", numThreads, numChannels, numPixels, numSamples
         );
 
@@ -545,7 +545,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 co_return nullopt;
             }
 
-            throw ImageLoadError{fmt::format("Failed to decode track image: {}", error.message)};
+            throw ImageLoadError{format("Failed to decode track image: {}", error.message)};
         }
 
         co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, partName, partName);
@@ -559,13 +559,13 @@ Task<vector<ImageData>> HeifImageLoader::load(
     }
 
     if (const auto error = heif_context_read_from_reader(ctx.get(), &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
-        throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
+        throw ImageLoadError{format("Failed to read image: {}", error.message)};
     }
 
     // If we're an image *sequence*, load the sequence tracks instead of individual images.
     const auto seqTrackCount = heif_context_number_of_sequence_tracks(ctx.get());
     if (seqTrackCount > 0) {
-        tlog::debug() << fmt::format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
+        tlog::debug() << format("HEIF image contains {} sequence track(s). Loading tracks instead of image.", seqTrackCount);
 
         vector<uint32_t> trackIds(seqTrackCount);
         heif_context_get_track_ids(ctx.get(), trackIds.data());
@@ -576,8 +576,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
             heif_track* track = heif_context_get_track(ctx.get(), trackIds[i]);
 
             for (size_t frameIdx = 0;; ++frameIdx) {
-                const auto partName = seqTrackCount > 1 ? fmt::format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
-                                                          fmt::format("frames.{}", frameIdx);
+                const auto partName = seqTrackCount > 1 ? format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
+                                                          format("frames.{}", frameIdx);
 
                 auto imageData = co_await decodeSingleTrackImage(track, partName);
                 if (!imageData) {
@@ -598,11 +598,11 @@ Task<vector<ImageData>> HeifImageLoader::load(
     heif_context_get_list_of_top_level_image_IDs(ctx.get(), imageIds.data(), (int)numImages);
 
     const auto decodeTopLevelImgIdAndAuxImages = [&](heif_item_id id, string partName) -> Task<ImageData> {
-        tlog::debug() << fmt::format("Spawning decoding task for top-level HEIF image ID '{}'", id);
+        tlog::debug() << format("Spawning decoding task for top-level HEIF image ID '{}'", id);
 
         heif_image_handle* imgHandle;
         if (const auto error = heif_context_get_image_handle(ctx.get(), id, &imgHandle); error.code != heif_error_Ok) {
-            throw ImageLoadError{fmt::format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
+            throw ImageLoadError{format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
         }
 
         auto mainImageTask = [](const auto* imgHandle, const auto& decodeImageHandle, string_view partName, auto priority) -> Task<ImageData> {
@@ -626,7 +626,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     heif_image_handle_get_auxiliary_image_handle(imgHandle, auxId, &auxImgHandle).code == heif_error_Ok) {
                     aux.emplace_back(auxId, HeifImageHandlePtr{auxImgHandle, heif_image_handle_release});
                 } else {
-                    tlog::warning() << fmt::format("Failed to get auxiliary image handle for ID {}.", auxId);
+                    tlog::warning() << format("Failed to get auxiliary image handle for ID {}.", auxId);
                 }
             }
         }
@@ -634,7 +634,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         heif_image_handle* gainmapImgHandle = nullptr;
         if (heif_image_handle_get_gain_map_image_handle(imgHandle, &gainmapImgHandle).code == heif_error_Ok) {
             const auto gainmapItemId = heif_image_handle_get_item_id(gainmapImgHandle);
-            tlog::debug() << fmt::format(
+            tlog::debug() << format(
                 "Found ISO 21496-1 gain map image with ID '{}'. Will be processed while reading auxiliary images.", gainmapItemId
             );
 
@@ -677,7 +677,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     }};
 
                     if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
-                        tlog::warning() << fmt::format("Failed to get auxiliary image type: {}", error.message);
+                        tlog::warning() << format("Failed to get auxiliary image type: {}", error.message);
                         co_return nullopt;
                     }
 
@@ -687,7 +687,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
                     if (auxLayerName.empty()) {
                         const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
-                        auxLayerName = isIsoGainmap ? "gainmap" : fmt::format("aux.{}", auxId);
+                        auxLayerName = isIsoGainmap ? "gainmap" : format("aux.{}", auxId);
                     }
 
                     const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
@@ -723,7 +723,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
 
         if (numMetadataBlocks > 0) {
-            tlog::debug() << fmt::format("Found {} metadata block(s).", numMetadataBlocks);
+            tlog::debug() << format("Found {} metadata block(s).", numMetadataBlocks);
         }
 
         heif_image_handle_get_list_of_metadata_block_IDs(imgHandle, nullptr, metadataIDs.data(), numMetadataBlocks);
@@ -744,15 +744,15 @@ Task<vector<ImageData>> HeifImageLoader::load(
             }
 
             if (type == "Exif") {
-                tlog::debug() << fmt::format("Found EXIF data of size {} bytes", metadata.size());
+                tlog::debug() << format("Found EXIF data of size {} bytes", metadata.size());
 
                 try {
                     // The first four bytes are the length of the exif data and not strictly part of the exif data.
                     exif = Exif{span<uint8_t>{metadata}.subspan(4)};
                     mainImage.attributes.emplace_back(exif->toAttributes());
-                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+                } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read EXIF metadata: {}", e.what()); }
             } else if (contentType == "application/rdf+xml") {
-                tlog::debug() << fmt::format("Found XMP data '{}/{}' of size {} bytes", type, contentType, metadata.size());
+                tlog::debug() << format("Found XMP data '{}/{}' of size {} bytes", type, contentType, metadata.size());
 
                 try {
                     Xmp xmp{
@@ -764,16 +764,16 @@ Task<vector<ImageData>> HeifImageLoader::load(
                     }
 
                     mainImage.attributes.emplace_back(xmp.attributes());
-                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+                } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read XMP metadata: {}", e.what()); }
             } else if (type == "tmap") {
-                tlog::debug() << fmt::format("Found tmap data of size {} bytes", metadata.size());
+                tlog::debug() << format("Found tmap data of size {} bytes", metadata.size());
 
                 try {
                     isoGainMapMetadata = IsoGainMapMetadata{metadata};
                     tlog::debug() << "Successfully parsed tmap ISO 21496-1 gain map metadata.";
-                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read tmap metadata: {}", e.what()); }
+                } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read tmap metadata: {}", e.what()); }
             } else {
-                tlog::debug() << fmt::format("Skipping unknown metadata block of type '{}/{}' ({} bytes).", type, contentType, size);
+                tlog::debug() << format("Skipping unknown metadata block of type '{}/{}' ({} bytes).", type, contentType, size);
             }
         }
 
@@ -782,14 +782,14 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 optional<chroma_t> altImgChroma = nullopt;
 
                 if (auxImg.isIsoGainmap) {
-                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxImg.name);
+                    tlog::debug() << format("Found ISO 21496-1 gain map image: {}. Checking for metadata.", auxImg.name);
 
                     HeapArray<uint8_t> metadataData(heif_image_handle_get_gain_map_metadata_size(imgHandle));
                     if (metadataData.size() > 0 &&
                         heif_image_handle_get_gain_map_metadata(imgHandle, metadataData.data()).code == heif_error_Ok) {
 
                         tlog::debug()
-                            << fmt::format("Read {} bytes of gainmap metadata. Attempting to override if existing.", metadataData.size());
+                            << format("Read {} bytes of gainmap metadata. Attempting to override if existing.", metadataData.size());
 
                         try {
                             isoGainMapMetadata = IsoGainMapMetadata{
@@ -798,7 +798,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
                             tlog::debug() << "Successfully parsed ISO 21496-1 gain map metadata.";
                         } catch (const invalid_argument& e) {
-                            tlog::warning() << fmt::format("Failed to read gainmap metadata: {}", e.what());
+                            tlog::warning() << format("Failed to read gainmap metadata: {}", e.what());
                         }
                     } else if (!isoGainMapMetadata) {
                         tlog::warning() << "No gainmap metadata found for ISO 21496-1 gain map image.";
@@ -811,10 +811,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
                         try {
                             altImgChroma = ColorProfile::fromIcc(profileData).chroma();
                             if (altImgChroma) {
-                                tlog::debug() << fmt::format("ISO 21496-1 alt. image chroma from ICC: {}", *altImgChroma);
+                                tlog::debug() << format("ISO 21496-1 alt. image chroma from ICC: {}", *altImgChroma);
                             }
                         } catch (const invalid_argument& e) {
-                            tlog::warning() << fmt::format("Failed to read alt. image ICC profile: {}", e.what());
+                            tlog::warning() << format("Failed to read alt. image ICC profile: {}", e.what());
                         }
                     } else if (heif_color_profile_nclx* nclx;
                                heif_image_handle_get_derived_image_nclx_color_profile(imgHandle, &nclx).code == heif_error_Ok &&
@@ -831,23 +831,23 @@ Task<vector<ImageData>> HeifImageLoader::load(
                              }
                         };
 
-                        tlog::debug() << fmt::format("ISO 21496-1 alt. image chroma from NCLX: {}", *altImgChroma);
+                        tlog::debug() << format("ISO 21496-1 alt. image chroma from NCLX: {}", *altImgChroma);
                     }
                 }
 
                 // Prioritize ISO 21496-1 gain map application if both types are present. If the gain map is of Apple's type, we can
                 // fall back to their vendor-specific handling (optionally with maker note parameters, but also handles default).
                 if (isoGainMapMetadata) {
-                    tlog::debug() << fmt::format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxImg.name);
+                    tlog::debug() << format("Found ISO 21496-1 gain map w/ metadata: '{}'. Applying.", auxImg.name);
                     co_await preprocessAndApplyIsoGainMap(
                         mainImage, auxImg.data, *isoGainMapMetadata, mainImage.nativeMetadata.chroma, altImgChroma, settings.gainmapHeadroom, priority
                     );
                 } else if (auxImg.isAppleGainmap) {
                     const auto appleMakerNote = exif ? exif->tryGetAppleMakerNote() : nullopt;
-                    tlog::debug() << fmt::format("Found Apple HDR gain map: {} appleMakerNote={}", auxImg.name, appleMakerNote ? "yes" : "no");
+                    tlog::debug() << format("Found Apple HDR gain map: {} appleMakerNote={}", auxImg.name, appleMakerNote ? "yes" : "no");
                     co_await preprocessAndApplyAppleGainMap(mainImage, auxImg.data, appleMakerNote, settings.gainmapHeadroom, priority);
                 } else {
-                    tlog::warning() << fmt::format(
+                    tlog::warning() << format(
                         "Found ISO 21496-1 gain map '{}' but no associated metadata. Skipping gain map application.", auxImg.name
                     );
                 }
@@ -871,7 +871,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     vector<Task<ImageData>> decodeTasks;
     for (size_t i = 0; i < numImages; ++i) {
         const heif_item_id id = imageIds[i];
-        const string partName = numImages > 1 ? fmt::format("frames.{}", id) : "";
+        const string partName = numImages > 1 ? format("frames.{}", id) : "";
 
         decodeTasks.emplace_back([](auto id, auto partName, auto& decode, auto priority) -> Task<ImageData> {
             co_await ThreadPool::global().enqueueCoroutine(priority);

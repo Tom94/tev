@@ -181,12 +181,12 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 
     if (auto ipc = weakIpc.lock(); ipc) {
         if (ipc->isPrimaryInstance()) {
-            addRow(network, fmt::format("Listening to {}", ipc->hostname()), "Status");
+            addRow(network, format("Listening to {}", ipc->hostname()), "Status");
             addRow(network, to_string(ipc->nActiveConnections()), "Active connections");
         } else if (ipc->isConnectedToPrimaryInstance()) {
-            addRow(network, fmt::format("Connected to {}", ipc->hostname()), "Status");
+            addRow(network, format("Connected to {}", ipc->hostname()), "Status");
         } else {
-            addRow(network, fmt::format("Failed to connect to {}", ipc->hostname()), "Status");
+            addRow(network, format("Failed to connect to {}", ipc->hostname()), "Status");
         }
 
         addRow(network, to_string(ipc->nTotalBytesSent()), "Bytes sent");
@@ -236,7 +236,6 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 #ifdef _WIN32
     addLibrary(about, "DirectXTex", "DirectX texture processing library");
 #endif
-    addLibrary(about, "{fmt}", "Fast & safe formatting library");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
     addLibrary(about, "GLFW", "OpenGL desktop development library");
 #ifdef TEV_SUPPORT_HEIC

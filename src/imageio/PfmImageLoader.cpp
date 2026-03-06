@@ -170,9 +170,9 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 size.x() = stoi(headerParams[0]);
                 size.y() = stoi(headerParams[1]);
             } catch (const invalid_argument&) {
-                throw ImageLoadError{fmt::format("Invalid image size '{} {}'", headerParams[0], headerParams[1])};
+                throw ImageLoadError{format("Invalid image size '{} {}'", headerParams[0], headerParams[1])};
             } catch (const out_of_range&) {
-                throw ImageLoadError{fmt::format("Image size '{} {}' out of range", headerParams[0], headerParams[1])};
+                throw ImageLoadError{format("Image size '{} {}' out of range", headerParams[0], headerParams[1])};
             }
 
             if (pfm) {
@@ -181,8 +181,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 try {
                     scale = stof(headerParams[2]);
                 } catch (const invalid_argument&) {
-                    throw ImageLoadError{fmt::format("Invalid scale '{}'", headerParams[2])};
-                } catch (const out_of_range&) { throw ImageLoadError{fmt::format("Scale '{}' out of range", headerParams[2])}; }
+                    throw ImageLoadError{format("Invalid scale '{}'", headerParams[2])};
+                } catch (const out_of_range&) { throw ImageLoadError{format("Scale '{}' out of range", headerParams[2])}; }
 
                 isLittleEndian = scale < 0;
                 scale = abs(scale);
@@ -209,8 +209,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                         bitsPerChannel = maxVal >= (1 << 16) ? 32 : maxVal >= (1 << 8) ? 16 : 8;
                         scale = 1.0f / maxVal;
                     } catch (const invalid_argument&) {
-                        throw ImageLoadError{fmt::format("Invalid maxval '{}'", headerParams[2])};
-                    } catch (const out_of_range&) { throw ImageLoadError{fmt::format("Maxval '{}' out of range", headerParams[2])}; }
+                        throw ImageLoadError{format("Invalid maxval '{}'", headerParams[2])};
+                    } catch (const out_of_range&) { throw ImageLoadError{format("Maxval '{}' out of range", headerParams[2])}; }
                 }
             }
         } else {
@@ -243,7 +243,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (parts.size() < 2) {
-                    tlog::warning() << fmt::format("Missing value of PAM header key '{}'", key);
+                    tlog::warning() << format("Missing value of PAM header key '{}'", key);
                     continue;
                 }
 
@@ -272,11 +272,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                             scale = 1.0f / maxVal;
                             bitsPerChannel = maxVal >= (1 << 16) ? 32 : maxVal >= (1 << 8) ? 16 : 8;
                         } else {
-                            tlog::warning() << fmt::format("Invalid PAM key '{}'", key);
+                            tlog::warning() << format("Invalid PAM key '{}'", key);
                         }
                     } catch (const invalid_argument&) {
-                        throw ImageLoadError{fmt::format("Invalid {}: '{}'", key, value)};
-                    } catch (const out_of_range&) { throw ImageLoadError{fmt::format("{}'s value '{}' is out of range", key, value)}; }
+                        throw ImageLoadError{format("Invalid {}: '{}'", key, value)};
+                    } catch (const out_of_range&) { throw ImageLoadError{format("{}'s value '{}' is out of range", key, value)}; }
                 }
             }
         }
@@ -293,22 +293,22 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         if (!isfinite(scale) || scale == 0) {
-            throw ImageLoadError{fmt::format("Invalid scale {}", scale)};
+            throw ImageLoadError{format("Invalid scale {}", scale)};
         }
 
         if (size.x() <= 0 || size.y() <= 0) {
-            throw ImageLoadError{fmt::format("Invalid image size {}x{}", size.x(), size.y())};
+            throw ImageLoadError{format("Invalid image size {}x{}", size.x(), size.y())};
         }
 
         if (numChannels <= 0 || numChannels > 4) {
-            throw ImageLoadError{fmt::format("Invalid number of channels {}", numChannels)};
+            throw ImageLoadError{format("Invalid number of channels {}", numChannels)};
         }
 
         if (bitsPerChannel != 1 && bitsPerChannel != 8 && bitsPerChannel != 16 && bitsPerChannel != 32) {
-            throw ImageLoadError{fmt::format("Unsupported bits per channel: {}", bitsPerChannel)};
+            throw ImageLoadError{format("Unsupported bits per channel: {}", bitsPerChannel)};
         }
 
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "Loading {} image: size={}x{} channels={} bitsPerChannel={} scale={} endian={}",
             toString(pamType),
             size.x(),
@@ -321,7 +321,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         vector<ImageData> result(1);
         ImageData& resultData = result.front();
-        resultData.partName = fmt::format("frames.{}", frameIdx++);
+        resultData.partName = format("frames.{}", frameIdx++);
 
         if (!global.children.empty()) {
             resultData.attributes.emplace_back(std::move(header));
@@ -356,7 +356,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             case 8: pixelFormat = EPixelFormat::U8; break;
             case 16: pixelFormat = EPixelFormat::U16; break;
             case 32: pixelFormat = pfm ? EPixelFormat::F32 : EPixelFormat::U32; break;
-            default: throw ImageLoadError{fmt::format("Unsupported bits per channel: {}", bitsPerChannel)};
+            default: throw ImageLoadError{format("Unsupported bits per channel: {}", bitsPerChannel)};
         }
 
         auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
@@ -364,7 +364,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
         if (isBinary) {
             iStream.read(reinterpret_cast<char*>(buf.dataBytes()), numBytes);
             if (iStream.gcount() < (streamsize)numBytes) {
-                throw ImageLoadError{fmt::format("Insufficient bytes to read ({} vs {})", iStream.gcount(), numBytes)};
+                throw ImageLoadError{format("Insufficient bytes to read ({} vs {})", iStream.gcount(), numBytes)};
             }
         } else {
             TEV_ASSERT(bitsPerChannel == 32, "ASCII PNM with non-32 bits per channel not supported.");
@@ -469,7 +469,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     priority
                 );
             } else {
-                throw ImageLoadError{fmt::format("Unsupported bits per channel: {}", bitsPerChannel)};
+                throw ImageLoadError{format("Unsupported bits per channel: {}", bitsPerChannel)};
             }
         }
 

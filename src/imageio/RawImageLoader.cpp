@@ -218,15 +218,15 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     auto librawStream = LibRawDataStream{iStream, path};
     if (const int error = iProcessor.open_datastream(&librawStream); error != LIBRAW_SUCCESS) {
-        throw FormatNotSupported{fmt::format("Could not open raw image: {}", libraw_strerror(error))};
+        throw FormatNotSupported{format("Could not open raw image: {}", libraw_strerror(error))};
     }
 
     if (const int error = iProcessor.unpack(); error != LIBRAW_SUCCESS) {
-        throw ImageLoadError{fmt::format("Could not unpack raw image: {}", libraw_strerror(error))};
+        throw ImageLoadError{format("Could not unpack raw image: {}", libraw_strerror(error))};
     }
 
     if (const int error = iProcessor.dcraw_process(); error != LIBRAW_SUCCESS) {
-        throw ImageLoadError{fmt::format("Could not process raw image: {}", libraw_strerror(error))};
+        throw ImageLoadError{format("Could not process raw image: {}", libraw_strerror(error))};
     }
 
     const Vector2i size = {iProcessor.imgdata.sizes.iwidth, iProcessor.imgdata.sizes.iheight};
@@ -243,7 +243,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     for (int i = 0; i < 8; i++) {
         const Box2i box = maskToBox(iProcessor.imgdata.sizes.mask[i]);
-        tlog::debug() << fmt::format("mask[{}] = [{}, {}]", i, box.min, box.max);
+        tlog::debug() << format("mask[{}] = [{}, {}]", i, box.min, box.max);
 
         if (!box.isValid() || box.area() == 0) {
             continue;
@@ -254,7 +254,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     for (int i = 0; i < 2; i++) {
         const Box2i box = cropToBox(iProcessor.imgdata.sizes.raw_inset_crops[i]);
-        tlog::debug() << fmt::format("raw_inset_crops[{}] = [{}, {}]", i, box.min, box.max);
+        tlog::debug() << format("raw_inset_crops[{}] = [{}, {}]", i, box.min, box.max);
 
         if (!box.isValid() || box.area() == 0) {
             continue;
@@ -271,7 +271,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     }
 
     const Vector2i margin = {iProcessor.imgdata.sizes.left_margin, iProcessor.imgdata.sizes.top_margin};
-    tlog::debug() << fmt::format(
+    tlog::debug() << format(
         "raw image: size={} flip={} crop=[{}, {}] margin={} fmax={} fnorm={}",
         orientedSize,
         flip,

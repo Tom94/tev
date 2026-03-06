@@ -45,7 +45,7 @@ Task<void> StbiLdrImageSaver::save(ostream& oStream, const fs::path& path, span<
     } else if (extension == ".tga") {
         stbi_write_tga_to_func(stbiOStreamWrite, &oStream, imageSize.x(), imageSize.y(), nChannels, data.data());
     } else {
-        throw ImageSaveError{fmt::format("Image {} has unknown format.", path)};
+        throw ImageSaveError{format("Image {} has unknown format.", path)};
     }
 
     co_return;

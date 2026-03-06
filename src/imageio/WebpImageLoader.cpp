@@ -66,7 +66,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                 tlog::debug() << "Found ICC color profile.";
                 iccProfileData = HeapArray<uint8_t>(chunkIter.chunk.size);
                 memcpy(iccProfileData.data(), chunkIter.chunk.bytes, chunkIter.chunk.size);
-            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to create ICC color profile: {}", e.what()); }
+            } catch (const runtime_error& e) { tlog::warning() << format("Failed to create ICC color profile: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get ICCP chunk from webp image, despite flag being set.";
         }
@@ -82,7 +82,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     {chunkIter.chunk.bytes, chunkIter.chunk.size}
                 };
                 attributes.emplace_back(exif.toAttributes());
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read EXIF metadata: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get EXIF chunk from webp image, despite flag being set.";
         }
@@ -97,7 +97,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     string_view{(const char*)chunkIter.chunk.bytes, chunkIter.chunk.size}
                 };
                 attributes.emplace_back(xmp.attributes());
-            } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+            } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read XMP metadata: {}", e.what()); }
         } else {
             tlog::warning() << "Failed to get XMP chunk from webp image, despite flag being set.";
         }
@@ -125,7 +125,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     bgColor.data(), 4, Vector2i{1, 1}
                 };
                 co_await toLinearSrgbPremul(ColorProfile::fromIcc(iccProfileData), EAlphaKind::Straight, bgView, bgView, nullopt, priority);
-            } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
+            } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC profile: {}", e.what()); }
         } else {
             for (uint32_t i = 0; i < 3; ++i) {
                 bgColor[i] = toLinear(bgColor[i]) * bgColor[3]; // Premultiply alpha
@@ -163,7 +163,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             resultData.attributes = attributes;
 
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
-            resultData.partName = isAnimation ? fmt::format("frames.{}", frameIdx++) : "";
+            resultData.partName = isAnimation ? format("frames.{}", frameIdx++) : "";
             resultData.channels = co_await makeRgbaInterleavedChannels(
                 numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );
@@ -181,7 +181,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
                 const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
                 if (allocationSize > numSamples) {
-                    tlog::warning() << fmt::format("WebP frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
+                    tlog::warning() << format("WebP frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
                 }
 
                 frameData = HeapArray<float>(allocationSize);
@@ -200,7 +200,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     );
 
                     resultData.readMetadataFromIcc(profile);
-                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC profile: {}", e.what()); }
+                } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC profile: {}", e.what()); }
             } else {
                 co_await toFloat32<uint8_t, true, true>(dataSpan, numChannels, dstView, hasAlpha, priority);
 

@@ -72,7 +72,7 @@ struct TiffTag {
                 return 4;
         }
 
-        throw std::invalid_argument{fmt::format("TiffTag: unknown format: {}", (uint32_t)format)};
+        throw std::invalid_argument{std::format("TiffTag: unknown format: {}", (uint32_t)format)};
     }
 
     size_t size() const { return nComponents * formatSize(format); }

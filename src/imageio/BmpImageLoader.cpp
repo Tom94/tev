@@ -801,7 +801,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
     }
 
     if (sig == "BA") {
-        tlog::debug() << fmt::format("Loading BA BMP sequence");
+        tlog::debug() << format("Loading BA BMP sequence");
 
         struct BaHeader {
             // Size of this header and following ones. Not meant to be used; see https://www.fileformat.info/format/os2bmp/egff.htm. Only
@@ -827,10 +827,10 @@ Task<vector<ImageData>> BmpImageLoader::load(
             }
 
             if (baFileHeader.headerSize < sizeof(BaHeader)) {
-                throw ImageLoadError{fmt::format("Invalid BA BMP header size: {}", baFileHeader.headerSize)};
+                throw ImageLoadError{format("Invalid BA BMP header size: {}", baFileHeader.headerSize)};
             }
 
-            tlog::debug() << fmt::format(
+            tlog::debug() << format(
                 "BA BMP frame #{}: headerSize={} offsetToNext={} width={} height={}",
                 i,
                 baFileHeader.headerSize,
@@ -842,7 +842,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
             try {
                 auto tmp = co_await load(iStream, path, channelSelector, settings, priority);
                 for (auto& image : tmp) {
-                    image.partName = Channel::joinIfNonempty(fmt::format("frames.{}", i), image.partName);
+                    image.partName = Channel::joinIfNonempty(format("frames.{}", i), image.partName);
                 }
 
                 result.insert(result.end(), make_move_iterator(tmp.begin()), make_move_iterator(tmp.end()));
@@ -971,7 +971,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         case EType::WindowsV3:
         case EType::WindowsV4:
         case EType::WindowsV5: break;
-        default: throw ImageLoadError{fmt::format("Unsupported BMP DIB header size: {}", dib.size)};
+        default: throw ImageLoadError{format("Unsupported BMP DIB header size: {}", dib.size)};
     }
 
     // This particular header uses 16-bit values for width and height. Others 32-bit values, so we have to read those first and then read
@@ -1016,7 +1016,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     bytesToRead = 0;
 
     if (!iStream) {
-        throw ImageLoadError{fmt::format("Failed to read BMP DIB header with size {}", dib.size)};
+        throw ImageLoadError{format("Failed to read BMP DIB header with size {}", dib.size)};
     }
 
     if (reverseEndianness) {
@@ -1096,14 +1096,14 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             case 11: return ECompression::Cmyk;
             case 12: return ECompression::CmykRle8;
             case 13: return ECompression::CmykRle4;
-            default: throw ImageLoadError{fmt::format("Invalid BMP compression method: {}", compression)};
+            default: throw ImageLoadError{format("Invalid BMP compression method: {}", compression)};
         }
     };
 
     const ECompression compression = convertCompression(dib.compression, type);
 
     if (compression == ECompression::Cmyk || compression == ECompression::CmykRle8 || compression == ECompression::CmykRle4) {
-        throw ImageLoadError{fmt::format("Unsupported BMP compression method: {}", compressionToString(compression))};
+        throw ImageLoadError{format("Unsupported BMP compression method: {}", compressionToString(compression))};
     }
 
     if (compression == ECompression::Jpeg) {
@@ -1139,12 +1139,12 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     }
 
     if (dib.bitsPerPixel == 0) {
-        throw ImageLoadError{fmt::format("Invalid BMP bits per pixel: {}", dib.bitsPerPixel)};
+        throw ImageLoadError{format("Invalid BMP bits per pixel: {}", dib.bitsPerPixel)};
     }
 
     const bool hasPalette = dib.bitsPerPixel <= 8;
     if (!hasPalette && dib.bitsPerPixel != 16 && dib.bitsPerPixel != 24 && dib.bitsPerPixel != 32 && dib.bitsPerPixel != 64) {
-        throw ImageLoadError{fmt::format("Unsupported BMP bits per pixel for non-paletted image: {}", dib.bitsPerPixel)};
+        throw ImageLoadError{format("Unsupported BMP bits per pixel for non-paletted image: {}", dib.bitsPerPixel)};
     }
 
     const auto setColorMasksToDefault = [&]() {
@@ -1257,7 +1257,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             iStream.read((char*)iccProfileData.data(), iccProfileData.size());
             if (!iStream) {
                 iccProfileData = {};
-                tlog::warning() << fmt::format("Failed to read ICC profile data of size {}", iccProfileData.size());
+                tlog::warning() << format("Failed to read ICC profile data of size {}", iccProfileData.size());
                 break;
             }
         } break;
@@ -1271,14 +1271,14 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             string path(dib.iccProfileSize, '\0');
             iStream.read(path.data(), dib.iccProfileSize);
             if (!iStream) {
-                tlog::warning() << fmt::format("Failed to read ICC profile path of size {}", iccProfileData.size());
+                tlog::warning() << format("Failed to read ICC profile path of size {}", iccProfileData.size());
                 break;
             }
 
             tlog::warning()
-                << fmt::format("Image contains path to an ICC profile '{}' but tev will not attempt read it for security concerns", path);
+                << format("Image contains path to an ICC profile '{}' but tev will not attempt read it for security concerns", path);
         } break;
-        default: tlog::warning() << fmt::format("Unsupported BMP color space type {:08X}, assuming sRGB", dib.colorSpaceType); break;
+        default: tlog::warning() << format("Unsupported BMP color space type {:08X}, assuming sRGB", dib.colorSpaceType); break;
     }
 
     optional<Vector3f> gamma = nullopt;
@@ -1335,7 +1335,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             case 0x00000004: return ERenderingIntent::Perceptual;
             case 0x00000008: return ERenderingIntent::AbsoluteColorimetric;
             default:
-                tlog::warning() << fmt::format("Unknown BMP rendering intent: {:08X}; ignoring rendering intent", dibIntent);
+                tlog::warning() << format("Unknown BMP rendering intent: {:08X}; ignoring rendering intent", dibIntent);
                 return nullopt;
         }
     };
@@ -1346,7 +1346,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     dib.height = abs(dib.height);
 
     if (dib.height <= 0 || dib.width <= 0) {
-        throw ImageLoadError{fmt::format("Invalid BMP image dimensions: {}x{}", dib.width, dib.height)};
+        throw ImageLoadError{format("Invalid BMP image dimensions: {}x{}", dib.width, dib.height)};
     }
 
     HeapArray<uint8_t> palette; // RRGGBBAA per element
@@ -1358,7 +1358,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         iStream.read((char*)palette.data(), palette.size());
         if (!iStream) {
             throw ImageLoadError{
-                fmt::format("Failed to read BMP palette with {} entries and entry size {}", numPaletteEntries, paletteEntrySize)
+                format("Failed to read BMP palette with {} entries and entry size {}", numPaletteEntries, paletteEntrySize)
             };
         }
 
@@ -1367,7 +1367,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     }
 
-    tlog::debug() << fmt::format(
+    tlog::debug() << format(
         "BMP info({}): size={} planes={} bpp={} compression={} palette={} redMask={:08X} greenMask={:08X} blueMask={:08X} alphaMask={:08X} colorSpaceType={:08X}",
         dib.size,
         Vector2i{dib.width, dib.height},
@@ -1383,15 +1383,15 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     );
 
     if (dib.size >= 108) {
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "BMP DIB header v4 color space: gamma={} chroma={}",
-            gamma.has_value() ? fmt::format("{}", *gamma) : "n/a",
-            chroma.has_value() ? fmt::format("{}", *chroma) : "n/a"
+            gamma.has_value() ? format("{}", *gamma) : "n/a",
+            chroma.has_value() ? format("{}", *chroma) : "n/a"
         );
     }
 
     if (dib.size >= 124) {
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "BMP DIB header v5 color profile: intent={} profileSize={}",
             renderingIntent.has_value() ? toString(*renderingIntent) : "n/a",
             dib.iccProfileSize
@@ -1419,7 +1419,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
     bytesToRead = isCompressed ? dib.imageSize : pixelDataSize;
     if (pixelDataEnd - pixelDataPos < bytesToRead) {
-        throw ImageLoadError{fmt::format(
+        throw ImageLoadError{format(
             "BMP file is too small to contain expected pixel data: {} bytes available, {} bytes expected", pixelDataEnd - pixelDataPos, pixelDataSize
         )};
     }
@@ -1427,7 +1427,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     HeapArray<uint8_t> pixelData(bytesToRead);
     iStream.read((char*)pixelData.data(), pixelData.size());
     if (!iStream) {
-        throw ImageLoadError{fmt::format("Failed to read BMP pixel data of size {}", pixelData.size())};
+        throw ImageLoadError{format("Failed to read BMP pixel data of size {}", pixelData.size())};
     }
 
     switch (compression) {
@@ -1439,7 +1439,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     }
 
     if (pixelData.size() < pixelDataSize) {
-        throw ImageLoadError{fmt::format("Decoded BMP pixel data size {} is smaller than expected {}", pixelData.size(), pixelDataSize)};
+        throw ImageLoadError{format("Decoded BMP pixel data size {} is smaller than expected {}", pixelData.size(), pixelDataSize)};
     }
 
     const auto colorBpp = hasPalette ? paletteEntrySize * 8 : dib.bitsPerPixel;
@@ -1525,7 +1525,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                         a = read<int16_t>(pixelPtr + 6, reverseEndianness);
                         break;
                     }
-                    default: throw ImageLoadError{fmt::format("Unsupported BMP bits per pixel: {}", colorBpp)};
+                    default: throw ImageLoadError{format("Unsupported BMP bits per pixel: {}", colorBpp)};
                 }
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
@@ -1565,7 +1565,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             resultData.readMetadataFromIcc(profile);
             resultData.renderingIntent = renderingIntent.value_or(resultData.renderingIntent);
             co_return result;
-        } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+        } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC color profile: {}", e.what()); }
     }
 
     resultData.renderingIntent = renderingIntent.value_or(ERenderingIntent::RelativeColorimetric);

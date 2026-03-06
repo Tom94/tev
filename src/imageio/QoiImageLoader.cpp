@@ -35,7 +35,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     string magicString(magic, 4);
 
     if (magicString != "qoif") {
-        throw FormatNotSupported{fmt::format("Invalid magic QOI string {}.", magicString)};
+        throw FormatNotSupported{format("Invalid magic QOI string {}.", magicString)};
     }
 
     iStream.clear();
@@ -62,7 +62,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
 
     const auto numChannels = (size_t)desc.channels;
     if (numChannels != 4 && numChannels != 3) {
-        throw ImageLoadError{fmt::format("Invalid number of channels {}.", numChannels)};
+        throw ImageLoadError{format("Invalid number of channels {}.", numChannels)};
     }
 
     const bool hasAlpha = numChannels == 4;

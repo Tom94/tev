@@ -86,7 +86,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
         throw FormatNotSupported{"Invalid ICO/CUR header"};
     }
 
-    tlog::debug() << fmt::format("Loading {} images from {} container", dir.count, typeToString(type));
+    tlog::debug() << format("Loading {} images from {} container", dir.count, typeToString(type));
 
     dir.entries.resize(dir.count); // No need to sanitize. Worst case we allocate 64k entries, each 16 bytes
     for (uint16_t i = 0; i < dir.count; i++) {
@@ -117,7 +117,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
     for (uint16_t i = 0; i < dir.count; i++) {
         const auto& entry = dir.entries[i];
 
-        tlog::debug() << fmt::format(
+        tlog::debug() << format(
             "  #{}: size={}x{} colorCount={} {}={} {}={} bytesInRes={} imageOffset={}",
             i,
             entry.width,
@@ -136,7 +136,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
 
     for (uint16_t i = 0; i < dir.count; i++) {
         const auto& entry = dir.entries[i];
-        tlog::debug() << fmt::format("Loading image #{} from {} container", i, typeToString(type));
+        tlog::debug() << format("Loading image #{} from {} container", i, typeToString(type));
 
         vector<ImageData> imageData;
         try {
@@ -149,9 +149,9 @@ Task<vector<ImageData>> IcoImageLoader::load(
             const auto pngLoader = PngImageLoader{};
             imageData = co_await pngLoader.load(iStream, path, channelSelector, settings, priority);
         } catch (const FormatNotSupported&) {
-            tlog::debug() << fmt::format("Not a PNG image; trying BMP.", i);
+            tlog::debug() << format("Not a PNG image; trying BMP.", i);
         } catch (const ImageLoadError& e) {
-            tlog::warning() << fmt::format("Malformed PNG image: {}", i, e.what());
+            tlog::warning() << format("Malformed PNG image: {}", i, e.what());
             continue;
         }
 
@@ -173,11 +173,11 @@ Task<vector<ImageData>> IcoImageLoader::load(
                 if (size != Vector2i{entry.width, entry.height}) {
                     if (size != Vector2i{entry.width, entry.height * 2}) {
                         throw ImageLoadError{
-                            fmt::format("BMP image size {} does not match entry size + AND mask {}x{}", size, entry.width, entry.height)
+                            format("BMP image size {} does not match entry size + AND mask {}x{}", size, entry.width, entry.height)
                         };
                     }
 
-                    tlog::debug() << fmt::format("BMP image size {} indicates presence of AND mask. Applying...", size);
+                    tlog::debug() << format("BMP image size {} indicates presence of AND mask. Applying...", size);
 
                     const auto bytesPerRow = (size_t)nextMultiple(entry.width, 32) / 8;
                     const size_t andMaskSize = bytesPerRow * entry.height;
@@ -188,7 +188,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     iStream.seekg(maskDataPos, ios_base::beg);
 
                     if (maskDataEnd - maskDataPos < andMaskSize) {
-                        throw ImageLoadError{fmt::format(
+                        throw ImageLoadError{format(
                             "BMP file is too small to contain expected AND mask: {} bytes available, {} bytes expected",
                             maskDataEnd - maskDataPos,
                             andMaskSize
@@ -198,14 +198,14 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     HeapArray<uint8_t> andMaskData(andMaskSize);
                     iStream.read((char*)andMaskData.data(), andMaskData.size());
                     if (!iStream) {
-                        throw ImageLoadError{fmt::format("Failed to read AND mask of size {}", andMaskData.size())};
+                        throw ImageLoadError{format("Failed to read AND mask of size {}", andMaskData.size())};
                     }
 
                     vector<ChannelView<float>> alphaChannels;
                     for (auto& image : imageData) {
                         auto* const alphaChannel = image.mutableChannel("A");
                         if (!alphaChannel) {
-                            tlog::warning() << fmt::format("No alpha channel but AND mask. Skipping AND mask application.", i);
+                            tlog::warning() << format("No alpha channel but AND mask. Skipping AND mask application.", i);
                             continue;
                         }
 
@@ -238,16 +238,16 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     );
                 }
             } catch (const FormatNotSupported&) {
-                tlog::warning() << fmt::format("Neither a PNG nor a BMP image", i);
+                tlog::warning() << format("Neither a PNG nor a BMP image", i);
                 continue;
             } catch (const ImageLoadError& e) {
-                tlog::warning() << fmt::format("Malformed BMP image: {}", i, e.what());
+                tlog::warning() << format("Malformed BMP image: {}", i, e.what());
                 continue;
             }
         }
 
         for (auto& image : imageData) {
-            image.partName = Channel::joinIfNonempty(fmt::format("images.{}", i), image.partName);
+            image.partName = Channel::joinIfNonempty(format("images.{}", i), image.partName);
         }
 
         result.insert(result.end(), make_move_iterator(imageData.begin()), make_move_iterator(imageData.end()));

@@ -48,8 +48,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_set_error_fn(
         pngPtr,
         nullptr,
-        [](png_structp, png_const_charp error_msg) { throw ImageLoadError{fmt::format("PNG error: {}", error_msg)}; },
-        [](png_structp, png_const_charp warning_msg) { tlog::warning() << fmt::format("PNG warning: {}", warning_msg); }
+        [](png_structp, png_const_charp error_msg) { throw ImageLoadError{format("PNG error: {}", error_msg)}; },
+        [](png_structp, png_const_charp warning_msg) { tlog::warning() << format("PNG warning: {}", warning_msg); }
     );
 
     infoPtr = png_create_info_struct(pngPtr);
@@ -102,7 +102,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             png_set_palette_to_rgb(pngPtr);
             numColorChannels = numChannels = 3;
             break;
-        default: throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
+        default: throw ImageLoadError{format("Unsupported PNG color type: {}", colorType)};
     }
 
     if (interlaceType != PNG_INTERLACE_NONE) {
@@ -114,7 +114,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     // RGB, we can additionally configure the reader to convert grayscale images with a bit depth of 1, 2, or 4 to 8-bit and then we only
     // have to deal with either 16-bit or 8-bit images.
     if (colorType == PNG_COLOR_TYPE_GRAY && bitDepth < 8) {
-        tlog::debug() << fmt::format("Converting grayscale image with bit depth {} to 8-bit.", bitDepth);
+        tlog::debug() << format("Converting grayscale image with bit depth {} to 8-bit.", bitDepth);
         png_set_expand_gray_1_2_4_to_8(pngPtr);
     }
 
@@ -133,12 +133,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     bitDepth = png_get_bit_depth(pngPtr, infoPtr);
     if (bitDepth != 8 && bitDepth != 16) {
-        throw ImageLoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
+        throw ImageLoadError{format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
     const auto pixelFormat = bitDepth > 8 ? EPixelFormat::U16 : EPixelFormat::U8;
 
-    tlog::debug() << fmt::format("PNG image info: size={} numChannels={} bitDepth={} colorType={}", size, numChannels, bitDepth, colorType);
+    tlog::debug() << format("PNG image info: size={} numChannels={} bitDepth={} colorType={}", size, numChannels, bitDepth, colorType);
 
     // 16 bit channels are big endian by default, but we want little endian on little endian systems
     if (bitDepth > 8 && endian::little == endian::native) {
@@ -160,7 +160,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 .type = "",
                 .children = {AttributeNode{
                     .name = "Last modified",
-                    .value = fmt::format(
+                    .value = format(
                         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", time->year, time->month, time->day, time->hour, time->minute, time->second
                     ),
                     .type = "UTC timestamp",
@@ -180,12 +180,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 .children = {
                              AttributeNode{
                         .name = "Pixel density X",
-                        .value = fmt::format("{}", resX),
+                        .value = format("{}", resX),
                         .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
                         .children = {},
                     }, AttributeNode{
                         .name = "Pixel density Y",
-                        .value = fmt::format("{}", resY),
+                        .value = format("{}", resY),
                         .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
                         .children = {},
                     }, }
@@ -204,9 +204,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             const auto exifOrientation = exif.getOrientation();
             if (exifOrientation != EOrientation::None) {
                 orientation = exifOrientation;
-                tlog::debug() << fmt::format("EXIF image orientation: {}", (int)orientation);
+                tlog::debug() << format("EXIF image orientation: {}", (int)orientation);
             }
-        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+        } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read EXIF metadata: {}", e.what()); }
     };
 
     png_uint_32 exifDataSize = 0;
@@ -214,13 +214,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_get_eXIf_1(pngPtr, infoPtr, &exifDataSize, &exifDataRaw);
 
     if (exifDataRaw) {
-        tlog::debug() << fmt::format("Found EXIF data chunk of size {} bytes", exifDataSize);
+        tlog::debug() << format("Found EXIF data chunk of size {} bytes", exifDataSize);
         handleExifData({exifDataRaw, exifDataSize});
     }
 
     png_textp textPtr = nullptr;
     if (const int numText = png_get_text(pngPtr, infoPtr, &textPtr, nullptr); numText > 0) {
-        tlog::debug() << fmt::format("Found {} text chunks in PNG metadata", numText);
+        tlog::debug() << format("Found {} text chunks in PNG metadata", numText);
 
         vector<AttributeNode> textEntries;
         for (int i = 0; i < numText; ++i) {
@@ -232,7 +232,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             // EXIF data should be stored in a separate eXIf chunk, but, again, historically some software stored it in text chunks (in hex
             // encoded form) with keys like "Raw profile type exif" or "Raw profile type APP1".
             if (key == "XML:com.adobe.xmp" || key == "Raw profile type xmp") {
-                tlog::debug() << fmt::format("Found XMP metadata chunk of size {}.", len);
+                tlog::debug() << format("Found XMP metadata chunk of size {}.", len);
                 try {
                     const auto xmp = Xmp{
                         string_view{textPtr[i].text, len}
@@ -243,12 +243,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     const auto xmpOrientation = xmp.orientation();
                     if (xmpOrientation != EOrientation::None) {
                         orientation = xmpOrientation;
-                        tlog::debug() << fmt::format("XMP image orientation: {}", (int)orientation);
+                        tlog::debug() << format("XMP image orientation: {}", (int)orientation);
                     }
-                } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read XMP metadata: {}", e.what()); }
+                } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read XMP metadata: {}", e.what()); }
                 continue;
             } else if (key == "Raw profile type exif" || key == "Raw profile type APP1" || key == "Raw profile type app1") {
-                tlog::debug() << fmt::format("Found EXIF metadata of size {} in text chunk '{}'.", len, key);
+                tlog::debug() << format("Found EXIF metadata of size {} in text chunk '{}'.", len, key);
 
                 istringstream is{
                     string{textPtr[i].text, len}
@@ -281,7 +281,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (exifDataBuffer.size() != payloadLen) {
-                    tlog::warning() << fmt::format("EXIF text chunk has mismatched payload length {}!={}.", exifDataBuffer.size(), payloadLen);
+                    tlog::warning() << format("EXIF text chunk has mismatched payload length {}!={}.", exifDataBuffer.size(), payloadLen);
                 }
 
                 handleExifData(exifDataBuffer);
@@ -314,13 +314,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_charp iccProfileName = nullptr;
     png_uint_32 iccProfileSize = 0;
     if (png_get_iCCP(pngPtr, infoPtr, &iccProfileName, nullptr, &iccProfileData, &iccProfileSize) == PNG_INFO_iCCP) {
-        tlog::debug() << fmt::format("Found ICC color profile: {}", iccProfileName);
+        tlog::debug() << format("Found ICC color profile: {}", iccProfileName);
     }
 
     const png_uint_32 numFrames = png_get_num_frames(pngPtr, infoPtr);
     const bool isAnimated = numFrames > 1;
     if (isAnimated) {
-        tlog::debug() << fmt::format("Image is an animated PNG with {} frames", numFrames);
+        tlog::debug() << format("Image is an animated PNG with {} frames", numFrames);
     }
 
     const auto numPixels = static_cast<size_t>(size.x()) * size.y();
@@ -344,7 +344,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         resultData.attributes = attributes;
 
         if (isAnimated) {
-            resultData.partName = fmt::format("frames.{}", frameIdx);
+            resultData.partName = format("frames.{}", frameIdx);
         }
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
@@ -391,7 +391,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             frameSize = {static_cast<int>(frameSizeX), static_cast<int>(frameSizeY)};
             frameOffset = {static_cast<int>(xOffset), static_cast<int>(yOffset)};
 
-            tlog::debug() << fmt::format(
+            tlog::debug() << format(
                 "fcTL: size={}, offset={}, dispose_op={}, blend_op={}",
                 frameSize,
                 frameOffset,
@@ -416,7 +416,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
             const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
             if (allocationSize > numSamples) {
-                tlog::warning() << fmt::format("PNG frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
+                tlog::warning() << format("PNG frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
             }
 
             frameData = HeapArray<float>(allocationSize);
@@ -432,7 +432,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
         const auto applyColorspace = [&]() -> Task<void> {
             if (double maxCLL, maxFALL; png_get_cLLI(pngPtr, infoPtr, &maxCLL, &maxFALL) == PNG_INFO_cLLI) {
-                tlog::info() << fmt::format("cLLI: maxCLL={} maxFALL={}", maxCLL, maxFALL);
+                tlog::info() << format("cLLI: maxCLL={} maxFALL={}", maxCLL, maxFALL);
 
                 resultData.hdrMetadata.maxCLL = static_cast<float>(maxCLL);
                 resultData.hdrMetadata.maxFALL = static_cast<float>(maxFALL);
@@ -451,7 +451,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 resultData.hdrMetadata.masteringMinLum = (float)minl;
                 resultData.hdrMetadata.masteringMaxLum = (float)maxl;
 
-                tlog::info() << fmt::format(
+                tlog::info() << format(
                     "mDCV: minLum={} maxLum={} chroma={}",
                     resultData.hdrMetadata.masteringMinLum,
                     resultData.hdrMetadata.masteringMaxLum,
@@ -476,11 +476,11 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
                 if (!ituth273::isTransferImplemented(cicp.transfer)) {
                     tlog::warning()
-                        << fmt::format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(cicp.transfer));
+                        << format("Unsupported transfer '{}' in cICP chunk. Using sRGB instead.", ituth273::toString(cicp.transfer));
                     cicp.transfer = ituth273::ETransfer::SRGB;
                 }
 
-                tlog::debug() << fmt::format(
+                tlog::debug() << format(
                     "cICP: primaries={} transfer={} full_range={}",
                     ituth273::toString(cicp.primaries),
                     ituth273::toString(cicp.transfer),
@@ -490,7 +490,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 const LimitedRange range = cicp.videoFullRangeFlag != 0 ? LimitedRange::full() : limitedRangeForBitsPerSample(bitDepth);
 
                 if (cicp.matrixCoeffs != 0) {
-                    tlog::warning() << fmt::format(
+                    tlog::warning() << format(
                         "Unsupported matrix coefficients in cICP chunk: {}. PNG images only support RGB (=0). Ignoring.", cicp.matrixCoeffs
                     );
                 }
@@ -543,7 +543,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     resultData.hasPremultipliedAlpha = true;
                     resultData.readMetadataFromIcc(profile);
                     co_return;
-                } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+                } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC color profile: {}", e.what()); }
             }
 
             // Assume png image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
@@ -566,7 +566,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 if (hasChunkSrgb) {
                     // NOTE: since tev represents colors in sRGB space anyway there is nothing to transform and the rendering intent makes
                     // no difference.
-                    tlog::debug() << fmt::format("Using sRGB chunk: rendering_intent={}", srgbIntent);
+                    tlog::debug() << format("Using sRGB chunk: rendering_intent={}", srgbIntent);
                     resultData.renderingIntent = static_cast<ERenderingIntent>(srgbIntent);
                 } else {
                     tlog::debug() << "No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.";
@@ -583,7 +583,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_return;
             }
 
-            tlog::debug() << fmt::format("Using gamma={}", invGamma64);
+            tlog::debug() << format("Using gamma={}", invGamma64);
             if (pixelFormat == EPixelFormat::U16) {
                 co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
             } else {
@@ -620,7 +620,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
                 resultData.nativeMetadata.chroma = chroma;
 
-                tlog::debug() << fmt::format("cHRM: primaries={}", chroma);
+                tlog::debug() << format("cHRM: primaries={}", chroma);
             }
         };
 
@@ -668,20 +668,20 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             case EDisposeOp::None: prevCanvas = outView; break;
             case EDisposeOp::Background: prevCanvas = nullopt; break;
             case EDisposeOp::Previous: break; // Previous frame is already set as the previous canvas
-            default: throw ImageLoadError{fmt::format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};
+            default: throw ImageLoadError{format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};
         }
 
         co_return resultData;
     };
 
     if (!isAnimated && numFrames > 1) {
-        tlog::warning() << fmt::format("PNG has {} frames, but no animation control chunk found", numFrames);
+        tlog::warning() << format("PNG has {} frames, but no animation control chunk found", numFrames);
     }
 
     for (png_uint_32 i = 0; i < numFrames; ++i) {
         if (isAnimated) {
             png_read_frame_head(pngPtr, infoPtr);
-            tlog::debug() << fmt::format("Reading frame {}/{}", i + 1, numFrames);
+            tlog::debug() << format("Reading frame {}/{}", i + 1, numFrames);
         }
 
         result.emplace_back(co_await readFrame(i));
