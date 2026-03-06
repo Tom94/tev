@@ -238,31 +238,24 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             vec4 computeColor() {
                 vec3 darkGray = vec3(0.5, 0.5, 0.5);
                 vec3 lightGray = vec3(0.55, 0.55, 0.55);
-
                 vec3 checker = abs(mod(floor(checkerUv.x) + floor(checkerUv.y), 2.0)) < 0.5 ? darkGray : lightGray;
-                if (!hasImage) {
-                    return vec4(checker, 1.0);
+
+                float cropAlpha = imageUv.x < cropMin.x || imageUv.x > cropMax.x || imageUv.y < cropMin.y || imageUv.y > cropMax.y ? 0.3 : 1.0;
+
+                vec4 val = vec4(0.0);
+                if (hasImage) {
+                    val = sample(image, imageUv);
+                    val.a *= cropAlpha;
                 }
 
-                float cropAlpha =
-                    imageUv.x < cropMin.x || imageUv.x > cropMax.x || imageUv.y < cropMin.y || imageUv.y > cropMax.y ? 0.3 : 1.0;
+                if (hasReference) {
+                    vec4 referenceVal = sample(reference, referenceUv);
+                    referenceVal.a *= cropAlpha;
 
-                vec4 imageVal = sample(image, imageUv);
-                imageVal.a *= cropAlpha;
-                if (!hasReference) {
-                    imageVal += bgColor * (1.0 - imageVal.a);
-                    vec4 result = vec4(
-                        applyTonemap(colorMultiplier * applyExposureAndOffset(imageVal.rgb), vec4(checker, 1.0 - imageVal.a)),
-                        1.0
-                    );
-                    return result;
+                    vec3 difference = val.rgb - referenceVal.rgb;
+                    val = vec4(applyMetric(difference, referenceVal.rgb), (val.a + referenceVal.a) * 0.5);
                 }
 
-                vec4 referenceVal = sample(reference, referenceUv);
-                referenceVal.a *= cropAlpha;
-
-                vec3 difference = imageVal.rgb - referenceVal.rgb;
-                vec4 val = vec4(applyMetric(difference, referenceVal.rgb), (imageVal.a + referenceVal.a) * 0.5);
                 val += bgColor * (1.0 - val.a);
                 vec4 result = vec4(
                     applyTonemap(colorMultiplier * applyExposureAndOffset(val.rgb), vec4(checker, 1.0 - val.a)),
@@ -452,41 +445,25 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             ) {
                 float3 darkGray = float3(0.5f, 0.5f, 0.5f);
                 float3 lightGray = float3(0.55f, 0.55f, 0.55f);
-
                 float3 checker = int(floor(vert.checkerUv.x) + floor(vert.checkerUv.y)) % 2 == 0 ? darkGray : lightGray;
-                if (!hasImage) {
-                    return dither(float4(checker, 1.0f), ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
-                }
 
                 float cropAlpha = vert.imageUv.x < cropMin.x || vert.imageUv.x > cropMax.x || vert.imageUv.y < cropMin.y || vert.imageUv.y > cropMax.y ? 0.3f : 1.0f;
 
-                float4 imageVal = sample(image, image_sampler, vert.imageUv, channelConfig);
-                imageVal.a *= cropAlpha;
-                if (!hasReference) {
-                    imageVal += bgColor * (1.0f - imageVal.a);
-                    float4 color = float4(
-                        applyTonemap(
-                            colorMultiplier * applyExposureAndOffset(imageVal.rgb, exposure, offset),
-                            float4(checker, 1.0f - imageVal.a),
-                            tonemap,
-                            offset,
-                            gamma,
-                            colormap,
-                            colormap_sampler
-                        ),
-                        1.0f
-                    );
-                    color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
-                    return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
+                float4 val = float4(0.0f);
+                if (hasImage) {
+                    val = sample(image, image_sampler, vert.imageUv, channelConfig);
+                    val.a *= cropAlpha;
                 }
 
-                float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv, channelConfig);
-                referenceVal.a *= cropAlpha;
+                if (hasReference) {
+                    float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv, channelConfig);
+                    referenceVal.a *= cropAlpha;
 
-                float3 difference = imageVal.rgb - referenceVal.rgb;
-                float4 val = float4(applyMetric(difference, referenceVal.rgb, metric), (imageVal.a + referenceVal.a) * 0.5f);
+                    float3 difference = val.rgb - referenceVal.rgb;
+                    val = float4(applyMetric(difference, referenceVal.rgb, metric), (val.a + referenceVal.a) * 0.5f);
+                }
+
                 val += bgColor * (1.0f - val.a);
-
                 float4 color = float4(
                     applyTonemap(
                         colorMultiplier * applyExposureAndOffset(val.rgb, exposure, offset),
