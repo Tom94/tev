@@ -73,7 +73,7 @@ Xmp::Xmp(string_view xmpData) {
         string schema, path, value;
 
         while (iter.Next(&schema, &path, &value)) {
-            // tlog::debug() << fmt::format("{} | {} | {}", schema, path, value);
+            // tlog::debug("{} | {} | {}", schema, path, value);
 
             if (value.empty()) {
                 continue;
@@ -96,8 +96,7 @@ Xmp::Xmp(string_view xmpData) {
             }
 
             if (!node->value.empty()) {
-                tlog::warning()
-                    << fmt::format("XMP property '{}' already has a value '{}', overwriting with new value '{}'.", path, node->value, value);
+                tlog::warning("XMP property '{}' already has a value '{}', overwriting with new value '{}'.", path, node->value, value);
             }
 
             node->value = value;
@@ -120,12 +119,12 @@ Xmp::Xmp(string_view xmpData) {
                 case 7: mOrientation = EOrientation::RightBottom; break;
                 case 8: mOrientation = EOrientation::LeftBottom; break;
                 default:
-                    tlog::warning() << fmt::format("Invalid XMP orientation value: {}", orientation);
+                    tlog::warning("Invalid XMP orientation value: {}", orientation);
                     mOrientation = EOrientation::None;
                     break;
             }
 
-            tlog::debug() << fmt::format("Found XMP orientation: {}", toString(mOrientation));
+            tlog::debug("Found XMP orientation: {}", toString(mOrientation));
         }
 
         // Metadata indicating this image is an Apple-format gain map. More metadata, like gain, is in Apple's maker note in a separate EXIF
@@ -135,16 +134,16 @@ Xmp::Xmp(string_view xmpData) {
             const auto pixelDataNs = "http://ns.apple.com/pixeldatainfo/1.0/";
             if (string prefix, version;
                 meta.GetNamespacePrefix(hdrGainMapNs, &prefix) && meta.GetProperty(hdrGainMapNs, "HDRGainMapVersion", &version, nullptr)) {
-                tlog::debug() << fmt::format("Found Apple HDR gain map metadata: prefix={} version={}", prefix, version);
+                tlog::debug("Found Apple HDR gain map metadata: prefix={} version={}", prefix, version);
 
                 if (string headroom; meta.GetProperty(hdrGainMapNs, "HDRGainMapHeadroom", &headroom, nullptr)) {
-                    tlog::debug() << fmt::format("- HDRGainMapHeadroom: {}", headroom);
+                    tlog::debug("- HDRGainMapHeadroom: {}", headroom);
                 }
             }
 
             if (string prefix; meta.GetNamespacePrefix(pixelDataNs, &prefix) &&
                 meta.GetProperty(pixelDataNs, "AuxiliaryImageType", &mAppleAuxImgType, nullptr)) {
-                tlog::debug() << fmt::format("Apple aux image: prefix={} type={}", prefix, mAppleAuxImgType);
+                tlog::debug("Apple aux image: prefix={} type={}", prefix, mAppleAuxImgType);
             }
         }
 
@@ -152,16 +151,15 @@ Xmp::Xmp(string_view xmpData) {
         try {
             const auto ns = "http://ns.adobe.com/hdr-gain-map/1.0/";
             if (string prefix, version; meta.GetNamespacePrefix(ns, &prefix) && meta.GetProperty(ns, "Version", &version, nullptr)) {
-                tlog::debug() << fmt::format("Found XMP gainmap metadata: prefix={} version={}", prefix, version);
+                tlog::debug("Found XMP gainmap metadata: prefix={} version={}", prefix, version);
 
                 if (const auto it = ranges::find_if(mAttributes.children, [&](const auto& c) { return c.name.starts_with(prefix); });
                     it != mAttributes.children.end() && it->children.size() > 1) {
-                    tlog::debug()
-                        << "XMP gainmap metadata contains more entries than just Version. Attempting to convert to ISO 21496-1 format.";
+                    tlog::debug("XMP gainmap metadata contains more entries than just Version. Attempting to convert to ISO 21496-1 format.");
                     mIsoGainMapMetadata = IsoGainMapMetadata{ns, &meta};
                 }
             }
-        } catch (invalid_argument& e) { tlog::warning() << fmt::format("Failed to convert XMP gainmap metadata: {}", e.what()); }
+        } catch (invalid_argument& e) { tlog::warning("Failed to convert XMP gainmap metadata: {}", e.what()); }
     } catch (XMP_Error& e) { throw invalid_argument{e.GetErrMsg()}; }
 }
 

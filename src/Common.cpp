@@ -260,22 +260,20 @@ Color parseColor(string_view str) {
                 (hexValue & 0xFF) / 255.0f,
             };
         } else {
-            throw runtime_error{fmt::format("Invalid hex color format: {}", str)};
+            throw runtime_error{format("Invalid hex color format: {}", str)};
         }
     }
 
     const auto parts = split(str, ",");
     if (parts.size() < 3 || parts.size() > 4) {
-        throw runtime_error{fmt::format("Invalid color format: {}", str)};
+        throw runtime_error{format("Invalid color format: {}", str)};
     }
 
     Color color = {0.0f, 0.0f, 0.0f, 1.0f};
     for (size_t i = 0; i < parts.size(); ++i) {
-        try {
-            color[i] = stof(string{trim(parts[i])});
-        } catch (const invalid_argument&) {
-            throw runtime_error{fmt::format("Invalid color component: {}", parts[i])};
-        } catch (const out_of_range&) { throw runtime_error{fmt::format("Color component out of range: {}", parts[i])}; }
+        if (!fromChars(trim(parts[i]), color[i])) {
+            throw runtime_error{format("Invalid color component: {}", parts[i])};
+        }
     }
 
     return color;
@@ -369,7 +367,7 @@ int maxTextureSize() {
 
 size_t nextSupportedTextureChannelCount(size_t channelCount) {
     if (channelCount == 0 || channelCount > 4) {
-        throw runtime_error{fmt::format("Unsupported number of texture channels: {}", channelCount)};
+        throw runtime_error{format("Unsupported number of texture channels: {}", channelCount)};
     }
 
 #if NANOGUI_USE_METAL
@@ -411,12 +409,12 @@ string errorString(int errorId) {
         NULL
     );
 
-    string result = fmt::format("{} ({})", s, errorId);
+    string result = format("{} ({})", s, errorId);
     LocalFree(s);
 
     return result;
 #else
-    return fmt::format("{} ({})", strerror(errorId), errno);
+    return format("{} ({})", strerror(errorId), errno);
 #endif
 }
 
@@ -637,12 +635,12 @@ EPixelType pixelType(EPixelFormat format) {
 
 std::string CompoundException::buildMessage(std::span<const std::exception_ptr> exceptions) {
     ostringstream oss;
-    oss << fmt::format("{} exception(s) occurred:", exceptions.size());
+    oss << format("{} exception(s) occurred:", exceptions.size());
     for (size_t i = 0; i < exceptions.size(); ++i) {
         try {
             rethrow_exception(exceptions[i]);
-        } catch (const exception& e) { oss << fmt::format("\n  #{}: {}", i, e.what()); } catch (...) {
-            oss << fmt::format("\n  #{}: <unknown exception>", i);
+        } catch (const exception& e) { oss << format("\n  #{}: {}", i, e.what()); } catch (...) {
+            oss << format("\n  #{}: <unknown exception>", i);
         }
     }
 

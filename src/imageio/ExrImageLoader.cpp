@@ -112,7 +112,7 @@ AttributeNode createVec2fNode(string_view name, Imath::V2f value) {
     AttributeNode node;
     node.name = name;
     node.type = "v2f";
-    node.value = fmt::format("({}, {})", value[0], value[1]);
+    node.value = format("({}, {})", value[0], value[1]);
     return node;
 }
 
@@ -120,7 +120,7 @@ AttributeNode createVec2iNode(string_view name, Imath::V2i value) {
     AttributeNode node;
     node.name = name;
     node.type = "v2i";
-    node.value = fmt::format("({}, {})", value[0], value[1]);
+    node.value = format("({}, {})", value[0], value[1]);
     return node;
 }
 
@@ -183,29 +183,29 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
         if (const auto* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
             node.value = strAttr->value();
         } else if (const auto* intAttr = dynamic_cast<const Imf::IntAttribute*>(attr)) {
-            node.value = fmt::format("{}", intAttr->value());
+            node.value = format("{}", intAttr->value());
         } else if (const auto* floatAttr = dynamic_cast<const Imf::FloatAttribute*>(attr)) {
-            node.value = fmt::format("{}", floatAttr->value());
+            node.value = format("{}", floatAttr->value());
         } else if (const auto* doubleAttr = dynamic_cast<const Imf::DoubleAttribute*>(attr)) {
-            node.value = fmt::format("{}", doubleAttr->value());
+            node.value = format("{}", doubleAttr->value());
         } else if (const auto* v2fAttr = dynamic_cast<const Imf::V2fAttribute*>(attr)) {
             const auto value = v2fAttr->value();
-            node.value = fmt::format("({}, {})", value[0], value[1]);
+            node.value = format("({}, {})", value[0], value[1]);
         } else if (const auto* v2dAttr = dynamic_cast<const Imf::V2dAttribute*>(attr)) {
             const auto value = v2dAttr->value();
-            node.value = fmt::format("({}, {})", value[0], value[1]);
+            node.value = format("({}, {})", value[0], value[1]);
         } else if (const auto* v2iAttr = dynamic_cast<const Imf::V2iAttribute*>(attr)) {
             const auto value = v2iAttr->value();
-            node.value = fmt::format("({}, {})", value[0], value[1]);
+            node.value = format("({}, {})", value[0], value[1]);
         } else if (const auto* v3fAttr = dynamic_cast<const Imf::V3fAttribute*>(attr)) {
             const auto value = v3fAttr->value();
-            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
+            node.value = format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const auto* v3dAttr = dynamic_cast<const Imf::V3dAttribute*>(attr)) {
             const auto value = v3dAttr->value();
-            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
+            node.value = format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const auto* v3iAttr = dynamic_cast<const Imf::V3iAttribute*>(attr)) {
             const auto value = v3iAttr->value();
-            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
+            node.value = format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const auto* box2iAttr = dynamic_cast<const Imf::Box2iAttribute*>(attr)) {
             const auto value = box2iAttr->value();
             AttributeNode minNode = createVec2iNode("min", value.min);
@@ -263,7 +263,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
             node.children.push_back({"perfsPerCount", to_string(value.perfsPerCount()), "int", {}});
         } else if (const auto* rationalAttr = dynamic_cast<const Imf::RationalAttribute*>(attr)) {
             const auto value = rationalAttr->value();
-            node.value = fmt::format("{} / {}", value.n, value.d);
+            node.value = format("{} / {}", value.n, value.d);
         } else if (const auto* chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute*>(attr)) {
             const auto value = chromaticitiesAttr->value();
 
@@ -346,7 +346,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
             node.children.push_back({"uncompressedSize", to_string(idManifestAttr->value()._uncompressedDataSize), "size_t", {}});
         } else if (const auto* timeCodeAttr = dynamic_cast<const Imf::TimeCodeAttribute*>(attr)) {
             const auto value = timeCodeAttr->value();
-            node.value = fmt::format(
+            node.value = format(
                 "{:02}:{:02}:{:02}.{:03} {} {}",
                 value.hours(),
                 value.minutes(),
@@ -358,7 +358,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
         } else if (const auto* opaqueAttr = dynamic_cast<const Imf::OpaqueAttribute*>(attr)) {
             node.children.push_back({"size", to_string(opaqueAttr->dataSize()), "int", {}});
         } else {
-            node.value = fmt::format("UNKNOWN: {}", attributeItr.attribute().typeName());
+            node.value = format("UNKNOWN: {}", attributeItr.attribute().typeName());
         }
 
         global.children.push_back(node);
@@ -489,7 +489,7 @@ Task<vector<ImageData>>
             Vector2i size = {dataWindow.max.x - dataWindow.min.x + 1, dataWindow.max.y - dataWindow.min.y + 1};
 
             if (size.x() == 0 || size.y() == 0) {
-                tlog::warning() << "EXR part '" << part.header().name() << "' has zero pixels.";
+                tlog::warning("EXR part '{}' has zero pixels.", part.header().name());
                 continue;
             }
 
@@ -511,7 +511,7 @@ Task<vector<ImageData>>
         }
 
         if (rawChannels.empty()) {
-            throw ImageLoadError{fmt::format("No channels match '{}'.", channelSelector)};
+            throw ImageLoadError{format("No channels match '{}'.", channelSelector)};
         }
 
         size_t totalNumPixels = 0;
@@ -553,14 +553,12 @@ Task<vector<ImageData>>
                 };
 
                 if (!data.dataWindow.isValid()) {
-                    throw ImageLoadError{
-                        fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)
-                    };
+                    throw ImageLoadError{format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)};
                 }
 
                 if (!data.displayWindow.isValid()) {
                     throw ImageLoadError{
-                        fmt::format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
+                        format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
                     };
                 }
 
@@ -574,7 +572,7 @@ Task<vector<ImageData>>
 
                 if (Imf::hasWhiteLuminance(part.header())) {
                     const auto wl = Imf::whiteLuminance(part.header());
-                    tlog::debug() << fmt::format("EXR part '{}' has white luminance {}", data.partName, wl);
+                    tlog::debug("EXR part '{}' has white luminance {}", data.partName, wl);
 
                     data.hdrMetadata.bestGuessWhiteLevel = wl;
                 }
@@ -593,7 +591,7 @@ Task<vector<ImageData>>
                     adoptedNeutral = Vector2f{an.x, an.y};
                     data.renderingIntent = ERenderingIntent::RelativeColorimetric;
 
-                    tlog::debug() << fmt::format("EXR part '{}' has adopted neutral {}", data.partName, *adoptedNeutral);
+                    tlog::debug("EXR part '{}' has adopted neutral {}", data.partName, *adoptedNeutral);
                 }
 
                 chroma_t chroma = rec709Chroma(); // Assumption: EXR images are Rec. 709 unless specified otherwise
@@ -603,7 +601,7 @@ Task<vector<ImageData>>
                         {{c.red.x, c.red.y}, {c.green.x, c.green.y}, {c.blue.x, c.blue.y}, {c.white.x, c.white.y}},
                     };
 
-                    tlog::debug() << fmt::format("EXR part '{}' has chromaticities {}", data.partName, chroma);
+                    tlog::debug("EXR part '{}' has chromaticities {}", data.partName, chroma);
                 }
 
                 data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent, adoptedNeutral);
@@ -611,7 +609,7 @@ Task<vector<ImageData>>
                 data.nativeMetadata.chroma = chroma;
                 data.nativeMetadata.transfer = ituth273::ETransfer::Linear;
             } catch (const Iex::BaseExc& e) {
-                tlog::warning() << "Error reading EXR part " << partIdx << ": " << e.what();
+                tlog::warning("Error reading EXR part {}: {}", partIdx, e.what());
 
                 // Remove channels that belong to this part
                 rawChannels.erase(

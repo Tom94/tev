@@ -36,7 +36,7 @@ Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uin
         case 2: colorType = PNG_COLOR_TYPE_GRAY_ALPHA; break;
         case 3: colorType = PNG_COLOR_TYPE_RGB; break;
         case 4: colorType = PNG_COLOR_TYPE_RGB_ALPHA; break;
-        default: throw ImageSaveError{fmt::format("Invalid number of channels {}.", nChannels)};
+        default: throw ImageSaveError{format("Invalid number of channels {}.", nChannels)};
     }
 
     png_infop info = nullptr;
@@ -49,8 +49,8 @@ Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uin
     png_set_error_fn(
         png,
         nullptr,
-        [](png_structp, png_const_charp error_msg) { throw ImageLoadError{fmt::format("PNG error: {}", error_msg)}; },
-        [](png_structp, png_const_charp warning_msg) { tlog::warning() << fmt::format("PNG warning: {}", warning_msg); }
+        [](png_structp, png_const_charp error_msg) { throw ImageLoadError{format("PNG error: {}", error_msg)}; },
+        [](png_structp, png_const_charp warning_msg) { tlog::warning("PNG warning: {}", warning_msg); }
     );
 
     info = png_create_info_struct(png);

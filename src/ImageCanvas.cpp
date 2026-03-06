@@ -190,13 +190,13 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 
                     if (shiftAndControlHeld) {
                         const unsigned char discretizedValue = (char)(clamp(values[i], 0.0f, 1.0f) * 255 + 0.5f);
-                        str = fmt::format("{:02X}", discretizedValue);
+                        str = format("{:02X}", discretizedValue);
                         pos = Vector2f{
                             m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
                             (float)m_pos.y() + nano.y(),
                         };
                     } else {
-                        str = abs(values[i]) > 100000 ? fmt::format("{:6g}", values[i]) : fmt::format("{:.5f}", values[i]);
+                        str = abs(values[i]) > 100000 ? format("{:6g}", values[i]) : format("{:.5f}", values[i]);
                         pos = Vector2f{
                             (float)m_pos.x() + nano.x(),
                             m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
@@ -492,7 +492,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                     ++saveCounter;
                 } else if (command.type == VgCommand::EType::Restore) {
                     if (saveCounter == 0) {
-                        tlog::warning() << "Malformed vector graphics commands: restore before save";
+                        tlog::warning("Malformed vector graphics commands: restore before save");
                         continue;
                     }
 
@@ -503,7 +503,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
             }
 
             if (saveCounter > 0) {
-                tlog::warning() << "Malformed vector graphics commands: missing restore after save";
+                tlog::warning("Malformed vector graphics commands: missing restore after save");
                 for (size_t i = 0; i < saveCounter; ++i) {
                     nvgRestore(ctx);
                 }
@@ -637,7 +637,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         throw ImageSaveError{"There is no image to save."};
     }
 
-    tlog::info() << fmt::format("Saving currently displayed image as {}.", toString(path));
+    tlog::info("Saving currently displayed image as {}.", toString(path));
 
     const auto start = chrono::steady_clock::now();
 
@@ -658,7 +658,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         .get();
 
     const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start};
-    tlog::success() << fmt::format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
+    tlog::success("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
@@ -670,7 +670,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         const string channels = join(mImage->channelsInGroup(mRequestedChannelGroup), ",");
 
         ostringstream keyStream;
-        keyStream << fmt::format(
+        keyStream << format(
             "{}-{}-{}-{}-{}-{}",
             (int)mInspectionTransfer,
             mInspectionChroma,
@@ -681,11 +681,11 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         );
 
         if (mReference) {
-            keyStream << fmt::format("-{}-{}", mReference->id(), (int)mMetric);
+            keyStream << format("-{}-{}", mReference->id(), (int)mMetric);
         }
 
         if (mCrop.has_value()) {
-            keyStream << fmt::format("-crop-{}-{}", mCrop->min, mCrop->max);
+            keyStream << format("-crop-{}-{}", mCrop->min, mCrop->max);
         }
 
         return keyStream;
@@ -805,7 +805,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const auto scopeGuard = ScopeGuard([&]() {
         const auto end = chrono::steady_clock::now();
         const chrono::duration<double> elapsedSeconds = end - start;
-        tlog::debug() << fmt::format("Computed canvas statistics for {} in {:.4f} seconds.", image->name(), elapsedSeconds.count());
+        tlog::debug("Computed canvas statistics for {} in {:.4f} seconds.", image->name(), elapsedSeconds.count());
     });
 
     auto flattened = co_await image->getHdrImageData(reference, requestedChannelGroup, metric, priority);

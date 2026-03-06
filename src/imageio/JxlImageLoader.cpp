@@ -295,7 +295,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
     while (true) {
         JxlDecoderStatus status = JxlDecoderProcessInput(decoder.get());
         switch (status) {
-            default: throw ImageLoadError{fmt::format("Unknown decoder status: {}", (size_t)status)};
+            default: throw ImageLoadError{format("Unknown decoder status: {}", (size_t)status)};
             case JXL_DEC_SUCCESS: goto l_decode_success;
             case JXL_DEC_ERROR: throw ImageLoadError{"Error decoding image."};
             case JXL_DEC_NEED_MORE_INPUT: throw ImageLoadError{"Incomplete image data."};
@@ -305,10 +305,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 }
 
                 if (info.num_color_channels > 3) {
-                    throw ImageLoadError{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
+                    throw ImageLoadError{format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
                 }
 
-                tlog::debug() << fmt::format(
+                tlog::debug(
                     "Image size={}x{} channels={} bits_per_sample={}:{} alpha_bits={} alpha_premultiplied={} have_animation={} intensity_target={} orientation={}",
                     info.xsize,
                     info.ysize,
@@ -371,7 +371,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 }
 
                 if (frameHeader.name_length == 0) {
-                    frameName = fmt::format("frames.{}", frameId);
+                    frameName = format("frames.{}", frameId);
                 } else {
                     frameName.resize(frameHeader.name_length + 1); // +1 for null terminator
                     if (JXL_DEC_SUCCESS != JxlDecoderGetFrameName(decoder.get(), frameName.data(), frameName.size() + 1)) {
@@ -379,9 +379,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     }
                 }
 
-                tlog::debug() << fmt::format(
-                    "Frame {}: duration={} is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName
-                );
+                tlog::debug("Frame {}: duration={} is_last={} name={}", frameId, frameHeader.duration, frameHeader.is_last, frameName);
             } break;
             case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
                 // libjxl expects the alpha channels to be decoded as part of the image (despite counting as an extra channel) and all
@@ -424,20 +422,20 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                     JxlExtraChannelInfo extraChannelInfo;
                     if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), i, &extraChannelInfo)) {
-                        throw ImageLoadError{fmt::format("Failed to get extra channel {}'s info.", i)};
+                        throw ImageLoadError{format("Failed to get extra channel {}'s info.", i)};
                     }
 
                     extraChannel.bitsPerSample = extraChannelInfo.bits_per_sample;
                     extraChannel.dimShift = extraChannelInfo.dim_shift;
                     if (extraChannelInfo.name_length == 0) {
-                        extraChannel.name = fmt::format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
+                        extraChannel.name = format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
                     } else {
                         vector<char> channelName(extraChannelInfo.name_length + 1, '\0'); // +1 for null terminator
                         if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelName(decoder.get(), i, channelName.data(), channelName.size())) {
-                            throw ImageLoadError{fmt::format("Failed to get extra channel {}'s name.", i)};
+                            throw ImageLoadError{format("Failed to get extra channel {}'s name.", i)};
                         }
 
-                        extraChannel.name = fmt::format("extra.{}", channelName.data());
+                        extraChannel.name = format("extra.{}", channelName.data());
                     }
 
                     extraChannel.name = Channel::joinIfNonempty(data.partName, extraChannel.name);
@@ -449,7 +447,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         continue;
                     }
 
-                    tlog::debug() << fmt::format(
+                    tlog::debug(
                         "Loading extra channel #{}: name={} bits_per_sample={} dim_shift={}",
                         i,
                         extraChannel.name,
@@ -458,13 +456,13 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     );
 
                     if (JXL_DEC_SUCCESS != JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, i)) {
-                        throw ImageLoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
+                        throw ImageLoadError{format("Failed to get extra channel {}'s buffer size.", i)};
                     }
 
                     extraChannel.data = HeapArray<float>{bufferSize / sizeof(float)};
                     if (JXL_DEC_SUCCESS !=
                         JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, i)) {
-                        throw ImageLoadError{fmt::format("Failed to set extra channel {}'s buffer.", i)};
+                        throw ImageLoadError{format("Failed to set extra channel {}'s buffer.", i)};
                     }
 
                     extraChannel.active = true;
@@ -514,7 +512,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 bool colorChannelsLoaded = false;
                 if (iccProfile && !skipColorProcessing) {
-                    tlog::debug() << "Found ICC color profile. Attempting to apply...";
+                    tlog::debug("Found ICC color profile. Attempting to apply...");
 
                     try {
                         const auto profile = ColorProfile::fromIcc(iccProfile);
@@ -532,7 +530,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         data.readMetadataFromIcc(profile);
 
                         colorChannelsLoaded = true;
-                    } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+                    } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
                 }
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
@@ -544,7 +542,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     if (ce && !skipColorProcessing) {
                         data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
 
-                        tlog::debug() << fmt::format(
+                        tlog::debug(
                             "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={} intent={}",
                             jxlToString(ce->color_space),
                             jxlToString(ce->primaries),
@@ -572,7 +570,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                         const bool hasGamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
                         if (hasGamma) {
-                            tlog::debug() << fmt::format("gamma={}", ce->gamma);
+                            tlog::debug("gamma={}", ce->gamma);
                             data.nativeMetadata.gamma = (float)ce->gamma;
                         }
 
@@ -581,8 +579,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                         if (!hasGamma) {
                             if (!ituth273::isTransferImplemented(cicpTransfer)) {
-                                tlog::warning()
-                                    << fmt::format("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
+                                tlog::warning("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
                                 cicpTransfer = ituth273::ETransfer::SRGB;
                             }
                         }
@@ -661,7 +658,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     continue;
                 }
 
-                tlog::debug() << fmt::format("Found metadata box of type {}.", boxTypeStr);
+                tlog::debug("Found metadata box of type {}.", boxTypeStr);
 
                 if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(decoder.get(), JXL_TRUE)) {
                     throw ImageLoadError{"Failed to set decompress boxes."};
@@ -673,7 +670,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 }
 
                 boxSize = std::max(boxSize, (uint64_t)1024); // Start with at least 1 KB buffer
-                tlog::debug() << fmt::format("Metadata box initial size: {} bytes.", boxSize);
+                tlog::debug("Metadata box initial size: {} bytes.", boxSize);
 
                 HeapArray<uint8_t> metadata(boxSize);
                 size_t pos = 0;
@@ -685,7 +682,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                     status = JxlDecoderProcessInput(decoder.get());
                     if (status != JXL_DEC_BOX_COMPLETE && status != JXL_DEC_BOX_NEED_MORE_OUTPUT) {
-                        throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
+                        throw ImageLoadError{format("Failed to process box: {}", (size_t)status)};
                     }
 
                     const size_t notYetWritten = JxlDecoderReleaseBoxBuffer(decoder.get());
@@ -695,13 +692,12 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                     pos += remaining - notYetWritten;
                     if (status == JXL_DEC_BOX_COMPLETE || status == JXL_DEC_SUCCESS) {
-                        tlog::debug()
-                            << fmt::format("Completed reading box of type {} ({} bytes / {} size)", boxTypeStr, pos, metadata.size());
+                        tlog::debug("Completed reading box of type {} ({} bytes / {} size)", boxTypeStr, pos, metadata.size());
                         metadata.resize(pos);
                         break;
                     } else if (status == JXL_DEC_BOX_NEED_MORE_OUTPUT) {
                         metadata.resize(metadata.size() * 2); // Double buffer size and try again
-                        tlog::debug() << fmt::format("Doubled box buffer size to {}", metadata.size());
+                        tlog::debug("Doubled box buffer size to {}", metadata.size());
                     } else {
                         throw ImageLoadError{"Unexpected decoder status when reading box."};
                     }
@@ -714,7 +710,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         };
 
                         attributes.emplace_back(xmp.attributes());
-                    } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse XMP data: {}", e.what()); }
+                    } catch (const invalid_argument& e) { tlog::warning("Failed to parse XMP data: {}", e.what()); }
                 } else if (boxTypeStr == "EXIF") {
                     try {
                         if (metadata.size() < 4) {
@@ -730,16 +726,16 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             throw invalid_argument{"Invalid EXIF data: offset is larger than box size."};
                         }
 
-                        tlog::debug() << fmt::format("EXIF data offset: {}", offset);
+                        tlog::debug("EXIF data offset: {}", offset);
 
                         const auto exif = Exif{span<uint8_t>{metadata}.subspan(4 + offset)};
                         const auto exifAttributes = exif.toAttributes();
 
                         attributes.emplace_back(exifAttributes);
-                    } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to parse EXIF data: {}", e.what()); }
+                    } catch (const invalid_argument& e) { tlog::warning("Failed to parse EXIF data: {}", e.what()); }
                 } else if (boxTypeStr == "JHGM") {
                     if (JxlGainMapBundle jgmb; JxlGainMapReadBundle(&jgmb, metadata.data(), metadata.size(), nullptr)) {
-                        tlog::debug() << fmt::format("Parsed JHGM gain map box: version={}", jgmb.jhgm_version);
+                        tlog::debug("Parsed JHGM gain map box: version={}", jgmb.jhgm_version);
 
                         try {
                             if (jgmb.gain_map_size == 0 || jgmb.gain_map == nullptr) {
@@ -757,7 +753,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                             optional<chroma_t> altChroma = nullopt;
                             if (jgmb.has_color_encoding) {
-                                tlog::debug() << "Gain map has JxlColorEncoding. Parsing...";
+                                tlog::debug("Gain map has JxlColorEncoding. Parsing...");
 
                                 const auto& jce = jgmb.color_encoding;
 
@@ -772,13 +768,13 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                      {(float)jce.white_point_xy[0], (float)jce.white_point_xy[1]}}
                                 };
                             } else if (jgmb.alt_icc_size > 0 && jgmb.alt_icc != nullptr) {
-                                tlog::debug() << "Gain map has alternative ICC profile. Attempting to parse...";
+                                tlog::debug("Gain map has alternative ICC profile. Attempting to parse...");
 
                                 try {
                                     const auto profile = ColorProfile::fromIcc({jgmb.alt_icc, jgmb.alt_icc_size});
                                     altChroma = profile.chroma();
                                 } catch (const runtime_error& e) {
-                                    tlog::warning() << fmt::format("Failed to parse gain map alternative ICC profile: {}", e.what());
+                                    tlog::warning("Failed to parse gain map alternative ICC profile: {}", e.what());
                                 }
                             }
 
@@ -787,12 +783,12 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                     span<const uint8_t>{jgmb.gain_map, jgmb.gain_map_size}, path, channelSelector, settings, priority, true
                                 );
 
-                                tlog::debug() << fmt::format("Decoded JXL gain map image data into {} image(s).", gainMapLoadResult.size());
+                                tlog::debug("Decoded JXL gain map image data into {} image(s).", gainMapLoadResult.size());
 
                                 if (gainMapLoadResult.size() == 0 || gainMapLoadResult.front().channels.empty()) {
                                     throw invalid_argument{"Decoded gain map image data is empty."};
                                 } else if (gainMapLoadResult.size() > 1) {
-                                    tlog::warning() << "Decoded gain map image data contains multiple images. Using the first one.";
+                                    tlog::warning("Decoded gain map image data contains multiple images. Using the first one.");
                                 }
 
                                 auto& gainMap = gainMapLoadResult.front();
@@ -806,20 +802,20 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                     .imageData = std::move(gainMap),
                                 };
                             } catch (const ImageLoadError& e) {
-                                throw invalid_argument{fmt::format("Failed to decode gain map image data: {}", e.what())};
+                                throw invalid_argument{format("Failed to decode gain map image data: {}", e.what())};
                             }
                         } catch (const invalid_argument& e) {
-                            tlog::warning() << fmt::format("Failed to load ISO 21496-1 gain map from JHGM box: {}", e.what());
+                            tlog::warning("Failed to load ISO 21496-1 gain map from JHGM box: {}", e.what());
                         }
                     } else {
-                        tlog::warning() << "Failed to parse JHGM gain map box.";
+                        tlog::warning("Failed to parse JHGM gain map box.");
                     }
                 } else {
-                    tlog::warning() << fmt::format("Unhandled box type: {}", boxTypeStr);
+                    tlog::warning("Unhandled box type: {}", boxTypeStr);
                 }
             } break;
             case JXL_DEC_BOX_COMPLETE: {
-                tlog::debug() << "Completed processing box.";
+                tlog::debug("Completed processing box.");
             } break;
         }
     }

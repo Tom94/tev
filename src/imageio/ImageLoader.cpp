@@ -44,6 +44,8 @@
 
 #include <half.h>
 
+#include <format>
+
 using namespace nanogui;
 using namespace std;
 
@@ -130,7 +132,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
     size_t numInterleavedDims,
     bool hasAlpha,
     Vector2i size,
-    EPixelFormat format,
+    EPixelFormat pixelFormat,
     EPixelFormat desiredFormat,
     string_view layer,
     int priority
@@ -147,11 +149,11 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 
     const auto numColorChannels = numChannels - (hasAlpha ? 1 : 0);
     if (numColorChannels <= 0 || numColorChannels > 3) {
-        throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
+        throw ImageLoadError{format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
-    const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, format));
+    const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, pixelFormat));
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
     const auto init = [numPixels, numInterleavedDims, hasAlpha, priority](auto* ptr) -> Task<void> {
@@ -176,7 +178,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
         );
     };
 
-    switch (format) {
+    switch (pixelFormat) {
         case EPixelFormat::U8: co_await init(data->data<uint8_t>()); break;
         case EPixelFormat::U16: co_await init(data->data<uint16_t>()); break;
         case EPixelFormat::U32: co_await init(data->data<uint32_t>()); break;
@@ -192,15 +194,15 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
         const vector<string_view> channelNames = {"R", "G", "B"};
         for (size_t c = 0; c < numColorChannels; ++c) {
             channels.emplace_back(
-                c < channelNames.size() ? channelNames[c] : to_string(c), size, format, desiredFormat, data, c, numInterleavedDims
+                c < channelNames.size() ? channelNames[c] : to_string(c), size, pixelFormat, desiredFormat, data, c, numInterleavedDims
             );
         }
     } else {
-        channels.emplace_back("L", size, format, desiredFormat, data, 0, numInterleavedDims);
+        channels.emplace_back("L", size, pixelFormat, desiredFormat, data, 0, numInterleavedDims);
     }
 
     if (hasAlpha) {
-        channels.emplace_back("A", size, format, desiredFormat, data, numColorChannels, numInterleavedDims);
+        channels.emplace_back("A", size, pixelFormat, desiredFormat, data, numColorChannels, numInterleavedDims);
     }
 
     for (auto& channel : channels) {
@@ -211,10 +213,10 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 }
 
 vector<Channel>
-    ImageLoader::makeNChannels(size_t numChannels, Vector2i size, EPixelFormat format, EPixelFormat desiredFormat, string_view layer) {
+    ImageLoader::makeNChannels(size_t numChannels, Vector2i size, EPixelFormat pixelFormat, EPixelFormat desiredFormat, string_view layer) {
     vector<Channel> channels;
     for (size_t c = 0; c < numChannels; ++c) {
-        channels.emplace_back(to_string(c), size, format, desiredFormat);
+        channels.emplace_back(to_string(c), size, pixelFormat, desiredFormat);
     }
 
     for (auto& channel : channels) {

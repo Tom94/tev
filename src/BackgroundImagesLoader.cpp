@@ -38,7 +38,7 @@ namespace tev {
 void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSelector, bool shallSelect, const shared_ptr<Image>& toReplace) {
     // If we're trying to open a directory, try loading all the images inside of that directory
     if (fs::exists(path) && fs::is_directory(path)) {
-        tlog::info() << fmt::format("Loading images {}from directory {}", mRecursiveDirectories ? "recursively " : "", path);
+        tlog::info("Loading images {}from directory {}", mRecursiveDirectories ? "recursively " : "", path);
 
         const fs::path canonicalPath = fs::canonical(path);
         mDirectories[canonicalPath].emplace(channelSelector);
@@ -140,7 +140,7 @@ bool BackgroundImagesLoader::publishSortedLoads() {
     if (mLoadCounter == mUnsortedLoadCounter && mLoadCounter - mLoadStartCounter > 1) {
         const auto end = chrono::system_clock::now();
         const chrono::duration<double> elapsedSeconds = end - mLoadStartTime;
-        tlog::success() << fmt::format("Loaded {} images in {:.3f} seconds.", mLoadCounter - mLoadStartCounter, elapsedSeconds.count());
+        tlog::success("Loaded {} images in {:.3f} seconds.", mLoadCounter - mLoadStartCounter, elapsedSeconds.count());
     }
 
     return pushed;

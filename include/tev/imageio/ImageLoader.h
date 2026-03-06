@@ -37,7 +37,7 @@ namespace tev {
 template <bool SRGB_TO_LINEAR = false>
 Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
     if (data.nChannels() < 3) {
-        tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
+        tlog::warning("Cannot convert from YCbCr to RGB: not enough channels.");
         co_return;
     }
 
@@ -106,7 +106,7 @@ Task<void> toFloat32(
     const size_t expectedDataSize = numSamplesPerRowIn * size.y();
     if (imageData.size() < expectedDataSize) {
         throw std::runtime_error{
-            fmt::format("Not enough image data provided: expected at least {} samples, got {}", expectedDataSize, imageData.size())
+            std::format("Not enough image data provided: expected at least {} samples, got {}", expectedDataSize, imageData.size())
         };
     }
 
@@ -177,14 +177,15 @@ public:
         size_t numInterleavedDims,
         bool hasAlpha,
         nanogui::Vector2i size,
-        EPixelFormat format,
+        EPixelFormat pixelFormat,
         EPixelFormat desiredFormat,
         std::string_view layer,
         int priority
     );
 
-    static std::vector<Channel>
-        makeNChannels(size_t numChannels, nanogui::Vector2i size, EPixelFormat format, EPixelFormat desiredFormat, std::string_view layer);
+    static std::vector<Channel> makeNChannels(
+        size_t numChannels, nanogui::Vector2i size, EPixelFormat pixelFormat, EPixelFormat desiredFormat, std::string_view layer
+    );
 
     static Task<void> resizeChannelsAsync(
         std::span<const Channel> srcChannels, std::span<Channel> dstChannels, const std::optional<Box2i>& dstBox, int priority

@@ -383,8 +383,8 @@ ImageViewer::ImageViewer(
 
             const array<string_view, 4> labels = {"Red", "Green", "Blue", "White"};
             for (size_t i = 0; i < labels.size(); ++i) {
-                new Label{xy, fmt::format("{} X", labels[i])};
-                new Label{xy, fmt::format("{} Y", labels[i])};
+                new Label{xy, format("{} X", labels[i])};
+                new Label{xy, format("{} Y", labels[i])};
                 mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 0));
                 mInspectionPrimariesBoxes.emplace_back(makeChromaBox(xy, i * 2 + 1));
                 addSpacer(xy, 1);
@@ -562,15 +562,13 @@ ImageViewer::ImageViewer(
             mFilter->set_callback([this](string_view filter) { return setFilter(filter); });
 
             mFilter->set_placeholder("Find");
-            mFilter->set_tooltip(
-                fmt::format(
-                    "Filters visible images and channel groups according to a supplied string. "
-                    "The string must have the format 'image:group'. "
-                    "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
-                    "Keyboard shortcut:\n{}+F",
-                    HelpWindow::COMMAND
-                )
-            );
+            mFilter->set_tooltip(format(
+                "Filters visible images and channel groups according to a supplied string. "
+                "The string must have the format 'image:group'. "
+                "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
+                "Keyboard shortcut:\n{}+F",
+                HelpWindow::COMMAND
+            ));
 
             mRegexButton = new Button{panel, "", FA_SEARCH};
             mRegexButton->set_tooltip("Treat filter as regular expression");
@@ -644,18 +642,18 @@ ImageViewer::ImageViewer(
                     return button;
                 };
 
-            makeImageButton("", true, [this] { openImageDialog(); }, FA_FOLDER, fmt::format("Open ({}+O)", HelpWindow::COMMAND));
+            makeImageButton("", true, [this] { openImageDialog(); }, FA_FOLDER, format("Open ({}+O)", HelpWindow::COMMAND));
 
             mCurrentImageButtons.push_back(
-                makeImageButton("", false, [this] { saveImageDialog(); }, FA_SAVE, fmt::format("Save ({}+S)", HelpWindow::COMMAND))
+                makeImageButton("", false, [this] { saveImageDialog(); }, FA_SAVE, format("Save ({}+S)", HelpWindow::COMMAND))
             );
 
             mCurrentImageButtons.push_back(makeImageButton(
-                "", false, [this] { reloadImage(mCurrentImage); }, FA_RECYCLE, fmt::format("Reload ({}+R or F5)", HelpWindow::COMMAND)
+                "", false, [this] { reloadImage(mCurrentImage); }, FA_RECYCLE, format("Reload ({}+R or F5)", HelpWindow::COMMAND)
             ));
 
             mAnyImageButtons.push_back(makeImageButton(
-                "A", false, [this] { reloadAllImages(); }, 0, fmt::format("Reload all ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)
+                "A", false, [this] { reloadAllImages(); }, 0, format("Reload all ({}+Shift+R or {}+F5)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
 
             mWatchFilesForChangesButton =
@@ -683,7 +681,7 @@ ImageViewer::ImageViewer(
                     }
                 },
                 FA_TIMES,
-                fmt::format("Close ({}+W); Close all ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
+                format("Close ({}+W); Close all ({}+Shift+W)", HelpWindow::COMMAND, HelpWindow::COMMAND)
             ));
 
             spacer = new Widget{mSidebarLayout};
@@ -1055,11 +1053,11 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             if (modifiers & GLFW_MOD_SHIFT) {
                 try {
                     copyImageNameToClipboard();
-                } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to copy image name to clipboard: {}", e.what())); }
+                } catch (const runtime_error& e) { showErrorDialog(format("Failed to copy image name to clipboard: {}", e.what())); }
             } else {
                 try {
                     copyImageCanvasToClipboard();
-                } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to copy image to clipboard: {}", e.what())); }
+                } catch (const runtime_error& e) { showErrorDialog(format("Failed to copy image to clipboard: {}", e.what())); }
             }
 
             return true;
@@ -1067,14 +1065,12 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             if (modifiers & GLFW_MOD_SHIFT) {
                 const char* clipboardString = glfwGetClipboardString(m_glfw_window);
                 if (clipboardString) {
-                    tlog::warning() << fmt::format(
-                        "Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString
-                    );
+                    tlog::warning("Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString);
                 }
             } else {
                 try {
                     pasteImagesFromClipboard();
-                } catch (const runtime_error& e) { showErrorDialog(fmt::format("Failed to paste image from clipboard: {}", e.what())); }
+                } catch (const runtime_error& e) { showErrorDialog(format("Failed to paste image from clipboard: {}", e.what())); }
             }
 
             return true;
@@ -1356,18 +1352,16 @@ void ImageViewer::draw_contents() {
             mHistogram->setMean(statistics->mean);
             mHistogram->setMaximum(statistics->maximum);
             mHistogram->setZero(statistics->histogramZero);
-            mHistogram->set_tooltip(
-                fmt::format(
-                    "{}\n\n"
-                    "Minimum: {:.3f}\n"
-                    "Mean: {:.3f}\n"
-                    "Maximum: {:.3f}",
-                    histogramTooltipBase,
-                    statistics->minimum,
-                    statistics->mean,
-                    statistics->maximum
-                )
-            );
+            mHistogram->set_tooltip(format(
+                "{}\n\n"
+                "Minimum: {:.3f}\n"
+                "Mean: {:.3f}\n"
+                "Maximum: {:.3f}",
+                histogramTooltipBase,
+                statistics->minimum,
+                statistics->mean,
+                statistics->maximum
+            ));
         }
     } else {
         mHistogram->setNChannels(1);
@@ -1409,7 +1403,7 @@ void ImageViewer::updateColorCapabilities() {
     const bool supportsAbsoluteBrightness = supportsHdr;
 #endif
 
-    tlog::info() << fmt::format(
+    tlog::info(
         "{} {} bit {} point frame buffer with primaries={} transfer={} range={}",
         prevColorSpace ? "Switched to" : "Initialized",
         this->bits_per_sample(),
@@ -1677,7 +1671,7 @@ void ImageViewer::reloadImagesWhoseFileChanged() {
 void ImageViewer::updateImage(string_view imageName, bool shallSelect, string_view channel, Box2i bounds, span<const float> imageData) {
     auto image = imageByName(imageName);
     if (!image) {
-        tlog::warning() << "Image " << imageName << " could not be updated, because it does not exist.";
+        tlog::warning("Image {} could not be updated, because it does not exist.", imageName);
         return;
     }
 
@@ -1699,7 +1693,7 @@ void ImageViewer::updateImage(string_view imageName, bool shallSelect, string_vi
 void ImageViewer::updateImageVectorGraphics(string_view imageName, bool shallSelect, bool append, span<const VgCommand> commands) {
     auto image = imageByName(imageName);
     if (!image) {
-        tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
+        tlog::warning("Vector graphics of image {} could not be updated, because it does not exist.", imageName);
         return;
     }
 
@@ -1905,7 +1899,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
     mExposureSlider->set_value(value);
-    mExposureLabel->set_caption(fmt::format("Exposure: {:+.1f}", value));
+    mExposureLabel->set_caption(format("Exposure: {:+.1f}", value));
 
     mImageCanvas->setExposure(value);
 }
@@ -1913,7 +1907,7 @@ void ImageViewer::setExposure(float value) {
 void ImageViewer::setOffset(float value) {
     value = round(value, 2.0f);
     mOffsetSlider->set_value(value);
-    mOffsetLabel->set_caption(fmt::format("Offset: {:+.2f}", value));
+    mOffsetLabel->set_caption(format("Offset: {:+.2f}", value));
 
     mImageCanvas->setOffset(value);
 }
@@ -1921,7 +1915,7 @@ void ImageViewer::setOffset(float value) {
 void ImageViewer::setGamma(float value) {
     value = round(value, 2.0f);
     mGammaSlider->set_value(value);
-    mGammaLabel->set_caption(fmt::format("Gamma: {:+.2f}", value));
+    mGammaLabel->set_caption(format("Gamma: {:+.2f}", value));
 
     mImageCanvas->setGamma(value);
 }
@@ -2075,7 +2069,7 @@ void ImageViewer::resizeToFit(Vector2f targetSize) {
         return;
     }
 
-    tlog::debug() << fmt::format("Resizing window to {}", targetSize);
+    tlog::debug("Resizing window to {}", targetSize);
 
     const auto sizeDiff = targetSize - Vector2f{m_size};
 
@@ -2235,7 +2229,7 @@ void ImageViewer::updateImageInfoWindow() {
 
 void ImageViewer::openImageDialog() {
     if (mFileDialogThread) {
-        tlog::warning() << "File dialog already running.";
+        tlog::warning("File dialog already running.");
         return;
     }
 
@@ -2295,7 +2289,7 @@ void ImageViewer::openImageDialog() {
                 mImagesLoader->enqueue(paths[i], "", shallSelect);
             }
         } catch (const runtime_error& e) {
-            const auto error = fmt::format("File dialog: {}", e.what());
+            const auto error = format("File dialog: {}", e.what());
             scheduleToUiThread([this, error]() { showErrorDialog(error); });
         }
     };
@@ -2313,7 +2307,7 @@ void ImageViewer::saveImageDialog() {
     }
 
     if (mFileDialogThread) {
-        tlog::warning() << "File dialog already running.";
+        tlog::warning("File dialog already running.");
         return;
     }
 
@@ -2352,10 +2346,10 @@ void ImageViewer::saveImageDialog() {
             scheduleToUiThread([this, path = paths.front()]() {
                 try {
                     mImageCanvas->saveImage(path);
-                } catch (const ImageSaveError& e) { showErrorDialog(fmt::format("Failed to save image: {}", e.what())); }
+                } catch (const ImageSaveError& e) { showErrorDialog(format("Failed to save image: {}", e.what())); }
             });
         } catch (const runtime_error& e) {
-            const auto error = fmt::format("Save dialog: {}", e.what());
+            const auto error = format("Save dialog: {}", e.what());
             scheduleToUiThread([this, error]() { showErrorDialog(error); });
         }
     };
@@ -2409,7 +2403,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     ostringstream pngData;
     try {
         pngImageSaver->save(pngData, "clipboard.png", imageData, imageSize, 4).get();
-    } catch (const ImageSaveError& e) { throw runtime_error{fmt::format("Failed to save image data to clipboard as PNG: {}", e.what())}; }
+    } catch (const ImageSaveError& e) { throw runtime_error{format("Failed to save image data to clipboard as PNG: {}", e.what())}; }
 
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
         waylandSetClipboardPngImage(pngData.view());
@@ -2428,7 +2422,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     const auto end = chrono::steady_clock::now();
     const auto duration = chrono::duration<float>(end - start).count();
 
-    tlog::success() << fmt::format("Image copied to clipboard after {:.3f} seconds.", duration);
+    tlog::success("Image copied to clipboard after {:.3f} seconds.", duration);
 }
 
 void ImageViewer::copyImageNameToClipboard() const {
@@ -2437,7 +2431,7 @@ void ImageViewer::copyImageNameToClipboard() const {
     }
 
     glfwSetClipboardString(m_glfw_window, string{mCurrentImage->name()}.c_str());
-    tlog::success() << "Image path copied to clipboard.";
+    tlog::success("Image path copied to clipboard.");
 }
 
 void ImageViewer::pasteImagesFromClipboard() {
@@ -2477,9 +2471,9 @@ void ImageViewer::pasteImagesFromClipboard() {
         imageStream.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
     }
 
-    tlog::info() << "Loading image from clipboard...";
+    tlog::info("Loading image from clipboard...");
     auto imagesLoadTask = tryLoadImage(
-        fmt::format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
+        format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
     );
 
     const auto images = imagesLoadTask.get();
@@ -2494,7 +2488,7 @@ void ImageViewer::pasteImagesFromClipboard() {
 }
 
 void ImageViewer::showErrorDialog(string_view message) {
-    tlog::error() << message;
+    tlog::error(message);
     new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
 }
 
@@ -2740,14 +2734,14 @@ void ImageViewer::updateTitle() {
     auto channelTails = channels;
     transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
-    caption << fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
+    caption << format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
 
     const auto rel = mouse_pos() - mImageCanvas->position();
     const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
     const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
     TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
-    caption << fmt::format(
+    caption << format(
         " – @{},{} ({:.3f},{:.3f}) / {}x{}: ",
         imageCoords.x(),
         imageCoords.y(),
@@ -2760,7 +2754,7 @@ void ImageViewer::updateTitle() {
     auto transformedValues = values;
     mImageCanvas->applyInspectionParameters(transformedValues, hasAlpha);
     for (size_t i = 0; i < transformedValues.size(); ++i) {
-        caption << fmt::format("{:.2f},", transformedValues[i]);
+        caption << format("{:.2f},", transformedValues[i]);
     }
 
     caption.seekp(-1, ios_base::cur); // Remove last comma
@@ -2768,7 +2762,7 @@ void ImageViewer::updateTitle() {
     for (size_t i = 0; i < values.size(); ++i) {
         const float srgbValue = hasAlpha && i == values.size() - 1 ? values[i] : toSRGB(values[i]);
         unsigned char discretizedValue = (char)(clamp(srgbValue, 0.0f, 1.0f) * 255 + 0.5f);
-        caption << fmt::format("{:02X}", discretizedValue);
+        caption << format("{:02X}", discretizedValue);
     }
 
     set_caption(caption.view());
@@ -2886,7 +2880,7 @@ void ImageViewer::updateCurrentMonitorSize() {
         // such cases (only after a current monitor was detected to give enough time for the compositor to set up the window) and
         // treat them as non-maximized always.
         if (isMaximized() && !mMaximizedLaunch) {
-            tlog::debug() << "Detected unreliable maximized state; disabling maximized detection.";
+            tlog::debug("Detected unreliable maximized state; disabling maximized detection.");
             mMaximizedUnreliable = true;
         }
 
@@ -2905,7 +2899,7 @@ void ImageViewer::updateCurrentMonitorSize() {
         mMinWindowPos = posf;
         mMaxWindowSize = sizef;
 
-        tlog::debug() << fmt::format("Current monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
+        tlog::debug("Current monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
     }
 }
 

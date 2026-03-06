@@ -199,7 +199,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
         case 3: format = DXGI_FORMAT_R32G32B32_FLOAT; break;
         case 2: format = DXGI_FORMAT_R32G32_FLOAT; break;
         case 1: format = DXGI_FORMAT_R32_FLOAT; break;
-        default: throw ImageLoadError{fmt::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
+        default: throw ImageLoadError{std::format("Unsupported DXGI format: {}", static_cast<int>(metadata.format))};
     }
 
     // Use DirectXTex to either decompress or convert to the target floating point format.

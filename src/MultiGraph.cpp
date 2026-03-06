@@ -34,7 +34,7 @@ namespace tev {
 
 static string formatNumber(float v) {
     bool needsScientificNotation = v != 0 && (abs(v) < 0.01f || abs(v) >= 1000);
-    return needsScientificNotation ? fmt::format("{:.2e}", v) : fmt::format("{:.3f}", v);
+    return needsScientificNotation ? format("{:.2e}", v) : format("{:.3f}", v);
 }
 
 MultiGraph::MultiGraph(Widget* parent, string_view caption) : Widget{parent}, mCaption{caption} {

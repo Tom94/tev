@@ -33,7 +33,6 @@
 #    include <GLFW/glfw3native.h>
 #endif
 
-#include <charconv>
 #include <iostream>
 #include <thread>
 
@@ -58,18 +57,6 @@ void redrawWindow() {
     if (imageViewerIsReady) {
         sImageViewer->redraw();
     }
-}
-
-// Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
-template <typename T> bool fromChars(const char* begin, const char* end, T&& value) {
-    const auto result = from_chars(begin, end, std::forward<T>(value));
-    return result.ec == errc{} && result.ptr == end;
-}
-
-template <typename T> bool fromChars(string_view s, T&& value) { return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value)); }
-
-template <typename T> bool fromChars(const string& s, T&& value) {
-    return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value));
 }
 
 static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<BackgroundImagesLoader>& imagesLoader) {
@@ -163,7 +150,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
         }
 
         default: {
-            throw runtime_error{fmt::format("Invalid IPC packet type {}", (int)packet.type())};
+            throw runtime_error{format("Invalid IPC packet type {}", (int)packet.type())};
         }
     }
 }
@@ -188,20 +175,20 @@ static void convertTo(
         }
 
         const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start}.count();
-        tlog::success() << fmt::format("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
+        tlog::success("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
     }};
 
     vector<Task<void>> saveTasks;
     for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
         if (imageAddition->images.empty()) {
-            tlog::error() << fmt::format("Image addition is empty, cannot convert");
+            tlog::error("Image addition is empty, cannot convert");
             continue;
         }
 
         // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
         const auto& image = imageAddition->images.front();
         if (image->channelGroups().empty()) {
-            tlog::error() << fmt::format("Image {} has no channel groups, cannot convert", image->path());
+            tlog::error("Image {} has no channel groups, cannot convert", image->path());
             continue;
         }
 
@@ -215,22 +202,22 @@ static void convertTo(
             } else if (fmt == "ext" && parts.size() == 1) {
                 return toString(image->path().extension());
             } else if (fmt == "idx" && parts.size() == 1) {
-                return fmt::format("{}", idx);
+                return format("{}", idx);
             } else if (fmt == "idx" && parts.size() == 2) {
-                return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
+                return vformat(format("{{:{}}}", parts[1]), make_format_args(idx));
             } else {
-                throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
+                throw runtime_error{format("Invalid placeholder '{{{}}}'", placeholder)};
             }
         }));
 
         if (writtenPaths.find(path) != writtenPaths.end()) {
-            tlog::info() << fmt::format("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
+            tlog::info("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
             continue;
         }
 
         writtenPaths.insert(path);
         if (path == image->path()) {
-            tlog::info() << fmt::format("Skipping conversion of {} to itself", image->path());
+            tlog::info("Skipping conversion of {} to itself", image->path());
             continue;
         }
 
@@ -254,10 +241,8 @@ static void convertTo(
                     co_await image->save(path, nullptr, window, cg, metric, bg, tonemap, gamma, exposure, offset, priority);
 
                     const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
-                    tlog::success() << fmt::format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
-                } catch (const ImageSaveError& e) {
-                    tlog::error() << fmt::format("Could not convert {} to {}: {}", image->path(), path, e.what());
-                }
+                    tlog::success("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
+                } catch (const ImageSaveError& e) { tlog::error("Could not convert {} to {}: {}", image->path(), path, e.what()); }
             }(image, path, metric, bg, tonemap, gamma, exposure, offset, priority)
         );
     }
@@ -567,10 +552,10 @@ static int mainFunc(span<const string> arguments) {
         cout << parser;
         return 0;
     } catch (const ParseError& e) {
-        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
+        cerr << format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -1;
     } catch (const ValidationError& e) {
-        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
+        cerr << format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -2;
     }
 
@@ -579,12 +564,12 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (versionFlag) {
-        tlog::none() << "tev — The EDR Viewer\nversion " TEV_VERSION;
+        tlog::none("tev — The EDR Viewer\nversion " TEV_VERSION);
         return 0;
     }
 
     if (newWindowFlagOn && newWindowFlagOff) {
-        tlog::error() << "Ambiguous '--new' arguments.";
+        tlog::error("Ambiguous '--new' arguments.");
         return -3;
     }
 
@@ -612,7 +597,7 @@ static int mainFunc(span<const string> arguments) {
 
             fs::path imagePath = toPath(imageFile);
             if (!fs::exists(imagePath)) {
-                tlog::error() << fmt::format("Image {} does not exist.", imagePath);
+                tlog::error("Image {} does not exist.", imagePath);
                 continue;
             }
 
@@ -626,7 +611,7 @@ static int mainFunc(span<const string> arguments) {
                 first = false;
 
                 ipc->sendToPrimaryInstance(packet);
-            } catch (const runtime_error& e) { tlog::error() << fmt::format("Unexpected error {}: {}", imagePath, e.what()); }
+            } catch (const runtime_error& e) { tlog::error("Unexpected error {}: {}", imagePath, e.what()); }
         }
 
         return 0;
@@ -646,8 +631,8 @@ static int mainFunc(span<const string> arguments) {
         try {
             const auto gainmapHeadroom = GainmapHeadroom{get(gainmapHeadroomFlag)};
             imagesLoader->imageLoaderSettings().gainmapHeadroom = gainmapHeadroom;
-        } catch (const invalid_argument& e) {
-            tlog::error() << fmt::format("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
+        } catch (const runtime_error& e) {
+            tlog::error("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
             return -6;
         }
     }
@@ -698,12 +683,12 @@ static int mainFunc(span<const string> arguments) {
                 ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
                     try {
                         handleIpcPacket(packet, imagesLoader);
-                    } catch (const runtime_error& e) { tlog::warning() << "Malformed IPC packet: " << e.what(); }
+                    } catch (const runtime_error& e) { tlog::warning("Malformed IPC packet: {}", e.what()); }
                 });
 
                 this_thread::sleep_for(10ms);
             }
-        } catch (const runtime_error& e) { tlog::warning() << "Uncaught exception in IPC thread: " << e.what(); }
+        } catch (const runtime_error& e) { tlog::warning("Uncaught exception in IPC thread: {}", e.what()); }
     }};
 
     const auto backgroundThreadShutdownGuard = ScopeGuard{[&]() {
@@ -735,7 +720,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (convertToFlag) {
-        tlog::info() << "Running in conversion mode. No window will be opened.";
+        tlog::info("Running in conversion mode. No window will be opened.");
 
         while (imagesLoader->hasPendingLoads()) {
             this_thread::sleep_for(1ms);
@@ -753,9 +738,7 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    static constexpr auto errorCallback = [](int error, const char* description) {
-        tlog::warning() << fmt::format("GLFW error {}: {}", error, description);
-    };
+    static constexpr auto errorCallback = [](int error, const char* description) { tlog::warning("GLFW error {}: {}", error, description); };
     nanogui::init(!get(ldrFlag), errorCallback);
 
     const auto nanoguiShutdownGuard = ScopeGuard{[&]() {
@@ -786,7 +769,7 @@ static int mainFunc(span<const string> arguments) {
 #endif
 
     if (maximizeFlagOn && maximizeFlagOff) {
-        tlog::error() << "Ambiguous '--maximize' arguments.";
+        tlog::error("Ambiguous '--maximize' arguments.");
         return -3;
     }
 
@@ -794,7 +777,7 @@ static int mainFunc(span<const string> arguments) {
     const bool maximize = (false && !maximizeFlagOff) || maximizeFlagOn;
 
     if (resizeWindowToFitFlagOn && resizeWindowToFitFlagOff) {
-        tlog::error() << "Ambiguous '--resize-window' arguments.";
+        tlog::error("Ambiguous '--resize-window' arguments.");
         return -3;
     }
 
@@ -806,17 +789,17 @@ static int mainFunc(span<const string> arguments) {
         const string sizeString = get(sizeFlag);
         const auto parts = split(sizeString, "x");
         if (parts.size() != 2) {
-            tlog::error() << fmt::format("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
+            tlog::error("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
             return -4;
         }
 
         if (!fromChars(parts[0], size.x()) || !fromChars(parts[1], size.y())) {
-            tlog::error() << fmt::format("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
+            tlog::error("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
             return -4;
         }
 
         if (size.x() <= 0 || size.y() <= 0) {
-            tlog::error() << fmt::format("Invalid size specification '{}'. Width and height must be positive.", sizeString);
+            tlog::error("Invalid size specification '{}'. Width and height must be positive.", sizeString);
             return -4;
         }
     }
@@ -900,15 +883,12 @@ static int mainFunc(span<const string> arguments) {
         const string wlValue = get(whiteLevelFlag);
         if (toLower(wlValue) == "image") {
             sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::ImageMetadata);
+        } else if (float whiteLevel; fromChars(wlValue, whiteLevel)) {
+            sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::Custom);
+            sImageViewer->setDisplayWhiteLevel(whiteLevel);
         } else {
-            try {
-                const float whiteLevel = stof(get(whiteLevelFlag));
-                sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::Custom);
-                sImageViewer->setDisplayWhiteLevel(whiteLevel);
-            } catch (const invalid_argument&) {
-                tlog::error() << fmt::format("Invalid white level value '{}'. Must be a float or 'image'.", get(whiteLevelFlag));
-                return -5;
-            }
+            tlog::error("Invalid white level value '{}'. Must be a float or 'image'.", wlValue);
+            return -5;
         }
     }
 
@@ -951,7 +931,7 @@ int main(int argc, char* argv[]) {
 
         return tev::mainFunc(arguments);
     } catch (const exception& e) {
-        tlog::error() << fmt::format("Uncaught exception: {}", e.what());
+        tlog::error("Uncaught exception: {}", e.what());
         return 1;
     }
 }

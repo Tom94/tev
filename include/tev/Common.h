@@ -20,19 +20,20 @@
 
 #include <tev/FalseColor.h>
 
-#define FMT_HEADER_ONLY 1
-#include <fmt/core.h>
-
 #include <nanogui/vector.h>
 
 #include <tinylogger/tinylogger.h>
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <charconv>
 #include <cmath>
 #include <concepts>
 #include <cstring>
+#include <exception>
 #include <filesystem>
+#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -42,6 +43,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -67,7 +69,7 @@
     if (!(cond)) [[unlikely]] {                                                                                                \
         const auto s = std::source_location::current();                                                                        \
         throw std::runtime_error{                                                                                              \
-            fmt::format("{}({}:{}) `{}`: " description, s.file_name(), s.line(), s.column(), s.function_name(), ##__VA_ARGS__) \
+            std::format("{}({}:{}) `{}`: " description, s.file_name(), s.line(), s.column(), s.function_name(), ##__VA_ARGS__) \
         };                                                                                                                     \
     }
 
@@ -80,72 +82,72 @@ std::string toString(const std::filesystem::path& path);
 }
 
 // Make std::filesystem::path formattable.
-template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
+template <> struct std::formatter<std::filesystem::path> : std::formatter<std::string_view> {
     template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) const {
         return formatter<std::string_view>::format(tev::toString(path), ctx);
     }
 };
 
-template <typename T, size_t N_DIMS> struct fmt::formatter<std::array<T, N_DIMS>> {
+template <typename T, size_t N_DIMS> struct std::formatter<std::array<T, N_DIMS>> {
     template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
     template <class FmtContext> FmtContext::iterator format(const std::array<T, N_DIMS>& v, FmtContext& ctx) const {
         auto&& out = ctx.out();
 
-        fmt::format_to(out, "[");
+        std::format_to(out, "[");
         for (size_t i = 0; i < N_DIMS; ++i) {
             if (i != 0) {
-                fmt::format_to(out, ", ");
+                std::format_to(out, ", ");
             }
 
-            fmt::format_to(out, "{}", v[i]);
+            std::format_to(out, "{}", v[i]);
         }
 
-        return fmt::format_to(out, "]");
+        return std::format_to(out, "]");
     }
 };
 
-template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> {
+template <typename T, size_t N_DIMS> struct std::formatter<nanogui::Array<T, N_DIMS>> {
     template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
     template <class FmtContext> FmtContext::iterator format(const nanogui::Array<T, N_DIMS>& v, FmtContext& ctx) const {
         auto&& out = ctx.out();
 
-        fmt::format_to(out, "[");
+        std::format_to(out, "[");
         for (size_t i = 0; i < N_DIMS; ++i) {
             if (i != 0) {
-                fmt::format_to(out, ", ");
+                std::format_to(out, ", ");
             }
 
-            fmt::format_to(out, "{}", v[i]);
+            std::format_to(out, "{}", v[i]);
         }
 
-        return fmt::format_to(out, "]");
+        return std::format_to(out, "]");
     }
 };
 
-template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Matrix<T, N_DIMS>> {
+template <typename T, size_t N_DIMS> struct std::formatter<nanogui::Matrix<T, N_DIMS>> {
     template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
     template <class FmtContext> FmtContext::iterator format(const nanogui::Matrix<T, N_DIMS>& m, FmtContext& ctx) const {
         auto&& out = ctx.out();
 
-        fmt::format_to(out, "[");
+        std::format_to(out, "[");
         for (size_t i = 0; i < N_DIMS; ++i) {
             if (i != 0) {
-                fmt::format_to(out, ", ");
+                std::format_to(out, ", ");
             }
 
-            fmt::format_to(out, "[");
+            std::format_to(out, "[");
             for (size_t j = 0; j < N_DIMS; ++j) {
                 if (j != 0) {
-                    fmt::format_to(out, ", ");
+                    std::format_to(out, ", ");
                 }
 
-                fmt::format_to(out, "{}", m.m[j][i]);
+                std::format_to(out, "{}", m.m[j][i]);
             }
 
-            fmt::format_to(out, "]");
+            std::format_to(out, "]");
         }
 
-        return fmt::format_to(out, "]");
+        return std::format_to(out, "]");
     }
 };
 
@@ -262,6 +264,30 @@ template <typename... Callable> struct visitor : Callable... {
 };
 
 template <typename T> concept trivially_copyable = std::is_trivially_copyable_v<T>;
+
+// Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
+template <typename T> bool fromChars(const char* begin, const char* end, T& value) {
+    const auto result = std::from_chars(begin, end, value);
+    return result.ec == std::errc{} && result.ptr == end;
+}
+
+template <typename T> bool fromChars(std::string_view s, T& value) {
+    // Shockingly, macOS *still* does not ship a floating point from_chars() implementation -- a C++17 feature! -- so we polyfill via the
+    // much heavier stof (string alloc + exception on failed parse). TODO: remove once supported
+#ifdef __APPLE__
+    if constexpr (std::is_floating_point_v<T>) {
+        try {
+            value = std::stof(std::string{s});
+            return true;
+        } catch (const std::invalid_argument&) { return false; } catch (const std::out_of_range&) {
+            return false;
+        }
+    } else
+#endif
+    {
+        return fromChars(s.data(), s.data() + s.size(), value);
+    }
+}
 
 template <trivially_copyable T> T fromBytes(std::span<const uint8_t> data) {
     if (data.size() < sizeof(T)) {
@@ -661,9 +687,9 @@ inline float applyMetric(float image, float reference, EMetric metric) {
     float diff = image - reference;
     switch (metric) {
         case EMetric::Error: return diff;
-        case EMetric::AbsoluteError: return abs(diff);
+        case EMetric::AbsoluteError: return std::abs(diff);
         case EMetric::SquaredError: return diff * diff;
-        case EMetric::RelativeAbsoluteError: return abs(diff) / (reference + 0.01f);
+        case EMetric::RelativeAbsoluteError: return std::abs(diff) / (reference + 0.01f);
         case EMetric::RelativeSquaredError: return diff * diff / (reference * reference + 0.01f);
         default: throw std::runtime_error{"Invalid metric selected."};
     }

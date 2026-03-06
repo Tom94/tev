@@ -143,7 +143,7 @@ static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t* length
     TEV_ASSERT(length, "Length output parameter must not be null.");
 
     if (data.size() < 8) {
-        tlog::warning() << "Invalid JP2 box: insufficient data for 32-bit length.";
+        tlog::warning("Invalid JP2 box: insufficient data for 32-bit length.");
         *length = data.size();
         return nullopt;
     }
@@ -153,7 +153,7 @@ static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t* length
     const auto len32 = std::min((size_t)readU32Be(data.data()), data.size());
     if (len32 == 1) {
         if (data.size() < 16) {
-            tlog::warning() << "Invalid JP2 box: insufficient data for 64-bit length.";
+            tlog::warning("Invalid JP2 box: insufficient data for 64-bit length.");
             *length = data.size();
             return nullopt;
         }
@@ -169,7 +169,7 @@ static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t* length
         boxData = data.subspan(8, len32 - 8);
         *length = len32;
     } else {
-        tlog::warning() << fmt::format("Invalid JP2 box: length {} is too small.", len32);
+        tlog::warning("Invalid JP2 box: length {} is too small.", len32);
         *length = data.size();
         return nullopt;
     }
@@ -183,7 +183,7 @@ static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t* length
 Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
     Jp2Metadata meta;
 
-    tlog::debug() << "Extracting JP2 boxes:";
+    tlog::debug("Extracting JP2 boxes:");
 
     while (data.size() > 0) {
         uint64_t boxLength = 0;
@@ -193,13 +193,13 @@ Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
         }
 
         data = data.subspan(boxLength);
-        tlog::debug() << fmt::format("  type='{}' length={}", box->type, boxLength);
+        tlog::debug("  type='{}' length={}", box->type, boxLength);
 
         if (box->type == "xml ") {
             meta.genericXml = box->data;
         } else if (box->type == "uuid") {
             if (box->data.size() < 16) {
-                tlog::warning() << "Invalid JP2 UUID box: insufficient data for UUID.";
+                tlog::warning("Invalid JP2 UUID box: insufficient data for UUID.");
                 continue;
             }
 
@@ -286,7 +286,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     };
     const auto size = region.size();
 
-    tlog::debug() << fmt::format(
+    tlog::debug(
         "JPEG 2000 info: region=[{}, {}] numcomps={} color_space={} icc={}",
         region.min,
         region.max,
@@ -300,7 +300,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     for (size_t c = 0; c < image->numcomps; ++c) {
         const auto& comp = image->comps[c];
 
-        tlog::debug() << fmt::format(
+        tlog::debug(
             "  Component {}: w={} h={} dx={} dy={} x0={} y0={} prec={} sgnd={} resno_decoded={} factor={} alpha={}",
             c,
             comp.w,
@@ -318,7 +318,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
         if (comp.alpha) {
             if (c != image->numcomps - 1) {
-                tlog::warning() << fmt::format("Alpha channel is not the last component (index {}). This is unusual and may cause issues.", c);
+                tlog::warning("Alpha channel is not the last component (index {}). This is unusual and may cause issues.", c);
             }
         }
     }
@@ -345,7 +345,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     const auto meta = j2kFormat == OPJ_CODEC_JP2 || j2kFormat == OPJ_CODEC_JPX ? extractJp2Metadata(data) : Jp2Metadata{};
 
     if (!meta.exifData.empty()) {
-        tlog::debug() << fmt::format("Found EXIF data of size {} bytes", meta.exifData.size());
+        tlog::debug("Found EXIF data of size {} bytes", meta.exifData.size());
 
         try {
             const auto exif = Exif{meta.exifData};
@@ -354,20 +354,20 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             const EOrientation exifOrientation = exif.getOrientation();
             if (exifOrientation != EOrientation::None) {
                 resultData.orientation = exifOrientation;
-                tlog::debug() << fmt::format("EXIF image orientation: {}", toString(resultData.orientation));
+                tlog::debug("EXIF image orientation: {}", toString(resultData.orientation));
             }
-        } catch (const invalid_argument& e) { tlog::warning() << fmt::format("Failed to read EXIF metadata: {}", e.what()); }
+        } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
     }
 
     if (!meta.xmpXml.empty() || !meta.genericXml.empty()) {
         // Prefer a known-xmp box over a generic xml box, but try the generic one if no xmp box is present just in case it contains xmp.
         const auto xmlData = meta.xmpXml.empty() ? meta.genericXml : meta.xmpXml;
         if (xmlData.data() == meta.genericXml.data()) {
-            tlog::debug() << fmt::format(
+            tlog::debug(
                 "Found generic XML metadata of size {} bytes. No XMP-specific box found, trying to parse as XMP anyway.", xmlData.size()
             );
         } else {
-            tlog::debug() << fmt::format("Found XMP metadata of size {} bytes.", xmlData.size());
+            tlog::debug("Found XMP metadata of size {} bytes.", xmlData.size());
         }
 
         const string_view xmpDataView = string_view{(const char*)xmlData.data(), xmlData.size()};
@@ -379,13 +379,13 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             const EOrientation xmpOrientation = xmp.orientation();
             if (xmpOrientation != EOrientation::None) {
                 resultData.orientation = xmpOrientation;
-                tlog::debug() << fmt::format("XMP image orientation: {}", toString(resultData.orientation));
+                tlog::debug("XMP image orientation: {}", toString(resultData.orientation));
             }
         } catch (const invalid_argument& e) {
             if (xmlData.data() == meta.genericXml.data()) {
-                tlog::debug() << fmt::format("Failed to parse XML data as XMP: {}", e.what());
+                tlog::debug("Failed to parse XML data as XMP: {}", e.what());
             } else {
-                tlog::warning() << fmt::format("Failed to parse XMP metadata: {}", e.what());
+                tlog::warning("Failed to parse XMP metadata: {}", e.what());
             }
         }
     }
@@ -403,7 +403,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     );
 
     for (size_t c = 0; c < numExtraChannels; ++c) {
-        resultData.channels.emplace_back(fmt::format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
+        resultData.channels.emplace_back(format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
     }
 
     // If there is an alpha channel, it's usually straight. TODO: read cdef box if present to be sure.
@@ -502,7 +502,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             resultData.readMetadataFromIcc(profile);
 
             co_return result;
-        } catch (const runtime_error& e) { tlog::warning() << fmt::format("Failed to apply ICC color profile: {}", e.what()); }
+        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
     }
 
     co_await rgbaToFloat(dstView, !skipColorProcessing);

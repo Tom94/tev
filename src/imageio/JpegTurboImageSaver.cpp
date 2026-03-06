@@ -34,7 +34,7 @@ Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<con
         case 1: colorSpace = JCS_GRAYSCALE; break;
         case 3: colorSpace = JCS_RGB; break;
         case 4: colorSpace = JCS_EXT_RGBX; break;
-        default: throw ImageSaveError{fmt::format("JPEG does not support {} channels.", nChannels)};
+        default: throw ImageSaveError{format("JPEG does not support {} channels.", nChannels)};
     }
 
     jpeg_compress_struct cinfo;
@@ -44,12 +44,12 @@ Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<con
     jerr.error_exit = [](j_common_ptr cinfo) {
         char buf[JMSG_LENGTH_MAX];
         cinfo->err->format_message(cinfo, buf);
-        throw ImageLoadError{fmt::format("libjpeg error: {}", buf)};
+        throw ImageLoadError{format("libjpeg error: {}", buf)};
     };
     jerr.output_message = [](j_common_ptr cinfo) {
         char buf[JMSG_LENGTH_MAX];
         (*cinfo->err->format_message)(cinfo, buf);
-        tlog::warning() << fmt::format("libjpeg warning: {}", buf);
+        tlog::warning("libjpeg warning: {}", buf);
     };
 
     jpeg_create_compress(&cinfo);

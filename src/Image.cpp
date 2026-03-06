@@ -307,7 +307,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
         if (whiteLevelFromMaxFALL > 0 && whiteLevelFromMaxCLL > 0 &&
             abs(whiteLevelFromMaxCLL - whiteLevelFromMaxFALL) / (whiteLevelFromMaxCLL + whiteLevelFromMaxFALL) > 0.01f) {
-            tlog::warning() << fmt::format(
+            tlog::warning(
                 "Derived white levels from maxCLL ({}->{}) and maxFALL ({}->{}) of layer '{}' differ by over 1%.",
                 hdrMetadata.maxCLL,
                 whiteLevelFromMaxCLL,
@@ -317,7 +317,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
             );
         }
 
-        tlog::debug() << fmt::format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.bestGuessWhiteLevel, layers[i]);
+        tlog::debug("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.bestGuessWhiteLevel, layers[i]);
     }
 }
 
@@ -354,7 +354,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                 if (c->pixelFormat() != sourceFormat || c->desiredPixelFormat() != targetFormat) {
                     canConvert = false;
 
-                    tlog::warning() << fmt::format(
+                    tlog::warning(
                         "Channels sharing the same data buffer must have the same source and target pixel format. ({}: {} -> {}, {}: {} -> {})",
                         firstChannel->name(),
                         toString(sourceFormat),
@@ -537,7 +537,7 @@ void ImageData::updateLayers() {
 }
 
 Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
-    tlog::debug() << "Ensuring image is valid...";
+    tlog::debug("Ensuring image is valid...");
 
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
@@ -555,9 +555,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     unordered_map<string_view, size_t> channelNameCounter;
     for (auto& c : channels) {
         if (c.size() != size()) {
-            throw ImageLoadError{
-                fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())
-            };
+            throw ImageLoadError{format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())};
         }
 
         // Ensure the top-level layer of each channel is the image's part name
@@ -569,8 +567,8 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         // E.g.: foo.bar.R -> foo.bar.1.R, R -> 1.R
         const size_t count = channelNameCounter[c.name()]++;
         if (count > 0) {
-            c.setName(Channel::join(fmt::format("{}{}", Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
-            tlog::debug() << fmt::format("Renamed duplicate channel to '{}'", c.name());
+            c.setName(Channel::join(format("{}{}", Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
+            tlog::debug("Renamed duplicate channel to '{}'", c.name());
         }
     }
 
@@ -597,14 +595,14 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     updateLayers();
 
     if (!hasPremultipliedAlpha) {
-        tlog::debug() << fmt::format("- Multiplying alpha");
+        tlog::debug("- Multiplying alpha");
         co_await multiplyAlpha(taskPriority);
     }
 
     TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
 
     if (toRec709 != Matrix3f{1.0f}) {
-        tlog::debug() << fmt::format("- Converting to Rec.709 D65");
+        tlog::debug("- Converting to Rec.709 D65");
         co_await convertToRec709(taskPriority);
     }
 
@@ -616,11 +614,11 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     // co_await deriveWhiteLevelFromMetadata(taskPriority);
 
-    tlog::debug() << fmt::format("- Converting to desired pixel format");
+    tlog::debug("- Converting to desired pixel format");
     co_await convertToDesiredPixelFormat(taskPriority);
 
     if (orientation != EOrientation::TopLeft) {
-        tlog::debug() << fmt::format("- Orienting to top-left");
+        tlog::debug("- Orienting to top-left");
         co_await orientToTopLeft(taskPriority);
     }
 
@@ -636,7 +634,7 @@ atomic<int> Image::sId(0);
 
 Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector, bool groupChannels) :
     mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? tev::toDisplayString(path) : fmt::format("{}:{}", tev::toDisplayString(path), channelSelector);
+    mName = channelSelector.empty() ? tev::toDisplayString(path) : format("{}:{}", tev::toDisplayString(path), channelSelector);
 
     if (groupChannels) {
         for (const auto& l : mData.layers) {
@@ -804,11 +802,11 @@ Task<void> prepareTextureChannel(T* data, const Channel* chan, Box2i box, size_t
 
 Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) & {
     if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
-        tlog::error() << fmt::format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
+        tlog::error("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
         return nullptr;
     }
 
-    const string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
+    const string lookup = format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
     if (const auto it = mTextures.find(lookup); it != end(mTextures)) {
         auto& texture = it->second;
         if (texture.mipmapDirty && minFilter == EInterpolationMode::Trilinear) {
@@ -870,7 +868,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     // Important: num channels can be *larger* than the number of channels in the image here!
     // This is because some graphics APIs, like metal, only have power-of-two channel counts: 1, 2, 4
     if (numTextureChannels < channelNames.size()) {
-        throw runtime_error{fmt::format(
+        throw runtime_error{format(
             "Image has {} channels, but texture requires at least {} channels. (Image: {}, Texture: {})",
             channelNames.size(),
             numTextureChannels,
@@ -881,7 +879,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     const bool directUpload = isInterleaved(channelNames, numTextureChannels);
 
-    tlog::debug() << fmt::format(
+    tlog::debug(
         "Uploading texture: direct={} bps={} filter={}-{} img={}:{}",
         directUpload,
         bitsPerSample,
@@ -893,7 +891,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-        tlog::debug() << fmt::format("Upload took {:.03}s", duration.count());
+        tlog::debug("Upload took {:.03}s", duration.count());
     }};
 
     shared_ptr<PixelBuffer> dataPtr = nullptr;
@@ -905,7 +903,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     } else {
         const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
             const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-            tlog::debug() << fmt::format("Upload buffer generation took {:.03}s", duration.count());
+            tlog::debug("Upload buffer generation took {:.03}s", duration.count());
         }};
 
         const auto numPixels = this->numPixels();
@@ -997,12 +995,12 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
         const string channelsString = join(channelTails, ",");
         const string name = layer.empty() ?
             channelsString :
-            (channelTails.size() == 1 ? fmt::format("{}{}", layer, channelsString) : fmt::format("{}({})", layer, channelsString));
+            (channelTails.size() == 1 ? format("{}{}", layer, channelsString) : format("{}({})", layer, channelsString));
 
         return ChannelGroup{name, std::move(channels)};
     };
 
-    string alphaChannelName = fmt::format("{}A", layerName);
+    string alphaChannelName = format("{}A", layerName);
 
     vector<string> allChannels = mData.channelsInLayer(layerName);
 
@@ -1017,7 +1015,7 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     for (const auto& group : groups) {
         vector<string> groupChannels;
         for (string_view channel : group) {
-            string name = fmt::format("{}{}", layerName, channel);
+            string name = format("{}{}", layerName, channel);
             auto it = find(begin(allChannels), end(allChannels), name);
             if (it != end(allChannels)) {
                 groupChannels.emplace_back(name);
@@ -1054,7 +1052,7 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
 void Image::updateChannel(const string_view channelName, const Box2i bounds, span<const float> data) {
     Channel* const chan = mutableChannel(channelName);
     if (!chan) {
-        tlog::warning() << "Channel " << channelName << " could not be updated, because it does not exist.";
+        tlog::warning("Channel {} could not be updated, because it does not exist.", channelName);
         return;
     }
 
@@ -1307,7 +1305,7 @@ Task<void> Image::save(
 
     ofstream f{path, ios_base::binary};
     if (!f) {
-        throw ImageSaveError{fmt::format("Could not open file {}", path)};
+        throw ImageSaveError{format("Could not open file {}", path)};
     }
 
     for (const auto& saver : ImageSaver::getSavers()) {
@@ -1333,12 +1331,12 @@ Task<void> Image::save(
         }
 
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::steady_clock::now() - start).count();
-        tlog::debug() << fmt::format("Saved {} bytes to {} after {:.3f} seconds", (size_t)f.tellp(), path, duration);
+        tlog::debug("Saved {} bytes to {} after {:.3f} seconds", (size_t)f.tellp(), path, duration);
 
         co_return;
     }
 
-    throw ImageSaveError{fmt::format("No save routine for image type {} found.", path.extension())};
+    throw ImageSaveError{format("No save routine for image type {} found.", path.extension())};
 }
 
 template <typename T> time_t to_time_t(T timePoint) {
@@ -1434,9 +1432,9 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
 ) {
     const auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << fmt::format("Could not load {}: {}", path, e.what());
+            tlog::error("Could not load {}: {}", path, e.what());
         } else {
-            tlog::error() << fmt::format("Could not load {}:{}: {}", path, channelSelector, e.what());
+            tlog::error("Could not load {}:{}: {}", path, channelSelector, e.what());
         }
     };
 
@@ -1449,7 +1447,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         const auto start = chrono::system_clock::now();
 
         if (!iStream) {
-            throw ImageLoadError{fmt::format("Image {} could not be opened.", path)};
+            throw ImageLoadError{format("Image {} could not be opened.", path)};
         }
 
         fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
@@ -1471,8 +1469,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
                 success = true;
                 break;
             } catch (const ImageLoader::FormatNotSupported& e) {
-                tlog::debug()
-                    << fmt::format("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
+                tlog::debug("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
 
                 // Reset file cursor to beginning and try next loader.
                 iStream.clear();
@@ -1503,7 +1500,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
                 if (channelSelector.empty()) {
                     localChannelSelector = i.partName;
                 } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
-                    localChannelSelector = fmt::format("{},{}", i.partName, channelSelector);
+                    localChannelSelector = format("{},{}", i.partName, channelSelector);
                 } else {
                     localChannelSelector = string{channelSelector};
                 }
@@ -1513,13 +1510,13 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         }
 
         if (images.empty()) {
-            throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
+            throw ImageLoadError{format("No parts/channels match channel selector :{}", channelSelector)};
         }
 
         const auto end = chrono::system_clock::now();
         const chrono::duration<double> elapsedSeconds = end - start;
 
-        tlog::success() << fmt::format("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
+        tlog::success("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
 
         co_return images;
     } catch (const runtime_error& e) { handleException(e); }
