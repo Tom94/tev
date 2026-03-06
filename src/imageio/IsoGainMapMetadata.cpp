@@ -146,7 +146,7 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
 
         mVersion = IsoGainMapVersion{format("XMP v{}", version)};
 
-        const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f* out) {
+        const auto getMaybeRgbFloat = [&](const char* name, nanogui::Vector3f& out) {
             if (XMP_OptionBits options; meta->GetProperty(ns, name, nullptr, &options)) {
                 if (options & kXMP_PropValueIsArray) {
                     XMP_Index count = meta->CountArrayItems(ns, name);
@@ -179,17 +179,13 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
 
                     const auto parts = split(val, ",");
                     if (parts.size() != 1 && parts.size() != 3) {
-                        throw invalid_argument(
-                            format(
-                                "XMP gainmap property '{}' has invalid number of comma-separated values {}, expected 1 or 3.", name, parts.size()
-                            )
-                        );
+                        throw invalid_argument(format(
+                            "XMP gainmap property '{}' has invalid number of comma-separated values {}, expected 1 or 3.", name, parts.size()
+                        ));
                     }
 
                     for (size_t i = 0; i < parts.size(); ++i) {
-                        try {
-                            out[i] = stof(string{parts[i]});
-                        } catch (const invalid_argument&) {
+                        if (!fromChars(parts[i], out[i])) {
                             throw invalid_argument(format("XMP gainmap property '{}' value '{}' is not a float.", name, parts[i]));
                         }
                     }
@@ -215,29 +211,29 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
             return false;
         };
 
-        if (!getMaybeRgbFloat("GainMapMin", &mGainMapMin)) {
+        if (!getMaybeRgbFloat("GainMapMin", mGainMapMin)) {
             mGainMapMin = nanogui::Vector3f{0.0f};
         }
 
-        if (!getMaybeRgbFloat("GainMapMax", &mGainMapMax)) {
+        if (!getMaybeRgbFloat("GainMapMax", mGainMapMax)) {
             throw invalid_argument{"XMP gainmap property GainMapMax is required."};
         }
 
         mGainMapMax = max(mGainMapMax, mGainMapMin);
 
-        if (!getMaybeRgbFloat("Gamma", &mGainMapGamma)) {
+        if (!getMaybeRgbFloat("Gamma", mGainMapGamma)) {
             mGainMapGamma = nanogui::Vector3f{1.0f};
         }
 
         mGainMapGamma = max(mGainMapGamma, nanogui::Vector3f{0.001f});
 
-        if (!getMaybeRgbFloat("OffsetSDR", &mBaseOffset)) {
+        if (!getMaybeRgbFloat("OffsetSDR", mBaseOffset)) {
             mBaseOffset = nanogui::Vector3f{1.0f / 64.0f};
         }
 
         mBaseOffset = max(mBaseOffset, nanogui::Vector3f{0.0f});
 
-        if (!getMaybeRgbFloat("OffsetHDR", &mAlternateOffset)) {
+        if (!getMaybeRgbFloat("OffsetHDR", mAlternateOffset)) {
             mAlternateOffset = nanogui::Vector3f{1.0f / 64.0f};
         }
 
@@ -262,9 +258,7 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
                    meta->GetProperty_Bool(ns, "BaseRenditionIsHDR", &backwardDirection, nullptr) && backwardDirection) {
             reverseDirection();
         }
-    } catch (const XMP_Error& e) {
-        throw invalid_argument(format("Failed to read ISO 21496-1 gainmap XMP metadata: {}", e.GetErrMsg()));
-    }
+    } catch (const XMP_Error& e) { throw invalid_argument(format("Failed to read ISO 21496-1 gainmap XMP metadata: {}", e.GetErrMsg())); }
 }
 
 AttributeNode IsoGainMapMetadata::toAttributes() const {
@@ -287,9 +281,7 @@ AttributeNode IsoGainMapMetadata::toAttributes() const {
 
         channelNode.children.push_back({.name = "Gain Map Min", .value = format("{}", mGainMapMin[c]), .type = "float", .children = {}});
         channelNode.children.push_back({.name = "Gain Map Max", .value = format("{}", mGainMapMax[c]), .type = "float", .children = {}});
-        channelNode.children.push_back(
-            {.name = "Gain Map Gamma", .value = format("{}", mGainMapGamma[c]), .type = "float", .children = {}}
-        );
+        channelNode.children.push_back({.name = "Gain Map Gamma", .value = format("{}", mGainMapGamma[c]), .type = "float", .children = {}});
         channelNode.children.push_back({.name = "Base Offset", .value = format("{}", mBaseOffset[c]), .type = "float", .children = {}});
         channelNode.children.push_back(
             {.name = "Alternate Offset", .value = format("{}", mAlternateOffset[c]), .type = "float", .children = {}}
