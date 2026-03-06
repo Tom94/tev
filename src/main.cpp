@@ -33,7 +33,6 @@
 #    include <GLFW/glfw3native.h>
 #endif
 
-#include <charconv>
 #include <iostream>
 #include <thread>
 
@@ -58,18 +57,6 @@ void redrawWindow() {
     if (imageViewerIsReady) {
         sImageViewer->redraw();
     }
-}
-
-// Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
-template <typename T> bool fromChars(const char* begin, const char* end, T&& value) {
-    const auto result = from_chars(begin, end, std::forward<T>(value));
-    return result.ec == errc{} && result.ptr == end;
-}
-
-template <typename T> bool fromChars(string_view s, T&& value) { return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value)); }
-
-template <typename T> bool fromChars(const string& s, T&& value) {
-    return fromChars(s.data(), s.data() + s.size(), std::forward<T>(value));
 }
 
 static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<BackgroundImagesLoader>& imagesLoader) {
@@ -644,7 +631,7 @@ static int mainFunc(span<const string> arguments) {
         try {
             const auto gainmapHeadroom = GainmapHeadroom{get(gainmapHeadroomFlag)};
             imagesLoader->imageLoaderSettings().gainmapHeadroom = gainmapHeadroom;
-        } catch (const invalid_argument& e) {
+        } catch (const runtime_error& e) {
             tlog::error("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
             return -6;
         }
@@ -896,15 +883,12 @@ static int mainFunc(span<const string> arguments) {
         const string wlValue = get(whiteLevelFlag);
         if (toLower(wlValue) == "image") {
             sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::ImageMetadata);
+        } else if (float whiteLevel; fromChars(wlValue, whiteLevel)) {
+            sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::Custom);
+            sImageViewer->setDisplayWhiteLevel(whiteLevel);
         } else {
-            try {
-                const float whiteLevel = stof(get(whiteLevelFlag));
-                sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::Custom);
-                sImageViewer->setDisplayWhiteLevel(whiteLevel);
-            } catch (const invalid_argument&) {
-                tlog::error("Invalid white level value '{}'. Must be a float or 'image'.", get(whiteLevelFlag));
-                return -5;
-            }
+            tlog::error("Invalid white level value '{}'. Must be a float or 'image'.", wlValue);
+            return -5;
         }
     }
 

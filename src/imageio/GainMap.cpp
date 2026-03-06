@@ -31,10 +31,16 @@ namespace tev {
 GainmapHeadroom::GainmapHeadroom(string_view str) {
     if (str.ends_with("%")) {
         unit = EUnit::Percent;
-        value = stof(string{str.substr(0, str.size() - 1)}) / 100.0f;
+        if (!fromChars(str.substr(0, str.size() - 1), value)) {
+            throw runtime_error{format("Invalid headroom percentage: {}", str)};
+        }
+
+        value /= 100.0f;
     } else {
         unit = EUnit::Stops;
-        value = stof(string{str});
+        if (!fromChars(str, value)) {
+            throw runtime_error{format("Invalid headroom stops: {}", str)};
+        }
     }
 }
 

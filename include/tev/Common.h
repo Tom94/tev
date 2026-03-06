@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <charconv>
 #include <cmath>
 #include <concepts>
 #include <cstring>
@@ -42,6 +43,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -262,6 +264,30 @@ template <typename... Callable> struct visitor : Callable... {
 };
 
 template <typename T> concept trivially_copyable = std::is_trivially_copyable_v<T>;
+
+// Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
+template <typename T> bool fromChars(const char* begin, const char* end, T& value) {
+    const auto result = std::from_chars(begin, end, value);
+    return result.ec == std::errc{} && result.ptr == end;
+}
+
+template <typename T> bool fromChars(std::string_view s, T& value) {
+    // Shockingly, macOS *still* does not ship a floating point from_chars() implementation -- a C++17 feature! -- so we polyfill via the
+    // much heavier stof (string alloc + exception on failed parse). TODO: remove once supported
+#ifdef __APPLE__
+    if constexpr (std::is_floating_point_v<T>) {
+        try {
+            value = std::stof(std::string{s});
+            return true;
+        } catch (const std::invalid_argument&) { return false; } catch (const std::out_of_range&) {
+            return false;
+        }
+    } else
+#endif
+    {
+        return fromChars(s.data(), s.data() + s.size(), value);
+    }
+}
 
 template <trivially_copyable T> T fromBytes(std::span<const uint8_t> data) {
     if (data.size() < sizeof(T)) {

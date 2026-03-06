@@ -271,11 +271,9 @@ Color parseColor(string_view str) {
 
     Color color = {0.0f, 0.0f, 0.0f, 1.0f};
     for (size_t i = 0; i < parts.size(); ++i) {
-        try {
-            color[i] = stof(string{trim(parts[i])});
-        } catch (const invalid_argument&) {
+        if (!fromChars(trim(parts[i]), color[i])) {
             throw runtime_error{format("Invalid color component: {}", parts[i])};
-        } catch (const out_of_range&) { throw runtime_error{format("Color component out of range: {}", parts[i])}; }
+        }
     }
 
     return color;

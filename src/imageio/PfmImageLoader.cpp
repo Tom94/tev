@@ -166,23 +166,15 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
             TEV_ASSERT(headerParams.size() >= 2, "Not enough header parameters.");
 
-            try {
-                size.x() = stoi(headerParams[0]);
-                size.y() = stoi(headerParams[1]);
-            } catch (const invalid_argument&) {
+            if (!fromChars(headerParams[0], size.x()) || !fromChars(headerParams[1], size.y())) {
                 throw ImageLoadError{format("Invalid image size '{} {}'", headerParams[0], headerParams[1])};
-            } catch (const out_of_range&) {
-                throw ImageLoadError{format("Image size '{} {}' out of range", headerParams[0], headerParams[1])};
             }
 
             if (pfm) {
                 TEV_ASSERT(headerParams.size() >= 3, "No scale parameter in PFM header.");
-
-                try {
-                    scale = stof(headerParams[2]);
-                } catch (const invalid_argument&) {
+                if (!fromChars(headerParams[2], scale)) {
                     throw ImageLoadError{format("Invalid scale '{}'", headerParams[2])};
-                } catch (const out_of_range&) { throw ImageLoadError{format("Scale '{}' out of range", headerParams[2])}; }
+                }
 
                 isLittleEndian = scale < 0;
                 scale = abs(scale);
@@ -204,13 +196,13 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 } else {
                     TEV_ASSERT(headerParams.size() >= 3, "No max value parameter in PNM header.");
 
-                    try {
-                        const unsigned long long maxVal = stoull(headerParams[2]); // Maxval
-                        bitsPerChannel = maxVal >= (1 << 16) ? 32 : maxVal >= (1 << 8) ? 16 : 8;
-                        scale = 1.0f / maxVal;
-                    } catch (const invalid_argument&) {
+                    unsigned long long maxVal;
+                    if (!fromChars(headerParams[2], maxVal)) {
                         throw ImageLoadError{format("Invalid maxval '{}'", headerParams[2])};
-                    } catch (const out_of_range&) { throw ImageLoadError{format("Maxval '{}' out of range", headerParams[2])}; }
+                    }
+
+                    bitsPerChannel = maxVal >= (1ull << 16) ? 32 : maxVal >= (1ull << 8) ? 16 : 8;
+                    scale = 1.0f / maxVal;
                 }
             }
         } else {
@@ -259,24 +251,24 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                         }
                     );
                 } else {
-                    try {
-                        const unsigned long long ullVal = stoull(string{value});
-                        if (key == "WIDTH") {
-                            size.x() = (int)ullVal;
-                        } else if (key == "HEIGHT") {
-                            size.y() = (int)ullVal;
-                        } else if (key == "DEPTH") {
-                            numChannels = (int)ullVal;
-                        } else if (key == "MAXVAL") {
-                            const auto maxVal = ullVal;
-                            scale = 1.0f / maxVal;
-                            bitsPerChannel = maxVal >= (1 << 16) ? 32 : maxVal >= (1 << 8) ? 16 : 8;
-                        } else {
-                            tlog::warning("Invalid PAM key '{}'", key);
-                        }
-                    } catch (const invalid_argument&) {
+                    unsigned long long ullVal;
+                    if (!fromChars(value, ullVal)) {
                         throw ImageLoadError{format("Invalid {}: '{}'", key, value)};
-                    } catch (const out_of_range&) { throw ImageLoadError{format("{}'s value '{}' is out of range", key, value)}; }
+                    }
+
+                    if (key == "WIDTH") {
+                        size.x() = (int)ullVal;
+                    } else if (key == "HEIGHT") {
+                        size.y() = (int)ullVal;
+                    } else if (key == "DEPTH") {
+                        numChannels = (int)ullVal;
+                    } else if (key == "MAXVAL") {
+                        const auto maxVal = ullVal;
+                        scale = 1.0f / maxVal;
+                        bitsPerChannel = maxVal >= (1 << 16) ? 32 : maxVal >= (1 << 8) ? 16 : 8;
+                    } else {
+                        tlog::warning("Invalid PAM key '{}'", key);
+                    }
                 }
             }
         }
