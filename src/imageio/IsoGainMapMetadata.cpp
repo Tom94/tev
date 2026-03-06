@@ -46,7 +46,7 @@ IsoGainMapVersion::IsoGainMapVersion(span<const uint8_t> data, size_t* pos) {
 
     const auto writerVersion = IsoGainMapMetadata::read<uint16_t>(data, pos);
 
-    tlog::debug() << format("ISO 21496-1: version={} writerVersion={}", version, writerVersion);
+    tlog::debug("ISO 21496-1: version={} writerVersion={}", version, writerVersion);
 
     mVersionString = format("ISO 21496-1 v{} / v{}", version, writerVersion);
 }
@@ -70,13 +70,13 @@ IsoGainMapMetadata::IsoGainMapMetadata(span<const uint8_t> data) {
         throw invalid_argument(format("Unsupported IsoGainMapMetadata channel count {}, expected 1 or 3.", channelCount));
     }
 
-    tlog::debug() << format("IsoGainMapMetadata channel count: {}", channelCount);
+    tlog::debug("IsoGainMapMetadata channel count: {}", channelCount);
 
     mUseBaseColorSpace = flags & (uint8_t)EFlags::UseBaseColorSpace;
 
     const bool backwardDirection = flags & (uint8_t)EFlags::BackwardDirection;
     const bool useCommonDenominator = flags & (uint8_t)EFlags::UseCommonDenominator;
-    tlog::debug() << format(
+    tlog::debug(
         "IsoGainMapMetadata flags: useBaseColorSpace={} backwardDirection={} useCommonDenominator={}",
         mUseBaseColorSpace,
         backwardDirection,

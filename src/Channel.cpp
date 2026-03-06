@@ -80,13 +80,7 @@ Color Channel::color(string_view channel, bool pastel) {
 }
 
 Channel::Channel(
-    string_view name,
-    Vector2i size,
-    EPixelFormat format,
-    EPixelFormat desiredFormat,
-    shared_ptr<PixelBuffer> data,
-    size_t dataOffset,
-    size_t dataStride
+    string_view name, Vector2i size, EPixelFormat format, EPixelFormat desiredFormat, shared_ptr<PixelBuffer> data, size_t dataOffset, size_t dataStride
 ) :
     mName{name}, mSize{size}, mDesiredPixelFormat{desiredFormat} {
     if (data) {
@@ -137,7 +131,7 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
 
 void Channel::updateTile(const Box2i bounds, const span<const float> newData) {
     if (!Box2i{size()}.contains(bounds)) {
-        tlog::warning() << format("Tile [{}, {}] does not fit into channel of size {}", bounds.min, bounds.max, size());
+        tlog::warning("Tile [{}, {}] does not fit into channel of size {}", bounds.min, bounds.max, size());
         return;
     }
 

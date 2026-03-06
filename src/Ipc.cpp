@@ -397,7 +397,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
     try {
         fs::create_directories(runtimeDirectory());
     } catch (const fs::filesystem_error& e) {
-        tlog::warning() << format("Runtime directory {} does not exist and could not be created: {}", runtimeDirectory(), e.what());
+        tlog::warning("Runtime directory {} does not exist and could not be created: {}", runtimeDirectory(), e.what());
     }
 
     mLockName = format(".tev.{}.lock", hostname);
@@ -405,10 +405,10 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
     const auto parts = split(hostname, ":");
     if (parts.size() == 1 || (parts.size() == 2 && parts.back() == "unix")) {
         mHostInfo = UnixHost{.socketPath = runtimeDirectory() / format(".tev.{}.sock", parts.front())};
-        tlog::debug() << format("Initializing IPC on unix socket {}", this->hostname());
+        tlog::debug("Initializing IPC on unix socket {}", this->hostname());
     } else if (parts.size() == 2) {
         mHostInfo = IpHost{.ip = string{parts.front()}, .port = string{parts.back()}};
-        tlog::debug() << format("Initializing IPC on IP host {}", this->hostname());
+        tlog::debug("Initializing IPC on IP host {}", this->hostname());
     } else {
         throw runtime_error{format("IPC hostname must not include more than one ':' symbol but is {}.", hostname)};
     }
@@ -471,7 +471,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
         for (struct addrinfo* ptr = &addrinfo; ptr; ptr = ptr->ai_next) {
             mSocketFd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
             if (mSocketFd == INVALID_SOCKET) {
-                tlog::warning() << format("socket() failed: {}", errorString(lastSocketError()));
+                tlog::warning("socket() failed: {}", errorString(lastSocketError()));
                 continue;
             }
 
@@ -480,7 +480,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
                 if (errorId == SocketError::ConnRefused) {
                     throw runtime_error{"Connection to primary instance refused"};
                 } else {
-                    tlog::warning() << format("connect() failed: {}", errorString(errorId));
+                    tlog::warning("connect() failed: {}", errorString(errorId));
                 }
 
                 closeSocket(mSocketFd); // discard socket closure error
@@ -488,7 +488,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
                 continue;
             }
 
-            tlog::success() << format("Connected to primary instance {}", this->hostname());
+            tlog::success("Connected to primary instance {}", this->hostname());
             break; // success
         }
 
@@ -496,13 +496,13 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
             throw runtime_error{"Unable to connect to primary instance."};
         }
     } catch (const runtime_error& e) {
-        tlog::warning() << "Could not initialize IPC. Assuming primary instance. " << e.what();
+        tlog::warning("Could not initialize IPC: {}. Assuming primary instance.", e.what());
         mIsPrimaryInstance = true;
     }
 }
 
 Ipc::~Ipc() {
-    tlog::debug() << "Shutting down IPC.";
+    tlog::debug("Shutting down IPC.");
 
     if (mSocketFd != INVALID_SOCKET) {
         if (!mIsPrimaryInstance) {
@@ -510,7 +510,7 @@ Ipc::~Ipc() {
         }
 
         if (closeSocket(mSocketFd) == SOCKET_ERROR) {
-            tlog::warning() << format("Error closing socket {}: {}", mSocketFd, errorString(lastSocketError()));
+            tlog::warning("Error closing socket {}: {}", mSocketFd, errorString(lastSocketError()));
         }
     }
 
@@ -553,7 +553,7 @@ void Ipc::sendRemainingDataAndDisconnectFromPrimaryInstance() {
 
     const bool successfulShutdown = shutdownSocketWrite(mSocketFd) != SOCKET_ERROR;
     if (!successfulShutdown) {
-        tlog::warning() << format("Error shutting down socket {}: {}", mSocketFd, errorString(lastSocketError()));
+        tlog::warning("Error shutting down socket {}: {}", mSocketFd, errorString(lastSocketError()));
     } else {
         const auto start = chrono::steady_clock::now();
         const auto timeout = chrono::seconds{5};
@@ -569,8 +569,7 @@ void Ipc::sendRemainingDataAndDisconnectFromPrimaryInstance() {
                     this_thread::sleep_for(1ms);
                     continue;
                 } else {
-                    tlog::warning()
-                        << format("Error receiving final data from primary instance ({}: {})", mSocketFd, errorString(errorId));
+                    tlog::warning("Error receiving final data from primary instance ({}: {})", mSocketFd, errorString(errorId));
                     break;
                 }
             } else if (nReceived == 0) {
@@ -579,11 +578,10 @@ void Ipc::sendRemainingDataAndDisconnectFromPrimaryInstance() {
         }
 
         if (chrono::steady_clock::now() - start >= timeout) {
-            tlog::warning()
-                << format("Timeout of {} seconds while disconnecting from primary instance {}", timeout.count(), this->hostname());
+            tlog::warning("Timeout of {} seconds while disconnecting from primary instance {}", timeout.count(), this->hostname());
         }
 
-        tlog::debug() << format("Gracefully disconnected from primary instance {}", this->hostname());
+        tlog::debug("Gracefully disconnected from primary instance {}", this->hostname());
     }
 }
 
@@ -612,11 +610,11 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         throw runtime_error{format("Could not create lock file: {}", errorString(lastError()))};
     }
 
-    tlog::debug() << format("Lock file {} created or exists", mLockFile);
+    tlog::debug("Lock file {} created or exists", mLockFile);
 
     mIsPrimaryInstance = !flock(mLockFileDescriptor, LOCK_EX | LOCK_NB);
     if (!mIsPrimaryInstance) {
-        tlog::debug() << format("Could not acquire lock. Must be secondary instance.");
+        tlog::debug("Could not acquire lock. Must be secondary instance.");
         close(mLockFileDescriptor);
     }
 #endif
@@ -630,7 +628,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
     // If we were previously a secondary instance connected with the primary instance, disconnect
     if (mSocketFd != INVALID_SOCKET) {
         if (closeSocket(mSocketFd) == SOCKET_ERROR) {
-            tlog::warning() << "Error closing socket upon becoming primary instance " << mSocketFd << ": " << errorString(lastSocketError());
+            tlog::warning("Error closing socket upon becoming primary instance {}: {}", mSocketFd, errorString(lastSocketError()));
         }
     }
 
@@ -686,7 +684,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         throw runtime_error{format("listen() call failed: {}", errorString(lastSocketError()))};
     }
 
-    tlog::success() << format("Initialized IPC, listening on {}", this->hostname());
+    tlog::success("Initialized IPC, listening on {}", this->hostname());
     return true;
 }
 
@@ -725,7 +723,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
     if (fd == INVALID_SOCKET) {
         const int errorId = lastSocketError();
         if (errorId != SocketError::Again && errorId != SocketError::WouldBlock) {
-            tlog::warning() << "accept() error: " << errorId << " " << errorString(errorId);
+            tlog::warning("accept() error: {}: {}", errorId, errorString(errorId));
         }
     } else {
         string name = "";
@@ -741,7 +739,7 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
             mHostInfo
         );
 
-        tlog::info() << format("Client {} (#{}) connected", name, fd);
+        tlog::info("Client {} (#{}) connected", name, fd);
         mSocketConnections.push_back(SocketConnection{fd, name});
     }
 
@@ -794,14 +792,14 @@ size_t Ipc::SocketConnection::service(function<void(const IpcPacket&)> callback)
         if (bytesReceived == SOCKET_ERROR) {
             const int errorId = lastSocketError();
             if (errorId != SocketError::Again && errorId != SocketError::WouldBlock) {
-                tlog::warning() << "Error while reading from socket. " << errorString(errorId) << " Connection terminated.";
+                tlog::warning("Error while reading from socket: {}. Connection terminated.", errorString(errorId));
                 close();
                 break;
             }
 
             break; // try again later
         } else if (bytesReceived == 0) {
-            tlog::info() << "Client " << mName << " (#" << mSocketFd << ") disconnected";
+            tlog::info("Client {} (#{}) disconnected", mName, mSocketFd);
             close();
             break;
         }

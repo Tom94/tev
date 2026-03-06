@@ -58,15 +58,12 @@ Exif::Exif() {
             const string msg = std::format("{}: {}", domain, buf);
             const auto m = trimRight(msg);
             switch (kind) {
-                case EXIF_LOG_CODE_NONE: tlog::info() << m; break;
-                case EXIF_LOG_CODE_DEBUG: tlog::debug() << m; break;
-                case EXIF_LOG_CODE_NO_MEMORY:
-                    *error = true;
-                    tlog::warning() << m;
-                    break;
+                case EXIF_LOG_CODE_NONE: tlog::info(m); break;
+                case EXIF_LOG_CODE_DEBUG: tlog::debug(m); break;
+                case EXIF_LOG_CODE_NO_MEMORY: [[fallthrough]];
                 case EXIF_LOG_CODE_CORRUPT_DATA:
                     *error = true;
-                    tlog::warning() << m;
+                    tlog::warning(m);
                     break;
             }
         },
@@ -101,7 +98,7 @@ Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
     }
 
     // Uncomment to dump complete EXIF contents
-    // tlog::debug() << "Loaded EXIF data. Entries:";
+    // tlog::debug("Loaded EXIF data. Entries:");
     // if (tlog::Logger::global()->hiddenSeverities().count(tlog::ESeverity::Debug) == 0) {
     //     exif_data_dump(mExif);
     // }
@@ -163,7 +160,7 @@ EOrientation Exif::getOrientation() const {
         case 6: return EOrientation::RightTop;
         case 7: return EOrientation::RightBottom;
         case 8: return EOrientation::LeftBottom;
-        default: tlog::warning() << format("Invalid EXIF orientation value: {}", orientationValue); return EOrientation::None;
+        default: tlog::warning("Invalid EXIF orientation value: {}", orientationValue); return EOrientation::None;
     }
 }
 

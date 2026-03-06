@@ -86,7 +86,7 @@ Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
 
     // prevent a division that rounds to zero
     if (abs(white.y()) <= 1.f && abs(white.x() * Y) >= abs(white.y()) * numeric_limits<float>::max()) {
-        tlog::warning() << format("Bad chromaticities: white.y is too small ({}); returning identity", white.y());
+        tlog::warning("Bad chromaticities: white.y is too small ({}); returning identity", white.y());
         return Matrix3f{1.0f};
     }
 
@@ -113,7 +113,7 @@ Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
         // cannot generate matrix if all RGB primaries have the same y value
         // or if they all have the an x value of zero
         // in both cases, the primaries are colinear, which makes them unusable
-        tlog::warning() << format("Bad chromaticities: RGB primaries are colinear or too close to it (d={}); returning identity", d);
+        tlog::warning("Bad chromaticities: RGB primaries are colinear or too close to it (d={}); returning identity", d);
         return Matrix3f{1.0f};
     }
 
@@ -182,7 +182,7 @@ Matrix3f
     const auto srcWhite = adoptedNeutral.has_value() ? *adoptedNeutral : srcChroma[3];
     switch (intent) {
         case ERenderingIntent::Saturation:
-            tlog::warning() << "Saturation rendering intent is not supported; falling back to Perceptual.";
+            tlog::warning("Saturation rendering intent is not supported; falling back to Perceptual.");
             [[fallthrough]];
         case ERenderingIntent::Perceptual:
         case ERenderingIntent::RelativeColorimetric:
@@ -382,9 +382,9 @@ string_view toString(const EColorPrimaries primaries) {
 
 chroma_t chroma(const EColorPrimaries primaries) {
     switch (primaries) {
-        default: tlog::warning() << format("Unknown color primaries {}. Using Rec.709 chroma.", (int)primaries); return rec709Chroma();
+        default: tlog::warning("Unknown color primaries {}. Using Rec.709 chroma.", (int)primaries); return rec709Chroma();
         case EColorPrimaries::BT709: return rec709Chroma();
-        case EColorPrimaries::Unspecified: tlog::warning() << "Unspecified color primaries. Using Rec.709 chroma."; return rec709Chroma();
+        case EColorPrimaries::Unspecified: tlog::warning("Unspecified color primaries. Using Rec.709 chroma."); return rec709Chroma();
         case EColorPrimaries::BT470M:
             return {
                 {
@@ -543,7 +543,7 @@ class GlobalCmsContext {
 public:
     GlobalCmsContext() {
         cmsSetLogErrorHandler([](cmsContext, cmsUInt32Number errorCode, const char* message) {
-            tlog::error() << format("lcms error #{}: {}", errorCode, message);
+            tlog::error("lcms error #{}: {}", errorCode, message);
         });
     }
 };
@@ -653,7 +653,7 @@ ERenderingIntent ColorProfile::renderingIntent() const {
             case INTENT_SATURATION: return ERenderingIntent::Saturation;
             case INTENT_ABSOLUTE_COLORIMETRIC: return ERenderingIntent::AbsoluteColorimetric;
             default:
-                tlog::warning() << format("Unknown rendering intent {} in profile. Falling back to checking other intents.", intent);
+                tlog::warning("Unknown rendering intent {} in profile. Falling back to checking other intents.", intent);
                 break; // fall back to checking other intents
         }
     }
@@ -748,7 +748,7 @@ ColorProfile ColorProfile::fromIcc(span<const uint8_t> iccProfile) {
         cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", desc.data(), (cmsUInt32Number)desc.size());
     }
 
-    tlog::debug() << format("Loaded ICC profile '{}'.", desc);
+    tlog::debug("Loaded ICC profile '{}'.", desc);
 
     return srcProfile;
 }
@@ -788,21 +788,21 @@ Task<void> toLinearSrgbPremul(
 
     auto cicp = profile.cicp();
     if (cicp) {
-        tlog::debug() << format("ICC profile has CICP tag. Attempting manual conversion.");
+        tlog::debug("ICC profile has CICP tag. Attempting manual conversion.");
     }
 
     if (cicp && !ituth273::isTransferImplemented(cicp->transfer)) {
-        tlog::warning() << format("Unsupported transfer '{}' in CICP tag. Falling back to LCMS2.", ituth273::toString(cicp->transfer));
+        tlog::warning("Unsupported transfer '{}' in CICP tag. Falling back to LCMS2.", ituth273::toString(cicp->transfer));
         cicp = nullopt;
     }
 
     if (cicp && cicp->matrixCoeffs != 0) {
-        tlog::warning() << format("Unsupported matrix coefficients in CICP chunk: {}. Falling back to LCMS2.", cicp->matrixCoeffs);
+        tlog::warning("Unsupported matrix coefficients in CICP chunk: {}. Falling back to LCMS2.", cicp->matrixCoeffs);
         cicp = nullopt;
     }
 
     if (cicp && (numColorChannels > 3 || numColorChannelsOut > 3)) {
-        tlog::warning() << format(
+        tlog::warning(
             "Unsupported channel count for manual CICP conversion: {} input channels, {} output channels. Falling back to LCMS2.",
             numColorChannels,
             numColorChannelsOut
@@ -815,7 +815,7 @@ Task<void> toLinearSrgbPremul(
 
     const ERenderingIntent intent = intentOverride.value_or(profile.renderingIntent());
     if (cicp) {
-        tlog::debug() << format(
+        tlog::debug(
             "CICP: primaries={} transfer={} coeffs={} fullRange={}",
             ituth273::toString(cicp->primaries),
             ituth273::toString(cicp->transfer),
@@ -872,7 +872,7 @@ Task<void> toLinearSrgbPremul(
     cmsUInt32Number colorSpaceType = 0;
     const cmsColorSpaceSignature cs = cmsGetColorSpace(profile.get());
     if (const auto expected = expectedColorChannelCount(cs); expected > 0 && numColorChannels != expected) {
-        tlog::warning() << format(
+        tlog::warning(
             "Profile color space {:08X} indicates {} color channels, but input has {}. Guessing color space based on channel count instead.",
             (uint32_t)cs,
             expectedColorChannelCount(cs),
@@ -895,8 +895,7 @@ Task<void> toLinearSrgbPremul(
             case cmsSigYCbCrData: colorSpaceType = COLORSPACE_SH(PT_YCbCr); break;
             case cmsSigYxyData: colorSpaceType = COLORSPACE_SH(PT_Yxy); break;
             default:
-                tlog::warning()
-                    << format("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
+                tlog::warning("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
                 colorSpaceType = guessColorSpace(numColorChannels);
                 break;
         }
@@ -917,7 +916,7 @@ Task<void> toLinearSrgbPremul(
 
     cmsHTRANSFORM transform = nullptr;
     if (cicp) {
-        tlog::debug() << format(
+        tlog::debug(
             "Performing CICP color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={}",
             (int)alphaKind,
             type,
@@ -931,7 +930,7 @@ Task<void> toLinearSrgbPremul(
         // convert quickly anyway. We'll disable optimizations arbitrarily for images with fewer than 512x512 pixels.
         const bool optimize = numPixels >= 512 * 512;
 
-        tlog::debug() << format(
+        tlog::debug(
             "Creating LCMS color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={} optimize={}",
             (int)alphaKind,
             type,
@@ -962,7 +961,7 @@ Task<void> toLinearSrgbPremul(
 
     const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-        tlog::debug() << format("ICC profile application took {:.03}s", duration.count());
+        tlog::debug("ICC profile application took {:.03}s", duration.count());
     }};
 
     const size_t numSamples = numPixels * src.nChannels();
@@ -1079,7 +1078,7 @@ LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {
         case 12: return {4095.0f / 3504.0f, 256.0f / 4095.0f};
     }
 
-    tlog::warning() << format("Unsupported bits per sample {} with limited range flag.", bitsPerSample);
+    tlog::warning("Unsupported bits per sample {} with limited range flag.", bitsPerSample);
     return LimitedRange::full();
 }
 

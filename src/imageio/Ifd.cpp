@@ -55,7 +55,7 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
 
         const uint32_t ifdOffset = read<uint32_t>(ptr + ofs);
 
-        tlog::debug() << std::format("IFD: ifdOffset={}", ifdOffset);
+        tlog::debug("IFD: ifdOffset={}", ifdOffset);
         ofs = initialOffset + ifdOffset;
     }
 
@@ -66,7 +66,7 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
         throw invalid_argument{std::format("IFD: too short for {} tags.", tcount)};
     }
 
-    tlog::debug() << "Decoding IFD:";
+    tlog::debug("Decoding IFD:");
     for (uint32_t i = 0; i < tcount; i++) {
         if (ofs + 12 > data.size()) {
             throw invalid_argument{"IFD: overflow"};
@@ -99,13 +99,13 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
         ofs += 12;
         mTags[entry.tag] = entry;
 
-        tlog::debug() << std::format("  tag={:04X}/{} format={} components={}", entry.tag, entry.tag, (int)entry.format, entry.nComponents);
+        tlog::debug("  tag={:04X}/{} format={} components={}", entry.tag, entry.tag, (int)entry.format, entry.nComponents);
     }
 
     if (ofs + 4 <= data.size()) {
         const auto nextIfdOffset = read<uint32_t>(ptr + ofs);
         if (nextIfdOffset != 0) {
-            tlog::debug() << std::format("IFD: next IFD offset: {}", nextIfdOffset);
+            tlog::debug("IFD: next IFD offset: {}", nextIfdOffset);
             mNextIfdOffset = nextIfdOffset;
         }
     }

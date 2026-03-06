@@ -243,7 +243,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     for (int i = 0; i < 8; i++) {
         const Box2i box = maskToBox(iProcessor.imgdata.sizes.mask[i]);
-        tlog::debug() << format("mask[{}] = [{}, {}]", i, box.min, box.max);
+        tlog::debug("mask[{}] = [{}, {}]", i, box.min, box.max);
 
         if (!box.isValid() || box.area() == 0) {
             continue;
@@ -254,7 +254,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     for (int i = 0; i < 2; i++) {
         const Box2i box = cropToBox(iProcessor.imgdata.sizes.raw_inset_crops[i]);
-        tlog::debug() << format("raw_inset_crops[{}] = [{}, {}]", i, box.min, box.max);
+        tlog::debug("raw_inset_crops[{}] = [{}, {}]", i, box.min, box.max);
 
         if (!box.isValid() || box.area() == 0) {
             continue;
@@ -271,7 +271,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     }
 
     const Vector2i margin = {iProcessor.imgdata.sizes.left_margin, iProcessor.imgdata.sizes.top_margin};
-    tlog::debug() << format(
+    tlog::debug(
         "raw image: size={} flip={} crop=[{}, {}] margin={} fmax={} fnorm={}",
         orientedSize,
         flip,

@@ -307,7 +307,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
 
         if (whiteLevelFromMaxFALL > 0 && whiteLevelFromMaxCLL > 0 &&
             abs(whiteLevelFromMaxCLL - whiteLevelFromMaxFALL) / (whiteLevelFromMaxCLL + whiteLevelFromMaxFALL) > 0.01f) {
-            tlog::warning() << format(
+            tlog::warning(
                 "Derived white levels from maxCLL ({}->{}) and maxFALL ({}->{}) of layer '{}' differ by over 1%.",
                 hdrMetadata.maxCLL,
                 whiteLevelFromMaxCLL,
@@ -317,7 +317,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
             );
         }
 
-        tlog::debug() << format("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.bestGuessWhiteLevel, layers[i]);
+        tlog::debug("Derived white level of {} from metadata & layer '{}'.", hdrMetadata.bestGuessWhiteLevel, layers[i]);
     }
 }
 
@@ -354,7 +354,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                 if (c->pixelFormat() != sourceFormat || c->desiredPixelFormat() != targetFormat) {
                     canConvert = false;
 
-                    tlog::warning() << format(
+                    tlog::warning(
                         "Channels sharing the same data buffer must have the same source and target pixel format. ({}: {} -> {}, {}: {} -> {})",
                         firstChannel->name(),
                         toString(sourceFormat),
@@ -537,7 +537,7 @@ void ImageData::updateLayers() {
 }
 
 Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority) {
-    tlog::debug() << "Ensuring image is valid...";
+    tlog::debug("Ensuring image is valid...");
 
     if (channels.empty()) {
         throw ImageLoadError{"Image must have at least one channel."};
@@ -555,9 +555,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     unordered_map<string_view, size_t> channelNameCounter;
     for (auto& c : channels) {
         if (c.size() != size()) {
-            throw ImageLoadError{
-                format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())
-            };
+            throw ImageLoadError{format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())};
         }
 
         // Ensure the top-level layer of each channel is the image's part name
@@ -570,7 +568,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         const size_t count = channelNameCounter[c.name()]++;
         if (count > 0) {
             c.setName(Channel::join(format("{}{}", Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
-            tlog::debug() << format("Renamed duplicate channel to '{}'", c.name());
+            tlog::debug("Renamed duplicate channel to '{}'", c.name());
         }
     }
 
@@ -597,14 +595,14 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     updateLayers();
 
     if (!hasPremultipliedAlpha) {
-        tlog::debug() << format("- Multiplying alpha");
+        tlog::debug("- Multiplying alpha");
         co_await multiplyAlpha(taskPriority);
     }
 
     TEV_ASSERT(hasPremultipliedAlpha, "tev assumes an internal pre-multiplied-alpha representation.");
 
     if (toRec709 != Matrix3f{1.0f}) {
-        tlog::debug() << format("- Converting to Rec.709 D65");
+        tlog::debug("- Converting to Rec.709 D65");
         co_await convertToRec709(taskPriority);
     }
 
@@ -616,11 +614,11 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     // co_await deriveWhiteLevelFromMetadata(taskPriority);
 
-    tlog::debug() << format("- Converting to desired pixel format");
+    tlog::debug("- Converting to desired pixel format");
     co_await convertToDesiredPixelFormat(taskPriority);
 
     if (orientation != EOrientation::TopLeft) {
-        tlog::debug() << format("- Orienting to top-left");
+        tlog::debug("- Orienting to top-left");
         co_await orientToTopLeft(taskPriority);
     }
 
@@ -804,7 +802,7 @@ Task<void> prepareTextureChannel(T* data, const Channel* chan, Box2i box, size_t
 
 Texture* Image::texture(span<const string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) & {
     if (size().x() > maxTextureSize() || size().y() > maxTextureSize()) {
-        tlog::error() << format("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
+        tlog::error("{} is too large for Texturing. ({}x{})", mName, size().x(), size().y());
         return nullptr;
     }
 
@@ -881,7 +879,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     const bool directUpload = isInterleaved(channelNames, numTextureChannels);
 
-    tlog::debug() << format(
+    tlog::debug(
         "Uploading texture: direct={} bps={} filter={}-{} img={}:{}",
         directUpload,
         bitsPerSample,
@@ -893,7 +891,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-        tlog::debug() << format("Upload took {:.03}s", duration.count());
+        tlog::debug("Upload took {:.03}s", duration.count());
     }};
 
     shared_ptr<PixelBuffer> dataPtr = nullptr;
@@ -905,7 +903,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     } else {
         const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
             const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
-            tlog::debug() << format("Upload buffer generation took {:.03}s", duration.count());
+            tlog::debug("Upload buffer generation took {:.03}s", duration.count());
         }};
 
         const auto numPixels = this->numPixels();
@@ -1054,7 +1052,7 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
 void Image::updateChannel(const string_view channelName, const Box2i bounds, span<const float> data) {
     Channel* const chan = mutableChannel(channelName);
     if (!chan) {
-        tlog::warning() << "Channel " << channelName << " could not be updated, because it does not exist.";
+        tlog::warning("Channel {} could not be updated, because it does not exist.", channelName);
         return;
     }
 
@@ -1333,7 +1331,7 @@ Task<void> Image::save(
         }
 
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::steady_clock::now() - start).count();
-        tlog::debug() << format("Saved {} bytes to {} after {:.3f} seconds", (size_t)f.tellp(), path, duration);
+        tlog::debug("Saved {} bytes to {} after {:.3f} seconds", (size_t)f.tellp(), path, duration);
 
         co_return;
     }
@@ -1434,9 +1432,9 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
 ) {
     const auto handleException = [&](const exception& e) {
         if (channelSelector.empty()) {
-            tlog::error() << format("Could not load {}: {}", path, e.what());
+            tlog::error("Could not load {}: {}", path, e.what());
         } else {
-            tlog::error() << format("Could not load {}:{}: {}", path, channelSelector, e.what());
+            tlog::error("Could not load {}:{}: {}", path, channelSelector, e.what());
         }
     };
 
@@ -1471,8 +1469,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
                 success = true;
                 break;
             } catch (const ImageLoader::FormatNotSupported& e) {
-                tlog::debug()
-                    << format("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
+                tlog::debug("Image loader {} does not support loading {}: {} Trying next loader.", loadMethod, path, e.what());
 
                 // Reset file cursor to beginning and try next loader.
                 iStream.clear();
@@ -1519,7 +1516,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         const auto end = chrono::system_clock::now();
         const chrono::duration<double> elapsedSeconds = end - start;
 
-        tlog::success() << format("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
+        tlog::success("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
 
         co_return images;
     } catch (const runtime_error& e) { handleException(e); }

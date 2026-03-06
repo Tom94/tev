@@ -801,7 +801,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
     }
 
     if (sig == "BA") {
-        tlog::debug() << format("Loading BA BMP sequence");
+        tlog::debug("Loading BA BMP sequence");
 
         struct BaHeader {
             // Size of this header and following ones. Not meant to be used; see https://www.fileformat.info/format/os2bmp/egff.htm. Only
@@ -830,7 +830,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
                 throw ImageLoadError{format("Invalid BA BMP header size: {}", baFileHeader.headerSize)};
             }
 
-            tlog::debug() << format(
+            tlog::debug(
                 "BA BMP frame #{}: headerSize={} offsetToNext={} width={} height={}",
                 i,
                 baFileHeader.headerSize,
@@ -977,7 +977,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     // This particular header uses 16-bit values for width and height. Others 32-bit values, so we have to read those first and then read
     // the rest of the header accordingly.
     if (type == EType::Os2V1) {
-        tlog::debug() << "BMP uses OS/2 V1 DIB header with 16-bit width and height";
+        tlog::debug("BMP uses OS/2 V1 DIB header with 16-bit width and height");
 
         uint16_t width16, height16;
         iStream.read((char*)&width16, sizeof(uint16_t));
@@ -1107,7 +1107,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     }
 
     if (compression == ECompression::Jpeg) {
-        tlog::debug() << "BMP embeds JPEG data. Delegating to JPEG loader.";
+        tlog::debug("BMP embeds JPEG data. Delegating to JPEG loader.");
 
         if (pixelDataOffset.has_value()) {
             iStream.seekg(*pixelDataOffset, ios::beg);
@@ -1123,7 +1123,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     }
 
     if (compression == ECompression::Png) {
-        tlog::debug() << "BMP embeds PNG data. Delegating to PNG loader.";
+        tlog::debug("BMP embeds PNG data. Delegating to PNG loader.");
 
         if (pixelDataOffset.has_value()) {
             iStream.seekg(*pixelDataOffset, ios::beg);
@@ -1169,8 +1169,9 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     // following bytes. This is a weird quirk of the BMP format but we have to support it.
     if (dib.size < 52) {
         if (compression == ECompression::Bitfields) {
-            tlog::debug()
-                << "BMP uses BITFIELDS compression but DIB header is too small to contain color masks; reading masks from following bytes";
+            tlog::debug(
+                "BMP uses BITFIELDS compression but DIB header is too small to contain color masks; reading masks from following bytes"
+            );
 
             uint32_t masks[3];
             iStream.read((char*)masks, sizeof(masks));
@@ -1183,8 +1184,9 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             dib.blueMask = reverseEndianness ? swapBytes(masks[2]) : masks[2];
             dib.alphaMask = 0; // alphaMask is already zero-initialized, but good to make this explicit here
         } else if (compression == ECompression::AlphaBitfields) {
-            tlog::debug()
-                << "BMP uses ALPHABITFIELDS compression but DIB header is too small to contain color masks; reading masks from following bytes";
+            tlog::debug(
+                "BMP uses ALPHABITFIELDS compression but DIB header is too small to contain color masks; reading masks from following bytes"
+            );
 
             uint32_t masks[4];
             iStream.read((char*)masks, sizeof(masks));
@@ -1248,7 +1250,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         case EColorSpace::Windows: break;
         case EColorSpace::IccEmbedded: {
             if (dib.iccProfileSize == 0 || dib.iccProfileData == 0) {
-                tlog::warning() << "BMP indicates embedded ICC profile but profile info is missing; skipping ICC profile handling";
+                tlog::warning("BMP indicates embedded ICC profile but profile info is missing; skipping ICC profile handling");
                 break;
             }
 
@@ -1257,13 +1259,13 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             iStream.read((char*)iccProfileData.data(), iccProfileData.size());
             if (!iStream) {
                 iccProfileData = {};
-                tlog::warning() << format("Failed to read ICC profile data of size {}", iccProfileData.size());
+                tlog::warning("Failed to read ICC profile data of size {}", iccProfileData.size());
                 break;
             }
         } break;
         case EColorSpace::IccLinked: {
             if (dib.iccProfileSize == 0 || dib.iccProfileData == 0) {
-                tlog::warning() << "BMP indicates linked ICC profile but profile info is missing; skipping ICC profile handling";
+                tlog::warning("BMP indicates linked ICC profile but profile info is missing; skipping ICC profile handling");
                 break;
             }
 
@@ -1271,14 +1273,13 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             string path(dib.iccProfileSize, '\0');
             iStream.read(path.data(), dib.iccProfileSize);
             if (!iStream) {
-                tlog::warning() << format("Failed to read ICC profile path of size {}", iccProfileData.size());
+                tlog::warning("Failed to read ICC profile path of size {}", iccProfileData.size());
                 break;
             }
 
-            tlog::warning()
-                << format("Image contains path to an ICC profile '{}' but tev will not attempt read it for security concerns", path);
+            tlog::warning("Image contains path to an ICC profile '{}' but tev will not attempt read it for security concerns", path);
         } break;
-        default: tlog::warning() << format("Unsupported BMP color space type {:08X}, assuming sRGB", dib.colorSpaceType); break;
+        default: tlog::warning("Unsupported BMP color space type {:08X}, assuming sRGB", dib.colorSpaceType); break;
     }
 
     optional<Vector3f> gamma = nullopt;
@@ -1334,9 +1335,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             case 0x00000002: return ERenderingIntent::RelativeColorimetric;
             case 0x00000004: return ERenderingIntent::Perceptual;
             case 0x00000008: return ERenderingIntent::AbsoluteColorimetric;
-            default:
-                tlog::warning() << format("Unknown BMP rendering intent: {:08X}; ignoring rendering intent", dibIntent);
-                return nullopt;
+            default: tlog::warning("Unknown BMP rendering intent: {:08X}; ignoring rendering intent", dibIntent); return nullopt;
         }
     };
 
@@ -1357,9 +1356,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
         iStream.read((char*)palette.data(), palette.size());
         if (!iStream) {
-            throw ImageLoadError{
-                format("Failed to read BMP palette with {} entries and entry size {}", numPaletteEntries, paletteEntrySize)
-            };
+            throw ImageLoadError{format("Failed to read BMP palette with {} entries and entry size {}", numPaletteEntries, paletteEntrySize)};
         }
 
         if (palette.size() == 0) {
@@ -1367,7 +1364,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     }
 
-    tlog::debug() << format(
+    tlog::debug(
         "BMP info({}): size={} planes={} bpp={} compression={} palette={} redMask={:08X} greenMask={:08X} blueMask={:08X} alphaMask={:08X} colorSpaceType={:08X}",
         dib.size,
         Vector2i{dib.width, dib.height},
@@ -1383,7 +1380,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     );
 
     if (dib.size >= 108) {
-        tlog::debug() << format(
+        tlog::debug(
             "BMP DIB header v4 color space: gamma={} chroma={}",
             gamma.has_value() ? format("{}", *gamma) : "n/a",
             chroma.has_value() ? format("{}", *chroma) : "n/a"
@@ -1391,7 +1388,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     }
 
     if (dib.size >= 124) {
-        tlog::debug() << format(
+        tlog::debug(
             "BMP DIB header v5 color profile: intent={} profileSize={}",
             renderingIntent.has_value() ? toString(*renderingIntent) : "n/a",
             dib.iccProfileSize
@@ -1550,7 +1547,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     );
 
     if (hasAlpha && allTransparent) {
-        tlog::debug() << "BMP image is fully transparent; flipping to all opaque";
+        tlog::debug("BMP image is fully transparent; flipping to all opaque");
         co_await ThreadPool::global().parallelFor(0uz, numPixels, numPixels, [&](size_t i) { outView[-1, i] = 1.0f; }, priority);
     }
 
@@ -1565,7 +1562,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             resultData.readMetadataFromIcc(profile);
             resultData.renderingIntent = renderingIntent.value_or(resultData.renderingIntent);
             co_return result;
-        } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC color profile: {}", e.what()); }
+        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
     }
 
     resultData.renderingIntent = renderingIntent.value_or(ERenderingIntent::RelativeColorimetric);

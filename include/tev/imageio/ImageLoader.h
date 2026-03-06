@@ -37,7 +37,7 @@ namespace tev {
 template <bool SRGB_TO_LINEAR = false>
 Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
     if (data.nChannels() < 3) {
-        tlog::warning() << "Cannot convert from YCbCr to RGB: not enough channels.";
+        tlog::warning("Cannot convert from YCbCr to RGB: not enough channels.");
         co_return;
     }
 

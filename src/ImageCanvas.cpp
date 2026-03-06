@@ -492,7 +492,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                     ++saveCounter;
                 } else if (command.type == VgCommand::EType::Restore) {
                     if (saveCounter == 0) {
-                        tlog::warning() << "Malformed vector graphics commands: restore before save";
+                        tlog::warning("Malformed vector graphics commands: restore before save");
                         continue;
                     }
 
@@ -503,7 +503,7 @@ void ImageCanvas::draw(NVGcontext* ctx) {
             }
 
             if (saveCounter > 0) {
-                tlog::warning() << "Malformed vector graphics commands: missing restore after save";
+                tlog::warning("Malformed vector graphics commands: missing restore after save");
                 for (size_t i = 0; i < saveCounter; ++i) {
                     nvgRestore(ctx);
                 }
@@ -637,7 +637,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         throw ImageSaveError{"There is no image to save."};
     }
 
-    tlog::info() << format("Saving currently displayed image as {}.", toString(path));
+    tlog::info("Saving currently displayed image as {}.", toString(path));
 
     const auto start = chrono::steady_clock::now();
 
@@ -658,7 +658,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
         .get();
 
     const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start};
-    tlog::success() << format("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
+    tlog::success("Saved {} after {:.3f} seconds.", path, elapsedSeconds.count());
 }
 
 shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
@@ -805,7 +805,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const auto scopeGuard = ScopeGuard([&]() {
         const auto end = chrono::steady_clock::now();
         const chrono::duration<double> elapsedSeconds = end - start;
-        tlog::debug() << format("Computed canvas statistics for {} in {:.4f} seconds.", image->name(), elapsedSeconds.count());
+        tlog::debug("Computed canvas statistics for {} in {:.4f} seconds.", image->name(), elapsedSeconds.count());
     });
 
     auto flattened = co_await image->getHdrImageData(reference, requestedChannelGroup, metric, priority);

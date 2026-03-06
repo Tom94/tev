@@ -73,13 +73,13 @@ Task<void> preprocessAndApplyAppleGainMap(
     auto gainMapChannels = getRgbOrLuminanceChannels(gainMap);
 
     if (imageChannels.empty() || gainMapChannels.empty()) {
-        tlog::warning() << "Apple gain map: image or gain map has no channels. Skipping gain map application.";
+        tlog::warning("Apple gain map: image or gain map has no channels. Skipping gain map application.");
         co_return;
     }
 
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
 
-    tlog::debug() << "Apple gain map: linearizing and resizing";
+    tlog::debug("Apple gain map: linearizing and resizing");
 
     // First: linearize per the spec, then resize to image size
     const auto gainmapSize = gainMapChannels.front().size();
@@ -115,7 +115,7 @@ Task<void> preprocessAndApplyAppleGainMap(
     float maker48 = 8.0f;
 
     if (amn.has_value()) {
-        tlog::debug() << "Apple gain map: found maker note data. Attempting to read maker notes #33 and #48 for gain map weight calculation...";
+        tlog::debug("Apple gain map: found maker note data. Attempting to read maker notes #33 and #48 for gain map weight calculation...");
         maker33 = amn->tryGet<float>(33).value_or(maker33);
         maker48 = amn->tryGet<float>(48).value_or(maker48);
     }
@@ -141,16 +141,16 @@ Task<void> preprocessAndApplyAppleGainMap(
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
     // gain map itself in tev.
     if (headroom <= 1.0f) {
-        tlog::debug() << "Apple gain map: target headroom <= 1.0, skipping gain map application.";
+        tlog::debug("Apple gain map: target headroom <= 1.0, skipping gain map application.");
         co_return;
     }
 
-    tlog::debug() << format(
+    tlog::debug(
         "Apple gain map: derived weight {} from headroom {} and maker note #33={} #48={}", headroom, targetHeadroom.toString(), maker33, maker48
     );
 
     if (gainMapChannels.size() > 1) {
-        tlog::warning() << "Apple gain map: should only have one channel. Attempting to apply multi-channel gain map.";
+        tlog::warning("Apple gain map: should only have one channel. Attempting to apply multi-channel gain map.");
     }
 
     const size_t numPixels = (size_t)size.x() * size.y();
@@ -187,13 +187,13 @@ Task<void> preprocessAndApplyIsoGainMap(
     auto gainMapChannels = getRgbOrLuminanceChannels(gainMap);
 
     if (imageChannels.empty() || gainMapChannels.empty()) {
-        tlog::warning() << "ISO gain map: image or gain map has no channels. Skipping gain map application.";
+        tlog::warning("ISO gain map: image or gain map has no channels. Skipping gain map application.");
         co_return;
     }
 
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
-    tlog::debug() << "ISO gain map: undoing gamma, unnormalizing, and resizing";
+    tlog::debug("ISO gain map: undoing gamma, unnormalizing, and resizing");
 
     const float targetHeadroomStops = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ?
         metadata.baseHdrHeadroom() + targetHeadroom.value * (metadata.alternateHdrHeadroom() - metadata.baseHdrHeadroom()) :
@@ -240,7 +240,7 @@ Task<void> preprocessAndApplyIsoGainMap(
     const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : (altChroma ? altChroma : baseChroma);
 
     if (chroma) {
-        tlog::debug() << format("ISO gain map: converting image to chroma '{}' prior to application", *chroma);
+        tlog::debug("ISO gain map: converting image to chroma '{}' prior to application", *chroma);
 
         const auto rec709ToChroma = convertColorspaceMatrix(rec709Chroma(), *chroma, image.renderingIntent);
         const auto imageToChroma = rec709ToChroma * image.toRec709;
@@ -252,11 +252,11 @@ Task<void> preprocessAndApplyIsoGainMap(
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
     // gain map itself in tev.
     if (weight == 0.0f) {
-        tlog::debug() << "ISO gain map: weight is 0, skipping gain map application.";
+        tlog::debug("ISO gain map: weight is 0, skipping gain map application.");
         co_return;
     }
 
-    tlog::debug() << format(
+    tlog::debug(
         "ISO gain map: applying with baseHdrHeadroom={} altHdrHeadroom={} targetHeadroom={} weight={}",
         metadata.baseHdrHeadroom(),
         metadata.alternateHdrHeadroom(),

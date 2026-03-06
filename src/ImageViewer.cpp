@@ -562,15 +562,13 @@ ImageViewer::ImageViewer(
             mFilter->set_callback([this](string_view filter) { return setFilter(filter); });
 
             mFilter->set_placeholder("Find");
-            mFilter->set_tooltip(
-                format(
-                    "Filters visible images and channel groups according to a supplied string. "
-                    "The string must have the format 'image:group'. "
-                    "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
-                    "Keyboard shortcut:\n{}+F",
-                    HelpWindow::COMMAND
-                )
-            );
+            mFilter->set_tooltip(format(
+                "Filters visible images and channel groups according to a supplied string. "
+                "The string must have the format 'image:group'. "
+                "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
+                "Keyboard shortcut:\n{}+F",
+                HelpWindow::COMMAND
+            ));
 
             mRegexButton = new Button{panel, "", FA_SEARCH};
             mRegexButton->set_tooltip("Treat filter as regular expression");
@@ -1067,9 +1065,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             if (modifiers & GLFW_MOD_SHIFT) {
                 const char* clipboardString = glfwGetClipboardString(m_glfw_window);
                 if (clipboardString) {
-                    tlog::warning() << format(
-                        "Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString
-                    );
+                    tlog::warning("Pasted string \"{}\" from clipboard, but tev can only paste images from clipboard.", clipboardString);
                 }
             } else {
                 try {
@@ -1356,18 +1352,16 @@ void ImageViewer::draw_contents() {
             mHistogram->setMean(statistics->mean);
             mHistogram->setMaximum(statistics->maximum);
             mHistogram->setZero(statistics->histogramZero);
-            mHistogram->set_tooltip(
-                format(
-                    "{}\n\n"
-                    "Minimum: {:.3f}\n"
-                    "Mean: {:.3f}\n"
-                    "Maximum: {:.3f}",
-                    histogramTooltipBase,
-                    statistics->minimum,
-                    statistics->mean,
-                    statistics->maximum
-                )
-            );
+            mHistogram->set_tooltip(format(
+                "{}\n\n"
+                "Minimum: {:.3f}\n"
+                "Mean: {:.3f}\n"
+                "Maximum: {:.3f}",
+                histogramTooltipBase,
+                statistics->minimum,
+                statistics->mean,
+                statistics->maximum
+            ));
         }
     } else {
         mHistogram->setNChannels(1);
@@ -1409,7 +1403,7 @@ void ImageViewer::updateColorCapabilities() {
     const bool supportsAbsoluteBrightness = supportsHdr;
 #endif
 
-    tlog::info() << format(
+    tlog::info(
         "{} {} bit {} point frame buffer with primaries={} transfer={} range={}",
         prevColorSpace ? "Switched to" : "Initialized",
         this->bits_per_sample(),
@@ -1677,7 +1671,7 @@ void ImageViewer::reloadImagesWhoseFileChanged() {
 void ImageViewer::updateImage(string_view imageName, bool shallSelect, string_view channel, Box2i bounds, span<const float> imageData) {
     auto image = imageByName(imageName);
     if (!image) {
-        tlog::warning() << "Image " << imageName << " could not be updated, because it does not exist.";
+        tlog::warning("Image {} could not be updated, because it does not exist.", imageName);
         return;
     }
 
@@ -1699,7 +1693,7 @@ void ImageViewer::updateImage(string_view imageName, bool shallSelect, string_vi
 void ImageViewer::updateImageVectorGraphics(string_view imageName, bool shallSelect, bool append, span<const VgCommand> commands) {
     auto image = imageByName(imageName);
     if (!image) {
-        tlog::warning() << "Vector graphics of image " << imageName << " could not be updated, because it does not exist.";
+        tlog::warning("Vector graphics of image {} could not be updated, because it does not exist.", imageName);
         return;
     }
 
@@ -2075,7 +2069,7 @@ void ImageViewer::resizeToFit(Vector2f targetSize) {
         return;
     }
 
-    tlog::debug() << format("Resizing window to {}", targetSize);
+    tlog::debug("Resizing window to {}", targetSize);
 
     const auto sizeDiff = targetSize - Vector2f{m_size};
 
@@ -2235,7 +2229,7 @@ void ImageViewer::updateImageInfoWindow() {
 
 void ImageViewer::openImageDialog() {
     if (mFileDialogThread) {
-        tlog::warning() << "File dialog already running.";
+        tlog::warning("File dialog already running.");
         return;
     }
 
@@ -2313,7 +2307,7 @@ void ImageViewer::saveImageDialog() {
     }
 
     if (mFileDialogThread) {
-        tlog::warning() << "File dialog already running.";
+        tlog::warning("File dialog already running.");
         return;
     }
 
@@ -2428,7 +2422,7 @@ void ImageViewer::copyImageCanvasToClipboard() const {
     const auto end = chrono::steady_clock::now();
     const auto duration = chrono::duration<float>(end - start).count();
 
-    tlog::success() << format("Image copied to clipboard after {:.3f} seconds.", duration);
+    tlog::success("Image copied to clipboard after {:.3f} seconds.", duration);
 }
 
 void ImageViewer::copyImageNameToClipboard() const {
@@ -2437,7 +2431,7 @@ void ImageViewer::copyImageNameToClipboard() const {
     }
 
     glfwSetClipboardString(m_glfw_window, string{mCurrentImage->name()}.c_str());
-    tlog::success() << "Image path copied to clipboard.";
+    tlog::success("Image path copied to clipboard.");
 }
 
 void ImageViewer::pasteImagesFromClipboard() {
@@ -2477,7 +2471,7 @@ void ImageViewer::pasteImagesFromClipboard() {
         imageStream.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
     }
 
-    tlog::info() << "Loading image from clipboard...";
+    tlog::info("Loading image from clipboard...");
     auto imagesLoadTask = tryLoadImage(
         format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
     );
@@ -2494,7 +2488,7 @@ void ImageViewer::pasteImagesFromClipboard() {
 }
 
 void ImageViewer::showErrorDialog(string_view message) {
-    tlog::error() << message;
+    tlog::error(message);
     new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
 }
 
@@ -2886,7 +2880,7 @@ void ImageViewer::updateCurrentMonitorSize() {
         // such cases (only after a current monitor was detected to give enough time for the compositor to set up the window) and
         // treat them as non-maximized always.
         if (isMaximized() && !mMaximizedLaunch) {
-            tlog::debug() << "Detected unreliable maximized state; disabling maximized detection.";
+            tlog::debug("Detected unreliable maximized state; disabling maximized detection.");
             mMaximizedUnreliable = true;
         }
 
@@ -2905,7 +2899,7 @@ void ImageViewer::updateCurrentMonitorSize() {
         mMinWindowPos = posf;
         mMaxWindowSize = sizef;
 
-        tlog::debug() << format("Current monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
+        tlog::debug("Current monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
     }
 }
 

@@ -49,7 +49,7 @@ Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<con
     jerr.output_message = [](j_common_ptr cinfo) {
         char buf[JMSG_LENGTH_MAX];
         (*cinfo->err->format_message)(cinfo, buf);
-        tlog::warning() << format("libjpeg warning: {}", buf);
+        tlog::warning("libjpeg warning: {}", buf);
     };
 
     jpeg_create_compress(&cinfo);

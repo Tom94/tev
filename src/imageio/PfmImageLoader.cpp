@@ -243,7 +243,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (parts.size() < 2) {
-                    tlog::warning() << format("Missing value of PAM header key '{}'", key);
+                    tlog::warning("Missing value of PAM header key '{}'", key);
                     continue;
                 }
 
@@ -272,7 +272,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                             scale = 1.0f / maxVal;
                             bitsPerChannel = maxVal >= (1 << 16) ? 32 : maxVal >= (1 << 8) ? 16 : 8;
                         } else {
-                            tlog::warning() << format("Invalid PAM key '{}'", key);
+                            tlog::warning("Invalid PAM key '{}'", key);
                         }
                     } catch (const invalid_argument&) {
                         throw ImageLoadError{format("Invalid {}: '{}'", key, value)};
@@ -308,7 +308,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
             throw ImageLoadError{format("Unsupported bits per channel: {}", bitsPerChannel)};
         }
 
-        tlog::debug() << format(
+        tlog::debug(
             "Loading {} image: size={}x{} channels={} bitsPerChannel={} scale={} endian={}",
             toString(pamType),
             size.x(),

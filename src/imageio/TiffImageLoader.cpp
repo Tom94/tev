@@ -96,7 +96,7 @@ template <typename T> span<const T> tiffGetSpan(TIFF* tif, ttag_t tag) {
     }
 
     if (const int size = TIFFFieldSetGetSize(field); size != sizeof(T)) {
-        tlog::warning() << format("TIFF tag {} has unexpected size (expected {}, got {})", tag, sizeof(tiffDataType<T>()), size);
+        tlog::warning("TIFF tag {} has unexpected size (expected {}, got {})", tag, sizeof(tiffDataType<T>()), size);
         return {};
     }
 
@@ -110,7 +110,7 @@ template <typename T> span<const T> tiffGetSpan(TIFF* tif, ttag_t tag) {
 
         const T* data = nullptr;
         if (n == 1) {
-            tlog::warning() << format("TIFF tag {} is a single value, but expected an array. Skipping.", tag);
+            tlog::warning("TIFF tag {} is a single value, but expected an array. Skipping.", tag);
             return {};
         }
 
@@ -147,7 +147,7 @@ template <typename T> optional<T> tiffGetValue(TIFF* tif, ttag_t tag) {
     }
 
     if (const int size = TIFFFieldSetGetSize(field); size != sizeof(T)) {
-        tlog::warning() << format("TIFF tag {} has unexpected size (expected {}, got {})", tag, sizeof(tiffDataType<T>()), size);
+        tlog::warning("TIFF tag {} has unexpected size (expected {}, got {})", tag, sizeof(tiffDataType<T>()), size);
         return nullopt;
     }
 
@@ -157,8 +157,7 @@ template <typename T> optional<T> tiffGetValue(TIFF* tif, ttag_t tag) {
         if (asSpan.size() == 1) {
             return asSpan[0];
         } else {
-            tlog::warning()
-                << format("TIFF tag {} is an array of {} elements, but expected a single value. Skipping.", tag, asSpan.size());
+            tlog::warning("TIFF tag {} is an array of {} elements, but expected a single value. Skipping.", tag, asSpan.size());
             return nullopt;
         }
     } else if (countSize == 0) {
@@ -167,7 +166,7 @@ template <typename T> optional<T> tiffGetValue(TIFF* tif, ttag_t tag) {
             return value;
         }
     } else {
-        tlog::warning() << format("TIFF tag {} has unsupported count size {}. Skipping.", tag, countSize);
+        tlog::warning("TIFF tag {} has unsupported count size {}. Skipping.", tag, countSize);
         return nullopt;
     }
 
@@ -290,13 +289,13 @@ Task<void> tiffDataToFloat32(
 static void tiffErrorHandler(const char* module, const char* fmt, va_list args) {
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
-    tlog::warning() << format("TIFF error ({}): {}", module ? module : "unknown", buffer);
+    tlog::warning("TIFF error ({}): {}", module ? module : "unknown", buffer);
 }
 
 static void tiffWarningHandler(const char* module, const char* fmt, va_list args) {
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), fmt, args);
-    tlog::warning() << format("TIFF warning ({}): {}", module ? module : "unknown", buffer);
+    tlog::warning("TIFF warning ({}): {}", module ? module : "unknown", buffer);
 }
 
 // Custom TIFF I/O functions for reading from an istream
@@ -443,7 +442,7 @@ Box2i getActiveArea(TIFF* tif, const Vector2i size) {
     }
 
     if (!activeArea.isValid() || !Box2i(Vector2i{0, 0}, size).contains(activeArea)) {
-        tlog::warning() << format("Invalid active area: min={} max={}; using full image area instead.", activeArea.min, activeArea.max);
+        tlog::warning("Invalid active area: min={} max={}; using full image area instead.", activeArea.min, activeArea.max);
         return Box2i{
             Vector2i{0, 0},
             size
@@ -468,7 +467,7 @@ Box2i getDefaultCrop(TIFF* tif, const Vector2i size) {
     }
 
     if (!cropBox.isValid() || !Box2i(Vector2i{0, 0}, size).contains(cropBox)) {
-        tlog::warning() << format("Invalid crop area: min={} max={}; using full area instead.", cropBox.min, cropBox.max);
+        tlog::warning("Invalid crop area: min={} max={}; using full area instead.", cropBox.min, cropBox.max);
         return Box2i{Vector2i(0, 0), size};
     }
 
@@ -501,7 +500,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
         if (const auto asn = tiffGetSpan<float>(tif, TIFFTAG_ASSHOTNEUTRAL); asn.size() >= 3) {
             const float maxVal = std::max({asn[0], asn[1], asn[2]});
             wbScale = Vector3f{asn[0], asn[1], asn[2]} / maxVal;
-            tlog::debug() << format("Clipping integer CFA to neutral white {}", wbScale);
+            tlog::debug("Clipping integer CFA to neutral white {}", wbScale);
         }
     }
 
@@ -527,10 +526,10 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
     const ELayout layout = tiffGetValue<ELayout>(tif, TIFFTAG_CFALAYOUT).value_or(ELayout::Rect);
 
     if (layout != ELayout::Rect) {
-        tlog::warning() << format("Found CFALayout tag with non-rectangular value {}; not supported yet", (uint16_t)layout);
+        tlog::warning("Found CFALayout tag with non-rectangular value {}; not supported yet", (uint16_t)layout);
     }
 
-    tlog::debug() << format("Found CFA pattern of size {}; applying...", cfaSize);
+    tlog::debug("Found CFA pattern of size {}; applying...", cfaSize);
 
     const auto size = cfaData.size();
     const auto numPixels = (size_t)size.x() * size.y();
@@ -583,10 +582,10 @@ Task<void> linearizeAndNormalizeRawDng(
 
     // 1. Map colors via linearization table if it exists and the data is not already float
     if (const auto linTable = tiffGetSpan<uint16_t>(tif, TIFFTAG_LINEARIZATIONTABLE); !linTable.empty()) {
-        tlog::debug() << format("Found linearization table of size {}; applying...", linTable.size());
+        tlog::debug("Found linearization table of size {}; applying...", linTable.size());
 
         if (dataSampleFormat == SAMPLEFORMAT_IEEEFP) {
-            tlog::warning() << "Data is already in floating point format, but a linearization table is present. Skipping.";
+            tlog::warning("Data is already in floating point format, but a linearization table is present. Skipping.");
         } else {
             const size_t maxIdx = linTable.size() - 1;
 
@@ -634,16 +633,16 @@ Task<void> linearizeAndNormalizeRawDng(
 
         for (size_t i = 0; i < blackLevel.size(); ++i) {
             blackLevel[i] = blackLevelFloat[i] * scale;
-            tlog::debug() << format("Black level[{}] = {}", i, blackLevel[i]);
+            tlog::debug("Black level[{}] = {}", i, blackLevel[i]);
         }
 
-        tlog::debug() << format("Found {}x{} black level data; applying...", blackLevelRepeatRows, blackLevelRepeatCols);
+        tlog::debug("Found {}x{} black level data; applying...", blackLevelRepeatRows, blackLevelRepeatCols);
 
         vector<float> blackLevelDeltaH(size.x(), 0.0f);
         vector<float> blackLevelDeltaV(size.y(), 0.0f);
 
         if (const auto bldh = tiffGetSpan<float>(tif, TIFFTAG_BLACKLEVELDELTAH); !bldh.empty()) {
-            tlog::debug() << format("Found {} black level H entries", bldh.size());
+            tlog::debug("Found {} black level H entries", bldh.size());
             if (bldh.size() != blackLevelDeltaH.size()) {
                 throw ImageLoadError{"Invalid number of black level delta H pixels."};
             }
@@ -654,7 +653,7 @@ Task<void> linearizeAndNormalizeRawDng(
         }
 
         if (const auto bldv = tiffGetSpan<float>(tif, TIFFTAG_BLACKLEVELDELTAV); !bldv.empty()) {
-            tlog::debug() << format("Found {} black level V entries", bldv.size());
+            tlog::debug("Found {} black level V entries", bldv.size());
             if (bldv.size() != blackLevelDeltaV.size()) {
                 throw ImageLoadError{"Invalid number of black level delta V pixels."};
             }
@@ -703,7 +702,7 @@ Task<void> linearizeAndNormalizeRawDng(
             };
         }
 
-        tlog::debug() << "Found white level data";
+        tlog::debug("Found white level data");
 
         for (size_t i = 0; i < whiteLevel.size(); ++i) {
             whiteLevel[i] = whiteLevelLong[i] * scale;
@@ -712,13 +711,13 @@ Task<void> linearizeAndNormalizeRawDng(
 
     vector<float> channelScale(numChannels);
     for (size_t c = 0; c < numChannels; ++c) {
-        tlog::debug() << format("whiteLevel[{}] = {}", c, whiteLevel[c]);
-        tlog::debug() << format("maxBlackLevel[{}] = {}", c, maxBlackLevel[c]);
+        tlog::debug("whiteLevel[{}] = {}", c, whiteLevel[c]);
+        tlog::debug("maxBlackLevel[{}] = {}", c, maxBlackLevel[c]);
         channelScale[c] = 1.0f / (whiteLevel[c] - maxBlackLevel[c]);
     }
 
     if (any_of(channelScale.begin(), channelScale.end(), [](float s) { return s != 1.0f; })) {
-        tlog::debug() << format("Non-1.0 channel scale [{}]", join(channelScale, ","));
+        tlog::debug("Non-1.0 channel scale [{}]", join(channelScale, ","));
 
         co_await ThreadPool::global().parallelFor(
             0uz,
@@ -760,7 +759,7 @@ Task<void> postprocessLinearRawDng(
     }
 
     // We follow page 96 of https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
-    tlog::debug() << "Mapping LinearRAW to linear RGB...";
+    tlog::debug("Mapping LinearRAW to linear RGB...");
 
     const auto size = resultData.size();
     const auto numPixels = (size_t)size.x() * size.y();
@@ -780,7 +779,7 @@ Task<void> postprocessLinearRawDng(
             analogBalance[i] = abt[i];
         }
 
-        tlog::debug() << format("Analog balance: {}", analogBalance);
+        tlog::debug("Analog balance: {}", analogBalance);
     }
 
     const auto readCameraToXyz = [&](int CCTAG, int CMTAG, int CALTAG) {
@@ -796,7 +795,7 @@ Task<void> postprocessLinearRawDng(
                 }
             }
 
-            tlog::debug() << format("Found color matrix: {}", colorMatrix);
+            tlog::debug("Found color matrix: {}", colorMatrix);
         } else {
             return optional<Matrix3f>{};
         }
@@ -813,7 +812,7 @@ Task<void> postprocessLinearRawDng(
                 }
             }
 
-            tlog::debug() << format("Found camera calibration matrix: {}", cameraCalibration);
+            tlog::debug("Found camera calibration matrix: {}", cameraCalibration);
         }
 
         Matrix3f chromaticAdaptation{1.0f};
@@ -832,7 +831,7 @@ Task<void> postprocessLinearRawDng(
             }
 
             const Vector3f asShotNeutral{asn[0], asn[1], asn[2]};
-            tlog::debug() << format("Adapting white to D50 based on AsShotNeutral={}", asShotNeutral);
+            tlog::debug("Adapting white to D50 based on AsShotNeutral={}", asShotNeutral);
 
             const Vector3f xyz = cameraToXyz * asShotNeutral;
             const float sxyz = xyz.x() + xyz.y() + xyz.z();
@@ -846,18 +845,18 @@ Task<void> postprocessLinearRawDng(
 
             const Vector2f cameraNeutralXy = {aswp[0], aswp[1]};
 
-            tlog::debug() << format("Adapting white to D50 based on AsShotWhiteXY={}", cameraNeutralXy);
+            tlog::debug("Adapting white to D50 based on AsShotWhiteXY={}", cameraNeutralXy);
             chromaticAdaptation = adaptWhiteBradford(cameraNeutralXy, whiteD50());
         } else if (const auto illu = tiffGetValue<uint16_t>(tif, CALTAG); illu && adaptToExifIlluminant) {
             EExifLightSource illuminant = static_cast<EExifLightSource>(*illu);
-            tlog::debug() << format("Found illuminant={}/{}", toString(illuminant), *illu);
+            tlog::debug("Found illuminant={}/{}", toString(illuminant), *illu);
 
             const auto whitePoint = xy(illuminant);
             if (whitePoint.x() > 0.0f && whitePoint.y() > 0.0f) {
-                tlog::debug() << format("Adapting known illuminant with CIE1931 xy={} to D50", whitePoint);
+                tlog::debug("Adapting known illuminant with CIE1931 xy={} to D50", whitePoint);
                 chromaticAdaptation = adaptWhiteBradford(whitePoint, whiteD50());
             } else {
-                tlog::warning() << format("Unknown illuminant");
+                tlog::warning("Unknown illuminant");
             }
         }
 
@@ -880,7 +879,7 @@ Task<void> postprocessLinearRawDng(
     auto toRimm = xyzToChromaMatrix(proPhotoChroma());
     for (size_t i = 0; i < camTags.size(); ++i) {
         if (const auto camToXyz = readCameraToXyz(get<0>(camTags[i]), get<1>(camTags[i]), get<2>(camTags[i]))) {
-            tlog::debug() << format("Applying camToXyz matrix #{}: {}", camTags.size() - i, camToXyz.value());
+            tlog::debug("Applying camToXyz matrix #{}: {}", camTags.size() - i, camToXyz.value());
             resultData.toRec709 = resultData.toRec709 * camToXyz.value();
             toRimm = toRimm * camToXyz.value();
             break;
@@ -898,7 +897,7 @@ Task<void> postprocessLinearRawDng(
     exposureScale *= exp2f(tiffGetValue<float>(tif, TIFFTAG_BASELINEEXPOSUREOFFSET).value_or(0.0f));
 
     if (exposureScale != 1.0f) {
-        tlog::debug() << format("Applying exposure scale: {}", exposureScale);
+        tlog::debug("Applying exposure scale: {}", exposureScale);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -949,7 +948,7 @@ Task<void> postprocessLinearRawDng(
             pdr.hintMaxOutputValue = swapBytes(pdr.hintMaxOutputValue);
         }
 
-        tlog::debug() << format(
+        tlog::debug(
             "Found profile dynamic range: version={} dynamicRange={} hintMaxOutputValue={}", pdr.version, pdr.dynamicRange, pdr.hintMaxOutputValue
         );
 
@@ -959,7 +958,7 @@ Task<void> postprocessLinearRawDng(
     }
 
     if (const auto str = tiffGetSpan<char>(tif, TIFFTAG_PROFILENAME); !str.empty()) {
-        tlog::debug() << format("Applying camera profile \"{}\"", str.data());
+        tlog::debug("Applying camera profile \"{}\"", str.data());
     }
 
     {
@@ -1022,7 +1021,7 @@ Task<void> postprocessLinearRawDng(
                 }
             }
 
-            tlog::debug() << format(
+            tlog::debug(
                 "Found gain table map: points={}x{}x{} spacing=[{:.4f}, {:.4f}] origin=[{:.4f}, {:.4f}] inputWeights={}",
                 header.mapPointsV,
                 header.mapPointsH,
@@ -1124,10 +1123,10 @@ Task<void> postprocessLinearRawDng(
         uint32_t satDivisions = dims[1];
         uint32_t valueDivisions = dims[2];
 
-        tlog::debug() << format("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
+        tlog::debug("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
-        tlog::debug() << "Found hue/sat/val map, but not implemented yet. Color profile may look wrong.";
+        tlog::debug("Found hue/sat/val map, but not implemented yet. Color profile may look wrong.");
     }
 
     if (const auto dims = tiffGetSpan<uint32_t>(tif, TIFFTAG_PROFILELOOKTABLEDIMS); dims.size() >= 3) {
@@ -1135,10 +1134,10 @@ Task<void> postprocessLinearRawDng(
         uint32_t satDivisions = dims[1];
         uint32_t valueDivisions = dims[2];
 
-        tlog::debug() << format("Look table dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
+        tlog::debug("Look table dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
         // TODO: implement hue/sat/val map...
-        tlog::debug() << "Found look table, but not implemented yet. Color profile may look wrong.";
+        tlog::debug("Found look table, but not implemented yet. Color profile may look wrong.");
     }
 
     if (const auto tonecurve = tiffGetSpan<float>(tif, TIFFTAG_PROFILETONECURVE); !tonecurve.empty()) {
@@ -1146,7 +1145,7 @@ Task<void> postprocessLinearRawDng(
             throw ImageLoadError{"Number of tone curve entries must be divisible by 2 and >=4."};
         }
 
-        tlog::debug() << format("Applying profile tone curve of length {}", tonecurve.size());
+        tlog::debug("Applying profile tone curve of length {}", tonecurve.size());
 
         const auto tc = tonecurve | fixed_chunks<2> | views::transform([](auto c) { return Vector2f{c[0], c[1]}; }) | to_vector;
         if (tc.front().x() != 0.0f || tc.back().x() != 1.0f) {
@@ -1180,7 +1179,7 @@ Task<void> postprocessLinearRawDng(
     }
 
     if (TIFFFindField(tif, TIFFTAG_RGBTABLES, TIFFDataType::TIFF_ANY)) {
-        tlog::warning() << "Found RGB tables, but not implemented yet. Color profile may look wrong.";
+        tlog::warning("Found RGB tables, but not implemented yet. Color profile may look wrong.");
     }
 
     if (isHdr) {
@@ -1233,7 +1232,7 @@ Task<void> postprocessRgb(
 
         const Vector3f totalScale = codingRange * invRange / maxVal;
 
-        tlog::debug() << format("Found reference black/white: black={} white={}", refBlack, refWhite);
+        tlog::debug("Found reference black/white: black={} white={}", refBlack, refWhite);
 
         co_await ThreadPool::global().parallelFor(
             0uz,
@@ -1259,7 +1258,7 @@ Task<void> postprocessRgb(
                 2.0f * (1.0f - K.z()),
             };
 
-            tlog::debug() << format("Found YCbCr coefficients: {} -> {}", K, coeffs);
+            tlog::debug("Found YCbCr coefficients: {} -> {}", K, coeffs);
         }
 
         co_await yCbCrToRgb(rgbaView, priority, coeffs);
@@ -1267,14 +1266,14 @@ Task<void> postprocessRgb(
 
     chroma_t chroma = rec709Chroma();
     if (const auto primaries = tiffGetSpan<float>(tif, TIFFTAG_PRIMARYCHROMATICITIES); primaries.size() >= 6) {
-        tlog::debug() << "Found custom primaries; applying...";
+        tlog::debug("Found custom primaries; applying...");
         chroma[0] = {primaries[0], primaries[1]};
         chroma[1] = {primaries[2], primaries[3]};
         chroma[2] = {primaries[4], primaries[5]};
     }
 
     if (const auto whitePoint = tiffGetSpan<float>(tif, TIFFTAG_WHITEPOINT); whitePoint.size() >= 2) {
-        tlog::debug() << "Found custom white point; applying...";
+        tlog::debug("Found custom white point; applying...");
         chroma[3] = {whitePoint[0], whitePoint[1]};
     }
 
@@ -1289,7 +1288,7 @@ Task<void> postprocessRgb(
     if (const auto transferFunction = tiffGetTransferFunction(tif); !transferFunction.at(0).empty()) {
         // In TIFF, transfer functions are stored as 2**bitsPerSample values in the range [0, 65535] per color channel. The transfer
         // function is a linear interpolation between these values.
-        tlog::debug() << "Found custom transfer function; applying...";
+        tlog::debug("Found custom transfer function; applying...");
 
         if (transferFunction.size() < numColorChannels || numColorChannels > 3) {
             throw ImageLoadError{"TIFF images with transfer functions and more than 3 color channels are not supported."};
@@ -1312,7 +1311,7 @@ Task<void> postprocessRgb(
             transferRangeBlack = {transferRange[0], transferRange[2], transferRange[4]};
             transferRangeWhite = {transferRange[1], transferRange[3], transferRange[5]};
 
-            tlog::debug() << format("Found transfer range [{}, {}]", transferRangeBlack, transferRangeWhite);
+            tlog::debug("Found transfer range [{}, {}]", transferRangeBlack, transferRangeWhite);
         }
 
         const Vector3f scale = Vector3f(1.0f) / Vector3f(transferRangeWhite - transferRangeBlack);
@@ -1340,7 +1339,7 @@ Task<void> postprocessRgb(
     } else if (const auto pcsInt = tiffGetValue<uint32_t>(tif, TIFFTAG_PREVIEWCOLORSPACE)) {
         // Alternatively, if we're a preview image from a DNG file, we can use the preview color space to determine the transfer. Values
         // 0 (Unknown) and 1 (Gamma 2.2) are handled by the following `else` block. Other values are handled in this one.
-        tlog::debug() << format("Found preview color space: {}", *pcsInt);
+        tlog::debug("Found preview color space: {}", *pcsInt);
 
         const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(*pcsInt);
 
@@ -1373,7 +1372,7 @@ Task<void> postprocessRgb(
         // If there's no transfer function specified, the TIFF spec says to use gamma 2.2 for RGB data and no transfer (linear) for
         // grayscale data. That said, all grayscale TIFF images I've seen in the wild so far assume gamma 2.2, so we'll go against the
         // spec here.
-        tlog::debug() << "No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.";
+        tlog::debug("No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.");
 
         size_t numPixels = (size_t)size.x() * size.y();
         co_await ThreadPool::global().parallelFor(
@@ -1447,7 +1446,7 @@ Task<void> postprocessLab(
             decodeMin = {decode[0], decode[2], decode[4]};
             decodeMax = {decode[1], decode[3], decode[5]};
 
-            tlog::debug() << format("Found ITULAB Decode tag: min={} max={}", decodeMin, decodeMax);
+            tlog::debug("Found ITULAB Decode tag: min={} max={}", decodeMin, decodeMax);
         }
 
         co_await ThreadPool::global().parallelFor(
@@ -1518,7 +1517,7 @@ Task<ImageData> decodeJpeg(
 ) {
     vector<uint8_t> stream;
     if (jpegTables.size() > 4) {
-        // tlog::debug() << "JPEG tables found; prepending to compressed data...";
+        // tlog::debug("JPEG tables found; prepending to compressed data...");
 
         const uint32_t tablesPayloadLen = jpegTables.size() - 4;
         const uint8_t* tablesPayload = jpegTables.data() + 2;
@@ -1543,7 +1542,7 @@ Task<ImageData> decodeJpeg(
     jerr.output_message = [](j_common_ptr cinfo) {
         char buf[JMSG_LENGTH_MAX];
         (*cinfo->err->format_message)(cinfo, buf);
-        tlog::warning() << format("libjpeg warning: {}", buf);
+        tlog::warning("libjpeg warning: {}", buf);
     };
 
     jpeg_create_decompress(&cinfo);
@@ -1598,7 +1597,7 @@ Task<ImageData> decodeJpeg(
 
     const auto outView = MultiChannelView<float>{result.channels};
 
-    // tlog::debug() << format(
+    // tlog::debug(
     //     "Decompressing JPEG with width={} height={} components={} precision={} colorspace={}",
     //     width,
     //     height,
@@ -1711,7 +1710,7 @@ Task<ImageData> readTiffImage(
 
     // Auto-convert LogLUV and LogL to RGB float. See http://www.anyhere.com/gward/pixformat/tiffluv.html
     if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
-        tlog::debug() << "Converting LogLUV/LogL to XYZ float.";
+        tlog::debug("Converting LogLUV/LogL to XYZ float.");
 
         if (compression != COMPRESSION_SGILOG && compression != COMPRESSION_SGILOG24) {
             throw ImageLoadError{"Unsupported compression for log data."};
@@ -1726,7 +1725,7 @@ Task<ImageData> readTiffImage(
     }
 
     if (compression == COMPRESSION_PIXARLOG) {
-        tlog::debug() << "Converting PIXAR log data to RGB float.";
+        tlog::debug("Converting PIXAR log data to RGB float.");
 
         if (!TIFFSetField(tif, TIFFTAG_PIXARLOGDATAFMT, PIXARLOGDATAFMT_FLOAT)) {
             throw ImageLoadError{"Failed to set PIXAR log data format."};
@@ -1748,7 +1747,7 @@ Task<ImageData> readTiffImage(
 
     span<const uint8_t> jpegTables = tiffGetSpan<uint8_t>(tif, TIFFTAG_JPEGTABLES);
     if ((compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG) && !jpegTables.empty()) {
-        tlog::debug() << "Found JPEG tables; will use for decompression.";
+        tlog::debug("Found JPEG tables; will use for decompression.");
     }
 
     // DNG-specific photometric interpretations. See https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf
@@ -1794,7 +1793,7 @@ Task<ImageData> readTiffImage(
         }
 
         if (uint16_t subsampling[2]; TIFFGetField(tif, TIFFTAG_YCBCRSUBSAMPLING, &subsampling[0], &subsampling[1])) {
-            tlog::debug() << format("Found YCbCr subsampling: {}x{}", subsampling[0], subsampling[1]);
+            tlog::debug("Found YCbCr subsampling: {}x{}", subsampling[0], subsampling[1]);
 
             const bool hasSubsampling = subsampling[0] != 1 || subsampling[1] != 1;
             if (hasSubsampling) {
@@ -1837,7 +1836,7 @@ Task<ImageData> readTiffImage(
         }
     }
 
-    tlog::debug() << format(
+    tlog::debug(
         "TIFF info: size={} bps={}/{} spp={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
         size,
         dataBitsPerSample,
@@ -1856,7 +1855,7 @@ Task<ImageData> readTiffImage(
     size_t numExtraChannels = 0;
 
     if (const auto extraChannelTypes = tiffGetSpan<uint16_t>(tif, TIFFTAG_EXTRASAMPLES); !extraChannelTypes.empty()) {
-        tlog::debug() << format("Found {} extra channels.", numExtraChannels);
+        tlog::debug("Found {} extra channels.", numExtraChannels);
         for (size_t i = 0; i < extraChannelTypes.size(); ++i) {
             if (extraChannelTypes[i] == EXTRASAMPLE_ASSOCALPHA || extraChannelTypes[i] == EXTRASAMPLE_UNASSALPHA) {
                 if (hasAlpha) {
@@ -1874,7 +1873,7 @@ Task<ImageData> readTiffImage(
 
         numExtraChannels = extraChannelTypes.size();
     } else if (samplesPerPixel == 2 || samplesPerPixel == 4) {
-        tlog::warning() << "Assuming alpha channel for 2 or 4 samples per pixel.";
+        tlog::warning("Assuming alpha channel for 2 or 4 samples per pixel.");
         numExtraChannels = 1;
         hasAlpha = true;
         hasPremultipliedAlpha = false; // Assume unassociated alpha if not specified
@@ -1915,10 +1914,10 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"Failed to read color palette."};
         }
 
-        tlog::debug() << format("Read color palette with {} entries.", palette[0].size());
+        tlog::debug("Read color palette with {} entries.", palette[0].size());
     }
 
-    tlog::debug() << format("numRgbaChannels={} numNonRgbaChannels={}", numRgbaChannels, numNonRgbaChannels);
+    tlog::debug("numRgbaChannels={} numNonRgbaChannels={}", numRgbaChannels, numNonRgbaChannels);
 
     static constexpr auto formatToPixelType = [](uint16_t sampleFormat) {
         switch (sampleFormat) {
@@ -1955,7 +1954,7 @@ Task<ImageData> readTiffImage(
     void* iccProfileData = nullptr;
 
     if (TIFFGetField(tif, TIFFTAG_ICCPROFILE, &iccProfileSize, &iccProfileData) && iccProfileSize > 0 && iccProfileData) {
-        tlog::debug() << format("Found ICC color profile of size {} bytes", iccProfileSize);
+        tlog::debug("Found ICC color profile of size {} bytes", iccProfileSize);
     }
 
     // Read XMP metadata if available
@@ -1963,14 +1962,14 @@ Task<ImageData> readTiffImage(
     const char* xmpData = nullptr;
 
     if (TIFFGetField(tif, TIFFTAG_XMLPACKET, &xmpDataSize, &xmpData) && xmpDataSize > 0 && xmpData) {
-        tlog::debug() << format("Found XMP metadata of size {} bytes", xmpDataSize);
+        tlog::debug("Found XMP metadata of size {} bytes", xmpDataSize);
         try {
             const Xmp xmp{
                 string_view{xmpData, xmpDataSize}
             };
 
             resultData.attributes.emplace_back(xmp.attributes());
-        } catch (const invalid_argument& e) { tlog::warning() << format("Failed to parse XMP data: {}", e.what()); }
+        } catch (const invalid_argument& e) { tlog::warning("Failed to parse XMP data: {}", e.what()); }
     }
 
     // TIFF images are either broken into strips (original format) or tiles (starting with TIFF 6.0). In practice, strips are just tiles
@@ -2051,9 +2050,9 @@ Task<ImageData> readTiffImage(
         }
 
         if ((size_t)tiffData.size < offset + size) {
-            throw ImageLoadError{format(
-                "Raw tile data for tile {} is out of bounds: offset={} size={} dataSize={}", tileIndex, offset, size, tiffData.size
-            )};
+            throw ImageLoadError{
+                format("Raw tile data for tile {} is out of bounds: offset={} size={} dataSize={}", tileIndex, offset, size, tiffData.size)
+            };
         }
 
         return span<const uint8_t>{(const uint8_t*)tiffData.data + offset, size};
@@ -2063,7 +2062,7 @@ Task<ImageData> readTiffImage(
     // to fit all data.
     tile.size = std::max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
 
-    tlog::debug() << format(
+    tlog::debug(
         "tile: size={} count={} width={} height={} numX={} numY={}", tile.size, tile.count, tile.width, tile.height, tile.numX, tile.numY
     );
 
@@ -2096,7 +2095,7 @@ Task<ImageData> readTiffImage(
                 }
 
                 if (bitsPerSample == 64) {
-                    tlog::warning() << "TIFF image has 64 bits per sample; tev will downcast to 32 bits per sample and precision will be lost.";
+                    tlog::warning("TIFF image has 64 bits per sample; tev will downcast to 32 bits per sample and precision will be lost.");
                 }
 
                 // We'll unpack all float data into 32-bit floats regardless of original precision
@@ -2184,9 +2183,7 @@ Task<ImageData> readTiffImage(
                         auto& tmpImage = tmp.front();
 
                         if (tmpImage.channels.size() < (size_t)samplesPerPixel / numPlanes) {
-                            throw ImageLoadError{
-                                format("Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size())
-                            };
+                            throw ImageLoadError{format("Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size())};
                         }
 
                         const auto tileSize = Vector2i{(int)tile.width, (int)tile.height};
@@ -2382,7 +2379,7 @@ Task<ImageData> readTiffImage(
         const auto bytesPerSample = unpackedBitsPerSample / 8;
         const auto bytesPerPixel = numChannels * bytesPerSample;
 
-        tlog::debug() << format("Cropping to active area: [{},{}] -> {}", activeArea.min, activeArea.max, size);
+        tlog::debug("Cropping to active area: [{},{}] -> {}", activeArea.min, activeArea.max, size);
 
         resultData.dataWindow = resultData.displayWindow = size;
 
@@ -2469,7 +2466,7 @@ Task<ImageData> readTiffImage(
             resultData.readMetadataFromIcc(profile);
 
             co_return resultData;
-        } catch (const runtime_error& e) { tlog::warning() << format("Failed to apply ICC color profile: {}", e.what()); }
+        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
     }
 
     co_await tiffDataToFloat32(
@@ -2562,7 +2559,7 @@ Task<vector<ImageData>>
     try {
         const auto exif = Exif{buffer};
         exifAttributes = exif.toAttributes();
-    } catch (const invalid_argument& e) { tlog::warning() << format("Failed to read EXIF metadata: {}", e.what()); }
+    } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
 
     TiffData tiffData(buffer.data() + sizeof(Exif::FOURCC), fileSize);
     TIFF* tif = TIFFClientOpen(
@@ -2587,7 +2584,7 @@ Task<vector<ImageData>>
     bool isDng = false;
     uint8_t* dngVersion = nullptr;
     if (TIFFGetField(tif, TIFFTAG_DNGVERSION, &dngVersion)) {
-        tlog::debug() << format("Detected DNG {}.{}.{}.{} file", dngVersion[0], dngVersion[1], dngVersion[2], dngVersion[3]);
+        tlog::debug("Detected DNG {}.{}.{}.{} file", dngVersion[0], dngVersion[1], dngVersion[2], dngVersion[3]);
         isDng = true;
     }
 
@@ -2646,7 +2643,7 @@ Task<vector<ImageData>>
         }
 
         try {
-            tlog::debug() << format("Loading '{}'", name);
+            tlog::debug("Loading '{}'", name);
 
             ImageData& data = result.emplace_back(co_await readTiffImage(tiffData, tif, isDng, reverseEndian, name, settings, priority));
             if (exifAttributes) {
@@ -2657,7 +2654,7 @@ Task<vector<ImageData>>
             if (dngOrientation != EOrientation::None) {
                 data.orientation = dngOrientation;
             }
-        } catch (const ImageLoadError& e) { tlog::warning() << format("Failed to load '{}': {}", name, e.what()); }
+        } catch (const ImageLoadError& e) { tlog::warning("Failed to load '{}': {}", name, e.what()); }
     };
 
     // The first directory is already read through TIFFOpen()

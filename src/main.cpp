@@ -188,20 +188,20 @@ static void convertTo(
         }
 
         const auto elapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - start}.count();
-        tlog::success() << format("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
+        tlog::success("Converted {} images in {:.3f} seconds.", writtenPaths.size(), elapsedSeconds);
     }};
 
     vector<Task<void>> saveTasks;
     for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
         if (imageAddition->images.empty()) {
-            tlog::error() << format("Image addition is empty, cannot convert");
+            tlog::error("Image addition is empty, cannot convert");
             continue;
         }
 
         // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
         const auto& image = imageAddition->images.front();
         if (image->channelGroups().empty()) {
-            tlog::error() << format("Image {} has no channel groups, cannot convert", image->path());
+            tlog::error("Image {} has no channel groups, cannot convert", image->path());
             continue;
         }
 
@@ -224,13 +224,13 @@ static void convertTo(
         }));
 
         if (writtenPaths.find(path) != writtenPaths.end()) {
-            tlog::info() << format("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
+            tlog::info("Skipping conversion of {} to {} as this path was already written to", image->path(), path);
             continue;
         }
 
         writtenPaths.insert(path);
         if (path == image->path()) {
-            tlog::info() << format("Skipping conversion of {} to itself", image->path());
+            tlog::info("Skipping conversion of {} to itself", image->path());
             continue;
         }
 
@@ -254,10 +254,8 @@ static void convertTo(
                     co_await image->save(path, nullptr, window, cg, metric, bg, tonemap, gamma, exposure, offset, priority);
 
                     const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
-                    tlog::success() << format("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
-                } catch (const ImageSaveError& e) {
-                    tlog::error() << format("Could not convert {} to {}: {}", image->path(), path, e.what());
-                }
+                    tlog::success("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
+                } catch (const ImageSaveError& e) { tlog::error("Could not convert {} to {}: {}", image->path(), path, e.what()); }
             }(image, path, metric, bg, tonemap, gamma, exposure, offset, priority)
         );
     }
@@ -579,12 +577,12 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (versionFlag) {
-        tlog::none() << "tev — The EDR Viewer\nversion " TEV_VERSION;
+        tlog::none("tev — The EDR Viewer\nversion " TEV_VERSION);
         return 0;
     }
 
     if (newWindowFlagOn && newWindowFlagOff) {
-        tlog::error() << "Ambiguous '--new' arguments.";
+        tlog::error("Ambiguous '--new' arguments.");
         return -3;
     }
 
@@ -612,7 +610,7 @@ static int mainFunc(span<const string> arguments) {
 
             fs::path imagePath = toPath(imageFile);
             if (!fs::exists(imagePath)) {
-                tlog::error() << format("Image {} does not exist.", imagePath);
+                tlog::error("Image {} does not exist.", imagePath);
                 continue;
             }
 
@@ -626,7 +624,7 @@ static int mainFunc(span<const string> arguments) {
                 first = false;
 
                 ipc->sendToPrimaryInstance(packet);
-            } catch (const runtime_error& e) { tlog::error() << format("Unexpected error {}: {}", imagePath, e.what()); }
+            } catch (const runtime_error& e) { tlog::error("Unexpected error {}: {}", imagePath, e.what()); }
         }
 
         return 0;
@@ -647,7 +645,7 @@ static int mainFunc(span<const string> arguments) {
             const auto gainmapHeadroom = GainmapHeadroom{get(gainmapHeadroomFlag)};
             imagesLoader->imageLoaderSettings().gainmapHeadroom = gainmapHeadroom;
         } catch (const invalid_argument& e) {
-            tlog::error() << format("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
+            tlog::error("Invalid gainmap headroom '{}': {}", get(gainmapHeadroomFlag), e.what());
             return -6;
         }
     }
@@ -698,12 +696,12 @@ static int mainFunc(span<const string> arguments) {
                 ipc->receiveFromSecondaryInstance([&](const IpcPacket& packet) {
                     try {
                         handleIpcPacket(packet, imagesLoader);
-                    } catch (const runtime_error& e) { tlog::warning() << "Malformed IPC packet: " << e.what(); }
+                    } catch (const runtime_error& e) { tlog::warning("Malformed IPC packet: {}", e.what()); }
                 });
 
                 this_thread::sleep_for(10ms);
             }
-        } catch (const runtime_error& e) { tlog::warning() << "Uncaught exception in IPC thread: " << e.what(); }
+        } catch (const runtime_error& e) { tlog::warning("Uncaught exception in IPC thread: {}", e.what()); }
     }};
 
     const auto backgroundThreadShutdownGuard = ScopeGuard{[&]() {
@@ -735,7 +733,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (convertToFlag) {
-        tlog::info() << "Running in conversion mode. No window will be opened.";
+        tlog::info("Running in conversion mode. No window will be opened.");
 
         while (imagesLoader->hasPendingLoads()) {
             this_thread::sleep_for(1ms);
@@ -753,9 +751,7 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    static constexpr auto errorCallback = [](int error, const char* description) {
-        tlog::warning() << format("GLFW error {}: {}", error, description);
-    };
+    static constexpr auto errorCallback = [](int error, const char* description) { tlog::warning("GLFW error {}: {}", error, description); };
     nanogui::init(!get(ldrFlag), errorCallback);
 
     const auto nanoguiShutdownGuard = ScopeGuard{[&]() {
@@ -786,7 +782,7 @@ static int mainFunc(span<const string> arguments) {
 #endif
 
     if (maximizeFlagOn && maximizeFlagOff) {
-        tlog::error() << "Ambiguous '--maximize' arguments.";
+        tlog::error("Ambiguous '--maximize' arguments.");
         return -3;
     }
 
@@ -794,7 +790,7 @@ static int mainFunc(span<const string> arguments) {
     const bool maximize = (false && !maximizeFlagOff) || maximizeFlagOn;
 
     if (resizeWindowToFitFlagOn && resizeWindowToFitFlagOff) {
-        tlog::error() << "Ambiguous '--resize-window' arguments.";
+        tlog::error("Ambiguous '--resize-window' arguments.");
         return -3;
     }
 
@@ -806,17 +802,17 @@ static int mainFunc(span<const string> arguments) {
         const string sizeString = get(sizeFlag);
         const auto parts = split(sizeString, "x");
         if (parts.size() != 2) {
-            tlog::error() << format("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
+            tlog::error("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
             return -4;
         }
 
         if (!fromChars(parts[0], size.x()) || !fromChars(parts[1], size.y())) {
-            tlog::error() << format("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
+            tlog::error("Invalid size specification '{}'. Must be of the form <width>x<height>.", sizeString);
             return -4;
         }
 
         if (size.x() <= 0 || size.y() <= 0) {
-            tlog::error() << format("Invalid size specification '{}'. Width and height must be positive.", sizeString);
+            tlog::error("Invalid size specification '{}'. Width and height must be positive.", sizeString);
             return -4;
         }
     }
@@ -906,7 +902,7 @@ static int mainFunc(span<const string> arguments) {
                 sImageViewer->setDisplayWhiteLevelSetting(ImageViewer::EDisplayWhiteLevelSetting::Custom);
                 sImageViewer->setDisplayWhiteLevel(whiteLevel);
             } catch (const invalid_argument&) {
-                tlog::error() << format("Invalid white level value '{}'. Must be a float or 'image'.", get(whiteLevelFlag));
+                tlog::error("Invalid white level value '{}'. Must be a float or 'image'.", get(whiteLevelFlag));
                 return -5;
             }
         }
@@ -951,7 +947,7 @@ int main(int argc, char* argv[]) {
 
         return tev::mainFunc(arguments);
     } catch (const exception& e) {
-        tlog::error() << format("Uncaught exception: {}", e.what());
+        tlog::error("Uncaught exception: {}", e.what());
         return 1;
     }
 }

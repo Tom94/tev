@@ -50,7 +50,7 @@ Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uin
         png,
         nullptr,
         [](png_structp, png_const_charp error_msg) { throw ImageLoadError{format("PNG error: {}", error_msg)}; },
-        [](png_structp, png_const_charp warning_msg) { tlog::warning() << format("PNG warning: {}", warning_msg); }
+        [](png_structp, png_const_charp warning_msg) { tlog::warning("PNG warning: {}", warning_msg); }
     );
 
     info = png_create_info_struct(png);

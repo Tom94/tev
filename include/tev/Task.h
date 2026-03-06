@@ -40,7 +40,7 @@ public:
     bool countDown() noexcept {
         const int val = --mCounter;
         if (val < 0) {
-            tlog::warning() << "Latch should never count below zero.";
+            tlog::warning("Latch should never count below zero.");
         }
 
         return val <= 0;
@@ -64,7 +64,7 @@ struct DetachedTask {
             try {
                 std::rethrow_exception(std::current_exception());
             } catch (const std::exception& e) {
-                tlog::error() << "Unhandled exception in DetachedTask: " << e.what();
+                tlog::error("Unhandled exception in DetachedTask: {}", e.what());
                 std::terminate();
             }
         }
@@ -168,7 +168,7 @@ public:
     ~Task() {
         // Make sure the coroutine finished and is cleaned up
         if (mHandle) {
-            tlog::warning() << "~Task<T> was invoked before completion.";
+            tlog::warning("~Task<T> was invoked before completion.");
         }
     }
 
@@ -198,7 +198,7 @@ public:
 
     T get() {
         if (!mHandle) {
-            tlog::error() << "Cannot get()/co_await a task multiple times.";
+            tlog::error("Cannot get()/co_await a task multiple times.");
         }
 
         mHandle = nullptr;
@@ -207,7 +207,7 @@ public:
 
     bool await_suspend(std::coroutine_handle<> coroutine) noexcept {
         if (!mHandle) {
-            tlog::error() << "Cannot co_await/get() a task multiple times.";
+            tlog::error("Cannot co_await/get() a task multiple times.");
             std::terminate();
         }
 
@@ -246,7 +246,7 @@ template <typename T> Task<std::vector<T>> awaitAll(std::span<Task<T>> futures) 
             results.emplace_back(co_await f);
         } catch (const std::exception& e) {
             if (eptr) {
-                tlog::error() << "Multiple exceptions in awaitAll(). Rethrowing first and logging others: " << e.what();
+                tlog::error("Multiple exceptions in awaitAll(). Rethrowing first and logging others: {}", e.what());
             } else {
                 eptr = std::current_exception();
             }
