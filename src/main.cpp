@@ -738,8 +738,8 @@ static int mainFunc(span<const string> arguments) {
         return 0;
     }
 
-    static constexpr auto errorCallback = [](int error, const char* description) { tlog::warning("GLFW error {}: {}", error, description); };
-    nanogui::init(!get(ldrFlag), errorCallback);
+    glfwSetErrorCallback([](int error, const char* description) { tlog::warning("GLFW error {}: {}", error, description); });
+    nanogui::init(!get(ldrFlag));
 
     const auto nanoguiShutdownGuard = ScopeGuard{[&]() {
     // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our
