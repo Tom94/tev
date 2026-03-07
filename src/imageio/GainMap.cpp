@@ -89,7 +89,7 @@ Task<void> preprocessAndApplyAppleGainMap(
 
     // First: linearize per the spec, then resize to image size
     const auto gainmapSize = gainMapChannels.front().size();
-    const size_t gainmapNumPixels = (size_t)gainmapSize.x() * gainmapSize.y();
+    const size_t gainmapNumPixels = posProd(gainmapSize);
     co_await ThreadPool::global().parallelFor(
         0uz,
         gainmapNumPixels,
@@ -159,7 +159,7 @@ Task<void> preprocessAndApplyAppleGainMap(
         tlog::warning("Apple gain map: should only have one channel. Attempting to apply multi-channel gain map.");
     }
 
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
     co_await ThreadPool::global().parallelFor(
         0uz,
         numPixels,
@@ -212,7 +212,7 @@ Task<void> preprocessAndApplyIsoGainMap(
 
     // Per the spec, unnormalize and then resize (in log space) to image size
     const auto gainmapSize = gainMapChannels.front().size();
-    const size_t gainmapNumPixels = (size_t)gainmapSize.x() * gainmapSize.y();
+    const size_t gainmapNumPixels = posProd(gainmapSize);
     co_await ThreadPool::global().parallelFor(
         0uz,
         gainmapNumPixels,
@@ -271,7 +271,7 @@ Task<void> preprocessAndApplyIsoGainMap(
     );
 
     // Actual gainmap application
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
     co_await ThreadPool::global().parallelFor(
         0uz,
         numPixels,

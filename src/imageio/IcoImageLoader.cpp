@@ -220,9 +220,9 @@ Task<vector<ImageData>> IcoImageLoader::load(
                             const int outputY = flipVertically ? entry.height - 1 - y : y;
 
                             for (int x = 0; x < entry.width; ++x) {
-                                const size_t pixelBit = (size_t)x;
-                                const size_t pixelByte = pixelBit / 8;
-                                const size_t pixelBitOffset = pixelBit - pixelByte * 8;
+                                const auto pixelBit = (size_t)x;
+                                const auto pixelByte = pixelBit / 8;
+                                const auto pixelBitOffset = pixelBit - pixelByte * 8;
                                 const bool isTransparent = (andMaskData[rowStart + pixelByte] >> (7 - pixelBitOffset)) & 1;
 
                                 if (isTransparent) {

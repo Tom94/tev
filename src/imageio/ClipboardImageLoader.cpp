@@ -46,7 +46,7 @@ Task<vector<ImageData>>
 
     const Vector2i size{(int)spec.width, (int)spec.height};
 
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
     if (numPixels == 0) {
         throw ImageLoadError{"Image has zero pixels."};
     }

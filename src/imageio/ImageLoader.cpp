@@ -152,7 +152,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
         throw ImageLoadError{format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
     const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, pixelFormat));
 
     // Initialize pattern [0,0,0,1] efficiently using multi-byte writes

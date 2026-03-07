@@ -219,7 +219,7 @@ Task<vector<ImageData>>
         tlog::debug("JPEG image info: size={} numChannels={} precision={}", size, numChannels, cinfo.data_precision);
 
         // Allocate memory for image data
-        const auto numPixels = (size_t)size.x() * size.y();
+        const auto numPixels = posProd(size);
         auto buf = PixelBuffer::alloc(numPixels * numChannels, pixelFormat);
 
         // Create row pointers for libjpeg and then read image

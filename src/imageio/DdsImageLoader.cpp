@@ -237,7 +237,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     const auto outView = MultiChannelView<float>{resultData.channels};
 
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
     if (numPixels == 0) {
         throw ImageLoadError{"DDS image has zero pixels."};
     }

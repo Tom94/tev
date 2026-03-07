@@ -220,6 +220,33 @@ template <size_t N_DIMS> nanogui::Array<float, N_DIMS> pow(const nanogui::Array<
     return result;
 }
 
+template <typename T, size_t N_DIMS> auto prod(const nanogui::Array<T, N_DIMS>& v) {
+    using ssize_t = std::common_type_t<std::ptrdiff_t, std::make_signed_t<size_t>>;
+    using area_t = std::conditional_t<std::is_integral_v<T>, std::conditional_t<std::is_signed_v<T>, ssize_t, size_t>, T>;
+    area_t result = (T)1;
+
+    for (uint32_t i = 0; i < N_DIMS; ++i) {
+        result *= (area_t)v[i];
+    }
+
+    return result;
+}
+
+template <typename T, size_t N_DIMS> auto posProd(const nanogui::Array<T, N_DIMS>& v) {
+    using area_t = std::conditional_t<std::is_integral_v<T>, size_t, T>;
+    area_t result = (T)1;
+
+    for (uint32_t i = 0; i < N_DIMS; ++i) {
+        if (v[i] < 0) [[unlikely]] {
+            throw std::runtime_error{std::format("Negative value {} encountered when computing positive product.", v)};
+        }
+
+        result *= (area_t)v[i];
+    }
+
+    return result;
+}
+
 struct NVGcontext;
 
 namespace tev {

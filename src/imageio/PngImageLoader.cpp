@@ -411,7 +411,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         // directly write onto the canvas and not worry about blending.
         const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
 
-        const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+        const size_t numFramePixels = posProd(frameSize);
         const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
         if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
             const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);

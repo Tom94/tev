@@ -55,7 +55,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     const Vector2i size{(int)desc.width, (int)desc.height};
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
     if (numPixels == 0) {
         throw ImageLoadError{"Image has zero pixels."};
     }

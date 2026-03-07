@@ -142,7 +142,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     bool disposed = true;
 
     // Conservatively allocate enough space such that any frame can be decoded into it.
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
     const size_t numSamples = numPixels * numChannels;
     const size_t numInterleavedSamples = numPixels * numInterleavedChannels;
     HeapArray<float> frameData;
@@ -175,7 +175,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             // can directly write onto the canvas and not worry about blending.
             const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
 
-            const size_t numFramePixels = (size_t)frameSize.x() * frameSize.y();
+            const size_t numFramePixels = posProd(frameSize);
             const size_t numFrameSamples = numFramePixels * numChannels;
             const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
             if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {

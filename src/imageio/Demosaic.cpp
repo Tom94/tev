@@ -226,7 +226,7 @@ static Task<void> generalDemosaic(
         }
     }
 
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
 
     // Demosaic using edge-adaptive weighted interpolation.
     // At each pixel, for each missing channel, weight contributions
@@ -1228,7 +1228,7 @@ static Task<void> amazeDemosaic(
         co_await ThreadPool::global().parallelFor(
             0,
             size.y(),
-            (size_t)size.x() * size.y(),
+            posProd(size),
             [&](int row) {
                 for (int col = 0; col < size.x(); col++) {
                     if (row >= border && row < size.y() - border && col >= border && col < size.x() - border) {

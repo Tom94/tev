@@ -508,11 +508,14 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
     mShader->set_buffer("position", VariableType::Float32, {4, 2}, positions);
 
     const auto& fcd = colormap::turbo();
+    if (fcd.size() % 4 != 0) {
+        throw runtime_error{format("Invalid false color data size. Expected multiple of 4, got {}.", fcd.size())};
+    }
 
     mColorMap = new Texture{
         Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, Vector2i{(int)fcd.size() / 4, 1}
     };
-    mColorMap->upload((uint8_t*)fcd.data());
+    mColorMap->upload(reinterpret_cast<const uint8_t*>(fcd.data()));
 
     mDitherMatrix = new Texture{
         Texture::PixelFormat::R,
@@ -523,7 +526,12 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
         Texture::WrapMode::Repeat,
     };
 
-    mDitherMatrix->upload((uint8_t*)ditherMatrix(ditherScale).data());
+    const auto dmat = ditherMatrix(ditherScale);
+    if (dmat.size() != posProd(mDitherMatrix->size())) {
+        throw runtime_error{format("Invalid dither matrix size. Expected {}, got {}.", posProd(mDitherMatrix->size()), dmat.size())};
+    }
+
+    mDitherMatrix->upload(reinterpret_cast<const uint8_t*>(dmat.data()));
 }
 
 UberShader::~UberShader() {}

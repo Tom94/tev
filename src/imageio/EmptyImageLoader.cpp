@@ -38,7 +38,7 @@ Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&
     int nChannels;
     iStream >> size.x() >> size.y() >> nChannels;
 
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
     if (numPixels == 0) {
         throw ImageLoadError{"Image has zero pixels."};
     }

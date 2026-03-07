@@ -111,7 +111,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
 
         const auto outView = MultiChannelView<float>{resultData.channels};
 
-        const auto numPixels = (size_t)size.x() * size.y();
+        const auto numPixels = posProd(size);
         const auto numSamples = numPixels * numChannels;
         if (isHdr) {
             // Treated like EXR: scene-referred by nature. Usually corresponds to linear light, so should not get its white point adjusted.

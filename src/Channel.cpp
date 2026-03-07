@@ -92,7 +92,7 @@ Channel::Channel(
         mDataOffset = dataOffset;
         mDataStride = dataStride;
     } else {
-        mData = make_shared<PixelBuffer>(PixelBuffer::alloc((size_t)size.x() * size.y(), format));
+        mData = make_shared<PixelBuffer>(PixelBuffer::alloc(posProd(size), format));
         mDataOffset = 0;
         mDataStride = 1;
     }
@@ -135,10 +135,10 @@ void Channel::updateTile(const Box2i bounds, const span<const float> newData) {
         return;
     }
 
-    const auto width = bounds.max.x() - bounds.min.x();
+    const auto width = (size_t)(bounds.max.x() - bounds.min.x());
     for (int y = bounds.min.y(); y < bounds.max.y(); ++y) {
         for (int x = bounds.min.x(); x < bounds.max.x(); ++x) {
-            dynamicSetAt({x, y}, newData[(x - bounds.min.x()) + (y - bounds.min.y()) * (size_t)width]);
+            dynamicSetAt({x, y}, newData[(x - bounds.min.x()) + (y - bounds.min.y()) * width]);
         }
     }
 }

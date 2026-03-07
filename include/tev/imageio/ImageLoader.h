@@ -43,7 +43,7 @@ Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vecto
 
     const nanogui::Vector2i size = data.size();
 
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
     co_await ThreadPool::global().parallelFor(
         0uz,
         numPixels,
@@ -101,7 +101,7 @@ Task<void> toFloat32(
     }
 
     const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, floatData.nChannels());
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
 
     const size_t expectedDataSize = numSamplesPerRowIn * size.y();
     if (imageData.size() < expectedDataSize) {

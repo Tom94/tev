@@ -912,7 +912,7 @@ Task<void> toLinearSrgbPremul(
         default: throw runtime_error{format("Invalid number of output channels {}", rgbaDst.nChannels())};
     }
 
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
 
     cmsHTRANSFORM transform = nullptr;
     if (cicp) {

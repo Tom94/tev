@@ -214,7 +214,7 @@ public:
     bool isAlpha() const { return Channel::isAlpha(mName); }
     bool isTopmost() const { return Channel::isTopmost(mName); }
 
-    size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
+    size_t numPixels() const { return posProd(mSize); }
 
     nanogui::Vector2i size() const { return mSize; }
     void setSize(nanogui::Vector2i size) { mSize = size; }

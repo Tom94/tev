@@ -373,7 +373,7 @@ public:
     RawChannel(size_t partId, string_view name, string_view imfName, Imf::Channel imfChannel, Vector2i size) :
         mPartId{partId}, mName{name}, mImfName{imfName}, mImfChannel{imfChannel}, mSize{size} {}
 
-    void resize() { mData = PixelBuffer::alloc((size_t)mSize.x() * mSize.y(), pixelFormat()); }
+    void resize() { mData = PixelBuffer::alloc(posProd(mSize), pixelFormat()); }
 
     void registerWith(Imf::FrameBuffer& frameBuffer, Imath::Box2i dw) {
         int width = dw.max.x - dw.min.x + 1;
@@ -424,7 +424,7 @@ public:
     string_view name() const & { return mName; }
 
     Vector2i size() const { return mSize; }
-    size_t numPixels() const { return (size_t)mSize.x() * mSize.y(); }
+    size_t numPixels() const { return posProd(mSize); }
 
     EPixelFormat pixelFormat() const {
         switch (mImfChannel.type) {

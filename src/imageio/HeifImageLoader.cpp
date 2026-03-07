@@ -359,7 +359,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             cicpTransfer = ituth273::ETransfer::SRGB;
         }
 
-        const size_t numPixels = size.x() * (size_t)size.y();
+        const size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -471,7 +471,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         }
 
         const auto sizeGuess = Vector2i{heif_image_handle_get_width(imgHandle), heif_image_handle_get_height(imgHandle)};
-        const auto numPixels = sizeGuess.x() * (size_t)sizeGuess.y();
+        const auto numPixels = posProd(sizeGuess);
         const auto numSamples = numChannels * numPixels;
         const auto numThreads = idealThreadCount(numSamples);
 
@@ -523,7 +523,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             tlog::warning("Failed to get track image resolution: {}", error.message);
         }
 
-        const auto numPixels = widthGuess * (size_t)heightGuess;
+        const auto numPixels = posProd(Vector2i{widthGuess, heightGuess});
         const auto numSamples = numChannels * numPixels;
         const auto numThreads = idealThreadCount(numSamples);
 

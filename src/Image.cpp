@@ -761,7 +761,7 @@ Task<void> prepareTextureChannel(T* data, const Channel* chan, Box2i box, size_t
     const T defaultVal = isAlpha ? (T)1.0f : (T)0.0f;
 
     const auto size = box.size();
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
 
     if (chan) {
         const auto copyChannel = [&](const auto view) -> Task<void> {
@@ -771,7 +771,7 @@ Task<void> prepareTextureChannel(T* data, const Channel* chan, Box2i box, size_t
                 numPixels,
                 [view, &data, numTextureChannels, channelIdx, width = size.x(), pos = box.min](int y) {
                     for (int x = 0; x < width; ++x) {
-                        size_t tileIdx = x + y * (size_t)width;
+                        const auto tileIdx = x + y * (size_t)width;
                         data[tileIdx * numTextureChannels + channelIdx] = view[pos.x() + x, pos.y() + y];
                     }
                 },
@@ -1184,7 +1184,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
 
     const size_t nColorChannels = alphaChannel ? (channels.size() - 1) : channels.size();
 
-    const auto numPixels = (size_t)imageRegion.size().x() * imageRegion.size().y();
+    const auto numPixels = imageRegion.area();
     const auto nColorChannelsToSave = std::min(nColorChannels, 3uz);
 
     // Flatten image into vector
@@ -1394,7 +1394,7 @@ Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i siz
     nanogui::Vector2i otherSize = swapAxes ? nanogui::Vector2i{size.y(), size.x()} : size;
 
     const size_t numBytesPerSample = nBytes(data.format());
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
 
     if (numPixels == 0) {
         co_return size;
@@ -1412,10 +1412,10 @@ Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i siz
         numPixels,
         [&](int y) {
             for (int x = 0; x < size.x(); ++x) {
-                const size_t i = y * (size_t)size.x() + x;
+                const auto i = y * (size_t)size.x() + x;
 
                 const auto other = applyOrientation(orientation, nanogui::Vector2i{x, y}, size);
-                const size_t j = other.y() * (size_t)otherSize.x() + other.x();
+                const auto j = other.y() * (size_t)otherSize.x() + other.x();
 
                 memcpy(reorientedData.dataBytes() + i * numBytesPerPixel, data.dataBytes() + j * numBytesPerPixel, numBytesPerPixel);
             }

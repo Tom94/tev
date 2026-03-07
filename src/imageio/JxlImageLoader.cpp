@@ -587,7 +587,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         data.nativeMetadata.transfer = cicpTransfer;
                         data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
-                        const size_t numPixels = size.x() * (size_t)size.y();
+                        const size_t numPixels = posProd(size);
                         co_await ThreadPool::global().parallelFor(
                             0uz,
                             numPixels,
@@ -632,7 +632,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     );
                     const auto view = channel.view<float>();
 
-                    const size_t numPixels = (size_t)size.x() * size.y();
+                    const size_t numPixels = posProd(size);
                     co_await ThreadPool::global().parallelFor(
                         0,
                         size.y(),

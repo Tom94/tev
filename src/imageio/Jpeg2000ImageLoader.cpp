@@ -80,7 +80,7 @@ static OPJ_OFF_T memSkip(OPJ_OFF_T n, void* ud) {
         return -1;
     }
 
-    m->pos = std::min(m->pos + (size_t)n, m->data.size());
+    m->pos = std::min((size_t)(m->pos + n), m->data.size());
     return (OPJ_OFF_T)m->pos;
 }
 
@@ -409,7 +409,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     // If there is an alpha channel, it's usually straight. TODO: read cdef box if present to be sure.
     resultData.hasPremultipliedAlpha = !hasAlpha;
 
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
 
     const auto getChannelValue = [&image](size_t c, int x, int y) -> float {
         const auto& comp = image->comps[c];

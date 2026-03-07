@@ -28,7 +28,7 @@ namespace tev {
 namespace colormap {
     span<const float> turbo() {
         // "turbo" colormap data generated with scripts/sample-colormap.py
-        static constexpr array<float, 256 * 4> data = {
+        static constexpr array data = {
             0.18995f, 0.07176f, 0.23217f, 1.0f,
             0.19483f, 0.08339f, 0.26149f, 1.0f,
             0.19956f, 0.09498f, 0.29024f, 1.0f,
@@ -292,7 +292,7 @@ namespace colormap {
 
     span<const float> viridis() {
         // "viridis" colormap data generated with scripts/sample-colormap.py
-        static constexpr array<float, 256 * 4> data = {
+        static constexpr array data = {
             0.267004f, 0.004874f, 0.329415f, 1.0f,
             0.26851f, 0.009605f, 0.335427f, 1.0f,
             0.269944f, 0.014625f, 0.341379f, 1.0f,

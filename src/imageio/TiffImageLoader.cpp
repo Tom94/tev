@@ -225,7 +225,7 @@ Task<void> tiffDataToFloat32(
     bool flipWhiteAndBlack
 ) {
     const auto size = rgbaView.size();
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
 
     const auto expectedSize = numPixels * numSppIn;
     if (imageData.size() < expectedSize) {
@@ -523,7 +523,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
     }
 
     const auto cfaSize = Vector2i{dim[1], dim[0]};
-    const size_t patternSize = (size_t)cfaSize.x() * cfaSize.y();
+    const size_t patternSize = posProd(cfaSize);
 
     const auto pat = tiffGetSpan<uint8_t>(tif, TIFFTAG_EP_CFAPATTERN);
     if (pat.size() < patternSize) {
@@ -540,7 +540,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
     tlog::debug("Found CFA pattern of size {}; applying...", cfaSize);
 
     const auto size = cfaData.size();
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
 
     if (wbScale != Vector3f{1.0f}) {
         co_await ThreadPool::global().parallelFor(
@@ -582,7 +582,7 @@ Task<void> linearizeAndNormalizeRawDng(
     const auto numChannels = rgbaView.nChannels();
 
     const auto size = rgbaView.size();
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
 
     // Utility var that we'll reuse whenever reading a variable TIFF array
     const size_t maxVal = dataSampleFormat != SAMPLEFORMAT_IEEEFP ? (1ull << dataBitsPerSample) - 1 : 1.0f;
@@ -770,7 +770,7 @@ Task<void> postprocessLinearRawDng(
     tlog::debug("Mapping LinearRAW to linear RGB...");
 
     const auto size = resultData.size();
-    const auto numPixels = (size_t)size.x() * size.y();
+    const auto numPixels = posProd(size);
 
     // Camera parameters are stored in IFD 0, so let's switch to it temporarily.
     const uint64_t prevOffset = TIFFCurrentDirOffset(tif);
@@ -1222,7 +1222,7 @@ Task<void> postprocessRgb(
     }
 
     const Vector2i size = resultData.size();
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
 
     const size_t bps = photometric == PHOTOMETRIC_PALETTE ? 16 : dataBitsPerSample;
 
@@ -1351,7 +1351,7 @@ Task<void> postprocessRgb(
 
         const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(*pcsInt);
 
-        size_t numPixels = (size_t)size.x() * size.y();
+        size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -1382,7 +1382,7 @@ Task<void> postprocessRgb(
         // spec here.
         tlog::debug("No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.");
 
-        size_t numPixels = (size_t)size.x() * size.y();
+        size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -1416,7 +1416,7 @@ Task<void> postprocessLab(
     }
 
     const Vector2i size = resultData.size();
-    const size_t numPixels = (size_t)size.x() * size.y();
+    const size_t numPixels = posProd(size);
 
     // Step 1: Decode the encoded values to CIE L*a*b* [L: 0..100, a: -128..127, b: -128..127]
     if (photometric == PHOTOMETRIC_CIELAB) {
@@ -1584,8 +1584,8 @@ Task<ImageData> decodeJpeg(
     const auto height = (size_t)cinfo.output_height;
     const auto numComponents = (size_t)cinfo.output_components;
 
-    const auto numJpegPixels = (size_t)width * height;
-    const auto numTilePixels = (size_t)tileSize.x() * tileSize.y();
+    const auto numJpegPixels = width * height;
+    const auto numTilePixels = posProd(tileSize);
 
     const auto numJpegSamples = numJpegPixels * numComponents;
     const auto numTileSamples = numTilePixels * tileNumComponents;
@@ -1614,7 +1614,7 @@ Task<ImageData> decodeJpeg(
     //     (int)cinfo.jpeg_color_space
     // );
 
-    auto buf = PixelBuffer::alloc((size_t)width * height * numComponents, pixelFormat);
+    auto buf = PixelBuffer::alloc(width * height * numComponents, pixelFormat);
 
     if (cinfo.data_precision <= 8) {
         HeapArray<JSAMPROW> rowPointers(height);
@@ -2137,7 +2137,7 @@ Task<ImageData> readTiffImage(
         }
     };
 
-    auto buf = PixelBuffer::alloc((size_t)size.x() * size.y() * samplesPerPixel, tiffKindToPixelFormat(kind));
+    auto buf = PixelBuffer::alloc(posProd(size) * samplesPerPixel, tiffKindToPixelFormat(kind));
 
     if (decodeRaw) {
         TEV_ASSERT(buf.format() == EPixelFormat::F32, "Expected unpacked tile data to be in 32-bit float format.");
@@ -2346,7 +2346,7 @@ Task<ImageData> readTiffImage(
     }
 
     if (interleave != Vector2i{1, 1}) {
-        const auto numPixels = (size_t)size.x() * size.y();
+        const auto numPixels = posProd(size);
         const auto bytesPerSample = unpackedBitsPerSample / 8;
         const auto bytesPerPixel = numChannels * bytesPerSample;
 
@@ -2383,7 +2383,7 @@ Task<ImageData> readTiffImage(
     if (const auto activeArea = getActiveArea(tif, size); size != activeArea.size()) {
         const auto rawSize = size;
         size = activeArea.size();
-        const auto numPixels = (size_t)size.x() * size.y();
+        const auto numPixels = posProd(size);
         const auto bytesPerSample = unpackedBitsPerSample / 8;
         const auto bytesPerPixel = numChannels * bytesPerSample;
 
