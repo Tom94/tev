@@ -43,7 +43,7 @@ namespace tev {
 
 struct ImageLoaderSettings;
 
-static constexpr float DEFAULT_IMAGE_WHITE_LEVEL = 80.0f;
+inline constexpr float DEFAULT_IMAGE_WHITE_LEVEL = 80.0f;
 
 struct AttributeNode {
     std::string name;

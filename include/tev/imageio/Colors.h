@@ -168,9 +168,9 @@ bool isTransferImplemented(const ETransfer transfer);
 ETransfer fromWpTransfer(int wpTransfer);
 
 namespace bt709 {
-static constexpr float beta = 0.018053968510807f;
-static constexpr float alpha = 1.0f + 5.5f * beta;
-static constexpr float thres = 4.5f * beta;
+inline constexpr float beta = 0.018053968510807f;
+inline constexpr float alpha = 1.0f + 5.5f * beta;
+inline constexpr float thres = 4.5f * beta;
 } // namespace bt709
 
 inline float bt709ToLinear(float val) {
@@ -218,13 +218,13 @@ inline float smpteSt240ToLinear(float val) { return val <= 0.0913f ? (val / 4.0f
 inline float linearToSmpteSt240(float val) { return val <= 0.022825f ? (val * 4.0f) : (1.1115f * pow(val, 0.45f) - 0.1115f); }
 
 namespace pq {
-static constexpr float c1 = 107.0f / 128.0f;
-static constexpr float c2 = 2413.0f / 128.0f;
-static constexpr float c3 = 2392.0f / 128.0f;
-static constexpr float m1 = 1305.0f / 8192.0f;
-static constexpr float m2 = 2523.0f / 32.0f;
-static constexpr float invm1 = 8192.0f / 1305.0f;
-static constexpr float invm2 = 32.0f / 2523.0f;
+inline constexpr float c1 = 107.0f / 128.0f;
+inline constexpr float c2 = 2413.0f / 128.0f;
+inline constexpr float c3 = 2392.0f / 128.0f;
+inline constexpr float m1 = 1305.0f / 8192.0f;
+inline constexpr float m2 = 2523.0f / 32.0f;
+inline constexpr float invm1 = 8192.0f / 1305.0f;
+inline constexpr float invm2 = 32.0f / 2523.0f;
 } // namespace pq
 
 inline float pqToLinear(float val) {
@@ -245,13 +245,13 @@ inline float linearToSmpteSt428(float val) { return std::pow(val * (48.0f / 52.3
 
 namespace hlg {
 // TODO: make these params configurable at runtime
-static constexpr float Lw = 1000.0f; // display peak brightness in cd/m² (nits)
-static constexpr float gain = Lw; // can technically be adjusted, but usually set to Lw
-static const float gamma = 1.2f + 0.42f * std::log10(Lw / 1000.0f);
+inline constexpr float Lw = 1000.0f; // display peak brightness in cd/m² (nits)
+inline constexpr float gain = Lw; // can technically be adjusted, but usually set to Lw
+inline const float gamma = 1.2f + 0.42f * std::log10(Lw / 1000.0f);
 
-static constexpr float a = 0.17883277f;
-static constexpr float b = 0.28466892f;
-static constexpr float c = 0.55991073f;
+inline constexpr float a = 0.17883277f;
+inline constexpr float b = 0.28466892f;
+inline constexpr float c = 0.55991073f;
 } // namespace hlg
 
 inline nanogui::Vector3f hlgToLinear(nanogui::Vector3f val) {
