@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Channel.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
@@ -339,7 +340,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     optional<MultiChannelView<float>> prevCanvas = nullopt;
 
-    const auto readFrame = [&](int frameIdx) -> Task<ImageData> {
+    const auto readFrame = [&]<trivially_copyable T>(int frameIdx) -> Task<ImageData> {
         ImageData resultData;
         resultData.attributes = attributes;
 
@@ -494,11 +495,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                if (pixelFormat == EPixelFormat::U16) {
-                    co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
-                } else if (pixelFormat == EPixelFormat::U8) {
-                    co_await toFloat32(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
-                }
+                co_await toFloat32(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
 
                 co_await ThreadPool::global().parallelFor(
                     0uz,
@@ -529,11 +526,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_return;
             } else if (iccProfileData) {
                 try {
-                    if (pixelFormat == EPixelFormat::U16) {
-                        co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
-                    } else {
-                        co_await toFloat32(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
-                    }
+                    co_await toFloat32(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
 
                     const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
                     co_await toLinearSrgbPremul(
@@ -571,11 +564,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     tlog::debug("No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.");
                 }
 
-                if (pixelFormat == EPixelFormat::U16) {
-                    co_await toFloat32<true, true>(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
-                } else {
-                    co_await toFloat32<true, true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
-                }
+                co_await toFloat32<true, true>(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
 
                 resultData.hasPremultipliedAlpha = true;
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
@@ -583,11 +572,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             }
 
             tlog::debug("Using gamma={}", invGamma64);
-            if (pixelFormat == EPixelFormat::U16) {
-                co_await toFloat32(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
-            } else {
-                co_await toFloat32(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
-            }
+            co_await toFloat32(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
 
             co_await ThreadPool::global().parallelFor(
                 0uz,
@@ -683,7 +668,13 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             tlog::debug("Reading frame {}/{}", i + 1, numFrames);
         }
 
-        result.emplace_back(co_await readFrame(i));
+        if (pixelFormat == EPixelFormat::U8) {
+            result.emplace_back(co_await readFrame.operator()<uint8_t>(i));
+        } else if (pixelFormat == EPixelFormat::U16) {
+            result.emplace_back(co_await readFrame.operator()<uint16_t>(i));
+        } else {
+            TEV_ASSERT(false, "Unexpected pixel format {}", toString(pixelFormat));
+        }
     }
 
     co_return result;
