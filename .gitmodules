@@ -106,3 +106,7 @@
 	path = dependencies/libtiff
 	url = https://github.com/Tom94/libtiff
 	shallow = true
+[submodule "dependencies/small_vector"]
+	path = dependencies/small_vector
+	url = https://github.com/gharveymn/small_vector
+	shallow = true
