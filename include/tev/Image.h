@@ -210,7 +210,7 @@ public:
     nanogui::Texture* texture(std::span<const std::string> channelNames, EInterpolationMode minFilter, EInterpolationMode magFilter) &;
 
     std::span<const std::string> channelsInGroup(std::string_view groupName) const &;
-    void decomposeChannelGroup(std::string_view groupName);
+    void ungroup(std::string_view groupName);
 
     nanogui::Vector2i size() const { return mData.size(); }
 
@@ -263,6 +263,7 @@ public:
         Box2i imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
+        EChannelMask mask,
         nanogui::Color bg,
         bool divideAlpha,
         int priority
@@ -276,6 +277,7 @@ public:
         Box2i imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
+        EChannelMask mask,
         nanogui::Color bg,
         bool divideAlpha,
         ETonemap tonemap,
@@ -291,6 +293,7 @@ public:
         Box2i imageRegion,
         std::string_view requestedChannelGroup,
         EMetric metric,
+        EChannelMask mask,
         nanogui::Color bg,
         ETonemap tonemap,
         float gamma,

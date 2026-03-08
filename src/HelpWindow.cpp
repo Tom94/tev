@@ -145,7 +145,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addRow(groupSelection, "Left Click", "Select hovered channel group");
     addRow(groupSelection, "Ctrl+1…9", "Select N-th channel group");
     addRow(groupSelection, "Right/Left or D/A or ]/[", "Select next/previous channel group");
-    addRow(groupSelection, "X", "Explode current channel group");
+    addRow(groupSelection, "X", "Ungroup current channel group");
 
     new Label{shortcuts, "Interface", "sans-bold", 18};
     auto ui = new Widget{shortcuts};

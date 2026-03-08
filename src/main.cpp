@@ -238,7 +238,7 @@ static void convertTo(
                     // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
                     const auto cg = image->channelGroups().front().name;
                     const auto window = image->toImageCoords(image->displayWindow());
-                    co_await image->save(path, nullptr, window, cg, metric, bg, tonemap, gamma, exposure, offset, priority);
+                    co_await image->save(path, nullptr, window, cg, metric, EChannelMask::All, bg, tonemap, gamma, exposure, offset, priority);
 
                     const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
                     tlog::success("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);

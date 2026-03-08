@@ -697,6 +697,72 @@ inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETon
     return min(max(result, nanogui::Vector3f{0.0f}), nanogui::Vector3f{1.0f});
 }
 
+template <typename E> struct enable_bitmask : std::false_type {};
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E operator|(E a, E b) {
+    using U = std::underlying_type_t<E>;
+    return static_cast<E>(static_cast<U>(a) | static_cast<U>(b));
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E operator&(E a, E b) {
+    using U = std::underlying_type_t<E>;
+    return static_cast<E>(static_cast<U>(a) & static_cast<U>(b));
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E operator^(E a, E b) {
+    using U = std::underlying_type_t<E>;
+    return static_cast<E>(static_cast<U>(a) ^ static_cast<U>(b));
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E operator~(E a) {
+    using U = std::underlying_type_t<E>;
+    return static_cast<E>(~static_cast<U>(a));
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E& operator|=(E& a, E b) {
+    return a = a | b;
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E& operator&=(E& a, E b) {
+    return a = a & b;
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr E& operator^=(E& a, E b) {
+    return a = a ^ b;
+}
+
+template <typename E>
+    requires enable_bitmask<E>::value
+constexpr bool hasFlag(E mask, E flag) {
+    using U = std::underlying_type_t<E>;
+    return (static_cast<U>(mask) & static_cast<U>(flag)) == static_cast<U>(flag);
+}
+
+enum class EChannelMask : uint8_t {
+    None = 0,
+    Red = 1 << 0,
+    Green = 1 << 1,
+    Blue = 1 << 2,
+    Alpha = 1 << 3,
+    All = Red | Green | Blue | Alpha,
+};
+
+template <> struct enable_bitmask<EChannelMask> : std::true_type {};
+
 enum class EMetric : int {
     Error = 0,
     AbsoluteError,
