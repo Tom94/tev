@@ -572,9 +572,9 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 }
 
                 if (pixelFormat == EPixelFormat::U16) {
-                    co_await toFloat32<uint16_t, true, true>(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32<true, true>(buf.span<const uint16_t>(), numChannels, dstView, hasAlpha, priority);
                 } else {
-                    co_await toFloat32<uint8_t, true, true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32<true, true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority);
                 }
 
                 resultData.hasPremultipliedAlpha = true;

@@ -82,11 +82,11 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     const auto s = span<const uint8_t>{decodedData.get(), numPixels * numChannels};
 
     if (desc.colorspace == QOI_LINEAR) {
-        co_await toFloat32<uint8_t, false>(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<false>(s, numChannels, outView, hasAlpha, priority);
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
-        co_await toFloat32<uint8_t, true>(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<true>(s, numChannels, outView, hasAlpha, priority);
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     }

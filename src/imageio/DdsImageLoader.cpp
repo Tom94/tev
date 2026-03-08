@@ -258,7 +258,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
-        co_await toFloat32<float, true>(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<true>(s, numChannels, outView, hasAlpha, priority);
     }
 
     co_return result;

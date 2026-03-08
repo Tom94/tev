@@ -27,6 +27,7 @@
 #include <nanogui/vector.h>
 
 #include <istream>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -72,9 +73,9 @@ Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vecto
     );
 }
 
-template <typename T, bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false>
+template <bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false, std::ranges::random_access_range T>
 Task<void> toFloat32(
-    std::span<const T> imageData,
+    T&& imageData,
     size_t numSamplesPerPixelIn,
     MultiChannelView<float> floatData,
     bool hasAlpha,
@@ -84,9 +85,10 @@ Task<void> toFloat32(
     // 0 defaults to numSamplesPerPixelIn * size.x()
     size_t numSamplesPerRowIn = 0
 ) {
-    if constexpr (std::is_integral_v<T>) {
+    using value_t = typename std::remove_cvref_t<T>::value_type;
+    if constexpr (std::is_integral_v<value_t>) {
         if (scale == 0.0f) {
-            scale = 1.0f / (((size_t)1 << (sizeof(T) * 8)) - 1);
+            scale = 1.0f / (((size_t)1 << (sizeof(value_t) * 8)) - 1);
         }
     } else {
         if (scale == 0.0f) {

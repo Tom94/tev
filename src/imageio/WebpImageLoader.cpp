@@ -202,7 +202,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     resultData.readMetadataFromIcc(profile);
                 } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC profile: {}", e.what()); }
             } else {
-                co_await toFloat32<uint8_t, true, true>(dataSpan, numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32<true, true>(dataSpan, numChannels, dstView, hasAlpha, priority);
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
