@@ -234,8 +234,8 @@ Task<void> ImageLoader::resizeChannelsAsync(
         co_return;
     }
 
-    const auto srcViews = srcChannels | views::transform([](const Channel& c) { return c.view<const float>(); }) | to_vector;
-    const auto dstViews = dstChannels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
+    const auto srcViews = srcChannels | views::transform([](const Channel& c) { return c.view<const float>(); }) | toVector;
+    const auto dstViews = dstChannels | views::transform([](Channel& c) { return c.view<float>(); }) | toVector;
 
     const Vector2i size = srcChannels.front().size();
     const Vector2i targetSize = dstChannels.front().size();
@@ -307,7 +307,7 @@ Task<void> ImageLoader::resizeImageData(ImageData& resultData, Vector2i targetSi
 
     auto resizedChannels = resultData.channels |
         views::transform([targetSize](const Channel& c) { return Channel{c.name(), targetSize, c.pixelFormat(), c.desiredPixelFormat()}; }) |
-        to_vector;
+        toVector;
 
     co_await resizeChannelsAsync(resultData.channels, resizedChannels, targetArea, priority);
 

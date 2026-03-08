@@ -257,18 +257,18 @@ namespace fs = std::filesystem;
 //       Same for fixed_chunks once std::ranges::views::chunk becomes available.
 namespace detail {
 
-struct to_vector_fn {
+template <template <typename...> class Vector> struct to_vector_fn {
     template <std::ranges::range R> friend constexpr auto operator|(R&& r, to_vector_fn) {
         using value_type = std::ranges::range_value_t<R>;
         if constexpr (std::ranges::sized_range<R>) {
-            std::vector<value_type> v;
+            Vector<value_type> v;
             v.reserve(std::ranges::size(r));
             for (auto&& e : r) {
                 v.emplace_back(static_cast<decltype(e)&&>(e));
             }
             return v;
         } else {
-            return std::vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
+            return Vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
         }
     }
 };
@@ -282,7 +282,7 @@ template <size_t N> struct fixed_chunks_fn {
 
 } // namespace detail
 
-inline constexpr detail::to_vector_fn to_vector{};
+inline constexpr detail::to_vector_fn<std::vector> toVector{};
 template <std::size_t N> inline constexpr detail::fixed_chunks_fn<N> fixed_chunks{};
 
 // Helper for std::visit on multiple lambdas

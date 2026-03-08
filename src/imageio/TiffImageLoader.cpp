@@ -1155,7 +1155,7 @@ Task<void> postprocessLinearRawDng(
 
         tlog::debug("Applying profile tone curve of length {}", tonecurve.size());
 
-        const auto tc = tonecurve | fixed_chunks<2> | views::transform([](auto c) { return Vector2f{c[0], c[1]}; }) | to_vector;
+        const auto tc = tonecurve | fixed_chunks<2> | views::transform([](auto c) { return Vector2f{c[0], c[1]}; }) | toVector;
         if (tc.front().x() != 0.0f || tc.back().x() != 1.0f) {
             throw ImageLoadError{"Tone curve must start at 0."};
         }
@@ -2229,7 +2229,7 @@ Task<ImageData> readTiffImage(
 
                         auto* const data = buf.data<float>();
 
-                        const auto views = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
+                        const auto views = tmpImage.channels | views::transform([](Channel& c) { return c.view<float>(); }) | toVector;
 
                         co_await ThreadPool::global().parallelFor(
                             yStart,

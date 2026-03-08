@@ -342,6 +342,9 @@ private:
     size_t mDataStride;
 };
 
+template <typename T> using SmallRgbaVector = gch::small_vector<T, 4>; // Up to 4 channels should be stored on the stack
+inline constexpr detail::to_vector_fn<SmallRgbaVector> toSmallRgbaVector{};
+
 template <typename T> class MultiChannelView {
 public:
     MultiChannelView() = delete;
@@ -367,11 +370,11 @@ public:
 
     MultiChannelView(std::span<Channel> channels)
         requires(!std::is_const_v<T>)
-        : MultiChannelView{channels | std::views::transform([](Channel& c) { return c.view<T>(); }) | to_vector} {}
+        : MultiChannelView{channels | std::views::transform([](Channel& c) { return c.view<T>(); }) | toSmallRgbaVector} {}
 
     MultiChannelView(std::span<const Channel> channels)
         requires(std::is_const_v<T>)
-        : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | to_vector} {}
+        : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | toSmallRgbaVector} {}
 
     MultiChannelView(std::span<const ChannelView<T>> views) : mChannelViews{views.begin(), views.end()} {
         if (mChannelViews.empty()) {
@@ -425,7 +428,7 @@ public:
     size_t nChannels() const { return mChannelViews.size(); }
 
 private:
-    gch::small_vector<ChannelView<T>, 4> mChannelViews;
+    SmallRgbaVector<ChannelView<T>> mChannelViews;
 };
 
 } // namespace tev

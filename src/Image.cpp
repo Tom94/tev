@@ -1109,7 +1109,7 @@ Task<vector<Channel>> Image::getHdrImageData(shared_ptr<Image> reference, string
         result.emplace_back(toUpper(Channel::tail(channelNames[i])), size, EPixelFormat::F32, EPixelFormat::F32);
     }
 
-    const auto views = result | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
+    const auto views = result | views::transform([](Channel& c) { return c.view<float>(); }) | toVector;
     const auto channels = this->channels(channelNames);
     if (!reference) {
         co_await ThreadPool::global().parallelFor(
