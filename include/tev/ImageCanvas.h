@@ -80,6 +80,10 @@ public:
     EMetric metric() const { return mMetric; }
     void setMetric(EMetric metric) { mMetric = metric; }
 
+    bool areChannelsMasked(EChannelMask mask) const { return hasFlag(mChannelMask, mask); }
+    EChannelMask channelMask() const { return mChannelMask; }
+    void setChannelMask(EChannelMask mask) { mChannelMask = mask; }
+
     const std::optional<Box2i>& crop() const & { return mCrop; }
     void setCrop(const std::optional<Box2i>& crop) { mCrop = crop; }
     Box2i cropInImageCoords() const;
@@ -178,6 +182,7 @@ private:
 
     std::unique_ptr<UberShader> mShader;
 
+    EChannelMask mChannelMask = EChannelMask::Red | EChannelMask::Green | EChannelMask::Blue | EChannelMask::Alpha;
     ETonemap mTonemap = ETonemap::None;
     EMetric mMetric = EMetric::Error;
     std::optional<Box2i> mCrop;

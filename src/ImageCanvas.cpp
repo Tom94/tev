@@ -107,6 +107,7 @@ void ImageCanvas::draw_contents() {
         mBackgroundColor,
         mTonemap,
         mMetric,
+        mChannelMask,
         imageSpaceCrop
     );
 }
@@ -618,7 +619,7 @@ Task<HeapArray<float>> ImageCanvas::getRgbaHdrImageData(bool divideAlpha, int pr
     }
 
     co_return co_await mImage->getRgbaHdrImageData(
-        mReference, cropInImageCoords(), mRequestedChannelGroup, mMetric, mBackgroundColor, divideAlpha, priority
+        mReference, cropInImageCoords(), mRequestedChannelGroup, mMetric, mChannelMask, mBackgroundColor, divideAlpha, priority
     );
 }
 
@@ -628,7 +629,18 @@ Task<HeapArray<uint8_t>> ImageCanvas::getRgbaLdrImageData(bool divideAlpha, int 
     }
 
     co_return co_await mImage->getRgbaLdrImageData(
-        mReference, cropInImageCoords(), mRequestedChannelGroup, mMetric, mBackgroundColor, divideAlpha, mTonemap, mGamma, mExposure, mOffset, priority
+        mReference,
+        cropInImageCoords(),
+        mRequestedChannelGroup,
+        mMetric,
+        mChannelMask,
+        mBackgroundColor,
+        divideAlpha,
+        mTonemap,
+        mGamma,
+        mExposure,
+        mOffset,
+        priority
     );
 }
 
@@ -648,6 +660,7 @@ void ImageCanvas::saveImage(const fs::path& path) const {
             cropInImageCoords(),
             mRequestedChannelGroup,
             mMetric,
+            mChannelMask,
             mBackgroundColor,
             mTonemap,
             mGamma,

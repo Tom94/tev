@@ -171,7 +171,7 @@ ImageViewer::ImageViewer(
 
             panel->set_tooltip(
                 "Exposure scales the brightness of an image prior to tonemapping by 2^Exposure.\n\n"
-                "Keyboard shortcuts:\nE and Shift+E"
+                "Keyboard shortcuts: E and Shift+E"
             );
         }
 
@@ -527,6 +527,42 @@ ImageViewer::ImageViewer(
         );
     }
 
+    // Image channel mask
+    {
+        mChannelMaskButtonContainer = new Widget{mSidebarLayout};
+        mChannelMaskButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 5, Alignment::Fill, 5, 2});
+
+        const auto makeChannelMaskBtn = [&](string_view name, string_view humanReadable, int c) {
+            auto button = new Button{mChannelMaskButtonContainer, name};
+            button->set_flags(Button::ToggleButton);
+            button->set_pushed(false);
+            button->set_font_size(15);
+            button->set_text_color(Channel::color(name, true));
+            button->set_change_callback(
+                [this, button, mask = static_cast<EChannelMask>(1 << c), activeColor = Channel::color(name, true)](bool state) {
+                    setChannelMask(mask, !state);
+                    button->set_text_color(state ? Color{0.6f} : activeColor);
+                }
+            );
+            button->set_tooltip(format(
+                "Disable the {} channel.{}",
+                humanReadable,
+                c < 3 ? "\n\nIn terms of rec.709 primaries, regardless of the image's original color space." : ""
+            ));
+            return button;
+        };
+
+        makeChannelMaskBtn("R", "red", 0);
+        makeChannelMaskBtn("G", "green", 1);
+        makeChannelMaskBtn("B", "blue", 2);
+        makeChannelMaskBtn("A", "alpha", 3);
+
+        auto button = new Button{mChannelMaskButtonContainer, "Ungroup"};
+        button->set_font_size(15);
+        button->set_callback([this]() { ungroupCurrentChannelGroup(); });
+        button->set_tooltip("Ungroup current channel group into individual channels.\n\nKeyboard shortcut: Ctrl+U");
+    }
+
     // Image selection
     {
         auto spacer = new Widget{mSidebarLayout};
@@ -566,7 +602,7 @@ ImageViewer::ImageViewer(
                 "Filters visible images and channel groups according to a supplied string. "
                 "The string must have the format 'image:group'. "
                 "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
-                "Keyboard shortcut:\n{}+F",
+                "Keyboard shortcut: {}+F",
                 HelpWindow::COMMAND
             ));
 
@@ -999,18 +1035,7 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             }
             return true;
         } else if (key == GLFW_KEY_X) {
-            // X for "eXplode channels
-            if (mCurrentImage) {
-                mCurrentImage->decomposeChannelGroup(mCurrentGroup);
-
-                // Resets channel group buttons to include the now exploded channels
-                selectImage(mCurrentImage);
-            }
-
-            if (mCurrentReference) {
-                mCurrentReference->decomposeChannelGroup(mCurrentGroup);
-                selectReference(mCurrentReference);
-            }
+            ungroupCurrentChannelGroup();
         } else if (key == GLFW_KEY_B && (modifiers & SYSTEM_COMMAND_MOD)) {
             setUiVisible(!isUiVisible());
             return true;
@@ -1948,6 +1973,20 @@ void ImageViewer::resetImage() {
     mImageCanvas->resetTransform();
 }
 
+void ImageViewer::ungroupCurrentChannelGroup() {
+    if (mCurrentImage) {
+        mCurrentImage->ungroup(mCurrentGroup);
+
+        // Resets channel group buttons to include the now exploded channels
+        selectImage(mCurrentImage);
+    }
+
+    if (mCurrentReference) {
+        mCurrentReference->ungroup(mCurrentGroup);
+        selectReference(mCurrentReference);
+    }
+}
+
 void ImageViewer::setTonemap(ETonemap tonemap) {
     mImageCanvas->setTonemap(tonemap);
     auto& buttons = mTonemapButtonContainer->children();
@@ -1967,6 +2006,19 @@ void ImageViewer::setMetric(EMetric metric) {
         Button* b = dynamic_cast<Button*>(buttons[i]);
         b->set_pushed((EMetric)i == metric);
     }
+}
+
+void ImageViewer::setChannelMask(EChannelMask channel, bool state) {
+    EChannelMask mask = mImageCanvas->channelMask();
+
+    if (state) {
+        mask |= channel;
+    } else {
+        mask &= ~channel;
+    }
+
+    mImageCanvas->setChannelMask(mask);
+    requestLayoutUpdate();
 }
 
 void ImageViewer::setBackgroundColorStraight(Color color) {

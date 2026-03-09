@@ -119,6 +119,8 @@ public:
 
     void resetImage();
 
+    void ungroupCurrentChannelGroup();
+
     EInterpolationMode minFilter() const { return mImageCanvas->minFilter(); }
     void setMinFilter(EInterpolationMode value) { mImageCanvas->setMinFilter(value); }
 
@@ -130,6 +132,10 @@ public:
 
     EMetric metric() const { return mImageCanvas->metric(); }
     void setMetric(EMetric metric);
+
+    bool areChannelsMasked(EChannelMask mask) const { return mImageCanvas->areChannelsMasked(mask); };
+    EChannelMask channelMask() const { return mImageCanvas->channelMask(); }
+    void setChannelMask(EChannelMask channel, bool state);
 
     void setBackgroundColorStraight(nanogui::Color color);
 
@@ -265,6 +271,7 @@ private:
 
     nanogui::Widget* mTonemapButtonContainer = nullptr;
     nanogui::Widget* mMetricButtonContainer = nullptr;
+    nanogui::Widget* mChannelMaskButtonContainer = nullptr;
 
     std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
     std::weak_ptr<Ipc> mIpc;

@@ -129,6 +129,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             uniform bool clipToLdr;
             uniform int tonemap;
             uniform int metric;
+            uniform vec4 channelMask;
 
             uniform vec2 cropMin;
             uniform vec2 cropMax;
@@ -211,7 +212,17 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return vec3(0.0);
             }
 
-            vec4 sample(sampler2D sampler, vec2 uv) {
+            vec4 applyMask(vec4 color, vec4 mask) {
+                color.rgb *= mask.rgb;
+                color.a = mask.a == 1.0 ? color.a : 1.0;
+                return color;
+            }
+
+            vec4 sample(sampler2D sampler, vec4 mask, vec2 uv) {
+                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+                    return vec4(0.0);
+                }
+
                 vec4 color = texture2D(sampler, uv);
 
                 // Duplicate first channel in monochromatic images and move alpha to end if not already there.
@@ -223,10 +234,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     color = vec4(color.r, color.g, 0.0, color.b);
                 }
 
-                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-                    color = vec4(0.0);
-                }
-
+                color = applyMask(color, mask);
                 return color;
             }
 
@@ -244,12 +252,12 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
                 vec4 val = vec4(0.0);
                 if (hasImage) {
-                    val = sample(image, imageUv);
+                    val = sample(image, channelMask, imageUv);
                     val.a *= cropAlpha;
                 }
 
                 if (hasReference) {
-                    vec4 referenceVal = sample(reference, referenceUv);
+                    vec4 referenceVal = sample(reference, channelMask, referenceUv);
                     referenceVal.a *= cropAlpha;
 
                     vec3 difference = val.rgb - referenceVal.rgb;
@@ -387,7 +395,17 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return float3(0.0f);
             }
 
-            float4 sample(texture2d<float, access::sample> texture, sampler textureSampler, float2 uv, int channelConfig) {
+            float4 applyMask(float4 color, float4 mask) {
+                color.rgb *= mask.rgb;
+                color.a = mask.a == 1.0f ? color.a : 1.0f;
+                return color;
+            }
+
+            float4 sample(texture2d<float, access::sample> texture, sampler textureSampler, float4 mask, float2 uv, int channelConfig) {
+                if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f) {
+                    return float4(0.0f);
+                }
+
                 float4 color = texture.sample(textureSampler, uv);
 
                 // Duplicate first channel in monochromatic images and move alpha to end if not already there.
@@ -399,10 +417,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     color = float4(color.r, color.g, 0.0f, color.b);
                 }
 
-                if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f) {
-                    return float4(0.0f);
-                }
-
+                color = applyMask(color, mask);
                 return color;
             }
 
@@ -439,6 +454,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
+                const constant float4& channelMask,
                 const constant float2& cropMin,
                 const constant float2& cropMax,
                 const constant float4& bgColor
@@ -451,12 +467,12 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
                 float4 val = float4(0.0f);
                 if (hasImage) {
-                    val = sample(image, image_sampler, vert.imageUv, channelConfig);
+                    val = sample(image, image_sampler, channelMask, vert.imageUv, channelConfig);
                     val.a *= cropAlpha;
                 }
 
                 if (hasReference) {
-                    float4 referenceVal = sample(reference, reference_sampler, vert.referenceUv, channelConfig);
+                    float4 referenceVal = sample(reference, reference_sampler, channelMask, vert.referenceUv, channelConfig);
                     referenceVal.a *= cropAlpha;
 
                     float3 difference = val.rgb - referenceVal.rgb;
@@ -554,6 +570,7 @@ void UberShader::draw(
     Color backgroundColor,
     ETonemap tonemap,
     EMetric metric,
+    EChannelMask channelMask,
     const optional<Box2i>& crop
 ) {
     // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
@@ -577,6 +594,14 @@ void UberShader::draw(
     bindCheckerboardData(pixelSize, checkerSize, backgroundColor);
     bindImageData(textureImage ? textureImage : mColorMap.get(), transformImage, exposure, offset, gamma, tonemap);
     bindReferenceData(textureReference ? textureReference : mColorMap.get(), transformReference, metric);
+
+    const Vector4f uChannelMask = {
+        hasFlag(channelMask, EChannelMask::Red) ? 1.0f : 0.0f,
+        hasFlag(channelMask, EChannelMask::Green) ? 1.0f : 0.0f,
+        hasFlag(channelMask, EChannelMask::Blue) ? 1.0f : 0.0f,
+        hasFlag(channelMask, EChannelMask::Alpha) ? 1.0f : 0.0f,
+    };
+    mShader->set_uniform("channelMask", uChannelMask);
 
     mShader->set_uniform("hasImage", (bool)textureImage);
     mShader->set_uniform("hasReference", (bool)textureReference);
