@@ -809,7 +809,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     });
 
     auto flattened = co_await image->getHdrImageData(reference, requestedChannelGroup, metric, priority);
-    const auto views = flattened | views::transform([](Channel& c) { return c.view<float>(); }) | to_vector;
+    const auto views = flattened | views::transform([](Channel& c) { return c.view<float>(); }) | toVector;
 
     const ChannelView<float>* alphaChannel = nullptr;
 

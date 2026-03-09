@@ -243,6 +243,7 @@ target_include_directories(tev PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/args
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/qoi
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/small_vector/source/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinylogger
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/utfcpp/source

@@ -22,16 +22,15 @@
 #include <tev/Common.h>
 #include <tev/Task.h>
 
-#include <nanogui/vector.h>
-
+#include <gch/small_vector.hpp>
 #include <half.h>
+#include <nanogui/vector.h>
 
 #include <memory>
 #include <ranges>
 #include <span>
 #include <string>
 #include <type_traits>
-#include <vector>
 
 namespace tev {
 
@@ -62,7 +61,7 @@ template <typename T> class ChannelView {
 public:
     ChannelView(const ChannelView<std::remove_const_t<T>>& other)
         requires(!std::is_same_v<T, std::remove_const_t<T>>)
-        : ChannelView(other.data(), other.dataStride(), other.dataOffset(), other.size()) {}
+        : ChannelView(other.data(), other.dataStride(), 0, other.size()) {}
 
     ChannelView(const ChannelView&) = default;
     ChannelView& operator=(const ChannelView&) = default;
@@ -71,14 +70,14 @@ public:
     ChannelView& operator=(ChannelView&&) = default;
 
     ChannelView(T* data, size_t dataStride, size_t dataOffset, nanogui::Vector2i size) :
-        mData{data}, mDataOffset{dataOffset}, mDataStride{dataStride}, mSize{size} {}
+        mData{data + dataOffset}, mDataStride{dataStride}, mSize{size} {}
 
     std::conditional_t<std::is_same_v<T, float>, float&, float> operator[](size_t i) const & {
         if constexpr (std::is_integral_v<T>) {
-            const auto v = mData[mDataOffset + i * mDataStride];
+            const auto v = mData[i * mDataStride];
             return (float)v / (float)std::numeric_limits<T>::max();
         } else {
-            return mData[mDataOffset + i * mDataStride];
+            return mData[i * mDataStride];
         }
     }
 
@@ -90,7 +89,7 @@ public:
     float operator[](int x, int y) const && { return this->operator[](x, y); }
 
     void setAt(size_t i, float value) const {
-        T& val = mData[mDataOffset + i * mDataStride];
+        T& val = mData[i * mDataStride];
         if constexpr (std::is_integral_v<T>) {
             if constexpr (std::is_signed_v<T>) {
                 val = (T)(std::clamp(value, -1.0f, 1.0f) * (float)std::numeric_limits<T>::max() + copysignf(0.5f, value));
@@ -108,12 +107,10 @@ public:
 
     T* data() const & { return mData; }
 
-    size_t dataOffset() const { return mDataOffset; }
     size_t dataStride() const { return mDataStride; }
 
 private:
     T* mData = nullptr;
-    size_t mDataOffset = 0;
     size_t mDataStride = 1;
     nanogui::Vector2i mSize = {0};
 };
@@ -345,6 +342,9 @@ private:
     size_t mDataStride;
 };
 
+template <typename T> using SmallRgbaVector = gch::small_vector<T, 4>; // Up to 4 channels should be stored on the stack
+inline constexpr detail::to_vector_fn<SmallRgbaVector> toSmallRgbaVector{};
+
 template <typename T> class MultiChannelView {
 public:
     MultiChannelView() = delete;
@@ -354,7 +354,10 @@ public:
             numChannels = dataStride;
         }
 
-        mSize = size;
+        if (numChannels == 0) {
+            throw std::runtime_error{"MultiChannelView(ptr) must have at least one channel."};
+        }
+
         for (size_t c = 0; c < numChannels; ++c) {
             mChannelViews.emplace_back(data, dataStride, c, size);
         }
@@ -367,20 +370,20 @@ public:
 
     MultiChannelView(std::span<Channel> channels)
         requires(!std::is_const_v<T>)
-        : MultiChannelView{channels | std::views::transform([](Channel& c) { return c.view<T>(); }) | to_vector} {}
+        : MultiChannelView{channels | std::views::transform([](Channel& c) { return c.view<T>(); }) | toSmallRgbaVector} {}
 
     MultiChannelView(std::span<const Channel> channels)
         requires(std::is_const_v<T>)
-        : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | to_vector} {}
+        : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | toSmallRgbaVector} {}
 
     MultiChannelView(std::span<const ChannelView<T>> views) : mChannelViews{views.begin(), views.end()} {
         if (mChannelViews.empty()) {
-            throw std::runtime_error{"MultiChannelView must have at least one channel."};
+            throw std::runtime_error{"MultiChannelView(span) must have at least one channel."};
         }
 
-        mSize = mChannelViews.front().size();
+        const auto s = mChannelViews.front().size();
         for (const auto& channel : mChannelViews) {
-            if (channel.size() != mSize) {
+            if (channel.size() != s) {
                 throw std::runtime_error{"All channels in a MultiChannelView must have the same size."};
             }
         }
@@ -392,8 +395,8 @@ public:
     decltype(auto) operator[](int c, size_t i) const & { return mChannelViews[channelIdx(c)][i]; }
     decltype(auto) operator[](int c, int x, int y) const & { return mChannelViews[channelIdx(c)][x, y]; }
 
-    float operator[](int c, size_t i) const && { return mChannelViews[channelIdx(c)][i]; }
-    float operator[](int c, int x, int y) const && { return mChannelViews[channelIdx(c)][x, y]; }
+    auto operator[](int c, size_t i) const && { return mChannelViews[channelIdx(c)][i]; }
+    auto operator[](int c, int x, int y) const && { return mChannelViews[channelIdx(c)][x, y]; }
 
     void setAt(int c, size_t i, float value) const { mChannelViews[channelIdx(c)].setAt(i, value); }
     void setAt(int c, int x, int y, float value) const { mChannelViews[channelIdx(c)].setAt(x, y, value); }
@@ -402,7 +405,8 @@ public:
         const auto& front = mChannelViews.front();
         for (size_t i = 0; i < mChannelViews.size(); ++i) {
             const auto& channel = mChannelViews[i];
-            if (channel.data() != front.data() || channel.dataOffset() != i || channel.dataStride() != front.dataStride()) {
+            const auto offset = channel.data() - front.data();
+            if (channel.data() != front.data() || offset != (ptrdiff_t)i || channel.dataStride() != front.dataStride()) {
                 return std::nullopt;
             }
         }
@@ -420,12 +424,11 @@ public:
         return mChannelViews.front().data();
     }
 
-    nanogui::Vector2i size() const { return mSize; }
+    nanogui::Vector2i size() const { return mChannelViews.front().size(); }
     size_t nChannels() const { return mChannelViews.size(); }
 
 private:
-    std::vector<ChannelView<T>> mChannelViews;
-    nanogui::Vector2i mSize = {0};
+    SmallRgbaVector<ChannelView<T>> mChannelViews;
 };
 
 } // namespace tev

@@ -498,16 +498,16 @@ Task<vector<ImageData>>
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
-        const auto jpegDataToFloat32Typed = [&](auto src, bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
+        const auto jpegDataToFloat32Typed =
+            [&](ranges::random_access_range auto&& src, bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
 
             const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && dst.nChannels() >= 3;
 
-            using T = remove_const_t<typename decltype(src)::value_type>;
             if (fromSrgb && !yCbCrConversionNeeded) {
-                co_await toFloat32<T, true>(src, numChannels, dst, hasAlpha, priority, scale);
+                co_await toFloat32<true>(src, numChannels, dst, hasAlpha, priority, scale);
             } else {
-                co_await toFloat32<T, false>(src, numChannels, dst, hasAlpha, priority, scale);
+                co_await toFloat32<false>(src, numChannels, dst, hasAlpha, priority, scale);
             }
 
             if (yCbCrConversionNeeded) {

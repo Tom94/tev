@@ -420,7 +420,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32<uint32_t, true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 16) {
                 const auto uintData = buf.span<uint16_t>();
                 if (shallSwapBytes) {
@@ -429,9 +429,9 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32<uint16_t, true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 8) {
-                co_await toFloat32<uint8_t, true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
             } else if (bitsPerChannel == 1) {
                 auto* const data = buf.data<uint8_t>();
                 co_await ThreadPool::global().parallelFor(

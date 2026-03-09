@@ -126,7 +126,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
             const auto s = span{static_cast<const uint8_t*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
-            co_await toFloat32<uint8_t, true>(s, numChannels, outView, hasAlpha, priority);
+            co_await toFloat32<true>(s, numChannels, outView, hasAlpha, priority);
         }
     }
 
