@@ -2524,11 +2524,9 @@ void ImageViewer::pasteImagesFromClipboard() {
     }
 
     tlog::info("Loading image from clipboard...");
-    auto imagesLoadTask = tryLoadImage(
-        format("clipboard ({})", ++mClipboardIndex), imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()
-    );
 
-    const auto images = imagesLoadTask.get();
+    const auto name = format("clipboard ({})", ++mClipboardIndex);
+    const auto images = tryLoadImage(name, imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()).get();
 
     if (images.empty()) {
         throw runtime_error{"Failed to load image from clipboard data."};

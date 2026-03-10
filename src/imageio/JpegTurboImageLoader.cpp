@@ -623,11 +623,14 @@ Task<vector<ImageData>>
             );
         } else if (imageInfo.isAppleGainmap) {
             co_await preprocessAndApplyAppleGainMap(mainImage, imageData, mainImageInfo.appleMakerNoteIfd, settings.gainmapHeadroom, priority);
+        } else {
+            tlog::warning("Image {} is marked as gain map but has no associated metadata. Skipping gain map application.", i);
         }
 
-        mainImage.channels.insert(
-            mainImage.channels.end(), make_move_iterator(imageData.channels.begin()), make_move_iterator(imageData.channels.end())
-        );
+        co_await imageData.matchColorsAndSizeOf(mainImage, priority);
+
+        // TODO: Handle the case where the auxiliary image has different attributes
+        ranges::move(imageData.channels, back_inserter(mainImage.channels));
     }
 
     co_return result;

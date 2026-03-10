@@ -162,8 +162,22 @@ inline nanogui::Matrix2f extract2x2(const nanogui::Matrix3f& mat) {
 }
 
 inline float extractScale(const nanogui::Matrix3f& mat) {
-    float det = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
+    const float det = mat.m[0][0] * mat.m[1][1] - mat.m[0][1] * mat.m[1][0];
     return std::sqrt(det);
+}
+
+template <typename T, size_t N_DIMS>
+bool almostEquals(const nanogui::Matrix<T, N_DIMS>& a, const nanogui::Matrix<T, N_DIMS>& b, float epsilon = 1e-6f) {
+    float frob = 0.0f;
+    for (size_t j = 0; j < N_DIMS; ++j) {
+        for (size_t i = 0; i < N_DIMS; ++i) {
+            const float diff = a.m[j][i] - b.m[j][i];
+            frob += diff * diff;
+        }
+    }
+
+    frob = std::sqrt(std::max(frob, 0.0f));
+    return frob < epsilon;
 }
 
 template <size_t N_DIMS> nanogui::Array<float, N_DIMS> abs(const nanogui::Array<float, N_DIMS>& v) {

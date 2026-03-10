@@ -831,7 +831,10 @@ l_decode_success:
                 data, gainMap, gainMapInfo->metadata, data.nativeMetadata.chroma, gainMapInfo->altChroma, settings.gainmapHeadroom, priority
             );
 
-            data.channels.insert(data.channels.end(), make_move_iterator(gainMap.channels.begin()), make_move_iterator(gainMap.channels.end()));
+            co_await gainMap.matchColorsAndSizeOf(data, priority);
+
+            // TODO: Handle the case where the auxiliary image has different attributes
+            ranges::move(gainMap.channels, back_inserter(data.channels));
         }
     }
 

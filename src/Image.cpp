@@ -152,6 +152,10 @@ vector<string> ImageData::channelsInLayer(string_view layerName) const {
 Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
     updateLayers();
 
+    if (almostEquals(mat, Matrix3f{1.0f})) {
+        co_return;
+    }
+
     vector<Task<void>> tasks;
 
     for (const auto& layer : layers) {
@@ -187,18 +191,6 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
     co_await awaitAll(tasks);
 
     toRec709 = toRec709 * inverse(mat);
-}
-
-Task<void> ImageData::convertToRec709(int priority) {
-    // No need to do anything for identity transforms
-    if (toRec709 == Matrix3f{1.0f}) {
-        co_return;
-    }
-
-    co_await applyColorConversion(toRec709, priority);
-
-    // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
-    toRec709 = Matrix3f{1.0f};
 }
 
 Task<void> ImageData::matchColorsAndSizeOf(const ImageData& other, int priority) {
@@ -603,7 +595,11 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
 
     if (toRec709 != Matrix3f{1.0f}) {
         tlog::debug("- Converting to Rec.709 D65");
-        co_await convertToRec709(taskPriority);
+
+        co_await applyColorConversion(toRec709, taskPriority);
+
+        // Since the image data is now in Rec709 space, converting to Rec709 is the identity transform.
+        toRec709 = Matrix3f{1.0f};
     }
 
     TEV_ASSERT(toRec709 == Matrix3f{1.0f}, "tev assumes an images to be internally represented in sRGB/Rec709 space.");

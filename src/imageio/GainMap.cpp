@@ -116,6 +116,10 @@ Task<void> preprocessAndApplyAppleGainMap(
         size == gainMapChannels.front().size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.front().size()
     );
 
+    // Apple gain maps are always assumed to be in the image's color space. (Technically an irrelevant detail, because they're also assumed
+    // to be monochromatic, but we'll set the metadata to generalize just in case, analogously to ISO gain maps.)
+    gainMap.toRec709 = image.toRec709;
+
     // 0.0 and 8.0 result in the weakest effect. They are a sane default; see https://developer.apple.com/forums/thread/709331
     float maker33 = 0.0f;
     float maker48 = 8.0f;
@@ -242,7 +246,7 @@ Task<void> preprocessAndApplyIsoGainMap(
     );
 
     // Before applying the gainmap, convert the image to the appropriate color space. Fall back to base chroma if alt chroma requested but
-    // not given (image should have been left in base chroma in that case).
+    // not given (image should have been left in base chroma in that case). Gainmap is assumed to be in that color space as well.
     const auto& chroma = metadata.useBaseColorSpace() ? baseChroma : (altChroma ? altChroma : baseChroma);
 
     if (chroma) {
@@ -255,8 +259,12 @@ Task<void> preprocessAndApplyIsoGainMap(
         co_await image.applyColorConversion(imageToChroma, priority);
     }
 
+    // The image and gain map are not in the gainmap application color space. Reflect this in the gainmap's meatadata.
+    gainMap.toRec709 = image.toRec709;
+
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
-    // gain map itself in tev.
+    // gain map itself in tev. The color space conversion is also necessary to ensure that the gainmap channels (which are expressed in
+    // terms of `chroma` get correctly converted to rec.709 once concatenated to the main image).
     if (weight == 0.0f) {
         tlog::debug("ISO gain map: weight is 0, skipping gain map application.");
         co_return;
