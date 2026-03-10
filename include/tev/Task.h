@@ -38,7 +38,7 @@ class Latch {
 public:
     Latch(int val) : mCounter{val} {}
     bool countDown() noexcept {
-        const int val = --mCounter;
+        const int val = mCounter.fetch_add(-1, std::memory_order_acq_rel) - 1;
         if (val < 0) {
             tlog::warning("Latch should never count below zero.");
         }
@@ -46,7 +46,7 @@ public:
         return val <= 0;
     }
 
-    int value() const { return mCounter; }
+    int value() const { return mCounter.load(std::memory_order_acquire); }
 
 private:
     std::atomic<int> mCounter;
