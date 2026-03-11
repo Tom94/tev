@@ -110,10 +110,10 @@ ImageViewer::ImageViewer(
                 monitorMax{numeric_limits<int>::min(), numeric_limits<int>::min()};
 
             for (int i = 0; i < monitorCount; ++i) {
-                Vector2i pos, size;
-                glfwGetMonitorWorkarea(monitors[i], &pos.x(), &pos.y(), &size.x(), &size.y());
-                monitorMin = min(monitorMin, pos);
-                monitorMax = max(monitorMax, pos + size);
+                Vector2i monitorPos, monitorSize;
+                glfwGetMonitorWorkarea(monitors[i], &monitorPos.x(), &monitorPos.y(), &monitorSize.x(), &monitorSize.y());
+                monitorMin = min(monitorMin, monitorPos);
+                monitorMax = max(monitorMax, monitorPos + monitorSize);
             }
 
             mMinWindowPos = monitorMin;

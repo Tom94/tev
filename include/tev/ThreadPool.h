@@ -46,7 +46,7 @@ public:
     }
 
     template <std::invocable F> auto enqueueTask(F&& f, int priority, bool stopToken = false) {
-        using return_type = std::invoke_result_t<decltype(f)>;
+        using return_type = std::invoke_result_t<F>;
 
         const auto task = std::make_shared<std::packaged_task<return_type()>>(std::forward<F>(f));
         auto res = task->get_future();
@@ -94,14 +94,12 @@ public:
         return Awaiter{this, priority};
     }
 
-    template <std::invocable F>
-    auto enqueueCoroutine(F&& fun, int priority) -> Task<typename std::invoke_result_t<decltype(fun)>::value_type> {
-        using return_type = std::invoke_result_t<decltype(fun)>::value_type;
-        co_return co_await [](F&& fun, ThreadPool* pool, int tPriority) -> Task<return_type> {
-            // Makes sure the function's captures have same lifetime as coroutine
-            auto exec = std::move(fun);
+    template <TaskCoroutine F> auto enqueueCoroutine(F&& fun, int priority) -> std::invoke_result_t<F> {
+        // Nesting without capture is necessary for coroutine state to be properly put on the heap (the lambda object itself goes out of
+        // scope and gets deallocated).
+        co_return co_await [](F tFun, ThreadPool* pool, int tPriority) -> std::invoke_result_t<F> {
             co_await pool->enqueueCoroutine(tPriority);
-            co_await exec();
+            co_return co_await tFun();
         }(std::forward<F>(fun), this, priority);
     }
 
@@ -126,7 +124,7 @@ public:
         const size_t maxNTasks = (approxCost + targetCostPerTask - 1) / targetCostPerTask;
 
         const Int range = end - start;
-        const Int nTasks = std::min({(Int)mNumThreads, (Int)mHardwareConcurrency, (Int)maxNTasks, range});
+        const Int nTasks = std::min({(Int)mNumThreads, (Int)std::thread::hardware_concurrency(), (Int)maxNTasks, range});
 
         return nTasks;
     }
@@ -148,16 +146,20 @@ public:
                 Int taskEnd = start + (range * (i + 1) / n);
                 TEV_ASSERT(taskStart != taskEnd, "Should not produce tasks with empty range.");
 
-                tasks.emplace_back([](Int tStart, Int tEnd, F& tBody, int tPriority, ThreadPool* pool) -> Task<void> {
-                    co_await pool->enqueueCoroutine(tPriority);
-                    for (Int j = tStart; j < tEnd; ++j) {
-                        if constexpr (is_coroutine_callable_v<F, Int>) {
-                            co_await tBody(j);
-                        } else {
-                            tBody(j);
+                tasks.emplace_back(enqueueCoroutine(
+                    [taskStart, taskEnd, &body]() -> Task<void> {
+                        for (Int j = taskStart; j < taskEnd; ++j) {
+                            if constexpr (is_coroutine_callable_v<F, Int>) {
+                                co_await body(j);
+                            } else {
+                                body(j);
+                            }
                         }
-                    }
-                }(taskStart, taskEnd, body, priority, this));
+
+                        co_return; // Make sure this is a coroutine even if body() is not a coroutine
+                    },
+                    priority
+                ));
             }
         }
 
@@ -169,7 +171,6 @@ public:
 private:
     bool mShuttingDown = false;
 
-    const size_t mHardwareConcurrency = std::thread::hardware_concurrency();
     std::vector<std::thread> mThreads;
 
     struct QueuedTask {

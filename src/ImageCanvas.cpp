@@ -998,7 +998,6 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                 float* const histogram = perTaskHistograms.data() + numBins * i;
                 const auto& channel = views[c];
 
-                const auto regionSize = region.size();
                 for (size_t j = taskStart; j < taskEnd; ++j) {
                     const int x = (int)(j % regionSize.x()) + region.min.x();
                     const int y = (int)(j / regionSize.x()) + region.min.y();

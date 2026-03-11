@@ -41,14 +41,14 @@ Task<void> JpegTurboImageSaver::save(ostream& oStream, const fs::path&, span<con
     jpeg_error_mgr jerr;
 
     cinfo.err = jpeg_std_error(&jerr);
-    jerr.error_exit = [](j_common_ptr cinfo) {
+    jerr.error_exit = [](j_common_ptr jcp) {
         char buf[JMSG_LENGTH_MAX];
-        cinfo->err->format_message(cinfo, buf);
+        jcp->err->format_message(jcp, buf);
         throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
     };
-    jerr.output_message = [](j_common_ptr cinfo) {
+    jerr.output_message = [](j_common_ptr jcp) {
         char buf[JMSG_LENGTH_MAX];
-        (*cinfo->err->format_message)(cinfo, buf);
+        (*jcp->err->format_message)(jcp, buf);
         tlog::warning("libjpeg warning: {}", static_cast<const char*>(buf));
     };
 

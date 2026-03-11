@@ -322,15 +322,15 @@ Task<vector<ImageData>> HeifImageLoader::load(
         // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
         // See: https://github.com/AOMediaCodec/libavif/wiki/CICP
         heif_color_profile_nclx* nclx = nullptr;
-        if (const auto error = imgHandle ? heif_image_handle_get_nclx_color_profile(imgHandle, &nclx) :
-                                           heif_error{heif_error_Color_profile_does_not_exist, heif_suberror_Unspecified, ""};
-            error.code != heif_error_Ok) {
-            if (error.code != heif_error_Color_profile_does_not_exist) {
-                tlog::warning("Failed to read NCLX color profile from handle: {}", error.message);
+        if (const auto imgHandleError = imgHandle ? heif_image_handle_get_nclx_color_profile(imgHandle, &nclx) :
+                                                    heif_error{heif_error_Color_profile_does_not_exist, heif_suberror_Unspecified, ""};
+            imgHandleError.code != heif_error_Ok) {
+            if (imgHandleError.code != heif_error_Color_profile_does_not_exist) {
+                tlog::warning("Failed to read NCLX color profile from handle: {}", imgHandleError.message);
             }
-        } else if (const auto error = heif_image_get_nclx_color_profile(img, &nclx); error.code != heif_error_Ok) {
-            if (error.code != heif_error_Color_profile_does_not_exist) {
-                tlog::warning("Failed to read NCLX color profile from img: {}", error.message);
+        } else if (const auto imgError = heif_image_get_nclx_color_profile(img, &nclx); imgError.code != heif_error_Ok) {
+            if (imgError.code != heif_error_Color_profile_does_not_exist) {
+                tlog::warning("Failed to read NCLX color profile from img: {}", imgError.message);
             }
         } else {
             tlog::debug("Found NCLX color profile. Deriving CICP from it.");
@@ -603,10 +603,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
         }
 
-        auto mainImageTask = [](const auto* imgHandle, const auto& decodeImageHandle, string_view partName, auto priority) -> Task<ImageData> {
-            co_await ThreadPool::global().enqueueCoroutine(priority);
-            co_return co_await decodeImageHandle(imgHandle, false, partName, partName);
-        }(imgHandle, decodeImageHandle, partName, priority);
+        auto mainImageTask = ThreadPool::global().enqueueCoroutine(bind(decodeImageHandle, imgHandle, false, partName, partName), priority);
 
         struct AuxInfo {
             heif_item_id id;
@@ -659,49 +656,48 @@ Task<vector<ImageData>> HeifImageLoader::load(
         vector<Task<optional<AuxImageData>>> auxImageDataTasks;
         for (const auto& a : aux) {
             auxImageDataTasks.emplace_back(
-                [](const auto* auxImgHandle,
-                   const auto* gainmapImgHandle,
-                   const auto& decodeImageHandle,
-                   string_view channelSelector,
-                   string_view partName,
-                   auto priority) -> Task<optional<AuxImageData>> {
-                    co_await ThreadPool::global().enqueueCoroutine(priority);
+                ThreadPool::global().enqueueCoroutine(
+                    [auxImgHandle = a.handle.get(), gainmapImgHandle, &decodeImageHandle, channelSelector, partName]()
+                        -> Task<optional<AuxImageData>> {
+                        const char* auxType = nullptr;
+                        const auto typeGuard = ScopeGuard{[auxImgHandle, &auxType] {
+                            heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType);
+                        }};
 
-                    const char* auxType = nullptr;
-                    const auto typeGuard = ScopeGuard{[auxImgHandle, &auxType] {
-                        heif_image_handle_release_auxiliary_type(auxImgHandle, &auxType);
-                    }};
+                        if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
+                            tlog::warning("Failed to get auxiliary image type: {}", error.message);
+                            co_return nullopt;
+                        }
 
-                    if (auto error = heif_image_handle_get_auxiliary_type(auxImgHandle, &auxType); error.code != heif_error_Ok) {
-                        tlog::warning("Failed to get auxiliary image type: {}", error.message);
-                        co_return nullopt;
-                    }
+                        string auxLayerName = auxType ? auxType : "";
+                        ranges::replace(auxLayerName, ':', '.');
 
-                    string auxLayerName = auxType ? auxType : "";
-                    ranges::replace(auxLayerName, ':', '.');
+                        const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
+                        if (auxLayerName.empty()) {
+                            const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
+                            auxLayerName = isIsoGainmap ? "gainmap" : format("aux.{}", auxId);
+                        }
 
-                    const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
-                    if (auxLayerName.empty()) {
-                        const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
-                        auxLayerName = isIsoGainmap ? "gainmap" : format("aux.{}", auxId);
-                    }
+                        const bool isAppleGainmap = auxLayerName.find("apple") != string::npos &&
+                            auxLayerName.find("hdrgainmap") != string::npos;
+                        const bool isGainmap = isIsoGainmap || isAppleGainmap;
+                        const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
 
-                    const bool isAppleGainmap = auxLayerName.find("apple") != string::npos && auxLayerName.find("hdrgainmap") != string::npos;
-                    const bool isGainmap = isIsoGainmap || isAppleGainmap;
-                    const bool retainAuxLayer = matchesFuzzy(auxLayerName, channelSelector);
+                        if (!retainAuxLayer && !isGainmap) {
+                            co_return nullopt;
+                        }
 
-                    if (!retainAuxLayer && !isGainmap) {
-                        co_return nullopt;
-                    }
-
-                    co_return AuxImageData{
-                        .data = co_await decodeImageHandle(auxImgHandle, isGainmap, Channel::joinIfNonempty(partName, auxLayerName), partName),
-                        .isIsoGainmap = isIsoGainmap,
-                        .isAppleGainmap = isAppleGainmap,
-                        .retain = retainAuxLayer,
-                        .name = auxLayerName,
-                    };
-                }(a.handle.get(), gainmapImgHandle, decodeImageHandle, channelSelector, partName, priority)
+                        auto data = co_await decodeImageHandle(auxImgHandle, isGainmap, auxLayerName, partName);
+                        co_return AuxImageData{
+                            .data = std::move(data),
+                            .isIsoGainmap = isIsoGainmap,
+                            .isAppleGainmap = isAppleGainmap,
+                            .retain = retainAuxLayer,
+                            .name = auxLayerName,
+                        };
+                    },
+                    priority
+                )
             );
         }
 
@@ -716,17 +712,17 @@ Task<vector<ImageData>> HeifImageLoader::load(
         optional<IsoGainMapMetadata> isoGainMapMetadata;
 
         const int numMetadataBlocks = heif_image_handle_get_number_of_metadata_blocks(imgHandle, nullptr);
-        vector<heif_item_id> metadataIDs((size_t)numMetadataBlocks);
+        vector<heif_item_id> metadataIds((size_t)numMetadataBlocks);
 
         if (numMetadataBlocks > 0) {
             tlog::debug("Found {} metadata block(s).", numMetadataBlocks);
         }
 
-        heif_image_handle_get_list_of_metadata_block_IDs(imgHandle, nullptr, metadataIDs.data(), numMetadataBlocks);
-        for (heif_item_id id : metadataIDs) {
-            const string_view type = heif_image_handle_get_metadata_type(imgHandle, id);
-            const string_view contentType = heif_image_handle_get_metadata_content_type(imgHandle, id);
-            const size_t size = heif_image_handle_get_metadata_size(imgHandle, id);
+        heif_image_handle_get_list_of_metadata_block_IDs(imgHandle, nullptr, metadataIds.data(), numMetadataBlocks);
+        for (heif_item_id metaId : metadataIds) {
+            const string_view type = heif_image_handle_get_metadata_type(imgHandle, metaId);
+            const string_view contentType = heif_image_handle_get_metadata_content_type(imgHandle, metaId);
+            const size_t size = heif_image_handle_get_metadata_size(imgHandle, metaId);
 
             if (size <= 4) {
                 tlog::warning("Failed to get size of metadata.");
@@ -734,7 +730,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             }
 
             HeapArray<uint8_t> metadata(size);
-            if (const auto error = heif_image_handle_get_metadata(imgHandle, id, metadata.data()); error.code != heif_error_Ok) {
+            if (const auto error = heif_image_handle_get_metadata(imgHandle, metaId, metadata.data()); error.code != heif_error_Ok) {
                 tlog::warning("Failed to read metadata: {}", error.message);
                 continue;
             }
@@ -862,10 +858,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const heif_item_id id = imageIds[i];
         const string partName = numImages > 1 ? format("frames.{}", id) : "";
 
-        decodeTasks.emplace_back([](auto id, auto partName, auto& decode, auto priority) -> Task<ImageData> {
-            co_await ThreadPool::global().enqueueCoroutine(priority);
-            co_return co_await decode(id, partName);
-        }(id, partName, decodeTopLevelImgIdAndAuxImages, priority));
+        decodeTasks.emplace_back(ThreadPool::global().enqueueCoroutine(bind(decodeTopLevelImgIdAndAuxImages, id, partName), priority));
     }
 
     co_return co_await awaitAll(span{decodeTasks});

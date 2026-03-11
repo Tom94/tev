@@ -222,28 +222,24 @@ static void convertTo(
         }
 
         saveTasks.emplace_back(
-            [](shared_ptr<Image> image,
-               fs::path path,
-               EMetric metric,
-               nanogui::Color bg,
-               ETonemap tonemap,
-               float gamma,
-               float exposure,
-               float offset,
-               int priority) -> Task<void> {
-                try {
-                    co_await ThreadPool::global().enqueueCoroutine(priority);
-                    const auto saveStart = chrono::steady_clock::now();
+            ThreadPool::global().enqueueCoroutine(
+                [image, path, metric, bg, tonemap, gamma, exposure, offset]() -> Task<void> {
+                    try {
+                        const auto saveStart = chrono::steady_clock::now();
 
-                    // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
-                    const auto cg = image->channelGroups().front().name;
-                    const auto window = image->toImageCoords(image->displayWindow());
-                    co_await image->save(path, nullptr, window, cg, metric, EChannelMask::All, bg, tonemap, gamma, exposure, offset, priority);
+                        // TODO: support saving images with multiple channel groups (if output format permits). Currently only RGBA.
+                        const auto cg = image->channelGroups().front().name;
+                        const auto window = image->toImageCoords(image->displayWindow());
+                        co_await image->save(
+                            path, nullptr, window, cg, metric, EChannelMask::All, bg, tonemap, gamma, exposure, offset, priority
+                        );
 
-                    const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
-                    tlog::success("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
-                } catch (const ImageSaveError& e) { tlog::error("Could not convert {} to {}: {}", image->path(), path, e.what()); }
-            }(image, path, metric, bg, tonemap, gamma, exposure, offset, priority)
+                        const auto saveElapsedSeconds = chrono::duration<double>{chrono::steady_clock::now() - saveStart}.count();
+                        tlog::success("Converted {} to {} after {:.3f} seconds", image->path(), path, saveElapsedSeconds);
+                    } catch (const ImageSaveError& e) { tlog::error("Could not convert {} to {}: {}", image->path(), path, e.what()); }
+                },
+                priority
+            )
         );
     }
 
@@ -654,8 +650,8 @@ static int mainFunc(span<const string> arguments) {
                     continue;
                 }
 
-                if (auto imagesLoader = weakImagesLoader.lock(); imagesLoader) {
-                    imagesLoader->enqueue(tev::toPath(imageFile), channelSelector, false);
+                if (auto il = weakImagesLoader.lock(); il) {
+                    il->enqueue(tev::toPath(imageFile), channelSelector, false);
                 }
             }
 

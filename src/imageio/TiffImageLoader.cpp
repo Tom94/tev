@@ -308,8 +308,6 @@ static void tiffWarningHandler(const char* module, const char* fmt, va_list args
 
 // Custom TIFF I/O functions for reading from an istream
 struct TiffData {
-    TiffData(const uint8_t* data, size_t size) : data(data), offset(0), size(size) {}
-
     const uint8_t* data;
     toff_t offset;
     tsize_t size;
@@ -368,12 +366,12 @@ template <trivially_copyable T>
 void unpackBits(
     const uint8_t* const __restrict input, const size_t inputSize, const int bitwidth, T* const __restrict output, const size_t outputSize
 ) {
-    const auto writeSample = [](T* target, uint64_t sample, int bitwidth) {
+    const auto writeSample = [](T* target, uint64_t sample, int bw) {
         if constexpr (is_integral_v<T>) {
             if constexpr (is_signed_v<T>) {
                 // If signbit is set, set all bits to the left to 1
-                if (sample & (1ull << (bitwidth - 1))) {
-                    sample |= ~((1ull << bitwidth) - 1);
+                if (sample & (1ull << (bw - 1))) {
+                    sample |= ~((1ull << bw) - 1);
                 }
 
                 *target = static_cast<T>(bit_cast<int64_t>(sample));
@@ -382,7 +380,7 @@ void unpackBits(
             }
         } else {
             static_assert(is_floating_point_v<T>, "Unsupported float type for bit unpacking.");
-            switch (bitwidth) {
+            switch (bw) {
                 case 16: *target = static_cast<T>(bit_cast<half>(static_cast<uint16_t>(sample))); break;
                 case 24: {
                     const uint32_t sign = (sample >> 23) & 0x1;      // 1-bit sign
@@ -394,7 +392,7 @@ void unpackBits(
                 } break;
                 case 32: *target = static_cast<T>(bit_cast<float>(static_cast<uint32_t>(sample))); break;
                 case 64: *target = static_cast<T>(bit_cast<double>(sample)); break;
-                default: TEV_ASSERT(false, "Unsupported bitwidth for float unpacking: {}", bitwidth);
+                default: TEV_ASSERT(false, "Unsupported bitwidth for float unpacking: {}", bw);
             }
         }
     };
@@ -464,14 +462,14 @@ Box2i getActiveArea(TIFF* tif, const Vector2i size) {
 Box2i getDefaultCrop(TIFF* tif, const Vector2i size) {
     Box2i cropBox{Vector2i(0, 0), size};
 
-    if (const auto origin = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPORIGIN); origin.size() >= 2) {
-        cropBox.min.x() = (int)origin[0];
-        cropBox.min.y() = (int)origin[1];
+    if (const auto cropOrigin = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPORIGIN); cropOrigin.size() >= 2) {
+        cropBox.min.x() = (int)cropOrigin[0];
+        cropBox.min.y() = (int)cropOrigin[1];
     }
 
-    if (const auto size = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPSIZE); size.size() >= 2) {
-        cropBox.max.x() = cropBox.min.x() + (int)size[0];
-        cropBox.max.y() = cropBox.min.y() + (int)size[1];
+    if (const auto cropSize = tiffGetSpan<float>(tif, TIFFTAG_DEFAULTCROPSIZE); cropSize.size() >= 2) {
+        cropBox.max.x() = cropBox.min.x() + (int)cropSize[0];
+        cropBox.max.y() = cropBox.min.y() + (int)cropSize[1];
     }
 
     if (!cropBox.isValid() || !Box2i(Vector2i{0, 0}, size).contains(cropBox)) {
@@ -1160,7 +1158,7 @@ Task<void> postprocessLinearRawDng(
             throw ImageLoadError{"Tone curve must start at 0."};
         }
 
-        static constexpr auto applyPwLinear = [](span<const Vector2f> tc, float x) {
+        const auto applyPwLinear = [&tc](float x) {
             const auto it = lower_bound(tc.begin(), tc.end(), x, [](auto a, float b) { return a.x() < b; });
 
             // The spec says to extend the slope of the last segment.
@@ -1179,7 +1177,7 @@ Task<void> postprocessLinearRawDng(
             [&](size_t i) {
                 for (size_t c = 0; c < numChannels; ++c) {
                     float& v = rgbView[c, i];
-                    v = applyPwLinear(tc, v);
+                    v = applyPwLinear(v);
                 }
             },
             priority
@@ -1291,7 +1289,7 @@ Task<void> postprocessRgb(
     resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
     resultData.nativeMetadata.chroma = chroma;
 
-    enum EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
+    enum class EPreviewColorSpace : uint32_t { Unknown = 0, Gamma2_2 = 1, sRGB = 2, AdobeRGB = 3, ProPhotoRGB = 4 };
 
     if (const auto transferFunction = tiffGetTransferFunction(tif); !transferFunction.at(0).empty()) {
         // In TIFF, transfer functions are stored as 2**bitsPerSample values in the range [0, 65535] per color channel. The transfer
@@ -1351,7 +1349,6 @@ Task<void> postprocessRgb(
 
         const EPreviewColorSpace pcs = static_cast<EPreviewColorSpace>(*pcsInt);
 
-        size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -1368,11 +1365,11 @@ Task<void> postprocessRgb(
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
         if (pcs == EPreviewColorSpace::AdobeRGB) {
-            const auto chroma = adobeChroma();
+            chroma = adobeChroma();
             resultData.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), resultData.renderingIntent);
             resultData.nativeMetadata.chroma = chroma;
         } else if (pcs == EPreviewColorSpace::ProPhotoRGB) {
-            const auto chroma = adobeChroma();
+            chroma = adobeChroma();
             resultData.toRec709 = convertColorspaceMatrix(proPhotoChroma(), rec709Chroma(), resultData.renderingIntent);
             resultData.nativeMetadata.chroma = chroma;
         }
@@ -1382,7 +1379,6 @@ Task<void> postprocessRgb(
         // spec here.
         tlog::debug("No transfer function found; assuming gamma 2.2 for RGB data per the TIFF spec.");
 
-        size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
@@ -1542,14 +1538,14 @@ Task<ImageData> decodeJpeg(
     struct jpeg_error_mgr jerr;
 
     cinfo.err = jpeg_std_error(&jerr);
-    jerr.error_exit = [](j_common_ptr cinfo) {
+    jerr.error_exit = [](j_common_ptr jcp) {
         char buf[JMSG_LENGTH_MAX];
-        cinfo->err->format_message(cinfo, buf);
+        jcp->err->format_message(jcp, buf);
         throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
     };
-    jerr.output_message = [](j_common_ptr cinfo) {
+    jerr.output_message = [](j_common_ptr jcp) {
         char buf[JMSG_LENGTH_MAX];
-        (*cinfo->err->format_message)(cinfo, buf);
+        (*jcp->err->format_message)(jcp, buf);
         tlog::warning("libjpeg warning: {}", static_cast<const char*>(buf));
     };
 
@@ -1927,21 +1923,21 @@ Task<ImageData> readTiffImage(
 
     tlog::debug("numRgbaChannels={} numNonRgbaChannels={}", numRgbaChannels, numNonRgbaChannels);
 
-    static constexpr auto formatToPixelType = [](uint16_t sampleFormat) {
-        switch (sampleFormat) {
+    static constexpr auto formatToPixelType = [](uint16_t f) {
+        switch (f) {
             case SAMPLEFORMAT_UINT: return EPixelType::Uint;
             case SAMPLEFORMAT_INT: return EPixelType::Int;
             case SAMPLEFORMAT_IEEEFP: return EPixelType::Float;
-            default: throw ImageLoadError{format("Unsupported sample format: {}", sampleFormat)};
+            default: throw ImageLoadError{format("Unsupported sample format: {}", f)};
         }
     };
 
-    static constexpr auto deriveScale = [](EPixelType pixelType, size_t bitsPerSample) {
-        switch (pixelType) {
-            case EPixelType::Uint: return 1.0f / (float)((1ull << bitsPerSample) - 1);
-            case EPixelType::Int: return 1.0f / (float)((1ull << (bitsPerSample - 1)) - 1);
+    static constexpr auto deriveScale = [](EPixelType pt, size_t bps) {
+        switch (pt) {
+            case EPixelType::Uint: return 1.0f / (float)((1ull << bps) - 1);
+            case EPixelType::Int: return 1.0f / (float)((1ull << (bps - 1)) - 1);
             case EPixelType::Float: return 1.0f;
-            default: throw ImageLoadError{format("Unsupported pixel type: {}", toString(pixelType))};
+            default: throw ImageLoadError{format("Unsupported pixel type: {}", toString(pt))};
         }
     };
 
@@ -2024,12 +2020,12 @@ Task<ImageData> readTiffImage(
 
     const auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
 
-    const auto getRawTileSpan = [&tiffData, &tile, isTiled](TIFF* tif, uint32_t tileIndex) -> span<const uint8_t> {
+    const auto getRawTileSpan = [tif, &tiffData, &tile, isTiled](size_t tileIndex) -> span<const uint8_t> {
         if (tileIndex >= tile.count) {
             throw ImageLoadError{format("Tile index {} out of bounds ({} tiles total)", tileIndex, tile.count)};
         }
 
-        const auto getRawTileOffset = [isTiled](TIFF* tif, uint32_t tileIndex) -> uint64_t {
+        const auto getRawTileOffset = [tif, isTiled, tileIndex]() -> uint64_t {
             const uint64_t* rawTileOffset = NULL;
             if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEOFFSETS : TIFFTAG_STRIPOFFSETS, &rawTileOffset) || !rawTileOffset) {
                 throw ImageLoadError{format("Failed to read raw tile offset for tile {}", tileIndex)};
@@ -2038,7 +2034,7 @@ Task<ImageData> readTiffImage(
             return rawTileOffset[tileIndex];
         };
 
-        const auto getRawTileSize = [isTiled](TIFF* tif, uint32_t tileIndex) -> size_t {
+        const auto getRawTileSize = [tif, isTiled, tileIndex]() -> size_t {
             const uint64_t* rawTileSize = NULL;
             if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEBYTECOUNTS : TIFFTAG_STRIPBYTECOUNTS, &rawTileSize) || !rawTileSize) {
                 throw ImageLoadError{format("Failed to read raw tile size for tile {}", tileIndex)};
@@ -2047,23 +2043,23 @@ Task<ImageData> readTiffImage(
             return (size_t)rawTileSize[tileIndex];
         };
 
-        const size_t offset = getRawTileOffset(tif, tileIndex);
-        if (offset == 0) {
+        const size_t tileOffset = getRawTileOffset();
+        if (tileOffset == 0) {
             throw ImageLoadError{format("Raw tile offset is 0 for tile {}", tileIndex)};
         }
 
-        const size_t size = getRawTileSize(tif, tileIndex);
-        if (size == 0) {
+        const size_t tileSize = getRawTileSize();
+        if (tileSize == 0) {
             throw ImageLoadError{format("Raw tile size is 0 for tile {}", tileIndex)};
         }
 
-        if ((size_t)tiffData.size < offset + size) {
-            throw ImageLoadError{
-                format("Raw tile data for tile {} is out of bounds: offset={} size={} dataSize={}", tileIndex, offset, size, tiffData.size)
-            };
+        if ((size_t)tiffData.size < tileOffset + tileSize) {
+            throw ImageLoadError{format(
+                "Raw tile data for tile {} is out of bounds: offset={} size={} dataSize={}", tileIndex, tileOffset, tileSize, tiffData.size
+            )};
         }
 
-        return span<const uint8_t>{(const uint8_t*)tiffData.data + offset, size};
+        return span<const uint8_t>{(const uint8_t*)tiffData.data + tileOffset, tileSize};
     };
 
     // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory
@@ -2127,13 +2123,13 @@ Task<ImageData> readTiffImage(
 
     // At least at the moment, tev does not support displaying or handling >32-bit data, so we'll have to deal with f64 data being downcast
     // to f32 and precision thus being lost. Warn the user about this.
-    const auto tiffKindToPixelFormat = [](ETiffKind kind) {
-        switch (kind) {
+    static constexpr auto tiffKindToPixelFormat = [](ETiffKind k) {
+        switch (k) {
             case ETiffKind::U32: return EPixelFormat::U32;
             case ETiffKind::I32: return EPixelFormat::I32;
             case ETiffKind::F32: return EPixelFormat::F32;
             case ETiffKind::Palette: return EPixelFormat::U32;
-            default: throw ImageLoadError{format("Unsupported TIFF kind: {}", (int)kind)};
+            default: throw ImageLoadError{format("Unsupported TIFF kind: {}", (int)k)};
         }
     };
 
@@ -2146,7 +2142,7 @@ Task<ImageData> readTiffImage(
         for (size_t i = 0; i < tile.count; ++i) {
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
-                    [&, i, compressedTileData = getRawTileSpan(tif, (uint32_t)i)]() -> Task<void> {
+                    [&, i, compressedTileData = getRawTileSpan(i)]() -> Task<void> {
                         // Assume the embedded data has the same bits/format as the TIFF wrapper claims (can be overridden by the loader)
                         size_t nestedBitsPerSample = dataBitsPerSample;
                         EPixelType nestedPixelType = formatToPixelType(dataSampleFormat);
@@ -2569,7 +2565,7 @@ Task<vector<ImageData>>
         exifAttributes = exif.toAttributes();
     } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
 
-    TiffData tiffData(buffer.data() + sizeof(Exif::FOURCC), fileSize);
+    TiffData tiffData{buffer.data() + sizeof(Exif::FOURCC), 0, (tsize_t)fileSize};
     TIFF* tif = TIFFClientOpen(
         toString(path).c_str(),
         "rMc", // read-only w/ memory mapping; no strip chopping

@@ -37,33 +37,34 @@ static Task<void> generalDemosaic(
     ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, Vector2i cfaSize, int priority
 );
 
+static auto isBayer(span<const uint8_t> cfaPattern, Vector2i cfaSize) {
+    if (cfaSize.y() != 2 || cfaSize.x() != 2) {
+        return false;
+    }
+
+    int color_count[3] = {};
+    for (int i = 0; i < 4; ++i) {
+        if (cfaPattern[i] > 2) {
+            return false;
+        }
+
+        color_count[cfaPattern[i]]++;
+    }
+
+        // Bayer must have exactly 1R, 2G, 1B
+    if (!(color_count[0] == 1 && color_count[1] == 2 && color_count[2] == 1)) {
+        return false;
+    }
+
+    return true;
+};
+
 Task<void> demosaic(
     ChannelView<const float> cfaIn, MultiChannelView<float> rgbOut, span<const uint8_t> cfaPattern, const Vector2i cfaSize, int priority
 ) {
     if (cfaIn.size() != rgbOut.size()) {
         throw runtime_error{"CFA input and RGB output must have the same size."};
     }
-
-    static constexpr auto isBayer = [](auto cfaPattern, auto cfaSize) {
-        if (cfaSize.y() != 2 || cfaSize.x() != 2) {
-            return false;
-        }
-
-        int color_count[3] = {};
-        for (int i = 0; i < 4; ++i) {
-            if (cfaPattern[i] > 2) {
-                return false;
-            }
-            color_count[cfaPattern[i]]++;
-        }
-
-        // Bayer must have exactly 1R, 2G, 1B
-        if (!(color_count[0] == 1 && color_count[1] == 2 && color_count[2] == 1)) {
-            return false;
-        }
-
-        return true;
-    };
 
     // Use fancy demosaicing algorithm if we have a supported pattern, which generally gives better results than simple weighted interpolation.
     if (isBayer(cfaPattern, cfaSize)) {

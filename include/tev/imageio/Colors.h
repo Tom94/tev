@@ -255,26 +255,26 @@ inline constexpr float c = 0.55991073f;
 } // namespace hlg
 
 inline nanogui::Vector3f hlgToLinear(nanogui::Vector3f val) {
-    static constexpr auto invOetf = [](const float val) {
-        return val <= 0.5f ? (val * val / 3.0f) : ((std::exp((val - hlg::c) / hlg::a) + hlg::b) / 12.0f);
+    static constexpr auto invOetf = [](const float v) {
+        return v <= 0.5f ? (v * v / 3.0f) : ((std::exp((v - hlg::c) / hlg::a) + hlg::b) / 12.0f);
     };
 
-    static constexpr auto ootf = [](nanogui::Vector3f val) {
+    static constexpr auto ootf = [](nanogui::Vector3f v) {
         // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
-        const float lum = 0.2627f * val.x() + 0.6780f * val.y() + 0.0593f * val.z();
-        return hlg::gain * pow(lum, hlg::gamma - 1.0f) * val;
+        const float lum = 0.2627f * v.x() + 0.6780f * v.y() + 0.0593f * v.z();
+        return hlg::gain * pow(lum, hlg::gamma - 1.0f) * v;
     };
 
     return ootf({invOetf(val.x()), invOetf(val.y()), invOetf(val.z())}) / 203.0f; // Convert to linear units where SDR white is 1.0
 }
 
 inline nanogui::Vector3f linearToHlg(nanogui::Vector3f val) {
-    static constexpr auto oetf = [](const float val) {
-        return val <= 1.0f / 12.0f ? std::sqrt(3.0f * val) : (hlg::a * std::log(12.0f * val - hlg::b) + hlg::c);
+    static constexpr auto oetf = [](const float v) {
+        return v <= 1.0f / 12.0f ? std::sqrt(3.0f * v) : (hlg::a * std::log(12.0f * v - hlg::b) + hlg::c);
     };
 
-    static constexpr auto invOotf = [](nanogui::Vector3f val) {
-        const auto tmp = val / hlg::gain;
+    static constexpr auto invOotf = [](nanogui::Vector3f v) {
+        const auto tmp = v / hlg::gain;
 
         // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
         const float lum = 0.2627f * tmp.x() + 0.6780f * tmp.y() + 0.0593f * tmp.z();

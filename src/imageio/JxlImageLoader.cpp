@@ -16,12 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tev/imageio/ImageLoader.h"
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
+#include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/JxlImageLoader.h>
 #include <tev/imageio/Xmp.h>
 
@@ -191,7 +191,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
             // but this approach here scales better to huge numbers of images (n-cores extra threads instead of n-images extra threads).
             static auto jxlPool = ThreadPool();
 
-            const auto* runnerData = static_cast<RunnerData*>(runnerOpaque);
+            const auto* runnerDataPtr = static_cast<RunnerData*>(runnerOpaque);
 
             const uint32_t range = endRange - startRange;
             const uint32_t numTasks = std::min(
@@ -200,7 +200,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     range,
                     numeric_limits<uint32_t>::max() // Max parallelism up to range tasks & hardware concurrency
                 ),
-                runnerData->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
+                runnerDataPtr->jxlSuggestedNumThreads // ...or fewer threads if JXL suggests so
             );
 
             const auto initResult = init(jpegxlOpaque, numTasks);
@@ -222,7 +222,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             func(jpegxlOpaque, j, (uint32_t)i);
                         }
                     },
-                    runnerData->priority
+                    runnerDataPtr->priority
                 )
                 // The synchronous parallel for loop is janky, because it doesn't follow the coroutine paradigm. But it is the only way to
                 // get the thread pool to cooperate with the JXL API that expects a non-coroutine function here. We will offload the

@@ -1084,7 +1084,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     };
 
-    static constexpr auto convertCompression = [](uint32_t compression, EType type) -> ECompression {
+    const auto convertCompression = [type](uint32_t compression) -> ECompression {
         switch (compression) {
             case 0: return ECompression::Rgb;
             case 1: return ECompression::Rle8;
@@ -1100,7 +1100,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         }
     };
 
-    const ECompression compression = convertCompression(dib.compression, type);
+    const ECompression compression = convertCompression(dib.compression);
 
     if (compression == ECompression::Cmyk || compression == ECompression::CmykRle8 || compression == ECompression::CmykRle4) {
         throw ImageLoadError{format("Unsupported BMP compression method: {}", compressionToString(compression))};
@@ -1270,14 +1270,14 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
             }
 
             iStream.seekg(dibHeaderBegin + dib.iccProfileData, ios_base::beg);
-            string path(dib.iccProfileSize, '\0');
-            iStream.read(path.data(), dib.iccProfileSize);
+            string iccPath(dib.iccProfileSize, '\0');
+            iStream.read(iccPath.data(), dib.iccProfileSize);
             if (!iStream) {
                 tlog::warning("Failed to read ICC profile path of size {}", iccProfileData.size());
                 break;
             }
 
-            tlog::warning("Image contains path to an ICC profile '{}' but tev will not attempt read it for security concerns", path);
+            tlog::warning("Image contains path to an ICC profile '{}' but tev will not attempt read it for security concerns", iccPath);
         } break;
         default: tlog::warning("Unsupported BMP color space type {:08X}, assuming sRGB", dib.colorSpaceType); break;
     }

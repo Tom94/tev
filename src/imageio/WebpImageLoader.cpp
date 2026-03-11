@@ -145,15 +145,15 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numPixels = posProd(size);
     const size_t numSamples = numPixels * numChannels;
     const size_t numInterleavedSamples = numPixels * numInterleavedChannels;
-    HeapArray<float> frameData;
+    HeapArray<float> frameFloatData;
 
     if (WebPDemuxGetFrame(demux.get(), 1, &iter)) {
         do {
             Vector2i frameSize;
 
             using DataPtr = unique_ptr<uint8_t, decltype(&WebPFree)>;
-            const auto data = DataPtr{WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y()), &WebPFree};
-            if (!data) {
+            const auto frameData = DataPtr{WebPDecodeRGBA(iter.fragment.bytes, iter.fragment.size, &frameSize.x(), &frameSize.y()), &WebPFree};
+            if (!frameData) {
                 throw ImageLoadError{"Failed to decode webp frame."};
             }
 
@@ -178,21 +178,22 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             const size_t numFramePixels = posProd(frameSize);
             const size_t numFrameSamples = numFramePixels * numChannels;
             const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
-            if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
+            if (!directlyOnCanvas && numInterleavedFrameSamples > frameFloatData.size()) {
                 const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
                 if (allocationSize > numSamples) {
                     tlog::warning("WebP frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
                 }
 
-                frameData = HeapArray<float>(allocationSize);
+                frameFloatData = HeapArray<float>(allocationSize);
             }
 
-            const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
+            const auto dstView = directlyOnCanvas ? outView :
+                                                    MultiChannelView<float>{frameFloatData.data(), numInterleavedChannels, frameSize};
 
-            const auto dataSpan = span<const uint8_t>{data.get(), numFrameSamples};
+            const auto frameDataSpan = span<const uint8_t>{frameData.get(), numFrameSamples};
             if (iccProfileData) {
                 try {
-                    co_await toFloat32(dataSpan, numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(frameDataSpan, numChannels, dstView, hasAlpha, priority);
 
                     const auto profile = ColorProfile::fromIcc(iccProfileData);
                     co_await toLinearSrgbPremul(
@@ -202,7 +203,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     resultData.readMetadataFromIcc(profile);
                 } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC profile: {}", e.what()); }
             } else {
-                co_await toFloat32<true, true>(dataSpan, numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32<true, true>(frameDataSpan, numChannels, dstView, hasAlpha, priority);
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
