@@ -71,11 +71,6 @@ struct DetachedTask {
     };
 };
 
-template <typename F, typename... Args> DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
-    auto exec = std::move(executor);
-    co_await exec(args...);
-}
-
 inline auto enqueueCoroutineToDetachedThread() noexcept {
     struct Awaiter {
         bool await_ready() const noexcept { return false; }
@@ -166,7 +161,6 @@ public:
     Task(Task&& other) { *this = std::move(other); }
 
     ~Task() {
-        // Make sure the coroutine finished and is cleaned up
         if (mHandle) {
             tlog::warning("~Task<T> was invoked before completion.");
         }
@@ -229,8 +223,19 @@ private:
     std::shared_ptr<TaskSharedState> mState = nullptr;
 };
 
-template <typename F, typename... Args> Task<void> invokeTask(F&& executor, Args&&... args) {
-    auto exec = std::move(executor);
+template <typename T> struct is_task : std::false_type {};
+
+template <typename T> struct is_task<Task<T>> : std::true_type {};
+
+template <typename F> concept TaskCoroutine = std::invocable<F> && is_task<std::invoke_result_t<F>>::value;
+
+template <TaskCoroutine F, typename... Args> Task<void> invokeTask(F&& executor, Args&&... args) {
+    auto exec = std::forward<F>(executor);
+    co_await exec(args...);
+}
+
+template <TaskCoroutine F, typename... Args> DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
+    auto exec = std::forward<F>(executor);
     co_await exec(args...);
 }
 
@@ -260,13 +265,22 @@ template <typename T> Task<std::vector<T>> awaitAll(std::span<Task<T>> futures) 
     co_return results;
 }
 
-template <typename T, typename U> Task<void> asyncScopeGuard(T&& cleanup, U&& body) {
+template <std::invocable T, std::invocable U> Task<void> asyncScopeGuard(T&& cleanup, U&& body) {
     std::exception_ptr exceptionPtr;
     try {
-        co_await body();
+        if constexpr (is_coroutine_callable_v<U>) {
+            co_await body();
+        } else {
+            body();
+        }
     } catch (...) { exceptionPtr = std::current_exception(); }
 
-    co_await cleanup();
+    if constexpr (is_coroutine_callable_v<T>) {
+        co_await cleanup();
+    } else {
+        cleanup();
+    }
+
     if (exceptionPtr) {
         std::rethrow_exception(exceptionPtr);
     }

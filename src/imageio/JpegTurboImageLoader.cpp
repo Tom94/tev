@@ -86,14 +86,14 @@ Task<vector<ImageData>>
         struct jpeg_error_mgr jerr;
 
         cinfo.err = jpeg_std_error(&jerr);
-        jerr.error_exit = [](j_common_ptr cinfo) {
+        jerr.error_exit = [](j_common_ptr jcp) {
             char buf[JMSG_LENGTH_MAX];
-            cinfo->err->format_message(cinfo, buf);
+            jcp->err->format_message(jcp, buf);
             throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
         };
-        jerr.output_message = [](j_common_ptr cinfo) {
+        jerr.output_message = [](j_common_ptr jcp) {
             char buf[JMSG_LENGTH_MAX];
-            (*cinfo->err->format_message)(cinfo, buf);
+            (*jcp->err->format_message)(jcp, buf);
             tlog::warning("libjpeg warning: {}", static_cast<const char*>(buf));
         };
 
@@ -114,37 +114,37 @@ Task<vector<ImageData>>
 
         cinfo.client_data = &appN;
 
-        static constexpr auto processMarker = [](j_decompress_ptr cinfo) -> boolean {
+        static constexpr auto processMarker = [](j_decompress_ptr jdp) -> boolean {
             // Because we're reading from memory, cinfo->src points directly into `buffer`
 
             // Read marker length (2 bytes, big-endian)
-            const uint8_t* data = cinfo->src->next_input_byte;
-            const uint16_t length = (*data << 8) | *(data + 1);
+            const uint8_t* markerData = jdp->src->next_input_byte;
+            const uint16_t markerLength = (*markerData << 8) | *(markerData + 1);
 
-            if (length > cinfo->src->bytes_in_buffer) {
+            if (markerLength > jdp->src->bytes_in_buffer) {
                 tlog::warning("JPEG marker length exceeds buffer size, skipping.");
                 return FALSE;
             }
 
             const auto extractMarker = [&](span<const uint8_t> ns) -> optional<span<const uint8_t>> {
-                if (length > ns.size() + 2 && !memcmp(data + 2, ns.data(), ns.size())) {
-                    return span<const uint8_t>{data + ns.size() + 2, length - ns.size() - 2};
+                if (markerLength > ns.size() + 2 && !memcmp(markerData + 2, ns.data(), ns.size())) {
+                    return span<const uint8_t>{markerData + ns.size() + 2, markerLength - ns.size() - 2};
                 } else {
                     return nullopt;
                 }
             };
 
-            AppNSpans* appN = static_cast<AppNSpans*>(cinfo->client_data);
-            appN->exif = extractMarker(Exif::FOURCC).value_or(appN->exif);
+            AppNSpans* result = static_cast<AppNSpans*>(jdp->client_data);
+            result->exif = extractMarker(Exif::FOURCC).value_or(result->exif);
 
             static constexpr uint8_t xmpNs[] = "http://ns.adobe.com/xap/1.0/";
-            appN->xmp = extractMarker({xmpNs, sizeof(xmpNs)}).value_or(appN->xmp);
+            result->xmp = extractMarker({xmpNs, sizeof(xmpNs)}).value_or(result->xmp);
 
             static constexpr uint8_t isoNs[] = "urn:iso:std:iso:ts:21496:-1";
-            appN->iso = extractMarker({isoNs, sizeof(isoNs)}).value_or(appN->iso);
+            result->iso = extractMarker({isoNs, sizeof(isoNs)}).value_or(result->iso);
 
             static constexpr uint8_t mpfNs[] = "MPF";
-            appN->mpf = extractMarker({mpfNs, sizeof(mpfNs)}).value_or(appN->mpf);
+            result->mpf = extractMarker({mpfNs, sizeof(mpfNs)}).value_or(result->mpf);
 
             // ICC profile may be split across multiple APP2 markers, each with a sequence number, hence the special handling
             static constexpr uint8_t iccNs[] = "ICC_PROFILE";
@@ -157,21 +157,21 @@ Task<vector<ImageData>>
 
                     tlog::debug("Found ICC profile part {}/{} of size {} bytes", seqNo, numSeq, iccPart->size());
 
-                    if (numSeq != appN->iccChunks.size() && appN->iccChunks.size() != 0) {
-                        tlog::warning("Inconsistent ICC profile sequence count: expected {}, got {}.", appN->iccChunks.size(), numSeq);
+                    if (numSeq != result->iccChunks.size() && result->iccChunks.size() != 0) {
+                        tlog::warning("Inconsistent ICC profile sequence count: expected {}, got {}.", result->iccChunks.size(), numSeq);
                     }
 
                     if (seqNo < 1 || seqNo > numSeq) {
                         tlog::warning("Invalid ICC profile sequence number: {} of {}.", seqNo, numSeq);
                     }
 
-                    appN->iccChunks.resize(numSeq);
-                    appN->iccChunks.at(seqNo - 1) = iccPart->subspan(2);
+                    result->iccChunks.resize(numSeq);
+                    result->iccChunks.at(seqNo - 1) = iccPart->subspan(2);
                 }
             }
 
-            cinfo->src->next_input_byte += length;
-            cinfo->src->bytes_in_buffer -= length;
+            jdp->src->next_input_byte += markerLength;
+            jdp->src->bytes_in_buffer -= markerLength;
 
             return TRUE;
         };

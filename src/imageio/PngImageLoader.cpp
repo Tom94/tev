@@ -58,8 +58,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         throw ImageLoadError{"Failed to create PNG info struct."};
     }
 
-    png_set_read_fn(pngPtr, &iStream, [](png_structp pngPtr, png_bytep data, png_size_t length) {
-        auto stream = static_cast<istream*>(png_get_io_ptr(pngPtr));
+    png_set_read_fn(pngPtr, &iStream, [](png_structp p, png_bytep data, png_size_t length) {
+        auto stream = static_cast<istream*>(png_get_io_ptr(p));
         size_t totalRead = 0;
         while (stream && totalRead < length) {
             stream->read(reinterpret_cast<char*>(data) + totalRead, length - totalRead);
@@ -67,7 +67,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         }
 
         if (totalRead < length) {
-            png_error(pngPtr, "Read error");
+            png_error(p, "Read error");
         }
     });
 
@@ -267,8 +267,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
                 string line;
                 while (getline(is, line)) {
-                    for (size_t i = 0; i < line.size(); i += 2) {
-                        const char a = line[i], b = line[i + 1];
+                    for (size_t j = 0; j < line.size(); j += 2) {
+                        const char a = line[j], b = line[j + 1];
                         exifDataBuffer.emplace_back(
                             ((a >= 'a'     ? (a - 'a' + 10) :
                                   a >= 'A' ? (a - 'A' + 10) :

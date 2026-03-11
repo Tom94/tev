@@ -841,7 +841,7 @@ Task<void> toLinearSrgbPremul(
     //     type |= PREMUL_SH(1);
     // }
 
-    static constexpr auto guessColorSpace = [](size_t numColorChannels) {
+    const auto guessColorSpace = [numColorChannels]() {
         if (numColorChannels == 1) {
             return COLORSPACE_SH(PT_GRAY);
         } else if (numColorChannels == 4) {
@@ -879,7 +879,7 @@ Task<void> toLinearSrgbPremul(
             numColorChannels
         );
 
-        colorSpaceType = guessColorSpace(numColorChannels);
+        colorSpaceType = guessColorSpace();
     } else {
         switch (cs) {
             case cmsSigCmyData: colorSpaceType = COLORSPACE_SH(PT_CMY); break;
@@ -896,7 +896,7 @@ Task<void> toLinearSrgbPremul(
             case cmsSigYxyData: colorSpaceType = COLORSPACE_SH(PT_Yxy); break;
             default:
                 tlog::warning("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
-                colorSpaceType = guessColorSpace(numColorChannels);
+                colorSpaceType = guessColorSpace();
                 break;
         }
     }

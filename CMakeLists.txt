@@ -299,12 +299,17 @@ if (MSVC)
     target_link_options(tev PRIVATE wsetargv.obj)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # Enable more warnings
-    target_compile_options(tev PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    target_compile_options(tev PRIVATE -Wall -Wextra -Wno-unused-parameter -Wshadow)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_compile_options(tev PRIVATE -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register -Wno-deprecated-anon-enum-enum-conversion)
+        target_compile_options(tev PRIVATE
+            -Wno-gnu-anonymous-struct -Wno-c99-extensions -Wno-nested-anon-types -Wno-deprecated-register
+            -Wno-deprecated-anon-enum-enum-conversion -Wshadow-uncaptured-local
+        )
     endif()
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        target_compile_options(tev PRIVATE -Wno-misleading-indentation -Wno-deprecated-declarations)
+        target_compile_options(tev PRIVATE
+            -Wno-misleading-indentation -Wno-deprecated-declarations
+        )
     endif()
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")

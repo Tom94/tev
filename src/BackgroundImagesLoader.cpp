@@ -70,11 +70,11 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSe
     }
 
     const int loadId = mUnsortedLoadCounter++;
-    invokeTaskDetached([loadId, path, channelSelector = string{channelSelector}, shallSelect, toReplace, this]() -> Task<void> {
+    invokeTaskDetached([loadId, path, cs = string{channelSelector}, shallSelect, toReplace, this]() -> Task<void> {
         const int taskPriority = -Image::drawId();
 
         co_await ThreadPool::global().enqueueCoroutine(taskPriority);
-        const auto images = co_await tryLoadImage(taskPriority, path, channelSelector, mImageLoaderSettings, mGroupChannels);
+        const auto images = co_await tryLoadImage(taskPriority, path, cs, mImageLoaderSettings, mGroupChannels);
 
         {
             const lock_guard lock{mPendingLoadedImagesMutex};

@@ -331,9 +331,9 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
         0uz,
         ranges.size(),
         numeric_limits<uint32_t>::max(), // Ensure each range gets its own task
-        [&](size_t i) -> Task<void> {
-            const auto rangeBegin = ranges.at(i).first;
-            const auto rangeEnd = ranges.at(i).second;
+        [&](size_t rangeIdx) -> Task<void> {
+            const auto rangeBegin = ranges.at(rangeIdx).first;
+            const auto rangeEnd = ranges.at(rangeIdx).second;
 
             vector<Channel*> channelsToConvert;
             const Channel* firstChannel = rangeBegin->second;
@@ -372,11 +372,11 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                     0uz,
                     nSamples,
                     nSamples,
-                    [typedSrc, typedDst](size_t i) {
+                    [typedSrc, typedDst](size_t sampleIdx) {
                         using src_t = remove_pointer_t<decltype(typedSrc)>;
                         using dst_t = remove_pointer_t<decltype(typedDst)>;
 
-                        float tmp = typedSrc[i];
+                        float tmp = typedSrc[sampleIdx];
                         if constexpr (is_integral_v<src_t>) {
                             tmp /= (float)numeric_limits<src_t>::max();
                         }
@@ -389,7 +389,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                             }
                         }
 
-                        typedDst[i] = tmp;
+                        typedDst[sampleIdx] = tmp;
                     },
                     priority
                 );
@@ -885,7 +885,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         join(channelNames, ",")
     );
 
-    const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
+    const auto uploadTimeGuard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
         tlog::debug("Upload took {:.03}s", duration.count());
     }};
@@ -897,7 +897,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         const Channel* chan = channel(channelNames[0]);
         dataPtr = chan->dataBuf();
     } else {
-        const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
+        const auto bufferGenTimeGuard = ScopeGuard{[now = chrono::system_clock::now()]() {
             const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
             tlog::debug("Upload buffer generation took {:.03}s", duration.count());
         }};
@@ -1069,13 +1069,13 @@ void Image::updateChannel(const string_view channelName, const Box2i bounds, spa
 
         vector<Task<void>> tasks;
         for (size_t i = 0; i < numTextureChannels; ++i) {
-            const Channel* chan = i < imageTexture.channels.size() ? channel(imageTexture.channels[i]) : nullptr;
+            const Channel* textureChan = i < imageTexture.channels.size() ? channel(imageTexture.channels[i]) : nullptr;
             switch (imageTexture.nanoguiTexture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel(textureData.data<half>(), chan, bounds, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(textureData.data<half>(), textureChan, bounds, i, numTextureChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel(textureData.data<float>(), chan, bounds, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(textureData.data<float>(), textureChan, bounds, i, numTextureChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }

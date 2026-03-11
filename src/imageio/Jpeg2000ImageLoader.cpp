@@ -16,11 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "tev/imageio/ImageLoader.h"
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/Xmp.h>
 

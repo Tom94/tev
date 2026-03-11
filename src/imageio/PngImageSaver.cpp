@@ -62,13 +62,13 @@ Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uin
     png_set_compression_strategy(png, Z_RLE);
     png_set_filter(png, 0, PNG_FAST_FILTERS);
 
-    static constexpr auto pngWriteCallback = [](png_structp png, png_bytep buf, png_size_t size) {
-        auto* os = static_cast<ostream*>(png_get_io_ptr(png));
+    static constexpr auto pngWriteCallback = [](png_structp p, png_bytep buf, png_size_t size) {
+        auto* os = static_cast<ostream*>(png_get_io_ptr(p));
         os->write(reinterpret_cast<char*>(buf), size);
     };
 
-    static constexpr auto pngFlushCallback = [](png_structp png) {
-        auto* os = static_cast<ostream*>(png_get_io_ptr(png));
+    static constexpr auto pngFlushCallback = [](png_structp p) {
+        auto* os = static_cast<ostream*>(png_get_io_ptr(p));
         os->flush();
     };
 

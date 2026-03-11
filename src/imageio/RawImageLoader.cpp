@@ -35,7 +35,7 @@ namespace tev {
 
 class LibRawDataStream final : public LibRaw_abstract_datastream {
 public:
-    LibRawDataStream(istream& stream, const fs::path& path) : stream{stream} {
+    LibRawDataStream(istream& stream, const fs::path& path) : mStream{stream} {
         const auto pathStr = toString(path);
         strncpy(mPath, pathStr.c_str(), sizeof(mPath) - 1);
 
@@ -47,11 +47,11 @@ public:
 
     ~LibRawDataStream() override = default;
 
-    int valid() override { return stream.good(); }
+    int valid() override { return mStream.good(); }
 
     int read(void* ptr, size_t size, size_t nmemb) override {
-        stream.read((char*)ptr, size * nmemb);
-        return stream.gcount() / size;
+        mStream.read((char*)ptr, size * nmemb);
+        return mStream.gcount() / size;
     }
 
     int seek(INT64 o, int whence) override {
@@ -62,26 +62,26 @@ public:
             case SEEK_END: dir = ios_base::end; break;
             default: return -1;
         }
-        stream.clear(); // Clear any eof flags
-        stream.seekg(o, dir);
-        return stream.good() ? 0 : -1;
+        mStream.clear(); // Clear any eof flags
+        mStream.seekg(o, dir);
+        return mStream.good() ? 0 : -1;
     }
 
-    INT64 tell() override { return stream.tellg(); }
+    INT64 tell() override { return mStream.tellg(); }
 
     INT64 size() override {
-        auto currentPos = stream.tellg();
-        stream.seekg(0, ios_base::end);
-        auto size = stream.tellg();
-        stream.seekg(currentPos, ios_base::beg);
+        auto currentPos = mStream.tellg();
+        mStream.seekg(0, ios_base::end);
+        auto size = mStream.tellg();
+        mStream.seekg(currentPos, ios_base::beg);
         return size;
     }
 
-    int get_char() override { return stream.get(); }
+    int get_char() override { return mStream.get(); }
 
     char* gets(char* str, int sz) override {
-        stream.getline(str, sz);
-        return stream.good() ? str : nullptr;
+        mStream.getline(str, sz);
+        return mStream.good() ? str : nullptr;
     }
 
     int scanf_one(const char* fmt, void* val) override {
@@ -89,7 +89,7 @@ public:
         return -1;
     }
 
-    int eof() override { return stream.eof(); }
+    int eof() override { return mStream.eof(); }
 
     int jpeg_src(void* /*jpegdata*/) override {
         // Not implemented
@@ -102,7 +102,7 @@ public:
 #endif
 
 private:
-    istream& stream;
+    istream& mStream;
 
     char mPath[1024] = {};
 #ifdef LIBRAW_WIN32_UNICODEPATHS
@@ -166,7 +166,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     } exif;
 
     static constexpr auto handleExif = [](void* context, int tag, int type, int len, unsigned int ord, void* ifp, INT64 base) {
-        ExifContext& exif = *(ExifContext*)context;
+        ExifContext* exifPtr = static_cast<ExifContext*>(context);
 
         ExifEntry* entry = exif_entry_new();
         if (!entry) {
@@ -175,8 +175,8 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
         const auto guard = ScopeGuard([&]() { exif_entry_unref(entry); });
 
-        exif_data_set_byte_order(exif.data, ord == 0x4949 ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA);
-        entry->parent = exif.content;
+        exif_data_set_byte_order(exifPtr->data, ord == 0x4949 ? EXIF_BYTE_ORDER_INTEL : EXIF_BYTE_ORDER_MOTOROLA);
+        entry->parent = exifPtr->content;
         entry->tag = (ExifTag)tag;
         entry->format = (ExifFormat)type;
         const int sizePerComponent = exif_format_get_size(entry->format);
@@ -207,8 +207,8 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
             value += "…"s;
         }
 
-        TEV_ASSERT(!exif.node.children.empty(), "EXIF node must have at least one child");
-        exif.node.children.front().children.push_back({name, value, typeStr, {}});
+        TEV_ASSERT(!exifPtr->node.children.empty(), "EXIF node must have at least one child");
+        exifPtr->node.children.front().children.push_back({name, value, typeStr, {}});
     };
 
     iProcessor.set_exifparser_handler(handleExif, &exif);
