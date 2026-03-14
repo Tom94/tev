@@ -364,6 +364,7 @@ private:
 
     // Misc state tracking variables
     int mDidFitToImage = 0;
+    size_t mNumFramesRendered = 0;
 
     nanogui::Vector2f mMinWindowPos = {0, 0};
     nanogui::Vector2f mMaxWindowSize = {8192, 8192};

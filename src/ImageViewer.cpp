@@ -1400,6 +1400,15 @@ void ImageViewer::draw_contents() {
         mHistogram->setZero(0);
         mHistogram->set_tooltip(histogramTooltipBase);
     }
+
+    // Some environments, notably Windows and some Wayland compositors, need several frames until color capabilities, current monitor,
+    // content scaling, etc. are propagated to the app. Therefore: render the first couple of frames (arbitrarily 10) eagerly and only
+    // *then* switch to lazy mode.
+    if (mNumFramesRendered < 10) {
+        redraw();
+    }
+
+    ++mNumFramesRendered;
 }
 
 void ImageViewer::updateColorCapabilities() {
