@@ -1,34 +1,41 @@
-{ lib
-, stdenv
-, cmake
-, dbus
-, fetchFromGitHub
-, lcms2
-, libGL
-, libffi
-, libxkbcommon
-, nasm
-, ninja
-, perl
-, pkg-config
-, wayland
-, wayland-protocols
-, wayland-scanner
-, xorg
-,
+{
+  lib,
+  stdenv,
+  cmake,
+  dbus,
+  fetchFromGitHub,
+  lcms2,
+  libGL,
+  libffi,
+  libx11,
+  libxcursor,
+  libxi,
+  libxinerama,
+  libxkbcommon,
+  libxrandr,
+  nasm,
+  ninja,
+  perl,
+  pkg-config,
+  wayland,
+  wayland-protocols,
+  wayland-scanner,
 }:
 
 stdenv.mkDerivation rec {
   pname = "tev";
 
   # Extract version from CMakeLists.txt
-  version = with builtins;
+  version =
+    with builtins;
     let
       cmakeContents = readFile ./CMakeLists.txt;
       versionMatch = match ".*VERSION[[:space:]]+([0-9]+\\.[0-9]+\\.[0-9]+).*" cmakeContents;
     in
-    if versionMatch == null then throw "Could not find version in CMakeLists.txt"
-    else head versionMatch;
+    if versionMatch == null then
+      throw "Could not find version in CMakeLists.txt"
+    else
+      head versionMatch;
 
   src = ./.;
 
@@ -55,23 +62,21 @@ stdenv.mkDerivation rec {
 
   buildInputs = [
     lcms2
-  ] ++ lib.optionals stdenv.hostPlatform.isLinux (
-    [
-      dbus
-      libffi
-      libGL
-      libxkbcommon
-      wayland
-      wayland-protocols
-      wayland-scanner
-    ] ++ (with xorg; [
-      libX11
-      libXcursor
-      libXi
-      libXinerama
-      libXrandr
-    ])
-  );
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isLinux ([
+    dbus
+    libffi
+    libGL
+    libxkbcommon
+    wayland
+    wayland-protocols
+    wayland-scanner
+    libx11
+    libxcursor
+    libxi
+    libxinerama
+    libxrandr
+  ]);
 
   cmakeFlags = [
     "-DTEV_DEPLOY=1"
