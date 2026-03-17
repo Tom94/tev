@@ -449,7 +449,7 @@ ImageViewer::ImageViewer(
     // Tonemap options
     {
         mTonemapButtonContainer = new Widget{mSidebarLayout};
-        mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 4, Alignment::Fill, 5, 2});
+        mTonemapButtonContainer->set_layout(new GridLayout{Orientation::Horizontal, 3, Alignment::Fill, 5, 2});
 
         const auto makeTonemapButton = [&](string_view name, function<void()> callback) {
             auto button = new Button{mTonemapButtonContainer, name};
@@ -459,12 +459,11 @@ ImageViewer::ImageViewer(
             return button;
         };
 
-        makeTonemapButton("None", [this]() { setTonemap(ETonemap::SRGB); });
-        makeTonemapButton("Gamma", [this]() { setTonemap(ETonemap::Gamma); });
+        makeTonemapButton("None", [this]() { setTonemap(ETonemap::Gamma); });
         makeTonemapButton("FC", [this]() { setTonemap(ETonemap::FalseColor); });
         makeTonemapButton("+/-", [this]() { setTonemap(ETonemap::PositiveNegative); });
 
-        setTonemap(ETonemap::SRGB);
+        setTonemap(ETonemap::Gamma);
 
         mTonemapButtonContainer->set_tooltip(
             "Tonemap selection:\n\n"

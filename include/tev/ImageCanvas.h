@@ -183,7 +183,7 @@ private:
     std::unique_ptr<UberShader> mShader;
 
     EChannelMask mChannelMask = EChannelMask::Red | EChannelMask::Green | EChannelMask::Blue | EChannelMask::Alpha;
-    ETonemap mTonemap = ETonemap::None;
+    ETonemap mTonemap = ETonemap::Gamma;
     EMetric mMetric = EMetric::Error;
     std::optional<Box2i> mCrop;
 

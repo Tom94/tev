@@ -668,9 +668,7 @@ EInterpolationMode toInterpolationMode(std::string_view name);
 std::string_view toString(EInterpolationMode mode);
 
 enum class ETonemap : int {
-    None = 0,
-    SRGB = 0,
-    Gamma,
+    Gamma = 0,
     FalseColor,
     PositiveNegative,
 
@@ -683,10 +681,6 @@ ETonemap toTonemap(std::string_view name);
 inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETonemap tonemap) {
     nanogui::Vector3f result;
     switch (tonemap) {
-        case ETonemap::SRGB: {
-            result = {toSRGB(value.x()), toSRGB(value.y()), toSRGB(value.z())};
-            break;
-        }
         case ETonemap::Gamma: {
             result = {std::pow(value.x(), 1 / gamma), std::pow(value.y(), 1 / gamma), std::pow(value.z(), 1 / gamma)};
             break;

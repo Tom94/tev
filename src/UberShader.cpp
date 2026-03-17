@@ -88,10 +88,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
         const auto fragmentShader = preamble +
             R"glsl(
-            #define SRGB        0
-            #define GAMMA       1
-            #define FALSE_COLOR 2
-            #define POS_NEG     3
+            #define GAMMA       0
+            #define FALSE_COLOR 1
+            #define POS_NEG     2
 
             #define ERROR                   0
             #define ABSOLUTE_ERROR          1
@@ -105,11 +104,6 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             #define CHANNEL_CONFIG_RA   3
             #define CHANNEL_CONFIG_RGA  4
             #define CHANNEL_CONFIG_RGBA 5
-
-            #define SRGB_POW 2.4
-            #define SRGB_CUT 0.0031308
-            #define SRGB_SCALE 12.92
-            #define SRGB_ALPHA 1.055
 
             uniform sampler2D image;
             uniform bool hasImage;
@@ -166,10 +160,6 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return mixb(hi, lo, isLow);
             }
 
-            vec3 linear(vec3 color) {
-                return sign(color) * invLinPow(abs(color), SRGB_POW, SRGB_CUT, SRGB_SCALE, SRGB_ALPHA);
-            }
-
             vec3 linPow(vec3 color, float gamma, float thres, float scale, float alpha) {
                 bvec3 isLow = lessThanEqual(color.rgb, vec3(thres));
                 vec3 lo = color.rgb * scale;
@@ -177,14 +167,8 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return mixb(hi, lo, isLow);
             }
 
-            vec3 srgb(vec3 color) {
-                return sign(color) * linPow(abs(color), SRGB_POW, SRGB_CUT, SRGB_SCALE, SRGB_ALPHA);
-            }
-
             vec3 applyTonemap(vec3 col, vec4 background) {
-                if (tonemap == SRGB) {
-                    return srgb(col + (linear(background.rgb) - offset) * background.a);
-                } else if (tonemap == GAMMA) {
+                if (tonemap == GAMMA) {
                     col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
                     return sign(col) * pow(abs(col), vec3(1.0 / gamma));
                 } else if (tonemap == FALSE_COLOR) {
@@ -317,10 +301,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
         auto fragmentShader =
             R"(using namespace metal;
 
-            #define SRGB        0
-            #define GAMMA       1
-            #define FALSE_COLOR 2
-            #define POS_NEG     3
+            #define GAMMA       0
+            #define FALSE_COLOR 1
+            #define POS_NEG     2
 
             #define ERROR                   0
             #define ABSOLUTE_ERROR          1
@@ -348,28 +331,8 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return colormap.sample(colormapSampler, float2(v, 0.5f)).rgb;
             }
 
-            float3 linear(float3 val) {
-                const float3 absVal = abs(val);
-                return select(
-                    copysign(pow((absVal + 0.055f) / 1.055f, 2.4f), val),
-                    val / 12.92f,
-                    absVal <= 0.04045f
-                );
-            }
-
-            float3 srgb(float3 val) {
-                const float3 absVal = abs(val);
-                return select(
-                    copysign(1.055f * pow(absVal, 0.41666f) - 0.055f, val),
-                    12.92f * val,
-                    absVal <= 0.0031308f
-                );
-            }
-
             float3 applyTonemap(float3 col, float4 background, int tonemap, float offset, float gamma, texture2d<float, access::sample> colormap, sampler colormapSampler) {
                 switch (tonemap) {
-                    case SRGB:
-                        return srgb(col + (linear(background.rgb) - offset) * background.a);
                     case GAMMA:
                         col = col + (pow(background.rgb, float3(gamma)) - offset) * background.a;
                         return sign(col) * pow(abs(col), float3(1.0 / gamma));
