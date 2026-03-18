@@ -459,8 +459,8 @@ ImageViewer::ImageViewer(
             return button;
         };
 
-        makeTonemapButton("None", [this]() { setTonemap(ETonemap::Gamma); });
-        makeTonemapButton("FC", [this]() { setTonemap(ETonemap::FalseColor); });
+        makeTonemapButton("Gamma", [this]() { setTonemap(ETonemap::Gamma); });
+        makeTonemapButton("False color", [this]() { setTonemap(ETonemap::FalseColor); });
         makeTonemapButton("+/-", [this]() { setTonemap(ETonemap::PositiveNegative); });
 
         setTonemap(ETonemap::Gamma);
@@ -468,15 +468,12 @@ ImageViewer::ImageViewer(
         mTonemapButtonContainer->set_tooltip(
             "Tonemap selection:\n\n"
 
-            "None\n"
-            "No tonemapping\n\n"
-
             "Gamma\n"
-            "Gamma correction + inverse sRGB\n"
-            "Needed when displaying SDR to\n"
-            "gamma-encoded displays.\n\n"
+            "A gamma value of 2.2 means that colors will be passed to the operating system faithfully, even if the system is configured "
+            "for non-gamma workflows such as the PQ HDR transfer function. In such cases, deviations from a value of 2.2 describe "
+            "relative gamma adjustments of linear colors x of the form x^(gamma/2.2).\n\n"
 
-            "FC\n"
+            "False color\n"
             "False-color visualization\n\n"
 
             "+/-\n"
