@@ -90,7 +90,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     };
 
     if (!supportedFormats.contains(brand)) {
-        throw FormatNotSupported{format("HEIF format {:08X} is not supported.", brand)};
+        throw FormatNotSupported{fmt::format("HEIF format {:08X} is not supported.", brand)};
     }
 
     iStream.seekg(0, ios_base::end);
@@ -182,7 +182,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         tlog::debug("Decoding HEIF image '{}'", layer);
 
         if (numChannels < 1 || numChannels > 4) {
-            throw ImageLoadError{format("Unsupported number of channels: {}", numChannels)};
+            throw ImageLoadError{fmt::format("Unsupported number of channels: {}", numChannels)};
         }
 
         const int numColorChannels = hasAlpha ? numChannels - 1 : numChannels;
@@ -200,14 +200,14 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         const int bitDepth = heif_image_get_bits_per_pixel(img, channelType) / numChannels;
         if (bitDepth != 8 && bitDepth != 16) {
-            throw ImageLoadError{format("Unsupported HEIF bit depth: {}", bitDepth)};
+            throw ImageLoadError{fmt::format("Unsupported HEIF bit depth: {}", bitDepth)};
         }
 
         const int bitsPerSample = heif_image_get_bits_per_pixel_range(img, channelType);
         const float channelScale = 1.0f / float((1 << bitsPerSample) - 1);
 
         if (bitsPerSample > bitDepth) {
-            throw ImageLoadError{format("Image has {} bits per sample, but expected at most {} bits.", bitsPerSample, bitDepth)};
+            throw ImageLoadError{fmt::format("Image has {} bits per sample, but expected at most {} bits.", bitsPerSample, bitDepth)};
         }
 
         struct PlaneData {
@@ -432,7 +432,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         heif_chroma preferredChroma = heif_chroma_undefined;
         if (auto error = heif_image_handle_get_preferred_decoding_colorspace(imgHandle, &preferredColorspace, &preferredChroma);
             error.code != heif_error_Ok) {
-            throw ImageLoadError{format("Failed to get preferred decoding colorspace: {}", error.message)};
+            throw ImageLoadError{fmt::format("Failed to get preferred decoding colorspace: {}", error.message)};
         }
 
         const bool hasAlpha = heif_image_handle_has_alpha_channel(imgHandle);
@@ -484,7 +484,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const auto imgGuard = ScopeGuard{[img] { heif_image_release(img); }};
         if (const auto error = heif_decode_image(imgHandle, &img, decodingColorspace, decodingChroma, decodingOptions.get());
             error.code != heif_error_Ok) {
-            throw ImageLoadError{format("Failed to decode image: {}", error.message)};
+            throw ImageLoadError{fmt::format("Failed to decode image: {}", error.message)};
         }
 
         co_return co_await decodeImage(img, imgHandle, numChannels, hasAlpha, skipColorProcessing, layer, partName);
@@ -543,7 +543,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 co_return nullopt;
             }
 
-            throw ImageLoadError{format("Failed to decode track image: {}", error.message)};
+            throw ImageLoadError{fmt::format("Failed to decode track image: {}", error.message)};
         }
 
         co_return co_await decodeImage(img, nullptr, numChannels, hasAlpha, false, partName, partName);
@@ -557,7 +557,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     }
 
     if (const auto error = heif_context_read_from_reader(ctx.get(), &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
-        throw ImageLoadError{format("Failed to read image: {}", error.message)};
+        throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 
     // If we're an image *sequence*, load the sequence tracks instead of individual images.
@@ -574,8 +574,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
             heif_track* track = heif_context_get_track(ctx.get(), trackIds[i]);
 
             for (size_t frameIdx = 0;; ++frameIdx) {
-                const auto partName = seqTrackCount > 1 ? format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
-                                                          format("frames.{}", frameIdx);
+                const auto partName = seqTrackCount > 1 ? fmt::format("tracks.{}.frames.{}", trackIds[i], frameIdx) :
+                                                          fmt::format("frames.{}", frameIdx);
 
                 auto imageData = co_await decodeSingleTrackImage(track, partName);
                 if (!imageData) {
@@ -600,7 +600,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         heif_image_handle* imgHandle;
         if (const auto error = heif_context_get_image_handle(ctx.get(), id, &imgHandle); error.code != heif_error_Ok) {
-            throw ImageLoadError{format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
+            throw ImageLoadError{fmt::format("Failed to get image handle for top-level image ID {}: {}", id, error.message)};
         }
 
         auto mainImageTask = ThreadPool::global().enqueueCoroutine(bind(decodeImageHandle, imgHandle, false, partName, partName), priority);
@@ -675,7 +675,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
                         const bool isIsoGainmap = auxImgHandle == gainmapImgHandle;
                         if (auxLayerName.empty()) {
                             const heif_item_id auxId = heif_image_handle_get_item_id(auxImgHandle);
-                            auxLayerName = isIsoGainmap ? "gainmap" : format("aux.{}", auxId);
+                            auxLayerName = isIsoGainmap ? "gainmap" : fmt::format("aux.{}", auxId);
                         }
 
                         const bool isAppleGainmap = auxLayerName.find("apple") != string::npos &&
@@ -856,7 +856,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
     vector<Task<ImageData>> decodeTasks;
     for (size_t i = 0; i < numImages; ++i) {
         const heif_item_id id = imageIds[i];
-        const string partName = numImages > 1 ? format("frames.{}", id) : "";
+        const string partName = numImages > 1 ? fmt::format("frames.{}", id) : "";
 
         decodeTasks.emplace_back(ThreadPool::global().enqueueCoroutine(bind(decodeTopLevelImgIdAndAuxImages, id, partName), priority));
     }

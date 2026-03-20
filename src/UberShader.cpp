@@ -488,7 +488,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
     const auto& fcd = colormap::turbo();
     if (fcd.size() % 4 != 0) {
-        throw runtime_error{format("Invalid false color data size. Expected multiple of 4, got {}.", fcd.size())};
+        throw runtime_error{fmt::format("Invalid false color data size. Expected multiple of 4, got {}.", fcd.size())};
     }
 
     mColorMap = new Texture{
@@ -507,7 +507,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
     const auto dmat = ditherMatrix(ditherScale);
     if (dmat.size() != posProd(mDitherMatrix->size())) {
-        throw runtime_error{format("Invalid dither matrix size. Expected {}, got {}.", posProd(mDitherMatrix->size()), dmat.size())};
+        throw runtime_error{fmt::format("Invalid dither matrix size. Expected {}, got {}.", posProd(mDitherMatrix->size()), dmat.size())};
     }
 
     mDitherMatrix->upload(reinterpret_cast<const uint8_t*>(dmat.data()));

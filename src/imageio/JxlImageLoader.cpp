@@ -295,7 +295,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
     while (true) {
         JxlDecoderStatus status = JxlDecoderProcessInput(decoder.get());
         switch (status) {
-            default: throw ImageLoadError{format("Unknown decoder status: {}", (size_t)status)};
+            default: throw ImageLoadError{fmt::format("Unknown decoder status: {}", (size_t)status)};
             case JXL_DEC_SUCCESS: goto l_decode_success;
             case JXL_DEC_ERROR: throw ImageLoadError{"Error decoding image."};
             case JXL_DEC_NEED_MORE_INPUT: throw ImageLoadError{"Incomplete image data."};
@@ -305,7 +305,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 }
 
                 if (info.num_color_channels > 3) {
-                    throw ImageLoadError{format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
+                    throw ImageLoadError{fmt::format("More than 3 color channels ({}) are not supported.", info.num_color_channels)};
                 }
 
                 tlog::debug(
@@ -371,7 +371,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 }
 
                 if (frameHeader.name_length == 0) {
-                    frameName = format("frames.{}", frameId);
+                    frameName = fmt::format("frames.{}", frameId);
                 } else {
                     frameName.resize(frameHeader.name_length + 1); // +1 for null terminator
                     if (JXL_DEC_SUCCESS != JxlDecoderGetFrameName(decoder.get(), frameName.data(), frameName.size() + 1)) {
@@ -422,20 +422,20 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                     JxlExtraChannelInfo extraChannelInfo;
                     if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelInfo(decoder.get(), i, &extraChannelInfo)) {
-                        throw ImageLoadError{format("Failed to get extra channel {}'s info.", i)};
+                        throw ImageLoadError{fmt::format("Failed to get extra channel {}'s info.", i)};
                     }
 
                     extraChannel.bitsPerSample = extraChannelInfo.bits_per_sample;
                     extraChannel.dimShift = extraChannelInfo.dim_shift;
                     if (extraChannelInfo.name_length == 0) {
-                        extraChannel.name = format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
+                        extraChannel.name = fmt::format("extra.{}.{}", i, jxlToString(extraChannelInfo.type));
                     } else {
                         vector<char> channelName(extraChannelInfo.name_length + 1, '\0'); // +1 for null terminator
                         if (JXL_DEC_SUCCESS != JxlDecoderGetExtraChannelName(decoder.get(), i, channelName.data(), channelName.size())) {
-                            throw ImageLoadError{format("Failed to get extra channel {}'s name.", i)};
+                            throw ImageLoadError{fmt::format("Failed to get extra channel {}'s name.", i)};
                         }
 
-                        extraChannel.name = format("extra.{}", channelName.data());
+                        extraChannel.name = fmt::format("extra.{}", channelName.data());
                     }
 
                     extraChannel.name = Channel::joinIfNonempty(data.partName, extraChannel.name);
@@ -456,13 +456,13 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     );
 
                     if (JXL_DEC_SUCCESS != JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, i)) {
-                        throw ImageLoadError{format("Failed to get extra channel {}'s buffer size.", i)};
+                        throw ImageLoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
                     }
 
                     extraChannel.data = HeapArray<float>{bufferSize / sizeof(float)};
                     if (JXL_DEC_SUCCESS !=
                         JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, i)) {
-                        throw ImageLoadError{format("Failed to set extra channel {}'s buffer.", i)};
+                        throw ImageLoadError{fmt::format("Failed to set extra channel {}'s buffer.", i)};
                     }
 
                     extraChannel.active = true;
@@ -682,7 +682,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                     status = JxlDecoderProcessInput(decoder.get());
                     if (status != JXL_DEC_BOX_COMPLETE && status != JXL_DEC_BOX_NEED_MORE_OUTPUT) {
-                        throw ImageLoadError{format("Failed to process box: {}", (size_t)status)};
+                        throw ImageLoadError{fmt::format("Failed to process box: {}", (size_t)status)};
                     }
 
                     const size_t notYetWritten = JxlDecoderReleaseBoxBuffer(decoder.get());
@@ -802,7 +802,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                     .imageData = std::move(gainMap),
                                 };
                             } catch (const ImageLoadError& e) {
-                                throw invalid_argument{format("Failed to decode gain map image data: {}", e.what())};
+                                throw invalid_argument{fmt::format("Failed to decode gain map image data: {}", e.what())};
                             }
                         } catch (const invalid_argument& e) {
                             tlog::warning("Failed to load ISO 21496-1 gain map from JHGM box: {}", e.what());

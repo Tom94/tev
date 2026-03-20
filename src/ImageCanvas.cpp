@@ -191,13 +191,13 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
 
                     if (shiftAndControlHeld) {
                         const unsigned char discretizedValue = (char)(clamp(values[i], 0.0f, 1.0f) * 255 + 0.5f);
-                        str = format("{:02X}", discretizedValue);
+                        str = fmt::format("{:02X}", discretizedValue);
                         pos = Vector2f{
                             m_pos.x() + nano.x() + (i - 0.5f * (colors.size() - 1)) * fontSize * 0.88f,
                             (float)m_pos.y() + nano.y(),
                         };
                     } else {
-                        str = abs(values[i]) > 100000 ? format("{:6g}", values[i]) : format("{:.5f}", values[i]);
+                        str = abs(values[i]) > 100000 ? fmt::format("{:6g}", values[i]) : fmt::format("{:.5f}", values[i]);
                         pos = Vector2f{
                             (float)m_pos.x() + nano.x(),
                             m_pos.y() + nano.y() + (i - 0.5f * (colors.size() - 1)) * fontSize,
@@ -683,7 +683,7 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         const string channels = join(mImage->channelsInGroup(mRequestedChannelGroup), ",");
 
         ostringstream keyStream;
-        keyStream << format(
+        keyStream << fmt::format(
             "{}-{}-{}-{}-{}-{}",
             (int)mInspectionTransfer,
             mInspectionChroma,
@@ -694,11 +694,11 @@ shared_ptr<Lazy<shared_ptr<CanvasStatistics>>> ImageCanvas::canvasStatistics() {
         );
 
         if (mReference) {
-            keyStream << format("-{}-{}", mReference->id(), (int)mMetric);
+            keyStream << fmt::format("-{}-{}", mReference->id(), (int)mMetric);
         }
 
         if (mCrop.has_value()) {
-            keyStream << format("-crop-{}-{}", mCrop->min, mCrop->max);
+            keyStream << fmt::format("-crop-{}-{}", mCrop->min, mCrop->max);
         }
 
         return keyStream;

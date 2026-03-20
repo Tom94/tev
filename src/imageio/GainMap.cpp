@@ -32,23 +32,23 @@ GainmapHeadroom::GainmapHeadroom(string_view str) {
     if (str.ends_with("%")) {
         unit = EUnit::Percent;
         if (!fromChars(str.substr(0, str.size() - 1), value)) {
-            throw runtime_error{format("Invalid headroom percentage: {}", str)};
+            throw runtime_error{fmt::format("Invalid headroom percentage: {}", str)};
         }
 
         value /= 100.0f;
     } else {
         unit = EUnit::Stops;
         if (!fromChars(str, value)) {
-            throw runtime_error{format("Invalid headroom stops: {}", str)};
+            throw runtime_error{fmt::format("Invalid headroom stops: {}", str)};
         }
     }
 }
 
 string GainmapHeadroom::toString() const {
     if (unit == EUnit::Percent) {
-        return format("{}%", value * 100.0f);
+        return fmt::format("{}%", value * 100.0f);
     } else {
-        return format("{} stops", value);
+        return fmt::format("{} stops", value);
     }
 }
 

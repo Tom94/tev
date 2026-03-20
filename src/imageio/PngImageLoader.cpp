@@ -49,7 +49,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     png_set_error_fn(
         pngPtr,
         nullptr,
-        [](png_structp, png_const_charp errorMsg) { throw ImageLoadError{format("PNG error: {}", errorMsg)}; },
+        [](png_structp, png_const_charp errorMsg) { throw ImageLoadError{fmt::format("PNG error: {}", errorMsg)}; },
         [](png_structp, png_const_charp warningMsg) { tlog::warning("PNG warning: {}", warningMsg); }
     );
 
@@ -103,7 +103,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             png_set_palette_to_rgb(pngPtr);
             numColorChannels = numChannels = 3;
             break;
-        default: throw ImageLoadError{format("Unsupported PNG color type: {}", colorType)};
+        default: throw ImageLoadError{fmt::format("Unsupported PNG color type: {}", colorType)};
     }
 
     if (interlaceType != PNG_INTERLACE_NONE) {
@@ -134,7 +134,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
 
     bitDepth = png_get_bit_depth(pngPtr, infoPtr);
     if (bitDepth != 8 && bitDepth != 16) {
-        throw ImageLoadError{format("Unsupported PNG bit depth: {}", bitDepth)};
+        throw ImageLoadError{fmt::format("Unsupported PNG bit depth: {}", bitDepth)};
     }
 
     const auto pixelFormat = bitDepth > 8 ? EPixelFormat::U16 : EPixelFormat::U8;
@@ -161,7 +161,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 .type = "",
                 .children = {AttributeNode{
                     .name = "Last modified",
-                    .value = format(
+                    .value = fmt::format(
                         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", time->year, time->month, time->day, time->hour, time->minute, time->second
                     ),
                     .type = "UTC timestamp",
@@ -181,12 +181,12 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 .children = {
                              AttributeNode{
                         .name = "Pixel density X",
-                        .value = format("{}", resX),
+                        .value = fmt::format("{}", resX),
                         .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
                         .children = {},
                     }, AttributeNode{
                         .name = "Pixel density Y",
-                        .value = format("{}", resY),
+                        .value = fmt::format("{}", resY),
                         .type = unit == PNG_RESOLUTION_METER ? "dpi" : "pixels/unknown",
                         .children = {},
                     }, }
@@ -345,7 +345,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         resultData.attributes = attributes;
 
         if (isAnimated) {
-            resultData.partName = format("frames.{}", frameIdx);
+            resultData.partName = fmt::format("frames.{}", frameIdx);
         }
 
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
@@ -652,7 +652,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             case EDisposeOp::None: prevCanvas = outView; break;
             case EDisposeOp::Background: prevCanvas = nullopt; break;
             case EDisposeOp::Previous: break; // Previous frame is already set as the previous canvas
-            default: throw ImageLoadError{format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};
+            default: throw ImageLoadError{fmt::format("Unsupported PNG dispose operation: {}", (uint8_t)disposeOp)};
         }
 
         co_return resultData;

@@ -229,7 +229,7 @@ Task<void> tiffDataToFloat32(
 
     const auto expectedSize = numPixels * numSppIn;
     if (imageData.size() < expectedSize) {
-        throw ImageLoadError{format("Image data is too small: expected at least {} elements, got {}", expectedSize, imageData.size())};
+        throw ImageLoadError{fmt::format("Image data is too small: expected at least {} elements, got {}", expectedSize, imageData.size())};
     }
 
     if (kind == ETiffKind::F32) {
@@ -267,7 +267,7 @@ Task<void> tiffDataToFloat32(
             priority
         );
     } else {
-        throw ImageLoadError{format("Unsupported sample format: {}", toString(kind))};
+        throw ImageLoadError{fmt::format("Unsupported sample format: {}", toString(kind))};
     }
 
     if (flipWhiteAndBlack) {
@@ -292,7 +292,7 @@ static void tiffErrorHandler(const char* module, const char* fmt, va_list args) 
     tlog::warning(
         "TIFF error ({}): {}",
         module ? module : "unknown",
-        res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : format("format error {}", res)
+        res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : fmt::format("format error {}", res)
     );
 }
 
@@ -302,7 +302,7 @@ static void tiffWarningHandler(const char* module, const char* fmt, va_list args
     tlog::warning(
         "TIFF warning ({}): {}",
         module ? module : "unknown",
-        res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : format("format error {}", res)
+        res > 0 ? string_view{buf, std::min((size_t)res, sizeof(buf))} : fmt::format("format error {}", res)
     );
 }
 
@@ -482,12 +482,12 @@ Box2i getDefaultCrop(TIFF* tif, const Vector2i size) {
 
 Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannelView<float>& rgbData, int priority) {
     if (rgbData.nChannels() < 3) {
-        throw ImageLoadError{format("RGB output must have at least 3 channels, got {}", rgbData.nChannels())};
+        throw ImageLoadError{fmt::format("RGB output must have at least 3 channels, got {}", rgbData.nChannels())};
     }
 
     if (cfaData.size() != rgbData.size()) {
         throw ImageLoadError{
-            format("CFA and RGB data must have the same size. Got CFA size {} and RGB size {}.", cfaData.size(), rgbData.size())
+            fmt::format("CFA and RGB data must have the same size. Got CFA size {} and RGB size {}.", cfaData.size(), rgbData.size())
         };
     }
 
@@ -514,9 +514,9 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
 
     const auto dim = tiffGetSpan<uint16_t>(tif, TIFFTAG_EP_CFAREPEATPATTERNDIM);
     if (dim.size() != 2 || dim[0] == 0 || dim[1] == 0) {
-        throw ImageLoadError{format(
+        throw ImageLoadError{fmt::format(
             "Invalid CFA pattern dimensions: expected 2 positive values, got {}",
-            dim.size() == 2 ? format("{}, {}", dim[0], dim[1]) : format("{}", dim.size())
+            dim.size() == 2 ? fmt::format("{}, {}", dim[0], dim[1]) : fmt::format("{}", dim.size())
         )};
     }
 
@@ -525,7 +525,7 @@ Task<void> demosaicCfa(TIFF* tif, ChannelView<float> cfaData, const MultiChannel
 
     const auto pat = tiffGetSpan<uint8_t>(tif, TIFFTAG_EP_CFAPATTERN);
     if (pat.size() < patternSize) {
-        throw ImageLoadError{format("CFA pattern size is smaller than expected: expected at least {}, got {}", patternSize, pat.size())};
+        throw ImageLoadError{fmt::format("CFA pattern size is smaller than expected: expected at least {}, got {}", patternSize, pat.size())};
     }
 
     enum class ELayout : uint16_t { Rect = 1, A, B, C, D, E, F, G, H, I };
@@ -633,7 +633,7 @@ Task<void> linearizeAndNormalizeRawDng(
 
         if (blackLevelFloat.size() < blackLevel.size()) {
             throw ImageLoadError{
-                format("Not enough black level data: expected at least {}, got {}", blackLevel.size(), blackLevelFloat.size())
+                fmt::format("Not enough black level data: expected at least {}, got {}", blackLevel.size(), blackLevelFloat.size())
             };
         }
 
@@ -704,7 +704,7 @@ Task<void> linearizeAndNormalizeRawDng(
     if (const auto whiteLevelLong = tiffGetSpan<uint32_t>(tif, TIFFTAG_WHITELEVEL); !whiteLevelLong.empty()) {
         if (whiteLevelLong.size() != whiteLevel.size()) {
             throw ImageLoadError{
-                format("Invalid number of long white level pixels: expected {}, got {}", whiteLevel.size(), whiteLevelLong.size())
+                fmt::format("Invalid number of long white level pixels: expected {}, got {}", whiteLevel.size(), whiteLevelLong.size())
             };
         }
 
@@ -986,7 +986,7 @@ Task<void> postprocessLinearRawDng(
             static_assert(sizeof(GainTableMapHeader) == 64, "Unexpected padding in GainTableMapHeader");
 
             if (gainTableMap.size() < sizeof(GainTableMapHeader)) {
-                throw ImageLoadError{format(
+                throw ImageLoadError{fmt::format(
                     "Gain table map is too small to contain header: expected at least {}, got {}",
                     sizeof(GainTableMapHeader),
                     gainTableMap.size()
@@ -1015,7 +1015,7 @@ Task<void> postprocessLinearRawDng(
             const auto numBytes = sizeof(GainTableMapHeader) + numValues * sizeof(float);
             if (gainTableMap.size() < numBytes) {
                 throw ImageLoadError{
-                    format("Gain table map is too small to contain values: expected at least {}, got {}", numBytes, gainTableMap.size())
+                    fmt::format("Gain table map is too small to contain values: expected at least {}, got {}", numBytes, gainTableMap.size())
                 };
             }
 
@@ -1215,7 +1215,7 @@ Task<void> postprocessRgb(
 ) {
     if (numColorChannels > rgbaView.nChannels()) {
         throw ImageLoadError{
-            format("Too many color channels in the image: expected at most {}, got {}", rgbaView.nChannels(), numColorChannels)
+            fmt::format("Too many color channels in the image: expected at most {}, got {}", rgbaView.nChannels(), numColorChannels)
         };
     }
 
@@ -1302,7 +1302,7 @@ Task<void> postprocessRgb(
 
         for (size_t c = 0; c < numColorChannels; ++c) {
             if (transferFunction.at(c).size() < 2) {
-                throw ImageLoadError{format("Missing transfer function for channel {}", c)};
+                throw ImageLoadError{fmt::format("Missing transfer function for channel {}", c)};
             }
         }
 
@@ -1541,7 +1541,7 @@ Task<ImageData> decodeJpeg(
     jerr.error_exit = [](j_common_ptr jcp) {
         char buf[JMSG_LENGTH_MAX];
         jcp->err->format_message(jcp, buf);
-        throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
+        throw ImageLoadError{fmt::format("libjpeg error: {}", static_cast<const char*>(buf))};
     };
     jerr.output_message = [](j_common_ptr jcp) {
         char buf[JMSG_LENGTH_MAX];
@@ -1565,7 +1565,7 @@ Task<ImageData> decodeJpeg(
     }
 
     if (precision < 2 || precision > 16) {
-        throw ImageLoadError{format("Unsupported JPEG precision: {} bits per sample.", precision)};
+        throw ImageLoadError{fmt::format("Unsupported JPEG precision: {} bits per sample.", precision)};
     }
 
     const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 : EPixelFormat::U8;
@@ -1587,7 +1587,7 @@ Task<ImageData> decodeJpeg(
     const auto numTileSamples = numTilePixels * tileNumComponents;
 
     if (numJpegSamples < numTileSamples) {
-        throw ImageLoadError{format(
+        throw ImageLoadError{fmt::format(
             "Decompressed JPEG has fewer samples ({}) than expected from the tile size and samples per pixel ({}).", numJpegSamples, numTileSamples
         )};
     }
@@ -1648,7 +1648,7 @@ Task<ImageData> decodeJpeg(
     } else if (pixelFormat == EPixelFormat::U16) {
         co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, false, priority, scale);
     } else {
-        throw ImageLoadError{format("Unsupported pixel format: {}", toString(pixelFormat))};
+        throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
     }
 
     decompressGuard.disarm();
@@ -1695,7 +1695,7 @@ Task<ImageData> readTiffImage(
     }
 
     if (sampleFormat > SAMPLEFORMAT_IEEEFP) {
-        throw ImageLoadError{format("Unsupported sample format: {}", sampleFormat)};
+        throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
     }
 
     uint16_t compression;
@@ -1808,7 +1808,7 @@ Task<ImageData> readTiffImage(
     }
 
     if (all_of(begin(SUPPORTED_PHOTOMETRICS), end(SUPPORTED_PHOTOMETRICS), [&](uint16_t p) { return p != photometric; })) {
-        throw ImageLoadError{format("Unsupported photometric interpretation: {}", photometric)};
+        throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
     }
 
     uint16_t planar;
@@ -1886,7 +1886,7 @@ Task<ImageData> readTiffImage(
     }
 
     if (numExtraChannels >= samplesPerPixel) {
-        throw ImageLoadError{format("Invalid number of extra channels: {}", numExtraChannels)};
+        throw ImageLoadError{fmt::format("Invalid number of extra channels: {}", numExtraChannels)};
     }
 
     // Determine number of color channels
@@ -1895,7 +1895,7 @@ Task<ImageData> readTiffImage(
 
     size_t numRgbaChannels = numColorChannels + (hasAlpha ? 1 : 0);
     if (numRgbaChannels < 1 || numRgbaChannels > 4) {
-        throw ImageLoadError{format("Unsupported number of RGBA channels: {}", numRgbaChannels)};
+        throw ImageLoadError{fmt::format("Unsupported number of RGBA channels: {}", numRgbaChannels)};
     }
 
     const size_t numNonRgbaChannels = numChannels - numRgbaChannels;
@@ -1928,7 +1928,7 @@ Task<ImageData> readTiffImage(
             case SAMPLEFORMAT_UINT: return EPixelType::Uint;
             case SAMPLEFORMAT_INT: return EPixelType::Int;
             case SAMPLEFORMAT_IEEEFP: return EPixelType::Float;
-            default: throw ImageLoadError{format("Unsupported sample format: {}", f)};
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", f)};
         }
     };
 
@@ -1937,7 +1937,7 @@ Task<ImageData> readTiffImage(
             case EPixelType::Uint: return 1.0f / (float)((1ull << bps) - 1);
             case EPixelType::Int: return 1.0f / (float)((1ull << (bps - 1)) - 1);
             case EPixelType::Float: return 1.0f;
-            default: throw ImageLoadError{format("Unsupported pixel type: {}", toString(pt))};
+            default: throw ImageLoadError{fmt::format("Unsupported pixel type: {}", toString(pt))};
         }
     };
 
@@ -2022,13 +2022,13 @@ Task<ImageData> readTiffImage(
 
     const auto getRawTileSpan = [tif, &tiffData, &tile, isTiled](size_t tileIndex) -> span<const uint8_t> {
         if (tileIndex >= tile.count) {
-            throw ImageLoadError{format("Tile index {} out of bounds ({} tiles total)", tileIndex, tile.count)};
+            throw ImageLoadError{fmt::format("Tile index {} out of bounds ({} tiles total)", tileIndex, tile.count)};
         }
 
         const auto getRawTileOffset = [tif, isTiled, tileIndex]() -> uint64_t {
             const uint64_t* rawTileOffset = NULL;
             if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEOFFSETS : TIFFTAG_STRIPOFFSETS, &rawTileOffset) || !rawTileOffset) {
-                throw ImageLoadError{format("Failed to read raw tile offset for tile {}", tileIndex)};
+                throw ImageLoadError{fmt::format("Failed to read raw tile offset for tile {}", tileIndex)};
             }
 
             return rawTileOffset[tileIndex];
@@ -2037,7 +2037,7 @@ Task<ImageData> readTiffImage(
         const auto getRawTileSize = [tif, isTiled, tileIndex]() -> size_t {
             const uint64_t* rawTileSize = NULL;
             if (!TIFFGetField(tif, isTiled ? TIFFTAG_TILEBYTECOUNTS : TIFFTAG_STRIPBYTECOUNTS, &rawTileSize) || !rawTileSize) {
-                throw ImageLoadError{format("Failed to read raw tile size for tile {}", tileIndex)};
+                throw ImageLoadError{fmt::format("Failed to read raw tile size for tile {}", tileIndex)};
             }
 
             return (size_t)rawTileSize[tileIndex];
@@ -2045,16 +2045,16 @@ Task<ImageData> readTiffImage(
 
         const size_t tileOffset = getRawTileOffset();
         if (tileOffset == 0) {
-            throw ImageLoadError{format("Raw tile offset is 0 for tile {}", tileIndex)};
+            throw ImageLoadError{fmt::format("Raw tile offset is 0 for tile {}", tileIndex)};
         }
 
         const size_t tileSize = getRawTileSize();
         if (tileSize == 0) {
-            throw ImageLoadError{format("Raw tile size is 0 for tile {}", tileIndex)};
+            throw ImageLoadError{fmt::format("Raw tile size is 0 for tile {}", tileIndex)};
         }
 
         if ((size_t)tiffData.size < tileOffset + tileSize) {
-            throw ImageLoadError{format(
+            throw ImageLoadError{fmt::format(
                 "Raw tile data for tile {} is out of bounds: offset={} size={} dataSize={}", tileIndex, tileOffset, tileSize, tiffData.size
             )};
         }
@@ -2075,7 +2075,7 @@ Task<ImageData> readTiffImage(
     }
 
     if (tile.count != tile.numX * tile.numY * numPlanes) {
-        throw ImageLoadError{format(
+        throw ImageLoadError{fmt::format(
             "Number of tiles/strips does not match expected dimensions. Expected {}x{}x{}={} tiles, got {}.",
             tile.numX,
             tile.numY,
@@ -2095,7 +2095,7 @@ Task<ImageData> readTiffImage(
         switch (sampleFormat) {
             case SAMPLEFORMAT_IEEEFP: {
                 if (bitsPerSample != 16 && bitsPerSample != 24 && bitsPerSample != 32 && bitsPerSample != 64) {
-                    throw ImageLoadError{format("Unsupported floating point bits per sample: {}", bitsPerSample)};
+                    throw ImageLoadError{fmt::format("Unsupported floating point bits per sample: {}", bitsPerSample)};
                 }
 
                 if (bitsPerSample == 64) {
@@ -2115,7 +2115,7 @@ Task<ImageData> readTiffImage(
 
                 return ETiffKind::U32;
             }
-            default: throw ImageLoadError{format("Unsupported sample format: {}", sampleFormat)};
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", sampleFormat)};
         }
     };
 
@@ -2129,7 +2129,7 @@ Task<ImageData> readTiffImage(
             case ETiffKind::I32: return EPixelFormat::I32;
             case ETiffKind::F32: return EPixelFormat::F32;
             case ETiffKind::Palette: return EPixelFormat::U32;
-            default: throw ImageLoadError{format("Unsupported TIFF kind: {}", (int)k)};
+            default: throw ImageLoadError{fmt::format("Unsupported TIFF kind: {}", (int)k)};
         }
     };
 
@@ -2177,23 +2177,25 @@ Task<ImageData> readTiffImage(
                                     )
                                 );
                             } break;
-                            default: throw ImageLoadError{format("Unsupported compression type: {}", compression)};
+                            default: throw ImageLoadError{fmt::format("Unsupported compression type: {}", compression)};
                         }
 
                         if (tmp.size() != 1) {
-                            throw ImageLoadError{format("Expected exactly one image from tile, got {}", tmp.size())};
+                            throw ImageLoadError{fmt::format("Expected exactly one image from tile, got {}", tmp.size())};
                         }
 
                         auto& tmpImage = tmp.front();
 
                         if (tmpImage.channels.size() < (size_t)samplesPerPixel / numPlanes) {
-                            throw ImageLoadError{format("Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size())};
+                            throw ImageLoadError{
+                                fmt::format("Tile has too few channels: expected {}, got {}", numPlanes, tmpImage.channels.size())
+                            };
                         }
 
                         const auto tileSize = Vector2i{(int)tile.width, (int)tile.height};
                         for (auto& channel : tmpImage.channels) {
                             if (channel.size() != tileSize) {
-                                throw ImageLoadError{format(
+                                throw ImageLoadError{fmt::format(
                                     "Tile channel '{}' has unexpected dimensions: expected {}, got {}",
                                     channel.name(),
                                     tileSize,
@@ -2272,7 +2274,7 @@ Task<ImageData> readTiffImage(
             uint8_t* const td = tileData.data() + tile.size * i;
             if (readTile(tif, (uint32_t)i, td, tile.size) < 0) {
                 co_await awaitAll(decodeTasks);
-                throw ImageLoadError{format("Failed to read tile {}", i)};
+                throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
 
             decodeTasks.emplace_back(
@@ -2615,7 +2617,7 @@ Task<vector<ImageData>>
             case Enhanced: return "enhanced";
             case AltReduced: return "reduced.alt";
             case SemanticMask: return "mask";
-            default: return format("unknown.{}", subFileType);
+            default: return fmt::format("unknown.{}", subFileType);
         }
     };
 
@@ -2626,7 +2628,7 @@ Task<vector<ImageData>>
 
     EOrientation dngOrientation = EOrientation::None;
     const auto tryLoadImage = [&](tdir_t dir, int subId, int subChainId) -> Task<void> {
-        string name = subId != -1 ? format("ifd.{}.subifd.{}.{}", dir, subId, subChainId) : format("ifd.{}", dir);
+        string name = subId != -1 ? fmt::format("ifd.{}.subifd.{}.{}", dir, subId, subChainId) : fmt::format("ifd.{}", dir);
         if (isDng) {
             if (dngOrientation == EOrientation::None) {
                 uint16_t orientation = 0;

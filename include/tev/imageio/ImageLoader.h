@@ -108,7 +108,7 @@ Task<void> toFloat32(
     const size_t expectedDataSize = numSamplesPerRowIn * size.y();
     if (imageData.size() < expectedDataSize) {
         throw std::runtime_error{
-            std::format("Not enough image data provided: expected at least {} samples, got {}", expectedDataSize, imageData.size())
+            fmt::format("Not enough image data provided: expected at least {} samples, got {}", expectedDataSize, imageData.size())
         };
     }
 

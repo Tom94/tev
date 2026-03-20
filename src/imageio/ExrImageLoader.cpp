@@ -112,7 +112,7 @@ AttributeNode createVec2fNode(string_view name, Imath::V2f value) {
     AttributeNode node;
     node.name = name;
     node.type = "v2f";
-    node.value = format("({}, {})", value[0], value[1]);
+    node.value = fmt::format("({}, {})", value[0], value[1]);
     return node;
 }
 
@@ -120,7 +120,7 @@ AttributeNode createVec2iNode(string_view name, Imath::V2i value) {
     AttributeNode node;
     node.name = name;
     node.type = "v2i";
-    node.value = format("({}, {})", value[0], value[1]);
+    node.value = fmt::format("({}, {})", value[0], value[1]);
     return node;
 }
 
@@ -183,29 +183,29 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
         if (const auto* strAttr = dynamic_cast<const Imf::StringAttribute*>(attr)) {
             node.value = strAttr->value();
         } else if (const auto* intAttr = dynamic_cast<const Imf::IntAttribute*>(attr)) {
-            node.value = format("{}", intAttr->value());
+            node.value = fmt::format("{}", intAttr->value());
         } else if (const auto* floatAttr = dynamic_cast<const Imf::FloatAttribute*>(attr)) {
-            node.value = format("{}", floatAttr->value());
+            node.value = fmt::format("{}", floatAttr->value());
         } else if (const auto* doubleAttr = dynamic_cast<const Imf::DoubleAttribute*>(attr)) {
-            node.value = format("{}", doubleAttr->value());
+            node.value = fmt::format("{}", doubleAttr->value());
         } else if (const auto* v2fAttr = dynamic_cast<const Imf::V2fAttribute*>(attr)) {
             const auto value = v2fAttr->value();
-            node.value = format("({}, {})", value[0], value[1]);
+            node.value = fmt::format("({}, {})", value[0], value[1]);
         } else if (const auto* v2dAttr = dynamic_cast<const Imf::V2dAttribute*>(attr)) {
             const auto value = v2dAttr->value();
-            node.value = format("({}, {})", value[0], value[1]);
+            node.value = fmt::format("({}, {})", value[0], value[1]);
         } else if (const auto* v2iAttr = dynamic_cast<const Imf::V2iAttribute*>(attr)) {
             const auto value = v2iAttr->value();
-            node.value = format("({}, {})", value[0], value[1]);
+            node.value = fmt::format("({}, {})", value[0], value[1]);
         } else if (const auto* v3fAttr = dynamic_cast<const Imf::V3fAttribute*>(attr)) {
             const auto value = v3fAttr->value();
-            node.value = format("({}, {}, {})", value[0], value[1], value[2]);
+            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const auto* v3dAttr = dynamic_cast<const Imf::V3dAttribute*>(attr)) {
             const auto value = v3dAttr->value();
-            node.value = format("({}, {}, {})", value[0], value[1], value[2]);
+            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const auto* v3iAttr = dynamic_cast<const Imf::V3iAttribute*>(attr)) {
             const auto value = v3iAttr->value();
-            node.value = format("({}, {}, {})", value[0], value[1], value[2]);
+            node.value = fmt::format("({}, {}, {})", value[0], value[1], value[2]);
         } else if (const auto* box2iAttr = dynamic_cast<const Imf::Box2iAttribute*>(attr)) {
             const auto value = box2iAttr->value();
             AttributeNode minNode = createVec2iNode("min", value.min);
@@ -263,7 +263,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
             node.children.push_back({"perfsPerCount", to_string(value.perfsPerCount()), "int", {}});
         } else if (const auto* rationalAttr = dynamic_cast<const Imf::RationalAttribute*>(attr)) {
             const auto value = rationalAttr->value();
-            node.value = format("{} / {}", value.n, value.d);
+            node.value = fmt::format("{} / {}", value.n, value.d);
         } else if (const auto* chromaticitiesAttr = dynamic_cast<const Imf::ChromaticitiesAttribute*>(attr)) {
             const auto value = chromaticitiesAttr->value();
 
@@ -346,7 +346,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
             node.children.push_back({"uncompressedSize", to_string(idManifestAttr->value()._uncompressedDataSize), "size_t", {}});
         } else if (const auto* timeCodeAttr = dynamic_cast<const Imf::TimeCodeAttribute*>(attr)) {
             const auto value = timeCodeAttr->value();
-            node.value = format(
+            node.value = fmt::format(
                 "{:02}:{:02}:{:02}.{:03} {} {}",
                 value.hours(),
                 value.minutes(),
@@ -358,7 +358,7 @@ AttributeNode toAttributeNode(const Imf::Header& header) {
         } else if (const auto* opaqueAttr = dynamic_cast<const Imf::OpaqueAttribute*>(attr)) {
             node.children.push_back({"size", to_string(opaqueAttr->dataSize()), "int", {}});
         } else {
-            node.value = format("UNKNOWN: {}", attributeItr.attribute().typeName());
+            node.value = fmt::format("UNKNOWN: {}", attributeItr.attribute().typeName());
         }
 
         global.children.push_back(node);
@@ -511,7 +511,7 @@ Task<vector<ImageData>>
         }
 
         if (rawChannels.empty()) {
-            throw ImageLoadError{format("No channels match '{}'.", channelSelector)};
+            throw ImageLoadError{fmt::format("No channels match '{}'.", channelSelector)};
         }
 
         size_t totalNumPixels = 0;
@@ -553,12 +553,12 @@ Task<vector<ImageData>>
                 };
 
                 if (!data.dataWindow.isValid()) {
-                    throw ImageLoadError{format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)};
+                    throw ImageLoadError{fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)};
                 }
 
                 if (!data.displayWindow.isValid()) {
                     throw ImageLoadError{
-                        format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
+                        fmt::format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
                     };
                 }
 

@@ -89,7 +89,7 @@ Task<vector<ImageData>>
         jerr.error_exit = [](j_common_ptr jcp) {
             char buf[JMSG_LENGTH_MAX];
             jcp->err->format_message(jcp, buf);
-            throw ImageLoadError{format("libjpeg error: {}", static_cast<const char*>(buf))};
+            throw ImageLoadError{fmt::format("libjpeg error: {}", static_cast<const char*>(buf))};
         };
         jerr.output_message = [](j_common_ptr jcp) {
             char buf[JMSG_LENGTH_MAX];
@@ -202,7 +202,7 @@ Task<vector<ImageData>>
         }
 
         if (cinfo.data_precision < 2 || cinfo.data_precision > 16) {
-            throw ImageLoadError{format("Unsupported JPEG data precision: {} bits per channel.", cinfo.data_precision)};
+            throw ImageLoadError{fmt::format("Unsupported JPEG data precision: {} bits per channel.", cinfo.data_precision)};
         }
 
         const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 :
@@ -211,7 +211,7 @@ Task<vector<ImageData>>
         // JPEG does not support alpha, so all channels are color channels.
         const size_t numChannels = cinfo.output_components;
         if (numChannels > 4) {
-            throw ImageLoadError{format("Unsupported number of color channels: {}", numChannels)};
+            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numChannels)};
         }
 
         const bool hasAlpha = numChannels == 4;
@@ -351,7 +351,7 @@ Task<vector<ImageData>>
                                 iie.dependentImage2EntryNumber
                             );
 
-                            const string partName = format("{}.{}", mfpTypeToString(iie.type()), idx + i);
+                            const string partName = fmt::format("{}.{}", mfpTypeToString(iie.type()), idx + i);
 
                             // Skip images with zero offset: those are the one we're already reading. But: in this case we should overwrite
                             // the part name if we're not the top-level primary image. (Primary image should have empty part name.)
@@ -527,7 +527,7 @@ Task<vector<ImageData>>
             } else if (pixelFormat == EPixelFormat::U16) {
                 co_await jpegDataToFloat32Typed(buf.span<const uint16_t>(), fromSrgb, dst);
             } else {
-                throw ImageLoadError{format("Unsupported pixel format: {}", toString(pixelFormat))};
+                throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
             }
         };
 

@@ -22,6 +22,7 @@
 
 #include <nanogui/vector.h>
 
+// fmtlib's fmt::format inherited from tinylogger.h
 #include <tinylogger/tinylogger.h>
 
 #include <algorithm>
@@ -33,7 +34,6 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
-#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -69,7 +69,7 @@
     if (!(cond)) [[unlikely]] {                                                                                                \
         const auto s = std::source_location::current();                                                                        \
         throw std::runtime_error{                                                                                              \
-            std::format("{}({}:{}) `{}`: " description, s.file_name(), s.line(), s.column(), s.function_name(), ##__VA_ARGS__) \
+            fmt::format("{}({}:{}) `{}`: " description, s.file_name(), s.line(), s.column(), s.function_name(), ##__VA_ARGS__) \
         };                                                                                                                     \
     }
 
@@ -82,72 +82,72 @@ std::string toString(const std::filesystem::path& path);
 }
 
 // Make std::filesystem::path formattable.
-template <> struct std::formatter<std::filesystem::path> : std::formatter<std::string_view> {
+template <> struct fmt::formatter<std::filesystem::path> : fmt::formatter<std::string_view> {
     template <typename FormatContext> auto format(const std::filesystem::path& path, FormatContext& ctx) const {
         return formatter<std::string_view>::format(tev::toString(path), ctx);
     }
 };
 
-template <typename T, size_t N_DIMS> struct std::formatter<std::array<T, N_DIMS>> {
+template <typename T, size_t N_DIMS> struct fmt::formatter<std::array<T, N_DIMS>> {
     template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
     template <class FmtContext> FmtContext::iterator format(const std::array<T, N_DIMS>& v, FmtContext& ctx) const {
         auto&& out = ctx.out();
 
-        std::format_to(out, "[");
+        fmt::format_to(out, "[");
         for (size_t i = 0; i < N_DIMS; ++i) {
             if (i != 0) {
-                std::format_to(out, ", ");
+                fmt::format_to(out, ", ");
             }
 
-            std::format_to(out, "{}", v[i]);
+            fmt::format_to(out, "{}", v[i]);
         }
 
-        return std::format_to(out, "]");
+        return fmt::format_to(out, "]");
     }
 };
 
-template <typename T, size_t N_DIMS> struct std::formatter<nanogui::Array<T, N_DIMS>> {
+template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Array<T, N_DIMS>> {
     template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
     template <class FmtContext> FmtContext::iterator format(const nanogui::Array<T, N_DIMS>& v, FmtContext& ctx) const {
         auto&& out = ctx.out();
 
-        std::format_to(out, "[");
+        fmt::format_to(out, "[");
         for (size_t i = 0; i < N_DIMS; ++i) {
             if (i != 0) {
-                std::format_to(out, ", ");
+                fmt::format_to(out, ", ");
             }
 
-            std::format_to(out, "{}", v[i]);
+            fmt::format_to(out, "{}", v[i]);
         }
 
-        return std::format_to(out, "]");
+        return fmt::format_to(out, "]");
     }
 };
 
-template <typename T, size_t N_DIMS> struct std::formatter<nanogui::Matrix<T, N_DIMS>> {
+template <typename T, size_t N_DIMS> struct fmt::formatter<nanogui::Matrix<T, N_DIMS>> {
     template <class ParseContext> constexpr ParseContext::iterator parse(ParseContext& ctx) { return ctx.begin(); }
     template <class FmtContext> FmtContext::iterator format(const nanogui::Matrix<T, N_DIMS>& m, FmtContext& ctx) const {
         auto&& out = ctx.out();
 
-        std::format_to(out, "[");
+        fmt::format_to(out, "[");
         for (size_t i = 0; i < N_DIMS; ++i) {
             if (i != 0) {
-                std::format_to(out, ", ");
+                fmt::format_to(out, ", ");
             }
 
-            std::format_to(out, "[");
+            fmt::format_to(out, "[");
             for (size_t j = 0; j < N_DIMS; ++j) {
                 if (j != 0) {
-                    std::format_to(out, ", ");
+                    fmt::format_to(out, ", ");
                 }
 
-                std::format_to(out, "{}", m.m[j][i]);
+                fmt::format_to(out, "{}", m.m[j][i]);
             }
 
-            std::format_to(out, "]");
+            fmt::format_to(out, "]");
         }
 
-        return std::format_to(out, "]");
+        return fmt::format_to(out, "]");
     }
 };
 
@@ -252,7 +252,7 @@ template <typename T, size_t N_DIMS> auto posProd(const nanogui::Array<T, N_DIMS
 
     for (uint32_t i = 0; i < N_DIMS; ++i) {
         if (v[i] < 0) [[unlikely]] {
-            throw std::runtime_error{std::format("Negative value {} encountered when computing positive product.", v)};
+            throw std::runtime_error{fmt::format("Negative value {} encountered when computing positive product.", v)};
         }
 
         result *= (area_t)v[i];
