@@ -313,9 +313,9 @@ template <typename T> bool fromChars(const char* begin, const char* end, T& valu
 }
 
 template <typename T> bool fromChars(std::string_view s, T& value) {
-    // Shockingly, macOS *still* does not ship a floating point from_chars() implementation -- a C++17 feature! -- so we polyfill via the
-    // much heavier stof (string alloc + exception on failed parse). TODO: remove once supported
-#ifdef __APPLE__
+    // libc++ *still* does not ship a floating-point from_chars() -- a C++17 feature!
+    // Polyfill via stof/stod (string alloc + exception on failed parse).
+#if !defined(__cpp_lib_to_chars) || __cpp_lib_to_chars < 201611L
     if constexpr (std::is_floating_point_v<T>) {
         try {
             value = std::stof(std::string{s});

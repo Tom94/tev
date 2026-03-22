@@ -17,16 +17,46 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        include:
+          - os: ubuntu-24.04
+            cc: gcc
+            cxx: g++
+            upload: true
+          - os: ubuntu-24.04-arm
+            cc: gcc
+            cxx: g++
+            upload: true
+          - os: ubuntu-24.04
+            cc: clang
+            cxx: clang++
+            upload: false
+          - os: ubuntu-24.04-arm
+            cc: clang
+            cxx: clang++
+            upload: false
     env:
       build_dir: "build"
       config: "Release"
-      CC: gcc
-      CXX: g++
-      APPIMAGE_EXTRACT_AND_RUN: 1# https://github.com/AppImage/AppImageKit/wiki/FUSE#docker
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libglu1-mesa-dev xorg-dev libdbus-1-dev libwayland-dev wayland-protocols libxkbcommon-dev libffi-dev nasm ninja-build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            libc++-dev \
+            libc++abi-dev \
+            libdbus-1-dev \
+            libffi-dev \
+            libglu1-mesa-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            nasm \
+            ninja-build \
+            wayland-protocols \
+            xorg-dev
       - uses: actions/checkout@v1
         with:
           submodules: recursive
@@ -39,10 +69,11 @@ jobs:
         working-directory: ${{ env.build_dir }}
         run: ./tev --version
       - name: Package
+        if: matrix.upload
         working-directory: ${{ env.build_dir }}
         run: cmake --build . --config ${{ env.config }} --target package --verbose
       - name: Upload executable
-        if: github.event_name != 'pull_request'
+        if: matrix.upload && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: Linux executable (${{ matrix.os }})
