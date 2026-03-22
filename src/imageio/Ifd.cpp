@@ -19,7 +19,6 @@
 #include <tev/Common.h>
 #include <tev/imageio/Ifd.h>
 
-#include <format>
 #include <optional>
 
 using namespace std;
@@ -63,7 +62,7 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
     ofs += 2;
 
     if (ofs + tcount * 12 + 4 > data.size()) {
-        throw invalid_argument{std::format("IFD: too short for {} tags.", tcount)};
+        throw invalid_argument{fmt::format("IFD: too short for {} tags.", tcount)};
     }
 
     tlog::debug("Decoding IFD:");
@@ -93,7 +92,7 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
         entry.data.insert(entry.data.end(), d.begin(), d.end());
 
         if (entryOffset + entry.size() > data.size()) {
-            throw invalid_argument{std::format("IFD: offset overflow {}+{} vs. {}", entryOffset, entry.size(), data.size())};
+            throw invalid_argument{fmt::format("IFD: offset overflow {}+{} vs. {}", entryOffset, entry.size(), data.size())};
         }
 
         ofs += 12;

@@ -547,7 +547,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     unordered_map<string_view, size_t> channelNameCounter;
     for (auto& c : channels) {
         if (c.size() != size()) {
-            throw ImageLoadError{format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())};
+            throw ImageLoadError{fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())};
         }
 
         // Ensure the top-level layer of each channel is the image's part name
@@ -559,7 +559,7 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
         // E.g.: foo.bar.R -> foo.bar.1.R, R -> 1.R
         const size_t count = channelNameCounter[c.name()]++;
         if (count > 0) {
-            c.setName(Channel::join(format("{}{}", Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
+            c.setName(Channel::join(fmt::format("{}{}", Channel::head(c.name()), to_string(count)), Channel::tail(c.name())));
             tlog::debug("Renamed duplicate channel to '{}'", c.name());
         }
     }
@@ -630,7 +630,7 @@ atomic<int> Image::sId(0);
 
 Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector, bool groupChannels) :
     mPath{path}, mFileLastModified{fileLastModified}, mChannelSelector{channelSelector}, mData{std::move(data)}, mId{Image::drawId()} {
-    mName = channelSelector.empty() ? tev::toDisplayString(path) : format("{}:{}", tev::toDisplayString(path), channelSelector);
+    mName = channelSelector.empty() ? tev::toDisplayString(path) : fmt::format("{}:{}", tev::toDisplayString(path), channelSelector);
 
     if (groupChannels) {
         for (const auto& l : mData.layers) {
@@ -802,7 +802,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         return nullptr;
     }
 
-    const string lookup = format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
+    const string lookup = fmt::format("{}-{}-{}", join(channelNames, ","), tev::toString(minFilter), tev::toString(magFilter));
     if (const auto it = mTextures.find(lookup); it != end(mTextures)) {
         auto& texture = it->second;
         if (texture.mipmapDirty && minFilter == EInterpolationMode::Trilinear) {
@@ -864,7 +864,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     // Important: num channels can be *larger* than the number of channels in the image here!
     // This is because some graphics APIs, like metal, only have power-of-two channel counts: 1, 2, 4
     if (numTextureChannels < channelNames.size()) {
-        throw runtime_error{format(
+        throw runtime_error{fmt::format(
             "Image has {} channels, but texture requires at least {} channels. (Image: {}, Texture: {})",
             channelNames.size(),
             numTextureChannels,
@@ -991,12 +991,12 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
         const string channelsString = join(channelTails, ",");
         const string name = layer.empty() ?
             channelsString :
-            (channelTails.size() == 1 ? format("{}{}", layer, channelsString) : format("{}({})", layer, channelsString));
+            (channelTails.size() == 1 ? fmt::format("{}{}", layer, channelsString) : fmt::format("{}({})", layer, channelsString));
 
         return ChannelGroup{name, std::move(channels)};
     };
 
-    string alphaChannelName = format("{}A", layerName);
+    string alphaChannelName = fmt::format("{}A", layerName);
 
     vector<string> allChannels = mData.channelsInLayer(layerName);
 
@@ -1011,7 +1011,7 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     for (const auto& group : groups) {
         vector<string> groupChannels;
         for (string_view channel : group) {
-            string name = format("{}{}", layerName, channel);
+            string name = fmt::format("{}{}", layerName, channel);
             auto it = find(begin(allChannels), end(allChannels), name);
             if (it != end(allChannels)) {
                 groupChannels.emplace_back(name);
@@ -1312,7 +1312,7 @@ Task<void> Image::save(
 
     ofstream f{path, ios_base::binary};
     if (!f) {
-        throw ImageSaveError{format("Could not open file {}", path)};
+        throw ImageSaveError{fmt::format("Could not open file {}", path)};
     }
 
     for (const auto& saver : ImageSaver::getSavers()) {
@@ -1344,7 +1344,7 @@ Task<void> Image::save(
         co_return;
     }
 
-    throw ImageSaveError{format("No save routine for image type {} found.", path.extension())};
+    throw ImageSaveError{fmt::format("No save routine for image type {} found.", path.extension())};
 }
 
 template <typename T> time_t to_time_t(T timePoint) {
@@ -1455,7 +1455,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         const auto start = chrono::system_clock::now();
 
         if (!iStream) {
-            throw ImageLoadError{format("Image {} could not be opened.", path)};
+            throw ImageLoadError{fmt::format("Image {} could not be opened.", path)};
         }
 
         fs::file_time_type fileLastModified = fs::file_time_type::clock::now();
@@ -1508,7 +1508,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
                 if (channelSelector.empty()) {
                     localChannelSelector = i.partName;
                 } else if (find(begin(selectorParts), end(selectorParts), i.partName) == end(selectorParts)) {
-                    localChannelSelector = format("{},{}", i.partName, channelSelector);
+                    localChannelSelector = fmt::format("{},{}", i.partName, channelSelector);
                 } else {
                     localChannelSelector = string{channelSelector};
                 }
@@ -1518,7 +1518,7 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         }
 
         if (images.empty()) {
-            throw ImageLoadError{format("No parts/channels match channel selector :{}", channelSelector)};
+            throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
         }
 
         const auto end = chrono::system_clock::now();

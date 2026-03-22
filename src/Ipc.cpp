@@ -136,7 +136,7 @@ void IpcPacket::setUpdateImage(
     }
 
     if (stridedImageData.size() != stridedImageDataSize) {
-        throw runtime_error{format(
+        throw runtime_error{fmt::format(
             "UpdateImage IPC packet's data size does not match specified dimensions, offset, and stride. (Expected: {})", stridedImageDataSize
         )};
     }
@@ -360,11 +360,11 @@ static void makeSocketNonBlocking(Ipc::socket_t socketFd) {
     u_long mode = 1;
     int ioctlsocketResult = ioctlsocket(socketFd, FIONBIO, &mode);
     if (ioctlsocketResult != NO_ERROR) {
-        throw runtime_error{format("ioctlsocket() to make socket non-blocking failed: {}", errorString(ioctlsocketResult))};
+        throw runtime_error{fmt::format("ioctlsocket() to make socket non-blocking failed: {}", errorString(ioctlsocketResult))};
     }
 #else
     if (fcntl(socketFd, F_SETFL, fcntl(socketFd, F_GETFL, 0) | O_NONBLOCK) == SOCKET_ERROR) {
-        throw runtime_error{format("fcntl() to make socket non-blocking failed: {}", errorString(lastSocketError()))};
+        throw runtime_error{fmt::format("fcntl() to make socket non-blocking failed: {}", errorString(lastSocketError()))};
     }
 #endif
 }
@@ -400,17 +400,17 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
         tlog::warning("Runtime directory {} does not exist and could not be created: {}", runtimeDirectory(), e.what());
     }
 
-    mLockName = format(".tev.{}.lock", hostname);
+    mLockName = fmt::format(".tev.{}.lock", hostname);
 
     const auto parts = split(hostname, ":");
     if (parts.size() == 1 || (parts.size() == 2 && parts.back() == "unix")) {
-        mHostInfo = UnixHost{.socketPath = runtimeDirectory() / format(".tev.{}.sock", parts.front())};
+        mHostInfo = UnixHost{.socketPath = runtimeDirectory() / fmt::format(".tev.{}.sock", parts.front())};
         tlog::debug("Initializing IPC on unix socket {}", this->hostname());
     } else if (parts.size() == 2) {
         mHostInfo = IpHost{.ip = string{parts.front()}, .port = string{parts.back()}};
         tlog::debug("Initializing IPC on IP host {}", this->hostname());
     } else {
-        throw runtime_error{format("IPC hostname must not include more than one ':' symbol but is {}.", hostname)};
+        throw runtime_error{fmt::format("IPC hostname must not include more than one ':' symbol but is {}.", hostname)};
     }
 
     try {
@@ -420,7 +420,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
         WSADATA wsaData;
         int wsaStartupResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (wsaStartupResult != NO_ERROR) {
-            throw runtime_error{format("Could not initialize WSA: {}", errorString(wsaStartupResult))};
+            throw runtime_error{fmt::format("Could not initialize WSA: {}", errorString(wsaStartupResult))};
         }
 #else
         // We don't care about getting a SIGPIPE if the display server goes away...
@@ -444,7 +444,7 @@ Ipc::Ipc(string_view hostname) : mSocketFd{INVALID_SOCKET} {
 
                     const int err = getaddrinfo(ipHostInfo.ip.c_str(), ipHostInfo.port.c_str(), &addrinfo, &heapaddrinfo);
                     if (err != 0) {
-                        throw runtime_error{format("getaddrinfo() failed: {}", gai_strerror(err))};
+                        throw runtime_error{fmt::format("getaddrinfo() failed: {}", gai_strerror(err))};
                     }
 
                     addrinfo = *heapaddrinfo;
@@ -593,7 +593,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
     mInstanceMutex = CreateMutex(NULL, TRUE, mLockName.c_str());
 
     if (!mInstanceMutex) {
-        throw runtime_error{format("Could not obtain global mutex: {}", errorString(lastError()))};
+        throw runtime_error{fmt::format("Could not obtain global mutex: {}", errorString(lastError()))};
     }
 
     mIsPrimaryInstance = GetLastError() != ERROR_ALREADY_EXISTS;
@@ -607,7 +607,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
 
     mLockFileDescriptor = open(mLockFile.string().c_str(), O_RDWR | O_CREAT, 0666);
     if (mLockFileDescriptor == -1) {
-        throw runtime_error{format("Could not create lock file: {}", errorString(lastError()))};
+        throw runtime_error{fmt::format("Could not create lock file: {}", errorString(lastError()))};
     }
 
     tlog::debug("Lock file {} created or exists", mLockFile);
@@ -635,7 +635,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
     // Set up primary instance listening socket
     mSocketFd = socket(holds_alternative<IpHost>(mHostInfo) ? AF_INET : AF_UNIX, SOCK_STREAM, 0);
     if (mSocketFd == INVALID_SOCKET) {
-        throw runtime_error{format("socket() call failed: {}", errorString(lastSocketError()))};
+        throw runtime_error{fmt::format("socket() call failed: {}", errorString(lastSocketError()))};
     }
 
     makeSocketNonBlocking(mSocketFd);
@@ -644,7 +644,7 @@ bool Ipc::attemptToBecomePrimaryInstance() {
         // Avoid address in use error that occurs if we quit with a client connected.
         int t = 1;
         if (setsockopt(mSocketFd, SOL_SOCKET, SO_REUSEADDR, (const char*)&t, sizeof(int)) == SOCKET_ERROR) {
-            throw runtime_error{format("setsockopt() call failed: {}", errorString(lastSocketError()))};
+            throw runtime_error{fmt::format("setsockopt() call failed: {}", errorString(lastSocketError()))};
         }
     }
 
@@ -677,11 +677,11 @@ bool Ipc::attemptToBecomePrimaryInstance() {
     );
 
     if (::bind(mSocketFd, (const struct sockaddr*)&addr, addrLen) == SOCKET_ERROR) {
-        throw runtime_error{format("bind() call failed: {}", errorString(lastSocketError()))};
+        throw runtime_error{fmt::format("bind() call failed: {}", errorString(lastSocketError()))};
     }
 
     if (listen(mSocketFd, 5) == SOCKET_ERROR) {
-        throw runtime_error{format("listen() call failed: {}", errorString(lastSocketError()))};
+        throw runtime_error{fmt::format("listen() call failed: {}", errorString(lastSocketError()))};
     }
 
     tlog::success("Initialized IPC, listening on {}", this->hostname());
@@ -695,7 +695,7 @@ void Ipc::sendToPrimaryInstance(const IpcPacket& message) {
 
     const int bytesSent = (int)send(mSocketFd, message.data(), (int)message.size(), 0 /* flags */);
     if (bytesSent != int(message.size())) {
-        throw runtime_error{format("send() failed: {}", errorString(lastSocketError()))};
+        throw runtime_error{fmt::format("send() failed: {}", errorString(lastSocketError()))};
     }
 
     mNTotalBytesSent += message.size();
@@ -732,9 +732,9 @@ void Ipc::receiveFromSecondaryInstance(function<void(const IpcPacket&)> callback
                 [&](const IpHost&) {
                     const uint32_t ip = ntohl(client.in.sin_addr.s_addr);
                     const uint16_t port = ntohs(client.in.sin_port);
-                    name = format("{}.{}.{}.{}:{}", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
+                    name = fmt::format("{}.{}.{}.{}:{}", ip >> 24, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, port);
                 },
-                [&](const UnixHost& unixHostInfo) { name = format("{}", unixHostInfo.socketPath); },
+                [&](const UnixHost& unixHostInfo) { name = fmt::format("{}", unixHostInfo.socketPath); },
             },
             mHostInfo
         );
@@ -759,8 +759,8 @@ string Ipc::hostname() const {
     string result = "";
     visit(
         visitor{
-            [&](const IpHost& arg) { result = format("{}:{}", arg.ip, arg.port); },
-            [&](const UnixHost& arg) { result = format("{}", arg.socketPath); },
+            [&](const IpHost& arg) { result = fmt::format("{}:{}", arg.ip, arg.port); },
+            [&](const UnixHost& arg) { result = fmt::format("{}", arg.socketPath); },
         },
         mHostInfo
     );

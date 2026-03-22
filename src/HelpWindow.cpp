@@ -181,12 +181,12 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 
     if (auto ipc = weakIpc.lock(); ipc) {
         if (ipc->isPrimaryInstance()) {
-            addRow(network, format("Listening to {}", ipc->hostname()), "Status");
+            addRow(network, fmt::format("Listening to {}", ipc->hostname()), "Status");
             addRow(network, to_string(ipc->nActiveConnections()), "Active connections");
         } else if (ipc->isConnectedToPrimaryInstance()) {
-            addRow(network, format("Connected to {}", ipc->hostname()), "Status");
+            addRow(network, fmt::format("Connected to {}", ipc->hostname()), "Status");
         } else {
-            addRow(network, format("Failed to connect to {}", ipc->hostname()), "Status");
+            addRow(network, fmt::format("Failed to connect to {}", ipc->hostname()), "Status");
         }
 
         addRow(network, to_string(ipc->nTotalBytesSent()), "Bytes sent");

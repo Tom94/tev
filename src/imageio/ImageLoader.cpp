@@ -44,8 +44,6 @@
 
 #include <half.h>
 
-#include <format>
-
 using namespace nanogui;
 using namespace std;
 
@@ -149,7 +147,7 @@ Task<vector<Channel>> ImageLoader::makeRgbaInterleavedChannels(
 
     const auto numColorChannels = numChannels - (hasAlpha ? 1 : 0);
     if (numColorChannels <= 0 || numColorChannels > 3) {
-        throw ImageLoadError{format("Image has invalid number of color channels: {}", numColorChannels)};
+        throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
     const size_t numPixels = posProd(size);

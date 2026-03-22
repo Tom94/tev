@@ -163,7 +163,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             resultData.attributes = attributes;
 
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
-            resultData.partName = isAnimation ? format("frames.{}", frameIdx++) : "";
+            resultData.partName = isAnimation ? fmt::format("frames.{}", frameIdx++) : "";
             resultData.channels = co_await makeRgbaInterleavedChannels(
                 numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );

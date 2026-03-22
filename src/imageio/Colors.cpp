@@ -486,7 +486,7 @@ EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries) {
         case EWpPrimaries::CIE1931XYZ: return ituth273::EColorPrimaries::SMPTE428;
         case EWpPrimaries::DCIP3: return ituth273::EColorPrimaries::SMPTE431;
         case EWpPrimaries::DisplayP3: return ituth273::EColorPrimaries::SMPTE432;
-        default: throw invalid_argument{format("Unknown wp color primaries: {}", toString(wpPrimaries))};
+        default: throw invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
     }
 }
 
@@ -534,7 +534,7 @@ ETransfer fromWpTransfer(int wpTransfer) {
         case 13: return ETransfer::HLG;
     }
 
-    throw invalid_argument{format("Unknown transfer characteristics from color manager: {}", wpTransfer)};
+    throw invalid_argument{fmt::format("Unknown transfer characteristics from color manager: {}", wpTransfer)};
 }
 
 } // namespace ituth273
@@ -909,7 +909,7 @@ Task<void> toLinearSrgbPremul(
         case 2: typeOut = TYPE_GRAYA_FLT; break;
         case 3: typeOut = TYPE_RGB_FLT; break;
         case 4: typeOut = TYPE_RGBA_FLT; break;
-        default: throw runtime_error{format("Invalid number of output channels {}", rgbaDst.nChannels())};
+        default: throw runtime_error{fmt::format("Invalid number of output channels {}", rgbaDst.nChannels())};
     }
 
     const size_t numPixels = posProd(size);

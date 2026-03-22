@@ -403,7 +403,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     );
 
     for (size_t c = 0; c < numExtraChannels; ++c) {
-        resultData.channels.emplace_back(format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
+        resultData.channels.emplace_back(fmt::format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
     }
 
     // If there is an alpha channel, it's usually straight. TODO: read cdef box if present to be sure.

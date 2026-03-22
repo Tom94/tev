@@ -171,7 +171,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                 if (size != Vector2i{entry.width, entry.height}) {
                     if (size != Vector2i{entry.width, entry.height * 2}) {
                         throw ImageLoadError{
-                            format("BMP image size {} does not match entry size + AND mask {}x{}", size, entry.width, entry.height)
+                            fmt::format("BMP image size {} does not match entry size + AND mask {}x{}", size, entry.width, entry.height)
                         };
                     }
 
@@ -186,7 +186,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     iStream.seekg(maskDataPos, ios_base::beg);
 
                     if (maskDataEnd - maskDataPos < andMaskSize) {
-                        throw ImageLoadError{format(
+                        throw ImageLoadError{fmt::format(
                             "BMP file is too small to contain expected AND mask: {} bytes available, {} bytes expected",
                             maskDataEnd - maskDataPos,
                             andMaskSize
@@ -196,7 +196,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     HeapArray<uint8_t> andMaskData(andMaskSize);
                     iStream.read((char*)andMaskData.data(), andMaskData.size());
                     if (!iStream) {
-                        throw ImageLoadError{format("Failed to read AND mask of size {}", andMaskData.size())};
+                        throw ImageLoadError{fmt::format("Failed to read AND mask of size {}", andMaskData.size())};
                     }
 
                     vector<ChannelView<float>> alphaChannels;
@@ -245,7 +245,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
         }
 
         for (auto& image : imageData) {
-            image.partName = Channel::joinIfNonempty(format("images.{}", i), image.partName);
+            image.partName = Channel::joinIfNonempty(fmt::format("images.{}", i), image.partName);
         }
 
         result.insert(result.end(), make_move_iterator(imageData.begin()), make_move_iterator(imageData.end()));

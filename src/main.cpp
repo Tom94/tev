@@ -150,7 +150,7 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
         }
 
         default: {
-            throw runtime_error{format("Invalid IPC packet type {}", (int)packet.type())};
+            throw runtime_error{fmt::format("Invalid IPC packet type {}", (int)packet.type())};
         }
     }
 }
@@ -202,11 +202,11 @@ static void convertTo(
             } else if (fmt == "ext" && parts.size() == 1) {
                 return toString(image->path().extension());
             } else if (fmt == "idx" && parts.size() == 1) {
-                return format("{}", idx);
+                return fmt::format("{}", idx);
             } else if (fmt == "idx" && parts.size() == 2) {
-                return vformat(format("{{:{}}}", parts[1]), make_format_args(idx));
+                return fmt::format(fmt::runtime(fmt::format("{{:{}}}", parts[1])), idx);
             } else {
-                throw runtime_error{format("Invalid placeholder '{{{}}}'", placeholder)};
+                throw runtime_error{fmt::format("Invalid placeholder '{{{}}}'", placeholder)};
             }
         }));
 
@@ -545,10 +545,10 @@ static int mainFunc(span<const string> arguments) {
         cout << parser;
         return 0;
     } catch (const ParseError& e) {
-        cerr << format("{}\nUsage: {} --help\n", e.what(), arguments.front());
+        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -1;
     } catch (const ValidationError& e) {
-        cerr << format("{}\nUsage: {} --help\n", e.what(), arguments.front());
+        cerr << fmt::format("{}\nUsage: {} --help\n", e.what(), arguments.front());
         return -2;
     }
 

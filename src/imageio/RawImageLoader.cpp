@@ -218,15 +218,15 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
 
     auto librawStream = LibRawDataStream{iStream, path};
     if (const int error = iProcessor.open_datastream(&librawStream); error != LIBRAW_SUCCESS) {
-        throw FormatNotSupported{format("Could not open raw image: {}", libraw_strerror(error))};
+        throw FormatNotSupported{fmt::format("Could not open raw image: {}", libraw_strerror(error))};
     }
 
     if (const int error = iProcessor.unpack(); error != LIBRAW_SUCCESS) {
-        throw ImageLoadError{format("Could not unpack raw image: {}", libraw_strerror(error))};
+        throw ImageLoadError{fmt::format("Could not unpack raw image: {}", libraw_strerror(error))};
     }
 
     if (const int error = iProcessor.dcraw_process(); error != LIBRAW_SUCCESS) {
-        throw ImageLoadError{format("Could not process raw image: {}", libraw_strerror(error))};
+        throw ImageLoadError{fmt::format("Could not process raw image: {}", libraw_strerror(error))};
     }
 
     const Vector2i size = {iProcessor.imgdata.sizes.iwidth, iProcessor.imgdata.sizes.iheight};
