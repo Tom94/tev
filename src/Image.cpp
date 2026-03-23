@@ -35,6 +35,7 @@
 #include <map>
 #include <numeric>
 #include <ranges>
+#include <set>
 #include <unordered_set>
 #include <vector>
 
@@ -547,7 +548,9 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     unordered_map<string_view, size_t> channelNameCounter;
     for (auto& c : channels) {
         if (c.size() != size()) {
-            throw ImageLoadError{fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())};
+            throw ImageLoadError{
+                fmt::format("All channels must have the same size as the data window. ({}: {} != {})", c.name(), c.size(), size())
+            };
         }
 
         // Ensure the top-level layer of each channel is the image's part name
