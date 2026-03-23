@@ -37,6 +37,7 @@
 #include <optional>
 #include <span>
 #include <type_traits>
+#include <unordered_set>
 #include <vector>
 
 using namespace nanogui;
@@ -2441,7 +2442,7 @@ Task<ImageData> readTiffImage(
         );
     }
 
-    const set<uint16_t> labPhotometrics = {
+    const unordered_set<uint16_t> labPhotometrics = {
         PHOTOMETRIC_CIELAB,
         PHOTOMETRIC_ICCLAB,
         PHOTOMETRIC_ITULAB,
