@@ -126,14 +126,8 @@ bool BackgroundImagesLoader::publishSortedLoads() {
     const lock_guard lock{mPendingLoadedImagesMutex};
     bool pushed = false;
     while (!mPendingLoadedImages.empty() && mPendingLoadedImages.top().loadId == mLoadCounter) {
-        // null image pointers indicate failed loads. These shouldn't be pushed.
-        if (!mPendingLoadedImages.top().images.empty()) {
-            mLoadedImages.push(mPendingLoadedImages.top());
-        }
-
-        mPendingLoadedImages.pop();
+        mLoadedImages.push(mPendingLoadedImages.pop());
         pushed = true;
-
         ++mLoadCounter;
     }
 

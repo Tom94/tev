@@ -39,9 +39,15 @@ public:
         return mRawQueue.size();
     }
 
-    void push(T newElem) {
+    void push(const T& newElem) {
         std::lock_guard lock{mMutex};
         mRawQueue.push_back(newElem);
+        mDataCondition.notify_one();
+    }
+
+    void push(T&& newElem) {
+        std::lock_guard lock{mMutex};
+        mRawQueue.push_back(std::move(newElem));
         mDataCondition.notify_one();
     }
 
