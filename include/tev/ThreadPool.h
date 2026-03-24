@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/Common.h>
+#include <tev/PriorityQueue.h>
 #include <tev/Task.h>
 
 #include <concurrentqueue/concurrentqueue.h> // Needs to be included before lightweightsemaphore.h
@@ -28,7 +29,6 @@
 #include <concepts>
 #include <functional>
 #include <future>
-#include <queue>
 #include <thread>
 #include <vector>
 
@@ -183,7 +183,7 @@ private:
         };
     };
 
-    std::priority_queue<QueuedTask, std::vector<QueuedTask>, QueuedTask::Comparator> mTaskQueue;
+    PriorityQueue<QueuedTask, QueuedTask::Comparator> mTaskQueue;
     std::recursive_mutex mTaskQueueMutex;
 
     // Significantly faster than C++20's std::semaphore implementation on some platforms

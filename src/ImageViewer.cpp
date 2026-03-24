@@ -1304,6 +1304,7 @@ void ImageViewer::draw_contents() {
             } else {
                 addImage(image, shallSelect);
             }
+
             first = false;
         }
     }

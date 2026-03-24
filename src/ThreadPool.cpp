@@ -64,8 +64,7 @@ void ThreadPool::startThreads(size_t num) {
                     const scoped_lock taskQueueLock{mTaskQueueMutex};
                     TEV_ASSERT(!mTaskQueue.empty(), "Task queue was empty after semaphore wait.");
 
-                    task = std::move(mTaskQueue.top());
-                    mTaskQueue.pop();
+                    task = mTaskQueue.pop();
                 }
 
                 task.fun();

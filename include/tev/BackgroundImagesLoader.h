@@ -20,6 +20,7 @@
 
 #include <tev/Common.h>
 #include <tev/Image.h>
+#include <tev/PriorityQueue.h>
 #include <tev/SharedQueue.h>
 #include <tev/imageio/ImageLoader.h>
 
@@ -76,7 +77,7 @@ public:
 private:
     SharedQueue<ImageAddition> mLoadedImages;
 
-    std::priority_queue<ImageAddition, std::vector<ImageAddition>, ImageAddition::Comparator> mPendingLoadedImages;
+    PriorityQueue<ImageAddition, ImageAddition::Comparator> mPendingLoadedImages;
     mutable std::mutex mPendingLoadedImagesMutex;
 
     std::atomic<int> mLoadCounter{0};
