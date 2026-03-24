@@ -486,7 +486,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
     mShader->set_buffer("indices", VariableType::UInt32, {3 * 2}, indices);
     mShader->set_buffer("position", VariableType::Float32, {4, 2}, positions);
 
-    const auto& fcd = colormap::turbo();
+    // Wrap in vector to ensure the memory is not in the app's const data segments. Hardened runtimes w/ code signing
+    // would otherwise get tripped up if the texture upload happens via memory mapping, e.g. in Apple's unified archs.
+    const auto fcd = vector(colormap::turbo().begin(), colormap::turbo().end());
     if (fcd.size() % 4 != 0) {
         throw runtime_error{fmt::format("Invalid false color data size. Expected multiple of 4, got {}.", fcd.size())};
     }
