@@ -548,14 +548,16 @@ string_view toString(EInterpolationMode mode) {
 ETonemap toTonemap(string_view name) {
     // Perform matching on uppercase strings
     const auto upperName = toUpper(name);
-    if (upperName == "GAMMA") {
+    if (upperName == "NONE") {
+        return ETonemap::None;
+    } else if (upperName == "GAMMA") {
         return ETonemap::Gamma;
     } else if (upperName == "FALSECOLOR" || upperName == "FC") {
         return ETonemap::FalseColor;
     } else if (upperName == "POSITIVENEGATIVE" || upperName == "POSNEG" || upperName == "PN" || upperName == "+-") {
         return ETonemap::PositiveNegative;
     } else {
-        return ETonemap::Gamma;
+        return ETonemap::None;
     }
 }
 

@@ -668,6 +668,7 @@ EInterpolationMode toInterpolationMode(std::string_view name);
 std::string_view toString(EInterpolationMode mode);
 
 enum class ETonemap : int {
+    None = 0,
     Gamma = 0,
     FalseColor,
     PositiveNegative,

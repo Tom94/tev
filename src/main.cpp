@@ -464,7 +464,7 @@ static int mainFunc(span<const string> arguments) {
         parser,
         "TONEMAP",
         "The tonemap to use. Available options are:\n"
-        "Gamma: No tone mapping + gamma slider\n"
+        "None: No tone mapping\n"
         "FC: False Color\n"
         "PN: Positive=Green, Negative=Red\n"
         "Default is Gamma.",
@@ -721,7 +721,7 @@ static int mainFunc(span<const string> arguments) {
 
         const EMetric metric = metricFlag ? toMetric(get(metricFlag)) : EMetric::Error;
         const nanogui::Color bg = backgroundColorFlag ? parseColor(get(backgroundColorFlag)) : nanogui::Color{0, 0, 0, 0};
-        const ETonemap tonemap = tonemapFlag ? toTonemap(get(tonemapFlag)) : ETonemap::Gamma;
+        const ETonemap tonemap = tonemapFlag ? toTonemap(get(tonemapFlag)) : ETonemap::None;
         const float gamma = gammaFlag ? get(gammaFlag) : 2.2f;
         const float exposure = exposureFlag ? get(exposureFlag) : 0.0f;
         const float offset = offsetFlag ? get(offsetFlag) : 0.0f;

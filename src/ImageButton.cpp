@@ -152,7 +152,7 @@ void ImageButton::draw(NVGcontext* ctx) {
 
         nvgFontSize(ctx, m_font_size);
         while (mCutoff < mCaption.size()) {
-            float bounds = nvgTextBounds(ctx, 0, 0, mCaption.data() + mCutoff, mCaption.data() + mCaption.size(), nullptr);
+            const float bounds = nvgTextBounds(ctx, 0, 0, mCaption.data() + mCutoff, mCaption.data() + mCaption.size(), nullptr);
             if (bounds <= m_size.x() - 25 - idSize) {
                 break;
             }

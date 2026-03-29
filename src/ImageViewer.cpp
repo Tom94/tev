@@ -185,6 +185,11 @@ ImageViewer::ImageViewer(
             mOffsetSlider = new Slider{panel};
             mOffsetSlider->set_range({-1.0f, 1.0f});
             mOffsetSlider->set_callback([this](float value) { setOffset(value); });
+            mOffsetSlider->set_tooltip(
+                "Offset is added to the image after exposure has been applied.\n"
+                "Keyboard shortcuts: O and Shift+O"
+            );
+
             setOffset(0);
 
             mGammaLabel = new Label{panel, "", "sans-bold", 15};
@@ -192,14 +197,14 @@ ImageViewer::ImageViewer(
             mGammaSlider = new Slider{panel};
             mGammaSlider->set_range({0.01f, 5.0f});
             mGammaSlider->set_callback([this](float value) { setGamma(value); });
-            setGamma(2.2f);
-
-            panel->set_tooltip(
-                "The offset is added to the image after exposure has been applied.\n"
-                "Keyboard shortcuts: O and Shift+O\n\n"
-                "Gamma is the exponent used when gamma-tonemapping.\n"
+            mGammaSlider->set_tooltip(
+                "Gamma generalized to HDR:\n"
+                "A value of 2.2 means that colors will be passed to the operating system faithfully, even when on an HDR monitor. "
+                "Deviations from a value of 2.2 describe relative gamma adjustments of linear colors x by x^(gamma/2.2).\n\n"
                 "Keyboard shortcuts: G and Shift+G\n\n"
             );
+
+            setGamma(2.2f);
         }
     }
 
@@ -459,7 +464,7 @@ ImageViewer::ImageViewer(
             return button;
         };
 
-        makeTonemapButton("Gamma", [this]() { setTonemap(ETonemap::Gamma); });
+        makeTonemapButton("None", [this]() { setTonemap(ETonemap::Gamma); });
         makeTonemapButton("False color", [this]() { setTonemap(ETonemap::FalseColor); });
         makeTonemapButton("+/-", [this]() { setTonemap(ETonemap::PositiveNegative); });
 
@@ -468,10 +473,8 @@ ImageViewer::ImageViewer(
         mTonemapButtonContainer->set_tooltip(
             "Tonemap selection:\n\n"
 
-            "Gamma\n"
-            "A gamma value of 2.2 means that colors will be passed to the operating system faithfully, even if the system is configured "
-            "for non-gamma workflows such as the PQ HDR transfer function. In such cases, deviations from a value of 2.2 describe "
-            "relative gamma adjustments of linear colors x of the form x^(gamma/2.2).\n\n"
+            "None\n"
+            "No tone mapping\n\n"
 
             "False color\n"
             "False-color visualization\n\n"
