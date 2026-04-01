@@ -104,16 +104,19 @@ public:
     void selectReference(const std::shared_ptr<Image>& image);
 
     float exposure() const { return mExposureSlider->value(); }
-
     void setExposure(float value);
 
     float offset() const { return mOffsetSlider->value(); }
-
     void setOffset(float value);
 
     float gamma() const { return mGammaSlider->value(); }
-
     void setGamma(float value);
+
+    float maxBrightness() const { return mBrightnessLimitSlider->value(); }
+    void setBrightnessLimit(float max);
+
+    float tonemapSmoothness() const { return mBrightnessLimitSoftnessSlider->value(); }
+    void setBrightnessLimitSoftness(float value);
 
     void normalizeExposureAndOffset();
 
@@ -356,6 +359,11 @@ private:
 
     nanogui::PopupButton* mHdrPopupButton = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
+
+    nanogui::Label* mBrightnessLimitLabel = nullptr;
+    nanogui::Slider* mBrightnessLimitSlider = nullptr;
+    nanogui::Label* mBrightnessLimitSoftnessLabel = nullptr;
+    nanogui::Slider* mBrightnessLimitSoftnessSlider = nullptr;
 
     nanogui::FloatBox<float>* mDisplayWhiteLevelBox = nullptr;
     nanogui::ComboBox* mDisplayWhiteLevelSettingComboBox = nullptr;

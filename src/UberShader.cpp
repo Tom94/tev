@@ -120,6 +120,8 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             uniform float offset;
             uniform float gamma;
             uniform float colorMultiplier;
+            uniform float brightnessLimit;
+            uniform float rolloffStops;
             uniform bool clipToLdr;
             uniform int tonemap;
             uniform int metric;
@@ -227,6 +229,23 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return color;
             }
 
+            vec3 limitBrightness(vec3 x, float logHi, float shoulderStops) {
+                float shoulderStart = logHi - shoulderStops;
+                vec3 logx = log2(max(x, vec3(1e-6)));
+                vec3 t = (logx - shoulderStart) / shoulderStops;
+                vec3 s = exp(-t);
+                vec3 compressed = exp2(logHi - shoulderStops * s);
+                return mixb(compressed, x, lessThanEqual(logx, vec3(shoulderStart)));
+            }
+
+            vec3 smoothClamp(vec3 color) {
+                color = limitBrightness(color, brightnessLimit, rolloffStops);
+
+                float minVal = clipToLdr ? 0.0 : -64.0;
+                float maxVal = clipToLdr ? 1.0 : 64.0;
+                return clamp(color, vec3(minVal), vec3(maxVal));
+            }
+
             vec4 computeColor() {
                 vec3 darkGray = vec3(0.5, 0.5, 0.5);
                 vec3 lightGray = vec3(0.55, 0.55, 0.55);
@@ -249,6 +268,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 }
 
                 val += bgColor * (1.0 - val.a);
+                val.rgb = smoothClamp(val.rgb);
                 vec4 result = vec4(
                     applyTonemap(colorMultiplier * applyExposureAndOffset(val.rgb), vec4(checker, 1.0 - val.a)),
                     1.0
@@ -259,7 +279,6 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
             void main() {
                 vec4 color = computeColor();
-                color.rgb = clamp(color.rgb, clipToLdr ? 0.0 : -64.0, clipToLdr ? 1.0 : 64.0);
                 gl_FragColor = dither(color);
             })glsl";
 #elif defined(NANOGUI_USE_METAL)
@@ -397,6 +416,23 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return color;
             }
 
+            float3 limitBrightness(float3 x, float logHi, float shoulderStops) {
+                const float shoulderStart = logHi - shoulderStops;
+                const float3 logx = log2(max(x, 1e-6f));
+                const float3 t = (logx - shoulderStart) / shoulderStops;
+                const float3 s = exp(-t);
+                const float3 compressed = exp2(logHi - shoulderStops * s);
+                return select(compressed, x, logx <= shoulderStart);
+            }
+
+            float3 smoothClamp(float3 color, float brightnessLimit, float rolloffStops, bool clipToLdr) {
+                color = limitBrightness(color, brightnessLimit, rolloffStops);
+
+                const float minVal = clipToLdr ? 0.0f : -64.0f;
+                const float maxVal = clipToLdr ? 1.0f : 64.0f;
+                return clamp(color, float3(minVal), float3(maxVal));
+            }
+
             fragment float4 fragment_main(
                 VertexOut vert [[stage_in]],
                 texture2d<float, access::sample> image,
@@ -414,6 +450,8 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 const constant float& offset,
                 const constant float& gamma,
                 const constant float& colorMultiplier,
+                const constant float& brightnessLimit,
+                const constant float& rolloffStops,
                 const constant bool& clipToLdr,
                 const constant int& tonemap,
                 const constant int& metric,
@@ -443,6 +481,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 }
 
                 val += bgColor * (1.0f - val.a);
+                val.rgb = smoothClamp(val.rgb, brightnessLimit, rolloffStops, clipToLdr);
                 float4 color = float4(
                     applyTonemap(
                         colorMultiplier * applyExposureAndOffset(val.rgb, exposure, offset),
@@ -455,7 +494,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     ),
                     1.0f
                 );
-                color.rgb = clamp(color.rgb, clipToLdr ? 0.0f : -64.0f, clipToLdr ? 1.0f : 64.0f);
+
                 return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
             })";
 #endif
@@ -531,6 +570,8 @@ void UberShader::draw(
     float offset,
     float gamma,
     float colorMultiplier,
+    float brightnessLimit,
+    float rolloffStops,
     bool clipToLdr,
     Color backgroundColor,
     ETonemap tonemap,
@@ -557,7 +598,9 @@ void UberShader::draw(
     }
 
     bindCheckerboardData(pixelSize, checkerSize, backgroundColor);
-    bindImageData(textureImage ? textureImage : mColorMap.get(), transformImage, exposure, offset, gamma, tonemap);
+    bindImageData(
+        textureImage ? textureImage : mColorMap.get(), transformImage, exposure, offset, gamma, brightnessLimit, rolloffStops, tonemap
+    );
     bindReferenceData(textureReference ? textureReference : mColorMap.get(), transformReference, metric);
 
     const Vector4f uChannelMask = {
@@ -598,7 +641,16 @@ void UberShader::bindCheckerboardData(Vector2f pixelSize, Vector2f checkerSize, 
     mShader->set_uniform("bgColor", backgroundColor);
 }
 
-void UberShader::bindImageData(Texture* textureImage, const Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap) {
+void UberShader::bindImageData(
+    Texture* textureImage,
+    const Matrix3f& transformImage,
+    float exposure,
+    float offset,
+    float gamma,
+    float brightnessLimit,
+    float rolloffStops,
+    ETonemap tonemap
+) {
     mShader->set_texture("image", textureImage);
 
     mShader->set_uniform("imageScale", Vector2f{transformImage.m[0][0], transformImage.m[1][1]});
@@ -607,6 +659,8 @@ void UberShader::bindImageData(Texture* textureImage, const Matrix3f& transformI
     mShader->set_uniform("exposure", exposure);
     mShader->set_uniform("offset", offset);
     mShader->set_uniform("gamma", gamma);
+    mShader->set_uniform("brightnessLimit", brightnessLimit);
+    mShader->set_uniform("rolloffStops", rolloffStops);
     mShader->set_uniform("tonemap", static_cast<int>(tonemap));
 
     mShader->set_texture("colormap", mColorMap.get());

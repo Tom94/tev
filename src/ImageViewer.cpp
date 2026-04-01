@@ -250,10 +250,37 @@ ImageViewer::ImageViewer(
             mClipToLdrButton->set_font_size(16);
             mClipToLdrButton->set_change_callback([this](bool value) { mImageCanvas->setClipToLdr(value); });
             mClipToLdrButton->set_tooltip(
-                "Clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
+                "Hard-clips the image to [0,1] as if displayed on a low dynamic range (LDR) screen.\n\n"
                 "Shortcut: U"
             );
             mClipToLdrButton->set_flags(Button::ToggleButton);
+
+            addSpacer(popup, 10);
+
+            mBrightnessLimitLabel = new Label{popup, ""};
+
+            mBrightnessLimitSlider = new Slider{popup};
+            mBrightnessLimitSlider->set_range({0.0f, 8.0f});
+            mBrightnessLimitSlider->set_callback([this](float value) { setBrightnessLimit(value); });
+            mBrightnessLimitSlider->set_tooltip(
+                "Maximum displayed brightness of the image. "
+                "The limit is soft in the sense that the image will gradually approach the limit but not get clipped sharply at it unless the rolloff is set to zero."
+            );
+
+            setBrightnessLimit(8.0f);
+
+            mBrightnessLimitSoftnessLabel = new Label{popup, ""};
+
+            mBrightnessLimitSoftnessSlider = new Slider{popup};
+            mBrightnessLimitSoftnessSlider->set_range({0.0f, 10.0f});
+            mBrightnessLimitSoftnessSlider->set_callback([this](float value) { setBrightnessLimitSoftness(value); });
+            mBrightnessLimitSoftnessSlider->set_tooltip(
+                "How far away from the limit the brightness rolloff begins. A value of 0 means a hard limit, while higher values mean a softer rolloff."
+            );
+
+            setBrightnessLimitSoftness(2.0f);
+
+            addSpacer(popup, 5);
 
             addSpacer(popup, 10);
 
@@ -543,11 +570,13 @@ ImageViewer::ImageViewer(
                     button->set_text_color(state ? Color{0.6f} : activeColor);
                 }
             );
-            button->set_tooltip(fmt::format(
-                "Disable the {} channel.{}",
-                humanReadable,
-                c < 3 ? "\n\nIn terms of rec.709 primaries, regardless of the image's original color space." : ""
-            ));
+            button->set_tooltip(
+                fmt::format(
+                    "Disable the {} channel.{}",
+                    humanReadable,
+                    c < 3 ? "\n\nIn terms of rec.709 primaries, regardless of the image's original color space." : ""
+                )
+            );
             return button;
         };
 
@@ -597,13 +626,15 @@ ImageViewer::ImageViewer(
             mFilter->set_callback([this](string_view filter) { return setFilter(filter); });
 
             mFilter->set_placeholder("Find");
-            mFilter->set_tooltip(fmt::format(
-                "Filters visible images and channel groups according to a supplied string. "
-                "The string must have the format 'image:group'. "
-                "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
-                "Keyboard shortcut: {}+F",
-                HelpWindow::COMMAND
-            ));
+            mFilter->set_tooltip(
+                fmt::format(
+                    "Filters visible images and channel groups according to a supplied string. "
+                    "The string must have the format 'image:group'. "
+                    "Only images whose name contains 'image' and groups whose name contains 'group' will be visible.\n\n"
+                    "Keyboard shortcut: {}+F",
+                    HelpWindow::COMMAND
+                )
+            );
 
             mRegexButton = new Button{panel, "", FA_SEARCH};
             mRegexButton->set_tooltip("Treat filter as regular expression");
@@ -1377,16 +1408,18 @@ void ImageViewer::draw_contents() {
             mHistogram->setMean(statistics->mean);
             mHistogram->setMaximum(statistics->maximum);
             mHistogram->setZero(statistics->histogramZero);
-            mHistogram->set_tooltip(fmt::format(
-                "{}\n\n"
-                "Minimum: {:.3f}\n"
-                "Mean: {:.3f}\n"
-                "Maximum: {:.3f}",
-                histogramTooltipBase,
-                statistics->minimum,
-                statistics->mean,
-                statistics->maximum
-            ));
+            mHistogram->set_tooltip(
+                fmt::format(
+                    "{}\n\n"
+                    "Minimum: {:.3f}\n"
+                    "Mean: {:.3f}\n"
+                    "Maximum: {:.3f}",
+                    histogramTooltipBase,
+                    statistics->minimum,
+                    statistics->mean,
+                    statistics->maximum
+                )
+            );
         }
     } else {
         mHistogram->setNChannels(1);
@@ -1933,7 +1966,7 @@ void ImageViewer::selectReference(const shared_ptr<Image>& image) {
 void ImageViewer::setExposure(float value) {
     value = round(value, 1.0f);
     mExposureSlider->set_value(value);
-    mExposureLabel->set_caption(fmt::format("Exposure: {:+.1f}", value));
+    mExposureLabel->set_caption(fmt::format("Exposure: {:+.1f} stops", value));
 
     mImageCanvas->setExposure(value);
 }
@@ -1952,6 +1985,22 @@ void ImageViewer::setGamma(float value) {
     mGammaLabel->set_caption(fmt::format("Gamma: {:+.2f}", value));
 
     mImageCanvas->setGamma(value);
+}
+
+void ImageViewer::setBrightnessLimit(float max) {
+    max = round(max, 2.0f);
+    mBrightnessLimitSlider->set_value(max);
+    mBrightnessLimitLabel->set_caption(fmt::format("Brightness limit: {:+.2f} stops", max));
+
+    mImageCanvas->setBrightnessLimit(max);
+}
+
+void ImageViewer::setBrightnessLimitSoftness(float value) {
+    value = round(value, 2.0f);
+    mBrightnessLimitSoftnessSlider->set_value(value);
+    mBrightnessLimitSoftnessLabel->set_caption(fmt::format("Rolloff range: {:+.2f} stops", value));
+
+    mImageCanvas->setBrightnessLimitSoftness(value);
 }
 
 void ImageViewer::normalizeExposureAndOffset() {

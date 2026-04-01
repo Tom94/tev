@@ -49,6 +49,8 @@ public:
         float offset,
         float gamma,
         float colorMultiplier,
+        float brightnessLimit,
+        float rolloffStops,
         bool clipToLdr,
         nanogui::Color backgroundColor,
         ETonemap tonemap,
@@ -61,7 +63,14 @@ private:
     void bindCheckerboardData(nanogui::Vector2f pixelSize, nanogui::Vector2f checkerSize, nanogui::Color backgroundColor);
 
     void bindImageData(
-        nanogui::Texture* textureImage, const nanogui::Matrix3f& transformImage, float exposure, float offset, float gamma, ETonemap tonemap
+        nanogui::Texture* textureImage,
+        const nanogui::Matrix3f& transformImage,
+        float exposure,
+        float offset,
+        float gamma,
+        float brightnessLimit,
+        float rolloffStops,
+        ETonemap tonemap
     );
 
     void bindReferenceData(nanogui::Texture* textureReference, const nanogui::Matrix3f& transformReference, EMetric metric);

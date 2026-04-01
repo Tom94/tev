@@ -59,6 +59,8 @@ public:
     void setExposure(float exposure) { mExposure = exposure; }
     void setOffset(float offset) { mOffset = offset; }
     void setGamma(float gamma) { mGamma = gamma; }
+    void setBrightnessLimit(float max) { mBrightnessLimit = max; }
+    void setBrightnessLimitSoftness(float value) { mBrightnessLimitSoftness = value; }
 
     void setImage(std::shared_ptr<Image> image) { mImage = image; }
     void setReference(std::shared_ptr<Image> reference) { mReference = reference; }
@@ -165,6 +167,8 @@ private:
     float mExposure = 0;
     float mOffset = 0;
     float mGamma = 2.2f;
+    float mBrightnessLimit = 8.0f;
+    float mBrightnessLimitSoftness = 1.0f;
 
     std::optional<float> mWhiteLevelOverride = std::nullopt;
     bool mClipToLdr = false;
