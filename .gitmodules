@@ -110,3 +110,6 @@
 	path = dependencies/small_vector
 	url = https://github.com/gharveymn/small_vector
 	shallow = true
+[submodule "dependencies/tinyfits"]
+	path = dependencies/tinyfits
+	url = https://github.com/cek/tinyfits.git

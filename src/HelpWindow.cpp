@@ -264,6 +264,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "qoi", "QOI image format library");
     addLibrary(about, "small_vector", "Vector with small buffer optimization");
     addLibrary(about, "stb_image(_write)", "Single-header library for loading and writing images");
+    addLibrary(about, "tinyfits", "Single-header FITS image format library");
     addLibrary(about, "tinylogger", "Minimal pretty-logging library");
     addLibrary(about, "UTF8-CPP", "Lightweight UTF-8 string manipulation library");
     addLibrary(about, "XMP-Toolkit-SDK", "XMP metadata parsing library");

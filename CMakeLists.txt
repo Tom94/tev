@@ -152,6 +152,7 @@ set(TEV_SOURCES
     include/tev/imageio/Exif.h src/imageio/Exif.cpp
     include/tev/imageio/ExrImageLoader.h src/imageio/ExrImageLoader.cpp
     include/tev/imageio/ExrImageSaver.h src/imageio/ExrImageSaver.cpp
+    include/tev/imageio/FitsImageLoader.h src/imageio/FitsImageLoader.cpp
     include/tev/imageio/GainMap.h src/imageio/GainMap.cpp
     include/tev/imageio/IcoImageLoader.h src/imageio/IcoImageLoader.cpp
     include/tev/imageio/ImageLoader.h src/imageio/ImageLoader.cpp

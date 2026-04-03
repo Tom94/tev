@@ -20,6 +20,7 @@
 #include <tev/imageio/ClipboardImageLoader.h>
 #include <tev/imageio/EmptyImageLoader.h>
 #include <tev/imageio/ExrImageLoader.h>
+#include <tev/imageio/FitsImageLoader.h>
 #include <tev/imageio/IcoImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/Jpeg2000ImageLoader.h>
@@ -65,6 +66,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #ifdef TEV_SUPPORT_JXL
         imageLoaders.emplace_back(new JxlImageLoader());
 #endif
+        imageLoaders.emplace_back(new FitsImageLoader());
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new WebpImageLoader());
         imageLoaders.emplace_back(new Jpeg2000ImageLoader());
@@ -89,6 +91,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
 #endif
         "image/apng",
         "image/bmp",
+        "image/fits",
         "image/gif",
 #ifdef TEV_SUPPORT_HEIC
         "image/heic",

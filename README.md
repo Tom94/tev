@@ -130,6 +130,7 @@ $ cpack --config build/CPackConfig.cmake
 ## File Formats
 
 - __EXR__ (via [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr))
+- __FITS__ (via [tinyfits](https://github.com/cek/tinyfits))
 - __JPEG XL__ (including gain maps; via [libjxl](https://github.com/libjxl/libjxl))
 - __JPEG__ (including gain maps, e.g. HDR pictures from Android; via [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo))
 - __JPEG 2000__ (via [openjpeg](https://github.com/uclouvain/openjpeg))

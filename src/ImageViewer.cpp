@@ -2376,6 +2376,7 @@ void ImageViewer::openImageDialog() {
 #endif
                 {"dng",                     "Digital Negative image"           },
                 {"exr",                     "OpenEXR image"                    },
+                {"fit,fits",                "FITS image"                       },
                 {"gif",                     "Graphics Interchange Format image"},
                 {"hdr",                     "HDR image"                        },
 #ifdef TEV_SUPPORT_HEIC
