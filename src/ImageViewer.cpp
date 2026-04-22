@@ -233,6 +233,7 @@ ImageViewer::ImageViewer(
         mHdrPopupButton = new PopupButton{buttonContainer, "HDR", 0};
         mHdrPopupButton->set_font_size(15);
         mHdrPopupButton->set_chevron_icon(0);
+        mHdrPopupButton->set_tooltip("HDR Settings");
 
         static constexpr auto addSpacer = [](Widget* current, int space) {
             auto row = new Widget{current};
@@ -244,7 +245,9 @@ ImageViewer::ImageViewer(
             popup->set_layout(new BoxLayout{Orientation::Vertical, Alignment::Fill, 10});
 
             new Label{popup, "HDR settings", "sans-bold", 20};
-            addSpacer(popup, 10);
+            addSpacer(popup, 5);
+            mHdrDisplayCapsDesc = new Label{popup, "", "sans-bold"};
+            addSpacer(popup, 15);
 
             mClipToLdrButton = new Button{popup, "Clip to LDR", 0};
             mClipToLdrButton->set_font_size(16);
@@ -1483,6 +1486,7 @@ void ImageViewer::updateColorCapabilities() {
     );
 
     // Update UI elements accordingly
+    mHdrDisplayCapsDesc->set_caption(fmt::format("Display range: {}", supportsHdr ? "HDR" : supportsWideGamut ? "wide gamut SDR" : "SDR"));
     mClipToLdrButton->set_enabled(supportsHdr);
 
     if (supportsAbsoluteBrightness) {

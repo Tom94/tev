@@ -358,6 +358,7 @@ private:
     nanogui::Slider* mBackgroundAlphaSlider = nullptr;
 
     nanogui::PopupButton* mHdrPopupButton = nullptr;
+    nanogui::Label* mHdrDisplayCapsDesc = nullptr;
     nanogui::Button* mClipToLdrButton = nullptr;
 
     nanogui::Label* mBrightnessLimitLabel = nullptr;
