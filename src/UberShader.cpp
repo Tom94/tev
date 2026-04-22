@@ -199,9 +199,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             }
 
             vec4 applyMask(vec4 color, vec4 mask) {
-                color.rgb *= mask.rgb;
-                color.a = mask.a == 1.0 ? color.a : 1.0;
-                return color;
+                return color * mask + vec4(0.0, 0.0, 0.0, 1.0) * (vec4(1.0) - mask);
             }
 
             vec4 sample(sampler2D sampler, vec4 mask, vec2 uv) {
@@ -220,8 +218,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     color = vec4(color.r, color.g, 0.0, color.b);
                 }
 
-                color = applyMask(color, mask);
-                return color;
+                return applyMask(color, mask);
             }
 
             vec4 dither(vec4 color) {
@@ -378,9 +375,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             }
 
             float4 applyMask(float4 color, float4 mask) {
-                color.rgb *= mask.rgb;
-                color.a = mask.a == 1.0f ? color.a : 1.0f;
-                return color;
+                return color * mask + float4(0.0f, 0.0f, 0.0f, 1.0f) * (float4(1.0f) - mask);
             }
 
             float4 sample(texture2d<float, access::sample> texture, sampler textureSampler, float4 mask, float2 uv, int channelConfig) {
@@ -399,8 +394,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     color = float4(color.r, color.g, 0.0f, color.b);
                 }
 
-                color = applyMask(color, mask);
-                return color;
+                return applyMask(color, mask);
             }
 
             struct VertexOut {
