@@ -1483,16 +1483,6 @@ void ImageViewer::updateColorCapabilities() {
     );
 
     // Update UI elements accordingly
-    mHdrPopupButton->set_enabled(supportsHdr);
-    if (supportsHdr) {
-        mHdrPopupButton->set_tooltip("HDR Settings");
-    } else {
-        mHdrPopupButton->set_tooltip(
-            "Your system does not support HDR colors. "
-            "Make sure that your OS, GPU, and display support HDR and that it is enabled in your system and display settings."
-        );
-    }
-
     mClipToLdrButton->set_enabled(supportsHdr);
 
     if (supportsAbsoluteBrightness) {
