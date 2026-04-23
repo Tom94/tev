@@ -103,6 +103,8 @@ void ImageCanvas::draw_contents() {
         mOffset,
         mGamma,
         mWhiteLevelOverride ? (*mWhiteLevelOverride / glfwGetWindowSdrWhiteLevel(glfwWindow)) : 1.0f,
+        mBrightnessLimit,
+        mBrightnessLimitSoftness,
         mClipToLdr,
         mBackgroundColor,
         mTonemap,
