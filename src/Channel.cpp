@@ -130,6 +130,10 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
 }
 
 void Channel::updateTile(const Box2i bounds, const span<const float> newData) {
+    if (newData.size() < bounds.area()) {
+        throw runtime_error{"Not enough data provided to update tile."};
+    }
+
     if (!Box2i{size()}.contains(bounds)) {
         tlog::warning("Tile [{}, {}] does not fit into channel of size {}", bounds.min, bounds.max, size());
         return;
