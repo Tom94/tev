@@ -236,7 +236,7 @@ public:
     int id() const { return mId; }
 
     void bumpId() {
-        int oldId = mId;
+        const int oldId = mId;
         mId = sId++;
 
         if (mStaleIdCallback) {

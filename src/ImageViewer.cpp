@@ -1736,6 +1736,16 @@ void ImageViewer::updateImage(string_view imageName, bool shallSelect, string_vi
         return;
     }
 
+    tlog::debug(
+        "Updating image: name=\"{}\" channel={} bounds=[{}, {}] data.size={} shallSelect={}",
+        imageName,
+        channel,
+        bounds.min,
+        bounds.max,
+        imageData.size(),
+        shallSelect
+    );
+
     image->updateChannel(channel, bounds, imageData);
     if (shallSelect) {
         selectImage(image);
@@ -1757,6 +1767,10 @@ void ImageViewer::updateImageVectorGraphics(string_view imageName, bool shallSel
         tlog::warning("Vector graphics of image {} could not be updated, because it does not exist.", imageName);
         return;
     }
+
+    tlog::debug(
+        "Updating vector graphics: image=\"{}\" commands.size={} append={} shallSelect={}", imageName, commands.size(), append, shallSelect
+    );
 
     image->updateVectorGraphics(append, commands);
     if (shallSelect) {
