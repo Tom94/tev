@@ -155,24 +155,14 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return mix(a, b, vec3(mask));
             }
 
-            vec3 invLinPow(vec3 color, float gamma, float thres, float scale, float alpha) {
-                bvec3 isLow = lessThanEqual(color.rgb, vec3(thres * scale));
-                vec3 lo = color.rgb / scale;
-                vec3 hi = pow((color.rgb + alpha - 1.0) / alpha, vec3(gamma));
-                return mixb(hi, lo, isLow);
-            }
-
-            vec3 linPow(vec3 color, float gamma, float thres, float scale, float alpha) {
-                bvec3 isLow = lessThanEqual(color.rgb, vec3(thres));
-                vec3 lo = color.rgb * scale;
-                vec3 hi = pow(color.rgb, vec3(1.0 / gamma)) * alpha - (alpha - 1.0);
-                return mixb(hi, lo, isLow);
+            vec3 applyGamma(vec3 col, float gamma) {
+                return sign(col) * pow(abs(col), vec3(gamma));
             }
 
             vec3 applyTonemap(vec3 col, vec4 background) {
                 if (tonemap == GAMMA) {
                     col = col + (pow(background.rgb, vec3(gamma)) - offset) * background.a;
-                    return sign(col) * pow(abs(col), vec3(1.0 / gamma));
+                    return applyGamma(col, 1.0 / gamma);
                 } else if (tonemap == FALSE_COLOR) {
                     return falseColor(log2(average(col)+0.03125) / 10.0 + 0.5) + (background.rgb - falseColor(0.0)) * background.a;
                 } else if (tonemap == POS_NEG) {
@@ -236,7 +226,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             }
 
             vec3 smoothClamp(vec3 color) {
-                color = limitBrightness(color, brightnessLimit, rolloffStops);
+                color = applyGamma(limitBrightness(applyGamma(color, 2.2), brightnessLimit, rolloffStops), 1.0 / 2.2);
 
                 float minVal = clipToLdr ? 0.0 : -64.0;
                 float maxVal = clipToLdr ? 1.0 : 64.0;
@@ -265,12 +255,12 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 }
 
                 val += bgColor * (1.0 - val.a);
-                val.rgb = smoothClamp(val.rgb);
                 vec4 result = vec4(
                     applyTonemap(colorMultiplier * applyExposureAndOffset(val.rgb), vec4(checker, 1.0 - val.a)),
                     1.0
                 );
 
+                result.rgb = smoothClamp(result.rgb);
                 return result;
             }
 
@@ -347,11 +337,15 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 return colormap.sample(colormapSampler, float2(v, 0.5f)).rgb;
             }
 
+            float3 applyGamma(float3 col, float gamma) {
+                return sign(col) * pow(abs(col), float3(gamma));
+            }
+
             float3 applyTonemap(float3 col, float4 background, int tonemap, float offset, float gamma, texture2d<float, access::sample> colormap, sampler colormapSampler) {
                 switch (tonemap) {
                     case GAMMA:
                         col = col + (pow(background.rgb, float3(gamma)) - offset) * background.a;
-                        return sign(col) * pow(abs(col), float3(1.0 / gamma));
+                        return applyGamma(col, 1.0f / gamma);
                     // Here grayscale is compressed such that the darkest color is is 1/1024th as bright as the brightest color.
                     case FALSE_COLOR:
                         return falseColor(log2(average(col)+0.03125f) / 10.0f + 0.5f, colormap, colormapSampler) + (background.rgb - falseColor(0.0f, colormap, colormapSampler)) * background.a;
@@ -420,7 +414,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             }
 
             float3 smoothClamp(float3 color, float brightnessLimit, float rolloffStops, bool clipToLdr) {
-                color = limitBrightness(color, brightnessLimit, rolloffStops);
+                color = applyGamma(limitBrightness(applyGamma(color, 2.2f), brightnessLimit, rolloffStops), 1.0f / 2.2f);
 
                 const float minVal = clipToLdr ? 0.0f : -64.0f;
                 const float maxVal = clipToLdr ? 1.0f : 64.0f;
@@ -475,7 +469,6 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                 }
 
                 val += bgColor * (1.0f - val.a);
-                val.rgb = smoothClamp(val.rgb, brightnessLimit, rolloffStops, clipToLdr);
                 float4 color = float4(
                     applyTonemap(
                         colorMultiplier * applyExposureAndOffset(val.rgb, exposure, offset),
@@ -489,6 +482,7 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     1.0f
                 );
 
+                color.rgb = smoothClamp(color.rgb, brightnessLimit, rolloffStops, clipToLdr);
                 return dither(color, ditherMatrix, ditherMatrix_sampler, vert.ditherUv);
             })";
 #endif
