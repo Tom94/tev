@@ -110,3 +110,7 @@
 	path = dependencies/small_vector
 	url = https://github.com/gharveymn/small_vector
 	shallow = true
+[submodule "dependencies/cfitsio"]
+	path = dependencies/cfitsio
+	url = https://github.com/tom94/cfitsio
+	shallow = true

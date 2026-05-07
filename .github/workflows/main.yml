@@ -13,7 +13,7 @@ env:
 
 jobs:
   build_linux:
-    name: Build on linux systems
+    name: Build on Linux
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

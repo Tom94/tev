@@ -231,6 +231,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 #ifdef TEV_SUPPORT_AVIF
     addLibrary(about, "aom", "AV1 video codec library");
 #endif
+    addLibrary(about, "cfitsio", "FITS data file library");
     addLibrary(about, "clip", "Cross-platform clipboard library");
     addLibrary(about, "concurrentqueue", "Cross-platform lightweight semaphore");
 #ifdef _WIN32
