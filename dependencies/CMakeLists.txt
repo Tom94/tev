@@ -422,11 +422,12 @@ add_subdirectory(libexpat/expat EXCLUDE_FROM_ALL)
 add_subdirectory(xmp EXCLUDE_FROM_ALL)
 
 # Compile cfitsio for FITS image support.
-set(CFITSIO_USE_CURL        OFF CACHE BOOL " " FORCE)
-set(CFITSIO_USE_BZIP2       OFF CACHE BOOL " " FORCE)
+set(CFITSIO_USE_CURL OFF CACHE BOOL " " FORCE)
+set(CFITSIO_USE_BZIP2 OFF CACHE BOOL " " FORCE)
 if(MSVC)
-    set(CFITSIO_USE_C11_THREADS ON  CACHE BOOL " " FORCE)
+    set(CFITSIO_USE_C11_THREADS ON CACHE BOOL " " FORCE)
 else()
-    set(CFITSIO_USE_PTHREADS ON  CACHE BOOL " " FORCE)
+    set(CFITSIO_USE_PTHREADS ON CACHE BOOL " " FORCE)
 endif()
 add_subdirectory(cfitsio EXCLUDE_FROM_ALL)
+

@@ -20,6 +20,11 @@
 
 #include <fitsio.h>
 
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
+
 using namespace nanogui;
 using namespace std;
 
@@ -32,39 +37,42 @@ void throwOnCfitsioError(int status, string_view context) {
     if (status == 0) {
         return;
     }
+
     char msg[FLEN_ERRMSG] = {};
     fits_get_errstatus(status, msg);
     throw ImageLoadError{fmt::format("cfitsio error during {} (status {}): {}", context, status, msg)};
 }
 
-// Strip surrounding apostrophes from a FITS string-value field if present,
-// trim trailing spaces inside the quotes, and unescape doubled apostrophes.
+// Strip surrounding apostrophes from a FITS string-value field if present, trim trailing spaces inside the quotes, and unescape doubled
+// apostrophes.
 string stripValueQuotes(const char* raw) {
     if (!raw || !*raw) {
         return {};
     }
-    string s{raw};
+
+    string_view s{raw};
     if (s.size() < 2 || s.front() != '\'' || s.back() != '\'') {
-        return s; // numeric or logical value; pass through unchanged.
+        return string{s}; // numeric or logical value; pass through unchanged.
     }
+
     s = s.substr(1, s.size() - 2);
     while (!s.empty() && s.back() == ' ') {
-        s.pop_back();
+        s = s.substr(0, s.size() - 1);
     }
+
     // Collapse '' to '.
-    string out;
-    out.reserve(s.size());
+    ostringstream out;
     for (size_t i = 0; i < s.size(); ++i) {
-        out.push_back(s[i]);
+        out << s[i];
         if (s[i] == '\'' && i + 1 < s.size() && s[i + 1] == '\'') {
             ++i; // skip the second apostrophe of the pair
         }
     }
-    return out;
+
+    return out.str();
 }
 
-// Decode the image HDU at the current cfitsio cursor position into ImageData.
-// Returns nullopt if the HDU is image-like but is not loadable
+// Decode the image HDU at the current cfitsio cursor position into ImageData. Returns nullopt if the HDU is image-like but is not loadable
 // (NAXIS not in {2,3}, NAXIS1=0 (Random Groups), or zero pixels).
 optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
     int status = 0;
@@ -99,30 +107,35 @@ optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
         tlog::warning("HDU {} has BITPIX=64; precision will be lost converting to float32.", hduIndex);
     }
 
+    // Negative values indigate floating-point types, positive values integers. For integers, ~lossless fp16 representation means fitting
+    // into the 10-bit mantissa.
+    const bool fitsIntoFloat16 = bitpix <= 10 && bitpix >= -16;
+
+    static const auto channelName = [](size_t c, size_t numChannels) -> string {
+        if (numChannels == 1) {
+            return "L";
+        } else if (numChannels == 3) {
+            static const string rgbNames[] = {"R", "G", "B"};
+            return rgbNames[c];
+        } else {
+            return to_string(c);
+        }
+    };
+
     ImageData resultData;
 
-    // Build channels by reading each plane directly into its float channel storage.
-    // cfitsio applies BSCALE/BZERO and any unsigned-integer conversion when
-    // reading as TFLOAT, so we always get float32 physical units.
-    const string_view rgbNames[] = {"R", "G", "B"};
-    LONGLONG fpixel[3] = {1, 1, 1};
-    float nullval = 0.0f;
-    int anynull = 0;
+    // Build channels by reading each plane directly into its float channel storage. cfitsio applies BSCALE/BZERO and any unsigned-integer
+    // conversion when reading as TFLOAT, so we always get float32 physical units.
     for (size_t c = 0; c < numChannels; ++c) {
-        string name;
-        if (numChannels == 1) {
-            name = "L";
-        } else if (numChannels == 3) {
-            name = rgbNames[c];
-        } else {
-            name = to_string(c);
-        }
-
-        resultData.channels.emplace_back(name, size, EPixelFormat::F32, EPixelFormat::F32);
-        fpixel[2] = (LONGLONG)(c + 1);
-        fits_read_pixll(
-            fp, TFLOAT, fpixel, (LONGLONG)numPixels, &nullval, resultData.channels[c].view<float>().data(), &anynull, &status
+        auto& channel = resultData.channels.emplace_back(
+            channelName(c, numChannels), size, EPixelFormat::F32, fitsIntoFloat16 ? EPixelFormat::F16 : EPixelFormat::F32
         );
+
+        LONGLONG fpixel[3] = {1, 1, (LONGLONG)c + 1};
+        float nullval = 0.0f;
+        int anynull = 0;
+        fits_read_pixll(fp, TFLOAT, fpixel, (LONGLONG)numPixels, &nullval, channel.view<float>().data(), &anynull, &status);
+
         throwOnCfitsioError(status, fmt::format("HDU {} read_pixll plane {}", hduIndex, c));
     }
 
@@ -145,6 +158,7 @@ optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
         if (keyStatus != 0) {
             continue;
         }
+
         AttributeNode& node = section.children.emplace_back();
         node.name = key;
         node.value = stripValueQuotes(value);
@@ -162,16 +176,19 @@ optional<string> readExtname(fitsfile* fp) {
     if (status != 0) {
         return nullopt;
     }
+
     string_view trimmed = trim(extname);
     if (trimmed.empty()) {
         return nullopt;
     }
+
     return string{trimmed};
 }
 
 } // anonymous namespace
 
-Task<vector<ImageData>> FitsImageLoader::load( istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    FitsImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
     char magic[9] = {};
     iStream.read(magic, sizeof(magic));
     if (!iStream || string_view{magic, sizeof(magic)} != "SIMPLE  =") {
@@ -197,7 +214,7 @@ Task<vector<ImageData>> FitsImageLoader::load( istream& iStream, const fs::path&
     fits_open_memfile(&fp, memName.c_str(), READONLY, &bufferPtr, &bufferSize, 0, nullptr, &status);
     throwOnCfitsioError(status, "open_memfile");
 
-    auto fitsGuard = ScopeGuard{[&]() {
+    const auto fitsGuard = ScopeGuard{[&]() {
         int closeStatus = 0;
         fits_close_file(fp, &closeStatus);
     }};
@@ -208,6 +225,7 @@ Task<vector<ImageData>> FitsImageLoader::load( istream& iStream, const fs::path&
 
     vector<ImageData> result;
     int skippedNonImage = 0;
+
     // cfitsio HDU indexing is 1-based
     for (int i = 1; i <= numHdus; ++i) {
         int hduType = 0;
@@ -217,17 +235,18 @@ Task<vector<ImageData>> FitsImageLoader::load( istream& iStream, const fs::path&
             ++skippedNonImage;
             continue;
         }
-        auto extname = readExtname(fp);
-        auto imageData = decodeImageHdu(fp, i);
-        if (imageData) {
+
+        const auto extname = readExtname(fp);
+        if (auto imageData = decodeImageHdu(fp, i)) {
             imageData->partName = extname ? fmt::format("hdu.{}", *extname) : fmt::format("hdu.{}", i);
             result.emplace_back(std::move(*imageData));
         }
     }
 
     if (skippedNonImage > 0) {
-        tlog::info("FITS file: skipped {} non-image {}.", skippedNonImage, skippedNonImage == 1 ? "HDU" : "HDUs");
+        tlog::warning("FITS file: skipped {} non-image {}.", skippedNonImage, skippedNonImage == 1 ? "HDU" : "HDUs");
     }
+
     if (result.empty()) {
         throw ImageLoadError{"No loadable image HDUs found in FITS file."};
     }
