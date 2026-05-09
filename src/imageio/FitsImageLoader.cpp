@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/imageio/Demosaic.h>
 #include <tev/imageio/FitsImageLoader.h>
 
 #include <fitsio.h>
@@ -72,16 +73,33 @@ string stripValueQuotes(const char* raw) {
     return out.str();
 }
 
+// Read the EXTNAME keyword from the current HDU.
+optional<string> readExtname(fitsfile* fp) {
+    char extname[FLEN_VALUE] = {};
+    int status = 0;
+    fits_read_key(fp, TSTRING, "EXTNAME", extname, nullptr, &status);
+    if (status != 0) {
+        return nullopt;
+    }
+
+    string_view trimmed = trim(extname);
+    if (trimmed.empty()) {
+        return nullopt;
+    }
+
+    return string{trimmed};
+}
+
 // Decode the image HDU at the current cfitsio cursor position into ImageData. Returns nullopt if the HDU is image-like but is not loadable
 // (NAXIS not in {2,3}, NAXIS1=0 (Random Groups), or zero pixels).
-optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
+Task<optional<ImageData>> decodeImageHdu(fitsfile* fp, int hduIndex, int priority) {
     int status = 0;
 
     int naxis = 0;
     fits_get_img_dim(fp, &naxis, &status);
     throwOnCfitsioError(status, fmt::format("HDU {} get_img_dim", hduIndex));
     if (naxis != 2 && naxis != 3) {
-        return nullopt;
+        co_return nullopt;
     }
 
     long axes[3] = {0};
@@ -90,14 +108,14 @@ optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
 
     // Reject zero-extent axes. NAXIS1=0 is the Random Groups sentinel.
     if (axes[0] <= 0 || axes[1] <= 0) {
-        return nullopt;
+        co_return nullopt;
     }
 
     const Vector2i size{(int)axes[0], (int)axes[1]};
     const size_t numPixels = (size_t)axes[0] * (size_t)axes[1];
     const size_t numChannels = (naxis == 3) ? (size_t)axes[2] : 1;
     if (numChannels == 0) {
-        return nullopt;
+        co_return nullopt;
     }
 
     int bitpix = 0;
@@ -111,7 +129,7 @@ optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
     // into the 10-bit mantissa.
     const bool fitsIntoFloat16 = bitpix <= 10 && bitpix >= -16;
 
-    static const auto channelName = [](size_t c, size_t numChannels) -> string {
+    const auto channelName = [numChannels](size_t c) -> string {
         if (numChannels == 1) {
             return "L";
         } else if (numChannels == 3) {
@@ -124,11 +142,14 @@ optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
 
     ImageData resultData;
 
+    const auto extname = readExtname(fp);
+    resultData.partName = extname ? fmt::format("hdu.{}", *extname) : fmt::format("hdu.{}", hduIndex);
+
     // Build channels by reading each plane directly into its float channel storage. cfitsio applies BSCALE/BZERO and any unsigned-integer
     // conversion when reading as TFLOAT, so we always get float32 physical units.
     for (size_t c = 0; c < numChannels; ++c) {
         auto& channel = resultData.channels.emplace_back(
-            channelName(c, numChannels), size, EPixelFormat::F32, fitsIntoFloat16 ? EPixelFormat::F16 : EPixelFormat::F32
+            channelName(c), size, EPixelFormat::F32, fitsIntoFloat16 ? EPixelFormat::F16 : EPixelFormat::F32
         );
 
         LONGLONG fpixel[3] = {1, 1, (LONGLONG)c + 1};
@@ -151,38 +172,134 @@ optional<ImageData> decodeImageHdu(fitsfile* fp, int hduIndex) {
     root.name = "FITS header";
     AttributeNode& section = root.children.emplace_back();
     section.name = "";
+
+    // FITS images are conventionally stored in bottom-up orientation, but this can be overridden by the optional ROWORDER keyword.
+    resultData.orientation = EOrientation::BottomLeft;
+
+    unordered_map<string, string> headerVals;
+
     for (int k = 1; k <= nKeys; ++k) {
         char key[FLEN_KEYWORD] = {}, value[FLEN_VALUE] = {}, comment[FLEN_COMMENT] = {};
         int keyStatus = 0;
+
         fits_read_keyn(fp, k, key, value, comment, &keyStatus);
         if (keyStatus != 0) {
             continue;
         }
 
+        const string valueStr = stripValueQuotes(value);
+        headerVals[key] = valueStr;
+
         AttributeNode& node = section.children.emplace_back();
         node.name = key;
-        node.value = stripValueQuotes(value);
+        node.value = std::move(valueStr);
         node.type = comment;
     }
 
-    return resultData;
-}
+    // CBLACK and CWHITE are display hints that, while not part of the FITS standard and not strictly speaking affecting the underlying
+    // data, are common enough in practice that we will rescale if they're present.
+    float cwhite = 1.0f;
+    float cblack = 0.0f;
 
-// Read the EXTNAME keyword from the current HDU.
-optional<string> readExtname(fitsfile* fp) {
-    char extname[FLEN_VALUE] = {};
-    int status = 0;
-    fits_read_key(fp, TSTRING, "EXTNAME", extname, nullptr, &status);
-    if (status != 0) {
-        return nullopt;
+    if (auto it = headerVals.find("CWHITE"); it != headerVals.end()) {
+        fromChars(it->second, cwhite);
     }
 
-    string_view trimmed = trim(extname);
-    if (trimmed.empty()) {
-        return nullopt;
+    if (auto it = headerVals.find("CBLACK"); it != headerVals.end()) {
+        fromChars(it->second, cblack);
     }
 
-    return string{trimmed};
+    if (cwhite != 1.0f || cblack != 0.0f) {
+        tlog::debug("HDU {} has CWHITE={} and CBLACK={}. Rescaling.", hduIndex, cwhite, cblack);
+
+        const float scale = 1.0f / (cwhite - cblack);
+        for (size_t c = 0; c < numChannels; ++c) {
+            co_await ThreadPool::global().parallelFor(
+                0uz,
+                numPixels,
+                numPixels,
+                [view = resultData.channels[c].view<float>(), scale, cblack](size_t i) { view[i] = (view[i] - cblack) * scale; },
+                priority
+            );
+        }
+    }
+
+    // ROWORDER and BAYERPAT are implemented following https://siril.readthedocs.io/en/latest/file-formats/FITS.html#retrieving-the-bayer-matrix
+    // such that the sample images on that page are correctly debayered and rendered in the correct orientation.
+    if (auto it = headerVals.find("ROWORDER"); it != headerVals.end()) {
+        const auto& rowOrder = it->second;
+        if (rowOrder != "BOTTOM-UP" && rowOrder != "TOP-DOWN") {
+            tlog::warning("HDU {} has unrecognized ROWORDER value '{}'; ignoring.", hduIndex, rowOrder);
+        } else {
+            resultData.orientation = rowOrder == "BOTTOM-UP" ? EOrientation::TopLeft : EOrientation::BottomLeft;
+        }
+    }
+
+    if (auto it = headerVals.find("BAYERPAT"); it != headerVals.end()) {
+        auto bayerPatStr = it->second;
+
+        if (bayerPatStr != "RGGB" && bayerPatStr != "BGGR" && bayerPatStr != "GRBG" && bayerPatStr != "GBRG") {
+            tlog::warning("HDU {} has unrecognized BAYERPAT value '{}'; assuming RGGB.", hduIndex, bayerPatStr);
+            bayerPatStr = "RGGB";
+        }
+
+        Vector2i bayerOffset = {0, 0};
+        if (auto xoffIt = headerVals.find("XBAYROFF"); xoffIt != headerVals.end()) {
+            if (!fromChars(xoffIt->second, bayerOffset.x())) {
+                tlog::warning("HDU {} has invalid BAYERXOFF value '{}'; using default 0.", hduIndex, xoffIt->second);
+                bayerOffset.x() = 0;
+            }
+        }
+
+        if (auto yoffIt = headerVals.find("YBAYROFF"); yoffIt != headerVals.end()) {
+            if (!fromChars(yoffIt->second, bayerOffset.y())) {
+                tlog::warning("HDU {} has invalid BAYERXOFF value '{}'; using default 0.", hduIndex, yoffIt->second);
+                bayerOffset.y() = 0;
+            }
+        }
+
+        tlog::debug("HDU {} has BAYERPAT='{}' with offset ({}, {}). Applying.", hduIndex, bayerPatStr, bayerOffset.x(), bayerOffset.y());
+
+        const int bayerWidth = sqrt((int)bayerPatStr.size());
+        if (bayerWidth * bayerWidth != (int)bayerPatStr.size()) {
+            tlog::warning("HDU {} has BAYERPAT of length {} that is not a perfect square; ignoring.", hduIndex, bayerPatStr.size());
+        } else {
+            vector<uint8_t> bayerpat;
+            for (int y = 0; y < bayerWidth; ++y) {
+                for (int x = 0; x < bayerWidth; ++x) {
+                    const auto xy = Vector2i{(x + bayerOffset.x()) % bayerWidth, bayerWidth - 1 - ((y + bayerOffset.y()) % bayerWidth)};
+                    const auto reorientedXy = applyOrientation(resultData.orientation, xy, Vector2i{bayerWidth});
+
+                    const auto idx = (size_t)(reorientedXy.y() * bayerWidth + reorientedXy.x());
+                    const char c = toupper(bayerPatStr[idx]);
+
+                    TEV_ASSERT(c == 'R' || c == 'G' || c == 'B', "BAYERPAT must only contain R, G, and B characters");
+                    bayerpat.emplace_back(c == 'R' ? 0 : (c == 'G' ? 1 : 2));
+                }
+            }
+
+            TEV_ASSERT(numChannels > 0, "Unexpected zero channels after earlier check");
+            const auto numInterleavedChannels = nextSupportedTextureChannelCount(3);
+            auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
+                3, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), "", priority
+            );
+
+            co_await demosaic(
+                resultData.channels.front().view<float>(),
+                MultiChannelView<float>{rgbaChannels},
+                bayerpat,
+                Vector2i{bayerWidth},
+                priority
+            );
+
+            resultData.channels.front().setName("cfa.L");
+            resultData.channels.insert(
+                resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
+            );
+        }
+    }
+
+    co_return resultData;
 }
 
 } // anonymous namespace
@@ -236,9 +353,7 @@ Task<vector<ImageData>>
             continue;
         }
 
-        const auto extname = readExtname(fp);
-        if (auto imageData = decodeImageHdu(fp, i)) {
-            imageData->partName = extname ? fmt::format("hdu.{}", *extname) : fmt::format("hdu.{}", i);
+        if (auto imageData = co_await decodeImageHdu(fp, i, priority)) {
             result.emplace_back(std::move(*imageData));
         }
     }
