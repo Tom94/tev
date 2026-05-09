@@ -235,9 +235,7 @@ Task<optional<ImageData>> decodeImageHdu(fitsfile* fp, int hduIndex, int priorit
         }
     }
 
-    if (auto it = headerVals.find("BAYERPAT"); it != headerVals.end()) {
-        auto bayerPatStr = it->second;
-
+    const auto applyBayerPattern = [&](string bayerPatStr) -> Task<void> {
         if (bayerPatStr != "RGGB" && bayerPatStr != "BGGR" && bayerPatStr != "GRBG" && bayerPatStr != "GBRG") {
             tlog::warning("HDU {} has unrecognized BAYERPAT value '{}'; assuming RGGB.", hduIndex, bayerPatStr);
             bayerPatStr = "RGGB";
@@ -263,40 +261,43 @@ Task<optional<ImageData>> decodeImageHdu(fitsfile* fp, int hduIndex, int priorit
         const int bayerWidth = sqrt((int)bayerPatStr.size());
         if (bayerWidth * bayerWidth != (int)bayerPatStr.size()) {
             tlog::warning("HDU {} has BAYERPAT of length {} that is not a perfect square; ignoring.", hduIndex, bayerPatStr.size());
-        } else {
-            vector<uint8_t> bayerpat;
-            for (int y = 0; y < bayerWidth; ++y) {
-                for (int x = 0; x < bayerWidth; ++x) {
-                    const auto xy = Vector2i{(x + bayerOffset.x()) % bayerWidth, bayerWidth - 1 - ((y + bayerOffset.y()) % bayerWidth)};
-                    const auto reorientedXy = applyOrientation(resultData.orientation, xy, Vector2i{bayerWidth});
-
-                    const auto idx = (size_t)(reorientedXy.y() * bayerWidth + reorientedXy.x());
-                    const char c = toupper(bayerPatStr[idx]);
-
-                    TEV_ASSERT(c == 'R' || c == 'G' || c == 'B', "BAYERPAT must only contain R, G, and B characters");
-                    bayerpat.emplace_back(c == 'R' ? 0 : (c == 'G' ? 1 : 2));
-                }
-            }
-
-            TEV_ASSERT(numChannels > 0, "Unexpected zero channels after earlier check");
-            const auto numInterleavedChannels = nextSupportedTextureChannelCount(3);
-            auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
-                3, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), "", priority
-            );
-
-            co_await demosaic(
-                resultData.channels.front().view<float>(),
-                MultiChannelView<float>{rgbaChannels},
-                bayerpat,
-                Vector2i{bayerWidth},
-                priority
-            );
-
-            resultData.channels.front().setName("cfa.L");
-            resultData.channels.insert(
-                resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
-            );
+            co_return;
         }
+
+        vector<uint8_t> bayerpat;
+        for (int y = 0; y < bayerWidth; ++y) {
+            for (int x = 0; x < bayerWidth; ++x) {
+                const auto xy = Vector2i{(x + bayerOffset.x()) % bayerWidth, bayerWidth - 1 - ((y + bayerOffset.y()) % bayerWidth)};
+                const auto reorientedXy = applyOrientation(resultData.orientation, xy, Vector2i{bayerWidth});
+
+                const auto idx = (size_t)(reorientedXy.y() * bayerWidth + reorientedXy.x());
+                const char c = toupper(bayerPatStr[idx]);
+
+                TEV_ASSERT(c == 'R' || c == 'G' || c == 'B', "BAYERPAT must only contain R, G, and B characters");
+                bayerpat.emplace_back(c == 'R' ? 0 : (c == 'G' ? 1 : 2));
+            }
+        }
+
+        TEV_ASSERT(numChannels > 0, "Unexpected zero channels after earlier check");
+        const auto numInterleavedChannels = nextSupportedTextureChannelCount(3);
+        auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
+            3, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), "", priority
+        );
+
+        co_await demosaic(
+            resultData.channels.front().view<float>(), MultiChannelView<float>{rgbaChannels}, bayerpat, Vector2i{bayerWidth}, priority
+        );
+
+        resultData.channels.front().setName("cfa.L");
+        resultData.channels.insert(
+            resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
+        );
+    };
+
+    if (auto it = headerVals.find("BAYERPAT"); it != headerVals.end()) {
+        co_await applyBayerPattern(it->second);
+    } else if (it = headerVals.find("COLORTYP"); it != headerVals.end()) {
+        co_await applyBayerPattern(it->second);
     }
 
     co_return resultData;
