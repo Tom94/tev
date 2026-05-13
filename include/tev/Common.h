@@ -613,6 +613,13 @@ std::string errorString(int errorId);
 fs::path homeDirectory();
 fs::path runtimeDirectory();
 
+struct FramePadding {
+    nanogui::Vector2i topLeft;
+    nanogui::Vector2i bottomRight;
+};
+
+FramePadding framePadding(GLFWwindow* window);
+
 void toggleConsole();
 
 bool shuttingDown();
