@@ -450,6 +450,21 @@ fs::path runtimeDirectory() {
 #endif
 }
 
+FramePadding framePadding(GLFWwindow* window) {
+    FramePadding result;
+#ifdef _WIN32
+    // glfwGetWindowFrameSize is a bit too conservative on Windows -- it includes CXPADDEDBORDER on all sides -- which looks like quite a
+    // lot of empty space to the sides and bottom of the window. Therefore, we use a bit of custom logic here that still allows resizing the
+    // window from all sides (exposes the frame part) while making space tighter.
+    const Vector2i border = {GetSystemMetrics(SM_CXSIZEFRAME), GetSystemMetrics(SM_CYSIZEFRAME)};
+    result.topLeft = result.bottomRight = border;
+    result.topLeft.y() += GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CXPADDEDBORDER);
+#else
+    glfwGetWindowFrameSize(window, &result.topLeft.x(), &result.topLeft.y(), &result.bottomRight.x(), &result.bottomRight.y());
+#endif
+    return result;
+}
+
 void toggleConsole() {
 #ifdef _WIN32
     HWND console = GetConsoleWindow();

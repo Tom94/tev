@@ -116,8 +116,19 @@ ImageViewer::ImageViewer(
                 monitorMax = max(monitorMax, monitorPos + monitorSize);
             }
 
+            const auto padding = framePadding(m_glfw_window);
+            monitorMin += padding.topLeft;
+            monitorMax -= padding.bottomRight;
+
             mMinWindowPos = monitorMin;
             mMaxWindowSize = min(mMaxWindowSize, Vector2f{max(monitorMax - monitorMin, Vector2i{1024, 800})});
+
+#if defined(_WIN32) || defined(__linux__) || defined(EMSCRIPTEN)
+            mMinWindowPos = mMinWindowPos / pixel_ratio();
+            mMaxWindowSize = mMaxWindowSize / pixel_ratio();
+#endif
+
+            tlog::debug("Initial monitor: pos={} size={}", mMinWindowPos, mMaxWindowSize);
         }
     }
 
@@ -2170,19 +2181,7 @@ void ImageViewer::resizeToFit(Vector2f targetSize) {
     targetSize = max(Vector2f{m_size}, targetSize);
     // For sanity, don't make us larger than 8192x8192 to ensure that we don't break any texture size limitations of the user's GPU.
 
-    auto maxSize = mMaxWindowSize;
-
-    const Vector2f padding = {
-#ifdef _WIN32
-        2
-#else
-        0
-#endif
-    };
-
-    maxSize -= 2 * padding;
-
-    targetSize = min(targetSize, maxSize);
+    targetSize = min(targetSize, mMaxWindowSize);
     if (targetSize == m_size) {
         return;
     }
@@ -2195,15 +2194,19 @@ void ImageViewer::resizeToFit(Vector2f targetSize) {
     move_window(-sizeDiff / 2);
 
     // Ensure the window does not go off-screen by clamping its position. This does not work on Wayland, because Wayland does not allow
-    // windows to control their own position. On Windows, we add additional padding because, otherwise, moving the mouse to the edge of the
-    // screen does not allow the user to resize the window anymore.
+    // windows to control their own position.
     if (glfwGetPlatform() != GLFW_PLATFORM_WAYLAND) {
-        const auto minWindowPos = Vector2i{mMinWindowPos + padding};
-        const auto maxWindowPos = Vector2i{mMinWindowPos + maxSize - targetSize + padding};
+        auto minWindowPos = mMinWindowPos;
+        auto maxWindowPos = mMinWindowPos + mMaxWindowSize - targetSize;
+
+#if defined(_WIN32) || defined(__linux__) || defined(EMSCRIPTEN)
+        minWindowPos *= pixel_ratio();
+        maxWindowPos *= pixel_ratio();
+#endif
 
         Vector2i pos;
         glfwGetWindowPos(m_glfw_window, &pos.x(), &pos.y());
-        pos = min(max(pos, minWindowPos), maxWindowPos);
+        pos = min(max(pos, Vector2i{minWindowPos}), Vector2i{maxWindowPos});
         glfwSetWindowPos(m_glfw_window, pos.x(), pos.y());
     }
 
@@ -2986,11 +2989,15 @@ shared_ptr<Image> ImageViewer::imageByName(string_view imageName) {
 
 void ImageViewer::updateCurrentMonitorSize() {
     if (GLFWmonitor* monitor = glfwGetWindowCurrentMonitor(m_glfw_window)) {
-        Vector2i pos, size;
+        Vector2i pos{0}, size{0};
         glfwGetMonitorWorkarea(monitor, &pos.x(), &pos.y(), &size.x(), &size.y());
         if (size == Vector2i{0, 0}) {
             return;
         }
+
+        const auto padding = framePadding(m_glfw_window);
+        pos += padding.topLeft;
+        size -= padding.topLeft + padding.bottomRight;
 
         // On some systems (notably Hyprland and some other tiling window managers / compositors), windows are always flagged as
         // maximized, even if they are technically not, to get them to play nicely with decorations. In the following, we detect
@@ -3004,10 +3011,10 @@ void ImageViewer::updateCurrentMonitorSize() {
         auto posf = Vector2f{pos};
         auto sizef = Vector2f{size};
 
-        if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-            posf = posf / pixel_ratio();
-            sizef = sizef / pixel_ratio();
-        }
+#if defined(_WIN32) || defined(__linux__) || defined(EMSCRIPTEN)
+        posf = posf / pixel_ratio();
+        sizef = sizef / pixel_ratio();
+#endif
 
         if (posf == mMinWindowPos && sizef == mMaxWindowSize) {
             return;
