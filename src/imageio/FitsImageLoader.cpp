@@ -236,6 +236,11 @@ Task<optional<ImageData>> decodeImageHdu(fitsfile* fp, int hduIndex, int priorit
     }
 
     const auto applyBayerPattern = [&](string bayerPatStr) -> Task<void> {
+        if (numChannels != 1) {
+            tlog::warning("HDU {} has BAYERPAT or COLORTYP keyword but multiple channels; skipping debayering.", hduIndex, numChannels);
+            co_return;
+        }
+
         if (bayerPatStr != "RGGB" && bayerPatStr != "BGGR" && bayerPatStr != "GRBG" && bayerPatStr != "GBRG") {
             tlog::warning("HDU {} has unrecognized BAYERPAT value '{}'; assuming RGGB.", hduIndex, bayerPatStr);
             bayerPatStr = "RGGB";
