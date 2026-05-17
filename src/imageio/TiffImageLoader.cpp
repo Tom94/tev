@@ -1586,12 +1586,12 @@ Task<ImageData> decodeJpeg(
 
     const auto numJpegSamples = numJpegPixels * numComponents;
     const auto numTileSamples = numTilePixels * tileNumComponents;
+    const auto numSamples = std::max(numJpegSamples, numTileSamples);
 
-    if (numJpegSamples < numTileSamples) {
-        throw ImageLoadError{fmt::format(
-            "Decompressed JPEG has fewer samples ({}) than expected from the tile size and samples per pixel ({}).", numJpegSamples, numTileSamples
-        )};
-    }
+    // There are situations in which either the jpeg is smaller than the tile size (e.g. last strip of an image, where the strip height does
+    // not evenly divide the image height) or the jpeg is larger than the tile size (some DNG; we ignore the extra data). Hence make our
+    // buffer large enough for either case.
+    auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
 
     const float scale = 1.0f / (float)((1ull << precision) - 1);
 
@@ -1610,8 +1610,6 @@ Task<ImageData> decodeJpeg(
     //     precision,
     //     (int)cinfo.jpeg_color_space
     // );
-
-    auto buf = PixelBuffer::alloc(width * height * numComponents, pixelFormat);
 
     if (cinfo.data_precision <= 8) {
         HeapArray<JSAMPROW> rowPointers(height);
@@ -2193,18 +2191,6 @@ Task<ImageData> readTiffImage(
                             };
                         }
 
-                        const auto tileSize = Vector2i{(int)tile.width, (int)tile.height};
-                        for (auto& channel : tmpImage.channels) {
-                            if (channel.size() != tileSize) {
-                                throw ImageLoadError{fmt::format(
-                                    "Tile channel '{}' has unexpected dimensions: expected {}, got {}",
-                                    channel.name(),
-                                    tileSize,
-                                    tmpImage.channels.front().size()
-                                )};
-                            }
-                        }
-
                         // Rescale embedded image data according to its true bits per sample. E.g. when a 10 bit TIFF encodes data with only
                         // 16 bits of JXL precision, as can happen when JXL codestreams are embedded in TIFF files. Curiously, when the
                         // situation is reversed (e.g. 16 bit TIFF with 14 bit JXL data), the data shouldn't get rescaled. Hence the clamp.
@@ -2223,6 +2209,18 @@ Task<ImageData> readTiffImage(
 
                         const int yStart = (int)tileY * tile.height;
                         const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+
+                        const auto tileSize = Vector2i{xEnd - xStart, yEnd - yStart};
+                        for (auto& channel : tmpImage.channels) {
+                            if (channel.size().x() < tileSize.x() || channel.size().y() < tileSize.y()) {
+                                throw ImageLoadError{fmt::format(
+                                    "Tile channel '{}' has unexpected dimensions: expected {}, got {}",
+                                    channel.name(),
+                                    tileSize,
+                                    tmpImage.channels.front().size()
+                                )};
+                            }
+                        }
 
                         const size_t numPixels = (size_t)(xEnd - xStart) * (yEnd - yStart);
 
