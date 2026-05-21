@@ -88,7 +88,7 @@ Task<void> toFloat32(
     using value_t = typename std::remove_cvref_t<T>::value_type;
     if constexpr (std::is_integral_v<value_t>) {
         if (scale == 0.0f) {
-            scale = 1.0f / (((size_t)1 << (sizeof(value_t) * 8)) - 1);
+            scale = 1.0f / (float)(((size_t)1 << (sizeof(value_t) * 8)) - 1);
         }
     } else {
         if (scale == 0.0f) {
