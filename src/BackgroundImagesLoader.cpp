@@ -46,7 +46,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSe
         vector<fs::directory_entry> entries;
         forEachFileInDir(mRecursiveDirectories, canonicalPath, [&](const auto& entry) {
             if (!entry.is_directory()) {
-                mFilesFoundInDirectories.emplace(PathAndChannelSelector{entry, string{channelSelector}});
+                mFilesFoundInDirectories.emplace(entry, string{channelSelector});
                 entries.emplace_back(entry);
             }
         });

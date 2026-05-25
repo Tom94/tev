@@ -278,8 +278,13 @@ template <template <typename...> class Vector> struct to_vector_fn {
             Vector<value_type> v;
             v.reserve(std::ranges::size(r));
             for (auto&& e : r) {
-                v.emplace_back(static_cast<decltype(e)&&>(e));
+                if constexpr (std::same_as<Vector<value_type>, std::basic_string<value_type>>) {
+                    v.push_back(static_cast<value_type>(e));
+                } else {
+                    v.emplace_back(static_cast<decltype(e)&&>(e));
+                }
             }
+
             return v;
         } else {
             return Vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
@@ -297,6 +302,7 @@ template <size_t N> struct fixed_chunks_fn {
 } // namespace detail
 
 inline constexpr detail::to_vector_fn<std::vector> toVector{};
+inline constexpr detail::to_vector_fn<std::basic_string> toBasicString{};
 template <std::size_t N> inline constexpr detail::fixed_chunks_fn<N> fixed_chunks{};
 
 // Helper for std::visit on multiple lambdas
@@ -540,12 +546,12 @@ template <typename Int> Int nextMultiple(Int value, Int multiple) { return divRo
 
 template <typename T> std::string join(const T& components, std::string_view delim) {
     std::ostringstream s;
-    for (const auto& component : components) {
-        if (&components[0] != &component) {
+    for (size_t i = 0; i < components.size(); ++i) {
+        if (i != 0) {
             s << delim;
         }
 
-        s << component;
+        s << components[i];
     }
 
     return std::move(s).str();

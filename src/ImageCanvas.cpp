@@ -831,7 +831,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     const ChannelView<float>* alphaChannel = nullptr;
 
     // Only treat the alpha channel specially if it is not the only channel of the image.
-    if (!all_of(begin(flattened), end(flattened), [](const Channel& c) { return c.isAlpha(); })) {
+    if (ranges::any_of(flattened, [](const Channel& c) { return !c.isAlpha(); })) {
         if (flattened.back().isAlpha()) {
             alphaChannel = &views.back();
         }

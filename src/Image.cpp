@@ -133,8 +133,8 @@ void ImageData::readMetadataFromCicp(const ColorProfile::CICP& cicp) {
     hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicp.transfer);
 }
 
-vector<string> ImageData::channelsInLayer(string_view layerName) const {
-    vector<string> result;
+vector<string_view> ImageData::channelsInLayer(string_view layerName) const {
+    vector<string_view> result;
 
     for (const auto& c : channels) {
         // If the layer name starts at the beginning, and if no other dot is found after the end of the layer name, then we have found a
@@ -834,29 +834,33 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         default: throw runtime_error{"Unsupported number of channels for texture."};
     }
 
-    Texture::ComponentFormat componentFormat = Texture::ComponentFormat::Float16;
-    for (const auto& chanName : channelNames) {
-        const Channel* chan = channel(chanName);
-        if (chan && chan->desiredPixelFormat() == EPixelFormat::F32) {
-            componentFormat = Texture::ComponentFormat::Float32;
-            break; // No need to check further, we already have a channel that requires F32.
-        }
-    }
+    const Texture::ComponentFormat componentFormat = ranges::any_of(
+                                                         channelNames | views::transform([this](const auto& c) { return channel(c); }),
+                                                         [](const auto& c) { return c && c->desiredPixelFormat() == EPixelFormat::F32; }
+                                                     ) ?
+        Texture::ComponentFormat::Float32 :
+        Texture::ComponentFormat::Float16;
 
     mTextures.emplace(
-        lookup,
-        ImageTexture{
+        piecewise_construct,
+        tuple{
+            lookup
+    },
+        tuple{
             new Texture{
-                        pixelFormat, componentFormat,
-                        {size().x(), size().y()},
-                        toNanogui(minFilter),
-                        toNanogui(magFilter),
-                        Texture::WrapMode::ClampToEdge,
-                        1, Texture::TextureFlags::ShaderRead,
-                        true, },
-            {channelNames.begin(), channelNames.end()},
+                pixelFormat,
+                componentFormat,
+                {size().x(), size().y()},
+                toNanogui(minFilter),
+                toNanogui(magFilter),
+                Texture::WrapMode::ClampToEdge,
+                1,
+                Texture::TextureFlags::ShaderRead,
+                true,
+            },
+            channelNames | toVector,
             false,
-    }
+        }
     );
 
     auto& texture = mTextures.at(lookup).nanoguiTexture;
@@ -973,7 +977,7 @@ void Image::ungroup(string_view groupName) {
 }
 
 vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
-    vector<vector<string>> groups = {
+    static const vector<vector<string>> groups = {
         {"R", "G", "B"},
         {"r", "g", "b"},
         {"X", "Y", "Z"},
@@ -984,27 +988,26 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
         {"z"},
     };
 
-    static constexpr auto createChannelGroup = [](string_view layer, vector<string> channels) {
+    static constexpr auto createChannelGroup = [](string_view layer, span<const string_view> channels) {
         TEV_ASSERT(!channels.empty(), "Can't create a channel group without channels.");
 
-        vector<string_view> channelTails = {channels.begin(), channels.end()};
+        vector<string_view> channelTails = channels | views::transform(Channel::tail) | toVector;
         channelTails.erase(unique(begin(channelTails), end(channelTails)), end(channelTails));
-        transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
 
         const string channelsString = join(channelTails, ",");
         const string name = layer.empty() ?
             channelsString :
             (channelTails.size() == 1 ? fmt::format("{}{}", layer, channelsString) : fmt::format("{}({})", layer, channelsString));
 
-        return ChannelGroup{name, std::move(channels)};
+        return ChannelGroup{name, channels | views::transform([](const auto& c) { return string{c}; }) | toVector};
     };
 
-    string alphaChannelName = fmt::format("{}A", layerName);
+    const string alphaChannelName = fmt::format("{}A", layerName);
 
-    vector<string> allChannels = mData.channelsInLayer(layerName);
+    vector<string_view> allChannels = mData.channelsInLayer(layerName);
 
-    auto alphaIt = find(begin(allChannels), end(allChannels), alphaChannelName);
-    bool hasAlpha = alphaIt != end(allChannels);
+    const auto alphaIt = ranges::find(allChannels, alphaChannelName);
+    const bool hasAlpha = alphaIt != end(allChannels);
     if (hasAlpha) {
         allChannels.erase(alphaIt);
     }
@@ -1012,12 +1015,10 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     vector<ChannelGroup> result;
 
     for (const auto& group : groups) {
-        vector<string> groupChannels;
+        vector<string_view> groupChannels;
         for (string_view channel : group) {
-            string name = fmt::format("{}{}", layerName, channel);
-            auto it = find(begin(allChannels), end(allChannels), name);
-            if (it != end(allChannels)) {
-                groupChannels.emplace_back(name);
+            if (const auto it = ranges::find(allChannels, fmt::format("{}{}", layerName, channel)); it != end(allChannels)) {
+                groupChannels.emplace_back(*it);
                 allChannels.erase(it);
             }
         }
@@ -1027,20 +1028,20 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
                 groupChannels.emplace_back(alphaChannelName);
             }
 
-            result.emplace_back(createChannelGroup(layerName, std::move(groupChannels)));
+            result.emplace_back(createChannelGroup(layerName, groupChannels));
         }
     }
 
-    for (const auto& name : allChannels) {
+    for (auto& name : allChannels) {
         if (hasAlpha) {
-            result.emplace_back(createChannelGroup(layerName, vector<string>{name, alphaChannelName}));
+            result.emplace_back(createChannelGroup(layerName, array<string_view, 2>{name, alphaChannelName}));
         } else {
-            result.emplace_back(createChannelGroup(layerName, vector<string>{name}));
+            result.emplace_back(createChannelGroup(layerName, span{&name, 1}));
         }
     }
 
     if (hasAlpha && result.empty()) {
-        result.emplace_back(createChannelGroup(layerName, vector<string>{alphaChannelName}));
+        result.emplace_back(createChannelGroup(layerName, array<string_view, 1>{alphaChannelName}));
     }
 
     TEV_ASSERT(!result.empty(), "Images with no channels should never exist.");
@@ -1182,7 +1183,7 @@ Task<HeapArray<float>> Image::getRgbaHdrImageData(
     const Channel* alphaChannel = nullptr;
 
     // Only treat the alpha channel specially if it is not the only channel of the image.
-    if (!all_of(begin(channels), end(channels), [](const Channel& c) { return c.isAlpha(); })) {
+    if (ranges::any_of(channels, [](const Channel& c) { return !c.isAlpha(); })) {
         if (channels.back().isAlpha()) {
             alphaChannel = &channels.back();
         }
@@ -1376,21 +1377,21 @@ string Image::toString() const {
 
     sstream << "\nChannels:\n";
 
-    auto localLayers = mData.layers;
-    transform(begin(localLayers), end(localLayers), begin(localLayers), [this](string layer) {
-        auto channels = mData.channelsInLayer(layer);
-        transform(begin(channels), end(channels), begin(channels), [](string channel) { return Channel::tail(channel); });
+    sstream << join(
+        mData.layers | views::transform([this](string_view layer) {
+            const auto channels = mData.channelsInLayer(layer) | views::transform([](string_view c) { return Channel::tail(c); });
 
-        if (layer.empty()) {
-            return join(channels, ",");
-        } else if (channels.size() == 1) {
-            return layer + channels.front();
-        } else {
-            return layer + "("s + join(channels, ",") + ")"s;
-        }
-    });
+            if (layer.empty()) {
+                return join(channels, ",");
+            } else if (channels.size() == 1) {
+                return fmt::format("{}{}", layer, channels.front());
+            } else {
+                return fmt::format("{}({})", layer, join(channels, ","));
+            }
+        }),
+        "\n"
+    );
 
-    sstream << join(localLayers, "\n");
     return std::move(sstream).str();
 }
 

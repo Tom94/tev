@@ -1206,8 +1206,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             }
 
             return true;
-        } else if (key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP ||
-                   (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT))) {
+        } else if (
+            key == GLFW_KEY_UP || key == GLFW_KEY_W || key == GLFW_KEY_PAGE_UP ||
+            (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && (modifiers & GLFW_MOD_SHIFT))
+        ) {
             if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
                 selectReference(nextImage(mCurrentReference, Backward));
             } else {
@@ -1215,8 +1217,10 @@ bool ImageViewer::keyboard_event(int key, int scancode, int action, int modifier
             }
 
             return true;
-        } else if (key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN ||
-                   (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT))) {
+        } else if (
+            key == GLFW_KEY_DOWN || key == GLFW_KEY_S || key == GLFW_KEY_PAGE_DOWN ||
+            (key == GLFW_KEY_TAB && (modifiers & GLFW_MOD_CONTROL) && !(modifiers & GLFW_MOD_SHIFT))
+        ) {
             if (key != GLFW_KEY_TAB && (modifiers & GLFW_MOD_SHIFT)) {
                 selectReference(nextImage(mCurrentReference, Forward));
             } else {
@@ -1387,7 +1391,7 @@ void ImageViewer::draw_contents() {
     }
 
     const bool anyImageVisible = mCurrentImage || mCurrentReference ||
-        any_of(begin(mImageButtonContainer->children()), end(mImageButtonContainer->children()), [](const auto& c) { return c->visible(); });
+        ranges::any_of(mImageButtonContainer->children(), [](const auto& c) { return c->visible(); });
 
     for (auto button : mAnyImageButtons) {
         button->set_enabled(anyImageVisible);
@@ -2403,7 +2407,7 @@ void ImageViewer::openImageDialog() {
                 allImages.push_back(filter.first);
             }
 
-            filters.emplace(filters.begin(), pair<string, string>{join(allImages, ","), "All images"});
+            filters.emplace(filters.begin(), pair{join(allImages, ","), "All images"});
             const auto paths = file_dialog(this, FileDialogType::OpenMultiple, filters);
 
             for (size_t i = 0; i < paths.size(); ++i) {
@@ -2735,7 +2739,7 @@ void ImageViewer::updateFilter() {
                 do {
                     int len = codePointLength(first[beginOffset]);
 
-                    allStartWithSameChar = all_of(begin(activeImageNames), end(activeImageNames), [&first, beginOffset, len](string_view name) {
+                    allStartWithSameChar = ranges::all_of(activeImageNames, [&first, beginOffset, len](string_view name) {
                         if (beginOffset + len > (int)name.size()) {
                             return false;
                         }
@@ -2755,7 +2759,7 @@ void ImageViewer::updateFilter() {
                 bool allEndWithSameChar;
                 do {
                     char lastChar = first[firstSize - endOffset - 1];
-                    allEndWithSameChar = all_of(begin(activeImageNames), end(activeImageNames), [lastChar, endOffset](string_view name) {
+                    allEndWithSameChar = ranges::all_of(activeImageNames, [lastChar, endOffset](string_view name) {
                         int index = (int)name.size() - endOffset - 1;
                         return index >= 0 && name[index] == lastChar;
                     });
@@ -2851,15 +2855,11 @@ void ImageViewer::updateTitle() {
     // Only treat alpha specially if it is not the only channel.
     const bool hasAlpha = channels.size() > 1 && Channel::isAlpha(channels.back());
 
-    auto channelTails = channels;
-    transform(begin(channelTails), end(channelTails), begin(channelTails), Channel::tail);
-
     caption << fmt::format("{} – {} – {}%", mCurrentImage->shortName(), mCurrentGroup, (int)std::round(mImageCanvas->scale() * 100));
 
     const auto rel = mouse_pos() - mImageCanvas->position();
     const vector<float> values = mImageCanvas->getValuesAtNanoPos({rel.x(), rel.y()}, channels);
     const Vector2i imageCoords = mImageCanvas->getImageCoords(mCurrentImage.get(), {rel.x(), rel.y()});
-    TEV_ASSERT(values.size() >= channelTails.size(), "Should obtain a value for every existing channel.");
 
     caption << fmt::format(
         " – @{},{} ({:.3f},{:.3f}) / {}x{}: ",

@@ -163,15 +163,11 @@ vector<string_view> split(string_view text, string_view delim, bool inclusive) {
 vector<string_view> splitWhitespace(string_view s, bool inclusive) { return split(s, ws, inclusive); }
 
 string toLower(string_view str) {
-    string result{str};
-    transform(begin(result), end(result), begin(result), [](unsigned char c) { return (char)tolower(c); });
-    return result;
+    return str | views::transform([](auto c) { return (char)tolower(c); }) | toBasicString;
 }
 
 string toUpper(string_view str) {
-    string result{str};
-    transform(begin(result), end(result), begin(result), [](unsigned char c) { return (char)toupper(c); });
-    return result;
+    return str | views::transform([](auto c) { return (char)toupper(c); }) | toBasicString;
 }
 
 string_view trimLeft(string_view s) {
@@ -297,7 +293,7 @@ bool matchesFuzzy(string_view text, string_view filter, size_t* matchedPartId) {
 
     // Perform matching via smart casing: if the filter is all lowercase, we want to match case-insensitively. If the filter contains any
     // uppercase characters, we want to match case-sensitively.
-    const bool caseInsensitive = all_of(begin(filter), end(filter), [](char c) { return islower(c); });
+    const bool caseInsensitive = ranges::all_of(filter, [](char c) { return islower(c); });
 
     string casedText, casedFilter;
     if (caseInsensitive) {

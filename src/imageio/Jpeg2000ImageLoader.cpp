@@ -205,7 +205,7 @@ Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
 
             if (memcmp(box->data.data(), xmpUuid, 16) == 0) {
                 meta.xmpXml = box->data.subspan(16);
-            } else if (any_of(begin(exifUuids), end(exifUuids), [&box](const uint8_t (&knownUuid)[16]) {
+            } else if (ranges::any_of(exifUuids, [&box](const uint8_t (&knownUuid)[16]) {
                            return memcmp(box->data.data(), knownUuid, 16) == 0;
                        })) {
                 meta.exifData = box->data.subspan(16);

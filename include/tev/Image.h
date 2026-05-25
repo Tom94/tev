@@ -120,7 +120,7 @@ struct ImageData {
 
     size_t numPixels() const { return channels.front().numPixels(); }
 
-    std::vector<std::string> channelsInLayer(std::string_view layerName) const;
+    std::vector<std::string_view> channelsInLayer(std::string_view layerName) const;
 
     Task<void> applyColorConversion(const nanogui::Matrix3f& mat, int priority);
 

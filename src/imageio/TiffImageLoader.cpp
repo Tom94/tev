@@ -240,7 +240,7 @@ Task<void> tiffDataToFloat32(
     } else if (kind == ETiffKind::U32) {
         co_await toFloat32(imageData.span<const uint32_t>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
     } else if (kind == ETiffKind::Palette) {
-        if (any_of(palette.begin(), palette.end(), [](const auto& c) { return c.empty(); })) {
+        if (ranges::any_of(palette, [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
         }
 
@@ -723,7 +723,7 @@ Task<void> linearizeAndNormalizeRawDng(
         channelScale[c] = 1.0f / (whiteLevel[c] - maxBlackLevel[c]);
     }
 
-    if (any_of(channelScale.begin(), channelScale.end(), [](float s) { return s != 1.0f; })) {
+    if (ranges::any_of(channelScale, [](float s) { return s != 1.0f; })) {
         tlog::debug("Non-1.0 channel scale [{}]", join(channelScale, ","));
 
         co_await ThreadPool::global().parallelFor(
@@ -1806,7 +1806,7 @@ Task<ImageData> readTiffImage(
         }
     }
 
-    if (all_of(begin(SUPPORTED_PHOTOMETRICS), end(SUPPORTED_PHOTOMETRICS), [&](uint16_t p) { return p != photometric; })) {
+    if (ranges::all_of(SUPPORTED_PHOTOMETRICS, [&](uint16_t p) { return p != photometric; })) {
         throw ImageLoadError{fmt::format("Unsupported photometric interpretation: {}", photometric)};
     }
 
@@ -1913,7 +1913,7 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"Palette images must have unsigned integer sample format."};
         }
 
-        if (any_of(begin(palette), end(palette), [](const auto& c) { return c.empty(); })) {
+        if (ranges::any_of(palette, [](const auto& c) { return c.empty(); })) {
             throw ImageLoadError{"Failed to read color palette."};
         }
 
