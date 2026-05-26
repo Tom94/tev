@@ -1241,15 +1241,18 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
         rgbaHdrData.size(),
         [&](const size_t i) {
             const size_t start = 4 * i;
-            const Vector3f rgb = applyTonemap(
-                {
-                    applyExposureAndOffset(rgbaHdrData[start + 0], exposure, offset),
-                    applyExposureAndOffset(rgbaHdrData[start + 1], exposure, offset),
-                    applyExposureAndOffset(rgbaHdrData[start + 2], exposure, offset),
-                },
-                gamma,
-                tonemap
-            );
+            const Vector3f rgb = toSRGB(applyGamma(
+                applyTonemap(
+                    {
+                        applyExposureAndOffset(rgbaHdrData[start + 0], exposure, offset),
+                        applyExposureAndOffset(rgbaHdrData[start + 1], exposure, offset),
+                        applyExposureAndOffset(rgbaHdrData[start + 2], exposure, offset),
+                    },
+                    gamma,
+                    tonemap
+                ),
+                2.2f
+            ));
 
             const auto rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), rgbaHdrData[start + 3]};
 

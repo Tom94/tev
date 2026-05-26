@@ -600,6 +600,10 @@ inline float toSRGB(float val, float gamma = 2.4f) {
     }
 }
 
+inline nanogui::Vector3f toSRGB(nanogui::Vector3f val, float gamma = 2.4f) {
+    return {toSRGB(val.x(), gamma), toSRGB(val.y(), gamma), toSRGB(val.z(), gamma)};
+}
+
 inline float toLinear(float val, float gamma = 2.4f) {
     static constexpr float a = 0.055f;
     static constexpr float threshold = 0.04045f;
@@ -610,6 +614,16 @@ inline float toLinear(float val, float gamma = 2.4f) {
     } else {
         return std::copysign(std::pow((absVal + a) / (1.0f + a), gamma), val);
     }
+}
+
+inline nanogui::Vector3f toLinear(nanogui::Vector3f val, float gamma = 2.4f) {
+    return {toLinear(val.x(), gamma), toLinear(val.y(), gamma), toLinear(val.z(), gamma)};
+}
+
+inline float applyGamma(float val, float gamma) { return std::copysign(std::pow(std::abs(val), gamma), val); }
+
+inline nanogui::Vector3f applyGamma(nanogui::Vector3f val, float gamma) {
+    return {applyGamma(val.x(), gamma), applyGamma(val.y(), gamma), applyGamma(val.z(), gamma)};
 }
 
 int lastError();
@@ -696,7 +710,7 @@ inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETon
     nanogui::Vector3f result;
     switch (tonemap) {
         case ETonemap::Gamma: {
-            result = {std::pow(value.x(), 1 / gamma), std::pow(value.y(), 1 / gamma), std::pow(value.z(), 1 / gamma)};
+            result = applyGamma(value, 1.0f / gamma);
             break;
         }
         case ETonemap::FalseColor: {

@@ -268,9 +268,11 @@ public:
         int priority
     ) const;
 
+    // Returns RGBA8 data with sRGB primaries and transfer, *not* gamma 2.2
     Task<HeapArray<uint8_t>>
         getRgbaLdrImageData(const HeapArray<float>& hdrData, ETonemap tonemap, float gamma, float exposure, float offset, int priority) const;
 
+    // Returns RGBA8 data with sRGB primaries and transfer, *not* gamma 2.2
     Task<HeapArray<uint8_t>> getRgbaLdrImageData(
         std::shared_ptr<Image> reference,
         Box2i imageRegion,
