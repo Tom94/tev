@@ -543,7 +543,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             resultData.nativeMetadata.chroma = rec709Chroma(); // default to Rec.709 primaries unless cHRM chunk says otherwise
 
             int srgbIntent = 0;
-            const bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_iCCP;
+            const bool hasChunkSrgb = png_get_sRGB(pngPtr, infoPtr, &srgbIntent) == PNG_INFO_sRGB;
 
             double invGamma64 = 1.0 / 2.2;
             const bool hasChunkGama = png_get_gAMA(pngPtr, infoPtr, &invGamma64) == PNG_INFO_gAMA;

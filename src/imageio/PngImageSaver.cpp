@@ -78,6 +78,8 @@ Task<void> PngImageSaver::save(ostream& oStream, const fs::path&, span<const uin
         png, info, imageSize.x(), imageSize.y(), 8, colorType, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT
     );
 
+    png_set_sRGB(png, info, 3 /* absolute colorimetric */);
+
     png_write_info(png, info);
 
     const auto stride = (size_t)imageSize.x() * nChannels;
