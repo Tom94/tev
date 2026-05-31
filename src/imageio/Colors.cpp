@@ -915,6 +915,12 @@ Task<void> toLinearSrgbPremul(
     const size_t numPixels = posProd(size);
 
     cmsHTRANSFORM transform = nullptr;
+    const auto transformGuard = ScopeGuard{[&transform]() {
+        if (transform) {
+            cmsDeleteTransform(transform);
+        }
+    }};
+
     if (cicp) {
         tlog::debug(
             "Performing CICP color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={}",
@@ -959,7 +965,7 @@ Task<void> toLinearSrgbPremul(
         }
     }
 
-    const auto guard = ScopeGuard{[now = chrono::system_clock::now()]() {
+    const auto timingGuard = ScopeGuard{[now = chrono::system_clock::now()]() {
         const auto duration = chrono::duration_cast<chrono::duration<double>>(chrono::system_clock::now() - now);
         tlog::debug("ICC profile application took {:.03}s", duration.count());
     }};
