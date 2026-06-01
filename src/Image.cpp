@@ -470,7 +470,8 @@ Task<void> ImageData::unmultiplyAlpha(int priority) {
 }
 
 Task<void> ImageData::orientToTopLeft(int priority) {
-    if (orientation == EOrientation::TopLeft) {
+    if (orientation == EOrientation::None || orientation == EOrientation::TopLeft) {
+        orientation = EOrientation::TopLeft;
         co_return;
     }
 

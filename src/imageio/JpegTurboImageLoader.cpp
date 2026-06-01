@@ -414,7 +414,6 @@ Task<vector<ImageData>>
 
         // Per ISO 21496-1, an sRGB color space exif setting takes precedence over ICC profiles
         bool forceSrgb = false;
-        EOrientation orientation = EOrientation::None;
 
         if (!appN.exif.empty()) {
             tlog::debug("Found EXIF data of size {} bytes", appN.exif.size());
@@ -430,8 +429,8 @@ Task<vector<ImageData>>
 
                 const EOrientation exifOrientation = exif.getOrientation();
                 if (exifOrientation != EOrientation::None) {
-                    orientation = exifOrientation;
-                    tlog::debug("EXIF image orientation: {}", toString(orientation));
+                    resultData.orientation = exifOrientation;
+                    tlog::debug("EXIF image orientation: {}", toString(resultData.orientation));
                 }
 
                 imageInfo.appleMakerNoteIfd = exif.tryGetAppleMakerNote();
@@ -450,8 +449,8 @@ Task<vector<ImageData>>
 
                 const EOrientation xmpOrientation = xmp.orientation();
                 if (xmpOrientation != EOrientation::None) {
-                    orientation = xmpOrientation;
-                    tlog::debug("XMP image orientation: {}", toString(orientation));
+                    resultData.orientation = xmpOrientation;
+                    tlog::debug("XMP image orientation: {}", toString(resultData.orientation));
                 }
 
                 isoGainmapMetadata = xmp.isoGainMapMetadata();
@@ -465,10 +464,6 @@ Task<vector<ImageData>>
                         resultData.partName.find("hdrgainmap") != string::npos;
                 }
             } catch (const invalid_argument& e) { tlog::warning("Failed to read XMP metadata: {}", e.what()); }
-        }
-
-        if (orientation != EOrientation::None) {
-            size = co_await orientToTopLeft(buf, size, orientation, priority);
         }
 
         if (!appN.iso.empty()) {
@@ -584,6 +579,11 @@ Task<vector<ImageData>>
 
     for (size_t i = 0; i < imageInfos.size(); ++i) {
         auto imageData = co_await decodeJpeg(imageInfos[i].data, i);
+
+        // MPF images may not have orientation metadata themselves. In that case inherit from main image
+        if (!result.empty() && imageData.orientation == EOrientation::None) {
+            imageData.orientation = result.front().orientation;
+        }
 
         // Danger: imageInfos may grow due to decodeJpeg adding MPF images!
         const auto& imageInfo = imageInfos[i];

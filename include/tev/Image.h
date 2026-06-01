@@ -82,7 +82,7 @@ struct ImageData {
     std::vector<std::string> layers;
     nanogui::Matrix3f toRec709 = nanogui::Matrix3f{1.0f}; // Identity by default
     bool hasPremultipliedAlpha = false;
-    EOrientation orientation = EOrientation::TopLeft;
+    EOrientation orientation = EOrientation::None;
     std::vector<AttributeNode> attributes;
 
     HdrMetadata hdrMetadata;
