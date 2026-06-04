@@ -289,7 +289,7 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = numChannels == 4;
 
-    resultData.channels = co_await makeRgbaInterleavedChannels(
+    resultData.channels = co_await makeInterleavedChannels(
         numChannels, numInterleavedChannels, hasAlpha, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
     resultData.hasPremultipliedAlpha = !hasAlpha;

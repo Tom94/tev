@@ -398,7 +398,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     const auto numColorChannels = hasAlpha ? numRgbaChannels - 1 : numRgbaChannels;
     const auto numExtraChannels = numChannels > numRgbaChannels ? numChannels - numRgbaChannels : 0;
 
-    resultData.channels = co_await makeRgbaInterleavedChannels(
+    resultData.channels = co_await makeInterleavedChannels(
         numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
     );
 

@@ -277,7 +277,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
-        resultData.channels = co_await makeRgbaInterleavedChannels(
+        resultData.channels = co_await makeInterleavedChannels(
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, layer, priority
         );
 

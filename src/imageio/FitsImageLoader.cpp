@@ -285,7 +285,7 @@ Task<optional<ImageData>> decodeImageHdu(fitsfile* fp, int hduIndex, int priorit
 
         TEV_ASSERT(numChannels > 0, "Unexpected zero channels after earlier check");
         const auto numInterleavedChannels = nextSupportedTextureChannelCount(3);
-        auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
+        auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
             3, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), "", priority
         );
 
