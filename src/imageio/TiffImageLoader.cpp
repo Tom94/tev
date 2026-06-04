@@ -2440,38 +2440,31 @@ Task<ImageData> readTiffImage(
     };
 
     auto rgbaView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+    co_await tiffDataToFloat32(
+        kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
+    );
+
+    auto rgbaOutView = rgbaView;
+    if (photometric == PHOTOMETRIC_SEPARATED) {
+        // If the data is CMYK, create RGB channels that we will first try to populate via ICC conversion and fall back to a simple
+        // conversion otherwise further down.
+        co_await resultData.prependRgb(priority);
+        rgbaOutView = MultiChannelView<float>{span{resultData.channels}.subspan(0, 3)};
+
+        if (hasAlpha) {
+            rgbaOutView.insertView(3, resultData.channels.at(3 + numColorChannels).view<float>());
+        }
+
+        numColorChannels = 3;
+        numRgbaChannels = samplesPerPixel = hasAlpha ? numColorChannels + 1 : numColorChannels;
+        numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+    }
 
     // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion. ICC profiles
     // are generally most accurate when available, so prefer them. However, if we've got a Lab photometric interpretation, TIFF's data handling
     // can be tricky and we can reproduce the exact behavior the ICC would have without too much trouble ourselves, so skip ICC in that case.
     if (iccProfileData && iccProfileSize > 0 && !labPhotometrics.contains(photometric)) {
         try {
-            co_await tiffDataToFloat32(
-                kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
-            );
-
-            auto rgbaOutView = rgbaView;
-            vector<Channel> newRgbaOutChannels;
-            if (photometric == PHOTOMETRIC_SEPARATED) {
-                // Need to convert from CMYK to RGB
-                numColorChannels = 3;
-                numRgbaChannels = samplesPerPixel = hasAlpha ? numColorChannels + 1 : numColorChannels;
-                numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
-
-                newRgbaOutChannels = co_await ImageLoader::makeInterleavedChannels(
-                    numRgbaChannels,
-                    numInterleavedChannels,
-                    hasAlpha,
-                    size,
-                    EPixelFormat::F32,
-                    resultData.channels.front().desiredPixelFormat(),
-                    partName,
-                    priority
-                );
-
-                rgbaOutView = MultiChannelView<float>{span{newRgbaOutChannels}};
-            }
-
             const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
             co_await toLinearSrgbPremul(
                 profile,
@@ -2485,17 +2478,9 @@ Task<ImageData> readTiffImage(
             resultData.hasPremultipliedAlpha = true;
             resultData.readMetadataFromIcc(profile);
 
-            resultData.channels.insert(
-                resultData.channels.begin(), make_move_iterator(newRgbaOutChannels.begin()), make_move_iterator(newRgbaOutChannels.end())
-            );
-
             co_return resultData;
         } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
     }
-
-    co_await tiffDataToFloat32(
-        kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
-    );
 
     // Both CFA and linear raw DNG data need to be linearized and normalized prior to color space conversions. Metadata for
     // linearization assumes *pre* demosaicing data, so this step needs to be done before we convert CFA to RGB.
@@ -2536,7 +2521,7 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"CMYK separated images must have exactly 4 inks."};
         }
 
-        if (numColorChannels != 4) {
+        if (rgbaView.nChannels() != 4) {
             throw ImageLoadError{"CMYK separated images must have exactly 4 color channels."};
         }
 
@@ -2549,44 +2534,26 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"Failed to read dot range for separated image."};
         }
 
-        numColorChannels = 3;
-        numRgbaChannels = samplesPerPixel = hasAlpha ? numColorChannels + 1 : numColorChannels;
-        numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
-        auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
-        );
-
         const auto cmykView = rgbaView;
-        const auto newRgbaView = MultiChannelView<float>{span{rgbaChannels}};
 
-        const size_t numPixels = prod(size);
-
+        const size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
-            numPixels,
+            numPixels * 4,
             [&](size_t i) {
                 const float c = (cmykView[0, i] - dotMin) / (dotMax - dotMin);
                 const float m = (cmykView[1, i] - dotMin) / (dotMax - dotMin);
                 const float y = (cmykView[2, i] - dotMin) / (dotMax - dotMin);
                 const float k = (cmykView[3, i] - dotMin) / (dotMax - dotMin);
+                const float oneMinusK = 1.0f - k;
 
-                newRgbaView[0, i] = (1.0f - c) * (1.0f - k);
-                newRgbaView[1, i] = (1.0f - m) * (1.0f - k);
-                newRgbaView[2, i] = (1.0f - y) * (1.0f - k);
-
-                if (hasAlpha) {
-                    newRgbaView[-1, i] = cmykView[-1, i];
-                }
+                rgbaOutView[0, i] = (1.0f - c) * oneMinusK;
+                rgbaOutView[1, i] = (1.0f - m) * oneMinusK;
+                rgbaOutView[2, i] = (1.0f - y) * oneMinusK;
             },
             priority
         );
-
-        resultData.channels.insert(
-            resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
-        );
-
-        rgbaView = newRgbaView;
     }
 
     // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.

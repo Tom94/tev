@@ -630,6 +630,25 @@ Task<void> ImageData::ensureValid(string_view channelSelector, int taskPriority)
     sort(begin(attributes), end(attributes), [](const AttributeNode& a, const AttributeNode& b) { return a.name < b.name; });
 }
 
+Task<void> ImageData::prependRgb(int priority) {
+    if (channels.empty()) {
+        throw ImageModifyError{"Image must have at least one channel to prepend RGB channels."};
+    }
+
+    auto tmp = co_await ImageLoader::makeInterleavedChannels(
+        3,
+        nextSupportedTextureChannelCount(3),
+        false,
+        channels.front().size(),
+        channels.front().pixelFormat(),
+        channels.front().desiredPixelFormat(),
+        Channel::head(channels.front().name()),
+        priority
+    );
+
+    channels.insert(begin(channels), make_move_iterator(begin(tmp)), make_move_iterator(end(tmp)));
+}
+
 atomic<int> Image::sId(0);
 
 Image::Image(const fs::path& path, fs::file_time_type fileLastModified, ImageData&& data, string_view channelSelector, bool groupChannels) :
@@ -981,8 +1000,14 @@ vector<ChannelGroup> Image::getGroupedChannels(string_view layerName) const {
     static const vector<vector<string>> groups = {
         {"R", "G", "B"},
         {"r", "g", "b"},
+        {"C"},
+        {"c"},
+        {"M"},
+        {"m"},
         {"X", "Y", "Z"},
         {"x", "y", "z"},
+        {"K"},
+        {"k"},
         {"U", "V"},
         {"u", "v"},
         {"Z"},
