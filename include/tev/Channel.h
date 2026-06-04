@@ -363,7 +363,7 @@ public:
         }
     }
 
-    MultiChannelView(const ChannelView<T>& channel) :
+    MultiChannelView(const ChannelView<std::remove_const_t<T>>& channel) :
         MultiChannelView{
             std::span{&channel, 1}
     } {}
@@ -376,7 +376,7 @@ public:
         requires(std::is_const_v<T>)
         : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | toSmallRgbaVector} {}
 
-    MultiChannelView(std::span<const ChannelView<T>> views) : mChannelViews{views.begin(), views.end()} {
+    MultiChannelView(std::span<const ChannelView<std::remove_const_t<T>>> views) : mChannelViews{views.begin(), views.end()} {
         if (mChannelViews.empty()) {
             throw std::runtime_error{"MultiChannelView(span) must have at least one channel."};
         }
@@ -388,6 +388,8 @@ public:
             }
         }
     }
+
+    operator MultiChannelView<const T>() const { return MultiChannelView<const T>{mChannelViews}; }
 
     size_t channelIdx(int c) const { return c < 0 ? mChannelViews.size() + c : c; }
 
