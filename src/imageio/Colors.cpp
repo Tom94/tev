@@ -771,7 +771,7 @@ Task<void> toLinearSrgbPremul(
 
     const auto size = src.size();
 
-    if (src.nChannels() < 1 || src.nChannels() > 4) {
+    if (src.nChannels() < 1 || src.nChannels() > 5) {
         throw runtime_error{"Must have between 1 and 4 channels."};
     }
 
@@ -934,7 +934,9 @@ Task<void> toLinearSrgbPremul(
     } else {
         // LCMS's fast float optimizations require a certain degree of precomputation which can be harmful for small images that would
         // convert quickly anyway. We'll disable optimizations arbitrarily for images with fewer than 512x512 pixels.
-        const bool optimize = numPixels >= 512 * 512;
+        // Additionally, LCMS's precomputation takes a significant amount of time for CMYK (4 channels), as well as result in degraded
+        // quality. Presumably due to the much larger LUT required. Hence we'll disable optimizations for CMYK conversions.
+        const bool optimize = numPixels >= 512 * 512 && numColorChannels <= 3;
 
         tlog::debug(
             "Creating LCMS color transform: alphaKind={} type={:#010x} channels={}->{} typeOut={:#010x} intent={} optimize={}",
@@ -1001,7 +1003,7 @@ Task<void> toLinearSrgbPremul(
                 // Ink channels are expected to be in [0, 100]
                 for (int x = 0; x < size.x(); ++x) {
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        src[c, x, y] *= 100.0f;
+                        src[c, x, y] = 100.0f - src[c, x, y] * 100.0f;
                     }
                 }
             }
@@ -1039,7 +1041,7 @@ Task<void> toLinearSrgbPremul(
                         sizeof(float)
                     );
                 } else {
-                    HeapArray<float> tmp(size.x() * std::max(src.nChannels(), rgbaDst.nChannels()));
+                    HeapArray<float> tmp(size.x() * (src.nChannels() + rgbaDst.nChannels()));
 
                     for (int x = 0; x < size.x(); ++x) {
                         for (size_t c = 0, count = src.nChannels(); c < count; ++c) {
@@ -1047,11 +1049,13 @@ Task<void> toLinearSrgbPremul(
                         }
                     }
 
-                    cmsDoTransform(transform, tmp.data(), tmp.data(), size.x());
+                    const float* in = tmp.data();
+                    float* out = tmp.data() + size.x() * src.nChannels();
+                    cmsDoTransform(transform, in, out, size.x());
 
                     for (int x = 0; x < size.x(); ++x) {
                         for (size_t c = 0, count = rgbaDst.nChannels(); c < count; ++c) {
-                            rgbaDst[c, x, y] = tmp[x * count + c];
+                            rgbaDst[c, x, y] = out[x * count + c];
                         }
                     }
                 }
