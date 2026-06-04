@@ -406,7 +406,7 @@ public:
         for (size_t i = 0; i < mChannelViews.size(); ++i) {
             const auto& channel = mChannelViews[i];
             const auto offset = channel.data() - front.data();
-            if (channel.data() != front.data() || offset != (ptrdiff_t)i || channel.dataStride() != front.dataStride()) {
+            if (offset != (ptrdiff_t)i || channel.dataStride() != front.dataStride()) {
                 return std::nullopt;
             }
         }
