@@ -483,7 +483,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 const Vector2i size{(int)info.xsize, (int)info.ysize};
 
                 const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-                data.channels = co_await makeRgbaInterleavedChannels(
+                data.channels = co_await makeInterleavedChannels(
                     numChannels,
                     numInterleavedChannels,
                     info.alpha_bits > 0,

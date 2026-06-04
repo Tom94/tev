@@ -1596,7 +1596,7 @@ Task<ImageData> decodeJpeg(
     const float scale = 1.0f / (float)((1ull << precision) - 1);
 
     ImageData result;
-    result.channels = co_await ImageLoader::makeRgbaInterleavedChannels(
+    result.channels = co_await ImageLoader::makeInterleavedChannels(
         tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
@@ -2419,7 +2419,7 @@ Task<ImageData> readTiffImage(
     // Local scope to prevent use-after-move
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
-        auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
+        auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
             numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
         auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
@@ -2491,7 +2491,7 @@ Task<ImageData> readTiffImage(
 
         numRgbaChannels = numColorChannels = samplesPerPixel = 3;
         numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
-        auto rgbaChannels = co_await ImageLoader::makeRgbaInterleavedChannels(
+        auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
             numRgbaChannels, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
         );
 

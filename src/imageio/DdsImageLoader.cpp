@@ -231,7 +231,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = DirectX::HasAlpha(metadata.format);
 
-    resultData.channels = co_await makeRgbaInterleavedChannels(
+    resultData.channels = co_await makeInterleavedChannels(
         numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F32, "", priority
     );
 

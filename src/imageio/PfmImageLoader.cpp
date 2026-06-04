@@ -323,7 +323,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         const bool hasAlpha = numChannels == 2 || numChannels == 4;
-        resultData.channels = co_await makeRgbaInterleavedChannels(
+        resultData.channels = co_await makeInterleavedChannels(
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
         );
 
