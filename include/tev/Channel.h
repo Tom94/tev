@@ -342,7 +342,7 @@ private:
     size_t mDataStride;
 };
 
-template <typename T> using SmallRgbaVector = gch::small_vector<T, 4>; // Up to 4 channels should be stored on the stack
+template <typename T> using SmallRgbaVector = gch::small_vector<T, 5>; // Up to 5 channels (CMYKA) should be stored on the stack
 inline constexpr detail::to_vector_fn<SmallRgbaVector> toSmallRgbaVector{};
 
 template <typename T> class MultiChannelView {
