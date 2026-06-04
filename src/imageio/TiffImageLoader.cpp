@@ -1561,10 +1561,6 @@ Task<ImageData> decodeJpeg(
 
     const int precision = cinfo.data_precision;
 
-    if (cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK) {
-        throw ImageLoadError{"CMYK JPEGs are not supported."};
-    }
-
     if (precision < 2 || precision > 16) {
         throw ImageLoadError{fmt::format("Unsupported JPEG precision: {} bits per sample.", precision)};
     }
@@ -1764,6 +1760,7 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_RGB,
         PHOTOMETRIC_PALETTE,
         PHOTOMETRIC_MASK,
+        PHOTOMETRIC_SEPARATED,
         PHOTOMETRIC_YCBCR,
         //
         PHOTOMETRIC_CIELAB,
@@ -1778,10 +1775,6 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_DEPTH,
         PHOTOMETRIC_SEMANTIC,
     };
-
-    if (photometric == PHOTOMETRIC_SEPARATED) {
-        throw ImageLoadError{"Separated images (e.g. CMYK) are unsupported."};
-    }
 
     if (photometric == PHOTOMETRIC_YCBCR) {
         if (compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG || compression == COMPRESSION_JP2000) {
@@ -1875,7 +1868,7 @@ Task<ImageData> readTiffImage(
         }
 
         numExtraChannels = extraChannelTypes.size();
-    } else if (samplesPerPixel == 2 || samplesPerPixel == 4) {
+    } else if (photometric != PHOTOMETRIC_SEPARATED && (samplesPerPixel == 2 || samplesPerPixel == 4)) {
         tlog::warning("Assuming alpha channel for 2 or 4 samples per pixel.");
         numExtraChannels = 1;
         hasAlpha = true;
@@ -2457,18 +2450,44 @@ Task<ImageData> readTiffImage(
                 kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
             );
 
+            auto rgbaOutView = rgbaView;
+            vector<Channel> newRgbaOutChannels;
+            if (photometric == PHOTOMETRIC_SEPARATED) {
+                // Need to convert from CMYK to RGB
+                numColorChannels = 3;
+                numRgbaChannels = samplesPerPixel = hasAlpha ? numColorChannels + 1 : numColorChannels;
+                numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+
+                newRgbaOutChannels = co_await ImageLoader::makeInterleavedChannels(
+                    numRgbaChannels,
+                    numInterleavedChannels,
+                    hasAlpha,
+                    size,
+                    EPixelFormat::F32,
+                    resultData.channels.front().desiredPixelFormat(),
+                    partName,
+                    priority
+                );
+
+                rgbaOutView = MultiChannelView<float>{span{newRgbaOutChannels}};
+            }
+
             const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
             co_await toLinearSrgbPremul(
                 profile,
                 hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
                 rgbaView,
-                rgbaView,
+                rgbaOutView,
                 nullopt,
                 priority
             );
 
             resultData.hasPremultipliedAlpha = true;
             resultData.readMetadataFromIcc(profile);
+
+            resultData.channels.insert(
+                resultData.channels.begin(), make_move_iterator(newRgbaOutChannels.begin()), make_move_iterator(newRgbaOutChannels.end())
+            );
 
             co_return resultData;
         } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
@@ -2497,7 +2516,9 @@ Task<ImageData> readTiffImage(
 
         co_await demosaicCfa(tif, resultData.channels.front().view<float>(), MultiChannelView<float>(rgbaChannels), priority);
 
-        photometric = isDng ? PHOTOMETRIC_LINEAR_RAW : PHOTOMETRIC_RGB;
+        if (isDng) {
+            photometric = PHOTOMETRIC_LINEAR_RAW;
+        }
 
         resultData.channels.front().setName(Channel::joinIfNonempty(partName, "cfa.L"));
         resultData.channels.insert(
@@ -2506,6 +2527,66 @@ Task<ImageData> readTiffImage(
 
         // Update the view to point to the new RGBA channels
         rgbaView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+    } else if (photometric == PHOTOMETRIC_SEPARATED) {
+        if (uint16_t inkset; !TIFFGetFieldDefaulted(tif, TIFFTAG_INKSET, &inkset) || inkset != INKSET_CMYK) {
+            throw ImageLoadError{"Only CMYK separated images are supported."};
+        }
+
+        if (uint16_t numberOfInks; !TIFFGetFieldDefaulted(tif, TIFFTAG_NUMBEROFINKS, &numberOfInks) || numberOfInks != 4) {
+            throw ImageLoadError{"CMYK separated images must have exactly 4 inks."};
+        }
+
+        if (numColorChannels != 4) {
+            throw ImageLoadError{"CMYK separated images must have exactly 4 color channels."};
+        }
+
+        float dotMin = 0.0f, dotMax = 1.0f;
+        if (uint16_t dmin, dmax; TIFFGetFieldDefaulted(tif, TIFFTAG_DOTRANGE, &dmin, &dmax)) {
+            dotMin = (float)dmin / (float)((1ull << dataBitsPerSample) - 1);
+            dotMax = (float)dmax / (float)((1ull << dataBitsPerSample) - 1);
+            tlog::debug("Read dot range for separated image: min={} max={}", dotMin, dotMax);
+        } else {
+            throw ImageLoadError{"Failed to read dot range for separated image."};
+        }
+
+        numColorChannels = 3;
+        numRgbaChannels = samplesPerPixel = hasAlpha ? numColorChannels + 1 : numColorChannels;
+        numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+        auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
+            numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
+        );
+
+        const auto cmykView = rgbaView;
+        const auto newRgbaView = MultiChannelView<float>{span{rgbaChannels}};
+
+        const size_t numPixels = prod(size);
+
+        co_await ThreadPool::global().parallelFor(
+            0uz,
+            numPixels,
+            numPixels,
+            [&](size_t i) {
+                const float c = (cmykView[0, i] - dotMin) / (dotMax - dotMin);
+                const float m = (cmykView[1, i] - dotMin) / (dotMax - dotMin);
+                const float y = (cmykView[2, i] - dotMin) / (dotMax - dotMin);
+                const float k = (cmykView[3, i] - dotMin) / (dotMax - dotMin);
+
+                newRgbaView[0, i] = (1.0f - c) * (1.0f - k);
+                newRgbaView[1, i] = (1.0f - m) * (1.0f - k);
+                newRgbaView[2, i] = (1.0f - y) * (1.0f - k);
+
+                if (hasAlpha) {
+                    newRgbaView[-1, i] = cmykView[-1, i];
+                }
+            },
+            priority
+        );
+
+        resultData.channels.insert(
+            resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
+        );
+
+        rgbaView = newRgbaView;
     }
 
     // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.
