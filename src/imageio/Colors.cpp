@@ -756,10 +756,11 @@ ColorProfile ColorProfile::fromIcc(span<const uint8_t> iccProfile) {
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     EAlphaKind alphaKind,
-    const MultiChannelView<float>& src,
+    const MultiChannelView<const float>& src,
     const MultiChannelView<float>& rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
-    int priority
+    int priority,
+    bool invertCmyk
 ) {
     if (!profile.isValid()) {
         throw runtime_error{"Color profile must be valid."};
@@ -978,13 +979,27 @@ Task<void> toLinearSrgbPremul(
         size.y(),
         numSamples * 64, // arbitrary factor to reflect increased cost of color conversion
         [&](size_t y) {
+            HeapArray<float> tmp(size.x() * (src.nChannels() + rgbaDst.nChannels()));
+            auto in = MultiChannelView<float>{
+                tmp.data(), src.nChannels(), {size.x(), 1}
+            };
+            auto out = MultiChannelView<float>{
+                tmp.data() + size.x() * src.nChannels(), rgbaDst.nChannels(), {size.x(), 1}
+            };
+
+            for (int x = 0; x < size.x(); ++x) {
+                for (size_t c = 0, count = src.nChannels(); c < count; ++c) {
+                    in[c, x] = src[c, x, y];
+                }
+            }
+
             // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
-                    const float alpha = src[-1, x, y];
+                    const float alpha = in[-1, x];
                     const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        src[c, x, y] *= factor;
+                        in[c, x] *= factor;
                     }
                 }
             }
@@ -995,7 +1010,7 @@ Task<void> toLinearSrgbPremul(
                     const auto scale = Vector3f{100.0f, 255.0f, 255.0f};
                     const auto offset = Vector3f{0.0f, -128.0f, -128.0f};
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        auto& val = src[c, x, y];
+                        auto& val = in[c, x];
                         val = val * scale[c] + offset[c];
                     }
                 }
@@ -1003,7 +1018,12 @@ Task<void> toLinearSrgbPremul(
                 // Ink channels are expected to be in [0, 100]
                 for (int x = 0; x < size.x(); ++x) {
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        src[c, x, y] = 100.0f - src[c, x, y] * 100.0f;
+                        float val = in[c, x] * 100.0f;
+                        if (invertCmyk) {
+                            val = 100.0f - val;
+                        }
+
+                        in[c, x] = val;
                     }
                 }
             }
@@ -1012,53 +1032,20 @@ Task<void> toLinearSrgbPremul(
                 for (int x = 0; x < size.x(); ++x) {
                     Vector3f color;
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        color[c] = (src[c, x, y] - range.offset) * range.scale;
+                        color[c] = (in[c, x] - range.offset) * range.scale;
                     }
 
                     color = toRec709 * ituth273::invTransfer(cicp->transfer, color);
                     for (size_t c = 0; c < numColorChannelsOut; ++c) {
-                        rgbaDst[c, x, y] = color[c];
+                        out[c, x] = color[c];
                     }
 
                     if (alphaKind != EAlphaKind::None) {
-                        rgbaDst[-1, x, y] = src[-1, x, y];
+                        out[-1, x] = in[-1, x];
                     }
                 }
             } else {
-                // LCMS2 wants interleaved input data, but we may have arbitrary channel layouts. The following code copies to a temporary
-                // buffer if necessary, but avoids copying if the data is already interleaved in the expected way.
-                const auto srcStride = src.interleavedStride(), dstStride = rgbaDst.interleavedStride();
-                if (srcStride && dstStride) {
-                    cmsDoTransformLineStride(
-                        transform,
-                        src.interleavedData(*srcStride) + y * (*srcStride * size.x()),
-                        rgbaDst.interleavedData(*dstStride) + y * (*dstStride * size.x()),
-                        1,
-                        size.x(),
-                        *srcStride * sizeof(float),
-                        *dstStride * sizeof(float),
-                        sizeof(float),
-                        sizeof(float)
-                    );
-                } else {
-                    HeapArray<float> tmp(size.x() * (src.nChannels() + rgbaDst.nChannels()));
-
-                    for (int x = 0; x < size.x(); ++x) {
-                        for (size_t c = 0, count = src.nChannels(); c < count; ++c) {
-                            tmp[x * count + c] = src[c, x, y];
-                        }
-                    }
-
-                    const float* in = tmp.data();
-                    float* out = tmp.data() + size.x() * src.nChannels();
-                    cmsDoTransform(transform, in, out, size.x());
-
-                    for (int x = 0; x < size.x(); ++x) {
-                        for (size_t c = 0, count = rgbaDst.nChannels(); c < count; ++c) {
-                            rgbaDst[c, x, y] = out[x * count + c];
-                        }
-                    }
-                }
+                cmsDoTransform(transform, in.interleavedData(src.nChannels()), out.interleavedData(rgbaDst.nChannels()), size.x());
             }
 
             // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the
@@ -1066,14 +1053,20 @@ Task<void> toLinearSrgbPremul(
             // also should not re-multiply those.
             if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
                 for (int x = 0; x < size.x(); ++x) {
-                    float factor = rgbaDst[-1, x, y];
+                    float factor = out[-1, x];
                     if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
                         factor = 1.0f;
                     }
 
                     for (size_t c = 0; c < numColorChannelsOut; ++c) {
-                        rgbaDst[c, x, y] *= factor;
+                        out[c, x] *= factor;
                     }
+                }
+            }
+
+            for (int x = 0; x < size.x(); ++x) {
+                for (size_t c = 0, count = rgbaDst.nChannels(); c < count; ++c) {
+                    rgbaDst[c, x, y] = out[c, x];
                 }
             }
         },

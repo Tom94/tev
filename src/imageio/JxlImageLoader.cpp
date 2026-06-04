@@ -536,7 +536,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             inView,
                             outView,
                             nullopt,
-                            priority
+                            priority,
+                            true // invert CMYK ink values since JXL strangely uses 0 == full ink, 1 == no ink
                         );
 
                         data.hasPremultipliedAlpha = true;
