@@ -153,6 +153,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
             continue;
         }
 
+        // Not PNG data. Try reading as BMP with optional AND mask instead.
         if (imageData.empty()) {
             try {
                 iStream.clear();
@@ -201,10 +202,19 @@ Task<vector<ImageData>> IcoImageLoader::load(
 
                     vector<ChannelView<float>> alphaChannels;
                     for (auto& image : imageData) {
-                        auto* const alphaChannel = image.mutableChannel("A");
+                        auto* alphaChannel = image.mutableChannel("A");
                         if (!alphaChannel) {
-                            tlog::warning("No alpha channel but AND mask. Skipping AND mask application.", i);
-                            continue;
+                            tlog::debug("No alpha channel but AND mask. Creating alpha channel equivalent to AND mask.", i);
+
+                            const auto& c = image.channels.front();
+                            auto& ac = image.channels.emplace_back("A", c.size(), c.pixelFormat(), c.desiredPixelFormat());
+
+                            alphaChannel = &ac;
+
+                            const size_t numPixels = prod(ac.size());
+                            co_await ThreadPool::global().parallelFor(
+                                0uz, numPixels, numPixels, [acv = ac.view<float>()](size_t j) { acv[j] = 1.0f; }, priority
+                            );
                         }
 
                         alphaChannels.emplace_back(alphaChannel->view<float>());
