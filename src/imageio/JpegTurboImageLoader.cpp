@@ -599,7 +599,8 @@ Task<vector<ImageData>>
         co_await jpegDataToFloat32(!imageInfo.isGainmap(), dstView);
 
         if (isCmyk) {
-            // In the absence of an ICC profile, the following code is a simpler conversion from CMYK to RGB
+            tlog::debug("No ICC profile found, applying default CMYK->RGB conversion.");
+
             co_await ThreadPool::global().parallelFor(
                 0uz,
                 numPixels,
