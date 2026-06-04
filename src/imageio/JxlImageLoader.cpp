@@ -416,6 +416,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 // Extra channels buffer & decode setup
                 vector<ExtraChannelInfo> extraChannels(numExtraChannels);
 
+                optional<size_t> blackChannelIndex = nullopt;
+
                 JxlPixelFormat extraChannelFormat = {1, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 for (size_t i = 0; i < numExtraChannels; ++i) {
                     ExtraChannelInfo& extraChannel = extraChannels[i];
@@ -441,8 +443,9 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     extraChannel.name = Channel::joinIfNonempty(data.partName, extraChannel.name);
 
                     // Skip loading of extra channels that don't match the selector entirely. And skip alpha channels, because they're
-                    // already part of the color channels.
-                    const bool skip = !matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA;
+                    // already part of the color channels. Never skip loading the black channel though; if it is present, we have CMYK data.
+                    const bool skip = extraChannelInfo.type != JXL_CHANNEL_BLACK &&
+                        (!matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA);
                     if (skip) {
                         continue;
                     }
@@ -466,6 +469,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     }
 
                     extraChannel.active = true;
+
+                    if (extraChannelInfo.type == JXL_CHANNEL_BLACK) {
+                        blackChannelIndex = i;
+                    }
                 }
 
                 status = JxlDecoderProcessInput(decoder.get());
@@ -479,7 +486,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 data.channels = co_await makeRgbaInterleavedChannels(
                     numChannels,
                     numInterleavedChannels,
-                    info.alpha_bits,
+                    info.alpha_bits > 0,
                     size,
                     EPixelFormat::F32,
                     info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16,
@@ -487,7 +494,6 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     priority
                 );
 
-                const auto inView = MultiChannelView<float>{colorData.data(), numChannels, size};
                 const auto outView = MultiChannelView<float>{data.channels};
 
                 // If there's no alpha channel, treat as premultiplied (by 1)
@@ -515,6 +521,13 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     tlog::debug("Found ICC color profile. Attempting to apply...");
 
                     try {
+                        auto inView = MultiChannelView<float>{colorData.data(), numChannels, size};
+                        if (blackChannelIndex.has_value()) {
+                            inView.insertView(
+                                info.num_color_channels, ChannelView<float>{extraChannels.at(*blackChannelIndex).data.data(), 1, 0, size}
+                            );
+                        }
+
                         const auto profile = ColorProfile::fromIcc(iccProfile);
                         co_await toLinearSrgbPremul(
                             profile,
@@ -535,6 +548,12 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
+                    if (blackChannelIndex.has_value()) {
+                        tlog::warning(
+                            "Image has a black channel (indicating CMYK data), but no ICC profile or color encoding information. Loading as RGB, which may produce incorrect colors."
+                        );
+                    }
+
                     co_await toFloat32(span<const float>{colorData}, numChannels, outView, info.alpha_bits, priority);
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the

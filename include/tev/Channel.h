@@ -427,6 +427,18 @@ public:
     nanogui::Vector2i size() const { return mChannelViews.front().size(); }
     size_t nChannels() const { return mChannelViews.size(); }
 
+    void insertView(size_t idx, const ChannelView<T>& view) {
+        if (view.size() != size()) {
+            throw std::runtime_error{"Appended channel must have the same size as existing channels."};
+        }
+
+        if (idx > mChannelViews.size()) {
+            throw std::runtime_error{"Channel index out of bounds."};
+        }
+
+        mChannelViews.insert(mChannelViews.begin() + idx, view);
+    }
+
 private:
     SmallRgbaVector<ChannelView<T>> mChannelViews;
 };
