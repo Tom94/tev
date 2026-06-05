@@ -51,6 +51,16 @@ string_view Channel::tail(string_view channel) { return split(channel).second; }
 
 string_view Channel::head(string_view channel) { return split(channel).first; }
 
+string_view Channel::layer(string_view channel) {
+    auto result = head(channel);
+    if (!result.empty()) {
+        TEV_ASSERT(result.back() == '.', "Layer should end with a dot.");
+        result.remove_suffix(1);
+    }
+
+    return result;
+}
+
 bool Channel::isTopmost(string_view channel) { return tail(channel) == channel; }
 
 bool Channel::isAlpha(string_view channel) { return toLower(tail(channel)) == "a"; }

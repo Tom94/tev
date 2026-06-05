@@ -189,6 +189,7 @@ public:
 
     static std::string_view tail(std::string_view fullChannel);
     static std::string_view head(std::string_view fullChannel);
+    static std::string_view layer(std::string_view fullChannel);
 
     static bool isTopmost(std::string_view fullChannel);
     static bool isAlpha(std::string_view fullChannel);
