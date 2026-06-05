@@ -1132,8 +1132,7 @@ Task<void> postprocessLinearRawDng(
 
         tlog::debug("Hue/sat/val map dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
-        // TODO: implement hue/sat/val map...
-        tlog::debug("Found hue/sat/val map, but not implemented yet. Color profile may look wrong.");
+        tlog::warning("Found hue/sat/val map, but not implemented yet. Color profile may look wrong.");
     }
 
     if (const auto dims = tiffGetSpan<uint32_t>(tif, TIFFTAG_PROFILELOOKTABLEDIMS); dims.size() >= 3) {
@@ -1143,8 +1142,7 @@ Task<void> postprocessLinearRawDng(
 
         tlog::debug("Look table dimensions: {}x{}x{}", hueDivisions, satDivisions, valueDivisions);
 
-        // TODO: implement hue/sat/val map...
-        tlog::debug("Found look table, but not implemented yet. Color profile may look wrong.");
+        tlog::warning("Found look table, but not implemented yet. Color profile may look wrong.");
     }
 
     if (const auto tonecurve = tiffGetSpan<float>(tif, TIFFTAG_PROFILETONECURVE); !tonecurve.empty()) {
