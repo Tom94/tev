@@ -1883,14 +1883,14 @@ Task<ImageData> readTiffImage(
 
     // Determine number of color channels
     size_t numColorChannels = samplesPerPixel - numExtraChannels;
-    const size_t numChannels = samplesPerPixel;
 
-    size_t numRgbaChannels = numColorChannels + (hasAlpha ? 1 : 0);
-    if (numRgbaChannels < 1 || numRgbaChannels > 4) {
-        throw ImageLoadError{fmt::format("Unsupported number of RGBA channels: {}", numRgbaChannels)};
+    size_t numChannels = numColorChannels + (hasAlpha ? 1 : 0);
+    if (numChannels < 1 || numChannels > 5) {
+        throw ImageLoadError{fmt::format("Unsupported number of non-extra channels: {}", numChannels)};
     }
 
-    const size_t numNonRgbaChannels = numChannels - numRgbaChannels;
+    // Redefine extra channels as *excluding* alpha
+    numExtraChannels = samplesPerPixel - numChannels;
 
     const auto palette = tiffGetColorMap(tif);
     if (photometric == PHOTOMETRIC_PALETTE) {
@@ -1900,7 +1900,7 @@ Task<ImageData> readTiffImage(
 
         // We'll read the palette and convert the single index channel to RGB later on, hence we need to keep track of the extra 2 channels
         numColorChannels += 2;
-        numRgbaChannels += 2;
+        numChannels += 2;
 
         if (sampleFormat != SAMPLEFORMAT_UINT) {
             throw ImageLoadError{"Palette images must have unsigned integer sample format."};
@@ -1913,7 +1913,7 @@ Task<ImageData> readTiffImage(
         tlog::debug("Read color palette with {} entries.", palette[0].size());
     }
 
-    tlog::debug("numRgbaChannels={} numNonRgbaChannels={}", numRgbaChannels, numNonRgbaChannels);
+    tlog::debug("numChannels={} numExtraChannels={}", numChannels, numExtraChannels);
 
     static constexpr auto formatToPixelType = [](uint16_t f) {
         switch (f) {
@@ -2338,14 +2338,14 @@ Task<ImageData> readTiffImage(
     if (interleave != Vector2i{1, 1}) {
         const auto numPixels = posProd(size);
         const auto bytesPerSample = unpackedBitsPerSample / 8;
-        const auto bytesPerPixel = numChannels * bytesPerSample;
+        const auto bytesPerPixel = samplesPerPixel * bytesPerSample;
 
         auto interleavedBuf = PixelBuffer::alloc(buf.size(), buf.format());
         const auto parallelInterleave = [&](const auto* __restrict in, auto* __restrict out) -> Task<void> {
             co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
-                numPixels * numChannels,
+                numPixels * samplesPerPixel,
                 [&](int y) {
                     const size_t subY = y / interleave.y();
                     const size_t interleaveY = y - subY * interleave.y();
@@ -2375,7 +2375,7 @@ Task<ImageData> readTiffImage(
         size = activeArea.size();
         const auto numPixels = posProd(size);
         const auto bytesPerSample = unpackedBitsPerSample / 8;
-        const auto bytesPerPixel = numChannels * bytesPerSample;
+        const auto bytesPerPixel = samplesPerPixel * bytesPerSample;
 
         tlog::debug("Cropping to active area: [{},{}] -> {}", activeArea.min, activeArea.max, size);
 
@@ -2386,7 +2386,7 @@ Task<ImageData> readTiffImage(
             co_await ThreadPool::global().parallelFor(
                 0,
                 size.y(),
-                numPixels * numChannels,
+                numPixels * samplesPerPixel,
                 [&](int y) {
                     const int srcY = y + activeArea.min.y();
                     for (int x = 0; x < size.x(); ++x) {
@@ -2407,15 +2407,15 @@ Task<ImageData> readTiffImage(
 
     resultData.displayWindow = getDefaultCrop(tif, size);
 
-    size_t numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+    size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     // Local scope to prevent use-after-move
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
         auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
+            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
-        auto extraChannels = ImageLoader::makeNChannels(numNonRgbaChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
+        auto extraChannels = ImageLoader::makeNChannels(numExtraChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 
         resultData.channels.insert(resultData.channels.end(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end()));
         resultData.channels.insert(
@@ -2427,9 +2427,19 @@ Task<ImageData> readTiffImage(
     const bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
 
     // Convert all the extra channels to float and store them in the result data. No further processing needed.
-    for (size_t c = numChannels - numExtraChannels + (hasAlpha ? 1 : 0); c < numChannels; ++c) {
+    for (size_t c = 0; c < numExtraChannels; ++c) {
         co_await tiffDataToFloat32(
-            kind, interleave, palette, buf, c, numChannels, resultData.channels[c].view<float>(), false, priority, intConversionScale, flipWhiteAndBlack
+            kind,
+            interleave,
+            palette,
+            buf,
+            samplesPerPixel - numExtraChannels + c,
+            samplesPerPixel,
+            resultData.channels.at(numChannels + c).view<float>(),
+            false,
+            priority,
+            intConversionScale,
+            flipWhiteAndBlack
         );
     }
 
@@ -2439,12 +2449,12 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_ITULAB,
     };
 
-    auto rgbaView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+    const auto dstView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numChannels)};
     co_await tiffDataToFloat32(
-        kind, interleave, palette, buf, 0, numChannels, rgbaView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
+        kind, interleave, palette, buf, 0, samplesPerPixel, dstView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
     );
 
-    auto rgbaOutView = rgbaView;
+    auto rgbaOutView = dstView;
     if (photometric == PHOTOMETRIC_SEPARATED) {
         // If the data is CMYK, create RGB channels that we will first try to populate via ICC conversion and fall back to a simple
         // conversion otherwise further down.
@@ -2454,10 +2464,6 @@ Task<ImageData> readTiffImage(
         if (hasAlpha) {
             rgbaOutView.insertView(3, resultData.channels.at(3 + numColorChannels).view<float>());
         }
-
-        numColorChannels = 3;
-        numRgbaChannels = samplesPerPixel = hasAlpha ? numColorChannels + 1 : numColorChannels;
-        numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
     }
 
     // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion. ICC profiles
@@ -2469,7 +2475,7 @@ Task<ImageData> readTiffImage(
             co_await toLinearSrgbPremul(
                 profile,
                 hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                rgbaView,
+                dstView,
                 rgbaOutView,
                 nullopt,
                 priority
@@ -2485,18 +2491,18 @@ Task<ImageData> readTiffImage(
     // Both CFA and linear raw DNG data need to be linearized and normalized prior to color space conversions. Metadata for
     // linearization assumes *pre* demosaicing data, so this step needs to be done before we convert CFA to RGB.
     if ((isDng && photometric == PHOTOMETRIC_CFA) || photometric == PHOTOMETRIC_LINEAR_RAW) {
-        co_await linearizeAndNormalizeRawDng(tif, dataSampleFormat, dataBitsPerSample, rgbaView, priority);
+        co_await linearizeAndNormalizeRawDng(tif, dataSampleFormat, dataBitsPerSample, dstView, priority);
     }
 
     if (photometric == PHOTOMETRIC_CFA) {
-        if (samplesPerPixel != 1 || numColorChannels != 1 || numRgbaChannels != 1) {
-            throw ImageLoadError{"CFA images must have exactly 1 sample per pixel / color / rgba channel."};
+        if (samplesPerPixel != 1 || numColorChannels != 1 || numChannels != 1) {
+            throw ImageLoadError{"CFA images must have exactly 1 sample per pixel / color channel."};
         }
 
-        numRgbaChannels = numColorChannels = samplesPerPixel = 3;
-        numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+        numChannels = numColorChannels = 3;
+        numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numRgbaChannels, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
+            numChannels, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
         );
 
         co_await demosaicCfa(tif, resultData.channels.front().view<float>(), MultiChannelView<float>(rgbaChannels), priority);
@@ -2510,8 +2516,7 @@ Task<ImageData> readTiffImage(
             resultData.channels.begin(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end())
         );
 
-        // Update the view to point to the new RGBA channels
-        rgbaView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+        rgbaOutView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numChannels)};
     } else if (photometric == PHOTOMETRIC_SEPARATED) {
         if (uint16_t inkset; !TIFFGetFieldDefaulted(tif, TIFFTAG_INKSET, &inkset) || inkset != INKSET_CMYK) {
             throw ImageLoadError{"Only CMYK separated images are supported."};
@@ -2521,7 +2526,7 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"CMYK separated images must have exactly 4 inks."};
         }
 
-        if (rgbaView.nChannels() != 4) {
+        if (numColorChannels != 4) {
             throw ImageLoadError{"CMYK separated images must have exactly 4 color channels."};
         }
 
@@ -2534,7 +2539,7 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"Failed to read dot range for separated image."};
         }
 
-        const auto cmykView = rgbaView;
+        const auto cmykView = dstView;
 
         const size_t numPixels = posProd(size);
         co_await ThreadPool::global().parallelFor(
@@ -2554,20 +2559,23 @@ Task<ImageData> readTiffImage(
             },
             priority
         );
+
+        numColorChannels = 3;
+        numChannels = hasAlpha ? numColorChannels + 1 : numColorChannels;
     }
 
     // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.
     if (compression == COMPRESSION_PIXARLOG) {
         // If we're a Pixar log image, the data is already linear
     } else if (photometric == PHOTOMETRIC_LINEAR_RAW) {
-        co_await postprocessLinearRawDng(tif, rgbaView, resultData, reverseEndian, settings.dngApplyCameraProfile, priority);
+        co_await postprocessLinearRawDng(tif, rgbaOutView, resultData, reverseEndian, settings.dngApplyCameraProfile, priority);
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
         // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
         resultData.toRec709 = xyzToChromaMatrix(rec709Chroma());
     } else if (photometric <= PHOTOMETRIC_PALETTE || photometric == PHOTOMETRIC_YCBCR) {
-        co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, rgbaView, resultData, priority);
+        co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, rgbaOutView, resultData, priority);
     } else if (labPhotometrics.contains(photometric)) {
-        co_await postprocessLab(tif, photometric, dataBitsPerSample, numColorChannels, rgbaView, resultData, priority);
+        co_await postprocessLab(tif, photometric, dataBitsPerSample, numColorChannels, rgbaOutView, resultData, priority);
     } else {
         // Other photometric interpretations do not need a transfer
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
