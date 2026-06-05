@@ -1212,6 +1212,8 @@ Task<void> postprocessRgb(
     const size_t numColorChannels,
     const MultiChannelView<float>& rgbaView,
     ImageData& resultData,
+    const span<const uint8_t>& iccProfile,
+    EAlphaKind alphaKind,
     const int priority
 ) {
     if (numColorChannels > rgbaView.nChannels()) {
@@ -1269,6 +1271,20 @@ Task<void> postprocessRgb(
         }
 
         co_await yCbCrToRgb(rgbaView, priority, coeffs);
+    }
+
+    // If we've got an ICC profile, apply it *after* scaling by reference black/white and converting from YCbCr to RGB; see the TIFF/EP
+    // spec. Only if the ICC profile can't be applied, try performing color conversion ourselves based TIFF tags.
+    if (!iccProfile.empty()) {
+        try {
+            const auto profile = ColorProfile::fromIcc(iccProfile);
+            co_await toLinearSrgbPremul(profile, alphaKind, rgbaView, rgbaView, nullopt, priority);
+
+            resultData.hasPremultipliedAlpha = true;
+            resultData.readMetadataFromIcc(profile);
+
+            co_return;
+        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
     }
 
     chroma_t chroma = rec709Chroma();
@@ -1511,28 +1527,94 @@ Task<void> postprocessLab(
     co_return;
 }
 
+Task<void> postprocessSeparated(
+    TIFF* tif,
+    const uint16_t dataBitsPerSample,
+    const size_t numColorChannels,
+    const MultiChannelView<const float>& cmykView,
+    const MultiChannelView<float>& rgbaView,
+    ImageData& resultData,
+    const span<const uint8_t>& iccProfile,
+    EAlphaKind alphaKind,
+    const int priority
+) {
+    // Technically, the TIFF spec does not permit ICC profiles in separated/CMYK images, but in practice some files come with one. ICC
+    // profiles are much more accurate than TIFF-tag based ink to RGB conversions, so prefer applying them.
+    if (!iccProfile.empty()) {
+        try {
+            const auto profile = ColorProfile::fromIcc(iccProfile);
+            co_await toLinearSrgbPremul(profile, alphaKind, cmykView, rgbaView, nullopt, priority);
+
+            resultData.hasPremultipliedAlpha = true;
+            resultData.readMetadataFromIcc(profile);
+
+            co_return;
+        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
+    }
+
+    if (uint16_t inkset; !TIFFGetFieldDefaulted(tif, TIFFTAG_INKSET, &inkset) || inkset != INKSET_CMYK) {
+        throw ImageLoadError{"Only CMYK separated images are supported."};
+    }
+
+    if (uint16_t numberOfInks; !TIFFGetFieldDefaulted(tif, TIFFTAG_NUMBEROFINKS, &numberOfInks) || numberOfInks != 4) {
+        throw ImageLoadError{"CMYK separated images must have exactly 4 inks."};
+    }
+
+    if (numColorChannels != 4) {
+        throw ImageLoadError{"CMYK separated images must have exactly 4 color channels."};
+    }
+
+    float dotMin = 0.0f, dotMax = 1.0f;
+    if (uint16_t dmin, dmax; TIFFGetFieldDefaulted(tif, TIFFTAG_DOTRANGE, &dmin, &dmax)) {
+        dotMin = (float)dmin / (float)((1ull << dataBitsPerSample) - 1);
+        dotMax = (float)dmax / (float)((1ull << dataBitsPerSample) - 1);
+        tlog::debug("Read dot range for separated image: min={} max={}", dotMin, dotMax);
+    } else {
+        throw ImageLoadError{"Failed to read dot range for separated image."};
+    }
+
+    const size_t numPixels = posProd(cmykView.size());
+    co_await ThreadPool::global().parallelFor(
+        0uz,
+        numPixels,
+        numPixels * 4,
+        [&](size_t i) {
+            const float c = (cmykView[0, i] - dotMin) / (dotMax - dotMin);
+            const float m = (cmykView[1, i] - dotMin) / (dotMax - dotMin);
+            const float y = (cmykView[2, i] - dotMin) / (dotMax - dotMin);
+            const float k = (cmykView[3, i] - dotMin) / (dotMax - dotMin);
+            const float oneMinusK = 1.0f - k;
+
+            rgbaView[0, i] = (1.0f - c) * oneMinusK;
+            rgbaView[1, i] = (1.0f - m) * oneMinusK;
+            rgbaView[2, i] = (1.0f - y) * oneMinusK;
+        },
+        priority
+    );
+}
+
 Task<ImageData> decodeJpeg(
     span<const uint8_t> compressedData,
-    span<const uint8_t> jpegTables,
+    const span<const uint8_t>& jpegTables,
     Vector2i tileSize,
     uint16_t tileNumComponents,
     size_t* nestedBitsPerSample,
     int photometric,
     int priority
 ) {
-    vector<uint8_t> stream;
+    vector<uint8_t> dataBuf;
     if (jpegTables.size() > 4) {
-        // tlog::debug("JPEG tables found; prepending to compressed data...");
+        // tlog::debug("JPEG tables found; splicing into compressed data...");
 
-        const uint32_t tablesPayloadLen = jpegTables.size() - 4;
-        const uint8_t* tablesPayload = jpegTables.data() + 2;
+        const auto tablesPayload = jpegTables.subspan(2, jpegTables.size() - 4);
 
-        stream.resize(2 + tablesPayloadLen + (compressedData.size() - 2));
-        memcpy(stream.data(), compressedData.data(), 2);
-        memcpy(stream.data() + 2, tablesPayload, tablesPayloadLen);
-        memcpy(stream.data() + 2 + tablesPayloadLen, compressedData.data() + 2, compressedData.size() - 2);
+        // Splice the tables payload in between the SOI and the rest of the compressed data
+        dataBuf.resize(tablesPayload.size() + compressedData.size());
+        memcpy(dataBuf.data(), compressedData.data(), 2);
+        memcpy(dataBuf.data() + 2, tablesPayload.data(), tablesPayload.size());
+        memcpy(dataBuf.data() + 2 + tablesPayload.size(), compressedData.data() + 2, compressedData.size() - 2);
 
-        compressedData = stream;
+        compressedData = dataBuf;
     }
 
     struct jpeg_decompress_struct cinfo;
@@ -1773,7 +1855,7 @@ Task<ImageData> readTiffImage(
         //
         PHOTOMETRIC_LOGLUV,
         PHOTOMETRIC_LOGL,
-        PHOTOMETRIC_CFA, // Color Filter Array; displayed as grayscale for now
+        PHOTOMETRIC_CFA, // Color Filter Array
         // DNG-specific
         PHOTOMETRIC_LINEAR_RAW,
         PHOTOMETRIC_DEPTH,
@@ -1881,6 +1963,8 @@ Task<ImageData> readTiffImage(
         numExtraChannels = 0;
     }
 
+    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None;
+
     if (numExtraChannels >= samplesPerPixel) {
         throw ImageLoadError{fmt::format("Invalid number of extra channels: {}", numExtraChannels)};
     }
@@ -1948,14 +2032,6 @@ Task<ImageData> readTiffImage(
 
     resultData.orientation = static_cast<EOrientation>(orientation);
     resultData.hasPremultipliedAlpha = hasPremultipliedAlpha;
-
-    // Read ICC profile if available
-    uint32_t iccProfileSize = 0;
-    void* iccProfileData = nullptr;
-
-    if (TIFFGetField(tif, TIFFTAG_ICCPROFILE, &iccProfileSize, &iccProfileData) && iccProfileSize > 0 && iccProfileData) {
-        tlog::debug("Found ICC color profile of size {} bytes", iccProfileSize);
-    }
 
     // Read XMP metadata if available
     uint32_t xmpDataSize = 0;
@@ -2466,28 +2542,6 @@ Task<ImageData> readTiffImage(
         }
     }
 
-    // The RGBA channels might need color space conversion: store them in a staging buffer first and then try ICC conversion. ICC profiles
-    // are generally most accurate when available, so prefer them. However, if we've got a Lab photometric interpretation, TIFF's data handling
-    // can be tricky and we can reproduce the exact behavior the ICC would have without too much trouble ourselves, so skip ICC in that case.
-    if (iccProfileData && iccProfileSize > 0 && !labPhotometrics.contains(photometric)) {
-        try {
-            const auto profile = ColorProfile::fromIcc({(uint8_t*)iccProfileData, iccProfileSize});
-            co_await toLinearSrgbPremul(
-                profile,
-                hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None,
-                dstView,
-                rgbaOutView,
-                nullopt,
-                priority
-            );
-
-            resultData.hasPremultipliedAlpha = true;
-            resultData.readMetadataFromIcc(profile);
-
-            co_return resultData;
-        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
-    }
-
     // Both CFA and linear raw DNG data need to be linearized and normalized prior to color space conversions. Metadata for
     // linearization assumes *pre* demosaicing data, so this step needs to be done before we convert CFA to RGB.
     if ((isDng && photometric == PHOTOMETRIC_CFA) || photometric == PHOTOMETRIC_LINEAR_RAW) {
@@ -2507,9 +2561,7 @@ Task<ImageData> readTiffImage(
 
         co_await demosaicCfa(tif, resultData.channels.front().view<float>(), MultiChannelView<float>(rgbaChannels), priority);
 
-        if (isDng) {
-            photometric = PHOTOMETRIC_LINEAR_RAW;
-        }
+        photometric = isDng ? PHOTOMETRIC_LINEAR_RAW : PHOTOMETRIC_RGB;
 
         resultData.channels.front().setName(Channel::joinIfNonempty(partName, "cfa.L"));
         resultData.channels.insert(
@@ -2517,65 +2569,30 @@ Task<ImageData> readTiffImage(
         );
 
         rgbaOutView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numChannels)};
-    } else if (photometric == PHOTOMETRIC_SEPARATED) {
-        if (uint16_t inkset; !TIFFGetFieldDefaulted(tif, TIFFTAG_INKSET, &inkset) || inkset != INKSET_CMYK) {
-            throw ImageLoadError{"Only CMYK separated images are supported."};
-        }
-
-        if (uint16_t numberOfInks; !TIFFGetFieldDefaulted(tif, TIFFTAG_NUMBEROFINKS, &numberOfInks) || numberOfInks != 4) {
-            throw ImageLoadError{"CMYK separated images must have exactly 4 inks."};
-        }
-
-        if (numColorChannels != 4) {
-            throw ImageLoadError{"CMYK separated images must have exactly 4 color channels."};
-        }
-
-        float dotMin = 0.0f, dotMax = 1.0f;
-        if (uint16_t dmin, dmax; TIFFGetFieldDefaulted(tif, TIFFTAG_DOTRANGE, &dmin, &dmax)) {
-            dotMin = (float)dmin / (float)((1ull << dataBitsPerSample) - 1);
-            dotMax = (float)dmax / (float)((1ull << dataBitsPerSample) - 1);
-            tlog::debug("Read dot range for separated image: min={} max={}", dotMin, dotMax);
-        } else {
-            throw ImageLoadError{"Failed to read dot range for separated image."};
-        }
-
-        const auto cmykView = dstView;
-
-        const size_t numPixels = posProd(size);
-        co_await ThreadPool::global().parallelFor(
-            0uz,
-            numPixels,
-            numPixels * 4,
-            [&](size_t i) {
-                const float c = (cmykView[0, i] - dotMin) / (dotMax - dotMin);
-                const float m = (cmykView[1, i] - dotMin) / (dotMax - dotMin);
-                const float y = (cmykView[2, i] - dotMin) / (dotMax - dotMin);
-                const float k = (cmykView[3, i] - dotMin) / (dotMax - dotMin);
-                const float oneMinusK = 1.0f - k;
-
-                rgbaOutView[0, i] = (1.0f - c) * oneMinusK;
-                rgbaOutView[1, i] = (1.0f - m) * oneMinusK;
-                rgbaOutView[2, i] = (1.0f - y) * oneMinusK;
-            },
-            priority
-        );
-
-        numColorChannels = 3;
-        numChannels = hasAlpha ? numColorChannels + 1 : numColorChannels;
     }
 
-    // If no ICC profile is available, we can try to convert the color space manually using TIFF's chromaticity data and transfer function.
+    const auto iccProfile = tiffGetSpan<uint8_t>(tif, TIFFTAG_ICCPROFILE);
+    if (!iccProfile.empty()) {
+        tlog::debug("Found ICC color profile of size {} bytes", iccProfile.size());
+    }
+
     if (compression == COMPRESSION_PIXARLOG) {
-        // If we're a Pixar log image, the data is already linear
+        // If we're a Pixar log image, the decoder already gave us linear data
     } else if (photometric == PHOTOMETRIC_LINEAR_RAW) {
         co_await postprocessLinearRawDng(tif, rgbaOutView, resultData, reverseEndian, settings.dngApplyCameraProfile, priority);
     } else if (photometric == PHOTOMETRIC_LOGLUV || photometric == PHOTOMETRIC_LOGL) {
-        // If we're a LogLUV image, we've already configured the encoder to give us linear XYZ data, so we can just convert that to Rec.709.
+        // If we're a LogLUV image, we've already configured the decoder to give us linear XYZ data, so we can just convert that to Rec.709.
         resultData.toRec709 = xyzToChromaMatrix(rec709Chroma());
     } else if (photometric <= PHOTOMETRIC_PALETTE || photometric == PHOTOMETRIC_YCBCR) {
-        co_await postprocessRgb(tif, photometric, dataBitsPerSample, numColorChannels, rgbaOutView, resultData, priority);
+        co_await postprocessRgb(
+            tif, photometric, dataBitsPerSample, numColorChannels, rgbaOutView, resultData, iccProfile, alphaKind, priority
+        );
     } else if (labPhotometrics.contains(photometric)) {
         co_await postprocessLab(tif, photometric, dataBitsPerSample, numColorChannels, rgbaOutView, resultData, priority);
+    } else if (photometric == PHOTOMETRIC_SEPARATED) {
+        co_await postprocessSeparated(
+            tif, dataBitsPerSample, numColorChannels, dstView, rgbaOutView, resultData, iccProfile, alphaKind, priority
+        );
     } else {
         // Other photometric interpretations do not need a transfer
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
