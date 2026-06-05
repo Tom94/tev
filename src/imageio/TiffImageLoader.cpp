@@ -1973,15 +1973,11 @@ Task<ImageData> readTiffImage(
     const bool isTiled = TIFFIsTiled(tif);
 
     struct TileInfo {
-        size_t rawSize, size, rowSize, count, numX, numY;
+        size_t size, rowSize, count, numX, numY;
         uint32_t width, height;
     } tile;
     const size_t numPlanes = planar == PLANARCONFIG_CONTIG ? 1 : samplesPerPixel;
     if (isTiled) {
-        const uint64_t* rawTileSize = NULL;
-        TIFFGetField(tif, TIFFTAG_TILEBYTECOUNTS, &rawTileSize);
-        tile.rawSize = rawTileSize ? *rawTileSize : 0;
-
         tile.size = TIFFTileSize64(tif);
         tile.rowSize = TIFFTileRowSize64(tif);
         tile.count = TIFFNumberOfTiles(tif);
