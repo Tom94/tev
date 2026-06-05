@@ -1570,8 +1570,10 @@ Task<ImageData> decodeJpeg(
     // Suppress all color conversion; output in the native colorspace. We'll convert outselves.
     cinfo.out_color_space = cinfo.jpeg_color_space;
     cinfo.quantize_colors = false;
-    jpeg_start_decompress(&cinfo);
     auto decompressGuard = ScopeGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
+    if (!jpeg_start_decompress(&cinfo)) {
+        throw ImageLoadError{"Failed to start JPEG decompression."};
+    }
 
     const auto width = (size_t)cinfo.output_width;
     const auto height = (size_t)cinfo.output_height;
@@ -1647,7 +1649,9 @@ Task<ImageData> decodeJpeg(
     }
 
     decompressGuard.disarm();
-    jpeg_finish_decompress(&cinfo);
+    if (!jpeg_finish_decompress(&cinfo)) {
+        throw ImageLoadError{"Failed to finish JPEG decompression."};
+    }
 
     *nestedBitsPerSample = (size_t)precision;
     co_return result;
