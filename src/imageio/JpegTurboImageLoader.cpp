@@ -189,8 +189,10 @@ Task<vector<ImageData>>
         }
 
         cinfo.out_color_space = cinfo.jpeg_color_space; // Keep the original color space, we'll handle color conversion ourselves if needed
-        jpeg_start_decompress(&cinfo);
         auto decompressGuard = ScopeGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
+        if (!jpeg_start_decompress(&cinfo)) {
+            throw ImageLoadError{"Failed to start JPEG decompression."};
+        }
 
         Vector2i size{(int)cinfo.output_width, (int)cinfo.output_height};
         if (size.x() == 0 || size.y() == 0) {
@@ -249,7 +251,9 @@ Task<vector<ImageData>>
         }
 
         decompressGuard.disarm();
-        jpeg_finish_decompress(&cinfo);
+        if (!jpeg_finish_decompress(&cinfo)) {
+            throw ImageLoadError{"Failed to finish JPEG decompression."};
+        }
 
         ImageData resultData;
 
