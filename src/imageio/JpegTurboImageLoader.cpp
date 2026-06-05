@@ -204,9 +204,8 @@ Task<vector<ImageData>>
         const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 :
                                                             EPixelFormat::U8;
 
-        // JPEG does not support alpha, so all channels are color channels.
         const size_t numChannels = cinfo.output_components;
-        if (numChannels > 4) {
+        if (numChannels == 0) {
             throw ImageLoadError{fmt::format("Unsupported number of channels: {}", numChannels)};
         }
 
@@ -217,11 +216,9 @@ Task<vector<ImageData>>
             "JPEG image info: size={} numChannels={} colorspace={} precision={}", size, numChannels, (int)cinfo.jpeg_color_space, cinfo.data_precision
         );
 
-        // Allocate memory for image data
         const auto numPixels = posProd(size);
         auto buf = PixelBuffer::alloc(numPixels * numChannels, pixelFormat);
 
-        // Create row pointers for libjpeg and then read image
         if (cinfo.data_precision <= 8) {
             HeapArray<JSAMPROW> rowPointers(size.y());
             for (int y = 0; y < size.y(); ++y) {
