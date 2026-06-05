@@ -642,7 +642,7 @@ Task<void> ImageData::prependRgb(int priority) {
         channels.front().size(),
         channels.front().pixelFormat(),
         channels.front().desiredPixelFormat(),
-        Channel::head(channels.front().name()),
+        Channel::layer(channels.front().name()),
         priority
     );
 
