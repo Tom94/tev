@@ -425,10 +425,11 @@ private:
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     EAlphaKind alphaKind,
-    const MultiChannelView<float>& src,
+    const MultiChannelView<const float>& src,
     const MultiChannelView<float>& rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
-    int priority
+    int priority,
+    bool invertCmyk = false
 );
 
 struct LimitedRange {

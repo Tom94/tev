@@ -141,6 +141,9 @@ struct ImageData {
     void updateLayers();
     Task<void> ensureValid(std::string_view channelSelector, int taskPriority);
 
+    // Useful when we have CMYK channels and want to prepend a set of RGB channels converted from them
+    Task<void> prependRgb(int priority);
+
     bool hasChannel(std::string_view channelName) const { return channel(channelName) != nullptr; }
 
     const Channel* channel(std::string_view channelName) const & {

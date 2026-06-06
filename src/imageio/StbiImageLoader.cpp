@@ -96,7 +96,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
         }
 
         // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
-        resultData.channels = co_await makeRgbaInterleavedChannels(
+        resultData.channels = co_await makeInterleavedChannels(
             numChannels,
             numInterleavedChannels,
             hasAlpha,
