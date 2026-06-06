@@ -416,6 +416,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 // Extra channels buffer & decode setup
                 vector<ExtraChannelInfo> extraChannels(numExtraChannels);
 
+                optional<size_t> blackChannelIndex = nullopt;
+
                 JxlPixelFormat extraChannelFormat = {1, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
                 for (size_t i = 0; i < numExtraChannels; ++i) {
                     ExtraChannelInfo& extraChannel = extraChannels[i];
@@ -441,8 +443,9 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     extraChannel.name = Channel::joinIfNonempty(data.partName, extraChannel.name);
 
                     // Skip loading of extra channels that don't match the selector entirely. And skip alpha channels, because they're
-                    // already part of the color channels.
-                    const bool skip = !matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA;
+                    // already part of the color channels. Never skip loading the black channel though; if it is present, we have CMYK data.
+                    const bool skip = extraChannelInfo.type != JXL_CHANNEL_BLACK &&
+                        (!matchesFuzzy(extraChannel.name, channelSelector) || extraChannelInfo.type == JXL_CHANNEL_ALPHA);
                     if (skip) {
                         continue;
                     }
@@ -466,6 +469,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     }
 
                     extraChannel.active = true;
+
+                    if (extraChannelInfo.type == JXL_CHANNEL_BLACK) {
+                        blackChannelIndex = i;
+                    }
                 }
 
                 status = JxlDecoderProcessInput(decoder.get());
@@ -476,10 +483,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 const Vector2i size{(int)info.xsize, (int)info.ysize};
 
                 const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-                data.channels = co_await makeRgbaInterleavedChannels(
+                data.channels = co_await makeInterleavedChannels(
                     numChannels,
                     numInterleavedChannels,
-                    info.alpha_bits,
+                    info.alpha_bits > 0,
                     size,
                     EPixelFormat::F32,
                     info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16,
@@ -487,8 +494,31 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     priority
                 );
 
-                const auto inView = MultiChannelView<float>{colorData.data(), numChannels, size};
+                auto inView = MultiChannelView<float>{colorData.data(), numChannels, size};
                 const auto outView = MultiChannelView<float>{data.channels};
+                auto rgbaOutView = outView;
+
+                const bool isCmyk = blackChannelIndex.has_value() && info.num_color_channels == 3;
+                if (isCmyk) {
+                    auto& blackInfo = extraChannels.at(*blackChannelIndex);
+                    inView.insertView(info.num_color_channels, ChannelView<float>{blackInfo.data.data(), 1, 0, size});
+
+                    data.channels.at(0).setName(Channel::joinIfNonempty(data.partName, "C"));
+                    data.channels.at(1).setName(Channel::joinIfNonempty(data.partName, "M"));
+                    data.channels.at(2).setName(Channel::joinIfNonempty(data.partName, "Y"));
+                    blackInfo.name = Channel::joinIfNonempty(data.partName, "K");
+
+                    co_await data.prependRgb(priority);
+                    rgbaOutView = MultiChannelView<float>{span{data.channels}.subspan(0, 3)};
+
+                    if (info.alpha_bits > 0) {
+                        rgbaOutView.insertView(3, data.channels.at(3 + info.num_color_channels).view<float>());
+                    }
+
+                    // Copy CMY(A) data into the original output view such that tev can display it and the K channel to the user in addition
+                    // to the converted RGB data later on.
+                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, info.alpha_bits, priority);
+                }
 
                 // If there's no alpha channel, treat as premultiplied (by 1)
                 data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
@@ -521,9 +551,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
                                               EAlphaKind::None,
                             inView,
-                            outView,
+                            rgbaOutView,
                             nullopt,
-                            priority
+                            priority,
+                            true // invert CMYK ink values since JXL strangely uses 0 == full ink, 1 == no ink
                         );
 
                         data.hasPremultipliedAlpha = true;
@@ -531,6 +562,26 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                         colorChannelsLoaded = true;
                     } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
+                }
+
+                if (!colorChannelsLoaded && isCmyk) {
+                    tlog::debug("No ICC profile found, applying default CMYK->RGB conversion.");
+
+                    const auto numPixels = posProd(size);
+                    co_await ThreadPool::global().parallelFor(
+                        0uz,
+                        numPixels,
+                        numPixels * 4,
+                        [&](size_t i) {
+                            const float oneMinusK = inView[3, i];
+                            rgbaOutView[0, i] = inView[0, i] * oneMinusK;
+                            rgbaOutView[1, i] = inView[1, i] * oneMinusK;
+                            rgbaOutView[2, i] = inView[2, i] * oneMinusK;
+                        },
+                        priority
+                    );
+
+                    colorChannelsLoaded = true;
                 }
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.

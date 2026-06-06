@@ -189,11 +189,9 @@ Task<vector<ImageData>>
         }
 
         cinfo.out_color_space = cinfo.jpeg_color_space; // Keep the original color space, we'll handle color conversion ourselves if needed
-        jpeg_start_decompress(&cinfo);
         auto decompressGuard = ScopeGuard{[&]() { jpeg_abort_decompress(&cinfo); }};
-
-        if (cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK) {
-            throw ImageLoadError{"CMYK JPEG images are not supported."};
+        if (!jpeg_start_decompress(&cinfo)) {
+            throw ImageLoadError{"Failed to start JPEG decompression."};
         }
 
         Vector2i size{(int)cinfo.output_width, (int)cinfo.output_height};
@@ -208,21 +206,21 @@ Task<vector<ImageData>>
         const auto pixelFormat = cinfo.data_precision > 8 ? cinfo.data_precision > 12 ? EPixelFormat::U16 : EPixelFormat::I16 :
                                                             EPixelFormat::U8;
 
-        // JPEG does not support alpha, so all channels are color channels.
         const size_t numChannels = cinfo.output_components;
-        if (numChannels > 4) {
-            throw ImageLoadError{fmt::format("Unsupported number of color channels: {}", numChannels)};
+        if (numChannels == 0) {
+            throw ImageLoadError{fmt::format("Unsupported number of channels: {}", numChannels)};
         }
 
-        const bool hasAlpha = numChannels == 4;
+        const bool isCmyk = cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK;
+        const bool hasAlpha = isCmyk ? (numChannels == 5) : (numChannels == 4);
 
-        tlog::debug("JPEG image info: size={} numChannels={} precision={}", size, numChannels, cinfo.data_precision);
+        tlog::debug(
+            "JPEG image info: size={} numChannels={} colorspace={} precision={}", size, numChannels, (int)cinfo.jpeg_color_space, cinfo.data_precision
+        );
 
-        // Allocate memory for image data
         const auto numPixels = posProd(size);
         auto buf = PixelBuffer::alloc(numPixels * numChannels, pixelFormat);
 
-        // Create row pointers for libjpeg and then read image
         if (cinfo.data_precision <= 8) {
             HeapArray<JSAMPROW> rowPointers(size.y());
             for (int y = 0; y < size.y(); ++y) {
@@ -253,7 +251,9 @@ Task<vector<ImageData>>
         }
 
         decompressGuard.disarm();
-        jpeg_finish_decompress(&cinfo);
+        if (!jpeg_finish_decompress(&cinfo)) {
+            throw ImageLoadError{"Failed to finish JPEG decompression."};
+        }
 
         ImageData resultData;
 
@@ -489,16 +489,20 @@ Task<vector<ImageData>>
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
         // fits into F16.
         const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-        resultData.channels = co_await makeRgbaInterleavedChannels(
+        resultData.channels = co_await makeInterleavedChannels(
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
         const auto jpegDataToFloat32Typed =
             [&](ranges::random_access_range auto&& src, bool fromSrgb, const MultiChannelView<float>& dst) -> Task<void> {
+            if (isCmyk) {
+                fromSrgb = false;
+            }
+
+            const bool yCbCrConversionNeeded = (cinfo.out_color_space == JCS_YCbCr || cinfo.out_color_space == JCS_YCCK) &&
+                dst.nChannels() >= 3;
+
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
-
-            const bool yCbCrConversionNeeded = cinfo.out_color_space == JCS_YCbCr && dst.nChannels() >= 3;
-
             if (fromSrgb && !yCbCrConversionNeeded) {
                 co_await toFloat32<true>(src, numChannels, dst, hasAlpha, priority, scale);
             } else {
@@ -511,6 +515,25 @@ Task<vector<ImageData>>
                 } else {
                     co_await yCbCrToRgb<false>(dst, priority);
                 }
+            }
+
+            // YCCK jpegs have K inverted. CMYK images have all channels inverted.
+            if (cinfo.out_color_space == JCS_YCCK && dst.nChannels() >= 4) {
+                co_await ThreadPool::global().parallelFor(
+                    0uz,
+                    numPixels,
+                    numPixels * 4,
+                    [dst, invertCmy = cinfo.out_color_space == JCS_CMYK](size_t i) {
+                        if (invertCmy) {
+                            dst[0, i] = 1.0f - dst[0, i];
+                            dst[1, i] = 1.0f - dst[1, i];
+                            dst[2, i] = 1.0f - dst[2, i];
+                        }
+
+                        dst[3, i] = 1.0f - dst[3, i];
+                    },
+                    priority
+                );
             }
         };
 
@@ -530,6 +553,16 @@ Task<vector<ImageData>>
         resultData.hasPremultipliedAlpha = !hasAlpha;
 
         const auto dstView = MultiChannelView<float>{resultData.channels};
+        auto rgbaOutView = dstView;
+
+        if (isCmyk) {
+            co_await resultData.prependRgb(priority);
+            rgbaOutView = MultiChannelView<float>{span{resultData.channels}.subspan(0, 3)};
+
+            if (hasAlpha) {
+                rgbaOutView.insertView(3, resultData.channels.at(3 + numChannels - 1).view<float>());
+            }
+        }
 
         // If an ICC profile exists, use it to convert to linear sRGB. Otherwise, assume the decoder gave us sRGB/Rec.709 (per the JPEG
         // spec) and convert it to linear space via inverse sRGB transfer function.
@@ -555,7 +588,7 @@ Task<vector<ImageData>>
                     }
 
                     co_await toLinearSrgbPremul(
-                        profile, hasAlpha ? EAlphaKind::Straight : EAlphaKind::None, dstView, dstView, nullopt, priority
+                        profile, hasAlpha ? EAlphaKind::Straight : EAlphaKind::None, dstView, rgbaOutView, nullopt, priority
                     );
 
                     resultData.readMetadataFromIcc(profile);
@@ -566,7 +599,24 @@ Task<vector<ImageData>>
 
         co_await jpegDataToFloat32(!imageInfo.isGainmap(), dstView);
 
-        if (!imageInfo.isGainmap()) {
+        if (isCmyk) {
+            tlog::debug("No ICC profile found, applying default CMYK->RGB conversion.");
+
+            co_await ThreadPool::global().parallelFor(
+                0uz,
+                numPixels,
+                numPixels * 4,
+                [&](size_t i) {
+                    const float oneMinusK = 1.0f - dstView[3, i];
+                    rgbaOutView[0, i] = (1.0f - dstView[0, i]) * oneMinusK;
+                    rgbaOutView[1, i] = (1.0f - dstView[1, i]) * oneMinusK;
+                    rgbaOutView[2, i] = (1.0f - dstView[2, i]) * oneMinusK;
+                },
+                priority
+            );
+        }
+
+        if (!imageInfo.isGainmap() && !isCmyk) {
             resultData.nativeMetadata.chroma = rec709Chroma();
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
         }

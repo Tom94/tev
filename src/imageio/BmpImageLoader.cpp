@@ -1454,7 +1454,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     ImageData& resultData = result[0];
 
     const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-    resultData.channels = co_await makeRgbaInterleavedChannels(
+    resultData.channels = co_await makeInterleavedChannels(
         numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
     );
     resultData.hasPremultipliedAlpha = !hasAlpha;

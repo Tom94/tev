@@ -189,6 +189,7 @@ public:
 
     static std::string_view tail(std::string_view fullChannel);
     static std::string_view head(std::string_view fullChannel);
+    static std::string_view layer(std::string_view fullChannel);
 
     static bool isTopmost(std::string_view fullChannel);
     static bool isAlpha(std::string_view fullChannel);
@@ -342,7 +343,7 @@ private:
     size_t mDataStride;
 };
 
-template <typename T> using SmallRgbaVector = gch::small_vector<T, 4>; // Up to 4 channels should be stored on the stack
+template <typename T> using SmallRgbaVector = gch::small_vector<T, 5>; // Up to 5 channels (CMYKA) should be stored on the stack
 inline constexpr detail::to_vector_fn<SmallRgbaVector> toSmallRgbaVector{};
 
 template <typename T> class MultiChannelView {
@@ -363,7 +364,7 @@ public:
         }
     }
 
-    MultiChannelView(const ChannelView<T>& channel) :
+    MultiChannelView(const ChannelView<std::remove_const_t<T>>& channel) :
         MultiChannelView{
             std::span{&channel, 1}
     } {}
@@ -376,7 +377,7 @@ public:
         requires(std::is_const_v<T>)
         : MultiChannelView{channels | std::views::transform([](const Channel& c) { return c.view<T>(); }) | toSmallRgbaVector} {}
 
-    MultiChannelView(std::span<const ChannelView<T>> views) : mChannelViews{views.begin(), views.end()} {
+    MultiChannelView(std::span<const ChannelView<std::remove_const_t<T>>> views) : mChannelViews{views.begin(), views.end()} {
         if (mChannelViews.empty()) {
             throw std::runtime_error{"MultiChannelView(span) must have at least one channel."};
         }
@@ -388,6 +389,8 @@ public:
             }
         }
     }
+
+    operator MultiChannelView<const T>() const { return MultiChannelView<const T>{mChannelViews}; }
 
     size_t channelIdx(int c) const { return c < 0 ? mChannelViews.size() + c : c; }
 
@@ -406,7 +409,7 @@ public:
         for (size_t i = 0; i < mChannelViews.size(); ++i) {
             const auto& channel = mChannelViews[i];
             const auto offset = channel.data() - front.data();
-            if (channel.data() != front.data() || offset != (ptrdiff_t)i || channel.dataStride() != front.dataStride()) {
+            if (offset != (ptrdiff_t)i || channel.dataStride() != front.dataStride()) {
                 return std::nullopt;
             }
         }
@@ -426,6 +429,18 @@ public:
 
     nanogui::Vector2i size() const { return mChannelViews.front().size(); }
     size_t nChannels() const { return mChannelViews.size(); }
+
+    void insertView(size_t idx, const ChannelView<T>& view) {
+        if (view.size() != size()) {
+            throw std::runtime_error{"Appended channel must have the same size as existing channels."};
+        }
+
+        if (idx > mChannelViews.size()) {
+            throw std::runtime_error{"Channel index out of bounds."};
+        }
+
+        mChannelViews.insert(mChannelViews.begin() + idx, view);
+    }
 
 private:
     SmallRgbaVector<ChannelView<T>> mChannelViews;

@@ -174,7 +174,7 @@ public:
     // Returns a list of all supported mime types, sorted by decoding preference.
     static const std::vector<std::string_view>& supportedMimeTypes();
 
-    static Task<std::vector<Channel>> makeRgbaInterleavedChannels(
+    static Task<std::vector<Channel>> makeInterleavedChannels(
         size_t numChannels,
         size_t numInterleavedDims,
         bool hasAlpha,
