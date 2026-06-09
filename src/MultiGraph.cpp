@@ -61,7 +61,9 @@ void MultiGraph::draw(NVGcontext* ctx) {
         nvgSave(ctx);
 
         // Additive blending
-        nvgGlobalCompositeBlendFunc(ctx, NVGblendFactor::NVG_SRC_ALPHA, NVGblendFactor::NVG_ONE);
+        nvgGlobalCompositeBlendFuncSeparate(
+            ctx, NVGblendFactor::NVG_SRC_ALPHA, NVGblendFactor::NVG_ONE, NVGblendFactor::NVG_ZERO, NVGblendFactor::NVG_ONE
+        );
 
         size_t nBins = mValues.size() / mNChannels;
 
