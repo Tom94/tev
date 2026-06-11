@@ -142,6 +142,7 @@ ExternalProject_Add(${JPEGTURBO_TARGET_NAME}
 # The following variables ensure that find_package can find libjpeg-turbo
 set(JPEG_LIBRARY ${JPEG_LIBRARIES})
 set(JPEG_INCLUDE_DIR ${JPEGTURBO_SOURCE_DIR})
+set(JPEG_HAS_12BIT_API TRUE)
 
 add_library(jpeg-turbo INTERFACE IMPORTED GLOBAL)
 add_dependencies(jpeg-turbo ${JPEGTURBO_TARGET_NAME})
@@ -151,6 +152,10 @@ set_target_properties(jpeg-turbo PROPERTIES
 )
 add_library(JPEG::JPEG ALIAS jpeg-turbo)
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
+
+set(libjpeg-turbo_INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})
+set(libjpeg-turbo_LIBRARIES ${JPEG_LIBRARIES})
+add_library(libjpeg-turbo::jpeg ALIAS jpeg-turbo)
 
 # Compile OpenJPEG for JPEG 2000 support
 set(BUILD_CODEC OFF CACHE BOOL " " FORCE)
@@ -163,6 +168,7 @@ set(OpenJPEG_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/openjpeg/src/lib/openjp2
     ${CMAKE_CURRENT_BINARY_DIR}/openjpeg/src/lib/openjp2
 )
+set(OPENJPEG_INCLUDE_DIRS ${OpenJPEG_INCLUDE_DIRS})
 
 set(OpenJPEG_FOUND TRUE CACHE BOOL " " FORCE)
 set(OPENJPEG_FOUND TRUE CACHE BOOL " " FORCE)
@@ -430,4 +436,25 @@ else()
     set(CFITSIO_USE_PTHREADS ON CACHE BOOL " " FORCE)
 endif()
 add_subdirectory(cfitsio EXCLUDE_FROM_ALL)
+
+# Compile GDCM for DICOM image support
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(GDCM_BUILD_APPLICATIONS OFF CACHE BOOL " " FORCE)
+set(GDCM_BUILD_TESTING OFF CACHE BOOL " " FORCE)
+set(GDCM_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(GDCM_TARGETS_NAME "gdcm-tev" CACHE STRING " " FORCE)
+set(GDCM_INSTALL_NO_DEVELOPMENT ON CACHE BOOL " " FORCE)
+set(GDCM_INSTALL_NO_DOCUMENTATION ON CACHE BOOL " " FORCE)
+set(GDCM_INSTALL_NO_RUNTIME ON CACHE BOOL " " FORCE)
+set(GDCM_USE_JPEGLS ON CACHE BOOL " " FORCE)
+
+# Pretend that we want to use system libraries and reroute to ours so that GDCM doesn't build its own copies. Particularly important for
+# openjpeg (whose cmake otherwise messes with parent scope) and libjpeg-turbo, which requires complex ExternalProject_Add logic.
+set(GDCM_USE_SYSTEM_OPENJPEG ON CACHE BOOL " " FORCE)
+set(GDCM_USE_JPEGTURBO OFF CACHE BOOL " " FORCE) # libjpeg-turbo turned off for now -- gdcm's impl not yet mature to support all images
+
+add_subdirectory(GDCM EXCLUDE_FROM_ALL)
+add_library(gdcm-tev INTERFACE)
+target_link_libraries(gdcm-tev INTERFACE gdcmCommon gdcmMSFF gdcmDSED gdcmDICT)
+target_include_directories(gdcm-tev INTERFACE ${GDCM_INCLUDE_PATH})
 

@@ -18,6 +18,7 @@
 
 #include <tev/imageio/BmpImageLoader.h>
 #include <tev/imageio/ClipboardImageLoader.h>
+#include <tev/imageio/DicomImageLoader.h>
 #include <tev/imageio/EmptyImageLoader.h>
 #include <tev/imageio/ExrImageLoader.h>
 #include <tev/imageio/FitsImageLoader.h>
@@ -73,6 +74,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new JpegTurboImageLoader());
         imageLoaders.emplace_back(new PngImageLoader());
         imageLoaders.emplace_back(new RawImageLoader());
+        imageLoaders.emplace_back(new DicomImageLoader());
         imageLoaders.emplace_back(new TiffImageLoader());
         imageLoaders.emplace_back(new BmpImageLoader());
         imageLoaders.emplace_back(new IcoImageLoader());
@@ -123,6 +125,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/x-portable-floatmap",
         "image/x-portable-graymap",
         "image/x-portable-pixmap",
+        "application/dicom",
     };
 
     return mimeTypes;

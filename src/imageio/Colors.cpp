@@ -1074,15 +1074,21 @@ Task<void> toLinearSrgbPremul(
     );
 }
 
-LimitedRange limitedRangeForBitsPerSample(int bitsPerSample) {
-    switch (bitsPerSample) {
-        case 8: return {255.0f / 219.0f, 16.0f / 255.0f};
-        case 10: return {1023.0f / 876.0f, 64.0f / 1023.0f};
-        case 12: return {4095.0f / 3504.0f, 256.0f / 4095.0f};
+LimitedRange limitedRangeForBitsPerSample(int bitsPerSample, bool cbcr) {
+    const int eightBitMin = 16;
+    const int eightBitMax = cbcr ? 240 : 235;
+
+    if (bitsPerSample < 8 || bitsPerSample > 16) {
+        tlog::warning("Unsupported bits per sample {} with limited range flag.", bitsPerSample);
+        return LimitedRange::full();
     }
 
-    tlog::warning("Unsupported bits per sample {} with limited range flag.", bitsPerSample);
-    return LimitedRange::full();
+    const int min = eightBitMin << (bitsPerSample - 8);
+    const int max = eightBitMax << (bitsPerSample - 8);
+    const int range = max - min;
+
+    const int bitMax = (1 << bitsPerSample) - 1;
+    return {bitMax / (float)range, (float)min / bitMax};
 }
 
 } // namespace tev
