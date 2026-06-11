@@ -154,13 +154,19 @@ void ImageButton::draw(NVGcontext* ctx) {
         const float idSize = nvgTextBounds(ctx, 0, 0, idString.data(), idString.data() + idString.size(), nullptr);
 
         nvgFontSize(ctx, m_font_size);
-        while (mCutoff < mCaption.size()) {
-            const float bounds = nvgTextBounds(ctx, 0, 0, mCaption.data() + mCutoff, mCaption.data() + mCaption.size(), nullptr);
-            if (bounds <= m_size.x() - 25 - idSize) {
-                break;
-            }
 
-            mCutoff += codePointLength(mCaption[mCutoff]);
+        vector<size_t> codePointOffsets;
+        for (size_t i = 0; i < mCaption.size(); i += codePointLength(mCaption[i])) {
+            codePointOffsets.push_back(i);
+        }
+
+        const auto boundsView = codePointOffsets | views::transform([this, ctx](size_t offset) {
+                                    return nvgTextBounds(ctx, 0, 0, mCaption.data() + offset, mCaption.data() + mCaption.size(), nullptr);
+                                });
+
+        const auto it = ranges::lower_bound(boundsView, m_size.x() - 25 - idSize, greater{});
+        if (it != boundsView.end()) {
+            mCutoff = codePointOffsets.at(distance(boundsView.begin(), it));
         }
 
         mSizeForWhichCutoffWasComputed = m_size;
