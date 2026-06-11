@@ -112,7 +112,7 @@ private:
 
     size_t mId = 0;
     size_t mCutoff = 0;
-    nanogui::Vector2i mSizeForWhichCutoffWasComputed = {0};
+    mutable nanogui::Vector2i mSizeForWhichCutoffWasComputed = {0};
 
     size_t mHighlightBegin = 0;
     size_t mHighlightEnd = 0;
