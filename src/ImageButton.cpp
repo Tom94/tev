@@ -53,13 +53,16 @@ Vector2i ImageButton::preferred_size_impl(NVGcontext* ctx) const {
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans-bold");
     string idString = to_string(mId);
-    float idSize = nvgTextBounds(ctx, 0, 0, idString.data(), idString.data() + idString.size(), nullptr);
+    const float idSize = nvgTextBounds(ctx, 0, 0, idString.data(), idString.data() + idString.size(), nullptr);
 
     nvgFontSize(ctx, m_font_size);
     nvgFontFace(ctx, "sans");
-    float tw = nvgTextBounds(ctx, 0, 0, mCaption.data(), mCaption.data() + mCaption.size(), nullptr);
+    const float tw = nvgTextBounds(ctx, 0, 0, mCaption.data(), mCaption.data() + mCaption.size(), nullptr);
 
     m_preferred_size_cache = Vector2i(static_cast<int>(tw + idSize) + 15, m_font_size + 6);
+
+    mSizeForWhichCutoffWasComputed = Vector2i(-1);
+
     return m_preferred_size_cache;
 }
 
