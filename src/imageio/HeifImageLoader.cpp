@@ -479,6 +479,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         decodingOptions->num_codec_threads = numThreads;
         decodingOptions->num_library_threads = numThreads;
+        decodingOptions->output_image_nclx_profile_passthrough = 1;
 
         heif_image* img = nullptr;
         const auto imgGuard = ScopeGuard{[img] { heif_image_release(img); }};
@@ -533,6 +534,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         decodingOptions->num_codec_threads = numThreads;
         decodingOptions->num_library_threads = numThreads;
+        decodingOptions->output_image_nclx_profile_passthrough = 1;
 
         heif_image* img = nullptr;
         const auto imgGuard = ScopeGuard{[img] { heif_image_release(img); }};
@@ -803,9 +805,11 @@ Task<vector<ImageData>> HeifImageLoader::load(
                                 tlog::debug("ISO 21496-1 alt. image chroma from ICC: {}", *altImgChroma);
                             }
                         } catch (const invalid_argument& e) { tlog::warning("Failed to read alt. image ICC profile: {}", e.what()); }
-                    } else if (heif_color_profile_nclx* nclx;
-                               heif_image_handle_get_derived_image_nclx_color_profile(imgHandle, &nclx).code == heif_error_Ok &&
-                               nclx->color_primaries != heif_color_primaries_unspecified) {
+                    } else if (
+                        heif_color_profile_nclx* nclx;
+                        heif_image_handle_get_derived_image_nclx_color_profile(imgHandle, &nclx).code == heif_error_Ok &&
+                        nclx->color_primaries != heif_color_primaries_unspecified
+                    ) {
 
                         const auto nclxGuard = ScopeGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
 
