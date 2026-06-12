@@ -520,7 +520,11 @@ Task<void> ImageData::orientToTopLeft(int priority) {
 void ImageData::updateLayers() {
     layers.clear();
 
-    set<string> layerNames;
+    struct NaturalComparer {
+        bool operator()(string_view s1, string_view s2) const { return naturalCompare(s1, s2); }
+    };
+
+    set<string, NaturalComparer> layerNames;
     for (auto& c : channels) {
         layerNames.emplace(Channel::head(c.name()));
     }
