@@ -54,7 +54,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     auto closeButton = new Button{button_panel(), "", FA_TIMES};
     closeButton->set_callback(mCloseCallback);
 
-    static constexpr int WINDOW_WIDTH = 640;
+    static constexpr int WINDOW_WIDTH = 650;
     static constexpr int WINDOW_HEIGHT = 640;
 
     set_layout(new GroupLayout{});
