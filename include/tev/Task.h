@@ -22,6 +22,7 @@
 
 #include <coroutine>
 #include <future>
+#include <ranges>
 #include <span>
 #include <thread>
 
@@ -239,27 +240,66 @@ template <TaskCoroutine F, typename... Args> DetachedTask invokeTaskDetached(F&&
     co_await exec(args...);
 }
 
-void waitAll(std::span<Task<void>> futures);
-Task<void> awaitAll(std::span<Task<void>> futures);
+void waitAll(range_of<Task<void>> auto&& futures) {
+    std::vector<std::exception_ptr> eptr = {};
 
-template <typename T> Task<std::vector<T>> awaitAll(std::span<Task<T>> futures) {
-    std::exception_ptr eptr = {};
+    for (auto&& f : futures) {
+        try {
+            f.get();
+        } catch (const std::exception& e) { eptr.emplace_back(std::current_exception()); }
+    }
 
+    if (eptr.size() == 1) {
+        rethrow_exception(eptr.front());
+    } else if (eptr.size() > 1) {
+        throw CompoundException{eptr};
+    }
+}
+
+template <typename> inline constexpr bool is_task_v = false;
+template <typename T> inline constexpr bool is_task_v<Task<T>> = true;
+template <typename T> concept task = is_task_v<T>;
+template <task T> using task_value_t = typename T::value_type;
+
+template <typename U> concept range_of_tasks = std::ranges::range<U> && is_task_v<std::ranges::range_value_t<U>>;
+
+template <range_of_tasks U>
+    requires std::same_as<std::ranges::range_value_t<U>, Task<void>>
+Task<void> awaitAll(U&& futures) {
+    std::vector<std::exception_ptr> eptr = {};
+
+    for (auto&& f : futures) {
+        try {
+            co_await f;
+        } catch (const std::exception& e) { eptr.emplace_back(std::current_exception()); }
+    }
+
+    if (eptr.size() == 1) {
+        rethrow_exception(eptr.front());
+    } else if (eptr.size() > 1) {
+        throw CompoundException{eptr};
+    }
+
+    co_return;
+}
+
+template <range_of_tasks U>
+    requires(!std::same_as<std::ranges::range_value_t<U>, Task<void>>)
+Task<std::vector<task_value_t<std::ranges::range_value_t<U>>>> awaitAll(U&& futures) {
+    std::vector<std::exception_ptr> eptr = {};
+
+    using T = task_value_t<std::ranges::range_value_t<U>>;
     std::vector<T> results;
     for (auto&& f : futures) {
         try {
             results.emplace_back(co_await f);
-        } catch (const std::exception& e) {
-            if (eptr) {
-                tlog::error("Multiple exceptions in awaitAll(). Rethrowing first and logging others: {}", e.what());
-            } else {
-                eptr = std::current_exception();
-            }
-        }
+        } catch (const std::exception& e) { eptr.emplace_back(std::current_exception()); }
     }
 
-    if (eptr) {
-        rethrow_exception(eptr);
+    if (eptr.size() == 1) {
+        rethrow_exception(eptr.front());
+    } else if (eptr.size() > 1) {
+        throw CompoundException{eptr};
     }
 
     co_return results;

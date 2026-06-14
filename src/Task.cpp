@@ -22,36 +22,4 @@ using namespace std;
 
 namespace tev {
 
-void waitAll(span<Task<void>> futures) {
-    vector<exception_ptr> eptr = {};
-
-    for (auto&& f : futures) {
-        try {
-            f.get();
-        } catch (const exception& e) { eptr.emplace_back(current_exception()); }
-    }
-
-    if (eptr.size() == 1) {
-        rethrow_exception(eptr.front());
-    } else if (eptr.size() > 1) {
-        throw CompoundException{eptr};
-    }
-}
-
-Task<void> awaitAll(span<Task<void>> futures) {
-    vector<exception_ptr> eptr = {};
-
-    for (auto&& f : futures) {
-        try {
-            co_await f;
-        } catch (const exception& e) { eptr.emplace_back(current_exception()); }
-    }
-
-    if (eptr.size() == 1) {
-        rethrow_exception(eptr.front());
-    } else if (eptr.size() > 1) {
-        throw CompoundException{eptr};
-    }
-}
-
 } // namespace tev

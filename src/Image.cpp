@@ -1526,13 +1526,8 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
             throw ImageLoadError{"No suitable image loader found."};
         }
 
-        vector<shared_ptr<Image>> images;
-        for (auto& i : imageData) {
+        const auto makeImage = [&](ImageData& i) -> Task<shared_ptr<Image>> {
             co_await i.ensureValid(channelSelector, taskPriority);
-
-            if (i.channels.empty()) {
-                continue;
-            }
 
             // If *multiple* image "parts" were loaded and they have names, ensure that these names are present in the channel selector. If
             // there's just a single part, it'll already be represented in the image's top-level layer name, so no need to clutter the UI by
@@ -1551,9 +1546,15 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
                 }
             }
 
-            images.emplace_back(make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector, groupChannels));
+            co_return make_shared<Image>(path, fileLastModified, std::move(i), localChannelSelector, groupChannels);
+        };
+
+        vector<Task<shared_ptr<Image>>> imageTasks;
+        for (auto&& i : imageData) {
+            imageTasks.emplace_back(ThreadPool::global().enqueueCoroutine(bind(makeImage, std::move(i)), taskPriority));
         }
 
+        vector<shared_ptr<Image>> images = co_await awaitAll(imageTasks) | toVector;
         if (images.empty()) {
             throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
         }

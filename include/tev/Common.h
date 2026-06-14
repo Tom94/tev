@@ -287,7 +287,11 @@ template <template <typename...> class Vector> struct to_vector_fn {
 
             return v;
         } else {
-            return Vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
+            if constexpr (std::is_rvalue_reference_v<R&&> && !std::is_const_v<std::remove_reference_t<R>>) {
+                return Vector<value_type>(std::make_move_iterator(std::ranges::begin(r)), std::make_move_iterator(std::ranges::end(r)));
+            } else {
+                return Vector<value_type>(std::ranges::begin(r), std::ranges::end(r));
+            }
         }
     }
 };
@@ -304,6 +308,8 @@ template <size_t N> struct fixed_chunks_fn {
 inline constexpr detail::to_vector_fn<std::vector> toVector{};
 inline constexpr detail::to_vector_fn<std::basic_string> toBasicString{};
 template <std::size_t N> inline constexpr detail::fixed_chunks_fn<N> fixed_chunks{};
+
+template <typename R, typename T> concept range_of = std::ranges::range<R> && std::same_as<std::ranges::range_value_t<R>, T>;
 
 // Helper for std::visit on multiple lambdas
 template <typename... Callable> struct visitor : Callable... {
