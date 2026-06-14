@@ -41,6 +41,8 @@ MultiGraph::MultiGraph(Widget* parent, string_view caption) : Widget{parent}, mC
     mBackgroundColor = Color(20, 128);
     mForegroundColor = Color(255, 192, 0, 128);
     mTextColor = Color(240, 192);
+
+    m_preferred_size_depends_on_size = false;
 }
 
 Vector2i MultiGraph::preferred_size_impl(NVGcontext*) const { return Vector2i(180, 80); }

@@ -43,6 +43,8 @@ ImageButton::ImageButton(Widget* parent, string_view caption, bool canBeReferenc
     });
     mCaptionTextBox->set_corner_radius(0.0f);
     mCaptionTextBox->set_solid_color(IMAGE_COLOR);
+
+    m_preferred_size_depends_on_size = false;
 }
 
 Vector2i ImageButton::preferred_size_impl(NVGcontext* ctx) const {
