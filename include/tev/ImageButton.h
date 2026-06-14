@@ -23,6 +23,7 @@
 #include <nanogui/textbox.h>
 #include <nanogui/widget.h>
 
+#include <array>
 #include <string>
 
 namespace tev {
@@ -34,6 +35,10 @@ public:
     nanogui::Vector2i preferred_size_impl(NVGcontext* ctx) const override;
 
     bool mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
+
+    std::array<std::string_view, 4> getCaptionPieces(size_t cutoff) const;
+
+    float getCaptionWidth(NVGcontext* ctx, size_t cutoff) const;
 
     void draw(NVGcontext* ctx) override;
 
