@@ -552,6 +552,64 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
         resultData.emplace_back(co_await readFrame(i), seriesNumber, instanceNumber, seriesUid, instanceUid);
     }
 
+    if (resultData.empty()) {
+        throw ImageLoadError{"DICOM image has no frames."};
+    }
+
+    // Read overlays into additional channels rather than burning them onto the pixel data
+    const size_t numOverlays = baseImage.GetNumberOfOverlays();
+    for (size_t i = 0; i < numOverlays; ++i) {
+        const gdcm::Overlay& ov = baseImage.GetOverlay(i);
+        if (ov.IsEmpty()) {
+            continue;
+        }
+
+        const Vector2i oSize = {ov.GetColumns(), ov.GetRows()};
+        const auto oFrames = std::max(ov.GetNumberOfFrames(), 1u);
+
+        // origin is 1-based (row, col) per DICOM; GDCM gives a signed pair
+        const short* originData = ov.GetOrigin();
+        const auto oOrigin =
+            max(Vector2i{originData[1] - 1, originData[0] - 1}, Vector2i{0}); // (col, row) order for easier indexing into pixel data
+        const auto oFrameOrigin = ov.GetFrameOrigin() > 0 ? ov.GetFrameOrigin() - 1 : 0;
+
+        HeapArray<char> mask(posProd(oSize) * oFrames);
+        ov.GetUnpackBuffer(mask.data(), mask.size());
+
+        vector<ChannelView<float>> overlayViews;
+        for (size_t fi = oFrameOrigin, n = std::min(resultData.size(), (size_t)(oFrameOrigin + oFrames)); fi < n; ++fi) {
+            overlayViews.emplace_back(resultData.at(fi)
+                                          .imageData.channels
+                                          .emplace_back(fmt::format("overlay.{}.L", i), size, EPixelFormat::F32, EPixelFormat::F16)
+                                          .view<float>());
+        }
+
+        const auto view = MultiChannelView<float>{overlayViews};
+
+        TEV_ASSERT(view.nChannels() == oFrames, "Overlay view must have one channel per frame.");
+
+        co_await ThreadPool::global().parallelFor(
+            0,
+            oSize.y(),
+            (size_t)posProd(oSize) * view.nChannels(),
+            [&](int y) {
+                const int iy = oOrigin.y() + y;
+                if (iy < 0 || iy >= size.y()) {
+                    return;
+                }
+
+                for (int x = 0; x < oSize.x(); ++x) {
+                    const int ix = oOrigin.x() + x;
+                    for (size_t c = 0; c < view.nChannels(); ++c) {
+                        const auto maskIdx = (size_t)c * posProd(oSize) + (size_t)y * oSize.x() + (size_t)x;
+                        view[c, ix, iy] = mask[maskIdx] ? 1.0f : 0.0f;
+                    }
+                }
+            },
+            priority
+        );
+    }
+
     co_return resultData;
 }
 
