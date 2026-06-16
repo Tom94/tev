@@ -845,7 +845,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
                     image.partName = Channel::joinIfNonempty(fmt::format("frames.{}", i), image.partName);
                 }
 
-                result.insert(result.end(), make_move_iterator(tmp.begin()), make_move_iterator(tmp.end()));
+                ranges::move(tmp, back_inserter(result));
             } catch (const FormatNotSupported&) { throw ImageLoadError{"Failed to load BA BMP frame: inner data is not a valid BMP."}; }
 
             if (baFileHeader.offsetToNext == 0) {

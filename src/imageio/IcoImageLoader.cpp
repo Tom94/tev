@@ -258,7 +258,7 @@ Task<vector<ImageData>> IcoImageLoader::load(
             image.partName = Channel::joinIfNonempty(fmt::format("images.{}", i), image.partName);
         }
 
-        result.insert(result.end(), make_move_iterator(imageData.begin()), make_move_iterator(imageData.end()));
+        ranges::move(imageData, back_inserter(result));
     }
 
     co_return result;
