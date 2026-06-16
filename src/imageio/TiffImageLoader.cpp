@@ -365,9 +365,9 @@ float dngHdrDecodingFunction(const float x) { return 16.0f * (8.0f * x - 8.0f + 
 
 template <trivially_copyable T>
 void unpackBits(
-    const uint8_t* const __restrict input, const size_t inputSize, const int bitwidth, T* const __restrict output, const size_t outputSize
+    const uint8_t* const __restrict input, const size_t inputSize, const size_t bitwidth, T* const __restrict output, const size_t outputSize
 ) {
-    const auto writeSample = [](T* target, uint64_t sample, int bw) {
+    const auto writeSample = [](T* target, uint64_t sample, size_t bw) {
         if constexpr (is_integral_v<T>) {
             if constexpr (is_signed_v<T>) {
                 // If signbit is set, set all bits to the left to 1
@@ -400,11 +400,11 @@ void unpackBits(
 
     // If the bitwidth is byte aligned (multiple of 8), libtiff already arranged the data in our machine's endianness
     if (bitwidth % 8 == 0) {
-        const uint32_t bytesPerSample = bitwidth / 8;
+        const size_t bytesPerSample = bitwidth / 8;
 
         for (size_t i = 0; i < outputSize; ++i) {
             uint64_t sample = 0;
-            for (uint32_t j = 0; j < bytesPerSample; ++j) {
+            for (size_t j = 0; j < bytesPerSample; ++j) {
                 if constexpr (endian::native == endian::little) {
                     sample |= (uint64_t)input[i * bytesPerSample + j] << (8 * j);
                 } else {
@@ -420,7 +420,7 @@ void unpackBits(
 
     // Otherwise, the data is packed in a bitwise, MSB first / big endian manner
     uint64_t currentBits = 0;
-    int bitsAvailable = 0;
+    size_t bitsAvailable = 0;
     size_t i = 0;
 
     for (size_t j = 0; j < inputSize; ++j) {
@@ -1860,6 +1860,7 @@ Task<ImageData> readTiffImage(
         PHOTOMETRIC_SEMANTIC,
     };
 
+    Vector2i yCbCrSubsampling = {1, 1};
     if (photometric == PHOTOMETRIC_YCBCR) {
         if (compression == COMPRESSION_JPEG || compression == COMPRESSION_LOSSY_JPEG || compression == COMPRESSION_JP2000) {
             // Our JPEG decoder upsamples YCbCr data for us
@@ -1873,14 +1874,18 @@ Task<ImageData> readTiffImage(
         }
 
         if (uint16_t subsampling[2]; TIFFGetField(tif, TIFFTAG_YCBCRSUBSAMPLING, &subsampling[0], &subsampling[1])) {
-            tlog::debug("Found YCbCr subsampling: {}x{}", subsampling[0], subsampling[1]);
-
-            const bool hasSubsampling = subsampling[0] != 1 || subsampling[1] != 1;
-            if (hasSubsampling) {
-                // TODO: actually handle subsampling
-                throw ImageLoadError{"Subsampled YCbCr images are only supported for JPEG-compressed TIFFs."};
+            if (subsampling[0] == 0 || subsampling[1] == 0) {
+                throw ImageLoadError{"Invalid YCbCr subsampling factors."};
             }
+
+            tlog::debug("Found YCbCr subsampling: {}x{}", subsampling[0], subsampling[1]);
+            yCbCrSubsampling = {subsampling[0], subsampling[1]};
         }
+    }
+
+    const bool hasYCbCrSubsampling = yCbCrSubsampling != Vector2i{1, 1};
+    if (hasYCbCrSubsampling && samplesPerPixel != 3) {
+        throw ImageLoadError{"YCbCr subsampling is only supported for 3-channel images."};
     }
 
     if (ranges::all_of(SUPPORTED_PHOTOMETRICS, [&](uint16_t p) { return p != photometric; })) {
@@ -2057,7 +2062,6 @@ Task<ImageData> readTiffImage(
     const size_t numPlanes = planar == PLANARCONFIG_CONTIG ? 1 : samplesPerPixel;
     if (isTiled) {
         tile.size = TIFFTileSize64(tif);
-        tile.rowSize = TIFFTileRowSize64(tif);
         tile.count = TIFFNumberOfTiles(tif);
 
         if (!TIFFGetField(tif, TIFFTAG_TILEWIDTH, &tile.width) || !TIFFGetField(tif, TIFFTAG_TILELENGTH, &tile.height)) {
@@ -2069,8 +2073,15 @@ Task<ImageData> readTiffImage(
             throw ImageLoadError{"3D tiled images are not supported."};
         }
 
-        tile.numX = (size.x() + tile.width - 1) / tile.width;
-        tile.numY = (size.y() + tile.height - 1) / tile.height;
+        tile.numX = divRoundUp((uint32_t)size.x(), tile.width);
+        tile.numY = divRoundUp((uint32_t)size.y(), tile.height);
+
+        // TIFFTileRowSize64 is also available, but does not take into account ycbcr subsampling. Best to compute this value ourselves
+        tile.rowSize = tile.size / tile.height;
+
+        tlog::debug(
+            "Image is tiled: tileSize={} rowSize={} count={} tileWidth={} tileHeight={}", tile.size, tile.rowSize, tile.count, tile.width, tile.height
+        );
     } else {
         tile.size = TIFFStripSize64(tif);
         tile.rowSize = TIFFScanlineSize64(tif);
@@ -2081,7 +2092,9 @@ Task<ImageData> readTiffImage(
         tile.height = tile.size / tile.rowSize;
 
         tile.numX = 1;
-        tile.numY = (size.y() + tile.height - 1) / tile.height;
+        tile.numY = divRoundUp((uint32_t)size.y(), tile.height);
+
+        tlog::debug("Image is stripped: stripSize={} rowSize={} count={} stripHeight={}", tile.size, tile.rowSize, tile.count, tile.height);
     }
 
     const auto readTile = isTiled ? TIFFReadEncodedTile : TIFFReadEncodedStrip;
@@ -2129,7 +2142,8 @@ Task<ImageData> readTiffImage(
     };
 
     // Be robust against broken TIFFs that have a tile/strip size smaller than the actual data size. Make sure to allocate enough memory
-    // to fit all data.
+    // to fit all data. Subsampled YCbCr images will also have smaller tile sizes due to chroma subsampling, but we're fine with
+    // overestimating the size here. Does not waste much RAM and ensures no out of bounds r/w further below, even for broken files.
     tile.size = std::max(tile.size, (size_t)tile.width * tile.height * bitsPerSample * samplesPerPixel / numPlanes / 8);
 
     tlog::debug(
@@ -2271,13 +2285,13 @@ Task<ImageData> readTiffImage(
                         const size_t tileX = planeTile % tile.numX;
                         const size_t tileY = planeTile / tile.numX;
 
-                        const int xStart = (int)tileX * tile.width;
-                        const int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
+                        const size_t xStart = tileX * tile.width;
+                        const size_t xEnd = std::min((tileX + 1) * tile.width, (size_t)size.x());
 
-                        const int yStart = (int)tileY * tile.height;
-                        const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+                        const size_t yStart = tileY * tile.height;
+                        const size_t yEnd = std::min((tileY + 1) * tile.height, (size_t)size.y());
 
-                        const auto tileSize = Vector2i{xEnd - xStart, yEnd - yStart};
+                        const auto tileSize = Vector2i{(int)(xEnd - xStart), (int)(yEnd - yStart)};
                         for (auto& channel : tmpImage.channels) {
                             if (channel.size().x() < tileSize.x() || channel.size().y() < tileSize.y()) {
                                 throw ImageLoadError{fmt::format(
@@ -2299,20 +2313,20 @@ Task<ImageData> readTiffImage(
                             yStart,
                             yEnd,
                             numPixels * samplesPerPixel / numPlanes,
-                            [&](int y) {
-                                const int y0 = y - yStart;
+                            [&](size_t y) {
+                                const size_t y0 = y - yStart;
                                 if (planar == PLANARCONFIG_CONTIG) {
-                                    for (int x = xStart; x < xEnd; ++x) {
-                                        const int x0 = x - xStart;
-                                        for (int c = 0; c < samplesPerPixel; ++c) {
+                                    for (size_t x = xStart; x < xEnd; ++x) {
+                                        const size_t x0 = x - xStart;
+                                        for (size_t c = 0; c < samplesPerPixel; ++c) {
                                             const auto pixel = views[c][x0, y0];
                                             data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                         }
                                     }
                                 } else {
                                     size_t c = i / numTilesPerPlane;
-                                    for (int x = xStart; x < xEnd; ++x) {
-                                        const int x0 = x - xStart;
+                                    for (size_t x = xStart; x < xEnd; ++x) {
+                                        const size_t x0 = x - xStart;
                                         const auto pixel = views[0][x0, y0];
                                         data[(y * size.x() + x) * samplesPerPixel + c] = pixel * scale;
                                     }
@@ -2329,7 +2343,16 @@ Task<ImageData> readTiffImage(
         co_await awaitAll(decodeTasks);
     } else {
         // Have libtiff decode the tiles for us if the compression method is supported
-        const size_t unpackedTileRowSamples = tile.width * samplesPerPixel / numPlanes;
+        size_t unpackedTileRowSamples = tile.width * samplesPerPixel / numPlanes;
+        if (hasYCbCrSubsampling) {
+            if (planar == PLANARCONFIG_CONTIG) {
+                unpackedTileRowSamples = divRoundUp(tile.width, (uint32_t)yCbCrSubsampling.x()) * (posProd(yCbCrSubsampling) + 2) /
+                    yCbCrSubsampling.y();
+            } else {
+                unpackedTileRowSamples = divRoundUp(tile.width, (uint32_t)yCbCrSubsampling.x());
+            }
+        }
+
         const size_t unpackedTileSize = tile.height * unpackedTileRowSamples;
 
         HeapArray<uint8_t> tileData(tile.size * tile.count);
@@ -2343,6 +2366,25 @@ Task<ImageData> readTiffImage(
                 throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
 
+            const auto subsampledOffset = [sub = yCbCrSubsampling,
+                                           unitSamples = posProd(yCbCrSubsampling) + 2,
+                                           unitsPerRow = (tile.width + yCbCrSubsampling.x() - 1) / yCbCrSubsampling.x()](int x, int y, int c) {
+                // which data unit, and position within it
+                int unitX = x / sub.x(); // column of data units
+                int unitY = y / sub.y(); // row of data units
+                int inX = x - unitX * sub.x(); // x within the unit's Y block
+                int inY = y - unitY * sub.y(); // y within the unit's Y block
+
+                size_t unitIndex = unitY * unitsPerRow + unitX;
+                size_t base = unitIndex * unitSamples;
+
+                if (c == 0) {
+                    return base + inY * sub.x() + inX; // Y sample
+                } else {
+                    return base + posProd(sub) + c - 1; // C* sample
+                }
+            };
+
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
                     [&, i, td]() -> Task<void> {
@@ -2350,37 +2392,52 @@ Task<ImageData> readTiffImage(
                         const size_t tileX = planeTile % tile.numX;
                         const size_t tileY = planeTile / tile.numX;
 
-                        const int xStart = (int)tileX * tile.width;
-                        const int xEnd = std::min((int)((tileX + 1) * tile.width), size.x());
+                        const size_t xStart = tileX * tile.width;
+                        const size_t xEnd = std::min((tileX + 1) * tile.width, (size_t)size.x());
 
-                        const int yStart = (int)tileY * tile.height;
-                        const int yEnd = std::min((int)((tileY + 1) * tile.height), size.y());
+                        const size_t yStart = tileY * tile.height;
+                        const size_t yEnd = std::min((tileY + 1) * tile.height, (size_t)size.y());
 
                         const size_t numPixels = (size_t)tile.width * tile.height;
 
                         const auto unpackTask = [&](auto& utd, auto* const data) -> Task<void> {
+                            // Not fused with the second parallel for loop to avoid data races in blocked subsampled layouts
+                            const size_t planarC = i / numTilesPerPlane;
+                            const Vector2i planarSub = planar == PLANARCONFIG_SEPARATE && planarC > 0 ? yCbCrSubsampling : Vector2i{1, 1};
+                            const size_t rowSize = divRoundUp(tile.rowSize, (size_t)planarSub.x());
+                            co_await ThreadPool::global().parallelFor(
+                                0uz,
+                                (yEnd - yStart) / planarSub.y(),
+                                numPixels * samplesPerPixel / numPlanes,
+                                [&](size_t y) {
+                                    unpackBits(
+                                        td + rowSize * y, rowSize, bitsPerSample, utd.data() + unpackedTileRowSamples * y, unpackedTileRowSamples
+                                    );
+                                },
+                                priority
+                            );
+
                             co_await ThreadPool::global().parallelFor(
                                 yStart,
                                 yEnd,
                                 numPixels * samplesPerPixel / numPlanes,
-                                [&](int y) {
-                                    int y0 = y - yStart;
-                                    unpackBits(
-                                        td + tile.rowSize * y0, tile.rowSize, bitsPerSample, utd.data() + unpackedTileRowSamples * y0, unpackedTileRowSamples
-                                    );
-
+                                [&](size_t y) {
+                                    size_t y0 = y - yStart;
                                     if (planar == PLANARCONFIG_CONTIG) {
-                                        for (int x = xStart; x < xEnd; ++x) {
-                                            for (int c = 0; c < samplesPerPixel; ++c) {
-                                                auto pixel = utd[(y0 * tile.width + x - xStart) * samplesPerPixel + c];
-                                                data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                        for (size_t x = xStart; x < xEnd; ++x) {
+                                            for (size_t c = 0; c < samplesPerPixel; ++c) {
+                                                const size_t idx = hasYCbCrSubsampling ?
+                                                    subsampledOffset(x - xStart, y0, c) :
+                                                    (y0 * tile.width + x - xStart) * samplesPerPixel + c;
+                                                data[(y * size.x() + x) * samplesPerPixel + c] = utd[idx];
                                             }
                                         }
                                     } else {
-                                        size_t c = i / numTilesPerPlane;
-                                        for (int x = xStart; x < xEnd; ++x) {
-                                            auto pixel = utd[y0 * tile.width + x - xStart];
-                                            data[(y * size.x() + x) * samplesPerPixel + c] = pixel;
+                                        const size_t c = planarC;
+                                        const Vector2i subsampling = c > 0 ? yCbCrSubsampling : Vector2i{1, 1};
+                                        for (size_t x = xStart; x < xEnd; ++x) {
+                                            const size_t idx = y0 / subsampling.y() * tile.width + (x - xStart) / subsampling.x();
+                                            data[(y * size.x() + x) * samplesPerPixel + c] = utd[idx];
                                         }
                                     }
                                 },
