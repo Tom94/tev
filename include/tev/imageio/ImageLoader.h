@@ -105,7 +105,11 @@ Task<void> toFloat32(
     const size_t numSamplesPerPixel = std::min(numSamplesPerPixelIn, floatData.nChannels());
     const size_t numPixels = posProd(size);
 
-    const size_t expectedDataSize = numSamplesPerRowIn * size.y();
+    size_t expectedDataSize = numSamplesPerRowIn * size.y();
+    if (!hasAlpha || !MULTIPLY_ALPHA) {
+        expectedDataSize = expectedDataSize - numSamplesPerPixelIn + numSamplesPerPixel;
+    }
+
     if (imageData.size() < expectedDataSize) {
         throw std::runtime_error{
             fmt::format("Not enough image data provided: expected at least {} samples, got {}", expectedDataSize, imageData.size())
