@@ -32,6 +32,7 @@
 #include <jpeglib.h>
 #include <tiff.h>
 #include <tiffio.h>
+#include <tiffiop.h>
 
 #include <array>
 #include <optional>
@@ -1884,8 +1885,14 @@ Task<ImageData> readTiffImage(
     }
 
     const bool hasYCbCrSubsampling = yCbCrSubsampling != Vector2i{1, 1};
-    if (hasYCbCrSubsampling && samplesPerPixel != 3) {
-        throw ImageLoadError{"YCbCr subsampling is only supported for 3-channel images."};
+    if (hasYCbCrSubsampling) {
+        if (samplesPerPixel != 3) {
+            throw ImageLoadError{"YCbCr subsampling is only supported for 3-channel images."};
+        }
+    } else if (photometric == PHOTOMETRIC_YCBCR) {
+        // Ensure strip/tile size calculations don't get borked. libtiff's internal special casing for YCbCr subsampling produces wrong
+        // rounding behavior when subsampling isn't present but YCbCr & contig are active.
+        tif->tif_flags |= TIFF_UPSAMPLED;
     }
 
     if (ranges::all_of(SUPPORTED_PHOTOMETRICS, [&](uint16_t p) { return p != photometric; })) {
