@@ -53,6 +53,9 @@ enum class EDicomKind {
     I16,
     U32,
     I32,
+    U64,
+    I64,
+    F16,
     F32,
     F64,
 };
@@ -65,6 +68,9 @@ string toString(EDicomKind kind) {
         case EDicomKind::I16: return "I16";
         case EDicomKind::U32: return "U32";
         case EDicomKind::I32: return "I32";
+        case EDicomKind::U64: return "U64";
+        case EDicomKind::I64: return "I64";
+        case EDicomKind::F16: return "F16";
         case EDicomKind::F32: return "F32";
         case EDicomKind::F64: return "F64";
         default: throw runtime_error{"Unknown DICOM kind."};
@@ -82,6 +88,9 @@ static EDicomKind gdcmScalarToKind(gdcm::PixelFormat::ScalarType st) {
         case gdcm::PixelFormat::INT16: return EDicomKind::I16;
         case gdcm::PixelFormat::UINT32: return EDicomKind::U32;
         case gdcm::PixelFormat::INT32: return EDicomKind::I32;
+        case gdcm::PixelFormat::UINT64: return EDicomKind::U64;
+        case gdcm::PixelFormat::INT64: return EDicomKind::I64;
+        case gdcm::PixelFormat::FLOAT16: return EDicomKind::F16;
         case gdcm::PixelFormat::FLOAT32: return EDicomKind::F32;
         case gdcm::PixelFormat::FLOAT64: return EDicomKind::F64;
         default: throw ImageLoadError{fmt::format("Unsupported DICOM scalar type: {}", (int)st)};
@@ -101,8 +110,7 @@ template <uint16_t Group, uint16_t Element, typename T> optional<T> dicomGetValu
         return nullopt;
     }
 
-    // return static_cast<T>(at.GetValue((unsigned int)index));
-    return static_cast<T>(at.GetValue());
+    return static_cast<T>(at.GetValues()[index]);
 }
 
 // Number of values in a (possibly multi-valued) attribute; used for windowing, which can carry multiple presets.
@@ -130,6 +138,9 @@ Task<void> dicomBufferToFloat32(
         case EDicomKind::I16: co_await toFloat32(reinterpret.operator()<int16_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
         case EDicomKind::U32: co_await toFloat32(reinterpret.operator()<uint32_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
         case EDicomKind::I32: co_await toFloat32(reinterpret.operator()<int32_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
+        case EDicomKind::U64: co_await toFloat32(reinterpret.operator()<uint64_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
+        case EDicomKind::I64: co_await toFloat32(reinterpret.operator()<int64_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
+        case EDicomKind::F16: co_await toFloat32(reinterpret.operator()<half>(), numComponents, view, hasAlpha, priority, 1.0f); break;
         case EDicomKind::F32: co_await toFloat32(reinterpret.operator()<float>(), numComponents, view, hasAlpha, priority, 1.0f); break;
         case EDicomKind::F64: co_await toFloat32(reinterpret.operator()<double>(), numComponents, view, hasAlpha, priority, 1.0f); break;
         default: throw ImageLoadError{fmt::format("Unsupported DICOM kind: {}", toString(kind))};
@@ -314,7 +325,7 @@ Task<void>
     } else if (kind == EDicomKind::I16) {
         co_await run.operator()<int16_t>({reinterpret_cast<const int16_t*>(bytes.data()), bytes.size() / 2});
     } else {
-        throw ImageLoadError{fmt::format("PALETTE COLOR images must have integer indices but has {}.", toString(kind))};
+        throw ImageLoadError{fmt::format("PALETTE COLOR images must have 8 bit or 16 bit integer indices but has {}.", toString(kind))};
     }
 }
 
@@ -458,7 +469,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
 
         // If neither rescale nor windowing ran and the data is integer, the values are still in raw stored magnitude (e.g. 0..4095). Bring
         // them into a sensible [0,1] display range using the stored bit depth.
-        if (!windowed && !inPhysicalUnits && kind != EDicomKind::F32 && kind != EDicomKind::F64) {
+        if (!windowed && !inPhysicalUnits && kind != EDicomKind::F16 && kind != EDicomKind::F32 && kind != EDicomKind::F64) {
             const float scale = 1.0f / (float)((1ull << m.bitsStored) - 1);
             const auto numPixels = posProd(size);
             co_await ThreadPool::global().parallelFor(
