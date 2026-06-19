@@ -441,6 +441,6 @@ struct LimitedRange {
     bool operator==(const LimitedRange& other) const { return scale == other.scale && offset == other.offset; }
 };
 
-LimitedRange limitedRangeForBitsPerSample(int bitsPerSample);
+LimitedRange limitedRangeForBitsPerSample(int bitsPerSample, bool cbcr = false);
 
 } // namespace tev

@@ -33,8 +33,8 @@ namespace tev {
 
 Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     png_byte header[8] = {0};
-    iStream.read(reinterpret_cast<char*>(header), 8);
-    if (png_sig_cmp(header, 0, 8)) {
+    iStream.read(reinterpret_cast<char*>(header), sizeof(header));
+    if (png_sig_cmp(header, 0, sizeof(header))) {
         throw FormatNotSupported{"File is not a PNG image."};
     }
 

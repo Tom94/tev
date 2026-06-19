@@ -483,7 +483,7 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
     try {
         while (iStream && !iStream.eof()) {
             auto images = co_await loadPam();
-            result.insert(result.end(), make_move_iterator(images.begin()), make_move_iterator(images.end()));
+            ranges::move(images, back_inserter(result));
         }
     } catch (const FormatNotSupported& e) {
         if (result.empty()) {

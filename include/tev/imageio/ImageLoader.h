@@ -36,7 +36,12 @@
 namespace tev {
 
 template <bool SRGB_TO_LINEAR = false>
-Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}) {
+Task<void> yCbCrToRgb(
+    MultiChannelView<float> data,
+    int priority,
+    nanogui::Vector2f offsets = {0.5f, 0.5f},
+    nanogui::Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}
+) {
     if (data.nChannels() < 3) {
         tlog::warning("Cannot convert from YCbCr to RGB: not enough channels.");
         co_return;
@@ -49,15 +54,51 @@ Task<void> yCbCrToRgb(MultiChannelView<float> data, int priority, nanogui::Vecto
         0uz,
         numPixels,
         numPixels * 3,
-        [&coeffs, &data](size_t i) {
+        [offsets, &coeffs, &data](size_t i) {
             const float Y = data[0, i];
-            const float Cb = data[1, i] - 0.5f;
-            const float Cr = data[2, i] - 0.5f;
+            const float Cb = data[1, i] - offsets[0];
+            const float Cr = data[2, i] - offsets[1];
 
             // BT.601 conversion
             float r = Y + coeffs[0] * Cr;
             float g = Y + coeffs[1] * Cb + coeffs[2] * Cr;
             float b = Y + coeffs[3] * Cb;
+
+            if constexpr (SRGB_TO_LINEAR) {
+                r = toLinear(r);
+                g = toLinear(g);
+                b = toLinear(b);
+            }
+
+            data[0, i] = r;
+            data[1, i] = g;
+            data[2, i] = b;
+        },
+        priority
+    );
+}
+
+template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView<float> data, int priority) {
+    if (data.nChannels() < 3) {
+        tlog::warning("Cannot convert from YCbCr to RGB: not enough channels.");
+        co_return;
+    }
+
+    const nanogui::Vector2i size = data.size();
+
+    const auto numPixels = posProd(size);
+    co_await ThreadPool::global().parallelFor(
+        0uz,
+        numPixels,
+        numPixels * 3,
+        [&data](size_t i) {
+            const float Y = data[0, i];
+            const float Cb = data[1, i];
+            const float Cr = data[2, i];
+
+            float g = Y - ((Cb + Cr) / 4);
+            float r = Cr + g;
+            float b = Cb + g;
 
             if constexpr (SRGB_TO_LINEAR) {
                 r = toLinear(r);
@@ -88,7 +129,7 @@ Task<void> toFloat32(
     using value_t = typename std::remove_cvref_t<T>::value_type;
     if constexpr (std::is_integral_v<value_t>) {
         if (scale == 0.0f) {
-            scale = 1.0f / (float)(((size_t)1 << (sizeof(value_t) * 8)) - 1);
+            scale = 1.0f / (float)std::numeric_limits<std::make_unsigned_t<value_t>>::max();
         }
     } else {
         if (scale == 0.0f) {

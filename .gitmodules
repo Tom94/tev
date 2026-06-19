@@ -114,3 +114,7 @@
 	path = dependencies/cfitsio
 	url = https://github.com/tom94/cfitsio
 	shallow = true
+[submodule "dependencies/GDCM"]
+	path = dependencies/GDCM
+	url = https://github.com/Tom94/GDCM
+	shallow = true

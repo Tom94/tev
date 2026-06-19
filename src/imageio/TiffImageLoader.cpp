@@ -1269,7 +1269,7 @@ Task<void> postprocessRgb(
             tlog::debug("Found YCbCr coefficients: {} -> {}", K, coeffs);
         }
 
-        co_await yCbCrToRgb(rgbaView, priority, coeffs);
+        co_await yCbCrToRgb(rgbaView, priority, Vector2f{0.5f}, coeffs);
     }
 
     // If we've got an ICC profile, apply it *after* scaling by reference black/white and converting from YCbCr to RGB; see the TIFF/EP
@@ -2555,10 +2555,8 @@ Task<ImageData> readTiffImage(
         );
         auto extraChannels = ImageLoader::makeNChannels(numExtraChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 
-        resultData.channels.insert(resultData.channels.end(), make_move_iterator(rgbaChannels.begin()), make_move_iterator(rgbaChannels.end()));
-        resultData.channels.insert(
-            resultData.channels.end(), make_move_iterator(extraChannels.begin()), make_move_iterator(extraChannels.end())
-        );
+        ranges::move(rgbaChannels, back_inserter(resultData.channels));
+        ranges::move(extraChannels, back_inserter(resultData.channels));
     }
 
     const float intConversionScale = deriveScale(formatToPixelType(sampleFormat), dataBitsPerSample);
@@ -2847,9 +2845,7 @@ Task<vector<ImageData>>
         co_await awaitAll(moveTasks);
 
         for (size_t i = 1; i < result.size(); ++i) {
-            mainImage.channels.insert(
-                mainImage.channels.end(), make_move_iterator(result[i].channels.begin()), make_move_iterator(result[i].channels.end())
-            );
+            ranges::move(result[i].channels, back_inserter(mainImage.channels));
         }
 
         result.resize(1);

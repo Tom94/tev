@@ -2378,6 +2378,7 @@ void ImageViewer::openImageDialog() {
 #endif
                 {"bmp",                     "Bitmap image"                     },
                 {"cur",                     "Microsoft cursor image"           },
+                {"dcm",                     "DICOM image"                      },
 #ifdef _WIN32
                 {"dds",                     "DirectDraw Surface image"         },
 #endif
