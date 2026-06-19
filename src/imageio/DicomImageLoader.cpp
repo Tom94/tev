@@ -25,6 +25,9 @@
 
 #include <gdcmAttribute.h>
 #include <gdcmDataSet.h>
+#include <gdcmDict.h>
+#include <gdcmDicts.h>
+#include <gdcmGlobal.h>
 #include <gdcmImage.h>
 #include <gdcmImageChangePlanarConfiguration.h>
 #include <gdcmImageHelper.h>
@@ -33,8 +36,10 @@
 #include <gdcmPhotometricInterpretation.h>
 #include <gdcmPixelFormat.h>
 #include <gdcmRescaler.h>
+#include <gdcmSequenceOfItems.h>
 #include <gdcmTag.h>
 #include <gdcmTransferSyntax.h>
+#include <gdcmVR.h>
 
 #include <array>
 #include <optional>
@@ -77,7 +82,7 @@ string toString(EDicomKind kind) {
     }
 }
 
-static EDicomKind gdcmScalarToKind(gdcm::PixelFormat::ScalarType st) {
+EDicomKind gdcmScalarToKind(gdcm::PixelFormat::ScalarType st) {
     switch (st) {
         case gdcm::PixelFormat::UINT8: return EDicomKind::U8;
         case gdcm::PixelFormat::INT8: return EDicomKind::I8;
@@ -165,7 +170,7 @@ struct DicomPixelModule {
     optional<double> windowWidth;
 };
 
-static DicomPixelModule readPixelModule(const gdcm::DataSet& ds, const gdcm::Image& image) {
+DicomPixelModule readPixelModule(const gdcm::DataSet& ds, const gdcm::Image& image) {
     DicomPixelModule m;
 
     const auto& pf = image.GetPixelFormat();
@@ -329,6 +334,94 @@ Task<void>
     }
 }
 
+string dicomVrToString(gdcm::VR vr) {
+    if (vr == gdcm::VR::INVALID) {
+        return "UN";
+    }
+
+    const char* s = gdcm::VR::GetVRString(vr);
+    return s ? string{s} : "UN";
+}
+
+// Format a tag as "(gggg,eeee) Name" using GDCM's global dictionary for the human-readable name.
+string dicomTagName(const gdcm::Tag& tag) {
+    static const auto& global = gdcm::Global::GetInstance();
+    static const auto& dicts = global.GetDicts();
+
+    const char* name = dicts.GetDictEntry(tag).GetName();
+    return fmt::format("{} ({:04x},{:04x})", name && name[0] != '\0' ? name : "n/a", tag.GetGroup(), tag.GetElement());
+}
+
+AttributeNode dicomDataSetToAttributeNode(const gdcm::DataSet& ds, string_view nodeName);
+
+// Recurse into a Sequence of Items (SQ), producing one child node per item.
+AttributeNode dicomSequenceToAttributeNode(const gdcm::DataElement& de, string_view nodeName) {
+    AttributeNode node;
+    node.name = nodeName;
+    node.type = "SQ";
+
+    gdcm::SmartPointer<gdcm::SequenceOfItems> sq = de.GetValueAsSQ();
+    if (!sq) {
+        return node;
+    }
+
+    const auto numItems = sq->GetNumberOfItems();
+    node.value = fmt::format("{} item{}", numItems, numItems == 1 ? "" : "s");
+
+    for (gdcm::SequenceOfItems::SizeType i = 1; i <= numItems; ++i) {
+        const gdcm::Item& item = sq->GetItem(i);
+        node.children.emplace_back(dicomDataSetToAttributeNode(item.GetNestedDataSet(), fmt::format("Item {}", i)));
+    }
+
+    return node;
+}
+
+AttributeNode dicomDataSetToAttributeNode(const gdcm::DataSet& ds, string_view nodeName) {
+    AttributeNode result;
+    result.name = nodeName;
+
+    for (auto it = ds.Begin(); it != ds.End(); ++it) {
+        const gdcm::DataElement& de = *it;
+        const gdcm::Tag& tag = de.GetTag();
+
+        // Skip group-length elements; they're structural and carry no user-facing meaning.
+        if (tag.GetElement() == 0x0000) {
+            continue;
+        }
+
+        const gdcm::VR vr = de.GetVR();
+        const string name = dicomTagName(tag);
+
+        if (vr == gdcm::VR::SQ || (de.GetValueAsSQ() && de.GetVR() == gdcm::VR::INVALID)) {
+            auto seqNode = dicomSequenceToAttributeNode(de, name);
+            if (!seqNode.children.empty() || !seqNode.value.empty()) {
+                result.children.emplace_back(std::move(seqNode));
+            }
+
+            continue;
+        }
+
+        ostringstream oss;
+        if (!de.IsEmpty()) {
+            de.GetValue().Print(oss);
+        }
+
+        const auto value = std::move(oss).str();
+        const auto trimmedView = trim(value);
+
+        result.children.emplace_back(
+            AttributeNode{
+                .name = name,
+                .value = string{trimmedView.empty() ? "n/a" : trimmedView},
+                .type = dicomVrToString(vr),
+                .children = {},
+            }
+        );
+    }
+
+    return result;
+}
+
 struct DicomImageData {
     ImageData imageData;
     optional<int> seriesNumber;
@@ -341,6 +434,8 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
     const gdcm::Image& baseImage = reader.GetImage();
     const gdcm::File& file = reader.GetFile();
     const gdcm::DataSet& ds = file.GetDataSet();
+
+    const AttributeNode dicomAttributes = dicomDataSetToAttributeNode(ds, "Global");
 
     gdcm::ImageChangePlanarConfiguration planarConverter;
     planarConverter.SetInput(baseImage);
@@ -388,8 +483,8 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
     };
     bool inPhysicalUnits = gdcm::ImageHelper::GetRealWorldValueMappingContent(file, rwvmc);
 
-    // Number of frames (3rd dimension). We load the first frame as the primary part and additional frames as extra parts; this keeps
-    // the loader honest about multi-frame CT/MR without forcing volume reconstruction here.
+    // Number of frames (3rd dimension). We load the first frame as the primary part and additional frames as extra parts; this keeps the
+    // loader honest about multi-frame CT/MR without forcing volume reconstruction here.
     const size_t numFrames = ndim >= 3 ? std::max(1u, dims[2]) : 1;
 
     tlog::debug(
@@ -434,6 +529,10 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
         resultData.partName = numFrames > 1 ? fmt::format("frame.{}", frameIdx) : "";
         resultData.dataWindow = resultData.displayWindow = size;
         resultData.hasPremultipliedAlpha = true;
+
+        if (!dicomAttributes.children.empty()) {
+            resultData.attributes.emplace_back(AttributeNode{.name = "DICOM", .value = "", .type = "", .children = {dicomAttributes}});
+        }
 
         resultData.channels = co_await ImageLoader::makeInterleavedChannels(
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, resultData.partName, priority
@@ -656,8 +755,8 @@ Task<vector<DicomImageData>> readDicomDir(const gdcm::File& dirFile, const fs::p
         const gdcm::Item& item = sq->GetItem(i);
         const gdcm::DataSet& recordDs = item.GetNestedDataSet();
 
-        // Referenced File ID (0004,1500): a multi-valued element whose components are the path segments (originally separated
-        // by backslashes per the DICOM file-set convention). Records without it (PATIENT/STUDY/SERIES nodes) are skipped.
+        // Referenced File ID (0004,1500): a multi-valued element whose components are the path segments (originally separated by
+        // backslashes per the DICOM file-set convention). Records without it (PATIENT/STUDY/SERIES nodes) are skipped.
         const gdcm::Tag referencedFileId{0x0004, 0x1500};
         if (!recordDs.FindDataElement(referencedFileId) || recordDs.GetDataElement(referencedFileId).IsEmpty()) {
             continue;
@@ -713,8 +812,8 @@ Task<vector<DicomImageData>> readDicomDir(const gdcm::File& dirFile, const fs::p
         co_return {};
     };
 
-    // Recurse into each referenced file via load(). We prefix each file's parts with a record-derived name so that the
-    // resulting multi-part image keeps PATIENT/STUDY/SERIES/INSTANCE provenance distinguishable.
+    // Recurse into each referenced file via load(). We prefix each file's parts with a record-derived name so that the resulting multi-part
+    // image keeps PATIENT/STUDY/SERIES/INSTANCE provenance distinguishable.
     vector<Task<vector<DicomImageData>>> loadTasks;
     for (size_t fi = 0; fi < referencedFiles.size(); ++fi) {
         loadTasks.emplace_back(ThreadPool::global().enqueueCoroutine(bind(loadFile, fi), priority));
@@ -807,11 +906,10 @@ Task<vector<ImageData>>
         if (reader.Read()) {
             result = co_await readDicomImage(reader, settings, priority);
         } else {
-            // If we can't read an image this might still be a DICOMDIR
-            // A DICOMDIR is a special DICOM file whose only job is to index other files sitting alongside it on disk (e.g. on a CD/DVD or
-            // a USB stick). It carries no pixel data of its own; instead its Directory Record Sequence (0004,1220) enumerates
-            // PATIENT/STUDY/SERIES/IMAGE records, each IMAGE record pointing at a Referenced File ID (0004,1500). We detect that case here,
-            // walk the records, resolve each referenced file relative to the DICOMDIR's location, and recursively load them.
+            // If we can't read an image this might still be a DICOMDIR. A DICOMDIR is a special DICOM file whose only job is to index other
+            // files sitting alongside it on disk. It carries no pixel data of its own; instead its Directory Record Sequence (0004,1220)
+            // enumerates PATIENT/STUDY/SERIES/IMAGE records, each IMAGE record pointing at a Referenced File ID (0004,1500). We detect that
+            // case here, walk the records, resolve each referenced file relative to the DICOMDIR's location, and recursively load them.
             const gdcm::File& dirFile = reader.GetFile();
             gdcm::MediaStorage ms;
             ms.SetFromFile(dirFile);
