@@ -440,6 +440,7 @@ add_subdirectory(cfitsio EXCLUDE_FROM_ALL)
 # Compile GDCM for DICOM image support
 set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(GDCM_BUILD_APPLICATIONS OFF CACHE BOOL " " FORCE)
+set(GDCM_BUILD_NETWORK OFF CACHE BOOL " " FORCE)
 set(GDCM_BUILD_TESTING OFF CACHE BOOL " " FORCE)
 set(GDCM_BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
 set(GDCM_TARGETS_NAME "gdcm-tev" CACHE STRING " " FORCE)
@@ -455,7 +456,7 @@ set(SOCKETXX_INSTALL_NO_DEVELOPMENT ON CACHE BOOL " " FORCE)
 # Pretend that we want to use system libraries and reroute to ours so that GDCM doesn't build its own copies. Particularly important for
 # openjpeg (whose cmake otherwise messes with parent scope) and libjpeg-turbo, which requires complex ExternalProject_Add logic.
 set(GDCM_USE_SYSTEM_OPENJPEG ON CACHE BOOL " " FORCE)
-set(GDCM_USE_JPEGTURBO OFF CACHE BOOL " " FORCE) # libjpeg-turbo turned off for now -- gdcm's impl not yet mature to support all images
+set(GDCM_USE_JPEGTURBO ON CACHE BOOL " " FORCE)
 
 add_subdirectory(GDCM EXCLUDE_FROM_ALL)
 add_library(gdcm-tev INTERFACE)
