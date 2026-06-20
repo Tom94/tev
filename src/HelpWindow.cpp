@@ -237,6 +237,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 #ifdef _WIN32
     addLibrary(about, "DirectXTex", "DirectX texture processing library");
 #endif
+    addLibrary(about, "GDCM", "Grassroots library for DICOM medical files");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
     addLibrary(about, "GLFW", "OpenGL desktop development library");
 #ifdef TEV_SUPPORT_HEIC
