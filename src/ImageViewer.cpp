@@ -2372,13 +2372,13 @@ void ImageViewer::openImageDialog() {
 
         try {
             vector<pair<string, string>> filters = {
+                {"acr,dcm,dicom",           "DICOM image"                      },
                 {"apng",                    "Animated PNG image"               },
 #ifdef TEV_SUPPORT_AVIF
                 {"avif",                    "AV1 Image File"                   },
 #endif
                 {"bmp",                     "Bitmap image"                     },
                 {"cur",                     "Microsoft cursor image"           },
-                {"dcm",                     "DICOM image"                      },
 #ifdef _WIN32
                 {"dds",                     "DirectDraw Surface image"         },
 #endif
