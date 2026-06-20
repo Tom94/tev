@@ -130,7 +130,6 @@ $ cpack --config build/CPackConfig.cmake
 ## File Formats
 
 - __EXR__ (via [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr))
-- __FITS__ (via [cfitsio](https://github.com/HEASARC/cfitsio.git))
 - __JPEG XL__ (including gain maps; via [libjxl](https://github.com/libjxl/libjxl))
 - __JPEG__ (including gain maps, e.g. HDR pictures from Android; via [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo))
 - __JPEG 2000__ (via [openjpeg](https://github.com/uclouvain/openjpeg))
@@ -145,6 +144,8 @@ $ cpack --config build/CPackConfig.cmake
 - __BMP__, ICO, CUR (including color profiles)
 - __HDR__, GIF, PIC, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
 - __RAW__ and various camera-specific RAW formats (via [LibRaw](https://github.com/LibRaw/LibRaw))
+- __DICOM__ (via [GDCM](https://github.com/malaterre/GDCM))
+- __FITS__ (via [cfitsio](https://github.com/HEASARC/cfitsio.git))
 
 ## License
 
