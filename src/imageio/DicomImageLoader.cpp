@@ -349,7 +349,8 @@ string dicomTagName(const gdcm::Tag& tag) {
     static const auto& dicts = global.GetDicts();
 
     const char* name = dicts.GetDictEntry(tag).GetName();
-    return fmt::format("{} ({:04x},{:04x})", name && name[0] != '\0' ? name : "n/a", tag.GetGroup(), tag.GetElement());
+    // return fmt::format("{} ({:04x},{:04x})", name && name[0] != '\0' ? name : "n/a", tag.GetGroup(), tag.GetElement());
+    return name && name[0] != '\0' ? name : "n/a";
 }
 
 AttributeNode dicomDataSetToAttributeNode(const gdcm::DataSet& ds, string_view nodeName);
@@ -389,11 +390,10 @@ AttributeNode dicomDataSetToAttributeNode(const gdcm::DataSet& ds, string_view n
             continue;
         }
 
-        const gdcm::VR vr = de.GetVR();
-        const string name = dicomTagName(tag);
+        const gdcm::VR::VRType vr = de.GetVR();
 
         if (vr == gdcm::VR::SQ || (de.GetValueAsSQ() && de.GetVR() == gdcm::VR::INVALID)) {
-            auto seqNode = dicomSequenceToAttributeNode(de, name);
+            auto seqNode = dicomSequenceToAttributeNode(de, dicomTagName(tag));
             if (!seqNode.children.empty() || !seqNode.value.empty()) {
                 result.children.emplace_back(std::move(seqNode));
             }
@@ -404,15 +404,14 @@ AttributeNode dicomDataSetToAttributeNode(const gdcm::DataSet& ds, string_view n
         ostringstream oss;
         if (!de.IsEmpty()) {
             de.GetValue().Print(oss);
+        } else {
+            oss << "n/a";
         }
-
-        const auto value = std::move(oss).str();
-        const auto trimmedView = trim(value);
 
         result.children.emplace_back(
             AttributeNode{
-                .name = name,
-                .value = string{trimmedView.empty() ? "n/a" : trimmedView},
+                .name = dicomTagName(tag),
+                .value = std::move(oss).str(),
                 .type = dicomVrToString(vr),
                 .children = {},
             }
