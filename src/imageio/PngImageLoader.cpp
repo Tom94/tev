@@ -324,7 +324,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
         tlog::debug("Image is an animated PNG with {} frames", numFrames);
     }
 
-    const auto numPixels = static_cast<size_t>(size.x()) * size.y();
+    const auto numPixels = posProd(size);
     const auto numSamples = numPixels * numChannels;
     const auto numInterleavedSamples = numPixels * numInterleavedChannels;
     const auto numBytesPerPixel = numChannels * nBytes(pixelFormat);

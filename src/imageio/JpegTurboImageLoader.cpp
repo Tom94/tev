@@ -40,7 +40,7 @@ namespace tev {
 
 Task<vector<ImageData>>
     JpegTurboImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings& settings, int priority) const {
-    const size_t initialPos = iStream.tellg();
+    const auto initialPos = iStream.tellg();
 
     unsigned char header[2] = {0};
     iStream.read(reinterpret_cast<char*>(header), 2);
@@ -53,7 +53,7 @@ Task<vector<ImageData>>
 
     // Read the entire stream into memory and decompress from there. JPEG does not support streaming decompression from iostreams.
     iStream.seekg(0, ios::end);
-    const size_t fileSize = iStream.tellg();
+    const size_t fileSize = iStream.tellg() - initialPos;
     iStream.seekg(initialPos, ios::beg);
 
     HeapArray<unsigned char> buffer(fileSize);
