@@ -1582,12 +1582,10 @@ Task<void> postprocessSeparated(
     }
 
     float dotMin = 0.0f, dotMax = 1.0f;
-    if (uint16_t dmin, dmax; TIFFGetFieldDefaulted(tif, TIFFTAG_DOTRANGE, &dmin, &dmax)) {
+    if (uint16_t dmin, dmax; TIFFGetFieldDefaulted(tif, TIFFTAG_DOTRANGE, &dmin, &dmax) && dmin < dmax) {
         dotMin = (float)dmin / (float)((1ull << dataBitsPerSample) - 1);
         dotMax = (float)dmax / (float)((1ull << dataBitsPerSample) - 1);
         tlog::debug("Read dot range for separated image: min={} max={}", dotMin, dotMax);
-    } else {
-        throw ImageLoadError{"Failed to read dot range for separated image."};
     }
 
     const size_t numPixels = posProd(cmykView.size());
