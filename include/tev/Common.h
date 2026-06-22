@@ -906,6 +906,40 @@ inline size_t nBytes(EPixelFormat format) {
 
 inline size_t nBits(EPixelFormat format) { return nBytes(format) * 8; }
 
+inline bool isSigned(EPixelFormat format) {
+    switch (format) {
+        case EPixelFormat::U8:
+        case EPixelFormat::U16:
+        case EPixelFormat::U32: return false;
+        case EPixelFormat::I8:
+        case EPixelFormat::I16:
+        case EPixelFormat::I32: return true;
+        case EPixelFormat::F16:
+        case EPixelFormat::F32: return true;
+    }
+
+    return false;
+}
+
+inline bool isInteger(EPixelFormat format) {
+    switch (format) {
+        case EPixelFormat::U8:
+        case EPixelFormat::U16:
+        case EPixelFormat::U32:
+        case EPixelFormat::I8:
+        case EPixelFormat::I16:
+        case EPixelFormat::I32: return true;
+        case EPixelFormat::F16:
+        case EPixelFormat::F32: return false;
+    }
+
+    return false;
+}
+
+inline bool isSignedInteger(EPixelFormat format) {
+    return isInteger(format) && isSigned(format);
+}
+
 inline constexpr uint32_t fourcc(const char s[5]) {
     uint32_t result = 0;
     for (size_t i = 0; i < 4; ++i) {

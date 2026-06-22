@@ -224,6 +224,7 @@ Task<void> tiffDataToFloat32(
     EAlphaKind alphaKind,
     int priority,
     float scale,
+    float valOffset,
     bool flipWhiteAndBlack
 ) {
     const auto size = rgbaView.size();
@@ -235,11 +236,11 @@ Task<void> tiffDataToFloat32(
     }
 
     if (kind == ETiffKind::F32) {
-        co_await toFloat32(imageData.span<const float>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale);
+        co_await toFloat32(imageData.span<const float>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale, valOffset);
     } else if (kind == ETiffKind::I32) {
-        co_await toFloat32(imageData.span<const int32_t>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale);
+        co_await toFloat32(imageData.span<const int32_t>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale, valOffset);
     } else if (kind == ETiffKind::U32) {
-        co_await toFloat32(imageData.span<const uint32_t>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale);
+        co_await toFloat32(imageData.span<const uint32_t>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale, valOffset);
     } else if (kind == ETiffKind::Palette) {
         if (ranges::any_of(palette, [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
@@ -1690,6 +1691,7 @@ Task<ImageData> decodeJpeg(
     auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
 
     const float scale = 1.0f / (float)((1ull << precision) - 1);
+    const float offset = isSignedInteger(pixelFormat) ? (float)(1ull << (precision - 1)) * scale : 0.0f;
 
     ImageData result;
     result.channels = co_await ImageLoader::makeInterleavedChannels(
@@ -1737,11 +1739,11 @@ Task<ImageData> decodeJpeg(
     }
 
     if (pixelFormat == EPixelFormat::U8) {
-        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
+        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale, offset);
     } else if (pixelFormat == EPixelFormat::I16) {
-        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
+        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale, offset);
     } else if (pixelFormat == EPixelFormat::U16) {
-        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
+        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale, offset);
     } else {
         throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
     }
@@ -2043,7 +2045,7 @@ Task<ImageData> readTiffImage(
     static constexpr auto deriveScale = [](EPixelType pt, size_t bps) {
         switch (pt) {
             case EPixelType::Uint: return 1.0f / (float)((1ull << bps) - 1);
-            case EPixelType::Int: return 1.0f / (float)((1ull << (bps - 1)) - 1);
+            case EPixelType::Int: return 1.0f / (float)((1ull << bps) - 1);
             case EPixelType::Float: return 1.0f;
             default: throw ImageLoadError{fmt::format("Unsupported pixel type: {}", toString(pt))};
         }
@@ -2577,8 +2579,30 @@ Task<ImageData> readTiffImage(
         ranges::move(extraChannels, back_inserter(resultData.channels));
     }
 
-    const float intConversionScale = deriveScale(formatToPixelType(sampleFormat), dataBitsPerSample);
     const bool flipWhiteAndBlack = photometric == PHOTOMETRIC_MINISWHITE;
+
+    static const auto minValue = [](uint16_t f, uint16_t bps) -> double {
+        switch (f) {
+            case SAMPLEFORMAT_UINT: return 0.0;
+            case SAMPLEFORMAT_INT: return 0.0; // Maintain negative values
+            case SAMPLEFORMAT_IEEEFP: return 0.0;
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", f)};
+        }
+    };
+
+    static const auto maxValue = [](uint16_t f, uint16_t bps) -> double {
+        switch (f) {
+            case SAMPLEFORMAT_UINT: return exp2((double)bps) - 1.0;
+            case SAMPLEFORMAT_INT: return exp2((double)bps - 1.0) - 1.0;
+            case SAMPLEFORMAT_IEEEFP: return 1.0;
+            default: throw ImageLoadError{fmt::format("Unsupported sample format: {}", f)};
+        }
+    };
+
+    const float minSampleValue = (float)tiffGetValue<double>(tif, TIFFTAG_SMINSAMPLEVALUE).value_or(minValue(sampleFormat, dataBitsPerSample));
+    const float maxSampleValue = (float)tiffGetValue<double>(tif, TIFFTAG_SMAXSAMPLEVALUE).value_or(maxValue(sampleFormat, dataBitsPerSample));
+    const float conversionScale = 1.0f / (maxSampleValue - minSampleValue);
+    const float conversionOffset = -minSampleValue * conversionScale;
 
     // Convert all the extra channels to float and store them in the result data. No further processing needed.
     for (size_t c = 0; c < numExtraChannels; ++c) {
@@ -2592,7 +2616,8 @@ Task<ImageData> readTiffImage(
             resultData.channels.at(numChannels + c).view<float>(),
             EAlphaKind::None,
             priority,
-            intConversionScale,
+            conversionScale,
+            conversionOffset,
             flipWhiteAndBlack
         );
     }
@@ -2605,7 +2630,7 @@ Task<ImageData> readTiffImage(
 
     const auto dstView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numChannels)};
     co_await tiffDataToFloat32(
-        kind, interleave, palette, buf, 0, samplesPerPixel, dstView, alphaKind, priority, intConversionScale, flipWhiteAndBlack
+        kind, interleave, palette, buf, 0, samplesPerPixel, dstView, alphaKind, priority, conversionScale, conversionOffset, flipWhiteAndBlack
     );
 
     auto rgbaOutView = dstView;

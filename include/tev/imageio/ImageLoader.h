@@ -123,6 +123,7 @@ Task<void> toFloat32(
     int priority,
     // 0 defaults to 1/(2**bitsPerSample-1)
     float scale = 0.0f,
+    float offset = 0.0f,
     // 0 defaults to numSamplesPerPixelIn * size.x()
     size_t numSamplesPerRowIn = 0
 ) {
@@ -168,7 +169,7 @@ Task<void> toFloat32(
             for (int x = 0; x < size.x(); ++x) {
                 const size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
 
-                const float alpha = alphaKind != EAlphaKind::None ? (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale : 1.0f;
+                const float alpha = alphaKind != EAlphaKind::None ? (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale + offset : 1.0f;
                 const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
                 const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
 
@@ -177,7 +178,7 @@ Task<void> toFloat32(
                         // Copy alpha channel to the last output channel without conversion
                         floatData[-1, x, y] = alpha;
                     } else {
-                        float result = imageData[baseIdxIn + c] * scale;
+                        float result = imageData[baseIdxIn + c] * scale + offset;
 
                         if constexpr (MULTIPLY_ALPHA) {
                             result *= factor;
