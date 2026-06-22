@@ -519,7 +519,7 @@ Task<vector<ImageData>>
             }
 
             // YCCK jpegs have K inverted. CMYK images have all channels inverted.
-            if (cinfo.out_color_space == JCS_YCCK && dst.nChannels() >= 4) {
+            if (isCmyk && dst.nChannels() >= 4) {
                 co_await ThreadPool::global().parallelFor(
                     0uz,
                     numPixels,
