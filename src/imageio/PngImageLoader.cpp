@@ -309,6 +309,8 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     const bool hasAlpha = numChannels > numColorChannels;
+    const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
+
     const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     png_bytep iccProfileData = nullptr;
@@ -495,7 +497,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
 
                 co_await ThreadPool::global().parallelFor(
                     0uz,
@@ -526,12 +528,10 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                 co_return;
             } else if (iccProfileData) {
                 try {
-                    co_await toFloat32(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
 
                     const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
-                    co_await toLinearSrgbPremul(
-                        profile, numChannels > numColorChannels ? EAlphaKind::Straight : EAlphaKind::None, dstView, dstView, nullopt, priority
-                    );
+                    co_await toLinearSrgbPremul(profile, alphaKind, dstView, dstView, nullopt, priority);
                     resultData.hasPremultipliedAlpha = true;
                     resultData.readMetadataFromIcc(profile);
                     co_return;
@@ -564,7 +564,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
                     tlog::debug("No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.");
                 }
 
-                co_await toFloat32<true, true>(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32<true, true>(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
 
                 resultData.hasPremultipliedAlpha = true;
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
@@ -572,7 +572,7 @@ Task<vector<ImageData>> PngImageLoader::load(istream& iStream, const fs::path&, 
             }
 
             tlog::debug("Using gamma={}", invGamma64);
-            co_await toFloat32(buf.span<const T>(), numChannels, dstView, hasAlpha, priority);
+            co_await toFloat32(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
 
             co_await ThreadPool::global().parallelFor(
                 0uz,

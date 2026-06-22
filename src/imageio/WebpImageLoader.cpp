@@ -106,6 +106,7 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
     const size_t numChannels = 4;
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = numChannels == 4;
+    const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
 
     const uint32_t width = WebPDemuxGetI(demux.get(), WEBP_FF_CANVAS_WIDTH);
     const uint32_t height = WebPDemuxGetI(demux.get(), WEBP_FF_CANVAS_HEIGHT);
@@ -193,17 +194,17 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
             const auto frameDataSpan = span<const uint8_t>{frameData.get(), numFrameSamples};
             if (iccProfileData) {
                 try {
-                    co_await toFloat32(frameDataSpan, numChannels, dstView, hasAlpha, priority);
+                    co_await toFloat32(frameDataSpan, numChannels, dstView, alphaKind, priority);
 
                     const auto profile = ColorProfile::fromIcc(iccProfileData);
-                    co_await toLinearSrgbPremul(
-                        profile, hasAlpha ? EAlphaKind::Straight : EAlphaKind::None, dstView, dstView, nullopt, priority
-                    );
+                    co_await toLinearSrgbPremul(profile, alphaKind, dstView, dstView, nullopt, priority);
+                    resultData.hasPremultipliedAlpha = true;
 
                     resultData.readMetadataFromIcc(profile);
                 } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC profile: {}", e.what()); }
             } else {
-                co_await toFloat32<true, true>(frameDataSpan, numChannels, dstView, hasAlpha, priority);
+                co_await toFloat32<true, true>(frameDataSpan, numChannels, dstView, alphaKind, priority);
+                resultData.hasPremultipliedAlpha = true;
 
                 resultData.nativeMetadata.chroma = rec709Chroma();
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
@@ -247,8 +248,6 @@ Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&,
                     priority
                 );
             }
-
-            resultData.hasPremultipliedAlpha = true;
         } while (WebPDemuxNextFrame(&iter));
         WebPDemuxReleaseIterator(&iter);
     }

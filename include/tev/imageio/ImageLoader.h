@@ -119,7 +119,7 @@ Task<void> toFloat32(
     T&& imageData,
     size_t numSamplesPerPixelIn,
     MultiChannelView<float> floatData,
-    bool hasAlpha,
+    EAlphaKind alphaKind,
     int priority,
     // 0 defaults to 1/(2**bitsPerSample-1)
     float scale = 0.0f,
@@ -147,7 +147,8 @@ Task<void> toFloat32(
     const size_t numPixels = posProd(size);
 
     size_t expectedDataSize = numSamplesPerRowIn * size.y();
-    if (!hasAlpha || !MULTIPLY_ALPHA) {
+    if (alphaKind == EAlphaKind::None || !MULTIPLY_ALPHA) {
+        // Don't require alpha channel (and channels before exceeding output channels) if not present or not multiplying, even if the input has it
         expectedDataSize = expectedDataSize - numSamplesPerPixelIn + numSamplesPerPixel;
     }
 
@@ -167,22 +168,27 @@ Task<void> toFloat32(
             for (int x = 0; x < size.x(); ++x) {
                 const size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
 
+                const float alpha = alphaKind != EAlphaKind::None ? (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale : 1.0f;
+                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+
                 for (size_t c = 0; c < numSamplesPerPixel; ++c) {
-                    if (hasAlpha && c == numSamplesPerPixelIn - 1) {
+                    if (alphaKind != EAlphaKind::None && c == numSamplesPerPixelIn - 1) {
                         // Copy alpha channel to the last output channel without conversion
-                        floatData[-1, x, y] = (float)imageData[baseIdxIn + c] * scale;
+                        floatData[-1, x, y] = alpha;
                     } else {
-                        float result;
+                        float result = imageData[baseIdxIn + c] * scale;
+
+                        if constexpr (MULTIPLY_ALPHA) {
+                            result *= factor;
+                        }
+
                         if constexpr (SRGB_TO_LINEAR) {
-                            result = toLinear((float)imageData[baseIdxIn + c] * scale);
-                        } else {
-                            result = (float)imageData[baseIdxIn + c] * scale;
+                            result = toLinear(result);
                         }
 
                         if constexpr (MULTIPLY_ALPHA) {
-                            if (hasAlpha) {
-                                result *= (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale;
-                            }
+                            result *= invFactor;
                         }
 
                         floatData[c, x, y] = result;

@@ -221,7 +221,7 @@ Task<void> tiffDataToFloat32(
     size_t offset,
     size_t numSppIn,
     const MultiChannelView<float>& rgbaView,
-    bool hasAlpha,
+    EAlphaKind alphaKind,
     int priority,
     float scale,
     bool flipWhiteAndBlack
@@ -235,11 +235,11 @@ Task<void> tiffDataToFloat32(
     }
 
     if (kind == ETiffKind::F32) {
-        co_await toFloat32(imageData.span<const float>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.span<const float>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale);
     } else if (kind == ETiffKind::I32) {
-        co_await toFloat32(imageData.span<const int32_t>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.span<const int32_t>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale);
     } else if (kind == ETiffKind::U32) {
-        co_await toFloat32(imageData.span<const uint32_t>().subspan(offset), numSppIn, rgbaView, hasAlpha, priority, scale);
+        co_await toFloat32(imageData.span<const uint32_t>().subspan(offset), numSppIn, rgbaView, alphaKind, priority, scale);
     } else if (kind == ETiffKind::Palette) {
         if (ranges::any_of(palette, [](const auto& c) { return c.empty(); })) {
             throw runtime_error{"Palette data is empty."};
@@ -1720,11 +1720,11 @@ Task<ImageData> decodeJpeg(
     }
 
     if (pixelFormat == EPixelFormat::U8) {
-        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, false, priority, scale);
+        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
     } else if (pixelFormat == EPixelFormat::I16) {
-        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, false, priority, scale);
+        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
     } else if (pixelFormat == EPixelFormat::U16) {
-        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, false, priority, scale);
+        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
     } else {
         throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
     }
@@ -1928,19 +1928,6 @@ Task<ImageData> readTiffImage(
         }
     }
 
-    tlog::debug(
-        "TIFF info: size={} bps={}/{} spp={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
-        size,
-        dataBitsPerSample,
-        bitsPerSample,
-        samplesPerPixel,
-        photometric,
-        planar,
-        interleave,
-        sampleFormat,
-        compression
-    );
-
     // Check if we have an alpha channel
     bool hasAlpha = false;
     bool hasPremultipliedAlpha = true; // No alpha is treated as premultiplied
@@ -1974,6 +1961,20 @@ Task<ImageData> readTiffImage(
     }
 
     const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None;
+
+    tlog::debug(
+        "TIFF info: size={} bps={}/{} spp={} alpha={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
+        size,
+        dataBitsPerSample,
+        bitsPerSample,
+        samplesPerPixel,
+        toString(alphaKind),
+        photometric,
+        planar,
+        interleave,
+        sampleFormat,
+        compression
+    );
 
     if (numExtraChannels >= samplesPerPixel) {
         throw ImageLoadError{fmt::format("Invalid number of extra channels: {}", numExtraChannels)};
@@ -2572,7 +2573,7 @@ Task<ImageData> readTiffImage(
             samplesPerPixel - numExtraChannels + c,
             samplesPerPixel,
             resultData.channels.at(numChannels + c).view<float>(),
-            false,
+            EAlphaKind::None,
             priority,
             intConversionScale,
             flipWhiteAndBlack
@@ -2587,7 +2588,7 @@ Task<ImageData> readTiffImage(
 
     const auto dstView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numChannels)};
     co_await tiffDataToFloat32(
-        kind, interleave, palette, buf, 0, samplesPerPixel, dstView, hasAlpha, priority, intConversionScale, flipWhiteAndBlack
+        kind, interleave, palette, buf, 0, samplesPerPixel, dstView, alphaKind, priority, intConversionScale, flipWhiteAndBlack
     );
 
     auto rgbaOutView = dstView;

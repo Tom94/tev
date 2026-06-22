@@ -230,6 +230,8 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = DirectX::HasAlpha(metadata.format);
+    const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                                      EAlphaKind::None;
 
     resultData.channels = co_await makeInterleavedChannels(
         numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F32, "", priority
@@ -254,11 +256,13 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
             static_cast<int>(metadata.format)
         );
 
-        co_await toFloat32(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<false, true>(s, numChannels, outView, alphaKind, priority);
+        resultData.hasPremultipliedAlpha = true;
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
-        co_await toFloat32<true>(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<true, true>(s, numChannels, outView, alphaKind, priority);
+        resultData.hasPremultipliedAlpha = true;
     }
 
     co_return result;

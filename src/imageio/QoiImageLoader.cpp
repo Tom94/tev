@@ -66,6 +66,7 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     }
 
     const bool hasAlpha = numChannels == 4;
+    const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
     const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     vector<ImageData> result(1);
@@ -75,18 +76,19 @@ Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, 
     resultData.channels = co_await makeInterleavedChannels(
         numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
-    resultData.hasPremultipliedAlpha = false;
     resultData.nativeMetadata.chroma = rec709Chroma();
 
     const auto outView = MultiChannelView<float>{resultData.channels};
     const auto s = span<const uint8_t>{decodedData.get(), numPixels * numChannels};
 
     if (desc.colorspace == QOI_LINEAR) {
-        co_await toFloat32<false>(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<false, true>(s, numChannels, outView, alphaKind, priority);
+        resultData.hasPremultipliedAlpha = true;
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
-        co_await toFloat32<true>(s, numChannels, outView, hasAlpha, priority);
+        co_await toFloat32<true, true>(s, numChannels, outView, alphaKind, priority);
+        resultData.hasPremultipliedAlpha = true;
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
     }

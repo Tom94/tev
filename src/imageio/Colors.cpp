@@ -997,7 +997,7 @@ Task<void> toLinearSrgbPremul(
             if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
                 for (int x = 0; x < size.x(); ++x) {
                     const float alpha = in[-1, x];
-                    const float factor = alpha == 0.0f ? 1.0f : 1.0f / alpha;
+                    const float factor = alpha > 0.0001f ? 1.0f / alpha : 1.0f;
                     for (size_t c = 0; c < numColorChannels; ++c) {
                         in[c, x] *= factor;
                     }
@@ -1053,13 +1053,9 @@ Task<void> toLinearSrgbPremul(
             // also should not re-multiply those.
             if (alphaKind != EAlphaKind::None && alphaKind != EAlphaKind::Premultiplied) {
                 for (int x = 0; x < size.x(); ++x) {
-                    float factor = out[-1, x];
-                    if (factor == 0.0f && alphaKind == EAlphaKind::PremultipliedNonlinear) {
-                        factor = 1.0f;
-                    }
-
+                    const float alpha = out[-1, x];
                     for (size_t c = 0; c < numColorChannelsOut; ++c) {
-                        out[c, x] *= factor;
+                        out[c, x] *= alpha;
                     }
                 }
             }

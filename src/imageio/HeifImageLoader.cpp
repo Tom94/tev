@@ -274,6 +274,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         }
 
         const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+        const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                                          EAlphaKind::None;
 
         // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
@@ -287,9 +289,9 @@ Task<vector<ImageData>> HeifImageLoader::load(
             // libheif returns 16-byte aligned uint8_t* data, regardless of the actual bit depth. The alignment and uint8_t type mean it's
             // well-defined behavior to reinterpret the data as uint16_t.
             const auto uint16Data = span<const uint16_t>{reinterpret_cast<const uint16_t*>(data.data()), data.size() / sizeof(uint16_t)};
-            co_await toFloat32(uint16Data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint16_t));
+            co_await toFloat32(uint16Data, numChannels, outView, alphaKind, priority, channelScale, bytesPerRow / sizeof(uint16_t));
         } else {
-            co_await toFloat32(data, numChannels, outView, hasAlpha, priority, channelScale, bytesPerRow / sizeof(uint8_t));
+            co_await toFloat32(data, numChannels, outView, alphaKind, priority, channelScale, bytesPerRow / sizeof(uint8_t));
         }
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
@@ -299,15 +301,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
             try {
                 const auto profile = ColorProfile::fromIcc(*iccProfileData);
-                co_await toLinearSrgbPremul(
-                    profile,
-                    hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
-                               EAlphaKind::None,
-                    outView,
-                    outView,
-                    nullopt,
-                    priority
-                );
+                co_await toLinearSrgbPremul(profile, alphaKind, outView, outView, nullopt, priority);
                 resultData.hasPremultipliedAlpha = true;
                 resultData.readMetadataFromIcc(profile);
                 co_return resultData;

@@ -213,6 +213,7 @@ Task<vector<ImageData>>
 
         const bool isCmyk = cinfo.jpeg_color_space == JCS_CMYK || cinfo.jpeg_color_space == JCS_YCCK;
         const bool hasAlpha = isCmyk ? (numChannels == 5) : (numChannels == 4);
+        const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
 
         tlog::debug(
             "JPEG image info: size={} numChannels={} colorspace={} precision={}", size, numChannels, (int)cinfo.jpeg_color_space, cinfo.data_precision
@@ -504,9 +505,9 @@ Task<vector<ImageData>>
 
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
             if (fromSrgb && !yCbCrConversionNeeded) {
-                co_await toFloat32<true>(src, numChannels, dst, hasAlpha, priority, scale);
+                co_await toFloat32<true>(src, numChannels, dst, alphaKind, priority, scale);
             } else {
-                co_await toFloat32<false>(src, numChannels, dst, hasAlpha, priority, scale);
+                co_await toFloat32<false>(src, numChannels, dst, alphaKind, priority, scale);
             }
 
             if (yCbCrConversionNeeded) {
@@ -549,7 +550,7 @@ Task<vector<ImageData>>
             }
         };
 
-        // Since JPEG always has no alpha channel, we default to 1, where premultiplied and straight are equivalent.
+        // JPEG images with alpha channels are very uncommon, but if they exist they're straight
         resultData.hasPremultipliedAlpha = !hasAlpha;
 
         const auto dstView = MultiChannelView<float>{resultData.channels};
@@ -587,11 +588,10 @@ Task<vector<ImageData>>
                         co_return resultData;
                     }
 
-                    co_await toLinearSrgbPremul(
-                        profile, hasAlpha ? EAlphaKind::Straight : EAlphaKind::None, dstView, rgbaOutView, nullopt, priority
-                    );
-
+                    co_await toLinearSrgbPremul(profile, alphaKind, dstView, rgbaOutView, nullopt, priority);
+                    resultData.hasPremultipliedAlpha = true;
                     resultData.readMetadataFromIcc(profile);
+
                     co_return resultData;
                 } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
             }
