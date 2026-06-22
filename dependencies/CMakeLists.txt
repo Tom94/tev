@@ -463,3 +463,5 @@ add_library(gdcm-tev INTERFACE)
 target_link_libraries(gdcm-tev INTERFACE gdcmCommon gdcmMSFF gdcmDSED gdcmDICT)
 target_include_directories(gdcm-tev INTERFACE ${GDCM_INCLUDE_PATH})
 
+# Compile jxrlib for JPEG XR support
+add_subdirectory(jxrlib EXCLUDE_FROM_ALL)

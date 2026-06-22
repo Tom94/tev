@@ -741,16 +741,19 @@ ColorProfile ColorProfile::fromIcc(span<const uint8_t> iccProfile) {
         throw runtime_error{"Failed to create ICC profile from raw data."};
     }
 
-    string desc = "<unnamed>";
+    auto result = ColorProfile{srcProfile};
+
     const size_t len = cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", nullptr, 0);
     if (len > 0) {
-        desc.resize(len);
-        cmsGetProfileInfoUTF8(srcProfile, cmsInfoDescription, "en", "US", desc.data(), (cmsUInt32Number)desc.size());
+        result.mDescription.resize(len);
+        cmsGetProfileInfoUTF8(
+            srcProfile, cmsInfoDescription, "en", "US", result.mDescription.data(), (cmsUInt32Number)result.mDescription.size()
+        );
     }
 
-    tlog::debug("Loaded ICC profile '{}'.", desc);
+    tlog::debug("Loaded ICC profile '{}'.", result.description());
 
-    return srcProfile;
+    return result;
 }
 
 Task<void> toLinearSrgbPremul(
@@ -772,17 +775,17 @@ Task<void> toLinearSrgbPremul(
 
     const auto size = src.size();
 
-    if (src.nChannels() < 1 || src.nChannels() > 5) {
-        throw runtime_error{"Must have between 1 and 4 channels."};
+    if (src.nChannels() < 1 || src.nChannels() > 16) {
+        throw runtime_error{"Must have between 1 and 16 channels."};
     }
 
     const size_t numColorChannels = alphaKind != EAlphaKind::None ? src.nChannels() - 1 : src.nChannels();
-    if (numColorChannels < 1 || numColorChannels > 4) {
-        throw runtime_error{"Must have between 1 and 4 color channels."};
+    if (numColorChannels < 1 || numColorChannels > 15) {
+        throw runtime_error{"Must have between 1 and 15 color channels."};
     }
 
-    if (rgbaDst.nChannels() < 1 || rgbaDst.nChannels() > 4) {
-        throw runtime_error{"Must output between 1 and 4 channels."};
+    if (rgbaDst.nChannels() < 1 || rgbaDst.nChannels() > 16) {
+        throw runtime_error{"Must output between 1 and 16 channels."};
     }
 
     const size_t numColorChannelsOut = rgbaDst.nChannels() == 1 || rgbaDst.nChannels() == 2 ? 1 : 3;
@@ -842,45 +845,38 @@ Task<void> toLinearSrgbPremul(
     //     type |= PREMUL_SH(1);
     // }
 
-    const auto guessColorSpace = [numColorChannels]() {
-        if (numColorChannels == 1) {
-            return COLORSPACE_SH(PT_GRAY);
-        } else if (numColorChannels == 4) {
-            return COLORSPACE_SH(PT_CMYK);
-        } else {
-            return COLORSPACE_SH(PT_RGB);
-        }
-    };
-
-    static constexpr auto expectedColorChannelCount = [](cmsColorSpaceSignature cs) -> size_t {
-        switch (cs) {
-            case cmsSigCmyData: return 3;
-            case cmsSigCmykData: return 4;
-            case cmsSigGrayData: return 1;
-            case cmsSigHlsData: return 3;
-            case cmsSigHsvData: return 3;
-            case cmsSigLabData: return 3;
-            case cmsSigLuvData: return 3;
-            case cmsSigLuvKData: return 4;
-            case cmsSigRgbData: return 3;
-            case cmsSigXYZData: return 3;
-            case cmsSigYCbCrData: return 3;
-            case cmsSigYxyData: return 3;
-            default: return 0;
+    static constexpr auto guessColorSpace = [](cmsUInt32Number numColorChannels) -> cmsUInt32Number {
+        switch (numColorChannels) {
+            case 1: return COLORSPACE_SH(PT_GRAY);
+            case 2: return COLORSPACE_SH(PT_RGB);
+            case 3: return COLORSPACE_SH(PT_RGB);
+            case 4: return COLORSPACE_SH(PT_CMYK);
+            case 5: return COLORSPACE_SH(PT_MCH5);
+            case 6: return COLORSPACE_SH(PT_MCH6);
+            case 7: return COLORSPACE_SH(PT_MCH7);
+            case 8: return COLORSPACE_SH(PT_MCH8);
+            case 9: return COLORSPACE_SH(PT_MCH9);
+            case 10: return COLORSPACE_SH(PT_MCH10);
+            case 11: return COLORSPACE_SH(PT_MCH11);
+            case 12: return COLORSPACE_SH(PT_MCH12);
+            case 13: return COLORSPACE_SH(PT_MCH13);
+            case 14: return COLORSPACE_SH(PT_MCH14);
+            case 15: return COLORSPACE_SH(PT_MCH15);
+            default: return COLORSPACE_SH(PT_RGB);
         }
     };
 
     cmsUInt32Number colorSpaceType = 0;
     const cmsColorSpaceSignature cs = cmsGetColorSpace(profile.get());
-    if (const auto expected = expectedColorChannelCount(cs); expected > 0 && numColorChannels != expected) {
+    if (const auto expected = cmsChannelsOfColorSpace(cs); expected > 0 && (cmsInt32Number)numColorChannels != expected) {
         tlog::warning(
             "Profile color space {:08X} indicates {} color channels, but input has {}. Guessing color space based on channel count instead.",
             (uint32_t)cs,
-            expectedColorChannelCount(cs),
+            expected,
             numColorChannels
         );
 
-        colorSpaceType = guessColorSpace();
+        colorSpaceType = guessColorSpace(numColorChannels);
     } else {
         switch (cs) {
             case cmsSigCmyData: colorSpaceType = COLORSPACE_SH(PT_CMY); break;
@@ -895,9 +891,39 @@ Task<void> toLinearSrgbPremul(
             case cmsSigXYZData: colorSpaceType = COLORSPACE_SH(PT_XYZ); break;
             case cmsSigYCbCrData: colorSpaceType = COLORSPACE_SH(PT_YCbCr); break;
             case cmsSigYxyData: colorSpaceType = COLORSPACE_SH(PT_Yxy); break;
+            case cmsSigMCH1Data:
+            case cmsSig1colorData: colorSpaceType = COLORSPACE_SH(PT_MCH1); break;
+            case cmsSigMCH2Data:
+            case cmsSig2colorData: colorSpaceType = COLORSPACE_SH(PT_MCH2); break;
+            case cmsSigMCH3Data:
+            case cmsSig3colorData: colorSpaceType = COLORSPACE_SH(PT_MCH3); break;
+            case cmsSigMCH4Data:
+            case cmsSig4colorData: colorSpaceType = COLORSPACE_SH(PT_MCH4); break;
+            case cmsSigMCH5Data:
+            case cmsSig5colorData: colorSpaceType = COLORSPACE_SH(PT_MCH5); break;
+            case cmsSigMCH6Data:
+            case cmsSig6colorData: colorSpaceType = COLORSPACE_SH(PT_MCH6); break;
+            case cmsSigMCH7Data:
+            case cmsSig7colorData: colorSpaceType = COLORSPACE_SH(PT_MCH7); break;
+            case cmsSigMCH8Data:
+            case cmsSig8colorData: colorSpaceType = COLORSPACE_SH(PT_MCH8); break;
+            case cmsSigMCH9Data:
+            case cmsSig9colorData: colorSpaceType = COLORSPACE_SH(PT_MCH9); break;
+            case cmsSigMCHAData:
+            case cmsSig10colorData: colorSpaceType = COLORSPACE_SH(PT_MCH10); break;
+            case cmsSigMCHBData:
+            case cmsSig11colorData: colorSpaceType = COLORSPACE_SH(PT_MCH11); break;
+            case cmsSigMCHCData:
+            case cmsSig12colorData: colorSpaceType = COLORSPACE_SH(PT_MCH12); break;
+            case cmsSigMCHDData:
+            case cmsSig13colorData: colorSpaceType = COLORSPACE_SH(PT_MCH13); break;
+            case cmsSigMCHEData:
+            case cmsSig14colorData: colorSpaceType = COLORSPACE_SH(PT_MCH14); break;
+            case cmsSigMCHFData:
+            case cmsSig15colorData: colorSpaceType = COLORSPACE_SH(PT_MCH15); break;
             default:
                 tlog::warning("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
-                colorSpaceType = guessColorSpace();
+                colorSpaceType = guessColorSpace(numColorChannels);
                 break;
         }
     }

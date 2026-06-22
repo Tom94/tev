@@ -118,3 +118,7 @@
 	path = dependencies/GDCM
 	url = https://github.com/Tom94/GDCM
 	shallow = true
+[submodule "dependencies/jxrlib"]
+	path = dependencies/jxrlib
+	url = https://github.com/Tom94/jxrlib
+	shallow = true
