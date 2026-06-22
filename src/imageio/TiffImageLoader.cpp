@@ -1341,17 +1341,22 @@ Task<void> postprocessRgb(
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
-            numPixels * numColorChannels,
+            numPixels * rgbaView.nChannels(),
             [&](size_t i) {
+                const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
+                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+
                 for (size_t c = 0; c < numColorChannels; ++c) {
-                    const float val = rgbaView[c, i];
+                    float& val = rgbaView[c, i];
+                    val *= factor;
 
                     // Lerp the transfer function
                     const size_t idx = clamp((size_t)(val * maxIdx) + transferRangeBlack[c], 0uz, transferFunction[c].size() - 2);
                     const float w = val * maxIdx - idx - transferRangeBlack[c];
-                    rgbaView[c, i] = ((1.0f - w) * (float)transferFunction[c][idx] + w * (float)transferFunction[c][idx + 1] -
-                                      transferRangeBlack[c]) *
+                    val = ((1.0f - w) * (float)transferFunction[c][idx] + w * (float)transferFunction[c][idx + 1] - transferRangeBlack[c]) *
                         scale[c];
+                    val *= invFactor;
                 }
             },
             priority
@@ -1368,11 +1373,17 @@ Task<void> postprocessRgb(
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
-            numPixels * numColorChannels,
+            numPixels * rgbaView.nChannels(),
             [&](size_t i) {
+                const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
+                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& v = rgbaView[c, i];
+                    v *= factor;
                     v = toLinear(v);
+                    v *= invFactor;
                 }
             },
             priority
@@ -1398,13 +1409,19 @@ Task<void> postprocessRgb(
         co_await ThreadPool::global().parallelFor(
             0uz,
             numPixels,
-            numPixels * numColorChannels,
+            numPixels * rgbaView.nChannels(),
             [&](size_t i) {
+                const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
+                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
                     // the power behaves like an odd exponent, thereby preserving the range of R.
                     float& v = rgbaView[c, i];
+                    v *= factor;
                     v = copysign(pow(abs(v), 2.2f), v);
+                    v *= invFactor;
                 }
             },
             priority
@@ -1960,7 +1977,7 @@ Task<ImageData> readTiffImage(
         numExtraChannels = 0;
     }
 
-    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::Premultiplied : EAlphaKind::Straight) : EAlphaKind::None;
+    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None;
 
     tlog::debug(
         "TIFF info: size={} bps={}/{} spp={} alpha={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
