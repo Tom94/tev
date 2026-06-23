@@ -19,7 +19,9 @@
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
+#include <tev/imageio/Exif.h>
 #include <tev/imageio/JxrImageLoader.h>
+#include <tev/imageio/Xmp.h>
 
 #ifndef FAR
 #    define FAR
@@ -436,6 +438,9 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
         decoder->WMP.wmiI.bRGB = TRUE; // Decode BGR to RGB
     }
 
+    vector<ImageData> result(1);
+    auto& resultData = result.front();
+
     vector<uint8_t> iccProfile;
     if (uint32_t iccSize = 0; !Failed(decoder->GetColorContext(decoder, nullptr, &iccSize)) && iccSize > 0) {
         iccProfile.resize(iccSize);
@@ -446,8 +451,32 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
         }
     }
 
-    // EXIF / XMP live in the decoder's descriptive metadata. (Wiring these through Exif/Xmp helpers is left as a follow-up; the structure
-    // mirrors the PNG loader's handleExifData / XMP handling.)
+    if (uint32_t exifSize = 0; !Failed(PKImageDecode_GetEXIFMetadata_WMP(decoder, nullptr, &exifSize)) && exifSize > 0) {
+        HeapArray<uint8_t> exifMetadata(exifSize);
+        if (!Failed(PKImageDecode_GetEXIFMetadata_WMP(decoder, exifMetadata.data(), &exifSize))) {
+            tlog::debug("Found EXIF data of size {} bytes", exifSize);
+
+            try {
+                const auto exif = Exif{exifMetadata};
+                resultData.attributes.emplace_back(exif.toAttributes());
+            } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
+        }
+    }
+
+    if (uint32_t xmpSize = 0; !Failed(PKImageDecode_GetXMPMetadata_WMP(decoder, nullptr, &xmpSize)) && xmpSize > 0) {
+        HeapArray<uint8_t> xmpMetadata(xmpSize);
+        if (!Failed(PKImageDecode_GetXMPMetadata_WMP(decoder, xmpMetadata.data(), &xmpSize))) {
+            tlog::debug("Found XMP data of size {} bytes", xmpSize);
+
+            try {
+                const auto xmp = Xmp{
+                    {reinterpret_cast<const char*>(xmpMetadata.data()), xmpSize}
+                };
+
+                resultData.attributes.emplace_back(xmp.attributes());
+            } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
+        }
+    }
 
     const auto numDecodedChannels = outDesc.numChannels;
     const auto numDecodedSamples = numPixels * numDecodedChannels;
@@ -472,8 +501,6 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
         JXR_CHECK(converter->Copy(converter, &rect, buf.dataBytes(), static_cast<uint32_t>(stride)));
     }
 
-    vector<ImageData> result(1);
-    auto& resultData = result.front();
     resultData.hasPremultipliedAlpha = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Premultiplied;
 
     const auto desiredPixelFormat = nBits(outDesc.pixelFormat) > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
