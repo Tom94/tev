@@ -86,6 +86,7 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
     }
 
     const bool hasAlpha = numChannels == 4;
+    const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
     const auto numInterleavedChannels = nextSupportedTextureChannelCount((size_t)numChannels);
 
     vector<ImageData> result(numFrames);
@@ -119,14 +120,16 @@ Task<vector<ImageData>> StbiImageLoader::load(istream& iStream, const fs::path&,
             resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
 
             const auto s = span{static_cast<const float*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
-            co_await toFloat32(s, numChannels, outView, hasAlpha, priority);
+            co_await toFloat32<false, true>(s, numChannels, outView, alphaKind, priority);
+            resultData.hasPremultipliedAlpha = true;
         } else {
             // Assume sRGB-encoded LDR images are display-referred.
             resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
             const auto s = span{static_cast<const uint8_t*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
-            co_await toFloat32<true>(s, numChannels, outView, hasAlpha, priority);
+            co_await toFloat32<true, true>(s, numChannels, outView, alphaKind, priority);
+            resultData.hasPremultipliedAlpha = true;
         }
     }
 

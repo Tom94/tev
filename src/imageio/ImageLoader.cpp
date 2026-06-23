@@ -26,6 +26,7 @@
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
+#include <tev/imageio/JxrImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>
 #include <tev/imageio/QoiImageLoader.h>
@@ -78,7 +79,8 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
         imageLoaders.emplace_back(new IcoImageLoader());
         imageLoaders.emplace_back(new DicomImageLoader()); // Some dicom images have weird TIFF dual encodings, so try before the TIFF loader.
         imageLoaders.emplace_back(new TiffImageLoader());
-        imageLoaders.emplace_back(new StbiImageLoader());
+        imageLoaders.emplace_back(new JxrImageLoader());
+        imageLoaders.emplace_back(new StbiImageLoader()); // STBI serves as catch-all last ditch effort loader; must stay last
         return imageLoaders;
     };
 
@@ -102,12 +104,14 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/ico",
         "image/jpeg",
         "image/jxl",
+        "image/jxr",
         "image/png",
         "image/qoi",
         "image/tga",
         "image/tiff",
         "image/vnd.microsoft.icon",
         "image/vnd.mozilla.apng",
+        "image/vnd.ms-photo", // JXR
         "image/vnd.radiance",
         "image/webp",
         "image/x-adobe-dng",

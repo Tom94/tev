@@ -2392,7 +2392,8 @@ void ImageViewer::openImageDialog() {
 #endif
                 {"ico",                     "Microsoft icon image"             },
                 {"jpeg,jpg",                "JPEG image"                       },
-                {"jxl",                     "JPEG-XL image"                    },
+                {"jxl",                     "JPEG XL image"                    },
+                {"jxr,hdp,wdp",             "JPEG XR image"                    },
                 {"pam,pbm,pfm,pgm,pnm,ppm", "Portable *Map image"              },
                 {"pic",                     "PIC image"                        },
                 {"png",                     "Portable Network Graphics image"  },

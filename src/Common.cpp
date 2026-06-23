@@ -521,8 +521,8 @@ const optional<FlatpakInfo>& flatpakInfo() {
 
 string_view toString(EAlphaKind kind) {
     switch (kind) {
-        case EAlphaKind::PremultipliedNonlinear: return "premultiplied_nonlinear";
-        case EAlphaKind::Premultiplied: return "premultiplied";
+        case EAlphaKind::PremultipliedNonlinear: return "premul_nonlinear";
+        case EAlphaKind::Premultiplied: return "premul";
         case EAlphaKind::Straight: return "straight";
         case EAlphaKind::None: return "none";
         default: throw runtime_error{"Unknown alpha kind."};

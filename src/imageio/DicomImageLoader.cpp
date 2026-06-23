@@ -132,22 +132,22 @@ template <uint16_t Group, uint16_t Element> size_t dicomNumValues(const gdcm::Da
 
 // Dispatch over scalar type, since GetBuffer hands us raw bytes.
 Task<void> dicomBufferToFloat32(
-    EDicomKind kind, span<const uint8_t> bytes, size_t numComponents, const MultiChannelView<float>& view, bool hasAlpha, int priority
+    EDicomKind kind, span<const uint8_t> bytes, size_t numComponents, const MultiChannelView<float>& view, EAlphaKind alphaKind, int priority
 ) {
     const auto reinterpret = [&]<typename T>() { return span<const T>{reinterpret_cast<const T*>(bytes.data()), bytes.size() / sizeof(T)}; };
 
     switch (kind) {
-        case EDicomKind::U8: co_await toFloat32(reinterpret.operator()<uint8_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::I8: co_await toFloat32(reinterpret.operator()<int8_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::U16: co_await toFloat32(reinterpret.operator()<uint16_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::I16: co_await toFloat32(reinterpret.operator()<int16_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::U32: co_await toFloat32(reinterpret.operator()<uint32_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::I32: co_await toFloat32(reinterpret.operator()<int32_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::U64: co_await toFloat32(reinterpret.operator()<uint64_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::I64: co_await toFloat32(reinterpret.operator()<int64_t>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::F16: co_await toFloat32(reinterpret.operator()<half>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::F32: co_await toFloat32(reinterpret.operator()<float>(), numComponents, view, hasAlpha, priority, 1.0f); break;
-        case EDicomKind::F64: co_await toFloat32(reinterpret.operator()<double>(), numComponents, view, hasAlpha, priority, 1.0f); break;
+        case EDicomKind::U8: co_await toFloat32(reinterpret.operator()<uint8_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::I8: co_await toFloat32(reinterpret.operator()<int8_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::U16: co_await toFloat32(reinterpret.operator()<uint16_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::I16: co_await toFloat32(reinterpret.operator()<int16_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::U32: co_await toFloat32(reinterpret.operator()<uint32_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::I32: co_await toFloat32(reinterpret.operator()<int32_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::U64: co_await toFloat32(reinterpret.operator()<uint64_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::I64: co_await toFloat32(reinterpret.operator()<int64_t>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::F16: co_await toFloat32(reinterpret.operator()<half>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::F32: co_await toFloat32(reinterpret.operator()<float>(), numComponents, view, alphaKind, priority, 1.0f); break;
+        case EDicomKind::F64: co_await toFloat32(reinterpret.operator()<double>(), numComponents, view, alphaKind, priority, 1.0f); break;
         default: throw ImageLoadError{fmt::format("Unsupported DICOM kind: {}", toString(kind))};
     }
 }
@@ -506,6 +506,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
     // Determine output channel layout. Palette and YBR expand to RGB; monochrome stays single-channel; RGB stays RGB.
     const size_t numColorChannels = (isPalette || isRgb || isYbr) ? 3 : 1;
     const bool hasAlpha = false; // DICOM pixel data does not carry alpha; overlays are separate and out of scope here.
+    const auto alphaKind = EAlphaKind::None;
     const size_t numChannels = numColorChannels;
 
     // Per-frame byte stride into the decoded blob.
@@ -553,7 +554,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
             co_return resultData;
         }
 
-        co_await dicomBufferToFloat32(kind, frame, componentsPerPixel, view, hasAlpha, priority);
+        co_await dicomBufferToFloat32(kind, frame, componentsPerPixel, view, alphaKind, priority);
 
         // Planar (RRR..GGG..BBB) data needs de-planarization for the multi-component case. For brevity we assume GDCM-interleaved output
         // here (GDCM can be asked to convert planar->interleaved via ImageChangePlanarConfiguration upstream); warn otherwise.

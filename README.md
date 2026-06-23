@@ -131,6 +131,7 @@ $ cpack --config build/CPackConfig.cmake
 
 - __EXR__ (via [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr))
 - __JPEG XL__ (including gain maps; via [libjxl](https://github.com/libjxl/libjxl))
+- __JPEG XR__ (e.g. HDR screenshots from Windows & XBOX; via [jxrlib](https://github.com/Tom94/jxrlib))
 - __JPEG__ (including gain maps, e.g. HDR pictures from Android; via [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo))
 - __JPEG 2000__ (via [openjpeg](https://github.com/uclouvain/openjpeg))
 - __PNG__, APNG (via [libpng](https://github.com/pnggroup/libpng))

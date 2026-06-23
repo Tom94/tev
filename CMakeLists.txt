@@ -163,6 +163,7 @@ set(TEV_SOURCES
     include/tev/imageio/Jpeg2000ImageLoader.h src/imageio/Jpeg2000ImageLoader.cpp
     include/tev/imageio/JpegTurboImageLoader.h src/imageio/JpegTurboImageLoader.cpp
     include/tev/imageio/JpegTurboImageSaver.h src/imageio/JpegTurboImageSaver.cpp
+    include/tev/imageio/JxrImageLoader.h src/imageio/JxrImageLoader.cpp
     include/tev/imageio/PfmImageLoader.h src/imageio/PfmImageLoader.cpp
     include/tev/imageio/PngImageLoader.h src/imageio/PngImageLoader.cpp
     include/tev/imageio/PngImageSaver.h src/imageio/PngImageSaver.cpp
@@ -273,7 +274,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS cfitsio clip exif_static gdcm-tev jpeg-turbo libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore)
+set(TEV_LIBS cfitsio clip exif_static gdcm-tev jpeg-turbo jxrglue libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
@@ -285,7 +286,7 @@ if (TEV_SUPPORT_JXL)
     list(APPEND TEV_LIBS jxl jxl_dec jxl_extras_nocodec-internal jxl_threads)
 endif()
 
-target_link_libraries(tev ${TEV_LIBS})
+target_link_libraries(tev PRIVATE ${TEV_LIBS})
 
 # Custom compile options
 if (MSVC)

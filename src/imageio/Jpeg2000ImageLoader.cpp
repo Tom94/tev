@@ -408,6 +408,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
     // If there is an alpha channel, it's usually straight. TODO: read cdef box if present to be sure.
     resultData.hasPremultipliedAlpha = !hasAlpha;
+    const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
 
     const auto numPixels = posProd(size);
 
@@ -490,14 +491,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
             co_await rgbaToFloat(dstView, false);
 
-            co_await toLinearSrgbPremul(
-                profile,
-                hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None,
-                dstView,
-                dstView,
-                nullopt,
-                priority
-            );
+            co_await toLinearSrgbPremul(profile, alphaKind, dstView, dstView, nullopt, priority);
             resultData.hasPremultipliedAlpha = true;
             resultData.readMetadataFromIcc(profile);
 

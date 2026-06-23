@@ -323,6 +323,9 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         const bool hasAlpha = numChannels == 2 || numChannels == 4;
+        const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
+
+        resultData.hasPremultipliedAlpha = !hasAlpha;
         resultData.channels = co_await makeInterleavedChannels(
             numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
         );
@@ -420,7 +423,8 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32<true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<true, true>(uintData, numChannels, dstView, alphaKind, priority, scale);
+                resultData.hasPremultipliedAlpha = true;
             } else if (bitsPerChannel == 16) {
                 const auto uintData = buf.span<uint16_t>();
                 if (shallSwapBytes) {
@@ -429,9 +433,11 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
                     );
                 }
 
-                co_await toFloat32<true>(uintData, numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<true, true>(uintData, numChannels, dstView, alphaKind, priority, scale);
+                resultData.hasPremultipliedAlpha = true;
             } else if (bitsPerChannel == 8) {
-                co_await toFloat32<true>(buf.span<const uint8_t>(), numChannels, dstView, hasAlpha, priority, scale);
+                co_await toFloat32<true, true>(buf.span<const uint8_t>(), numChannels, dstView, alphaKind, priority, scale);
+                resultData.hasPremultipliedAlpha = true;
             } else if (bitsPerChannel == 1) {
                 auto* const data = buf.data<uint8_t>();
                 co_await ThreadPool::global().parallelFor(
@@ -472,8 +478,6 @@ Task<vector<ImageData>> PfmImageLoader::load(istream& iStream, const fs::path&, 
 
         resultData.nativeMetadata.transfer = pfm ? ituth273::ETransfer::Linear : ituth273::ETransfer::SRGB;
         resultData.nativeMetadata.chroma = rec709Chroma();
-
-        resultData.hasPremultipliedAlpha = !hasAlpha;
 
         co_return result;
     };

@@ -498,6 +498,12 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 const auto outView = MultiChannelView<float>{data.channels};
                 auto rgbaOutView = outView;
 
+                // If there's no alpha channel, treat as premultiplied (by 1)
+                data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
+                const auto alphaKind = info.alpha_bits > 0 ?
+                    (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                    EAlphaKind::None;
+
                 const bool isCmyk = blackChannelIndex.has_value() && info.num_color_channels == 3;
                 if (isCmyk) {
                     auto& blackInfo = extraChannels.at(*blackChannelIndex);
@@ -517,11 +523,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                     // Copy CMY(A) data into the original output view such that tev can display it and the K channel to the user in addition
                     // to the converted RGB data later on.
-                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, info.alpha_bits, priority);
+                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, alphaKind, priority);
                 }
-
-                // If there's no alpha channel, treat as premultiplied (by 1)
-                data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
 
                 // JXL's orientation values match EXIF orientation tags (which also match our EOrientation enum).
                 data.orientation = (EOrientation)info.orientation;
@@ -548,8 +551,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         const auto profile = ColorProfile::fromIcc(iccProfile);
                         co_await toLinearSrgbPremul(
                             profile,
-                            info.alpha_bits ? (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
-                                              EAlphaKind::None,
+                            alphaKind,
                             inView,
                             rgbaOutView,
                             nullopt,
@@ -586,7 +588,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
-                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, info.alpha_bits, priority);
+                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, alphaKind, priority);
 
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
@@ -648,8 +650,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                 // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
                                 // See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
                                 const float alpha = info.alpha_bits ? outView[-1, i] : 1.0f;
-                                const float factor = info.alpha_premultiplied && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
-                                const float invFactor = info.alpha_premultiplied && alpha > 0.0001f ? alpha : 1.0f;
+                                const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
 
                                 Vector3f color;
                                 for (uint32_t c = 0; c < info.num_color_channels; ++c) {
@@ -657,9 +658,9 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                 }
 
                                 if (hasGamma) {
-                                    color = pow(color * factor, 1.0f / (float)ce->gamma) * invFactor;
+                                    color = pow(color * factor, 1.0f / (float)ce->gamma) * alpha;
                                 } else {
-                                    color = ituth273::invTransfer(cicpTransfer, color * factor) * invFactor;
+                                    color = ituth273::invTransfer(cicpTransfer, color * factor) * alpha;
                                 }
 
                                 for (uint32_t c = 0; c < info.num_color_channels; ++c) {
@@ -668,6 +669,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             },
                             priority
                         );
+                        data.hasPremultipliedAlpha = true;
                     }
                 }
 

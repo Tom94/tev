@@ -412,8 +412,11 @@ public:
 
     bool isValid() const { return mProfile; }
 
+    std::string_view description() const { return mDescription; }
+
 private:
     void* mProfile = nullptr;
+    std::string mDescription = "";
 };
 
 // Converts colors from an ICC profile to linear sRGB Rec.709 w/ premultiplied alpha.
