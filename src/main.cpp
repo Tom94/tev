@@ -128,9 +128,9 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
                 );
                 const auto images = imagesLoadTask.get();
 
-                if (!images.empty()) {
-                    sImageViewer->replaceImage(ensureUtf8(info.imageName), images.front(), info.grabFocus);
-                    TEV_ASSERT(images.size() == 1, "IPC CreateImage should never create more than 1 image at once.");
+                if (images && !images->empty()) {
+                    sImageViewer->replaceImage(ensureUtf8(info.imageName), images->front(), info.grabFocus);
+                    TEV_ASSERT(images->size() == 1, "IPC CreateImage should never create more than 1 image at once.");
                 }
             });
 
@@ -180,13 +180,18 @@ static void convertTo(
 
     vector<Task<void>> saveTasks;
     for (size_t idx = 0; const auto imageAddition = imagesLoader->tryPop(); ++idx) {
-        if (imageAddition->images.empty()) {
+        if (!imageAddition->images) {
+            tlog::error("Image load failed, cannot convert");
+            continue;
+        }
+
+        if (imageAddition->images->empty()) {
             tlog::error("Image addition is empty, cannot convert");
             continue;
         }
 
         // TODO: support saving images with multiple frames (if output format permits). Currently only the first frame is saved.
-        const auto& image = imageAddition->images.front();
+        const auto& image = imageAddition->images->front();
         if (image->channelGroups().empty()) {
             tlog::error("Image {} has no channel groups, cannot convert", image->path());
             continue;

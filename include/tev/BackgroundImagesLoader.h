@@ -30,15 +30,14 @@
 #include <optional>
 #include <set>
 #include <string>
-#include <vector>
 
 namespace tev {
 
 struct ImageAddition {
+    ImageLoadResult images;
+    std::shared_ptr<Image> toReplace;
     int loadId;
     bool shallSelect;
-    std::vector<std::shared_ptr<Image>> images;
-    std::shared_ptr<Image> toReplace;
 
     struct Comparator {
         bool operator()(const ImageAddition& a, const ImageAddition& b) { return a.loadId > b.loadId; }
@@ -64,6 +63,7 @@ public:
 
     bool publishSortedLoads();
     bool hasPendingLoads() const;
+    bool hasImageAdditions() const;
 
     bool recursiveDirectories() const { return mRecursiveDirectories; }
     void setRecursiveDirectories(bool value) { mRecursiveDirectories = value; }

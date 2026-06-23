@@ -78,7 +78,7 @@ void BackgroundImagesLoader::enqueue(const fs::path& path, string_view channelSe
 
         {
             const lock_guard lock{mPendingLoadedImagesMutex};
-            mPendingLoadedImages.push({loadId, shallSelect, images, toReplace});
+            mPendingLoadedImages.push({.images = images, .toReplace = toReplace, .loadId = loadId, .shallSelect = shallSelect});
         }
 
         if (publishSortedLoads()) {
@@ -115,11 +115,11 @@ optional<nanogui::Vector2i> BackgroundImagesLoader::firstImageSize() const {
     }
 
     const ImageAddition& firstImage = mLoadedImages.front();
-    if (firstImage.images.empty()) {
+    if (!firstImage.images || firstImage.images->empty()) {
         return nullopt;
     }
 
-    return firstImage.images.front()->size();
+    return firstImage.images->front()->size();
 }
 
 bool BackgroundImagesLoader::publishSortedLoads() {
@@ -143,6 +143,11 @@ bool BackgroundImagesLoader::publishSortedLoads() {
 bool BackgroundImagesLoader::hasPendingLoads() const {
     const lock_guard lock{mPendingLoadedImagesMutex};
     return mLoadCounter != mUnsortedLoadCounter;
+}
+
+bool BackgroundImagesLoader::hasImageAdditions() const {
+    const lock_guard lock{mPendingLoadedImagesMutex};
+    return !mLoadedImages.empty();
 }
 
 } // namespace tev

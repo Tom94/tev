@@ -181,6 +181,7 @@ set(TEV_SOURCES
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
     include/tev/Common.h src/Common.cpp
+    include/tev/ErrorDialog.h src/ErrorDialog.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
     include/tev/HelpWindow.h src/HelpWindow.cpp
     include/tev/ImageInfoWindow.h src/ImageInfoWindow.cpp

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/BackgroundImagesLoader.h>
+#include <tev/ErrorDialog.h>
 #include <tev/HelpWindow.h>
 #include <tev/Image.h>
 #include <tev/ImageButton.h>
@@ -208,7 +209,7 @@ public:
     void copyImageNameToClipboard() const;
     void pasteImagesFromClipboard();
 
-    void showErrorDialog(std::string_view message);
+    void showErrorDialog(std::string_view message, bool logToConsole = true);
 
     chroma_t inspectionChroma() const;
     void setInspectionChroma(const chroma_t& chroma);
@@ -277,6 +278,8 @@ private:
     nanogui::Widget* mChannelMaskButtonContainer = nullptr;
 
     std::shared_ptr<BackgroundImagesLoader> mImagesLoader;
+    std::vector<std::string> mImageLoadErrors;
+
     std::weak_ptr<Ipc> mIpc;
 
     std::shared_ptr<Image> mCurrentImage;

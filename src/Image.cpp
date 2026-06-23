@@ -1472,21 +1472,15 @@ Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i siz
     co_return size;
 }
 
-Task<vector<shared_ptr<Image>>> tryLoadImage(
+Task<ImageLoadResult> tryLoadImage(
     int taskPriority, fs::path path, istream& iStream, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 ) {
-    const auto handleException = [&](const exception& e) {
-        if (channelSelector.empty()) {
-            tlog::error("Could not load {}: {}", path, e.what());
-        } else {
-            tlog::error("Could not load {}:{}: {}", path, channelSelector, e.what());
-        }
-    };
-
     // No need to keep loading images if tev is already shutting down again.
     if (shuttingDown()) {
         co_return {};
     }
+
+    const auto name = channelSelector.empty() ? toString(path) : fmt::format("{}:{}", toString(path), channelSelector);
 
     try {
         const auto start = chrono::system_clock::now();
@@ -1565,17 +1559,20 @@ Task<vector<shared_ptr<Image>>> tryLoadImage(
         tlog::success("Loaded {} via {} after {:.3f} seconds.", path, loadMethod, elapsedSeconds.count());
 
         co_return images;
-    } catch (const runtime_error& e) { handleException(e); }
+    } catch (const runtime_error& e) {
+        tlog::error(fmt::format("Could not load {}: {}", name, e.what()));
+        co_return unexpected(ImageLoadError{fmt::format("{}: {}", name, e.what())});
+    }
 
-    co_return {};
+    co_return unexpected(ImageLoadError{fmt::format("{}: unknown error", name)});
 }
 
-Task<vector<shared_ptr<Image>>>
+Task<ImageLoadResult>
     tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {
     co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, settings, groupChannels);
 }
 
-Task<vector<shared_ptr<Image>>>
+Task<ImageLoadResult>
     tryLoadImage(int taskPriority, fs::path path, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {
     try {
         path = fs::absolute(path);
@@ -1588,8 +1585,7 @@ Task<vector<shared_ptr<Image>>>
     co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, settings, groupChannels);
 }
 
-Task<vector<shared_ptr<Image>>>
-    tryLoadImage(fs::path path, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {
+Task<ImageLoadResult> tryLoadImage(fs::path path, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {
     co_return co_await tryLoadImage(-Image::drawId(), path, channelSelector, settings, groupChannels);
 }
 
