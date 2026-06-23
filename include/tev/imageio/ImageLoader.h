@@ -169,7 +169,8 @@ Task<void> toFloat32(
             for (int x = 0; x < size.x(); ++x) {
                 const size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
 
-                const float alpha = alphaKind != EAlphaKind::None ? (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale + offset : 1.0f;
+                const float alpha = alphaKind != EAlphaKind::None ? (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale + offset :
+                                                                    1.0f;
                 const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
                 const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
 

@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <expected>
 #include <istream>
 #include <map>
 #include <memory>
@@ -340,16 +341,17 @@ private:
 // Modifies `data` and returns the new size of the data after reorientation.
 Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i size, EOrientation orientation, int priority);
 
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
+using ImageLoadResult = std::expected<std::vector<std::shared_ptr<Image>>, ImageLoadError>;
+
+Task<ImageLoadResult> tryLoadImage(
     int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
-Task<std::vector<std::shared_ptr<Image>>> tryLoadImage(
+Task<ImageLoadResult> tryLoadImage(
     fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
-Task<std::vector<std::shared_ptr<Image>>>
+Task<ImageLoadResult>
     tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
-Task<std::vector<std::shared_ptr<Image>>>
-    tryLoadImage(fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
+Task<ImageLoadResult> tryLoadImage(fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);
 
 } // namespace tev
 

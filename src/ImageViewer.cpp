@@ -97,6 +97,8 @@ ImageViewer::ImageViewer(
 ) :
     Screen{size, "tev", true, maximize, false, true, true, floatBuffer}, mImagesLoader{imagesLoader}, mIpc{ipc}, mMaximizedLaunch{maximize} {
 
+    m_theme->m_message_warning_icon = FA_EXCLAMATION_CIRCLE;
+
     // At this point we no longer need the standalone console (if it exists).
     toggleConsole();
 
@@ -1310,6 +1312,24 @@ void ImageViewer::draw_contents() {
         }
     }
 
+    // Check *before* dequeueing new images to ensure the error dialog happens *after* the resize event and is properly centered & sized
+    if (!mImagesLoader->hasPendingLoads() && !mImagesLoader->hasImageAdditions()) {
+        if (mImageLoadErrors.size() == 1) {
+            showErrorDialog(fmt::format("Failed to load {}", mImageLoadErrors.front()), false /* don't log; loader already did */);
+        } else if (mImageLoadErrors.size() > 1) {
+            showErrorDialog(
+                fmt::format(
+                    "Failed to load {} images:\n{}",
+                    mImageLoadErrors.size(),
+                    join(mImageLoadErrors | views::transform([](const auto& e) { return fmt::format("- {}", e); }), "\n")
+                ),
+                false /* don't log; loader already did */
+            );
+        }
+
+        mImageLoadErrors.clear();
+    }
+
     clear();
 
     // If playing back, ensure correct frame pacing
@@ -1345,10 +1365,15 @@ void ImageViewer::draw_contents() {
     // the GUI. Focus the application in case one of the new images is meant to override the current selection.
     bool newFocus = false;
     while (auto addition = mImagesLoader->tryPop()) {
+        if (!addition->images) {
+            mImageLoadErrors.emplace_back(addition->images.error().what());
+            continue;
+        }
+
         newFocus |= addition->shallSelect;
 
         bool first = true;
-        for (auto& image : addition->images) {
+        for (auto& image : *addition->images) {
             // If the loaded file consists of multiple images (such as multi-part EXRs), select the first part if selection is desired.
             bool shallSelect = first ? addition->shallSelect : false;
             if (addition->toReplace) {
@@ -2604,18 +2629,21 @@ void ImageViewer::pasteImagesFromClipboard() {
     const auto name = fmt::format("clipboard ({})", ++mClipboardIndex);
     const auto images = tryLoadImage(name, imageStream, "", mImagesLoader->imageLoaderSettings(), mImagesLoader->groupChannels()).get();
 
-    if (images.empty()) {
+    if (!images || images->empty()) {
         throw runtime_error{"Failed to load image from clipboard data."};
     } else {
-        for (auto& image : images) {
+        for (auto& image : *images) {
             addImage(image, true);
         }
     }
 }
 
-void ImageViewer::showErrorDialog(string_view message) {
-    tlog::error(message);
-    new MessageDialog(this, MessageDialog::Type::Warning, "Error", message);
+void ImageViewer::showErrorDialog(string_view message, bool logToConsole) {
+    if (logToConsole) {
+        tlog::error(message);
+    }
+
+    new ErrorDialog(this, MessageDialog::Type::Warning, "Error", message, "OK", "Cancel", false, (int)(m_size.x() * 0.75f), (int)(m_size.y() * 0.75f));
 }
 
 chroma_t ImageViewer::inspectionChroma() const {
