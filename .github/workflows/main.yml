@@ -74,7 +74,7 @@ jobs:
         run: cmake --build . --config ${{ env.config }} --target package --verbose
       - name: Upload executable
         if: matrix.upload && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Linux executable (${{ matrix.os }})
           path: ${{ env.build_dir }}/tev.appimage
@@ -113,7 +113,7 @@ jobs:
         run: zip -r tev.app.zip tev.app
       - name: Upload executable
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macOS executable (${{ matrix.arch }})
           path: ${{ env.build_dir }}/tev.app.zip
@@ -152,13 +152,13 @@ jobs:
         run: cpack
       - name: Upload executable
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Windows executable (${{ matrix.os }})
           path: ${{ env.build_dir }}/${{ env.config }}/tev.exe
       - name: Upload installer
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Windows installer (${{ matrix.os }})
           path: ${{ env.build_dir }}/tev-installer.msi
