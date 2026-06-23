@@ -559,6 +559,7 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::PQ;
                 resultData.nativeMetadata.chroma = bt2020Chroma();
                 resultData.toRec709 = convertColorspaceMatrix(*resultData.nativeMetadata.chroma, rec709Chroma(), resultData.renderingIntent);
+                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(*resultData.nativeMetadata.transfer);
                 co_return result;
             }
 
