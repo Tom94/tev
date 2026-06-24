@@ -382,6 +382,7 @@ inline int codePointLength(char first) {
 
 std::string ensureUtf8(std::string_view str);
 std::string utf16to8(std::wstring_view utf16);
+std::string utf16to8(std::u16string_view utf16);
 fs::path toPath(std::string_view utf8);
 std::string toString(const fs::path& path);
 std::string toDisplayString(const fs::path& path);
@@ -921,7 +922,7 @@ inline bool isSigned(EPixelFormat format) {
     return false;
 }
 
-inline bool isInteger(EPixelFormat format) {
+inline bool isInt(EPixelFormat format) {
     switch (format) {
         case EPixelFormat::U8:
         case EPixelFormat::U16:
@@ -936,9 +937,9 @@ inline bool isInteger(EPixelFormat format) {
     return false;
 }
 
-inline bool isSignedInteger(EPixelFormat format) {
-    return isInteger(format) && isSigned(format);
-}
+inline bool isSignedInt(EPixelFormat format) { return isInt(format) && isSigned(format); }
+
+inline bool isFloat(EPixelFormat format) { return !isInt(format); }
 
 inline constexpr uint32_t fourcc(const char s[5]) {
     uint32_t result = 0;

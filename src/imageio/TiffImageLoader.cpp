@@ -1689,7 +1689,7 @@ Task<ImageData> decodeJpeg(
     auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
 
     const float scale = 1.0f / (float)((1ull << precision) - 1);
-    const float offset = isSignedInteger(pixelFormat) ? (float)(1ull << (precision - 1)) * scale : 0.0f;
+    const float offset = isSignedInt(pixelFormat) ? (float)(1ull << (precision - 1)) * scale : 0.0f;
 
     ImageData result;
     result.channels = co_await ImageLoader::makeInterleavedChannels(

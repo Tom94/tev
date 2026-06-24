@@ -72,6 +72,12 @@ string utf16to8(wstring_view utf16) {
     return utf8;
 }
 
+string utf16to8(u16string_view utf16) {
+    string utf8;
+    utf8::utf16to8(begin(utf16), end(utf16), back_inserter(utf8));
+    return utf8;
+}
+
 fs::path toPath(string_view utf8) {
     // tev's strings are always utf8 encoded, however fs::path does not know this. Therefore: convert the string to a u8string and pass
     // _that_ string to the fs::path constructor, which will then take care of converting the utf8 string to the native file name encoding.

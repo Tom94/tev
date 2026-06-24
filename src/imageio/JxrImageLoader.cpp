@@ -20,8 +20,12 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
+#include <tev/imageio/Ifd.h>
 #include <tev/imageio/JxrImageLoader.h>
 #include <tev/imageio/Xmp.h>
+
+#include <string_view>
+#include <vector>
 
 #ifndef FAR
 #    define FAR
@@ -75,14 +79,11 @@ struct JxrFormat {
     size_t numColorChannels = 0; // color channels in the RGB(A) view tev consumes (1 for gray, 3 for color)
     size_t numChannels = 0;      // total incl. alpha in that view
     EPixelFormat pixelFormat = EPixelFormat::U8; // component type as decoded RAW (pre-conversion)
-    bool isFloat = false;        // half or float: linear, scene-referred
-    bool isFixedPoint = false;   // fixed point: linear, scene-referred, integer-stored
     bool hasAlpha = false;       // format actually carries an alpha plane
     bool bgrOrder = false;       // stored BGR(A); needs channel swap if consumed raw
-    bool rawConsumable = false;  // tev can read this layout directly without the converter
     EJxrColorModel colorModel = EJxrColorModel::RGB;
-    optional<PKPixelFormatGUID> target = nullopt;
     bool hasPremultipliedAlpha = false;
+    optional<PKPixelFormatGUID> target = nullopt;
 };
 
 optional<JxrFormat> describeFormat(const PKPixelFormatGUID& guid) {
@@ -98,253 +99,204 @@ optional<JxrFormat> describeFormat(const PKPixelFormatGUID& guid) {
 
     // Gray (RGB color model, 1 color channel)
     else if (eq(GUID_PKPixelFormatBlackWhite)) {
-        return F{1, 1, PF::U8, false, false, false, false, true, CM::RGB, GUID_PKPixelFormat8bppGray};
+        return F{1, 1, PF::U8, false, false, CM::RGB, false, GUID_PKPixelFormat8bppGray};
     } else if (eq(GUID_PKPixelFormat8bppGray)) {
-        return F{1, 1, PF::U8, false, false, false, false, true, CM::RGB};
+        return F{1, 1, PF::U8, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat16bppGray)) {
-        return F{1, 1, PF::U16, false, false, false, false, true, CM::RGB};
+        return F{1, 1, PF::U16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat16bppGrayHalf)) {
-        return F{1, 1, PF::F16, true, false, false, false, true, CM::RGB};
+        return F{1, 1, PF::F16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat32bppGrayFloat)) {
-        return F{1, 1, PF::F32, true, false, false, false, true, CM::RGB};
+        return F{1, 1, PF::F32, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat16bppGrayFixedPoint)) {
-        return F{1, 1, PF::I16, false, true, false, false, false, CM::RGB};
+        return F{1, 1, PF::I16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat32bppGrayFixedPoint)) {
-        return F{1, 1, PF::I32, false, true, false, false, false, CM::RGB};
+        return F{1, 1, PF::I32, false, false, CM::RGB};
     }
 
     // Packed RGB needing unpacking
     else if (eq(GUID_PKPixelFormat16bppRGB555)) {
-        return F{3, 3, PF::U8, false, false, false, false, false, CM::RGB, GUID_PKPixelFormat24bppRGB};
+        return F{3, 3, PF::U8, false, false, CM::RGB, false, GUID_PKPixelFormat24bppRGB};
     } else if (eq(GUID_PKPixelFormat16bppRGB565)) {
-        return F{3, 3, PF::U8, false, false, false, false, false, CM::RGB, GUID_PKPixelFormat24bppRGB};
+        return F{3, 3, PF::U8, false, false, CM::RGB, false, GUID_PKPixelFormat24bppRGB};
     } else if (eq(GUID_PKPixelFormat32bppRGB101010)) {
-        return F{3, 3, PF::U16, false, false, false, false, false, CM::RGB, GUID_PKPixelFormat48bppRGB};
+        return F{3, 3, PF::U16, false, false, CM::RGB, false, GUID_PKPixelFormat48bppRGB};
     } else if (eq(GUID_PKPixelFormat32bppRGBE)) {
-        return F{3, 3, PF::F32, true, false, false, false, false, CM::RGB, GUID_PKPixelFormat96bppRGBFloat};
+        return F{3, 3, PF::F32, false, false, CM::RGB, false, GUID_PKPixelFormat96bppRGBFloat};
     }
 
     // 8-bit RGB(A)
     else if (eq(GUID_PKPixelFormat24bppRGB)) {
-        return F{3, 3, PF::U8, false, false, false, false, true, CM::RGB};
+        return F{3, 3, PF::U8, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat24bppBGR)) {
-        return F{3, 3, PF::U8, false, false, false, true, true, CM::RGB};
+        return F{3, 3, PF::U8, false, true, CM::RGB};
     } else if (eq(GUID_PKPixelFormat32bppRGB)) {
-        return F{3, 4, PF::U8, false, false, false, false, true, CM::RGB}; // 4th channel is padding
+        return F{3, 4, PF::U8, false, false, CM::RGB}; // 4th channel is padding
     } else if (eq(GUID_PKPixelFormat32bppBGR)) {
-        return F{3, 4, PF::U8, false, false, false, true, true, CM::RGB}; // 4th channel is padding
+        return F{3, 4, PF::U8, false, true, CM::RGB}; // 4th channel is padding
     } else if (eq(GUID_PKPixelFormat32bppRGBA)) {
-        return F{3, 4, PF::U8, false, false, true, false, true, CM::RGB};
+        return F{3, 4, PF::U8, true, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat32bppBGRA)) {
-        return F{3, 4, PF::U8, false, false, true, true, true, CM::RGB};
+        return F{3, 4, PF::U8, true, true, CM::RGB};
     } else if (eq(GUID_PKPixelFormat32bppPRGBA)) {
-        return F{3, 4, PF::U8, false, false, true, false, true, CM::RGB, GUID_PKPixelFormat32bppPRGBA, true}; // premultiplied
+        return F{3, 4, PF::U8, true, false, CM::RGB, true};
     } else if (eq(GUID_PKPixelFormat32bppPBGRA)) {
-        return F{3, 4, PF::U8, false, false, true, true, true, CM::RGB, GUID_PKPixelFormat32bppPBGRA, true}; // premultiplied
+        return F{3, 4, PF::U8, true, true, CM::RGB, true};
     }
 
     // 16-bit RGB(A)
     else if (eq(GUID_PKPixelFormat48bppRGB)) {
-        return F{3, 3, PF::U16, false, false, false, false, true, CM::RGB};
+        return F{3, 3, PF::U16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat64bppRGBA)) {
-        return F{3, 4, PF::U16, false, false, true, false, true, CM::RGB};
+        return F{3, 4, PF::U16, true, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat64bppPRGBA)) {
-        return F{3, 4, PF::U16, false, false, true, false, true, CM::RGB, GUID_PKPixelFormat64bppPRGBA, true}; // premultiplied
+        return F{3, 4, PF::U16, true, false, CM::RGB, true};
     }
 
     // Fixed point RGB(A)
     else if (eq(GUID_PKPixelFormat48bppRGBFixedPoint)) {
-        return F{3, 3, PF::I16, false, true, false, false, false, CM::RGB};
+        return F{3, 3, PF::I16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat64bppRGBFixedPoint)) {
-        return F{3, 4, PF::I16, false, true, false, false, false, CM::RGB};
+        return F{3, 4, PF::I16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat64bppRGBAFixedPoint)) {
-        return F{3, 4, PF::I16, false, true, true, false, false, CM::RGB};
+        return F{3, 4, PF::I16, true, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat96bppRGBFixedPoint)) {
-        return F{3, 3, PF::I32, false, true, false, false, false, CM::RGB};
+        return F{3, 3, PF::I32, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat128bppRGBFixedPoint)) {
-        return F{3, 4, PF::I32, false, true, false, false, false, CM::RGB};
+        return F{3, 4, PF::I32, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat128bppRGBAFixedPoint)) {
-        return F{3, 4, PF::I32, false, true, true, false, false, CM::RGB};
+        return F{3, 4, PF::I32, true, false, CM::RGB};
     }
 
     // Half float RGB(A)
     else if (eq(GUID_PKPixelFormat48bppRGBHalf)) {
-        return F{3, 3, PF::F16, true, false, false, false, true, CM::RGB};
+        return F{3, 3, PF::F16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat64bppRGBHalf)) {
-        return F{3, 4, PF::F16, true, false, false, false, true, CM::RGB};
+        return F{3, 4, PF::F16, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat64bppRGBAHalf)) {
-        return F{3, 4, PF::F16, true, false, true, false, true, CM::RGB};
+        return F{3, 4, PF::F16, true, false, CM::RGB};
     }
 
     // 32-bit float RGB(A)
     else if (eq(GUID_PKPixelFormat96bppRGBFloat)) {
-        return F{3, 3, PF::F32, true, false, false, false, true, CM::RGB};
+        return F{3, 3, PF::F32, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat128bppRGBFloat)) {
-        return F{3, 4, PF::F32, true, false, false, false, true, CM::RGB};
+        return F{3, 4, PF::F32, false, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat128bppRGBAFloat)) {
-        return F{3, 4, PF::F32, true, false, true, false, true, CM::RGB};
+        return F{3, 4, PF::F32, true, false, CM::RGB};
     } else if (eq(GUID_PKPixelFormat128bppPRGBAFloat)) {
-        return F{3, 4, PF::F32, true, false, true, false, true, CM::RGB, GUID_PKPixelFormat128bppPRGBAFloat, true}; // premultiplied
+        return F{3, 4, PF::F32, true, false, CM::RGB, true};
     }
 
     // CMYK
     else if (eq(GUID_PKPixelFormat32bppCMYK)) {
-        return F{4, 4, PF::U8, false, false, false, false, false, CM::CMYK};
+        return F{4, 4, PF::U8, false, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat64bppCMYK)) {
-        return F{4, 4, PF::U16, false, false, false, false, false, CM::CMYK};
+        return F{4, 4, PF::U16, false, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat40bppCMYKAlpha)) {
-        return F{4, 5, PF::U8, false, false, true, false, false, CM::CMYK};
+        return F{4, 5, PF::U8, true, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat80bppCMYKAlpha)) {
-        return F{4, 5, PF::U16, false, false, true, false, false, CM::CMYK};
+        return F{4, 5, PF::U16, true, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat32bppCMYKDIRECT)) {
-        return F{4, 4, PF::U8, false, false, false, false, false, CM::CMYK};
+        return F{4, 4, PF::U8, false, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat64bppCMYKDIRECT)) {
-        return F{4, 4, PF::U16, false, false, false, false, false, CM::CMYK};
+        return F{4, 4, PF::U16, false, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat40bppCMYKDIRECTAlpha)) {
-        return F{4, 5, PF::U8, false, false, true, false, false, CM::CMYK};
+        return F{4, 5, PF::U8, true, false, CM::CMYK};
     } else if (eq(GUID_PKPixelFormat80bppCMYKDIRECTAlpha)) {
-        return F{4, 5, PF::U16, false, false, true, false, false, CM::CMYK};
+        return F{4, 5, PF::U16, true, false, CM::CMYK};
     }
 
     // n-Channel
     else if (eq(GUID_PKPixelFormat24bpp3Channels)) {
-        return F{3, 3, PF::U8, false, false, false, false, false, CM::NChannel};
+        return F{3, 3, PF::U8, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat48bpp3Channels)) {
-        return F{3, 3, PF::U16, false, false, false, false, false, CM::NChannel};
+        return F{3, 3, PF::U16, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat32bpp4Channels)) {
-        return F{4, 4, PF::U8, false, false, false, false, false, CM::NChannel};
+        return F{4, 4, PF::U8, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat64bpp4Channels)) {
-        return F{4, 4, PF::U16, false, false, false, false, false, CM::NChannel};
+        return F{4, 4, PF::U16, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat40bpp5Channels)) {
-        return F{5, 5, PF::U8, false, false, false, false, false, CM::NChannel};
+        return F{5, 5, PF::U8, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat80bpp5Channels)) {
-        return F{5, 5, PF::U16, false, false, false, false, false, CM::NChannel};
+        return F{5, 5, PF::U16, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat48bpp6Channels)) {
-        return F{6, 6, PF::U8, false, false, false, false, false, CM::NChannel};
+        return F{6, 6, PF::U8, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat96bpp6Channels)) {
-        return F{6, 6, PF::U16, false, false, false, false, false, CM::NChannel};
+        return F{6, 6, PF::U16, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat56bpp7Channels)) {
-        return F{7, 7, PF::U8, false, false, false, false, false, CM::NChannel};
+        return F{7, 7, PF::U8, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat112bpp7Channels)) {
-        return F{7, 7, PF::U16, false, false, false, false, false, CM::NChannel};
+        return F{7, 7, PF::U16, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat64bpp8Channels)) {
-        return F{8, 8, PF::U8, false, false, false, false, false, CM::NChannel};
+        return F{8, 8, PF::U8, false, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat128bpp8Channels)) {
-        return F{8, 8, PF::U16, false, false, false, false, false, CM::NChannel};
+        return F{8, 8, PF::U16, false, false, CM::NChannel};
     }
 
     else if (eq(GUID_PKPixelFormat32bpp3ChannelsAlpha)) {
-        return F{3, 4, PF::U8, false, false, true, false, false, CM::NChannel};
+        return F{3, 4, PF::U8, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat64bpp3ChannelsAlpha)) {
-        return F{3, 4, PF::U16, false, false, true, false, false, CM::NChannel};
+        return F{3, 4, PF::U16, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat40bpp4ChannelsAlpha)) {
-        return F{4, 5, PF::U8, false, false, true, false, false, CM::NChannel};
+        return F{4, 5, PF::U8, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat80bpp4ChannelsAlpha)) {
-        return F{4, 5, PF::U16, false, false, true, false, false, CM::NChannel};
+        return F{4, 5, PF::U16, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat48bpp5ChannelsAlpha)) {
-        return F{5, 6, PF::U8, false, false, true, false, false, CM::NChannel};
+        return F{5, 6, PF::U8, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat96bpp5ChannelsAlpha)) {
-        return F{5, 6, PF::U16, false, false, true, false, false, CM::NChannel};
+        return F{5, 6, PF::U16, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat56bpp6ChannelsAlpha)) {
-        return F{6, 7, PF::U8, false, false, true, false, false, CM::NChannel};
+        return F{6, 7, PF::U8, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat112bpp6ChannelsAlpha)) {
-        return F{6, 7, PF::U16, false, false, true, false, false, CM::NChannel};
+        return F{6, 7, PF::U16, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat64bpp7ChannelsAlpha)) {
-        return F{7, 8, PF::U8, false, false, true, false, false, CM::NChannel};
+        return F{7, 8, PF::U8, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat128bpp7ChannelsAlpha)) {
-        return F{7, 8, PF::U16, false, false, true, false, false, CM::NChannel};
+        return F{7, 8, PF::U16, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat72bpp8ChannelsAlpha)) {
-        return F{8, 9, PF::U8, false, false, true, false, false, CM::NChannel};
+        return F{8, 9, PF::U8, true, false, CM::NChannel};
     } else if (eq(GUID_PKPixelFormat144bpp8ChannelsAlpha)) {
-        return F{8, 9, PF::U16, false, false, true, false, false, CM::NChannel};
+        return F{8, 9, PF::U16, true, false, CM::NChannel};
     }
 
     // YCC / YUV, subsampled and full
     else if (eq(GUID_PKPixelFormat12bppYCC420)) {
-        return F{3, 3, PF::U8, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U8, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat16bppYCC422)) {
-        return F{3, 3, PF::U8, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U8, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat20bppYCC422)) {
-        return F{3, 3, PF::U16, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U16, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat32bppYCC422)) {
-        return F{3, 3, PF::U16, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U16, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat24bppYCC444)) {
-        return F{3, 3, PF::U8, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U8, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat30bppYCC444)) {
-        return F{3, 3, PF::U16, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U16, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat48bppYCC444)) {
-        return F{3, 3, PF::U16, false, false, false, false, false, CM::YCC};
+        return F{3, 3, PF::U16, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat16bpp48bppYCC444FixedPoint)) {
-        return F{3, 3, PF::U16, false, true, false, false, false, CM::YCC};
+        return F{3, 3, PF::U16, false, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat20bppYCC420Alpha)) {
-        return F{3, 4, PF::U8, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U8, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat24bppYCC422Alpha)) {
-        return F{3, 4, PF::U8, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U8, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat30bppYCC422Alpha)) {
-        return F{3, 4, PF::U16, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U16, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat48bppYCC422Alpha)) {
-        return F{3, 4, PF::U16, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U16, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat32bppYCC444Alpha)) {
-        return F{3, 4, PF::U8, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U8, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat40bppYCC444Alpha)) {
-        return F{3, 4, PF::U16, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U16, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat64bppYCC444Alpha)) {
-        return F{3, 4, PF::U16, false, false, true, false, false, CM::YCC};
+        return F{3, 4, PF::U16, true, false, CM::YCC};
     } else if (eq(GUID_PKPixelFormat64bppYCC444AlphaFixedPoint)) {
-        return F{3, 4, PF::U16, false, true, true, false, false, CM::YCC};
+        return F{3, 4, PF::U16, true, false, CM::YCC};
     }
 
     return nullopt; // unknown GUID
 }
-
-struct IStreamWmpStream {
-    WMPStream stream;
-    istream* is = nullptr;
-    streampos initialPos = 0;
-};
-
-ERR iStreamRead(WMPStream* pStream, void* pv, size_t cb) {
-    auto* self = reinterpret_cast<IStreamWmpStream*>(pStream);
-    size_t totalRead = 0;
-    while (self->is && totalRead < cb) {
-        self->is->read(reinterpret_cast<char*>(pv) + totalRead, cb - totalRead);
-        const auto got = self->is->gcount();
-        if (got <= 0) {
-            break;
-        }
-
-        totalRead += static_cast<size_t>(got);
-    }
-
-    return totalRead == cb ? WMP_errSuccess : WMP_errFileIO;
-}
-
-ERR iStreamWrite(WMPStream*, const void*, size_t) { return WMP_errFileIO; } // decode only
-
-ERR iStreamSetPos(WMPStream* pStream, size_t offPos) {
-    auto* self = reinterpret_cast<IStreamWmpStream*>(pStream);
-    self->is->clear();
-    self->is->seekg(self->initialPos + static_cast<streamoff>(offPos), ios::beg);
-    return self->is->good() ? WMP_errSuccess : WMP_errFileIO;
-}
-
-ERR iStreamGetPos(WMPStream* pStream, size_t* poffPos) {
-    auto* self = reinterpret_cast<IStreamWmpStream*>(pStream);
-    const auto pos = self->is->tellg() - self->initialPos;
-    if (pos < 0) {
-        return WMP_errFileIO;
-    }
-
-    *poffPos = static_cast<size_t>(pos);
-    return WMP_errSuccess;
-}
-
-Bool iStreamEos(WMPStream* pStream) {
-    auto* self = reinterpret_cast<IStreamWmpStream*>(pStream);
-    return self->is->eof() ? TRUE : FALSE;
-}
-
-ERR iStreamClose(WMPStream**) { return WMP_errSuccess; } // we own the istream's lifetime, nothing to do
 
 } // namespace
 
@@ -363,14 +315,12 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
         throw FormatNotSupported{"File is not a JPEG XR image."};
     }
 
-    // --- Set up codec factory and decoder ---
-    PKCodecFactory* codecFactory = nullptr;
-    JXR_CHECK(PKCreateCodecFactory(&codecFactory, WMP_SDK_VERSION));
-    const auto factoryGuard = ScopeGuard{[&]() {
-        if (codecFactory) {
-            codecFactory->Release(&codecFactory);
-        }
-    }};
+    iStream.seekg(0, ios::end);
+    const size_t fileSize = iStream.tellg() - initialPos;
+    iStream.seekg(initialPos, ios::beg);
+
+    HeapArray<uint8_t> buffer(fileSize);
+    iStream.read(reinterpret_cast<char*>(buffer.data()), fileSize);
 
     PKImageDecode* decoder = nullptr;
     const auto decoderGuard = ScopeGuard{[&]() {
@@ -379,19 +329,27 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
         }
     }};
 
-    IStreamWmpStream wmpStream{};
-    wmpStream.is = &iStream;
-    wmpStream.initialPos = initialPos;
-    wmpStream.stream.state.pvObj = nullptr;
-    wmpStream.stream.Read = iStreamRead;
-    wmpStream.stream.Write = iStreamWrite;
-    wmpStream.stream.SetPos = iStreamSetPos;
-    wmpStream.stream.GetPos = iStreamGetPos;
-    wmpStream.stream.EOS = iStreamEos;
-    wmpStream.stream.Close = iStreamClose;
+    PKCodecFactory* codecFactory = nullptr;
+    JXR_CHECK(PKCreateCodecFactory(&codecFactory, WMP_SDK_VERSION));
+    const auto codecFactoryGuard = ScopeGuard{[&]() {
+        if (codecFactory) {
+            codecFactory->Release(&codecFactory);
+        }
+    }};
 
     JXR_CHECK(codecFactory->CreateCodec(&IID_PKImageWmpDecode, (void**)&decoder));
-    JXR_CHECK(decoder->Initialize(decoder, &wmpStream.stream));
+
+    PKFactory* factory = nullptr;
+    JXR_CHECK(PKCreateFactory(&factory, WMP_SDK_VERSION));
+    const auto factoryGuard = ScopeGuard{[&]() {
+        if (factory) {
+            factory->Release(&factory);
+        }
+    }};
+
+    WMPStream* stream = nullptr;
+    JXR_CHECK(factory->CreateStreamFromMemory(&stream, buffer.data(), static_cast<uint32_t>(buffer.size())));
+    JXR_CHECK(decoder->Initialize(decoder, stream));
 
     int32_t width = 0, height = 0;
     JXR_CHECK(decoder->GetSize(decoder, &width, &height));
@@ -419,16 +377,46 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
     const auto numChannels = hasAlpha ? numColorChannels + 1 : numColorChannels;
     const auto numPixels = posProd(size);
 
+    optional<uint16_t> colorSpace = nullopt;
+
+    struct PtmColorInfo {
+        uint8_t primaries;
+        uint8_t transfer;
+        uint8_t matrixCoeffs;
+        uint8_t fullRangeFlag;
+    };
+    optional<PtmColorInfo> ptmColorInfo = nullopt;
+
+    try {
+        Ifd ifd{buffer, 0, true};
+        colorSpace = ifd.tryGet<uint16_t>(0xa001);
+        if (const auto ptmData = ifd.dataSpan(0xbc05); ptmData.size() >= sizeof(PtmColorInfo)) {
+            ptmColorInfo = PtmColorInfo{};
+            memcpy(&ptmColorInfo.value(), ptmData.data(), sizeof(PtmColorInfo));
+        }
+    } catch (const invalid_argument& e) { tlog::warning("Failed to read JXR IFD metadata: {}", e.what()); }
+
     tlog::debug(
-        "JXR source: numChannels={} pixelFormat={} color={} float={} fixed={} bgr={} alpha={}",
+        "JXR: numChannels={} pixelFormat={} color={} bgr={} alpha={} cs={}",
         numChannels,
         toString(srcDesc->pixelFormat),
         toString(srcDesc->colorModel),
-        srcDesc->isFloat,
-        srcDesc->isFixedPoint,
         srcDesc->bgrOrder,
-        hasAlpha
+        hasAlpha,
+        colorSpace ? to_string(colorSpace.value()) : "0"
     );
+
+    if (ptmColorInfo) {
+        tlog::debug(
+            "JXR PTM color info: primaries={} transfer={} matrixCoeffs={} fullRangeFlag={}",
+            (int)ptmColorInfo->primaries,
+            (int)ptmColorInfo->transfer,
+            (int)ptmColorInfo->matrixCoeffs,
+            (int)ptmColorInfo->fullRangeFlag
+        );
+
+        tlog::warning("JXR PTM color info is present, but tev does not support it. The image may be displayed incorrectly.");
+    }
 
     if (hasAlpha) {
         decoder->WMP.wmiSCP.uAlphaMode = 2; // Decode alpha if present
@@ -441,41 +429,101 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
     vector<ImageData> result(1);
     auto& resultData = result.front();
 
-    vector<uint8_t> iccProfile;
+    HeapArray<uint8_t> iccProfile;
     if (uint32_t iccSize = 0; !Failed(decoder->GetColorContext(decoder, nullptr, &iccSize)) && iccSize > 0) {
         iccProfile.resize(iccSize);
         if (Failed(decoder->GetColorContext(decoder, iccProfile.data(), &iccSize))) {
-            iccProfile.clear();
+            iccProfile = {};
         } else {
             tlog::debug("Found ICC color profile of size {} bytes", iccSize);
         }
     }
 
     if (uint32_t exifSize = 0; !Failed(PKImageDecode_GetEXIFMetadata_WMP(decoder, nullptr, &exifSize)) && exifSize > 0) {
-        HeapArray<uint8_t> exifMetadata(exifSize);
-        if (!Failed(PKImageDecode_GetEXIFMetadata_WMP(decoder, exifMetadata.data(), &exifSize))) {
+        HeapArray<uint8_t> exifData(exifSize);
+        if (!Failed(PKImageDecode_GetEXIFMetadata_WMP(decoder, exifData.data(), &exifSize))) {
             tlog::debug("Found EXIF data of size {} bytes", exifSize);
 
             try {
-                const auto exif = Exif{exifMetadata};
+                const auto exif = Exif{exifData};
                 resultData.attributes.emplace_back(exif.toAttributes());
             } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
         }
     }
 
     if (uint32_t xmpSize = 0; !Failed(PKImageDecode_GetXMPMetadata_WMP(decoder, nullptr, &xmpSize)) && xmpSize > 0) {
-        HeapArray<uint8_t> xmpMetadata(xmpSize);
-        if (!Failed(PKImageDecode_GetXMPMetadata_WMP(decoder, xmpMetadata.data(), &xmpSize))) {
+        HeapArray<uint8_t> xmpData(xmpSize);
+        if (!Failed(PKImageDecode_GetXMPMetadata_WMP(decoder, xmpData.data(), &xmpSize))) {
             tlog::debug("Found XMP data of size {} bytes", xmpSize);
 
             try {
-                const auto xmp = Xmp{
-                    {reinterpret_cast<const char*>(xmpMetadata.data()), xmpSize}
-                };
+                const string_view xmpDataView = string_view{(const char*)xmpData.data(), xmpData.size()};
+                const auto xmp = Xmp{xmpDataView};
 
                 resultData.attributes.emplace_back(xmp.attributes());
             } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
         }
+    }
+
+    if (DESCRIPTIVEMETADATA descMeta; !Failed(decoder->GetDescriptiveMetadata(decoder, &descMeta))) {
+        auto& meta = resultData.attributes.emplace_back();
+        meta.name = "JPEG XR";
+        auto& global = meta.children.emplace_back();
+        global.name = "Global";
+
+        const auto addField = [&](string_view name, const DPKPROPVARIANT& field) {
+            auto& child = global.children.emplace_back();
+            child.name = name;
+            switch (field.vt) {
+                case DPKVT_UI1:
+                    child.value = to_string(field.VT.bVal);
+                    child.type = "u8";
+                    break;
+                case DPKVT_UI2:
+                    child.value = to_string(field.VT.uiVal);
+                    child.type = "u16";
+                    break;
+                case DPKVT_UI4:
+                    child.value = to_string(field.VT.ulVal);
+                    child.type = "u32";
+                    break;
+                case DPKVT_LPSTR:
+                    child.value = string{field.VT.pszVal};
+                    child.type = "UTF-8";
+                    break;
+                case DPKVT_LPWSTR:
+                    child.value = utf16to8(u16string_view{(char16_t*)field.VT.pwszVal});
+                    child.type = "UTF-16";
+                    break;
+                case DPKVT_EMPTY:
+                    child.value = string{"<empty>"};
+                    child.type = "<empty>";
+                    break;
+                case DPKVT_BYREF:
+                    child.value = string{"<byref>"};
+                    child.type = "u8*";
+                    break;
+                default:
+                    child.value = string{"<unknown>"};
+                    child.type = "<unknown>";
+                    break;
+            }
+        };
+
+        addField("Version", descMeta.pvarImageDescription);
+        addField("Camera Make", descMeta.pvarCameraMake);
+        addField("Camera Model", descMeta.pvarCameraModel);
+        addField("Software", descMeta.pvarSoftware);
+        addField("Date Time", descMeta.pvarDateTime);
+        addField("Artist", descMeta.pvarArtist);
+        addField("Copyright", descMeta.pvarCopyright);
+        addField("Rating Stars", descMeta.pvarRatingStars);
+        addField("Rating Value", descMeta.pvarRatingValue);
+        addField("Caption", descMeta.pvarCaption);
+        addField("Document Name", descMeta.pvarDocumentName);
+        addField("Page Name", descMeta.pvarPageName);
+        addField("Page Number", descMeta.pvarPageNumber);
+        addField("Host Computer", descMeta.pvarHostComputer);
     }
 
     const auto numDecodedChannels = outDesc.numChannels;
@@ -560,35 +608,37 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
         }
     }
 
-    if (!iccProfile.empty()) {
+    // Strictly speaking, the JXR spec only defines COLOR_SPACE values 1 (sRGB) and FFFF (unspecified), see page 158, but in practice some
+    // JXR files use 2084 to indicate Rec.2020 PQ transfer function / BT.2020 primaries.
+    if (outDesc.colorModel == EJxrColorModel::RGB && colorSpace == 2084) {
+        tlog::debug("Detected Rec.2020 PQ transfer function from JXR metadata");
+
+        co_await convertToFloat32();
+        co_await ThreadPool::global().parallelFor(
+            0uz,
+            numPixels,
+            numPixels * numColorChannels,
+            [&](size_t i) {
+                for (uint32_t c = 0; c < numColorChannels; ++c) {
+                    dstView[c, i] = ituth273::pqToLinear(dstView[c, i]);
+                }
+            },
+            priority
+        );
+
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::PQ;
+        resultData.nativeMetadata.chroma = bt2020Chroma();
+        resultData.toRec709 = convertColorspaceMatrix(*resultData.nativeMetadata.chroma, rec709Chroma(), resultData.renderingIntent);
+        resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(*resultData.nativeMetadata.transfer);
+
+        co_return result;
+    }
+
+    if (iccProfile) {
         // Prefer an embedded ICC profile when present, mirroring the PNG loader's iCCP path.
         try {
             const auto profile = ColorProfile::fromIcc({iccProfile.data(), iccProfile.size()});
             co_await convertToFloat32();
-
-            // HACK: 10-bit JXR XBOX screenshots are encoded in Rec.2020 PQ (ST.2084) but the ICC profile renders SDR while carrying the
-            // color space info in its description.
-            const auto desc = profile.description();
-            if (desc.find("Rec2020 ST.2084") != string::npos || desc.find("Rec.2020 ST.2084") != string::npos) {
-                tlog::debug("Detected Rec.2020 PQ ICC profile name; manually converting.");
-                co_await ThreadPool::global().parallelFor(
-                    0uz,
-                    numPixels,
-                    numPixels * numColorChannels,
-                    [&](size_t i) {
-                        for (uint32_t c = 0; c < numColorChannels; ++c) {
-                            dstView[c, i] = ituth273::pqToLinear(dstView[c, i]);
-                        }
-                    },
-                    priority
-                );
-
-                resultData.nativeMetadata.transfer = ituth273::ETransfer::PQ;
-                resultData.nativeMetadata.chroma = bt2020Chroma();
-                resultData.toRec709 = convertColorspaceMatrix(*resultData.nativeMetadata.chroma, rec709Chroma(), resultData.renderingIntent);
-                resultData.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(*resultData.nativeMetadata.transfer);
-                co_return result;
-            }
 
             co_await toLinearSrgbPremul(profile, alphaKind, dstView, rgbaOutView, nullopt, priority);
             resultData.hasPremultipliedAlpha = true;
@@ -600,6 +650,7 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
     if (outDesc.colorModel == EJxrColorModel::CMYK) {
         TEV_ASSERT(numColorChannels == 4, "CMYK must have 4 color channels");
 
+        // TODO: use SWOP2006_Coated3v2.icc as fallback per JXR spec page 181/182. Need to embed it in tev first, but 2.6 MB...
         co_await convertToFloat32();
         co_await ThreadPool::global().parallelFor(
             0uz,
@@ -618,7 +669,12 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
             priority
         );
     } else if (outDesc.colorModel == EJxrColorModel::NChannel) {
-        co_await convertToFloat32.operator()<false, true>();
+        if (colorSpace == 1) {
+            tlog::info("Detected sRGB transfer function from JXR metadata");
+            co_await convertToFloat32.operator()<true, true>();
+        } else {
+            co_await convertToFloat32.operator()<false, true>();
+        }
 
         const auto minNumChannels = std::min(numColorChannels, 3uz);
         co_await ThreadPool::global().parallelFor(
@@ -635,12 +691,12 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
 
         resultData.hasPremultipliedAlpha = true;
     } else {
+        // Regardless of COLOR_SPACE value, RGB unsigned should be treated as sRGB per JXR spec page 181
         co_await convertToFloat32.operator()<true, true>();
         resultData.hasPremultipliedAlpha = true;
 
-        resultData.nativeMetadata.transfer = outDesc.pixelFormat == EPixelFormat::F16 || outDesc.pixelFormat == EPixelFormat::F32 ?
-            ituth273::ETransfer::Linear :
-            ituth273::ETransfer::SRGB;
+        const bool isScRgb = isFloat(outDesc.pixelFormat) || isSignedInt(outDesc.pixelFormat);
+        resultData.nativeMetadata.transfer = isScRgb ? ituth273::ETransfer::Linear : ituth273::ETransfer::SRGB;
         resultData.nativeMetadata.chroma = rec709Chroma();
     }
 
