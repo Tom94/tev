@@ -61,11 +61,11 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
     const uint32_t tcount = read<uint16_t>(ptr + ofs);
     ofs += 2;
 
-    if (ofs + tcount * 12 + 4 > data.size()) {
+    if (ofs + (size_t)tcount * 12 + 4 > data.size()) {
         throw invalid_argument{fmt::format("IFD: too short for {} tags.", tcount)};
     }
 
-    tlog::debug("Decoding IFD:");
+    tlog::debug("Decoding IFD with {} elements:", tcount);
     for (uint32_t i = 0; i < tcount; i++) {
         if (ofs + 12 > data.size()) {
             throw invalid_argument{"IFD: overflow"};
@@ -88,12 +88,12 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
             entryOffset = ofs + 8;
         }
 
-        const auto d = data.subspan(entryOffset, entry.size());
-        entry.data.insert(entry.data.end(), d.begin(), d.end());
-
         if (entryOffset + entry.size() > data.size()) {
             throw invalid_argument{fmt::format("IFD: offset overflow {}+{} vs. {}", entryOffset, entry.size(), data.size())};
         }
+
+        const auto d = data.subspan(entryOffset, entry.size());
+        entry.data.insert(entry.data.end(), d.begin(), d.end());
 
         ofs += 12;
         mTags[entry.tag] = entry;
