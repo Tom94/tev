@@ -120,6 +120,16 @@ public:
         return entry.data.data();
     }
 
+    std::span<const uint8_t> dataSpan(uint16_t tag) const {
+        const auto it = mTags.find(tag);
+        if (it == mTags.end()) {
+            return {};
+        }
+
+        const auto& entry = it->second;
+        return entry.data;
+    }
+
     template <trivially_copyable T> std::optional<T> tryGet(uint16_t tag) const {
         const auto it = mTags.find(tag);
         if (it == mTags.end()) {
@@ -156,12 +166,14 @@ public:
     }
 
     bool reverseEndianess() const { return mReverseEndianess; }
+    std::array<uint8_t, 2> tiffMagic() const { return mTiffMagic; }
     std::optional<uint32_t> nextIfdOffset() const { return mNextIfdOffset; }
 
 private:
     std::unordered_map<uint16_t, TiffTag> mTags;
 
     bool mReverseEndianess = false;
+    std::array<uint8_t, 2> mTiffMagic;
     std::optional<uint32_t> mNextIfdOffset;
 };
 

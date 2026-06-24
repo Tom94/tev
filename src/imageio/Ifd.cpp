@@ -33,6 +33,10 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
     if (reverseEndianess.has_value()) {
         mReverseEndianess = *reverseEndianess;
     } else {
+        if (ofs + 2 > data.size()) {
+            throw invalid_argument{"IFD: too short for byte order."};
+        }
+
         if ((data[ofs] == 'M') && (data[ofs + 1] == 'M')) {
             mReverseEndianess = endian::little == endian::native;
         } else if ((data[ofs] == 'I') && (data[ofs + 1] == 'I')) {
@@ -45,17 +49,22 @@ Ifd::Ifd(span<const uint8_t> data, size_t initialOffset, bool tiffHeader, option
     }
 
     if (tiffHeader) {
-        const uint16_t magic = read<uint16_t>(ptr + ofs);
-        ofs += 2;
-
-        if (magic != 42) {
-            throw invalid_argument{"IFD: invalid TIFF magic."};
+        if (ofs + 6 > data.size()) {
+            throw invalid_argument{"IFD: too short for TIFF header."};
         }
 
-        const uint32_t ifdOffset = read<uint32_t>(ptr + ofs);
+        mTiffMagic[0] = data[ofs + 0];
+        mTiffMagic[1] = data[ofs + 1];
+        ofs += 2;
+        tlog::debug("IFD: magic={}", mTiffMagic);
 
+        const uint32_t ifdOffset = read<uint32_t>(ptr + ofs);
         tlog::debug("IFD: ifdOffset={}", ifdOffset);
         ofs = initialOffset + ifdOffset;
+    }
+
+    if (ofs + 2 > data.size()) {
+        throw invalid_argument{"IFD: too short for tag count."};
     }
 
     const uint32_t tcount = read<uint16_t>(ptr + ofs);
