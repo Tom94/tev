@@ -178,6 +178,7 @@ ImageViewer::ImageViewer(
             mExposureLabel = new Label{panel, "", "sans-bold", 15};
 
             mExposureSlider = new Slider{panel};
+            mExposureSlider->set_clamp(false);
             mExposureSlider->set_range({-5.0f, 5.0f});
             mExposureSlider->set_callback([this](float value) { setExposure(value); });
             setExposure(0);
@@ -196,6 +197,7 @@ ImageViewer::ImageViewer(
             mOffsetLabel = new Label{panel, "", "sans-bold", 15};
 
             mOffsetSlider = new Slider{panel};
+            mOffsetSlider->set_clamp(false);
             mOffsetSlider->set_range({-1.0f, 1.0f});
             mOffsetSlider->set_callback([this](float value) { setOffset(value); });
             mOffsetSlider->set_tooltip(
@@ -208,6 +210,7 @@ ImageViewer::ImageViewer(
             mGammaLabel = new Label{panel, "", "sans-bold", 15};
 
             mGammaSlider = new Slider{panel};
+            mGammaSlider->set_clamp(false);
             mGammaSlider->set_range({0.01f, 5.0f});
             mGammaSlider->set_callback([this](float value) { setGamma(value); });
             mGammaSlider->set_tooltip(
