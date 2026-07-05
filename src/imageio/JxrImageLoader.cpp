@@ -388,7 +388,7 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
     optional<PtmColorInfo> ptmColorInfo = nullopt;
 
     try {
-        Ifd ifd{buffer, 0, true};
+        const Ifd ifd{buffer, 0, true};
         colorSpace = ifd.tryGet<uint16_t>(0xa001);
         if (const auto ptmData = ifd.dataSpan(0xbc05); ptmData.size() >= sizeof(PtmColorInfo)) {
             ptmColorInfo = PtmColorInfo{};
