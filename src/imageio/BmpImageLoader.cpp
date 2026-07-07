@@ -785,7 +785,7 @@ done:
 }
 
 Task<vector<ImageData>> BmpImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
+    istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     const bool reverseEndianness = endian::native == endian::big;
 
@@ -888,7 +888,7 @@ Task<vector<ImageData>> BmpImageLoader::load(
 }
 
 Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
-    istream& iStream,
+    istringstream& iStream,
     const fs::path& path,
     string_view channelSelector,
     const ImageLoaderSettings& settings,
@@ -1356,7 +1356,9 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
         iStream.read((char*)palette.data(), palette.size());
         if (!iStream) {
-            throw ImageLoadError{fmt::format("Failed to read BMP palette with {} entries and entry size {}", numPaletteEntries, paletteEntrySize)};
+            throw ImageLoadError{
+                fmt::format("Failed to read BMP palette with {} entries and entry size {}", numPaletteEntries, paletteEntrySize)
+            };
         }
 
         if (palette.size() == 0) {
@@ -1421,18 +1423,26 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
         )};
     }
 
-    HeapArray<uint8_t> pixelData(bytesToRead);
-    iStream.read((char*)pixelData.data(), pixelData.size());
-    if (!iStream) {
-        throw ImageLoadError{fmt::format("Failed to read BMP pixel data of size {}", pixelData.size())};
+    auto pixelData = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (pixelData.size() < bytesToRead) {
+        throw ImageLoadError{fmt::format("Failed to read BMP pixel data of size {}", bytesToRead)};
     }
 
+    // Required by IcoImageLoader if an AND-mask is stored right after the BMP pixel data. Ico files don't store metadata about where the
+    // BMP data ends and where the AND-mask begins, so has to rely on the BMP loader advancing iStream.
+    iStream.seekg(bytesToRead, ios_base::cur);
+
+    HeapArray<uint8_t> pixelDataCopy;
     switch (compression) {
-        case ECompression::Rle8: pixelData = decode_rle8(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
-        case ECompression::Rle4: pixelData = decode_rle4(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
-        case ECompression::Rle24: pixelData = decode_rle24(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
-        case ECompression::Huffman: pixelData = decode_huffman1d(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
+        case ECompression::Rle8: pixelDataCopy = decode_rle8(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
+        case ECompression::Rle4: pixelDataCopy = decode_rle4(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
+        case ECompression::Rle24: pixelDataCopy = decode_rle24(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
+        case ECompression::Huffman: pixelDataCopy = decode_huffman1d(pixelData.data(), pixelData.size(), dib.width, dib.height); break;
         default: break;
+    }
+
+    if (pixelDataCopy) {
+        pixelData = pixelDataCopy;
     }
 
     if (pixelData.size() < pixelDataSize) {
@@ -1479,7 +1489,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
 
                 const size_t pixelBit = (size_t)x * dib.bitsPerPixel;
                 const size_t pixelByte = pixelBit / 8;
-                uint8_t* pixelPtr = pixelData.data() + rowStart + pixelByte;
+                const uint8_t* pixelPtr = pixelData.data() + rowStart + pixelByte;
 
                 if (hasPalette) {
                     const size_t byte = *pixelPtr;

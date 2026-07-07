@@ -1473,7 +1473,7 @@ Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i siz
 }
 
 Task<ImageLoadResult> tryLoadImage(
-    int taskPriority, fs::path path, istream& iStream, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
+    int taskPriority, fs::path path, istringstream& iStream, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 ) {
     // No need to keep loading images if tev is already shutting down again.
     if (shuttingDown()) {
@@ -1550,7 +1550,11 @@ Task<ImageLoadResult> tryLoadImage(
 
         vector<shared_ptr<Image>> images = co_await awaitAll(imageTasks) | toVector;
         if (images.empty()) {
-            throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
+            if (channelSelector.empty()) {
+                throw ImageLoadError{fmt::format("No parts/channels found in image {}.", path)};
+            } else {
+                throw ImageLoadError{fmt::format("No parts/channels match channel selector :{}", channelSelector)};
+            }
         }
 
         const auto end = chrono::system_clock::now();
@@ -1568,7 +1572,7 @@ Task<ImageLoadResult> tryLoadImage(
 }
 
 Task<ImageLoadResult>
-    tryLoadImage(fs::path path, istream& iStream, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {
+    tryLoadImage(fs::path path, istringstream& iStream, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {
     co_return co_await tryLoadImage(-Image::drawId(), path, iStream, channelSelector, settings, groupChannels);
 }
 
@@ -1581,8 +1585,21 @@ Task<ImageLoadResult>
         // sure.
     }
 
-    ifstream fileStream{path, ios_base::binary};
-    co_return co_await tryLoadImage(taskPriority, path, fileStream, channelSelector, settings, groupChannels);
+    istringstream iStream;
+
+    {
+        co_await ThreadPool::blockingIo().enqueueCoroutine(taskPriority);
+
+        if (!shuttingDown()) {
+            ostringstream oStream;
+            ifstream fileStream{path, ios_base::binary};
+            oStream << fileStream.rdbuf();
+            iStream = istringstream{std::move(oStream).str()}; // C++20 rvalue .str() overload to avoid a copy of the string
+        }
+    }
+
+    co_await ThreadPool::global().enqueueCoroutine(taskPriority);
+    co_return co_await tryLoadImage(taskPriority, path, iStream, channelSelector, settings, groupChannels);
 }
 
 Task<ImageLoadResult> tryLoadImage(fs::path path, string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels) {

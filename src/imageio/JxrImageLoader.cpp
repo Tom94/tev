@@ -300,27 +300,16 @@ optional<JxrFormat> describeFormat(const PKPixelFormatGUID& guid) {
 
 } // namespace
 
-Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
-    const auto initialPos = iStream.tellg();
+Task<vector<ImageData>>
+    JxrImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+    const auto buffer = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
 
     // JXR/HD Photo files start with the TIFF-like magic "II" followed by 0x00BC (little endian) or the big-endian variant. Sniff the first
     // bytes and bail early if this clearly isn't a JXR so other loaders get a chance.
-    char magic[4] = {0};
-    iStream.read(magic, sizeof(magic));
-    iStream.clear();
-    iStream.seekg(initialPos, ios::beg);
-
-    const bool isJxrLE = magic[0] == 'I' && magic[1] == 'I' && (uint8_t)magic[2] == 0xBC;
+    const bool isJxrLE = buffer.size() >= 4 && buffer[0] == 'I' && buffer[1] == 'I' && buffer[2] == 0xBC;
     if (!isJxrLE) {
         throw FormatNotSupported{"File is not a JPEG XR image."};
     }
-
-    iStream.seekg(0, ios::end);
-    const size_t fileSize = iStream.tellg() - initialPos;
-    iStream.seekg(initialPos, ios::beg);
-
-    HeapArray<uint8_t> buffer(fileSize);
-    iStream.read(reinterpret_cast<char*>(buffer.data()), fileSize);
 
     PKImageDecode* decoder = nullptr;
     const auto decoderGuard = ScopeGuard{[&]() {
@@ -348,7 +337,7 @@ Task<vector<ImageData>> JxrImageLoader::load(istream& iStream, const fs::path&, 
     }};
 
     WMPStream* stream = nullptr;
-    JXR_CHECK(factory->CreateStreamFromMemory(&stream, buffer.data(), static_cast<uint32_t>(buffer.size())));
+    JXR_CHECK(factory->CreateStreamFromMemory(&stream, const_cast<uint8_t*>(buffer.data()), static_cast<uint32_t>(buffer.size())));
     JXR_CHECK(decoder->Initialize(decoder, stream));
 
     int32_t width = 0, height = 0;

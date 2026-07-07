@@ -152,23 +152,11 @@ static size_t getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
-    iStream.seekg(0, iStream.end);
-    const size_t dataSize = iStream.tellg();
-    if (dataSize < 4) {
-        throw FormatNotSupported{"File is too small."};
-    }
-
-    iStream.clear();
-    iStream.seekg(0);
-
-    HeapArray<char> data{dataSize};
-    iStream.read(data.data(), 4);
-    if (data[0] != 'D' || data[1] != 'D' || data[2] != 'S' || data[3] != ' ') {
+Task<vector<ImageData>> DdsImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+    const auto data = toSpan<const char>(iStream).subspan(iStream.tellg());
+    if (data.size() < 4 || data[0] != 'D' || data[1] != 'D' || data[2] != 'S' || data[3] != ' ') {
         throw FormatNotSupported{"File is not a DDS file."};
     }
-
-    iStream.read(data.data() + 4, dataSize - 4);
 
     // COM must be initialized on the thread executing the following DirectX calls. Thus: when editing this file *make sure* that no
     // co_await calls are made before the last DirectX call! Note that it is not a problem that CoInitializeEx will potentially get called
@@ -188,7 +176,7 @@ Task<vector<ImageData>> DdsImageLoader::load(istream& iStream, const fs::path&, 
 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
-    if (DirectX::LoadFromDDSMemory(data.data(), dataSize, DirectX::DDS_FLAGS_NONE, &metadata, scratchImage) != S_OK) {
+    if (DirectX::LoadFromDDSMemory(data.data(), data.size(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage) != S_OK) {
         throw ImageLoadError{"Failed to read DDS file."};
     }
 

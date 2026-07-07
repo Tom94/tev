@@ -33,83 +33,6 @@ using namespace std;
 
 namespace tev {
 
-class LibRawDataStream final : public LibRaw_abstract_datastream {
-public:
-    LibRawDataStream(istream& stream, const fs::path& path) : mStream{stream} {
-        const auto pathStr = toString(path);
-        strncpy(mPath, pathStr.c_str(), sizeof(mPath) - 1);
-
-#ifdef LIBRAW_WIN32_UNICODEPATHS
-        const auto wPathStr = path.wstring();
-        wcsncpy(mWPath, wPathStr.c_str(), sizeof(mWPath) / sizeof(mWPath[0]) - 1);
-#endif
-    }
-
-    ~LibRawDataStream() override = default;
-
-    int valid() override { return mStream.good(); }
-
-    int read(void* ptr, size_t size, size_t nmemb) override {
-        mStream.read((char*)ptr, size * nmemb);
-        return mStream.gcount() / size;
-    }
-
-    int seek(INT64 o, int whence) override {
-        ios_base::seekdir dir;
-        switch (whence) {
-            case SEEK_SET: dir = ios_base::beg; break;
-            case SEEK_CUR: dir = ios_base::cur; break;
-            case SEEK_END: dir = ios_base::end; break;
-            default: return -1;
-        }
-        mStream.clear(); // Clear any eof flags
-        mStream.seekg(o, dir);
-        return mStream.good() ? 0 : -1;
-    }
-
-    INT64 tell() override { return mStream.tellg(); }
-
-    INT64 size() override {
-        auto currentPos = mStream.tellg();
-        mStream.seekg(0, ios_base::end);
-        auto size = mStream.tellg();
-        mStream.seekg(currentPos, ios_base::beg);
-        return size;
-    }
-
-    int get_char() override { return mStream.get(); }
-
-    char* gets(char* str, int sz) override {
-        mStream.getline(str, sz);
-        return mStream.good() ? str : nullptr;
-    }
-
-    int scanf_one(const char* fmt, void* val) override {
-        // Not implemented
-        return -1;
-    }
-
-    int eof() override { return mStream.eof(); }
-
-    int jpeg_src(void* /*jpegdata*/) override {
-        // Not implemented
-        return -1;
-    }
-
-    const char* fname() override { return mPath; };
-#ifdef LIBRAW_WIN32_UNICODEPATHS
-    const wchar_t* wfname() override { return mWPath; };
-#endif
-
-private:
-    istream& mStream;
-
-    char mPath[1024] = {};
-#ifdef LIBRAW_WIN32_UNICODEPATHS
-    wchar_t mWPath[1024] = {};
-#endif
-};
-
 Vector2i flip_index(Vector2i idx, const Vector2i size, const int flip) {
     if (flip & 4) {
         swap(idx.x(), idx.y());
@@ -140,7 +63,7 @@ Box2i maskToBox(const int mask[4]) {
     };
 }
 
-Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>> RawImageLoader::load(istringstream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
     if (toLower(toString(path.extension())) == ".dng") {
         throw FormatNotSupported{"DNG files will be handled by TiffImageLoader."};
     }
@@ -216,8 +139,8 @@ Task<vector<ImageData>> RawImageLoader::load(istream& iStream, const fs::path& p
     iProcessor.imgdata.params.use_camera_matrix = true;
     iProcessor.imgdata.params.use_camera_wb = true;
 
-    auto librawStream = LibRawDataStream{iStream, path};
-    if (const int error = iProcessor.open_datastream(&librawStream); error != LIBRAW_SUCCESS) {
+    const auto buffer = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (const int error = iProcessor.open_buffer(buffer.data(), buffer.size()); error != LIBRAW_SUCCESS) {
         throw FormatNotSupported{fmt::format("Could not open raw image: {}", libraw_strerror(error))};
     }
 

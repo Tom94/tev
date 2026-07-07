@@ -41,21 +41,19 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>> HeifImageLoader::load(
-    istream& iStream, const fs::path&, string_view channelSelector, const ImageLoaderSettings& settings, int priority
+    istringstream& iStream, const fs::path&, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     // libheif's spec says it needs the first 12 bytes to determine whether the image can be read.
-    uint8_t header[12];
-    iStream.read((char*)header, 12);
-
-    if (!iStream || iStream.gcount() != 12) {
+    const auto data = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (data.size() < 12) {
         throw FormatNotSupported{"File is too short to be an HEIF image."};
     }
 
-    if (header[4] != 'f' || header[5] != 't' || header[6] != 'y' || header[7] != 'p') {
+    if (data[4] != 'f' || data[5] != 't' || data[6] != 'y' || data[7] != 'p') {
         throw FormatNotSupported{"Invalid HEIF file: missing 'ftyp' box."};
     }
 
-    const heif_brand2 brand = heif_read_main_brand(header, 12);
+    const heif_brand2 brand = heif_read_main_brand(data.data(), 12);
 
     const unordered_set<heif_brand2> supportedFormats = {
         // HEIC
@@ -92,43 +90,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
     if (!supportedFormats.contains(brand)) {
         throw FormatNotSupported{fmt::format("HEIF format {:08X} is not supported.", brand)};
     }
-
-    iStream.seekg(0, ios_base::end);
-    const int64_t fileSize = iStream.tellg();
-    iStream.clear();
-    iStream.seekg(0);
-
-    struct ReaderContext {
-        istream& stream;
-        int64_t size;
-    } readerContext = {iStream, fileSize};
-
-    static constexpr heif_reader reader = {
-        .reader_api_version = 1,
-        .get_position = [](void* context) { return (int64_t)static_cast<ReaderContext*>(context)->stream.tellg(); },
-        .read =
-            [](void* data, size_t size, void* context) {
-                auto& stream = static_cast<ReaderContext*>(context)->stream;
-                stream.read((char*)data, size);
-                return stream.good() ? 0 : -1;
-            },
-        .seek =
-            [](int64_t pos, void* context) {
-                auto& stream = static_cast<ReaderContext*>(context)->stream;
-                stream.seekg(pos);
-                return stream.good() ? 0 : -1;
-            },
-        .wait_for_file_size =
-            [](int64_t target_size, void* context) {
-                return static_cast<ReaderContext*>(context)->size < target_size ? heif_reader_grow_status_size_beyond_eof :
-                                                                                  heif_reader_grow_status_size_reached;
-            },
-        // Not used by API version 1
-        .request_range = {},
-        .preload_range_hint = {},
-        .release_file_range = {},
-        .release_error_msg = {},
-    };
 
     static constexpr auto getIccProfileFromImgAndHandle = [](const heif_image* img,
                                                              const heif_image_handle* handle) -> optional<HeapArray<uint8_t>> {
@@ -231,7 +192,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
             };
         };
 
-        const auto [bytesPerRow, data] = getPlaneData();
+        const auto [bytesPerRow, planeData] = getPlaneData();
 
         if (heif_image_has_content_light_level(img)) {
             heif_content_light_level cll;
@@ -288,10 +249,10 @@ Task<vector<ImageData>> HeifImageLoader::load(
         if (bitDepth == 16) {
             // libheif returns 16-byte aligned uint8_t* data, regardless of the actual bit depth. The alignment and uint8_t type mean it's
             // well-defined behavior to reinterpret the data as uint16_t.
-            const auto uint16Data = span<const uint16_t>{reinterpret_cast<const uint16_t*>(data.data()), data.size() / sizeof(uint16_t)};
+            const auto uint16Data = span<const uint16_t>{reinterpret_cast<const uint16_t*>(planeData.data()), planeData.size() / sizeof(uint16_t)};
             co_await toFloat32(uint16Data, numChannels, outView, alphaKind, priority, channelScale, 0.0f, bytesPerRow / sizeof(uint16_t));
         } else {
-            co_await toFloat32(data, numChannels, outView, alphaKind, priority, channelScale, 0.0f, bytesPerRow / sizeof(uint8_t));
+            co_await toFloat32(planeData, numChannels, outView, alphaKind, priority, channelScale, 0.0f, bytesPerRow / sizeof(uint8_t));
         }
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
@@ -552,7 +513,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         throw ImageLoadError{"Failed to allocate libheif context."};
     }
 
-    if (const auto error = heif_context_read_from_reader(ctx.get(), &reader, &readerContext, nullptr); error.code != heif_error_Ok) {
+    if (const auto error = heif_context_read_from_memory_without_copy(ctx.get(), data.data(), data.size(), nullptr); error.code != heif_error_Ok) {
         throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 
@@ -683,9 +644,9 @@ Task<vector<ImageData>> HeifImageLoader::load(
                             co_return nullopt;
                         }
 
-                        auto data = co_await decodeImageHandle(auxImgHandle, isGainmap, auxLayerName, partName);
+                        auto auxImageData = co_await decodeImageHandle(auxImgHandle, isGainmap, auxLayerName, partName);
                         co_return AuxImageData{
-                            .data = std::move(data),
+                            .data = std::move(auxImageData),
                             .isIsoGainmap = isIsoGainmap,
                             .isAppleGainmap = isAppleGainmap,
                             .retain = retainAuxLayer,

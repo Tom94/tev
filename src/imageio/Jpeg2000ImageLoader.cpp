@@ -508,7 +508,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 }
 
 Task<vector<ImageData>> Jpeg2000ImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
+    istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     const size_t initialPos = iStream.tellg();
 
@@ -519,14 +519,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         throw FormatNotSupported{"File is not a JPEG 2000 image or codestream."};
     }
 
-    iStream.clear();
-    iStream.seekg(0, iStream.end);
-    const auto dataSize = (size_t)iStream.tellg() - initialPos;
-    iStream.seekg(initialPos, iStream.beg);
-
-    HeapArray<uint8_t> data(dataSize);
-    iStream.read((char*)data.data(), dataSize);
-
+    span<const uint8_t> data{(const uint8_t*)iStream.view().data() + initialPos, iStream.view().size() - initialPos};
     co_return co_await load(data, path, channelSelector, settings, priority, false);
 }
 

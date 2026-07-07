@@ -45,6 +45,11 @@ public:
         return pool;
     }
 
+    static ThreadPool& blockingIo() {
+        static ThreadPool pool;
+        return pool;
+    }
+
     template <std::invocable F> auto enqueueTask(F&& f, int priority, bool stopToken = false) {
         using return_type = std::invoke_result_t<F>;
 

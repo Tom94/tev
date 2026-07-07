@@ -217,7 +217,7 @@ public:
     virtual ~ImageLoader() {}
 
     virtual Task<std::vector<ImageData>> load(
-        std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
+        std::istringstream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
     ) const = 0;
 
     virtual std::string name() const = 0;

@@ -309,7 +309,6 @@ static void tiffWarningHandler(const char* module, const char* fmt, va_list args
     );
 }
 
-// Custom TIFF I/O functions for reading from an istream
 struct TiffData {
     const uint8_t* data;
     toff_t offset;
@@ -2703,19 +2702,16 @@ Task<ImageData> readTiffImage(
 }
 
 Task<vector<ImageData>>
-    TiffImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings& settings, int priority) const {
-    // This function tries to implement the most relevant parts of the TIFF 6.0 spec:
-    // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
-    char magic[4] = {0};
-    iStream.read(magic, sizeof(magic));
-    if (!iStream || (magic[0] != 'I' && magic[0] != 'M') || magic[1] != magic[0]) {
+    TiffImageLoader::load(istringstream& iStream, const fs::path& path, string_view, const ImageLoaderSettings& settings, int priority) const {
+    const auto buffer = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (buffer.size() < 4 || (buffer[0] != 'I' && buffer[0] != 'M') || buffer[1] != buffer[0]) {
         throw FormatNotSupported{"File is not a TIFF image."};
     }
 
-    const auto fileEndianness = magic[0] == 'I' ? endian::little : endian::big;
+    const auto fileEndianness = buffer[0] == 'I' ? endian::little : endian::big;
     const bool reverseEndian = fileEndianness != endian::native;
 
-    const uint16_t answer = reverseEndian ? (magic[2] << 8 | magic[3]) : (magic[3] << 8 | magic[2]);
+    const uint16_t answer = reverseEndian ? (buffer[2] << 8 | buffer[3]) : (buffer[3] << 8 | buffer[2]);
     if (answer != 42) {
         throw FormatNotSupported{"File is not a TIFF image."};
     }
@@ -2723,24 +2719,13 @@ Task<vector<ImageData>>
     TIFFSetErrorHandler(tiffErrorHandler);
     TIFFSetWarningHandler(tiffWarningHandler);
 
-    // Read the entire stream into memory and decompress from there. Technically, we can progressively decode TIFF images, but we want
-    // to additionally load the TIFF image via our EXIF library, which requires the file to be in memory. For the same reason, we also
-    // prepend the EXIF FOURCC to the data ahead of the TIFF header.
-    iStream.seekg(0, ios::end);
-    const size_t fileSize = iStream.tellg();
-    iStream.seekg(0, ios::beg);
-
-    HeapArray<uint8_t> buffer(fileSize + sizeof(Exif::FOURCC));
-    copy(Exif::FOURCC.begin(), Exif::FOURCC.end(), buffer.data());
-    iStream.read((char*)buffer.data() + sizeof(Exif::FOURCC), fileSize);
-
     optional<AttributeNode> exifAttributes;
     try {
         const auto exif = Exif{buffer};
         exifAttributes = exif.toAttributes();
     } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
 
-    TiffData tiffData{buffer.data() + sizeof(Exif::FOURCC), 0, (tsize_t)fileSize};
+    TiffData tiffData{buffer.data(), 0, (tsize_t)buffer.size()};
     TIFF* tif = TIFFClientOpen(
         toString(path).c_str(),
         "rMc", // read-only w/ memory mapping; no strip chopping

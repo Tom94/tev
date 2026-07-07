@@ -36,7 +36,7 @@ template <trivially_copyable T> static T read(const uint8_t* data, bool reverseE
 }
 
 Task<vector<ImageData>> IcoImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
+    istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
     const size_t initialPos = iStream.tellg();
     const bool reverseEndianness = endian::native == endian::big;
@@ -181,24 +181,12 @@ Task<vector<ImageData>> IcoImageLoader::load(
                     const auto bytesPerRow = (size_t)nextMultiple(entry.width, 32) / 8;
                     const size_t andMaskSize = bytesPerRow * entry.height;
 
-                    const size_t maskDataPos = iStream.tellg();
-                    iStream.seekg(0, ios::end);
-                    const size_t maskDataEnd = iStream.tellg();
-                    iStream.seekg(maskDataPos, ios_base::beg);
-
-                    if (maskDataEnd - maskDataPos < andMaskSize) {
-                        throw ImageLoadError{fmt::format(
-                            "BMP file is too small to contain expected AND mask: {} bytes available, {} bytes expected",
-                            maskDataEnd - maskDataPos,
-                            andMaskSize
-                        )};
+                    const auto andMaskData = toSpan<const uint8_t>(iStream).subspan(iStream.tellg(), andMaskSize);
+                    if (andMaskData.size() != andMaskSize) {
+                        throw ImageLoadError{fmt::format("Failed to read AND mask of size {}", andMaskSize)};
                     }
 
-                    HeapArray<uint8_t> andMaskData(andMaskSize);
-                    iStream.read((char*)andMaskData.data(), andMaskData.size());
-                    if (!iStream) {
-                        throw ImageLoadError{fmt::format("Failed to read AND mask of size {}", andMaskData.size())};
-                    }
+                    iStream.seekg(andMaskSize, ios_base::cur);
 
                     vector<ChannelView<float>> alphaChannels;
                     for (auto& image : imageData) {

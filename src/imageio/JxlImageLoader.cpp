@@ -54,17 +54,6 @@ bool isJxlImage(span<const uint8_t> data) {
     return sig == JxlSignature::JXL_SIG_CODESTREAM || sig == JxlSignature::JXL_SIG_CONTAINER;
 }
 
-bool isJxlImage(istream& iStream) {
-    uint8_t signature[16];
-    iStream.read(reinterpret_cast<char*>(signature), sizeof(signature));
-
-    const bool result = !!iStream && iStream.gcount() == sizeof(signature) && isJxlImage(signature);
-
-    iStream.clear();
-    iStream.seekg(0);
-    return result;
-}
-
 string jxlToString(JxlExtraChannelType type) {
     switch (type) {
         case JXL_CHANNEL_ALPHA: return "alpha";
@@ -140,20 +129,14 @@ string jxlToString(JxlTransferFunction type) {
 } // namespace
 
 Task<vector<ImageData>> JxlImageLoader::load(
-    istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
+    istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings& settings, int priority
 ) const {
-    if (!isJxlImage(iStream)) {
+    const auto data = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (!isJxlImage(data)) {
         throw FormatNotSupported{"File is not a JPEG XL image."};
     }
 
-    iStream.seekg(0, ios::end);
-    const auto fileSize = iStream.tellg();
-    iStream.seekg(0, ios::beg);
-
-    HeapArray<uint8_t> fileData(fileSize);
-    iStream.read(reinterpret_cast<char*>(fileData.data()), fileSize);
-
-    co_return co_await load(fileData, path, channelSelector, settings, priority, false);
+    co_return co_await load(data, path, channelSelector, settings, priority, false);
 }
 
 Task<vector<ImageData>> JxlImageLoader::load(

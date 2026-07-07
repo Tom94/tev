@@ -32,19 +32,12 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> WebpImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
-    char magic[16] = {0};
-    iStream.read(magic, sizeof(magic));
-    if (!iStream || strncmp(magic, "RIFF", 4) != 0 || strncmp(magic + 8, "WEBP", 4) != 0) {
+Task<vector<ImageData>>
+    WebpImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+    const auto buffer = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (buffer.size() < 16 || strncmp((const char*)buffer.data(), "RIFF", 4) != 0 || strncmp((const char*)buffer.data() + 8, "WEBP", 4) != 0) {
         throw FormatNotSupported{"File is not a webp image."};
     }
-
-    iStream.seekg(0, ios::end);
-    const auto fileSize = iStream.tellg();
-    iStream.seekg(0, ios::beg);
-
-    HeapArray<uint8_t> buffer(fileSize);
-    iStream.read((char*)buffer.data(), fileSize);
 
     WebPData data = {buffer.data(), buffer.size()};
 

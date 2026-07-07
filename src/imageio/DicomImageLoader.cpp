@@ -723,7 +723,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
     co_return resultData;
 }
 
-Task<vector<DicomImageData>> readDicomImage(istream& iStream, const ImageLoaderSettings& settings, int priority) {
+Task<vector<DicomImageData>> readDicomImage(istringstream& iStream, const ImageLoaderSettings& settings, int priority) {
     gdcm::ImageReader reader;
     reader.SetStream(iStream);
     if (!reader.Read()) {
@@ -789,17 +789,24 @@ Task<vector<DicomImageData>> readDicomDir(const gdcm::File& dirFile, const fs::p
 
     const auto loadFile = [&](size_t fi) -> Task<vector<DicomImageData>> {
         const fs::path& refPath = referencedFiles[fi];
-        ifstream refStream{refPath, ios::binary};
 
-        if (!refStream) {
+        istringstream data;
+
+        {
+            co_await ThreadPool::blockingIo().enqueueCoroutine(priority);
+
+            ifstream refStream{refPath, ios::binary};
+            ostringstream oss;
+            oss << refStream.rdbuf();
+            data = istringstream{std::move(oss).str()};
+        }
+
+        co_await ThreadPool::global().enqueueCoroutine(priority);
+
+        if (!data) {
             tlog::warning("Failed to open DICOMDIR-referenced file: {}", refPath);
             co_return {};
         }
-
-        // Copy data into a string stream because GDCM does a lot of back and forth seeking and reading. On Linux, GDCM is actually quite
-        // performant when applied directly to a file stream, but on macOS, the copy is strongly needed.
-        stringstream data;
-        data << refStream.rdbuf();
 
         try {
             co_return co_await readDicomImage(data, settings, priority);
@@ -876,7 +883,7 @@ void generatePartNames(vector<DicomImageData>& dicomData) {
 }
 
 Task<vector<ImageData>>
-    DicomImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings& settings, int priority) const {
+    DicomImageLoader::load(istringstream& iStream, const fs::path& path, string_view, const ImageLoaderSettings& settings, int priority) const {
     char header[132] = {0};
     iStream.read(reinterpret_cast<char*>(header), sizeof(header));
     const bool hasMagic = header[128] == 'D' && header[129] == 'I' && header[130] == 'C' && header[131] == 'M';
@@ -893,16 +900,11 @@ Task<vector<ImageData>>
     iStream.clear();
     iStream.seekg(0);
 
-    // Copy data into a string stream because GDCM does a lot of back and forth seeking and reading. On Linux, GDCM is actually quite
-    // performant when applied directly to a file stream, but on macOS, the copy is strongly needed.
-    stringstream data;
-    data << iStream.rdbuf();
-
     vector<DicomImageData> result;
 
     try {
         gdcm::ImageReader reader;
-        reader.SetStream(data);
+        reader.SetStream(iStream);
         if (reader.Read()) {
             result = co_await readDicomImage(reader, settings, priority);
         } else {
