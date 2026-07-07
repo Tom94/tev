@@ -1591,10 +1591,8 @@ Task<ImageLoadResult>
         co_await ThreadPool::blockingIo().enqueueCoroutine(taskPriority);
 
         if (!shuttingDown()) {
-            ostringstream oStream;
-            ifstream fileStream{path, ios_base::binary};
-            oStream << fileStream.rdbuf();
-            iStream = istringstream{std::move(oStream).str()}; // C++20 rvalue .str() overload to avoid a copy of the string
+            auto ifStream = ifstream{path, ios::binary};
+            iStream = toIStringStream(ifStream);
         }
     }
 

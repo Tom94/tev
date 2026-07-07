@@ -48,6 +48,24 @@ using namespace std;
 
 namespace tev {
 
+istringstream toIStringStream(istream& stream) {
+    if (!stream) {
+        return {};
+    }
+
+    stream.seekg(0, ios::end);
+    const auto fileSize = stream.tellg();
+    stream.seekg(0, ios::beg);
+
+    string data;
+    data.resize_and_overwrite(fileSize, [&](char* p, size_t n) {
+        stream.read(p, n);
+        return stream.gcount();
+    });
+
+    return istringstream{std::move(data)};
+}
+
 static u8string toU8string(string_view str) {
     u8string temp;
     utf8::replace_invalid(begin(str), end(str), back_inserter(temp));

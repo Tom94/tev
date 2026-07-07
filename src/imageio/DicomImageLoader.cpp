@@ -794,11 +794,8 @@ Task<vector<DicomImageData>> readDicomDir(const gdcm::File& dirFile, const fs::p
 
         {
             co_await ThreadPool::blockingIo().enqueueCoroutine(priority);
-
-            ifstream refStream{refPath, ios::binary};
-            ostringstream oss;
-            oss << refStream.rdbuf();
-            data = istringstream{std::move(oss).str()};
+            auto refStream = ifstream{refPath, ios::binary};
+            data = toIStringStream(refStream);
         }
 
         co_await ThreadPool::global().enqueueCoroutine(priority);

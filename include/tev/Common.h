@@ -322,6 +322,8 @@ template <typename T> std::span<T> toSpan(const std::istringstream& stream) {
     return std::span<T>{reinterpret_cast<const T*>(stream.view().data()), stream.view().size()};
 }
 
+std::istringstream toIStringStream(std::istream& stream);
+
 // Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
 template <typename T> bool fromChars(const char* begin, const char* end, T& value) {
     const auto result = std::from_chars(begin, end, value);
