@@ -311,28 +311,16 @@ Task<optional<ImageData>> decodeImageHdu(fitsfile* fp, int hduIndex, int priorit
 } // anonymous namespace
 
 Task<vector<ImageData>>
-    FitsImageLoader::load(istream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
-    char magic[9] = {};
-    iStream.read(magic, sizeof(magic));
-    if (!iStream || string_view{magic, sizeof(magic)} != "SIMPLE  =") {
+    FitsImageLoader::load(istringstream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
+    const auto data = toSpan<const char>(iStream).subspan(iStream.tellg());
+    if (data.size() < 9 || string_view{data.data(), 9} != "SIMPLE  =") {
         throw FormatNotSupported{"File is not a FITS image."};
-    }
-
-    iStream.clear();
-    iStream.seekg(0, iStream.end);
-    const auto dataSize = iStream.tellg();
-    iStream.seekg(0, iStream.beg);
-
-    HeapArray<char> data(dataSize);
-    iStream.read(data.data(), dataSize);
-    if (!iStream) {
-        throw ImageLoadError{fmt::format("Failed to read FITS data of size {}", (size_t)dataSize)};
     }
 
     fitsfile* fp = nullptr;
     int status = 0;
-    void* bufferPtr = data.data();
-    size_t bufferSize = (size_t)dataSize;
+    void* bufferPtr = (void*)data.data(); // casting away constness, trusting cfitsio not to modify the buffer
+    size_t bufferSize = data.size();
     const string memName = fmt::format("{}.mem", path.filename().string());
     fits_open_memfile(&fp, memName.c_str(), READONLY, &bufferPtr, &bufferSize, 0, nullptr, &status);
     throwOnCfitsioError(status, "open_memfile");

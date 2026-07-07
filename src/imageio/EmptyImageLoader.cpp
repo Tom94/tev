@@ -25,7 +25,7 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> EmptyImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>> EmptyImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     char magic[6];
     iStream.read(magic, 6);
     string magicString(magic, 6);

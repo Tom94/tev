@@ -21,7 +21,7 @@
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
 
-#include <istream>
+#include <sstream>
 #include <optional>
 
 namespace tev {
@@ -29,7 +29,7 @@ namespace tev {
 class BmpImageLoader final : public ImageLoader {
 public:
     Task<std::vector<ImageData>> loadWithoutFileHeader(
-        std::istream& iStream,
+        std::istringstream& iStream,
         const fs::path& path,
         std::string_view channelSelector,
         const ImageLoaderSettings& settings,
@@ -46,7 +46,7 @@ public:
     ) const;
 
     Task<std::vector<ImageData>> load(
-        std::istream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
+        std::istringstream& iStream, const fs::path& path, std::string_view channelSelector, const ImageLoaderSettings& settings, int priority
     ) const override;
 
     std::string name() const override { return "BMP"; }

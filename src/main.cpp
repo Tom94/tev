@@ -111,17 +111,18 @@ static void handleIpcPacket(const IpcPacket& packet, const shared_ptr<Background
             while (!imageViewerIsReady) {}
             const auto info = packet.interpretAsCreateImage();
             sImageViewer->scheduleToUiThread([&, info] {
-                stringstream imageStream;
-                imageStream << "empty" << " " << info.width << " " << info.height << " " << info.nChannels << " ";
+                ostringstream oss;
+                oss << "empty" << " " << info.width << " " << info.height << " " << info.nChannels << " ";
                 for (int i = 0; i < info.nChannels; ++i) {
                     // The following lines encode strings by prefixing their length. The reason for using this encoding is to allow
                     // arbitrary characters, including whitespaces, in the channel names.
-                    imageStream << info.channelNames[i].length() << info.channelNames[i];
+                    oss << info.channelNames[i].length() << info.channelNames[i];
                 }
 
+                istringstream iStream{std::move(oss).str()};
                 auto imagesLoadTask = tryLoadImage(
                     toPath(info.imageName),
-                    imageStream,
+                    iStream,
                     "",
                     sImageViewer->imagesLoader().imageLoaderSettings(),
                     sImageViewer->imagesLoader().groupChannels()

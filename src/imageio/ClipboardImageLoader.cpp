@@ -28,7 +28,7 @@ using namespace std;
 namespace tev {
 
 Task<vector<ImageData>>
-    ClipboardImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+    ClipboardImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     char magic[4];
     clip::image_spec spec;
 
@@ -72,10 +72,9 @@ Task<vector<ImageData>>
 
     const auto outView = MultiChannelView<float>{resultData.channels};
 
-    HeapArray<char> data(numBytes);
-    iStream.read(data.data(), numBytes);
-    if ((size_t)iStream.gcount() < numBytes) {
-        throw ImageLoadError{fmt::format("Insufficient bytes to read image data ({} vs {}).", iStream.gcount(), numBytes)};
+    const auto data = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (data.size() < numBytes) {
+        throw ImageLoadError{fmt::format("Insufficient bytes to read image data ({} vs {}).", data.size(), numBytes)};
     }
 
     const size_t shifts[4] = {

@@ -82,15 +82,6 @@ Exif::Exif() {
 Exif::Exif(span<const uint8_t> exifData, bool autoPrependFourcc) : Exif() {
     auto guard = ScopeGuard{[this]() { reset(); }};
 
-    // If data doesn't already start with fourcc, prepend
-    HeapArray<uint8_t> newExifData;
-    if (autoPrependFourcc && (exifData.size() < 6 || memcmp(exifData.data(), Exif::FOURCC.data(), 6) != 0)) {
-        newExifData = HeapArray<uint8_t>{exifData.size() + FOURCC.size()};
-        memcpy(newExifData.data(), FOURCC.data(), FOURCC.size());
-        memcpy(newExifData.data() + FOURCC.size(), exifData.data(), exifData.size());
-        exifData = newExifData;
-    }
-
     if (exifData.size() > numeric_limits<unsigned int>::max()) {
         throw invalid_argument{"EXIF data size exceeds maximum supported size."};
     }
@@ -220,6 +211,8 @@ AttributeNode Exif::toAttributes() const {
     if (!md) {
         return result;
     }
+
+    tlog::info("FOUND MAKERNOTE");
 
     AttributeNode& mdNode = result.children.emplace_back();
     mdNode.name = "MakerNote";

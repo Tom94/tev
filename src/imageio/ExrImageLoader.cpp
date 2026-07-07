@@ -456,7 +456,7 @@ private:
 };
 
 Task<vector<ImageData>>
-    ExrImageLoader::load(istream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
+    ExrImageLoader::load(istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
     try {
         if (!isExrImage(iStream)) {
             throw FormatNotSupported{"File is not an EXR image."};

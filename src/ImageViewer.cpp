@@ -2591,7 +2591,7 @@ void ImageViewer::copyImageNameToClipboard() const {
 }
 
 void ImageViewer::pasteImagesFromClipboard() {
-    stringstream imageStream;
+    istringstream imageStream;
     if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
         const auto data = waylandGetClipboardPngImage();
         if (data.empty()) {
@@ -2599,7 +2599,7 @@ void ImageViewer::pasteImagesFromClipboard() {
         }
 
         // TODO: use spanstream once it is available in C++23 to avoid the copy
-        imageStream = stringstream{string{data}, ios::in};
+        imageStream = istringstream{string{data}};
     } else if (glfwGetPlatform() == GLFW_PLATFORM_X11) {
         clip::lock l;
         if (!l.locked()) {
@@ -2615,16 +2615,18 @@ void ImageViewer::pasteImagesFromClipboard() {
         string data(len, '\0');
         l.get_data(f, data.data(), len);
 
-        imageStream = stringstream{std::move(data), ios::in};
+        imageStream = istringstream{std::move(data)};
     } else {
         clip::image clipImage;
         if (!clip::get_image(clipImage)) {
             throw runtime_error{"No image data found in clipboard."};
         }
 
-        imageStream << "clip";
-        imageStream.write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
-        imageStream.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
+        ostringstream oss;
+        oss << "clip";
+        oss.write(reinterpret_cast<const char*>(&clipImage.spec()), sizeof(clip::image_spec));
+        oss.write(clipImage.data(), clipImage.spec().bytes_per_row * clipImage.spec().height);
+        imageStream = istringstream{std::move(oss).str()};
     }
 
     tlog::info("Loading image from clipboard...");
@@ -2646,7 +2648,9 @@ void ImageViewer::showErrorDialog(string_view message, bool logToConsole) {
         tlog::error(message);
     }
 
-    new ErrorDialog(this, MessageDialog::Type::Warning, "Error", message, "OK", "Cancel", false, (int)(m_size.x() * 0.75f), (int)(m_size.y() * 0.75f));
+    new ErrorDialog(
+        this, MessageDialog::Type::Warning, "Error", message, "OK", "Cancel", false, (int)(m_size.x() * 0.75f), (int)(m_size.y() * 0.75f)
+    );
 }
 
 chroma_t ImageViewer::inspectionChroma() const {

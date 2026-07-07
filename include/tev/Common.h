@@ -318,6 +318,10 @@ template <typename... Callable> struct visitor : Callable... {
 
 template <typename T> concept trivially_copyable = std::is_trivially_copyable_v<T>;
 
+template <typename T> std::span<T> toSpan(const std::istringstream& stream) {
+    return std::span<T>{reinterpret_cast<const T*>(stream.view().data()), stream.view().size()};
+}
+
 // Stricter version of from_chars that only returns true if the entire input was consumed and no error occurred.
 template <typename T> bool fromChars(const char* begin, const char* end, T& value) {
     const auto result = std::from_chars(begin, end, value);

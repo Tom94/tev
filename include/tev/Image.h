@@ -32,11 +32,11 @@
 #include <array>
 #include <atomic>
 #include <expected>
-#include <istream>
 #include <map>
 #include <memory>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -344,10 +344,10 @@ Task<nanogui::Vector2i> orientToTopLeft(PixelBuffer& data, nanogui::Vector2i siz
 using ImageLoadResult = std::expected<std::vector<std::shared_ptr<Image>>, ImageLoadError>;
 
 Task<ImageLoadResult> tryLoadImage(
-    int imageId, fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
+    int imageId, fs::path path, std::istringstream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
 Task<ImageLoadResult> tryLoadImage(
-    fs::path path, std::istream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
+    fs::path path, std::istringstream& iStream, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels
 );
 Task<ImageLoadResult>
     tryLoadImage(int imageId, fs::path path, std::string_view channelSelector, const ImageLoaderSettings& settings, bool groupChannels);

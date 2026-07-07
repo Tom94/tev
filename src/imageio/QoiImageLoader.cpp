@@ -29,27 +29,16 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> QoiImageLoader::load(istream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
-    char magic[4];
-    iStream.read(magic, 4);
-    string magicString(magic, 4);
-
-    if (magicString != "qoif") {
-        throw FormatNotSupported{fmt::format("Invalid magic QOI string {}.", magicString)};
+Task<vector<ImageData>> QoiImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+    const auto data = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
+    if (data.size() < 4 || string_view{(const char*)data.data(), 4} != "qoif") {
+        throw FormatNotSupported{"Invalid magic QOI string."};
     }
-
-    iStream.clear();
-    iStream.seekg(0, iStream.end);
-    const auto dataSize = iStream.tellg();
-    iStream.seekg(0, iStream.beg);
-
-    HeapArray<char> data(dataSize);
-    iStream.read(data.data(), dataSize);
 
     qoi_desc desc;
 
     using DataPtr = unique_ptr<uint8_t, decltype(&free)>;
-    const auto decodedData = DataPtr{static_cast<uint8_t*>(qoi_decode(data.data(), (int)dataSize, &desc, 0)), &free};
+    const auto decodedData = DataPtr{static_cast<uint8_t*>(qoi_decode(data.data(), (int)data.size(), &desc, 0)), &free};
     if (!decodedData) {
         throw ImageLoadError{"Failed to decode data from the QOI format."};
     }
