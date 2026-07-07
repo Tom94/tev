@@ -845,7 +845,7 @@ Task<void> toLinearSrgbPremul(
     //     type |= PREMUL_SH(1);
     // }
 
-    static constexpr auto guessColorSpace = [](cmsUInt32Number numColorChannels) -> cmsUInt32Number {
+    const auto guessColorSpace = [numColorChannels]() -> cmsUInt32Number {
         switch (numColorChannels) {
             case 1: return COLORSPACE_SH(PT_GRAY);
             case 2: return COLORSPACE_SH(PT_RGB);
@@ -876,8 +876,9 @@ Task<void> toLinearSrgbPremul(
             numColorChannels
         );
 
-        colorSpaceType = guessColorSpace(numColorChannels);
+        colorSpaceType = guessColorSpace();
     } else {
+        tlog::debug("Color space signature: {:08X} ({} channels)", (uint32_t)cs, numColorChannels);
         switch (cs) {
             case cmsSigCmyData: colorSpaceType = COLORSPACE_SH(PT_CMY); break;
             case cmsSigCmykData: colorSpaceType = COLORSPACE_SH(PT_CMYK); break;
@@ -923,7 +924,7 @@ Task<void> toLinearSrgbPremul(
             case cmsSig15colorData: colorSpaceType = COLORSPACE_SH(PT_MCH15); break;
             default:
                 tlog::warning("Unknown color space signature {:08X} in profile. Guessing based on number of channels.", (uint32_t)cs);
-                colorSpaceType = guessColorSpace(numColorChannels);
+                colorSpaceType = guessColorSpace();
                 break;
         }
     }
