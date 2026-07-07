@@ -486,7 +486,7 @@ private:
 template <typename T> class HeapArray {
 public:
     HeapArray() : mBuf{nullptr}, mSize{0} {}
-    HeapArray(size_t size) : mBuf{std::make_unique<T[]>(size)}, mSize{size} {}
+    HeapArray(size_t size) : mBuf{std::make_unique_for_overwrite<T[]>(size)}, mSize{size} {}
     HeapArray(HeapArray&& other) { *this = std::move(other); }
     HeapArray& operator=(HeapArray&& other) {
         mBuf = std::move(other.mBuf);
@@ -511,7 +511,7 @@ public:
         }
 
         const auto oldBuf = std::move(mBuf);
-        mBuf = std::make_unique<T[]>(newSize);
+        mBuf = std::make_unique_for_overwrite<T[]>(newSize);
         if (oldBuf) {
             std::copy_n(oldBuf.get(), mSize, mBuf.get());
         }
