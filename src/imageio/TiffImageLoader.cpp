@@ -1689,7 +1689,6 @@ Task<ImageData> decodeJpeg(
     auto buf = PixelBuffer::alloc(numSamples, pixelFormat);
 
     const float scale = 1.0f / (float)((1ull << precision) - 1);
-    const float offset = isSignedInt(pixelFormat) ? (float)(1ull << (precision - 1)) * scale : 0.0f;
 
     ImageData result;
     result.channels = co_await ImageLoader::makeInterleavedChannels(
@@ -1737,11 +1736,11 @@ Task<ImageData> decodeJpeg(
     }
 
     if (pixelFormat == EPixelFormat::U8) {
-        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale, offset);
+        co_await toFloat32(buf.span<const uint8_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
     } else if (pixelFormat == EPixelFormat::I16) {
-        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale, offset);
+        co_await toFloat32(buf.span<const int16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
     } else if (pixelFormat == EPixelFormat::U16) {
-        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale, offset);
+        co_await toFloat32(buf.span<const uint16_t>(), tileNumComponents, outView, EAlphaKind::None, priority, scale);
     } else {
         throw ImageLoadError{fmt::format("Unsupported pixel format: {}", toString(pixelFormat))};
     }
@@ -2601,6 +2600,8 @@ Task<ImageData> readTiffImage(
     const float maxSampleValue = (float)tiffGetValue<double>(tif, TIFFTAG_SMAXSAMPLEVALUE).value_or(maxValue(sampleFormat, dataBitsPerSample));
     const float conversionScale = 1.0f / (maxSampleValue - minSampleValue);
     const float conversionOffset = -minSampleValue * conversionScale;
+
+    tlog::debug("Sample value range: min={} max={} scale={} offset={}", minSampleValue, maxSampleValue, conversionScale, conversionOffset);
 
     // Convert all the extra channels to float and store them in the result data. No further processing needed.
     for (size_t c = 0; c < numExtraChannels; ++c) {
