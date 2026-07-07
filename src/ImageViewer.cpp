@@ -1367,6 +1367,7 @@ void ImageViewer::draw_contents() {
     // In case any images got loaded in the background, they sit around in mImagesLoader. Here is the place where we actually add them to
     // the GUI. Focus the application in case one of the new images is meant to override the current selection.
     bool newFocus = false;
+    bool anyNewImages = false;
     while (auto addition = mImagesLoader->tryPop()) {
         if (!addition->images) {
             mImageLoadErrors.emplace_back(addition->images.error().what());
@@ -1387,10 +1388,16 @@ void ImageViewer::draw_contents() {
 
             first = false;
         }
+
+        anyNewImages = true;
     }
 
     if (newFocus) {
         focusWindow();
+    }
+
+    if (anyNewImages) {
+        redraw(); // Redraw one more time to ensure that the window goes through the error dialog & resize cycle
     }
 
     // mTaskQueue contains jobs that should be executed on the main thread. It is useful for handling callbacks from background threads
