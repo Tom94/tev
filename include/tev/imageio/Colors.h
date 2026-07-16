@@ -181,6 +181,9 @@ inline float linearToBt709(float val) {
     return val <= bt709::beta ? (val * 4.5f) : (bt709::alpha * std::pow(val, 0.45f) - (bt709::alpha - 1.0f));
 }
 
+inline float iec6196624ToLinear(float val) { return std::copysign(bt709ToLinear(std::abs(val)), val); }
+inline float linearToIec6196624(float val) { return std::copysign(linearToBt709(std::abs(val)), val); }
+
 // From https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.1361-0-199802-W!!PDF-E.pdf, generalized to the more precise constants from the
 // bt709ToLinear function as defined in https://www.itu.int/rec/T-REC-H.273-202407-I/en.
 inline float bt1361ExtendedToLinear(float val) {
@@ -212,6 +215,15 @@ inline float linearToBt1361Extended(float val) {
 
     return result;
 }
+
+inline float gammaToLinear(float val, float gamma) { return std::pow(std::max(val, 0.0f), gamma); }
+inline float linearToGamma(float val, float gamma) { return std::pow(std::max(val, 0.0f), 1.0f / gamma); }
+
+inline float log100ToLinear(float val) { return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f; }
+inline float linearToLog100(float val) { return val >= 0.01f ? 1.0f + std::log10(val) / 2.0f : 0.0f; }
+
+inline float log100Sqrt10ToLinear(float val) { return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f; }
+inline float linearToLog100Sqrt10(float val) { return val >= std::sqrt(10.0f) / 1000.0f ? 1.0f + std::log10(val) / 2.5f : 0.0f; }
 
 // From http://car.france3.mars.free.fr/HD/INA-%2026%20jan%2006/SMPTE%20normes%20et%20confs/s240m.pdf
 inline float smpteSt240ToLinear(float val) { return val <= 0.0913f ? (val / 4.0f) : pow((val + 0.1115f) / 1.1115f, 1.0f / 0.45f); }
@@ -292,15 +304,15 @@ inline float invTransferComponent(const ETransfer transfer, float val) noexcept 
         case ETransfer::BT202010bit:
         case ETransfer::BT202012bit: return bt709ToLinear(val);
         case ETransfer::IEC61966_2_4: // handles negative values by mirroring
-            return std::copysign(bt709ToLinear(std::abs(val)), val);
+            return iec6196624ToLinear(val);
         case ETransfer::BT1361Extended: // extended to negative values (weirdly)
             return bt1361ExtendedToLinear(val);
-        case ETransfer::Gamma22: return std::pow(std::max(val, 0.0f), 2.2f);
-        case ETransfer::Gamma28: return std::pow(std::max(val, 0.0f), 2.8f);
+        case ETransfer::Gamma22: return gammaToLinear(val, 2.2f);
+        case ETransfer::Gamma28: return gammaToLinear(val, 2.8f);
         case ETransfer::SMPTE240: return smpteSt240ToLinear(val);
         case ETransfer::Linear: return val;
-        case ETransfer::Log100: return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f;
-        case ETransfer::Log100Sqrt10: return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f;
+        case ETransfer::Log100: return log100ToLinear(val);
+        case ETransfer::Log100Sqrt10: return log100Sqrt10ToLinear(val);
         case ETransfer::SRGB: return toLinear(val);
         case ETransfer::PQ: return pqToLinear(val);
         case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
@@ -311,14 +323,27 @@ inline float invTransferComponent(const ETransfer transfer, float val) noexcept 
 }
 
 inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f val) noexcept {
-    if (transfer == ETransfer::HLG) {
-        return hlgToLinear(val);
-    } else {
-        return {
-            invTransferComponent(transfer, val.x()),
-            invTransferComponent(transfer, val.y()),
-            invTransferComponent(transfer, val.z()),
-        };
+    switch (transfer) {
+        case ETransfer::BT709:
+        case ETransfer::BT601:
+        case ETransfer::BT202010bit:
+        case ETransfer::BT202012bit: return {bt709ToLinear(val.x()), bt709ToLinear(val.y()), bt709ToLinear(val.z())};
+        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
+            return {iec6196624ToLinear(val.x()), iec6196624ToLinear(val.y()), iec6196624ToLinear(val.z())};
+        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
+            return {bt1361ExtendedToLinear(val.x()), bt1361ExtendedToLinear(val.y()), bt1361ExtendedToLinear(val.z())};
+        case ETransfer::Gamma22: return {gammaToLinear(val.x(), 2.2f), gammaToLinear(val.y(), 2.2f), gammaToLinear(val.z(), 2.2f)};
+        case ETransfer::Gamma28: return {gammaToLinear(val.x(), 2.8f), gammaToLinear(val.y(), 2.8f), gammaToLinear(val.z(), 2.8f)};
+        case ETransfer::SMPTE240: return {smpteSt240ToLinear(val.x()), smpteSt240ToLinear(val.y()), smpteSt240ToLinear(val.z())};
+        case ETransfer::Linear: return val;
+        case ETransfer::Log100: return {log100ToLinear(val.x()), log100ToLinear(val.y()), log100ToLinear(val.z())};
+        case ETransfer::Log100Sqrt10: return {log100Sqrt10ToLinear(val.x()), log100Sqrt10ToLinear(val.y()), log100Sqrt10ToLinear(val.z())};
+        case ETransfer::SRGB: return {toLinear(val.x()), toLinear(val.y()), toLinear(val.z())};
+        case ETransfer::PQ: return {pqToLinear(val.x()), pqToLinear(val.y()), pqToLinear(val.z())};
+        case ETransfer::SMPTE428: return {smpteSt428ToLinear(val.x()), smpteSt428ToLinear(val.y()), smpteSt428ToLinear(val.z())};
+        case ETransfer::HLG: return hlgToLinear(val);
+        case ETransfer::Unspecified: return val; // Default to linear if unspecified
+        default: return val; // Other transfer functions are not implemented. Default to linear.
     }
 }
 
@@ -329,15 +354,15 @@ inline float transferComponent(const ETransfer transfer, float val) noexcept {
         case ETransfer::BT202010bit:
         case ETransfer::BT202012bit: return linearToBt709(val);
         case ETransfer::IEC61966_2_4: // handles negative values by mirroring
-            return std::copysign(linearToBt709(std::abs(val)), val);
+            return linearToIec6196624(val);
         case ETransfer::BT1361Extended: // extended to negative values (weirdly)
             return linearToBt1361Extended(val);
-        case ETransfer::Gamma22: return std::pow(std::max(val, 0.0f), 1.0f / 2.2f);
-        case ETransfer::Gamma28: return std::pow(std::max(val, 0.0f), 1.0f / 2.8f);
+        case ETransfer::Gamma22: return linearToGamma(val, 2.2f);
+        case ETransfer::Gamma28: return linearToGamma(val, 2.8f);
         case ETransfer::SMPTE240: return linearToSmpteSt240(val);
         case ETransfer::Linear: return val;
-        case ETransfer::Log100: return val >= 0.01f ? 1.0f + std::log10(val) / 2.0f : 0.0f;
-        case ETransfer::Log100Sqrt10: return val >= std::sqrt(10.0f) / 1000.0f ? 1.0f + std::log10(val) / 2.5f : 0.0f;
+        case ETransfer::Log100: return linearToLog100(val);
+        case ETransfer::Log100Sqrt10: return linearToLog100Sqrt10(val);
         case ETransfer::SRGB: return toSRGB(val);
         case ETransfer::PQ: return linearToPq(val);
         case ETransfer::SMPTE428: return linearToSmpteSt428(val);

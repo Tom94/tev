@@ -637,17 +637,17 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                                 Vector3f color;
                                 for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                    color[c] = outView[c, i];
+                                    color[c] = outView[c, i] * factor;
                                 }
 
                                 if (hasGamma) {
-                                    color = pow(color * factor, 1.0f / (float)ce->gamma) * alpha;
+                                    color = pow(color, 1.0f / (float)ce->gamma);
                                 } else {
-                                    color = ituth273::invTransfer(cicpTransfer, color * factor) * alpha;
+                                    color = ituth273::invTransfer(cicpTransfer, color);
                                 }
 
                                 for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                    outView[c, i] = color[c];
+                                    outView[c, i] = color[c] * alpha;
                                 }
                             },
                             priority
