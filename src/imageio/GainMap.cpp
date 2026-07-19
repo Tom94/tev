@@ -98,7 +98,7 @@ Task<void> preprocessAndApplyAppleGainMap(
             for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
                 // NOTE: The docs (above link) say to use the Rec.709 transfer function here, but comparisons with ISO gain maps indicate
                 // that the gain maps are actually encoded with the sRGB transfer function.
-                // const float gain = ituth273::invTransferComponent(ituth273::ETransfer::BT709, gainMapChannels[gainmapChannel].at(i));
+                // const float gain = ituth273::invTransferComponent<ituth273::ETransfer::BT709>(gainMapChannels[gainmapChannel].at(i));
                 gainMapChannels[c][i] = toLinear(gainMapChannels[c][i]);
             }
         },

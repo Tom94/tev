@@ -297,52 +297,85 @@ inline nanogui::Vector3f linearToHlg(nanogui::Vector3f val) {
     return {oetf(tmp.x()), oetf(tmp.y()), oetf(tmp.z())};
 }
 
+// Default to linear if unspecified or unimplemented
+template <ETransfer> float invTransferComponent(const float val) noexcept { return val; }
+
+template <> inline float invTransferComponent<ETransfer::BT709>(const float val) noexcept { return bt709ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::BT601>(const float val) noexcept { return bt709ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::BT202010bit>(const float val) noexcept { return bt709ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::BT202012bit>(const float val) noexcept { return bt709ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::IEC61966_2_4>(const float val) noexcept { return iec6196624ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::BT1361Extended>(const float val) noexcept { return bt1361ExtendedToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::Gamma22>(const float val) noexcept { return gammaToLinear(val, 2.2f); }
+template <> inline float invTransferComponent<ETransfer::Gamma28>(const float val) noexcept { return gammaToLinear(val, 2.8f); }
+template <> inline float invTransferComponent<ETransfer::SMPTE240>(const float val) noexcept { return smpteSt240ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::Linear>(const float val) noexcept { return val; }
+template <> inline float invTransferComponent<ETransfer::Log100>(const float val) noexcept { return log100ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::Log100Sqrt10>(const float val) noexcept { return log100Sqrt10ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::SRGB>(const float val) noexcept { return toLinear(val); }
+template <> inline float invTransferComponent<ETransfer::PQ>(const float val) noexcept { return pqToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::SMPTE428>(const float val) noexcept { return smpteSt428ToLinear(val); }
+template <> inline float invTransferComponent<ETransfer::HLG>(const float val) noexcept {
+    return hlgToLinear({val, val, val}).x(); // Treat single component as R=G=B
+}
+
+template <ETransfer TRANSFER, size_t N> nanogui::Array<float, N> invTransfer(const nanogui::Array<float, N>& val) noexcept {
+    nanogui::Array<float, N> result;
+    for (size_t i = 0; i < N; ++i) {
+        result[i] = invTransferComponent<TRANSFER>(val[i]);
+    }
+
+    return result;
+}
+
+template <> inline nanogui::Vector3f invTransfer<ETransfer::HLG, 3>(const nanogui::Vector3f& val) noexcept { return hlgToLinear(val); }
+
 inline float invTransferComponent(const ETransfer transfer, float val) noexcept {
     switch (transfer) {
-        case ETransfer::BT709:
-        case ETransfer::BT601:
-        case ETransfer::BT202010bit:
-        case ETransfer::BT202012bit: return bt709ToLinear(val);
-        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
-            return iec6196624ToLinear(val);
-        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
-            return bt1361ExtendedToLinear(val);
-        case ETransfer::Gamma22: return gammaToLinear(val, 2.2f);
-        case ETransfer::Gamma28: return gammaToLinear(val, 2.8f);
-        case ETransfer::SMPTE240: return smpteSt240ToLinear(val);
-        case ETransfer::Linear: return val;
-        case ETransfer::Log100: return log100ToLinear(val);
-        case ETransfer::Log100Sqrt10: return log100Sqrt10ToLinear(val);
-        case ETransfer::SRGB: return toLinear(val);
-        case ETransfer::PQ: return pqToLinear(val);
-        case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
-        case ETransfer::HLG: return hlgToLinear({val, val, val}).x(); // Treat single component as R=G=B
-        case ETransfer::Unspecified: return val; // Default to linear if unspecified
+        case ETransfer::BT709: return invTransferComponent<ETransfer::BT709>(val);
+        case ETransfer::BT601: return invTransferComponent<ETransfer::BT601>(val);
+        case ETransfer::BT202010bit: return invTransferComponent<ETransfer::BT202010bit>(val);
+        case ETransfer::BT202012bit: return invTransferComponent<ETransfer::BT202012bit>(val);
+        case ETransfer::IEC61966_2_4: return invTransferComponent<ETransfer::IEC61966_2_4>(val);
+        case ETransfer::BT1361Extended: return invTransferComponent<ETransfer::BT1361Extended>(val);
+        case ETransfer::Gamma22: return invTransferComponent<ETransfer::Gamma22>(val);
+        case ETransfer::Gamma28: return invTransferComponent<ETransfer::Gamma28>(val);
+        case ETransfer::SMPTE240: return invTransferComponent<ETransfer::SMPTE240>(val);
+        case ETransfer::Linear: return invTransferComponent<ETransfer::Linear>(val);
+        case ETransfer::Log100: return invTransferComponent<ETransfer::Log100>(val);
+        case ETransfer::Log100Sqrt10: return invTransferComponent<ETransfer::Log100Sqrt10>(val);
+        case ETransfer::SRGB: return invTransferComponent<ETransfer::SRGB>(val);
+        case ETransfer::PQ: return invTransferComponent<ETransfer::PQ>(val);
+        case ETransfer::SMPTE428: return invTransferComponent<ETransfer::SMPTE428>(val);
+        case ETransfer::HLG: return invTransferComponent<ETransfer::HLG>(val);
+        case ETransfer::Unspecified: return invTransferComponent<ETransfer::Unspecified>(val);
+        case ETransfer::LUT: return invTransferComponent<ETransfer::LUT>(val);
+        case ETransfer::GenericGamma: return invTransferComponent<ETransfer::GenericGamma>(val);
         default: return val; // Other transfer functions are not implemented. Default to linear.
     }
 }
 
-inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f val) noexcept {
+inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
     switch (transfer) {
-        case ETransfer::BT709:
-        case ETransfer::BT601:
-        case ETransfer::BT202010bit:
-        case ETransfer::BT202012bit: return {bt709ToLinear(val.x()), bt709ToLinear(val.y()), bt709ToLinear(val.z())};
-        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
-            return {iec6196624ToLinear(val.x()), iec6196624ToLinear(val.y()), iec6196624ToLinear(val.z())};
-        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
-            return {bt1361ExtendedToLinear(val.x()), bt1361ExtendedToLinear(val.y()), bt1361ExtendedToLinear(val.z())};
-        case ETransfer::Gamma22: return {gammaToLinear(val.x(), 2.2f), gammaToLinear(val.y(), 2.2f), gammaToLinear(val.z(), 2.2f)};
-        case ETransfer::Gamma28: return {gammaToLinear(val.x(), 2.8f), gammaToLinear(val.y(), 2.8f), gammaToLinear(val.z(), 2.8f)};
-        case ETransfer::SMPTE240: return {smpteSt240ToLinear(val.x()), smpteSt240ToLinear(val.y()), smpteSt240ToLinear(val.z())};
-        case ETransfer::Linear: return val;
-        case ETransfer::Log100: return {log100ToLinear(val.x()), log100ToLinear(val.y()), log100ToLinear(val.z())};
-        case ETransfer::Log100Sqrt10: return {log100Sqrt10ToLinear(val.x()), log100Sqrt10ToLinear(val.y()), log100Sqrt10ToLinear(val.z())};
-        case ETransfer::SRGB: return {toLinear(val.x()), toLinear(val.y()), toLinear(val.z())};
-        case ETransfer::PQ: return {pqToLinear(val.x()), pqToLinear(val.y()), pqToLinear(val.z())};
-        case ETransfer::SMPTE428: return {smpteSt428ToLinear(val.x()), smpteSt428ToLinear(val.y()), smpteSt428ToLinear(val.z())};
-        case ETransfer::HLG: return hlgToLinear(val);
-        case ETransfer::Unspecified: return val; // Default to linear if unspecified
+        case ETransfer::BT709: return invTransfer<ETransfer::BT709>(val);
+        case ETransfer::BT601: return invTransfer<ETransfer::BT601>(val);
+        case ETransfer::BT202010bit: return invTransfer<ETransfer::BT202010bit>(val);
+        case ETransfer::BT202012bit: return invTransfer<ETransfer::BT202012bit>(val);
+        case ETransfer::IEC61966_2_4: return invTransfer<ETransfer::IEC61966_2_4>(val);
+        case ETransfer::BT1361Extended: return invTransfer<ETransfer::BT1361Extended>(val);
+        case ETransfer::Gamma22: return invTransfer<ETransfer::Gamma22>(val);
+        case ETransfer::Gamma28: return invTransfer<ETransfer::Gamma28>(val);
+        case ETransfer::SMPTE240: return invTransfer<ETransfer::SMPTE240>(val);
+        case ETransfer::Linear: return invTransfer<ETransfer::Linear>(val);
+        case ETransfer::Log100: return invTransfer<ETransfer::Log100>(val);
+        case ETransfer::Log100Sqrt10: return invTransfer<ETransfer::Log100Sqrt10>(val);
+        case ETransfer::SRGB: return invTransfer<ETransfer::SRGB>(val);
+        case ETransfer::PQ: return invTransfer<ETransfer::PQ>(val);
+        case ETransfer::SMPTE428: return invTransfer<ETransfer::SMPTE428>(val);
+        case ETransfer::HLG: return invTransfer<ETransfer::HLG>(val);
+        case ETransfer::Unspecified: return invTransfer<ETransfer::Unspecified>(val);
+        case ETransfer::LUT: return invTransfer<ETransfer::LUT>(val);
+        case ETransfer::GenericGamma: return invTransfer<ETransfer::GenericGamma>(val);
         default: return val; // Other transfer functions are not implemented. Default to linear.
     }
 }

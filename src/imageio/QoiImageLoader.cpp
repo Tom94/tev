@@ -29,7 +29,8 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> QoiImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    QoiImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     const auto data = toSpan<const uint8_t>(iStream).subspan(iStream.tellg());
     if (data.size() < 4 || string_view{(const char*)data.data(), 4} != "qoif") {
         throw FormatNotSupported{"Invalid magic QOI string."};
@@ -71,12 +72,12 @@ Task<vector<ImageData>> QoiImageLoader::load(istringstream& iStream, const fs::p
     const auto s = span<const uint8_t>{decodedData.get(), numPixels * numChannels};
 
     if (desc.colorspace == QOI_LINEAR) {
-        co_await toFloat32<false, true>(s, numChannels, outView, alphaKind, priority);
+        co_await toFloat32<ituth273::ETransfer::Linear, true>(s, numChannels, outView, alphaKind, priority);
         resultData.hasPremultipliedAlpha = true;
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
     } else {
-        co_await toFloat32<true, true>(s, numChannels, outView, alphaKind, priority);
+        co_await toFloat32<ituth273::ETransfer::SRGB, true>(s, numChannels, outView, alphaKind, priority);
         resultData.hasPremultipliedAlpha = true;
 
         resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;

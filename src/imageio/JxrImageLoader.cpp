@@ -555,31 +555,36 @@ Task<vector<ImageData>>
 
     const auto dstView = MultiChannelView<float>{resultData.channels};
 
-    const auto convertToFloat32 = [&]<bool TO_SRGB = false, bool MULT_ALPHA = false>() -> Task<void> {
+    const auto convertToFloat32 = [&]<bool FROM_SRGB = false, bool MULT_ALPHA = false>() -> Task<void> {
+        static constexpr ituth273::ETransfer UNSIGNED_TRANSFER = FROM_SRGB ? ituth273::ETransfer::SRGB : ituth273::ETransfer::Linear;
         switch (outDesc.pixelFormat) {
             case EPixelFormat::U8:
-                co_await toFloat32<TO_SRGB, MULT_ALPHA>(buf.span<const uint8_t>(), numDecodedChannels, dstView, alphaKind, priority);
+                co_await toFloat32<UNSIGNED_TRANSFER, MULT_ALPHA>(buf.span<const uint8_t>(), numDecodedChannels, dstView, alphaKind, priority);
                 break;
             case EPixelFormat::U16:
-                co_await toFloat32<TO_SRGB, MULT_ALPHA>(buf.span<const uint16_t>(), numDecodedChannels, dstView, alphaKind, priority);
+                co_await toFloat32<UNSIGNED_TRANSFER, MULT_ALPHA>(buf.span<const uint16_t>(), numDecodedChannels, dstView, alphaKind, priority);
                 break;
             case EPixelFormat::I16:
                 // JXR's 16-bit fixed-point format is Q3.13, so we scale by 1/(2^13) to convert to float.
-                co_await toFloat32<false, MULT_ALPHA>(
+                co_await toFloat32<ituth273::ETransfer::Linear, MULT_ALPHA>(
                     buf.span<const int16_t>(), numDecodedChannels, dstView, alphaKind, priority, 1.0f / (float)(1ull << 13)
                 );
                 break;
             case EPixelFormat::I32:
                 // JXR's 32-bit fixed-point format is Q8.24, so we scale by 1/(2^24) to convert to float.
-                co_await toFloat32<false, MULT_ALPHA>(
+                co_await toFloat32<ituth273::ETransfer::Linear, MULT_ALPHA>(
                     buf.span<const int32_t>(), numDecodedChannels, dstView, alphaKind, priority, 1.0f / (float)(1ull << 24)
                 );
                 break;
             case EPixelFormat::F16:
-                co_await toFloat32<false, MULT_ALPHA>(buf.span<const half>(), numDecodedChannels, dstView, alphaKind, priority);
+                co_await toFloat32<ituth273::ETransfer::Linear, MULT_ALPHA>(
+                    buf.span<const half>(), numDecodedChannels, dstView, alphaKind, priority
+                );
                 break;
             case EPixelFormat::F32:
-                co_await toFloat32<false, MULT_ALPHA>(buf.span<const float>(), numDecodedChannels, dstView, alphaKind, priority);
+                co_await toFloat32<ituth273::ETransfer::Linear, MULT_ALPHA>(
+                    buf.span<const float>(), numDecodedChannels, dstView, alphaKind, priority
+                );
                 break;
             default: throw ImageLoadError{fmt::format("Unsupported JXR pixel format {}", toString(outDesc.pixelFormat))};
         }

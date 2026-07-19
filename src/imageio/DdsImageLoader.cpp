@@ -152,7 +152,8 @@ static size_t getDxgiChannelCount(DXGI_FORMAT fmt) {
     }
 }
 
-Task<vector<ImageData>> DdsImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    DdsImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     const auto data = toSpan<const char>(iStream).subspan(iStream.tellg());
     if (data.size() < 4 || data[0] != 'D' || data[1] != 'D' || data[2] != 'S' || data[3] != ' ') {
         throw FormatNotSupported{"File is not a DDS file."};
@@ -244,12 +245,12 @@ Task<vector<ImageData>> DdsImageLoader::load(istringstream& iStream, const fs::p
             static_cast<int>(metadata.format)
         );
 
-        co_await toFloat32<false, true>(s, numChannels, outView, alphaKind, priority);
+        co_await toFloat32<ituth273::ETransfer::Linear, true>(s, numChannels, outView, alphaKind, priority);
         resultData.hasPremultipliedAlpha = true;
     } else {
         // Ideally, we'd be able to assume that only *_SRGB format images were in sRGB space, and only they need to converted to linear.
         // However, RGB(A) DDS images tend to be in sRGB space, even those not explicitly stored in an *_SRGB format.
-        co_await toFloat32<true, true>(s, numChannels, outView, alphaKind, priority);
+        co_await toFloat32<ituth273::ETransfer::SRGB, true>(s, numChannels, outView, alphaKind, priority);
         resultData.hasPremultipliedAlpha = true;
     }
 

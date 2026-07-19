@@ -571,11 +571,11 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 // If we didn't load the channels via the ICC profile, we need to load them manually.
                 if (!colorChannelsLoaded) {
-                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, alphaKind, priority);
-
                     // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
                     // decoder has already prepared the data in linear sRGB for us.
-                    if (ce && !skipColorProcessing) {
+                    if (!ce || skipColorProcessing) {
+                        co_await toFloat32(span<const float>{colorData}, numChannels, outView, alphaKind, priority);
+                    } else {
                         data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
 
                         tlog::debug(
@@ -623,35 +623,31 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         data.nativeMetadata.transfer = cicpTransfer;
                         data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
 
-                        const size_t numPixels = posProd(size);
-                        co_await ThreadPool::global().parallelFor(
-                            0uz,
-                            numPixels,
-                            numPixels * numInterleavedChannels,
-                            [&](size_t i) {
-                                // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
-                                // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
-                                // See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
-                                const float alpha = info.alpha_bits ? outView[-1, i] : 1.0f;
-                                const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                        if (hasGamma) {
+                            const size_t numPixels = posProd(size);
+                            co_await ThreadPool::global().parallelFor(
+                                0uz,
+                                numPixels,
+                                numPixels * numInterleavedChannels,
+                                [&](size_t i) {
+                                    // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
+                                    // transfer), so we must unpremultiply prior to the color space conversion and transfer function
+                                    // inversion. See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
+                                    const float alpha = info.alpha_bits ? outView[-1, i] : 1.0f;
+                                    const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
 
-                                Vector3f color;
-                                for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                    color[c] = outView[c, i] * factor;
-                                }
+                                    for (uint32_t c = 0; c < info.num_color_channels; ++c) {
+                                        outView[c, i] = std::pow(outView[c, i] * factor, 1.0f / (float)ce->gamma) * alpha;
+                                    }
+                                },
+                                priority
+                            );
+                        } else {
+                            co_await toFloat32(
+                                cicpTransfer, info.alpha_bits, span<const float>{colorData}, numChannels, outView, alphaKind, priority
+                            );
+                        }
 
-                                if (hasGamma) {
-                                    color = pow(color, 1.0f / (float)ce->gamma);
-                                } else {
-                                    color = ituth273::invTransfer(cicpTransfer, color);
-                                }
-
-                                for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                    outView[c, i] = color[c] * alpha;
-                                }
-                            },
-                            priority
-                        );
                         data.hasPremultipliedAlpha = true;
                     }
                 }

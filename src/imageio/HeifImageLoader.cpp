@@ -146,8 +146,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
             throw ImageLoadError{fmt::format("Unsupported number of channels: {}", numChannels)};
         }
 
-        const int numColorChannels = hasAlpha ? numChannels - 1 : numChannels;
-
         ImageData resultData;
         resultData.hasPremultipliedAlpha = !hasAlpha || heif_image_is_premultiplied_alpha(img);
         resultData.partName = partName;
@@ -246,14 +244,41 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         const auto outView = MultiChannelView<float>{resultData.channels};
 
-        if (bitDepth == 16) {
-            // libheif returns 16-byte aligned uint8_t* data, regardless of the actual bit depth. The alignment and uint8_t type mean it's
-            // well-defined behavior to reinterpret the data as uint16_t.
-            const auto uint16Data = span<const uint16_t>{reinterpret_cast<const uint16_t*>(planeData.data()), planeData.size() / sizeof(uint16_t)};
-            co_await toFloat32(uint16Data, numChannels, outView, alphaKind, priority, channelScale, 0.0f, bytesPerRow / sizeof(uint16_t));
-        } else {
-            co_await toFloat32(planeData, numChannels, outView, alphaKind, priority, channelScale, 0.0f, bytesPerRow / sizeof(uint8_t));
-        }
+        LimitedRange range = LimitedRange::full();
+        const auto heifToFloat32 = [&](ituth273::ETransfer transfer, bool multiplyAlpha) -> Task<void> {
+            if (bitDepth == 16) {
+                // libheif returns 16-byte aligned uint8_t* data, regardless of the actual bit depth. The alignment and uint8_t type mean
+                // it's well-defined behavior to reinterpret the data as uint16_t.
+                const auto uint16Data =
+                    span<const uint16_t>{reinterpret_cast<const uint16_t*>(planeData.data()), planeData.size() / sizeof(uint16_t)};
+
+                co_await toFloat32(
+                    transfer,
+                    multiplyAlpha,
+                    uint16Data,
+                    numChannels,
+                    outView,
+                    alphaKind,
+                    priority,
+                    channelScale * range.scale,
+                    range.offset,
+                    bytesPerRow / sizeof(uint16_t)
+                );
+            } else {
+                co_await toFloat32(
+                    transfer,
+                    multiplyAlpha,
+                    planeData,
+                    numChannels,
+                    outView,
+                    alphaKind,
+                    priority,
+                    channelScale * range.scale,
+                    range.offset,
+                    bytesPerRow / sizeof(uint8_t)
+                );
+            }
+        };
 
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
         const auto iccProfileData = skipColorProcessing ? nullopt : getIccProfileFromImgAndHandle(img, imgHandle);
@@ -262,6 +287,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
             try {
                 const auto profile = ColorProfile::fromIcc(*iccProfileData);
+                co_await heifToFloat32(ituth273::ETransfer::Linear, false);
                 co_await toLinearSrgbPremul(profile, alphaKind, outView, outView, nullopt, priority);
                 resultData.hasPremultipliedAlpha = true;
                 resultData.readMetadataFromIcc(profile);
@@ -271,6 +297,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         if (skipColorProcessing) {
             tlog::debug("Skipping color processing.");
+
+            co_await heifToFloat32(ituth273::ETransfer::Linear, false);
             co_return resultData;
         }
 
@@ -293,7 +321,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
 
         const auto nclxGuard = ScopeGuard{[nclx] { heif_nclx_color_profile_free(nclx); }};
 
-        LimitedRange range = LimitedRange::full();
         if (nclx && nclx->full_range_flag == 0) {
             range = limitedRangeForBitsPerSample(bitsPerSample);
         }
@@ -314,30 +341,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
             cicpTransfer = ituth273::ETransfer::SRGB;
         }
 
-        const size_t numPixels = posProd(size);
-        co_await ThreadPool::global().parallelFor(
-            0uz,
-            numPixels,
-            numPixels * numInterleavedChannels,
-            [&](size_t i) {
-                // HEIF/AVIF unfortunately tends to have the alpha channel premultiplied in non-linear space (after application of the
-                // transfer), so we must unpremultiply prior to the color space conversion and transfer function inversion.
-                const float alpha = hasAlpha ? outView[-1, i] : 1.0f;
-                const float factor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? (1.0f / alpha) : 1.0f;
-                const float invFactor = resultData.hasPremultipliedAlpha && alpha > 0.0001f ? alpha : 1.0f;
-
-                Vector3f color;
-                for (int c = 0; c < numColorChannels; ++c) {
-                    color[c] = (outView[c, i] - range.offset) * range.scale;
-                }
-
-                color = ituth273::invTransfer(cicpTransfer, color * factor) * invFactor;
-                for (int c = 0; c < numColorChannels; ++c) {
-                    outView[c, i] = color[c];
-                }
-            },
-            priority
-        );
+        co_await heifToFloat32(cicpTransfer, true);
+        resultData.hasPremultipliedAlpha = true;
 
         // Assume heic/avif image is display referred and wants white point adaptation if mismatched. Matches browser behavior.
         resultData.renderingIntent = ERenderingIntent::RelativeColorimetric;
@@ -513,7 +518,8 @@ Task<vector<ImageData>> HeifImageLoader::load(
         throw ImageLoadError{"Failed to allocate libheif context."};
     }
 
-    if (const auto error = heif_context_read_from_memory_without_copy(ctx.get(), data.data(), data.size(), nullptr); error.code != heif_error_Ok) {
+    if (const auto error = heif_context_read_from_memory_without_copy(ctx.get(), data.data(), data.size(), nullptr);
+        error.code != heif_error_Ok) {
         throw ImageLoadError{fmt::format("Failed to read image: {}", error.message)};
     }
 

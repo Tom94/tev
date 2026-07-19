@@ -599,7 +599,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
                         for (size_t c = 0; c < (size_t)view.nChannels(); ++c) {
                             const float scale = c == 0 ? yRange.scale : cbcrRange.scale;
                             const float offset = c == 0 ? yRange.offset : cbcrRange.offset;
-                            view[c, i] = (view[c, i] - offset) * scale;
+                            view[c, i] = view[c, i] * scale + offset;
                         }
                     },
                     priority
