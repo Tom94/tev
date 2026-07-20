@@ -46,6 +46,18 @@ ImageCanvas::ImageCanvas(Widget* parent) : Canvas{parent, 1, false, false, false
 
     mShader.reset(new UberShader{render_pass(), ditherScale});
     set_draw_border(false);
+
+    mSplitscreenSlider = new SplitscreenSlider{};
+    mSplitscreenSlider->set_visible(true);
+    mSplitscreenSlider->set_callback([this](int value) {
+        mSplitscreenSliderOffsetX = value;
+    });
+}
+bool ImageCanvas::mouse_drag_event(const nanogui::Vector2i& p, const nanogui::Vector2i& rel, int button, int modifiers) {
+    return mSplitscreenSlider->mouse_drag_event(p, rel, button, modifiers);
+}
+bool ImageCanvas::mouse_button_event(const nanogui::Vector2i& p, int button, bool down, int modifiers) {
+    return mSplitscreenSlider->mouse_button_event(p, button, down, modifiers);
 }
 
 bool ImageCanvas::scroll_event(const Vector2i& p, const Vector2f& rel) {
@@ -85,13 +97,25 @@ void ImageCanvas::draw_contents() {
 
     viewImageOnly |= !mReference || image == mReference.get();
 
-    Image* reference = (viewImageOnly || !mReference || image == mReference.get()) ? nullptr : mReference.get();
+    Image* reference = (viewImageOnly) ? nullptr : mReference.get();
+
+    if (image && reference && mSplitscreenSliderEnabled) {
+        const auto displayWindowToNano = displayWindowToNanogui(mImage.get());
+        Vector2i s = {
+            displayWindowToNano * Vector2f{static_cast<float>(mImage->dataWindow().min.x()), 0.0f}
+        };
+        Vector2i t = {
+            displayWindowToNano * Vector2f{static_cast<float>(mImage->dataWindow().max.x()), 0.0f}
+        };
+        int width = t.x() - s.x();
+        mSplitscreemSliderT = static_cast<float>(std::clamp(mSplitscreenSliderOffsetX + 1 - s.x(), 0, width)) / static_cast<float>(width);
+    }
 
     mShader->draw(
         2.0f * inverse(Vector2f{m_size}) / mPixelRatio,
         Vector2f{20.0f},
         image,
-        // The uber shader operates in [-1, 1] coordinates and requires the _inserve_ image transform to obtain texture coordinates in [0,
+        // The uber shader operates in [-1, 1] coordinates and requires the _inverse_ image transform to obtain texture coordinates in [0,
         // 1]-space.
         inverse(transform(mImage.get())),
         reference,
@@ -110,7 +134,9 @@ void ImageCanvas::draw_contents() {
         mTonemap,
         mMetric,
         mChannelMask,
-        imageSpaceCrop
+        imageSpaceCrop,
+        mSplitscreenSliderEnabled,
+        mSplitscreemSliderT
     );
 }
 
@@ -534,6 +560,13 @@ void ImageCanvas::draw(NVGcontext* ctx) {
     // If we're not in fullscreen mode draw an inner drop shadow. (adapted from Window)
     if (m_pos.x() != 0) {
         drawEdgeShadows(ctx);
+    }
+
+    if (mImage && mReference && mSplitscreenSliderEnabled) {
+        mSplitscreenSlider->set_range(m_pos.x(), m_size.x());
+        mSplitscreenSlider->set_position({m_pos.x() + mSplitscreenSliderOffsetX, m_pos.y()});
+        mSplitscreenSlider->set_size({2, m_size.y()}); // Slider thickness = 2px
+        mSplitscreenSlider->draw(ctx);
     }
 }
 

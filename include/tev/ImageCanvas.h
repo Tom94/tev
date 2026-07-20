@@ -23,6 +23,7 @@
 #include <tev/Image.h>
 #include <tev/Lazy.h>
 #include <tev/UberShader.h>
+#include <tev/SplitscreenSlider.h>
 
 #include <nanogui/canvas.h>
 
@@ -46,6 +47,8 @@ class ImageCanvas final : public nanogui::Canvas {
 public:
     ImageCanvas(nanogui::Widget* parent);
 
+    bool mouse_drag_event(const nanogui::Vector2i &p, const nanogui::Vector2i &rel, int button, int modifiers) override;
+    bool mouse_button_event(const nanogui::Vector2i &p, int button, bool down, int modifiers) override;
     bool scroll_event(const nanogui::Vector2i& p, const nanogui::Vector2f& rel) override;
 
     void draw_contents() override;
@@ -138,6 +141,9 @@ public:
     // Assumes the alpha channel is the last one, if present
     void applyInspectionParameters(std::vector<float>& values, bool hasAlpha);
 
+    bool splitscreenSlider() const { return mSplitscreenSliderEnabled; }
+    void setSplitscreenSlider(bool enabled) { mSplitscreenSliderEnabled = enabled; }
+
 private:
     static Task<std::shared_ptr<CanvasStatistics>> computeCanvasStatistics(
         std::shared_ptr<Image> image,
@@ -198,6 +204,11 @@ private:
     ituth273::ETransfer mInspectionTransfer = ituth273::ETransfer::Linear;
     bool mInspectionAdaptWhitePoint = false;
     bool mInspectionPremultipliedAlpha = true;
+
+    SplitscreenSlider* mSplitscreenSlider = nullptr;
+    bool mSplitscreenSliderEnabled = false;
+    int mSplitscreenSliderOffsetX = 0;
+    float mSplitscreemSliderT = 0.0f;
 };
 
 } // namespace tev
