@@ -27,6 +27,8 @@
 
 #include <nanogui/vector.h>
 
+#include <xsimd/xsimd.hpp>
+
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -127,6 +129,9 @@ Task<void> toFloat32(
     // 0 defaults to numSamplesPerPixelIn * size.x()
     size_t numSamplesPerRowIn = 0
 ) {
+    using vf = xsimd::batch<float>;
+    constexpr size_t N = vf::size;
+
     using value_t = typename std::remove_cvref_t<T>::value_type;
     if constexpr (std::is_integral_v<value_t>) {
         if (scale == 0.0f) {
@@ -161,69 +166,113 @@ Task<void> toFloat32(
         };
     }
 
-    // N == 0 means "use runtime count"
-    constexpr size_t DYNAMIC = 0;
-    const auto channelCountSpecialized = [&]<size_t N_STATIC>(const size_t nDynamic) -> Task<void> {
-        const size_t N = N_STATIC == DYNAMIC ? nDynamic : N_STATIC;
-        const size_t N3 = std::min(N, 3uz);
-        co_await ThreadPool::global().parallelFor(
-            0,
-            size.y(),
-            numPixels * numSamplesPerPixel,
-            [&](int y) {
-                const size_t rowIdxIn = y * numSamplesPerRowIn;
+    const size_t numColorChannels = numSamplesPerPixel == 0 ? 0 : (numSamplesPerPixel - (alphaKind != EAlphaKind::None ? 1 : 0));
+    const bool hasAlpha = alphaKind != EAlphaKind::None;
 
-                for (int x = 0; x < size.x(); ++x) {
-                    const size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
+    co_await ThreadPool::global().parallelFor(
+        0,
+        size.y(),
+        numPixels * numColorChannels,
+        [&](int y) {
+            const size_t rowIdxIn = (size_t)y * numSamplesPerRowIn;
+            const int w = size.x();
+            const size_t alphaOff = numSamplesPerPixelIn - 1;
 
-                    const float alpha = alphaKind != EAlphaKind::None ?
-                        (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale + offset :
-                        1.0f;
-                    float factor = 1.0f, invFactor = 1.0f;
-                    if constexpr (MULTIPLY_ALPHA) {
-                        factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                        invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
-                    }
-
-                    if constexpr (TRANSFER == ETransfer::HLG) {
-                        nanogui::Vector3f result;
-                        for (size_t c = 0; c < N3; ++c) {
-                            result[c] = imageData[baseIdxIn + c] * scale + offset;
+            // Shared kernel over LANES pixels starting at pixel x.
+            //   LANES == N  -> vector path (Scalar = vf)
+            //   LANES == 1  -> scalar tail (Scalar = float)
+            // A tiny set of if-constexpr branches handle the load/store/select
+            // differences; the arithmetic is written once.
+            const auto processPixels = [&]<size_t LANES, class Scalar>(int x) {
+                const auto loadChannel = [&](size_t c) -> Scalar {
+                    if constexpr (LANES == N) {
+                        if (c >= numSamplesPerPixel) {
+                            return vf(0.0f);
                         }
 
-                        result = ituth273::invTransfer<TRANSFER>(result * factor) * invFactor;
+                        alignas(vf::arch_type::alignment()) float in[N];
+                        for (size_t i = 0; i < N; ++i) {
+                            const size_t base = rowIdxIn + (size_t)(x + (int)i) * numSamplesPerPixelIn;
+                            in[i] = (float)imageData[base + c];
+                        }
 
-                        for (size_t c = 0; c < N3; ++c) {
-                            floatData[c, x, y] = result[c];
+                        return xsimd::fma(vf::load_aligned(in), vf(scale), vf(offset));
+                    } else {
+                        if (c >= numSamplesPerPixel) {
+                            return 0.0f;
+                        }
+
+                        const size_t base = rowIdxIn + (size_t)x * numSamplesPerPixelIn;
+                        return (float)imageData[base + c] * scale + offset;
+                    }
+                };
+
+                // -- store channel `c` (or alpha when c < 0) for all LANES pixels --
+                const auto storeChannel = [&](int c, const Scalar& v) {
+                    if constexpr (LANES == N) {
+                        for (size_t i = 0; i < N; ++i) {
+                            floatData[c, x + (int)i, y] = v.get(i);
                         }
                     } else {
-                        for (size_t c = 0; c < N; ++c) {
-                            float result = imageData[baseIdxIn + c] * scale + offset;
-                            result = ituth273::invTransferComponent<TRANSFER>(result * factor) * invFactor;
-                            floatData[c, x, y] = result;
-                        }
+                        floatData[c, x, y] = v;
                     }
+                };
 
-                    if (alphaKind != EAlphaKind::None) {
-                        floatData[-1, x, y] = alpha;
+                // Alpha (needed before the color loop for premultiply handling).
+                Scalar a = hasAlpha ? loadChannel(alphaOff) : Scalar(1.0f);
+
+                Scalar factor = Scalar(1.0f);
+                Scalar invFactor = Scalar(1.0f);
+                if constexpr (MULTIPLY_ALPHA) {
+                    if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
+                        if constexpr (LANES == N) {
+                            factor = xsimd::select(a > vf(0.0001f), vf(1.0f) / a, vf(1.0f));
+                        } else {
+                            factor = a > 0.0001f ? 1.0f / a : 1.0f;
+                        }
+
+                        invFactor = a;
+                    } else if (alphaKind == EAlphaKind::Straight) {
+                        invFactor = a;
                     }
                 }
-            },
-            priority
-        );
-    };
 
-    const size_t numColorChannels = numSamplesPerPixel == 0 ? 0 : (numSamplesPerPixel - (alphaKind != EAlphaKind::None ? 1 : 0));
+                if constexpr (TRANSFER == ituth273::ETransfer::HLG) {
+                    // HLG is a special case: we need to load all three color channels at once to compute the luminance for scaling.
+                    Scalar r = loadChannel(0) * factor;
+                    Scalar g = loadChannel(1) * factor;
+                    Scalar b = loadChannel(2) * factor;
 
-    // Specialize for the common cases of 1 and 3 color channels (around 10% faster at the cost of binary size). 2 channel and 4 channel
-    // (CMYK) images are rare enough that we don't care enough about the 10% speed-up to justify the binary size increase.
-    if (numColorChannels == 1) {
-        co_await channelCountSpecialized.template operator()<1>(1);
-    } else if (numColorChannels == 3) {
-        co_await channelCountSpecialized.template operator()<3>(3);
-    } else {
-        co_await channelCountSpecialized.template operator()<DYNAMIC>(numColorChannels);
-    }
+                    ituth273::hlgToLinear(r, g, b);
+
+                    storeChannel(0, r * invFactor);
+                    storeChannel(1, g * invFactor);
+                    storeChannel(2, b * invFactor);
+                } else {
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        Scalar v = loadChannel(c) * factor;
+                        v = ituth273::invTransferComponent<TRANSFER>(v);
+                        storeChannel((int)c, v * invFactor);
+                    }
+                }
+
+                if (hasAlpha) {
+                    storeChannel(-1, a);
+                }
+            };
+
+            // Vector body: N pixels at a time, then scalar tail.
+            int x = 0;
+            for (; x + (int)N <= w; x += (int)N) {
+                processPixels.template operator()<N, vf>(x);
+            }
+
+            for (; x < w; ++x) {
+                processPixels.template operator()<1, float>(x);
+            }
+        },
+        priority
+    );
 }
 
 template <bool MULTIPLY_ALPHA = false, std::ranges::random_access_range T>

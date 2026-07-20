@@ -24,6 +24,8 @@
 
 #include <nanogui/vector.h>
 
+#include <xsimd/xsimd.hpp>
+
 #include <array>
 #include <optional>
 
@@ -167,67 +169,213 @@ bool isTransferImplemented(const ETransfer transfer);
 
 ETransfer fromWpTransfer(int wpTransfer);
 
+// -----------------------------------------------------------------------------
+// All functions are templated on the batch type B = xsimd::batch<float, A>.
+//
+// Vector mode:  B = xsimd::batch<float>                    (native best arch)
+//               B = xsimd::batch<float, xsimd::avx2>       (explicit arch)
+// Scalar mode:  B = float                                  (size == 1)
+// -----------------------------------------------------------------------------
+
+template <class B, class = void> struct int_companion {
+    using type = xsimd::batch<int32_t, typename B::arch_type>;
+};
+template <class B> struct int_companion<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
+    using type = int32_t;
+};
+template <class B> using int_companion_t = typename int_companion<B>::type;
+
+inline float int_to_float(std::int32_t i) { return static_cast<float>(i); }
+template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) { return xsimd::to_float(i); }
+
+inline int float_to_int(float f) { return static_cast<int32_t>(f); }
+template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) { return xsimd::to_int(f); }
+
+// log2, ~single-precision polynomial. Clamps subnormals to FLT_MIN.
+template <class B> B fastLog2(const B& x_in) {
+    using vi = int_companion_t<B>;
+
+    // x = max(x, FLT_MIN) to avoid the subnormal path.
+    B x = xsimd::max(x_in, B(1.1754944e-38f));
+
+    vi i = xsimd::bitwise_cast<int32_t>(x);
+
+    // exponent: ((i >> 23) & 0xFF) - 127
+    vi e = ((i >> 23) & vi(0xFF)) - vi(127);
+    B ef = int_to_float(e);
+
+    // mantissa in [1,2): (i & 0x007FFFFF) | 0x3F800000
+    vi mi = (i & vi(0x007FFFFF)) | vi(0x3F800000);
+    B m = xsimd::bitwise_cast<float>(mi);
+
+    B p = m - B(1.0f);
+    B r(0.04588701f);
+    r = xsimd::fma(r, p, B(-0.19442591f));
+    r = xsimd::fma(r, p, B(0.41542437f));
+    r = xsimd::fma(r, p, B(-0.70868282f));
+    r = xsimd::fma(r, p, B(1.44182586f));
+    r = r * p;
+    return r + ef;
+}
+
+// exp2, ~single-precision polynomial. round-to-nearest-even + bit-injection ldexp.
+template <class B> B fastExp2(const B& x) {
+    using vi = int_companion_t<B>;
+
+    // round to nearest even (matches nearbyintf under default rounding).
+    B n = xsimd::rint(x);
+    B f = x - n;
+
+    B r(0.00015465312f);
+    r = xsimd::fma(r, f, B(0.0013395280f));
+    r = xsimd::fma(r, f, B(0.0096180400f));
+    r = xsimd::fma(r, f, B(0.055503407f));
+    r = xsimd::fma(r, f, B(0.24022651f));
+    r = xsimd::fma(r, f, B(0.69314720f));
+    r = xsimd::fma(r, f, B(1.0f));
+
+    // scale by 2^n via exponent bits: (ni + 127) << 23
+    vi ni = float_to_int(n);
+    vi bias = (ni + vi(127)) << 23;
+    B scale = xsimd::bitwise_cast<float>(bias);
+    return r * scale;
+}
+
+// pow2-based pow: 2^(e * log2(x)). Requires x >= 0
+template <class B> B fastPow(const B& x, const B& y) {
+    B r = fastExp2(y * fastLog2(x));
+    r = xsimd::select(x == B(0.0f), B(0.0f), r);
+    return r;
+}
+
 namespace bt709 {
 inline constexpr float beta = 0.018053968510807f;
 inline constexpr float alpha = 1.0f + 5.5f * beta;
 inline constexpr float thres = 4.5f * beta;
 } // namespace bt709
 
-inline float bt709ToLinear(float val) {
-    return val <= bt709::thres ? (val / 4.5f) : std::pow((val + bt709::alpha - 1.0f) / bt709::alpha, 1.0f / 0.45f);
+template <class B> B bt709ToLinear(const B& val) {
+    using xsimd::select;
+    const B lo = val * (1.0f / 4.5f);
+    const B hi = fastPow((val + (bt709::alpha - 1.0f)) * (1.0f / bt709::alpha), B(1.0f / 0.45f));
+    return select(val <= B(bt709::thres), lo, hi);
 }
 
-inline float linearToBt709(float val) {
-    return val <= bt709::beta ? (val * 4.5f) : (bt709::alpha * std::pow(val, 0.45f) - (bt709::alpha - 1.0f));
+template <class B> B linearToBt709(const B& val) {
+    using xsimd::select;
+    const B lo = val * 4.5f;
+    const B hi = B(bt709::alpha) * fastPow(val, B(0.45f)) - (bt709::alpha - 1.0f);
+    return select(val <= B(bt709::beta), lo, hi);
 }
 
-inline float iec6196624ToLinear(float val) { return std::copysign(bt709ToLinear(std::abs(val)), val); }
-inline float linearToIec6196624(float val) { return std::copysign(linearToBt709(std::abs(val)), val); }
+template <class B> B iec6196624ToLinear(const B& val) {
+    using xsimd::abs;
+    using xsimd::copysign;
+    return copysign(bt709ToLinear(abs(val)), val);
+}
 
-// From https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.1361-0-199802-W!!PDF-E.pdf, generalized to the more precise constants from the
-// bt709ToLinear function as defined in https://www.itu.int/rec/T-REC-H.273-202407-I/en.
-inline float bt1361ExtendedToLinear(float val) {
+template <class B> B linearToIec6196624(const B& val) {
+    using xsimd::abs;
+    using xsimd::copysign;
+    return copysign(linearToBt709(abs(val)), val);
+}
+
+template <class B> B bt1361ExtendedToLinear(const B& val) {
+    using xsimd::select;
     constexpr float negThres = -bt709::thres / 4.0f;
 
-    float result;
-    if (val < negThres) {
-        result = (-1.0f / 4.0f) * std::pow((-4.0f * val + bt709::alpha - 1.0f) / bt709::alpha, 1.0f / 0.45f);
-    } else if (val <= bt709::thres) {
-        result = val / 4.5f;
-    } else {
-        result = std::pow((val + bt709::alpha - 1.0f) / bt709::alpha, 1.0f / 0.45f);
-    }
+    const B neg = B(-1.0f / 4.0f) * fastPow((val * -4.0f + (bt709::alpha - 1.0f)) * (1.0f / bt709::alpha), B(1.0f / 0.45f));
+    const B lin = val * (1.0f / 4.5f);
+    const B pos = fastPow((val + (bt709::alpha - 1.0f)) * (1.0f / bt709::alpha), B(1.0f / 0.45f));
 
-    return result;
+    // if (val < negThres) neg else if (val <= thres) lin else pos
+    return select(val < B(negThres), neg, select(val <= B(bt709::thres), lin, pos));
 }
 
-inline float linearToBt1361Extended(float val) {
+template <class B> B linearToBt1361Extended(const B& val) {
+    using xsimd::select;
     constexpr float negThres = -bt709::beta / 4.0f;
 
-    float result;
-    if (val < negThres) {
-        result = (-1.0f / 4.0f) * (bt709::alpha * std::pow(-4.0f * val, 0.45f) - (bt709::alpha - 1.0f));
-    } else if (val <= bt709::beta) {
-        result = val * 4.5f;
-    } else {
-        result = bt709::alpha * std::pow(val, 0.45f) - (bt709::alpha - 1.0f);
-    }
+    const B neg = B(-1.0f / 4.0f) * (B(bt709::alpha) * fastPow(val * -4.0f, B(0.45f)) - (bt709::alpha - 1.0f));
+    const B lin = val * 4.5f;
+    const B pos = B(bt709::alpha) * fastPow(val, B(0.45f)) - (bt709::alpha - 1.0f);
 
-    return result;
+    return select(val < B(negThres), neg, select(val <= B(bt709::beta), lin, pos));
 }
 
-inline float gammaToLinear(float val, float gamma) { return std::pow(std::max(val, 0.0f), gamma); }
-inline float linearToGamma(float val, float gamma) { return std::pow(std::max(val, 0.0f), 1.0f / gamma); }
+template <class B> B gammaToLinear(const B& val, float gamma) {
+    using xsimd::max;
+    return fastPow(max(val, B(0.0f)), B(gamma));
+}
 
-inline float log100ToLinear(float val) { return val > 0.0f ? std::exp((val - 1.0f) * 2.0f * std::log(10.0f)) : 0.0f; }
-inline float linearToLog100(float val) { return val >= 0.01f ? 1.0f + std::log10(val) / 2.0f : 0.0f; }
+template <class B> B linearToGamma(const B& val, float gamma) {
+    using xsimd::max;
+    return fastPow(max(val, B(0.0f)), B(1.0f / gamma));
+}
 
-inline float log100Sqrt10ToLinear(float val) { return val > 0.0f ? std::exp((val - 1.0f) * 2.5f * std::log(10.0f)) : 0.0f; }
-inline float linearToLog100Sqrt10(float val) { return val >= std::sqrt(10.0f) / 1000.0f ? 1.0f + std::log10(val) / 2.5f : 0.0f; }
+template <class B> B log100ToLinear(const B& val) {
+    using xsimd::exp;
+    using xsimd::select;
+    const B v = exp((val - 1.0f) * (2.0f * std::log(10.0f)));
+    return select(val > B(0.0f), v, B(0.0f));
+}
 
-// From http://car.france3.mars.free.fr/HD/INA-%2026%20jan%2006/SMPTE%20normes%20et%20confs/s240m.pdf
-inline float smpteSt240ToLinear(float val) { return val <= 0.0913f ? (val / 4.0f) : pow((val + 0.1115f) / 1.1115f, 1.0f / 0.45f); }
-inline float linearToSmpteSt240(float val) { return val <= 0.022825f ? (val * 4.0f) : (1.1115f * pow(val, 0.45f) - 0.1115f); }
+template <class B> B linearToLog100(const B& val) {
+    using xsimd::log10;
+    using xsimd::select;
+    const B v = B(1.0f) + log10(val) * (1.0f / 2.0f);
+    return select(val >= B(0.01f), v, B(0.0f));
+}
+
+template <class B> B log100Sqrt10ToLinear(const B& val) {
+    using xsimd::exp;
+    using xsimd::select;
+    const B v = exp((val - 1.0f) * (2.5f * std::log(10.0f)));
+    return select(val > B(0.0f), v, B(0.0f));
+}
+
+template <class B> B linearToLog100Sqrt10(const B& val) {
+    using xsimd::log10;
+    using xsimd::select;
+    const B v = B(1.0f) + log10(val) * (1.0f / 2.5f);
+    return select(val >= B(std::sqrt(10.0f) / 1000.0f), v, B(0.0f));
+}
+
+template <class B> B smpteSt240ToLinear(const B& val) {
+    using xsimd::select;
+    const B lo = val * (1.0f / 4.0f);
+    const B hi = fastPow((val + 0.1115f) * (1.0f / 1.1115f), B(1.0f / 0.45f));
+    return select(val <= B(0.0913f), lo, hi);
+}
+
+template <class B> B linearToSmpteSt240(const B& val) {
+    using xsimd::select;
+    const B lo = val * 4.0f;
+    const B hi = B(1.1115f) * fastPow(val, B(0.45f)) - 0.1115f;
+    return select(val <= B(0.022825f), lo, hi);
+}
+
+namespace srgb {
+inline constexpr float a = 0.055f;
+};
+
+template <class B> B srgbToLinear(const B& val) {
+    using xsimd::abs;
+    using xsimd::select;
+    const B a = abs(val);
+    const B lo = val * (1.0f / 12.92f);
+    const B hi = copysign(fastPow((a + srgb::a) * (1.0f / (1.0f + srgb::a)), B(2.4f)), val);
+    return select(a <= B(0.04045f), lo, hi);
+}
+
+template <class B> B linearToSrgb(const B& val) {
+    using xsimd::abs;
+    using xsimd::select;
+    const B a = abs(val);
+    const B lo = val * 12.92f;
+    const B hi = copysign((1.0f + srgb::a) * fastPow(a, B(1.0f / 2.4f)) - srgb::a, val);
+    return select(a <= B(0.0031308f), lo, hi);
+}
 
 namespace pq {
 inline constexpr float c1 = 107.0f / 128.0f;
@@ -239,26 +387,29 @@ inline constexpr float invm1 = 8192.0f / 1305.0f;
 inline constexpr float invm2 = 32.0f / 2523.0f;
 } // namespace pq
 
-inline float pqToLinear(float val) {
-    const float tmp = std::pow(std::max(val, 0.0f), pq::invm2);
-    return 10000.0f / 203.0f * std::pow(std::max(tmp - pq::c1, 0.0f) / std::max(pq::c2 - pq::c3 * tmp, 1e-5f), pq::invm1);
+template <class B> B pqToLinear(const B& val) {
+    using xsimd::max;
+    const B tmp = fastPow(max(val, B(0.0f)), B(pq::invm2));
+    const B num = max(tmp - pq::c1, B(0.0f));
+    const B den = max(B(pq::c2) - B(pq::c3) * tmp, B(1e-5f));
+    return B(10000.0f / 203.0f) * fastPow(num / den, B(pq::invm1));
 }
 
-inline float linearToPq(float val) {
-    val = val * 203.0f / 10000.0f;
-    const float p = std::pow(std::max(val, 0.0f), pq::m1);
-
-    const float num = pq::c1 + pq::c2 * p;
-    return std::pow(num / (1.0f + pq::c3 * p), pq::m2);
+template <class B> B linearToPq(B val) {
+    using xsimd::max;
+    val = val * (203.0f / 10000.0f);
+    const B p = fastPow(max(val, B(0.0f)), B(pq::m1));
+    const B num = B(pq::c1) + B(pq::c2) * p;
+    return fastPow(num / (B(1.0f) + B(pq::c3) * p), B(pq::m2));
 }
 
-inline float smpteSt428ToLinear(float val) { return std::pow(val, 2.6f) * (52.37f / 48.0f); }
-inline float linearToSmpteSt428(float val) { return std::pow(val * (48.0f / 52.37f), 1.0f / 2.6f); }
+template <class B> B smpteSt428ToLinear(const B& val) { return fastPow(val, B(2.6f)) * (52.37f / 48.0f); }
+
+template <class B> B linearToSmpteSt428(const B& val) { return fastPow(val * (48.0f / 52.37f), B(1.0f / 2.6f)); }
 
 namespace hlg {
-// TODO: make these params configurable at runtime
-inline constexpr float Lw = 1000.0f; // display peak brightness in cd/m² (nits)
-inline constexpr float gain = Lw; // can technically be adjusted, but usually set to Lw
+inline constexpr float Lw = 1000.0f;
+inline constexpr float gain = Lw;
 inline const float gamma = 1.2f + 0.42f * std::log10(Lw / 1000.0f);
 
 inline constexpr float a = 0.17883277f;
@@ -266,93 +417,126 @@ inline constexpr float b = 0.28466892f;
 inline constexpr float c = 0.55991073f;
 } // namespace hlg
 
-inline nanogui::Vector3f hlgToLinear(nanogui::Vector3f val) {
-    static constexpr auto invOetf = [](const float v) {
-        return v <= 0.5f ? (v * v / 3.0f) : ((std::exp((v - hlg::c) / hlg::a) + hlg::b) / 12.0f);
-    };
-
-    static constexpr auto ootf = [](nanogui::Vector3f v) {
-        // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
-        const float lum = 0.2627f * v.x() + 0.6780f * v.y() + 0.0593f * v.z();
-        return hlg::gain * pow(lum, hlg::gamma - 1.0f) * v;
-    };
-
-    return ootf({invOetf(val.x()), invOetf(val.y()), invOetf(val.z())}) / 203.0f; // Convert to linear units where SDR white is 1.0
+// HLG inverse OETF, per-lane (no channel coupling)
+template <class B> B hlgInvOetf(const B& v) {
+    using xsimd::exp;
+    using xsimd::select;
+    const B lo = v * v * (1.0f / 3.0f);
+    const B hi = (exp((v - hlg::c) * (1.0f / hlg::a)) + hlg::b) * (1.0f / 12.0f);
+    return select(v <= B(0.5f), lo, hi);
 }
 
-inline nanogui::Vector3f linearToHlg(nanogui::Vector3f val) {
-    static constexpr auto oetf = [](const float v) {
-        return v <= 1.0f / 12.0f ? std::sqrt(3.0f * v) : (hlg::a * std::log(12.0f * v - hlg::b) + hlg::c);
-    };
-
-    static constexpr auto invOotf = [](nanogui::Vector3f v) {
-        const auto tmp = v / hlg::gain;
-
-        // NOTE: HLG (BT.2100) mandates the use of Rec. 2020 primaries, so the following equation should always be valid.
-        const float lum = 0.2627f * tmp.x() + 0.6780f * tmp.y() + 0.0593f * tmp.z();
-        return pow(lum, (1.0f - hlg::gamma) / hlg::gamma) * tmp;
-    };
-
-    const auto tmp = invOotf(val * 203.0f); // Convert from linear units where SDR white is 1.0;
-    return {oetf(tmp.x()), oetf(tmp.y()), oetf(tmp.z())};
+template <class B> B hlgOetf(const B& v) {
+    using xsimd::log;
+    using xsimd::select;
+    using xsimd::sqrt;
+    const B lo = sqrt(v * 3.0f);
+    const B hi = B(hlg::a) * log(v * 12.0f - hlg::b) + hlg::c;
+    return select(v <= B(1.0f / 12.0f), lo, hi);
 }
 
-// Default to linear if unspecified or unimplemented
-template <ETransfer> float invTransferComponent(const float val) noexcept { return val; }
+// SoA HLG->linear: r,g,b are batches of the same set of pixels.
+template <class B> void hlgToLinear(B& r, B& g, B& b) {
+    const B er = hlgInvOetf(r);
+    const B eg = hlgInvOetf(g);
+    const B eb = hlgInvOetf(b);
 
-template <> inline float invTransferComponent<ETransfer::BT709>(const float val) noexcept { return bt709ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::BT601>(const float val) noexcept { return bt709ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::BT202010bit>(const float val) noexcept { return bt709ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::BT202012bit>(const float val) noexcept { return bt709ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::IEC61966_2_4>(const float val) noexcept { return iec6196624ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::BT1361Extended>(const float val) noexcept { return bt1361ExtendedToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::Gamma22>(const float val) noexcept { return gammaToLinear(val, 2.2f); }
-template <> inline float invTransferComponent<ETransfer::Gamma28>(const float val) noexcept { return gammaToLinear(val, 2.8f); }
-template <> inline float invTransferComponent<ETransfer::SMPTE240>(const float val) noexcept { return smpteSt240ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::Linear>(const float val) noexcept { return val; }
-template <> inline float invTransferComponent<ETransfer::Log100>(const float val) noexcept { return log100ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::Log100Sqrt10>(const float val) noexcept { return log100Sqrt10ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::SRGB>(const float val) noexcept { return toLinear(val); }
-template <> inline float invTransferComponent<ETransfer::PQ>(const float val) noexcept { return pqToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::SMPTE428>(const float val) noexcept { return smpteSt428ToLinear(val); }
-template <> inline float invTransferComponent<ETransfer::HLG>(const float val) noexcept {
-    return hlgToLinear({val, val, val}).x(); // Treat single component as R=G=B
+    const B lum = B(0.2627f) * er + B(0.6780f) * eg + B(0.0593f) * eb;
+    const B scale = B(hlg::gain) * fastPow(lum, B(hlg::gamma - 1.0f)) * (1.0f / 203.0f);
+    r = scale * er;
+    g = scale * eg;
+    b = scale * eb;
 }
 
-template <ETransfer TRANSFER, size_t N> nanogui::Array<float, N> invTransfer(const nanogui::Array<float, N>& val) noexcept {
-    nanogui::Array<float, N> result;
-    for (size_t i = 0; i < N; ++i) {
-        result[i] = invTransferComponent<TRANSFER>(val[i]);
-    }
+template <class B> void linearToHlg(B& r, B& g, B& b) {
+    // convert from linear units where SDR white is 1.0, then invOotf
+    const B tr = r * (203.0f / hlg::gain);
+    const B tg = g * (203.0f / hlg::gain);
+    const B tb = b * (203.0f / hlg::gain);
 
-    return result;
+    const B lum = B(0.2627f) * tr + B(0.6780f) * tg + B(0.0593f) * tb;
+    const B scale = fastPow(lum, B((1.0f - hlg::gamma) / hlg::gamma));
+    r = hlgOetf(scale * tr);
+    g = hlgOetf(scale * tg);
+    b = hlgOetf(scale * tb);
 }
 
-template <> inline nanogui::Vector3f invTransfer<ETransfer::HLG, 3>(const nanogui::Vector3f& val) noexcept { return hlgToLinear(val); }
+// R=G=B single-component HLG (matches original invTransferComponent<HLG>)
+template <class B> B hlgToLinearComponent(const B& val) {
+    const B e = hlgInvOetf(val);
+    const B lum = e; // 0.2627+0.6780+0.0593 == 1
+    return B(hlg::gain) * fastPow(lum, B(hlg::gamma - 1.0f)) * (1.0f / 203.0f) * e;
+}
 
-inline float invTransferComponent(const ETransfer transfer, float val) noexcept {
+// R=G=B single-component HLG (inverse of hlgToLinearComponent, matches original linearToHlg with R=G=B)
+template <class B> B linearToHlgComponent(const B& val) {
+    const B tmp = val * (203.0f / hlg::gain); // linear units where SDR white is 1.0
+    const B lum = tmp;                        // 0.2627 + 0.6780 + 0.0593 == 1
+    const B e = fastPow(lum, B((1.0f - hlg::gamma) / hlg::gamma)) * tmp;
+    return hlgOetf(e);
+}
+
+// Default: linear passthrough
+template <ETransfer E, class B> B invTransferComponentImpl(std::integral_constant<ETransfer, E>, const B& val) { return val; }
+
+#define IT_SPEC(E, EXPR) \
+    template <class B> B invTransferComponentImpl(std::integral_constant<ETransfer, ETransfer::E>, const B& val) { return EXPR; }
+
+IT_SPEC(BT709, bt709ToLinear(val))
+IT_SPEC(BT601, bt709ToLinear(val))
+IT_SPEC(BT202010bit, bt709ToLinear(val))
+IT_SPEC(BT202012bit, bt709ToLinear(val))
+IT_SPEC(IEC61966_2_4, iec6196624ToLinear(val))
+IT_SPEC(BT1361Extended, bt1361ExtendedToLinear(val))
+IT_SPEC(Gamma22, gammaToLinear(val, 2.2f))
+IT_SPEC(Gamma28, gammaToLinear(val, 2.8f))
+IT_SPEC(SMPTE240, smpteSt240ToLinear(val))
+IT_SPEC(Linear, val)
+IT_SPEC(Log100, log100ToLinear(val))
+IT_SPEC(Log100Sqrt10, log100Sqrt10ToLinear(val))
+IT_SPEC(SRGB, srgbToLinear(val))
+IT_SPEC(PQ, pqToLinear(val))
+IT_SPEC(SMPTE428, smpteSt428ToLinear(val))
+IT_SPEC(HLG, hlgToLinearComponent(val))
+#undef IT_SPEC
+
+template <ETransfer TRANSFER, class B> B invTransferComponent(const B& val) noexcept {
+    return invTransferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), val);
+}
+
+template <class B> B invTransferComponent(ETransfer transfer, const B& val) noexcept {
     switch (transfer) {
-        case ETransfer::BT709: return invTransferComponent<ETransfer::BT709>(val);
-        case ETransfer::BT601: return invTransferComponent<ETransfer::BT601>(val);
-        case ETransfer::BT202010bit: return invTransferComponent<ETransfer::BT202010bit>(val);
-        case ETransfer::BT202012bit: return invTransferComponent<ETransfer::BT202012bit>(val);
-        case ETransfer::IEC61966_2_4: return invTransferComponent<ETransfer::IEC61966_2_4>(val);
-        case ETransfer::BT1361Extended: return invTransferComponent<ETransfer::BT1361Extended>(val);
-        case ETransfer::Gamma22: return invTransferComponent<ETransfer::Gamma22>(val);
-        case ETransfer::Gamma28: return invTransferComponent<ETransfer::Gamma28>(val);
-        case ETransfer::SMPTE240: return invTransferComponent<ETransfer::SMPTE240>(val);
-        case ETransfer::Linear: return invTransferComponent<ETransfer::Linear>(val);
-        case ETransfer::Log100: return invTransferComponent<ETransfer::Log100>(val);
-        case ETransfer::Log100Sqrt10: return invTransferComponent<ETransfer::Log100Sqrt10>(val);
-        case ETransfer::SRGB: return invTransferComponent<ETransfer::SRGB>(val);
-        case ETransfer::PQ: return invTransferComponent<ETransfer::PQ>(val);
-        case ETransfer::SMPTE428: return invTransferComponent<ETransfer::SMPTE428>(val);
-        case ETransfer::HLG: return invTransferComponent<ETransfer::HLG>(val);
-        case ETransfer::Unspecified: return invTransferComponent<ETransfer::Unspecified>(val);
-        case ETransfer::LUT: return invTransferComponent<ETransfer::LUT>(val);
-        case ETransfer::GenericGamma: return invTransferComponent<ETransfer::GenericGamma>(val);
-        default: return val; // Other transfer functions are not implemented. Default to linear.
+        case ETransfer::BT709: return bt709ToLinear(val);
+        case ETransfer::BT601: return bt709ToLinear(val);
+        case ETransfer::BT202010bit: return bt709ToLinear(val);
+        case ETransfer::BT202012bit: return bt709ToLinear(val);
+        case ETransfer::IEC61966_2_4: return iec6196624ToLinear(val);
+        case ETransfer::BT1361Extended: return bt1361ExtendedToLinear(val);
+        case ETransfer::Gamma22: return gammaToLinear(val, 2.2f);
+        case ETransfer::Gamma28: return gammaToLinear(val, 2.8f);
+        case ETransfer::SMPTE240: return smpteSt240ToLinear(val);
+        case ETransfer::Log100: return log100ToLinear(val);
+        case ETransfer::Log100Sqrt10: return log100Sqrt10ToLinear(val);
+        case ETransfer::SRGB: return srgbToLinear(val);
+        case ETransfer::PQ: return pqToLinear(val);
+        case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
+        case ETransfer::HLG: return hlgToLinearComponent(val);
+        default: return val; // Linear / Unspecified / LUT / GenericGamma / unimplemented
     }
+}
+
+template <ETransfer TRANSFER> nanogui::Vector3f invTransfer(const nanogui::Vector3f& val) noexcept {
+    using v4f = xsimd::make_sized_batch_t<float, 4>;
+    const v4f in{val.x(), val.y(), val.z(), 0.0f};
+    const v4f res = invTransferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
+    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
+    return v;
+}
+
+template <> inline nanogui::Vector3f invTransfer<ETransfer::HLG>(const nanogui::Vector3f& val) noexcept {
+    auto res = val;
+    hlgToLinear(res.x(), res.y(), res.z());
+    return res;
 }
 
 inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
@@ -380,7 +564,7 @@ inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Ve
     }
 }
 
-inline float transferComponent(const ETransfer transfer, float val) noexcept {
+template <class B> B transferComponent(const ETransfer transfer, const B& val) noexcept {
     switch (transfer) {
         case ETransfer::BT709:
         case ETransfer::BT601:
@@ -396,10 +580,10 @@ inline float transferComponent(const ETransfer transfer, float val) noexcept {
         case ETransfer::Linear: return val;
         case ETransfer::Log100: return linearToLog100(val);
         case ETransfer::Log100Sqrt10: return linearToLog100Sqrt10(val);
-        case ETransfer::SRGB: return toSRGB(val);
+        case ETransfer::SRGB: return linearToSrgb(val);
         case ETransfer::PQ: return linearToPq(val);
         case ETransfer::SMPTE428: return linearToSmpteSt428(val);
-        case ETransfer::HLG: return linearToHlg({val, val, val}).x(); // Treat single component as R=G=B
+        case ETransfer::HLG: return linearToHlgComponent(val); // Treat single component as R=G=B
         case ETransfer::Unspecified: return val; // Default to linear if unspecified
         default: return val; // Other transfer functions are not implemented. Default to linear.
     }
@@ -407,13 +591,15 @@ inline float transferComponent(const ETransfer transfer, float val) noexcept {
 
 inline nanogui::Vector3f transfer(const ETransfer transfer, const nanogui::Vector3f val) noexcept {
     if (transfer == ETransfer::HLG) {
-        return linearToHlg(val);
+        auto res = val;
+        linearToHlg(res.x(), res.y(), res.z());
+        return res;
     } else {
-        return {
-            transferComponent(transfer, val.x()),
-            transferComponent(transfer, val.y()),
-            transferComponent(transfer, val.z()),
-        };
+        using v4f = xsimd::make_sized_batch_t<float, 4>;
+        const v4f in{val.x(), val.y(), val.z(), 0.0f};
+        const v4f res = transferComponent(transfer, in);
+        nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
+        return v;
     }
 }
 
