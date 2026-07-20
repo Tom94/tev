@@ -504,7 +504,10 @@ ImageViewer::ImageViewer(
         auto splitscreenButton = new Button{buttonContainer, "Splitscreen", 0};
         splitscreenButton->set_font_size(15);
         splitscreenButton->set_change_callback([this](bool status) { setSplitscreenSlider(status); });
-        splitscreenButton->set_tooltip("Toggle splitscreen slider, overrides any error metrics currently set.");
+        splitscreenButton->set_tooltip(
+            "Toggle splitscreen when overlaying images.\n\n"
+            "Right-click and drag anywhere on the canvas to move the slider."
+        );
         splitscreenButton->set_flags(Button::Flags::ToggleButton);
         splitscreenButton->set_pushed(false);
     }
