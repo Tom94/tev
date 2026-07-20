@@ -126,6 +126,7 @@ std::string_view toString(EWpPrimaries wpPrimaties);
 //               B = xsimd::batch<float, xsimd::avx2>       (explicit arch)
 // Scalar mode:  B = float                                  (size == 1)
 // -----------------------------------------------------------------------------
+using vf = xsimd::batch<float>;
 
 template <class B, class = void> struct int_companion {
     using type = xsimd::batch<int32_t, typename B::arch_type>;
