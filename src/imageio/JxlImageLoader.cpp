@@ -637,7 +637,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                     const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
 
                                     for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                        outView[c, i] = std::pow(outView[c, i] * factor, 1.0f / (float)ce->gamma) * alpha;
+                                        outView[c, i] = fastPow(outView[c, i] * factor, 1.0f / (float)ce->gamma) * alpha;
                                     }
                                 },
                                 priority

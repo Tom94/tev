@@ -67,9 +67,9 @@ Task<void> yCbCrToRgb(
             float b = Y + coeffs[3] * Cb;
 
             if constexpr (SRGB_TO_LINEAR) {
-                r = toLinear(r);
-                g = toLinear(g);
-                b = toLinear(b);
+                r = ituth273::srgbToLinear(r);
+                g = ituth273::srgbToLinear(g);
+                b = ituth273::srgbToLinear(b);
             }
 
             data[0, i] = r;
@@ -103,9 +103,9 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
             float b = Cb + g;
 
             if constexpr (SRGB_TO_LINEAR) {
-                r = toLinear(r);
-                g = toLinear(g);
-                b = toLinear(b);
+                r = ituth273::srgbToLinear(r);
+                g = ituth273::srgbToLinear(g);
+                b = ituth273::srgbToLinear(b);
             }
 
             data[0, i] = r;

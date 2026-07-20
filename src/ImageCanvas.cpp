@@ -180,7 +180,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                 // If shift and control are held, we display sRGB hex values
                 if (shiftAndControlHeld) {
                     for (size_t i = 0; i < colors.size(); ++i) {
-                        values[i] = hasAlpha && i == colors.size() - 1 ? values[i] : toSRGB(values[i]);
+                        values[i] = hasAlpha && i == colors.size() - 1 ? values[i] : ituth273::linearToSrgb(values[i]);
                     }
                 } else {
                     // Otherwise, display what the user configured as the inspection color space

@@ -466,7 +466,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
                     if (convertSrgbToLinear) {
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            rgb[c] = toLinear(rgb[c]);
+                            rgb[c] = ituth273::srgbToLinear(rgb[c]);
                         }
                     }
 

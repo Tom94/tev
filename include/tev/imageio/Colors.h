@@ -119,56 +119,6 @@ enum class EWpPrimaries : int {
 chroma_t chroma(EWpPrimaries wpPrimaries);
 std::string_view toString(EWpPrimaries wpPrimaties);
 
-// Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
-namespace ituth273 {
-enum class EColorPrimaries : uint8_t {
-    BT709 = 1,
-    Unspecified = 2,
-    BT470M = 4,
-    BT470BG = 5, // BT601 pal
-    SMPTE170M = 6, // BT601 ntsc
-    SMPTE240M = 7, // functionally same as SMPTE170M
-    Film = 8,
-    BT2020 = 9, // Same as BT2100
-    SMPTE428 = 10,
-    SMPTE431 = 11,
-    SMPTE432 = 12,
-    Weird = 22, // The spec says "No corresponding industry specification identified"
-};
-
-std::string_view toString(const EColorPrimaries primaries);
-chroma_t chroma(const EColorPrimaries primaries);
-
-EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries);
-
-enum class ETransfer : uint8_t {
-    BT709 = 1, // Also BT1361
-    Unspecified = 2,
-    Gamma22 = 4,
-    Gamma28 = 5,
-    BT601 = 6, // Also BT1358, BT1700, SMPTE ST 170
-    SMPTE240 = 7,
-    Linear = 8,
-    Log100 = 9,
-    Log100Sqrt10 = 10,
-    IEC61966_2_4 = 11,
-    BT1361Extended = 12,
-    SRGB = 13,
-    BT202010bit = 14,
-    BT202012bit = 15,
-    PQ = 16, // Perceptual Quantizer, SMPTE ST 2084
-    SMPTE428 = 17,
-    HLG = 18, // Hybrid Log-Gamma
-    // Not actually in the spec, but useful for tev to have
-    LUT = 126,
-    GenericGamma = 127,
-};
-
-std::string_view toString(const ETransfer transfer);
-bool isTransferImplemented(const ETransfer transfer);
-
-ETransfer fromWpTransfer(int wpTransfer);
-
 // -----------------------------------------------------------------------------
 // All functions are templated on the batch type B = xsimd::batch<float, A>.
 //
@@ -247,6 +197,105 @@ template <class B> B fastPow(const B& x, const B& y) {
     r = xsimd::select(x == B(0.0f), B(0.0f), r);
     return r;
 }
+
+template <class B> B applyGamma(const B& val, const B& gamma) { return xsimd::copysign(fastPow(xsimd::abs(val), gamma), val); }
+
+inline nanogui::Vector3f applyGamma(nanogui::Vector3f val, float gamma) {
+    using v4f = xsimd::make_sized_batch_t<float, 4>;
+    const v4f in{val.x(), val.y(), val.z(), 0.0f};
+    const v4f res = applyGamma(in, v4f(gamma));
+    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
+    return v;
+}
+
+inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETonemap tonemap) {
+    nanogui::Vector3f result;
+    switch (tonemap) {
+        case ETonemap::Gamma: {
+            result = applyGamma(value, 1.0f / gamma);
+            break;
+        }
+        case ETonemap::FalseColor: {
+            static constexpr auto falseColor = [](float linear) {
+                static const auto fcd = colormap::turbo();
+                int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
+                return nanogui::Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
+            };
+
+            result = falseColor(fastLog2(mean(value) + 0.03125f) / 10 + 0.5f);
+            break;
+        }
+        case ETonemap::PositiveNegative: {
+            result = {-2.0f * mean(min(value, nanogui::Vector3f{0.0f})), 2.0f * mean(max(value, nanogui::Vector3f{0.0f})), 0.0f};
+            break;
+        }
+        default: throw std::runtime_error{"Invalid tonemap selected."};
+    }
+
+    return min(max(result, nanogui::Vector3f{0.0f}), nanogui::Vector3f{1.0f});
+}
+
+inline float applyMetric(float image, float reference, EMetric metric) {
+    float diff = image - reference;
+    switch (metric) {
+        case EMetric::Error: return diff;
+        case EMetric::AbsoluteError: return std::abs(diff);
+        case EMetric::SquaredError: return diff * diff;
+        case EMetric::RelativeAbsoluteError: return std::abs(diff) / (reference + 0.01f);
+        case EMetric::RelativeSquaredError: return diff * diff / (reference * reference + 0.01f);
+        default: throw std::runtime_error{"Invalid metric selected."};
+    }
+}
+
+// Partial implementation of https://www.itu.int/rec/T-REC-H.273-202407-I/en (no YCbCr conversion)
+namespace ituth273 {
+enum class EColorPrimaries : uint8_t {
+    BT709 = 1,
+    Unspecified = 2,
+    BT470M = 4,
+    BT470BG = 5, // BT601 pal
+    SMPTE170M = 6, // BT601 ntsc
+    SMPTE240M = 7, // functionally same as SMPTE170M
+    Film = 8,
+    BT2020 = 9, // Same as BT2100
+    SMPTE428 = 10,
+    SMPTE431 = 11,
+    SMPTE432 = 12,
+    Weird = 22, // The spec says "No corresponding industry specification identified"
+};
+
+std::string_view toString(const EColorPrimaries primaries);
+chroma_t chroma(const EColorPrimaries primaries);
+
+EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries);
+
+enum class ETransfer : uint8_t {
+    BT709 = 1, // Also BT1361
+    Unspecified = 2,
+    Gamma22 = 4,
+    Gamma28 = 5,
+    BT601 = 6, // Also BT1358, BT1700, SMPTE ST 170
+    SMPTE240 = 7,
+    Linear = 8,
+    Log100 = 9,
+    Log100Sqrt10 = 10,
+    IEC61966_2_4 = 11,
+    BT1361Extended = 12,
+    SRGB = 13,
+    BT202010bit = 14,
+    BT202012bit = 15,
+    PQ = 16, // Perceptual Quantizer, SMPTE ST 2084
+    SMPTE428 = 17,
+    HLG = 18, // Hybrid Log-Gamma
+    // Not actually in the spec, but useful for tev to have
+    LUT = 126,
+    GenericGamma = 127,
+};
+
+std::string_view toString(const ETransfer transfer);
+bool isTransferImplemented(const ETransfer transfer);
+
+ETransfer fromWpTransfer(int wpTransfer);
 
 namespace bt709 {
 inline constexpr float beta = 0.018053968510807f;
@@ -564,16 +613,42 @@ inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Ve
     }
 }
 
+// Default: linear passthrough
+template <ETransfer E, class B> B transferComponentImpl(std::integral_constant<ETransfer, E>, const B& val) { return val; }
+
+#define IT_SPEC(E, EXPR) \
+    template <class B> B transferComponentImpl(std::integral_constant<ETransfer, ETransfer::E>, const B& val) { return EXPR; }
+
+IT_SPEC(BT709, linearToBt709(val))
+IT_SPEC(BT601, linearToBt709(val))
+IT_SPEC(BT202010bit, linearToBt709(val))
+IT_SPEC(BT202012bit, linearToBt709(val))
+IT_SPEC(IEC61966_2_4, linearToIec6196624(val))
+IT_SPEC(BT1361Extended, linearToBt1361Extended(val))
+IT_SPEC(Gamma22, linearToGamma(val, 2.2f))
+IT_SPEC(Gamma28, linearToGamma(val, 2.8f))
+IT_SPEC(SMPTE240, linearToSmpteSt240(val))
+IT_SPEC(Linear, val)
+IT_SPEC(Log100, linearToLog100(val))
+IT_SPEC(Log100Sqrt10, linearToLog100Sqrt10(val))
+IT_SPEC(SRGB, linearToSrgb(val))
+IT_SPEC(PQ, linearToPq(val))
+IT_SPEC(SMPTE428, linearToSmpteSt428(val))
+IT_SPEC(HLG, linearToHlgComponent(val))
+#undef IT_SPEC
+
+template <ETransfer TRANSFER, class B> B transferComponent(const B& val) noexcept {
+    return transferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), val);
+}
+
 template <class B> B transferComponent(const ETransfer transfer, const B& val) noexcept {
     switch (transfer) {
         case ETransfer::BT709:
         case ETransfer::BT601:
         case ETransfer::BT202010bit:
         case ETransfer::BT202012bit: return linearToBt709(val);
-        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
-            return linearToIec6196624(val);
-        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
-            return linearToBt1361Extended(val);
+        case ETransfer::IEC61966_2_4: return linearToIec6196624(val);
+        case ETransfer::BT1361Extended: return linearToBt1361Extended(val);
         case ETransfer::Gamma22: return linearToGamma(val, 2.2f);
         case ETransfer::Gamma28: return linearToGamma(val, 2.8f);
         case ETransfer::SMPTE240: return linearToSmpteSt240(val);
@@ -583,23 +658,47 @@ template <class B> B transferComponent(const ETransfer transfer, const B& val) n
         case ETransfer::SRGB: return linearToSrgb(val);
         case ETransfer::PQ: return linearToPq(val);
         case ETransfer::SMPTE428: return linearToSmpteSt428(val);
-        case ETransfer::HLG: return linearToHlgComponent(val); // Treat single component as R=G=B
-        case ETransfer::Unspecified: return val; // Default to linear if unspecified
-        default: return val; // Other transfer functions are not implemented. Default to linear.
+        case ETransfer::HLG: return linearToHlgComponent(val);
+        default: return val; // Linear / Unspecified / LUT / GenericGamma / unimplemented
     }
 }
 
-inline nanogui::Vector3f transfer(const ETransfer transfer, const nanogui::Vector3f val) noexcept {
-    if (transfer == ETransfer::HLG) {
-        auto res = val;
-        linearToHlg(res.x(), res.y(), res.z());
-        return res;
-    } else {
-        using v4f = xsimd::make_sized_batch_t<float, 4>;
-        const v4f in{val.x(), val.y(), val.z(), 0.0f};
-        const v4f res = transferComponent(transfer, in);
-        nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
-        return v;
+template <ETransfer TRANSFER> nanogui::Vector3f transfer(const nanogui::Vector3f& val) noexcept {
+    using v4f = xsimd::make_sized_batch_t<float, 4>;
+    const v4f in{val.x(), val.y(), val.z(), 0.0f};
+    const v4f res = transferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
+    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
+    return v;
+}
+
+template <> inline nanogui::Vector3f transfer<ETransfer::HLG>(const nanogui::Vector3f& val) noexcept {
+    auto res = val;
+    linearToHlg(res.x(), res.y(), res.z());
+    return res;
+}
+
+inline nanogui::Vector3f transfer(const ETransfer t, const nanogui::Vector3f& val) noexcept {
+    switch (t) {
+        case ETransfer::BT709: return transfer<ETransfer::BT709>(val);
+        case ETransfer::BT601: return transfer<ETransfer::BT601>(val);
+        case ETransfer::BT202010bit: return transfer<ETransfer::BT202010bit>(val);
+        case ETransfer::BT202012bit: return transfer<ETransfer::BT202012bit>(val);
+        case ETransfer::IEC61966_2_4: return transfer<ETransfer::IEC61966_2_4>(val);
+        case ETransfer::BT1361Extended: return transfer<ETransfer::BT1361Extended>(val);
+        case ETransfer::Gamma22: return transfer<ETransfer::Gamma22>(val);
+        case ETransfer::Gamma28: return transfer<ETransfer::Gamma28>(val);
+        case ETransfer::SMPTE240: return transfer<ETransfer::SMPTE240>(val);
+        case ETransfer::Linear: return transfer<ETransfer::Linear>(val);
+        case ETransfer::Log100: return transfer<ETransfer::Log100>(val);
+        case ETransfer::Log100Sqrt10: return transfer<ETransfer::Log100Sqrt10>(val);
+        case ETransfer::SRGB: return transfer<ETransfer::SRGB>(val);
+        case ETransfer::PQ: return transfer<ETransfer::PQ>(val);
+        case ETransfer::SMPTE428: return transfer<ETransfer::SMPTE428>(val);
+        case ETransfer::HLG: return transfer<ETransfer::HLG>(val);
+        case ETransfer::Unspecified: return transfer<ETransfer::Unspecified>(val);
+        case ETransfer::LUT: return transfer<ETransfer::LUT>(val);
+        case ETransfer::GenericGamma: return transfer<ETransfer::GenericGamma>(val);
+        default: return val;
     }
 }
 

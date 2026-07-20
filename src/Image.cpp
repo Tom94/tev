@@ -1265,18 +1265,20 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
 
     HeapArray<uint8_t> result(rgbaHdrData.size());
 
+    const auto applyExposureAndOffset = [factor = std::exp2(exposure), offset](float value) { return factor * value + offset; };
     co_await ThreadPool::global().parallelFor(
         0uz,
         rgbaHdrData.size() / 4,
         rgbaHdrData.size(),
         [&](const size_t i) {
             const size_t start = 4 * i;
-            const Vector3f rgb = toSRGB(applyGamma(
+
+            const Vector3f rgb = ituth273::transfer<ituth273::ETransfer::SRGB>(applyGamma(
                 applyTonemap(
                     {
-                        applyExposureAndOffset(rgbaHdrData[start + 0], exposure, offset),
-                        applyExposureAndOffset(rgbaHdrData[start + 1], exposure, offset),
-                        applyExposureAndOffset(rgbaHdrData[start + 2], exposure, offset),
+                        applyExposureAndOffset(rgbaHdrData[start + 0]),
+                        applyExposureAndOffset(rgbaHdrData[start + 1]),
+                        applyExposureAndOffset(rgbaHdrData[start + 2]),
                     },
                     gamma,
                     tonemap

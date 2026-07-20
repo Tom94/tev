@@ -122,7 +122,7 @@ Task<vector<ImageData>>
             } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC profile: {}", e.what()); }
         } else {
             for (uint32_t i = 0; i < 3; ++i) {
-                bgColor[i] = toLinear(bgColor[i]) * bgColor[3]; // Premultiply alpha
+                bgColor[i] = ituth273::srgbToLinear(bgColor[i]) * bgColor[3]; // Premultiply alpha
             }
         }
     }

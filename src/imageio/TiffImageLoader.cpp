@@ -1382,7 +1382,7 @@ Task<void> postprocessRgb(
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& v = rgbaView[c, i];
                     v *= factor;
-                    v = toLinear(v);
+                    v = ituth273::srgbToLinear(v);
                     v *= invFactor;
                 }
             },
