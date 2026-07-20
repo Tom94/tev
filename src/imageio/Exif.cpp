@@ -212,8 +212,6 @@ AttributeNode Exif::toAttributes() const {
         return result;
     }
 
-    tlog::info("FOUND MAKERNOTE");
-
     AttributeNode& mdNode = result.children.emplace_back();
     mdNode.name = "MakerNote";
     mdNode.type = "MakerNote";
