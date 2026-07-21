@@ -179,6 +179,7 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
                 r->numPixels(),
                 r->numPixels() * 3,
                 [rv, gv, bv, mat](size_t i) mutable {
+                    // TODO: vectorize with SIMD
                     const auto rgb = mat * Vector3f{rv[i], gv[i], bv[i]};
                     rv[i] = rgb.x();
                     gv[i] = rgb.y();
@@ -1286,7 +1287,7 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
 
     HeapArray<uint8_t> result(rgbaHdrData.size());
 
-    const auto applyExposureAndOffset = [factor = std::exp2(exposure), offset](float value) { return factor * value + offset; };
+    const auto applyExposureAndOffset = [factor = exp2(exposure), offset](float value) { return factor * value + offset; };
     co_await ThreadPool::global().parallelFor(
         0uz,
         rgbaHdrData.size() / 4,
