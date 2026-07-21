@@ -136,11 +136,111 @@ template <class B> struct int_companion<B, std::enable_if_t<std::is_arithmetic_v
 };
 template <class B> using int_companion_t = typename int_companion<B>::type;
 
+template <class B, class = void> struct uint_companion {
+    using type = xsimd::batch<uint32_t, typename B::arch_type>;
+};
+template <class B> struct uint_companion<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
+    using type = uint32_t;
+};
+template <class B> using uint_companion_t = typename uint_companion<B>::type;
+
 inline float int_to_float(std::int32_t i) { return static_cast<float>(i); }
 template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) { return xsimd::to_float(i); }
 
 inline int float_to_int(float f) { return static_cast<int32_t>(f); }
 template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) { return xsimd::to_int(f); }
+
+// portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
+// results land in the low 16 bits of an equally-wide uint32 batch.
+template <class B> auto float_to_half(const B& fb) -> uint_companion_t<B> {
+    using i32 = uint_companion_t<B>;
+    using s32 = int_companion_t<B>;
+    using f32 = B;
+
+    const i32 sign_mask = i32(0x80000000u);
+    const i32 f32infty = i32(255u << 23);
+    const i32 f16max = i32((127u + 16u) << 23); // >= this rounds to +inf
+    const i32 min_normal = i32((127u - 14u) << 23); // smallest fp32 -> normalized fp16
+    const i32 subnorm_magic = i32(((127u - 15u) + (23u - 10u) + 1u) << 23);
+    const i32 normal_bias = i32(0xfffu - ((127u - 15u) << 23));
+    const i32 nan_out = i32(0x7e00u);
+    const i32 inf_out = i32(0x7c00u);
+
+    i32 u = xsimd::bit_cast<i32>(fb);
+    i32 sign = u & sign_mask;
+    u = u ^ sign; // abs bits
+    f32 absf = xsimd::bit_cast<f32>(u);
+
+    // classification
+    auto is_nan = (u > f32infty); // strictly greater -> NaN
+    auto is_regular = (u < f16max); // (sub)normal, not special
+    auto is_sub = (u < min_normal); // result is subnormal fp16
+    i32 special = xsimd::select(is_nan, nan_out, inf_out);
+
+    // subnormal path: add magic, then integer-subtract the bias.
+    // relies on fp addition being round-to-nearest-even.
+    f32 sub1 = absf + xsimd::bit_cast<f32>(subnorm_magic);
+    i32 sub = xsimd::bit_cast<i32>(sub1) - subnorm_magic;
+
+    // normal path: RTNE via odd-mantissa bias.
+    i32 mantoddbit = u << (31 - 13);        // move mantissa LSB (bit 13) to sign
+    // arithmetic shift right by 31 -> all-ones if odd, zero if even.
+    i32 mantodd = xsimd::bit_cast<i32>(xsimd::bit_cast<s32>(mantoddbit) >> 31);
+    i32 round = (u + normal_bias) - mantodd;
+    i32 normal = round >> 13;
+
+    // combine
+    i32 nonspecial = xsimd::select(is_sub, sub, normal);
+    i32 out = xsimd::select(is_regular, nonspecial, special);
+    out = out | (sign >> 16);
+    return out;
+}
+
+// portable round-half-up: xsimd port of Giesen's float_to_half_fast3.
+// operates on one float batch, returns results in the low 16 bits of an equally-wide uint32 batch.
+template <class B> auto float_to_half_round_up(const B& fb) -> uint_companion_t<B> {
+    using i32 = uint_companion_t<B>;
+
+    const i32 sign_mask = i32(0x80000000u);
+    const i32 round_mask = i32(~0xfffu);
+    const i32 f32infty = i32(255u << 23);
+    const i32 f16infty = i32(31u << 23);
+    const B magic = xsimd::bit_cast<B>(i32(15u << 23));
+    const i32 nan_out = i32(0x7e00u);
+    const i32 inf_out = i32(0x7c00u);
+
+    i32 u = xsimd::bit_cast<i32>(fb);
+    i32 sign = u & sign_mask;
+    u = u ^ sign; // abs bits
+
+    // special-case mask: exponent all-ones (inf/nan)
+    auto is_special = u >= f32infty;
+    auto is_nan = u > f32infty;
+    i32 special = xsimd::select(is_nan, nan_out, inf_out);
+
+    // normal / denormal path
+    i32 masked = u & round_mask;
+    B scaled = xsimd::bit_cast<B>(masked) * magic;
+    i32 biased = xsimd::bit_cast<i32>(scaled) - round_mask;
+    biased = xsimd::min(biased, f16infty);   // clamp overflow to inf
+    i32 normal = biased >> 13;
+
+    i32 out = xsimd::select(is_special, special, normal);
+    out = out | (sign >> 16);
+    return out;
+}
+
+template <class B> void store_halves(const B& v, half* dst) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        *dst = std::bit_cast<half>(static_cast<uint16_t>(v));
+    } else {
+        alignas(B::arch_type::alignment()) uint32_t tmp[B::size];
+        v.store_aligned(tmp);
+        for (std::size_t j = 0; j < B::size; ++j) {
+            dst[j] = std::bit_cast<half>(static_cast<uint16_t>(tmp[j]));
+        }
+    }
+}
 
 // log2, ~single-precision polynomial. Clamps subnormals to FLT_MIN.
 template <class B> B fastLog2(const B& x_in) {
