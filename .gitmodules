@@ -125,3 +125,4 @@
 [submodule "dependencies/xsimd"]
 	path = dependencies/xsimd
 	url = https://github.com/Tom94/xsimd
+	shallow = true
