@@ -134,7 +134,7 @@ public:
         return nTasks;
     }
 
-    template <std::integral Int, std::invocable<Int> F>
+    template <std::integral Int, std::invocable<Int, Int> F>
     Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
         const Int range = end - start;
         const Int n = nTasks(start, end, approxCost);
@@ -153,15 +153,13 @@ public:
 
                 tasks.emplace_back(enqueueCoroutine(
                     [taskStart, taskEnd, &body]() -> Task<void> {
-                        for (Int j = taskStart; j < taskEnd; ++j) {
-                            if constexpr (is_coroutine_callable_v<F, Int>) {
-                                co_await body(j);
-                            } else {
-                                body(j);
-                            }
+                        if constexpr (is_coroutine_callable_v<F, Int, Int>) {
+                            co_await body(taskStart, taskEnd);
+                        } else {
+                            body(taskStart, taskEnd);
                         }
 
-                        co_return; // Make sure this is a coroutine even if body() is not a coroutine
+                        co_return;
                     },
                     priority
                 ));
@@ -169,6 +167,27 @@ public:
         }
 
         co_await awaitAll(tasks);
+    }
+
+    template <std::integral Int, std::invocable<Int> F>
+    Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
+        co_await parallelFor(
+            start,
+            end,
+            approxCost,
+            [&body](Int taskStart, Int taskEnd) -> Task<void> {
+                for (Int j = taskStart; j < taskEnd; ++j) {
+                    if constexpr (is_coroutine_callable_v<F, Int>) {
+                        co_await body(j);
+                    } else {
+                        body(j);
+                    }
+                }
+
+                co_return;
+            },
+            priority
+        );
     }
 
     size_t numThreads() const { return mNumThreads; }
