@@ -37,12 +37,6 @@ else()
     set(TEV_VERSION_DEV "${TEV_VERSION}dev")
 endif()
 
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (64 bit)")
-elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
-    set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (32 bit)")
-endif()
-
 option(TEV_LINUX_REVERSE_DNS_APP_ID OFF)
 set(TEV_LINUX_APP_ID "tev")
 if (TEV_LINUX_REVERSE_DNS_APP_ID)
@@ -254,7 +248,7 @@ target_include_directories(tev PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/utfcpp/source
 )
 
-set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
+set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_DEV}")
 if (APPLE)
     # Starting with macOS Mojave OpenGL is deprecated. tev uses metal by default but can optionally be targeted at GL, so there is no point
     # in keeping the warnings around.
