@@ -125,9 +125,7 @@ jobs:
       matrix:
         os:
           - windows-2022
-          # CMake is currently borked on the ARM runner, detecting AMD64. Disable for now.
-          # https://github.com/orgs/community/discussions/155713#discussioncomment-12991583
-          # - windows-11-arm
+          - windows-11-arm
     env:
       build_dir: "build"
       config: "Release"
