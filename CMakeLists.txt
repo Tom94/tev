@@ -292,6 +292,9 @@ if (MSVC)
     # "/utf-8" is equivalent to "/source-charset:utf-8 /execution-charset:utf-8".
     target_compile_options(tev PRIVATE /utf-8)
 
+    # tev uses a lot of template code which can exceed the default Windows object size limit of 65k
+    target_compile_options(tev PRIVATE /bigobj)
+
     # To allow for wildcards in command-line path arguments on windows,
     # we need to link to wsetargv.obj
     # http://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
