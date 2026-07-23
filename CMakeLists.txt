@@ -37,12 +37,6 @@ else()
     set(TEV_VERSION_DEV "${TEV_VERSION}dev")
 endif()
 
-if (CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (64 bit)")
-elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
-    set(TEV_VERSION_ARCH "${TEV_VERSION_DEV} (32 bit)")
-endif()
-
 option(TEV_LINUX_REVERSE_DNS_APP_ID OFF)
 set(TEV_LINUX_APP_ID "tev")
 if (TEV_LINUX_REVERSE_DNS_APP_ID)
@@ -254,7 +248,7 @@ target_include_directories(tev PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/utfcpp/source
 )
 
-set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_ARCH}")
+set(TEV_DEFINITIONS -DTEV_VERSION="${TEV_VERSION_DEV}")
 if (APPLE)
     # Starting with macOS Mojave OpenGL is deprecated. tev uses metal by default but can optionally be targeted at GL, so there is no point
     # in keeping the warnings around.
@@ -275,7 +269,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS cfitsio clip exif_static gdcm-tev jpeg-turbo jxrglue libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore)
+set(TEV_LIBS cfitsio clip exif_static gdcm-tev jpeg-turbo jxrglue libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore xsimd)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
@@ -297,6 +291,9 @@ if (MSVC)
     # tev uses UTF-8 chars. Specify UTF-8 charset explicitly.
     # "/utf-8" is equivalent to "/source-charset:utf-8 /execution-charset:utf-8".
     target_compile_options(tev PRIVATE /utf-8)
+
+    # tev uses a lot of template code which can exceed the default Windows object size limit of 65k
+    target_compile_options(tev PRIVATE /bigobj)
 
     # To allow for wildcards in command-line path arguments on windows,
     # we need to link to wsetargv.obj

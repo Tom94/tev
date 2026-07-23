@@ -2924,7 +2924,7 @@ void ImageViewer::updateTitle() {
     caption.seekp(-1, ios_base::cur); // Remove last comma
     caption << " / 0x";
     for (size_t i = 0; i < values.size(); ++i) {
-        const float srgbValue = hasAlpha && i == values.size() - 1 ? values[i] : toSRGB(values[i]);
+        const float srgbValue = hasAlpha && i == values.size() - 1 ? values[i] : ituth273::linearToSrgb(values[i]);
         unsigned char discretizedValue = (char)(clamp(srgbValue, 0.0f, 1.0f) * 255 + 0.5f);
         caption << fmt::format("{:02X}", discretizedValue);
     }

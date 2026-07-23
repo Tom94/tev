@@ -17,6 +17,7 @@
  */
 
 #include <tev/Common.h>
+#include <tev/imageio/Colors.h>
 
 #include <nanogui/opengl.h>
 
@@ -250,33 +251,33 @@ Color parseColor(string_view str) {
         if (str.size() == 4) {
             // #RGB
             return Color{
-                toLinear(((hexValue >> 8) & 0xF) / 15.0f),
-                toLinear(((hexValue >> 4) & 0xF) / 15.0f),
-                toLinear((hexValue & 0xF) / 15.0f),
+                ituth273::srgbToLinear(((hexValue >> 8) & 0xF) / 15.0f),
+                ituth273::srgbToLinear(((hexValue >> 4) & 0xF) / 15.0f),
+                ituth273::srgbToLinear((hexValue & 0xF) / 15.0f),
                 1.0f,
             };
         } else if (str.size() == 5) {
             // #RGBA
             return Color{
-                toLinear(((hexValue >> 12) & 0xF) / 15.0f),
-                toLinear(((hexValue >> 8) & 0xF) / 15.0f),
-                toLinear(((hexValue >> 4) & 0xF) / 15.0f),
+                ituth273::srgbToLinear(((hexValue >> 12) & 0xF) / 15.0f),
+                ituth273::srgbToLinear(((hexValue >> 8) & 0xF) / 15.0f),
+                ituth273::srgbToLinear(((hexValue >> 4) & 0xF) / 15.0f),
                 (hexValue & 0xF) / 15.0f,
             };
         } else if (str.size() == 7) {
             // #RRGGBB
             return Color{
-                toLinear(((hexValue >> 16) & 0xFF) / 255.0f),
-                toLinear(((hexValue >> 8) & 0xFF) / 255.0f),
-                toLinear((hexValue & 0xFF) / 255.0f),
+                ituth273::srgbToLinear(((hexValue >> 16) & 0xFF) / 255.0f),
+                ituth273::srgbToLinear(((hexValue >> 8) & 0xFF) / 255.0f),
+                ituth273::srgbToLinear((hexValue & 0xFF) / 255.0f),
                 1.0f,
             };
         } else if (str.size() == 9) {
             // #RRGGBBAA
             return Color{
-                toLinear(((hexValue >> 24) & 0xFF) / 255.0f),
-                toLinear(((hexValue >> 16) & 0xFF) / 255.0f),
-                toLinear(((hexValue >> 8) & 0xFF) / 255.0f),
+                ituth273::srgbToLinear(((hexValue >> 24) & 0xFF) / 255.0f),
+                ituth273::srgbToLinear(((hexValue >> 16) & 0xFF) / 255.0f),
+                ituth273::srgbToLinear(((hexValue >> 8) & 0xFF) / 255.0f),
                 (hexValue & 0xFF) / 255.0f,
             };
         } else {

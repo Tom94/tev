@@ -189,24 +189,6 @@ template <size_t N_DIMS> nanogui::Array<float, N_DIMS> abs(const nanogui::Array<
     return result;
 }
 
-template <size_t N_DIMS> nanogui::Array<float, N_DIMS> exp(const nanogui::Array<float, N_DIMS>& v) {
-    nanogui::Array<float, N_DIMS> result;
-    for (size_t i = 0; i < N_DIMS; ++i) {
-        result[i] = std::exp(v[i]);
-    }
-
-    return result;
-}
-
-template <size_t N_DIMS> nanogui::Array<float, N_DIMS> log(const nanogui::Array<float, N_DIMS>& v) {
-    nanogui::Array<float, N_DIMS> result;
-    for (size_t i = 0; i < N_DIMS; ++i) {
-        result[i] = std::log(v[i]);
-    }
-
-    return result;
-}
-
 template <size_t N_DIMS> nanogui::Array<float, N_DIMS> max(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
     nanogui::Array<float, N_DIMS> result;
     for (size_t i = 0; i < N_DIMS; ++i) {
@@ -220,15 +202,6 @@ template <size_t N_DIMS> nanogui::Array<float, N_DIMS> min(const nanogui::Array<
     nanogui::Array<float, N_DIMS> result;
     for (size_t i = 0; i < N_DIMS; ++i) {
         result[i] = std::min(a[i], b[i]);
-    }
-
-    return result;
-}
-
-template <size_t N_DIMS> nanogui::Array<float, N_DIMS> pow(const nanogui::Array<float, N_DIMS>& v, float exponent) {
-    nanogui::Array<float, N_DIMS> result;
-    for (size_t i = 0; i < N_DIMS; ++i) {
-        result[i] = std::pow(v[i], exponent);
     }
 
     return result;
@@ -601,44 +574,6 @@ void drawTextWithShadow(NVGcontext* ctx, float x, float y, std::string_view text
 int maxTextureSize();
 size_t nextSupportedTextureChannelCount(size_t channelCount);
 
-inline float toSRGB(float val, float gamma = 2.4f) {
-    static constexpr float a = 0.055f;
-    static constexpr float threshold = 0.0031308f;
-
-    const float absVal = std::abs(val);
-    if (absVal <= threshold) {
-        return 12.92f * val;
-    } else {
-        return std::copysign((1.0f + a) * std::pow(absVal, 1.0f / gamma) - a, val);
-    }
-}
-
-inline nanogui::Vector3f toSRGB(nanogui::Vector3f val, float gamma = 2.4f) {
-    return {toSRGB(val.x(), gamma), toSRGB(val.y(), gamma), toSRGB(val.z(), gamma)};
-}
-
-inline float toLinear(float val, float gamma = 2.4f) {
-    static constexpr float a = 0.055f;
-    static constexpr float threshold = 0.04045f;
-
-    const float absVal = std::abs(val);
-    if (absVal <= threshold) {
-        return val / 12.92f;
-    } else {
-        return std::copysign(std::pow((absVal + a) / (1.0f + a), gamma), val);
-    }
-}
-
-inline nanogui::Vector3f toLinear(nanogui::Vector3f val, float gamma = 2.4f) {
-    return {toLinear(val.x(), gamma), toLinear(val.y(), gamma), toLinear(val.z(), gamma)};
-}
-
-inline float applyGamma(float val, float gamma) { return std::copysign(std::pow(std::abs(val), gamma), val); }
-
-inline nanogui::Vector3f applyGamma(nanogui::Vector3f val, float gamma) {
-    return {applyGamma(val.x(), gamma), applyGamma(val.y(), gamma), applyGamma(val.z(), gamma)};
-}
-
 int lastError();
 int lastSocketError();
 std::string errorString(int errorId);
@@ -719,33 +654,6 @@ enum class ETonemap : int {
 
 ETonemap toTonemap(std::string_view name);
 
-inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETonemap tonemap) {
-    nanogui::Vector3f result;
-    switch (tonemap) {
-        case ETonemap::Gamma: {
-            result = applyGamma(value, 1.0f / gamma);
-            break;
-        }
-        case ETonemap::FalseColor: {
-            static constexpr auto falseColor = [](float linear) {
-                static const auto fcd = colormap::turbo();
-                int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
-                return nanogui::Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
-            };
-
-            result = falseColor(log2(mean(value) + 0.03125f) / 10 + 0.5f);
-            break;
-        }
-        case ETonemap::PositiveNegative: {
-            result = {-2.0f * mean(min(value, nanogui::Vector3f{0.0f})), 2.0f * mean(max(value, nanogui::Vector3f{0.0f})), 0.0f};
-            break;
-        }
-        default: throw std::runtime_error{"Invalid tonemap selected."};
-    }
-
-    return min(max(result, nanogui::Vector3f{0.0f}), nanogui::Vector3f{1.0f});
-}
-
 template <typename E> struct enable_bitmask : std::false_type {};
 
 template <typename E>
@@ -824,20 +732,6 @@ enum class EMetric : int {
 };
 
 EMetric toMetric(std::string_view name);
-
-inline float applyMetric(float image, float reference, EMetric metric) {
-    float diff = image - reference;
-    switch (metric) {
-        case EMetric::Error: return diff;
-        case EMetric::AbsoluteError: return std::abs(diff);
-        case EMetric::SquaredError: return diff * diff;
-        case EMetric::RelativeAbsoluteError: return std::abs(diff) / (reference + 0.01f);
-        case EMetric::RelativeSquaredError: return diff * diff / (reference * reference + 0.01f);
-        default: throw std::runtime_error{"Invalid metric selected."};
-    }
-}
-
-inline float applyExposureAndOffset(float value, float exposure, float offset) { return std::pow(2.0f, exposure) * value + offset; }
 
 enum EDirection {
     Forward,

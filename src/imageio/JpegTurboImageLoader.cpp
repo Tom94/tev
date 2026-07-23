@@ -491,9 +491,9 @@ Task<vector<ImageData>>
 
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
             if (fromSrgb && !yCbCrConversionNeeded) {
-                co_await toFloat32<true>(src, numChannels, dst, alphaKind, priority, scale);
+                co_await toFloat32<ituth273::ETransfer::SRGB>(src, numChannels, dst, alphaKind, priority, scale);
             } else {
-                co_await toFloat32<false>(src, numChannels, dst, alphaKind, priority, scale);
+                co_await toFloat32(src, numChannels, dst, alphaKind, priority, scale);
             }
 
             if (yCbCrConversionNeeded) {

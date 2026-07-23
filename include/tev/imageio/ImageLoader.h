@@ -22,11 +22,13 @@
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
+#include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
 
 #include <nanogui/vector.h>
 
-#include <istream>
+#include <xsimd/xsimd.hpp>
+
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -65,9 +67,9 @@ Task<void> yCbCrToRgb(
             float b = Y + coeffs[3] * Cb;
 
             if constexpr (SRGB_TO_LINEAR) {
-                r = toLinear(r);
-                g = toLinear(g);
-                b = toLinear(b);
+                r = ituth273::srgbToLinear(r);
+                g = ituth273::srgbToLinear(g);
+                b = ituth273::srgbToLinear(b);
             }
 
             data[0, i] = r;
@@ -101,9 +103,9 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
             float b = Cb + g;
 
             if constexpr (SRGB_TO_LINEAR) {
-                r = toLinear(r);
-                g = toLinear(g);
-                b = toLinear(b);
+                r = ituth273::srgbToLinear(r);
+                g = ituth273::srgbToLinear(g);
+                b = ituth273::srgbToLinear(b);
             }
 
             data[0, i] = r;
@@ -114,7 +116,7 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
     );
 }
 
-template <bool SRGB_TO_LINEAR = false, bool MULTIPLY_ALPHA = false, std::ranges::random_access_range T>
+template <ituth273::ETransfer TRANSFER = ituth273::ETransfer::Linear, bool MULTIPLY_ALPHA = false, std::ranges::random_access_range T>
 Task<void> toFloat32(
     T&& imageData,
     size_t numSamplesPerPixelIn,
@@ -127,6 +129,8 @@ Task<void> toFloat32(
     // 0 defaults to numSamplesPerPixelIn * size.x()
     size_t numSamplesPerRowIn = 0
 ) {
+    static constexpr size_t N = vf::size;
+
     using value_t = typename std::remove_cvref_t<T>::value_type;
     if constexpr (std::is_integral_v<value_t>) {
         if (scale == 0.0f) {
@@ -137,6 +141,8 @@ Task<void> toFloat32(
             scale = 1.0f;
         }
     }
+
+    using namespace ituth273;
 
     const auto size = floatData.size();
 
@@ -159,47 +165,245 @@ Task<void> toFloat32(
         };
     }
 
-    co_await ThreadPool::global().parallelFor(
-        0,
-        size.y(),
-        numPixels * numSamplesPerPixel,
-        [&](int y) {
-            const size_t rowIdxIn = y * numSamplesPerRowIn;
+    const size_t numColorChannels = numSamplesPerPixel == 0 ? 0 : (numSamplesPerPixel - (alphaKind != EAlphaKind::None ? 1 : 0));
+    const bool hasAlpha = alphaKind != EAlphaKind::None;
 
-            for (int x = 0; x < size.x(); ++x) {
-                const size_t baseIdxIn = rowIdxIn + x * numSamplesPerPixelIn;
+    static constexpr size_t DYNAMIC = 0;
+    const auto numColorChannelsSpecialized = [&]<size_t N_COLOR_CHANNELS_STATIC>(size_t nColorChannelsDynamic) -> Task<void> {
+        const size_t N_COLOR_CHANNELS = N_COLOR_CHANNELS_STATIC == DYNAMIC ? nColorChannelsDynamic : N_COLOR_CHANNELS_STATIC;
+        co_await ThreadPool::global().parallelFor(
+            0,
+            size.y(),
+            numPixels * N,
+            [&](int y) {
+                const size_t rowIdxIn = (size_t)y * numSamplesPerRowIn;
+                const int w = size.x();
+                const size_t alphaOff = numSamplesPerPixelIn - 1;
 
-                const float alpha = alphaKind != EAlphaKind::None ? (float)imageData[baseIdxIn + numSamplesPerPixelIn - 1] * scale + offset :
-                                                                    1.0f;
-                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                // Shared kernel over LANES pixels starting at pixel x.
+                //   LANES == N  -> vector path (Scalar = vf)
+                //   LANES == 1  -> scalar tail (Scalar = float)
+                // A tiny set of if-constexpr branches handle the load/store/select
+                // differences; the arithmetic is written once.
+                const auto processPixels = [&]<size_t LANES, class Scalar>(int x) {
+                    static constexpr bool IS_VECTOR = !std::is_same_v<Scalar, float>;
+                    const auto loadChannel = [&](size_t c) -> Scalar {
+                        if constexpr (IS_VECTOR) {
+                            alignas(vf::arch_type::alignment()) float in[N];
+                            for (size_t i = 0; i < N; ++i) {
+                                const size_t base = rowIdxIn + (size_t)(x + (int)i) * numSamplesPerPixelIn;
+                                in[i] = (float)imageData[base + c];
+                            }
 
-                for (size_t c = 0; c < numSamplesPerPixel; ++c) {
-                    if (alphaKind != EAlphaKind::None && c == numSamplesPerPixelIn - 1) {
-                        // Copy alpha channel to the last output channel without conversion
-                        floatData[-1, x, y] = alpha;
+                            return xsimd::fma(vf::load_aligned(in), vf(scale), vf(offset));
+                        } else {
+                            const size_t base = rowIdxIn + (size_t)x * numSamplesPerPixelIn;
+                            return (float)imageData[base + c] * scale + offset;
+                        }
+                    };
+
+                    // -- store channel `c` (or alpha when c < 0) for all LANES pixels --
+                    const auto storeChannel = [&](int c, const Scalar& v) {
+                        if constexpr (IS_VECTOR) {
+                            alignas(vf::arch_type::alignment()) float out[N];
+                            v.store_aligned(out);
+                            for (size_t i = 0; i < N; ++i) {
+                                floatData[c, x + (int)i, y] = out[i];
+                            }
+                        } else {
+                            floatData[c, x, y] = v;
+                        }
+                    };
+
+                    // Alpha (needed before the color loop for premultiply handling).
+                    Scalar a = hasAlpha ? loadChannel(alphaOff) : Scalar(1.0f);
+
+                    Scalar factor = Scalar(1.0f);
+                    Scalar invFactor = Scalar(1.0f);
+                    if constexpr (MULTIPLY_ALPHA) {
+                        if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
+                            factor = xsimd::select(a > Scalar(0.0001f), Scalar(1.0f / a), Scalar(1.0f));
+                            invFactor = a;
+                        } else if (alphaKind == EAlphaKind::Straight) {
+                            invFactor = a;
+                        }
+                    }
+
+                    if constexpr (TRANSFER == ituth273::ETransfer::HLG && N_COLOR_CHANNELS_STATIC == 3) {
+                        // HLG is a special case: we need to load all three color channels at once to compute the luminance for scaling.
+                        Scalar r = loadChannel(0) * factor;
+                        Scalar g = loadChannel(1) * factor;
+                        Scalar b = loadChannel(2) * factor;
+
+                        ituth273::hlgToLinear(r, g, b);
+
+                        storeChannel(0, r * invFactor);
+                        storeChannel(1, g * invFactor);
+                        storeChannel(2, b * invFactor);
                     } else {
-                        float result = imageData[baseIdxIn + c] * scale + offset;
-
-                        if constexpr (MULTIPLY_ALPHA) {
-                            result *= factor;
+                        for (size_t c = 0; c < N_COLOR_CHANNELS; ++c) {
+                            Scalar v = loadChannel(c) * factor;
+                            v = ituth273::invTransferComponent<TRANSFER>(v);
+                            storeChannel((int)c, v * invFactor);
                         }
+                    }
 
-                        if constexpr (SRGB_TO_LINEAR) {
-                            result = toLinear(result);
-                        }
+                    if (hasAlpha) {
+                        storeChannel(-1, a);
+                    }
+                };
 
-                        if constexpr (MULTIPLY_ALPHA) {
-                            result *= invFactor;
-                        }
+                int x = 0;
 
-                        floatData[c, x, y] = result;
+                if constexpr (N > 1) {
+                    // Vector body: N pixels at a time, then scalar tail.
+                    for (; x + (int)N <= w; x += (int)N) {
+                        processPixels.template operator()<N, vf>(x);
                     }
                 }
-            }
-        },
-        priority
-    );
+
+                for (; x < w; ++x) {
+                    processPixels.template operator()<1, float>(x);
+                }
+            },
+            priority
+        );
+    };
+
+    // Specialize for 3 channels (RGB) to get extra instruction-level parallelism (unrolled loop over channels). 1 channel wouldn't benefit
+    // (nothing to unroll), 2 (e.g. uv) and 4 (e.g. CMYK) color channels are rare enough that it's not worth the binary size increase.
+    if (numColorChannels == 3) {
+        co_await numColorChannelsSpecialized.template operator()<3>(3);
+    } else {
+        co_await numColorChannelsSpecialized.template operator()<DYNAMIC>(numColorChannels);
+    }
+}
+
+template <bool MULTIPLY_ALPHA = false, std::ranges::random_access_range T>
+Task<void> toFloat32(
+    ituth273::ETransfer transfer,
+    T&& imageData,
+    size_t numSamplesPerPixelIn,
+    MultiChannelView<float> floatData,
+    EAlphaKind alphaKind,
+    int priority,
+    // 0 defaults to 1/(2**bitsPerSample-1)
+    float scale = 0.0f,
+    float offset = 0.0f,
+    // 0 defaults to numSamplesPerPixelIn * size.x()
+    size_t numSamplesPerRowIn = 0
+) {
+    using namespace ituth273;
+    switch (transfer) {
+        case ETransfer::BT709:
+            co_return co_await toFloat32<ETransfer::BT709, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::BT601:
+            co_return co_await toFloat32<ETransfer::BT601, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::BT202010bit:
+            co_return co_await toFloat32<ETransfer::BT202010bit, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::BT202012bit:
+            co_return co_await toFloat32<ETransfer::BT202012bit, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::IEC61966_2_4:
+            co_return co_await toFloat32<ETransfer::IEC61966_2_4, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::BT1361Extended:
+            co_return co_await toFloat32<ETransfer::BT1361Extended, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::Gamma22:
+            co_return co_await toFloat32<ETransfer::Gamma22, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::Gamma28:
+            co_return co_await toFloat32<ETransfer::Gamma28, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::SMPTE240:
+            co_return co_await toFloat32<ETransfer::SMPTE240, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::Linear:
+            co_return co_await toFloat32<ETransfer::Linear, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::Log100:
+            co_return co_await toFloat32<ETransfer::Log100, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::Log100Sqrt10:
+            co_return co_await toFloat32<ETransfer::Log100Sqrt10, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::SRGB:
+            co_return co_await toFloat32<ETransfer::SRGB, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::PQ:
+            co_return co_await toFloat32<ETransfer::PQ, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::SMPTE428:
+            co_return co_await toFloat32<ETransfer::SMPTE428, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::HLG:
+            co_return co_await toFloat32<ETransfer::HLG, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::Unspecified:
+            co_return co_await toFloat32<ETransfer::Unspecified, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::LUT:
+            co_return co_await toFloat32<ETransfer::LUT, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        case ETransfer::GenericGamma:
+            co_return co_await toFloat32<ETransfer::GenericGamma, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+        // Fall back to linear otherwise
+        default:
+            co_return co_await toFloat32<ETransfer::Linear, MULTIPLY_ALPHA>(
+                imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+            );
+    }
+}
+
+template <std::ranges::random_access_range T>
+Task<void> toFloat32(
+    ituth273::ETransfer transfer,
+    bool multiplyAlpha,
+    T&& imageData,
+    size_t numSamplesPerPixelIn,
+    MultiChannelView<float> floatData,
+    EAlphaKind alphaKind,
+    int priority,
+    // 0 defaults to 1/(2**bitsPerSample-1)
+    float scale = 0.0f,
+    float offset = 0.0f,
+    // 0 defaults to numSamplesPerPixelIn * size.x()
+    size_t numSamplesPerRowIn = 0
+) {
+    using namespace ituth273;
+    if (multiplyAlpha) {
+        co_return co_await toFloat32<true>(
+            transfer, imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+        );
+    } else {
+        co_return co_await toFloat32<false>(
+            transfer, imageData, numSamplesPerPixelIn, floatData, alphaKind, priority, scale, offset, numSamplesPerRowIn
+        );
+    }
 }
 
 struct ImageLoaderSettings {

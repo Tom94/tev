@@ -106,7 +106,7 @@ Task<vector<ImageData>>
                         alpha = val / 255.0f;
                         outView[-1, x, y] = alpha;
                     } else {
-                        outView[c, x, y] = toLinear(val / 255.0f) * alpha;
+                        outView[c, x, y] = ituth273::srgbToLinear(val / 255.0f) * alpha;
                     }
                 }
             }

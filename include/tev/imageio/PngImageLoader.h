@@ -21,8 +21,6 @@
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
 
-#include <istream>
-
 namespace tev {
 
 class PngImageLoader final : public ImageLoader {

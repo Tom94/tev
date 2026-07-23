@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "xsimd/config/xsimd_arch.hpp"
 #include <tev/HelpWindow.h>
 #include <tev/Ipc.h>
 
@@ -28,6 +29,8 @@
 #include <nanogui/tabwidget.h>
 #include <nanogui/vscrollpanel.h>
 #include <nanogui/window.h>
+
+#include <xsimd/xsimd.hpp>
 
 #include <memory>
 
@@ -218,7 +221,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addSpacer(about, 5);
 
     addText(about, "tev — The EDR Viewer", "sans-bold", 46);
-    addText(about, "version " TEV_VERSION, "sans", 26);
+    addText(about, fmt::format("version " TEV_VERSION " ({})", xsimd::default_arch::name()), "sans", 26);
 
     addSpacer(about, 20);
 

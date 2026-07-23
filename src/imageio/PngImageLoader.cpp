@@ -31,7 +31,8 @@ using namespace std;
 
 namespace tev {
 
-Task<vector<ImageData>> PngImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    PngImageLoader::load(istringstream& iStream, const fs::path&, string_view, const ImageLoaderSettings&, int priority) const {
     png_byte header[8] = {0};
     iStream.read(reinterpret_cast<char*>(header), sizeof(header));
     if (png_sig_cmp(header, 0, sizeof(header))) {
@@ -497,26 +498,9 @@ Task<vector<ImageData>> PngImageLoader::load(istringstream& iStream, const fs::p
                     );
                 }
 
-                co_await toFloat32(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
-
-                co_await ThreadPool::global().parallelFor(
-                    0uz,
-                    numPixels,
-                    numSamples,
-                    [&](size_t i) {
-                        const float alpha = hasAlpha ? dstView[-1, i] : 1.0f;
-
-                        Vector3f color = {0.0f};
-                        for (size_t c = 0; c < numColorChannels; ++c) {
-                            color[c] = (dstView[c, i] - range.offset) * range.scale;
-                        }
-
-                        color = ituth273::invTransfer(cicp.transfer, color) * alpha;
-                        for (size_t c = 0; c < numColorChannels; ++c) {
-                            dstView[c, i] = color[c];
-                        }
-                    },
-                    priority
+                const auto channelScale = 1.0f / (float)std::numeric_limits<T>::max();
+                co_await toFloat32(
+                    cicp.transfer, true, buf.span<const T>(), numChannels, dstView, alphaKind, priority, channelScale * range.scale, range.offset
                 );
                 resultData.hasPremultipliedAlpha = true;
 
@@ -564,7 +548,7 @@ Task<vector<ImageData>> PngImageLoader::load(istringstream& iStream, const fs::p
                     tlog::debug("No cICP, iCCP, sRGB, gAMA, or cHRM chunks found. Using sRGB by default.");
                 }
 
-                co_await toFloat32<true, true>(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
+                co_await toFloat32<ituth273::ETransfer::SRGB, true>(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
 
                 resultData.hasPremultipliedAlpha = true;
                 resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;

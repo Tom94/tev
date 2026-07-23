@@ -465,3 +465,7 @@ target_include_directories(gdcm-tev INTERFACE ${GDCM_INCLUDE_PATH})
 
 # Compile jxrlib for JPEG XR support
 add_subdirectory(jxrlib EXCLUDE_FROM_ALL)
+
+# Cross-platform SIMD
+set(XSIMD_SKIP_INSTALL ON CACHE BOOL " " FORCE)
+add_subdirectory(xsimd EXCLUDE_FROM_ALL)

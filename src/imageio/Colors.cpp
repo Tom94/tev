@@ -1056,10 +1056,11 @@ Task<void> toLinearSrgbPremul(
             }
 
             if (cicp) {
+                // TODO: optimize invTransfer's runtime argument
                 for (int x = 0; x < size.x(); ++x) {
                     Vector3f color;
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        color[c] = (in[c, x] - range.offset) * range.scale;
+                        color[c] = in[c, x] * range.scale + range.offset;
                     }
 
                     color = toRec709 * ituth273::invTransfer(cicp->transfer, color);
@@ -1111,7 +1112,7 @@ LimitedRange limitedRangeForBitsPerSample(int bitsPerSample, bool cbcr) {
     const int range = max - min;
 
     const int bitMax = (1 << bitsPerSample) - 1;
-    return {bitMax / (float)range, (float)min / bitMax};
+    return {bitMax / (float)range, -(float)min / range};
 }
 
 } // namespace tev

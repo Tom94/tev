@@ -125,9 +125,7 @@ jobs:
       matrix:
         os:
           - windows-2022
-          # CMake is currently borked on the ARM runner, detecting AMD64. Disable for now.
-          # https://github.com/orgs/community/discussions/155713#discussioncomment-12991583
-          # - windows-11-arm
+          - windows-11-arm
     env:
       build_dir: "build"
       config: "Release"
@@ -139,6 +137,8 @@ jobs:
         run: |
           choco install nasm
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          choco install wixtoolset --no-progress -y
+          echo "WIX=$(Get-ChildItem 'C:\Program Files (x86)\WiX Toolset*' | Select-Object -First 1 | % FullName)" >> $env:GITHUB_ENV
       - name: CMake
         run: cmake . -B ${{ env.build_dir }} -DCMAKE_BUILD_TYPE=${{ env.config }} -DTEV_DEPLOY=1 -DTEV_SUPPORT_HEIC=${{ env.SUPPORT_HEIC }}
       - name: Build

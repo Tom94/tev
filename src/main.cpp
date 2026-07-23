@@ -23,10 +23,13 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/GainMap.h>
 
-#include <ImfThreading.h>
 #include <args.hxx>
 
+#include <ImfThreading.h>
+
 #include <utf8.h>
+
+#include <xsimd/xsimd.hpp>
 
 #ifdef __APPLE__
 #    define GLFW_EXPOSE_NATIVE_COCOA
@@ -253,14 +256,17 @@ static void convertTo(
 }
 
 static int mainFunc(span<const string> arguments) {
-    ArgumentParser parser{
-        "tev — The EDR Viewer\n"
-        "version " TEV_VERSION
-        "\n"
-        "Inspection tool for images with high dynamic range",
-        "tev was developed by Thomas Müller <contact@tom94.net>. "
-        "Its source code is available under the GPLv3 License at https://tom94.net/tev",
-    };
+    static const string TEV_STRING = "tev — The EDR Viewer";
+    static const string VERSION_STRING = fmt::format("version: " TEV_VERSION " ({})", xsimd::default_arch::name());
+    static const string COPYRIGHT_STRING = "copyright: (C) 2017-2026 Thomas Müller <tom94.net>";
+    static const string SOURCE_STRING = "source: https://tom94.net/tev";
+    static const string LICENSE_STRING = "license: GPLv3";
+    static const string DESCRIPTION_STRING = "High dynamic range (HDR) image viewer for people who care about colors";
+
+    static const string HELP_STRING =
+        join(vector{TEV_STRING, DESCRIPTION_STRING, VERSION_STRING, COPYRIGHT_STRING, SOURCE_STRING, LICENSE_STRING}, "\n");
+
+    ArgumentParser parser{HELP_STRING};
 
     Flag autoFitFlag{
         parser,
@@ -563,7 +569,7 @@ static int mainFunc(span<const string> arguments) {
     }
 
     if (versionFlag) {
-        tlog::none("tev — The EDR Viewer\nversion " TEV_VERSION);
+        tlog::none(HELP_STRING);
         return 0;
     }
 
@@ -741,8 +747,8 @@ static int mainFunc(span<const string> arguments) {
     nanogui::init(!get(ldrFlag));
 
     const auto nanoguiShutdownGuard = ScopeGuard{[&]() {
-    // On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our
-    // program here anyways, let's let the OS clean up after us.
+// On some linux distributions glfwTerminate() (which is called by nanogui::shutdown()) causes segfaults. Since we are done with our
+// program here anyways, let's let the OS clean up after us.
 #if defined(__APPLE__) or defined(_WIN32)
         nanogui::shutdown();
 #endif

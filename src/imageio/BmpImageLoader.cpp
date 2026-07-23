@@ -1608,9 +1608,9 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
                     // Modern browsers / image viewers treat untagged BMPs as sRGB, so we do the same. But if a gamma is explicitly
                     // specified in the header, we respect that instead.
                     if (g > 0.0f) {
-                        val = powf(val, g);
+                        val = fastPow(val, g);
                     } else {
-                        val = toLinear(val);
+                        val = ituth273::srgbToLinear(val);
                     }
                 }
             },

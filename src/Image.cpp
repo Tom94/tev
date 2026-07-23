@@ -179,6 +179,7 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
                 r->numPixels(),
                 r->numPixels() * 3,
                 [rv, gv, bv, mat](size_t i) mutable {
+                    // TODO: vectorize with SIMD
                     const auto rgb = mat * Vector3f{rv[i], gv[i], bv[i]};
                     rv[i] = rgb.x();
                     gv[i] = rgb.y();
@@ -368,25 +369,46 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
             const size_t nSamples = data->size();
             auto convData = PixelBuffer::alloc(nSamples, targetFormat);
 
-            const auto typedConvert = [nSamples, priority](const auto* typedSrc, auto* typedDst) -> Task<void> {
+            const auto typedConvert = [nSamples, priority]<typename TSRC, typename TDST>(const TSRC* typedSrc, TDST* typedDst) -> Task<void> {
+                // Specialization for float->half conversion. Imf's built-in one is a bit slow, so we roll our own (ported from Giesen's
+                // float_to_half_fast3), SIMD vectorizing it while we're at it.
+                if constexpr (is_same_v<TSRC, float> && is_same_v<TDST, half> && vf::size > 1) {
+                    static constexpr size_t W = xsimd::batch<float>::size;
+                    co_await ThreadPool::global().parallelFor(
+                        0uz,
+                        nSamples / W,
+                        nSamples,
+                        [typedSrc, typedDst](size_t i) {
+                            const auto fb = vf::load_unaligned(typedSrc + i * W);
+                            const auto out = float_to_half(fb);
+                            store_halves(out, typedDst + i * W);
+                        },
+                        priority
+                    );
+
+                    for (size_t i = nSamples / W * W; i < nSamples; ++i) {
+                        const auto out = float_to_half(typedSrc[i]);
+                        store_halves(out, typedDst + i);
+                    }
+
+                    co_return;
+                }
+
                 co_await ThreadPool::global().parallelFor(
                     0uz,
                     nSamples,
                     nSamples,
                     [typedSrc, typedDst](size_t sampleIdx) {
-                        using src_t = remove_pointer_t<decltype(typedSrc)>;
-                        using dst_t = remove_pointer_t<decltype(typedDst)>;
-
                         float tmp = typedSrc[sampleIdx];
-                        if constexpr (is_integral_v<src_t>) {
-                            tmp /= (float)numeric_limits<src_t>::max();
+                        if constexpr (is_integral_v<TSRC>) {
+                            tmp /= (float)numeric_limits<TSRC>::max();
                         }
 
-                        if constexpr (is_integral_v<dst_t>) {
-                            if constexpr (is_signed_v<dst_t>) {
-                                tmp = clamp(tmp, -1.0f, 1.0f) * (float)numeric_limits<dst_t>::max() + copysignf(0.5f, tmp);
+                        if constexpr (is_integral_v<TDST>) {
+                            if constexpr (is_signed_v<TDST>) {
+                                tmp = clamp(tmp, -1.0f, 1.0f) * (float)numeric_limits<TDST>::max() + copysignf(0.5f, tmp);
                             } else {
-                                tmp = clamp(tmp, 0.0f, 1.0f) * (float)numeric_limits<dst_t>::max() + 0.5f;
+                                tmp = clamp(tmp, 0.0f, 1.0f) * (float)numeric_limits<TDST>::max() + 0.5f;
                             }
                         }
 
@@ -1265,18 +1287,20 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
 
     HeapArray<uint8_t> result(rgbaHdrData.size());
 
+    const auto applyExposureAndOffset = [factor = exp2(exposure), offset](float value) { return factor * value + offset; };
     co_await ThreadPool::global().parallelFor(
         0uz,
         rgbaHdrData.size() / 4,
         rgbaHdrData.size(),
         [&](const size_t i) {
             const size_t start = 4 * i;
-            const Vector3f rgb = toSRGB(applyGamma(
+
+            const Vector3f rgb = ituth273::transfer<ituth273::ETransfer::SRGB>(applyGamma(
                 applyTonemap(
                     {
-                        applyExposureAndOffset(rgbaHdrData[start + 0], exposure, offset),
-                        applyExposureAndOffset(rgbaHdrData[start + 1], exposure, offset),
-                        applyExposureAndOffset(rgbaHdrData[start + 2], exposure, offset),
+                        applyExposureAndOffset(rgbaHdrData[start + 0]),
+                        applyExposureAndOffset(rgbaHdrData[start + 1]),
+                        applyExposureAndOffset(rgbaHdrData[start + 2]),
                     },
                     gamma,
                     tonemap

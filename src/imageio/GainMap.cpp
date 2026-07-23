@@ -63,8 +63,10 @@ static vector<ChannelView<float>> getRgbOrLuminanceChannels(ImageData& image) {
         if (((r = image.mutableChannel(layer + "R")) && (g = image.mutableChannel(layer + "G")) && (b = image.mutableChannel(layer + "B"))) ||
             ((r = image.mutableChannel(layer + "r")) && (g = image.mutableChannel(layer + "g")) && (b = image.mutableChannel(layer + "b")))) {
             return {r->view<float>(), g->view<float>(), b->view<float>()};
-        } else if ((r = image.mutableChannel(layer + "L")) || (r = image.mutableChannel(layer + "l")) ||
-                   (r = image.mutableChannel(layer + "Y")) || (r = image.mutableChannel(layer + "y"))) {
+        } else if (
+            (r = image.mutableChannel(layer + "L")) || (r = image.mutableChannel(layer + "l")) || (r = image.mutableChannel(layer + "Y")) ||
+            (r = image.mutableChannel(layer + "y"))
+        ) {
             return {r->view<float>()};
         }
     }
@@ -98,8 +100,8 @@ Task<void> preprocessAndApplyAppleGainMap(
             for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
                 // NOTE: The docs (above link) say to use the Rec.709 transfer function here, but comparisons with ISO gain maps indicate
                 // that the gain maps are actually encoded with the sRGB transfer function.
-                // const float gain = ituth273::invTransferComponent(ituth273::ETransfer::BT709, gainMapChannels[gainmapChannel].at(i));
-                gainMapChannels[c][i] = toLinear(gainMapChannels[c][i]);
+                // const float gain = ituth273::bt709ToLinear(gainMapChannels[gainmapChannel].at(i));
+                gainMapChannels[c][i] = ituth273::srgbToLinear(gainMapChannels[c][i]);
             }
         },
         priority
@@ -145,8 +147,9 @@ Task<void> preprocessAndApplyAppleGainMap(
         }
     }
 
-    const float headroom = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ? exp2f(clamp(stops * targetHeadroom.value, 0.0f, stops)) :
-                                                                                    exp2f(clamp(stops, 0.0f, targetHeadroom.value));
+    const float headroom = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ?
+        fastExp2(clamp(stops * targetHeadroom.value, 0.0f, stops)) :
+        fastExp2(clamp(stops, 0.0f, targetHeadroom.value));
 
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
     // gain map itself in tev.
@@ -225,7 +228,7 @@ Task<void> preprocessAndApplyIsoGainMap(
             for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
                 const float val = gainMapChannels[c][i];
 
-                const float logRecovery = copysign(pow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
+                const float logRecovery = copysign(fastPow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
                 const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
                 gainMapChannels[c][i] = logBoost;
@@ -291,7 +294,7 @@ Task<void> preprocessAndApplyIsoGainMap(
                 const float logBoost = gainMapChannels[gainmapChannel][i];
 
                 const float sdr = imageChannels[c][i];
-                const float hdr = (sdr + metadata.baseOffset()[c]) * exp2f(logBoost * weight) - metadata.alternateOffset()[c];
+                const float hdr = (sdr + metadata.baseOffset()[c]) * fastExp2(logBoost * weight) - metadata.alternateOffset()[c];
 
                 imageChannels[c][i] = hdr;
             }

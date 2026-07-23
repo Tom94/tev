@@ -274,7 +274,7 @@ Task<void>
             const float bitScale = 1.0f / ((1 << bitSize) - 1);
             vector<float> out(length);
             for (unsigned int i = 0; i < length; ++i) {
-                out[i] = toLinear(raw[i] * bitScale);
+                out[i] = ituth273::srgbToLinear(raw[i] * bitScale);
             }
 
             return out;
@@ -599,7 +599,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
                         for (size_t c = 0; c < (size_t)view.nChannels(); ++c) {
                             const float scale = c == 0 ? yRange.scale : cbcrRange.scale;
                             const float offset = c == 0 ? yRange.offset : cbcrRange.offset;
-                            view[c, i] = (view[c, i] - offset) * scale;
+                            view[c, i] = view[c, i] * scale + offset;
                         }
                     },
                     priority
@@ -627,7 +627,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
                             v = 1.0f - v;
                         }
 
-                        view[c, i] = toLinear(v);
+                        view[c, i] = ituth273::srgbToLinear(v);
                     }
                 },
                 priority

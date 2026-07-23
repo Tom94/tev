@@ -122,3 +122,7 @@
 	path = dependencies/jxrlib
 	url = https://github.com/Tom94/jxrlib
 	shallow = true
+[submodule "dependencies/xsimd"]
+	path = dependencies/xsimd
+	url = https://github.com/Tom94/xsimd
+	shallow = true

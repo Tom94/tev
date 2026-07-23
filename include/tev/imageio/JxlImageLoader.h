@@ -22,7 +22,6 @@
 #include <tev/Image.h>
 #include <tev/imageio/ImageLoader.h>
 
-#include <istream>
 #include <span>
 
 namespace tev {

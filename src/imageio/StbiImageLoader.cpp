@@ -106,7 +106,7 @@ Task<vector<ImageData>>
             resultData.nativeMetadata.transfer = ituth273::ETransfer::Linear;
 
             const auto s = span{static_cast<const float*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
-            co_await toFloat32<false, true>(s, numChannels, outView, alphaKind, priority);
+            co_await toFloat32<ituth273::ETransfer::Linear, true>(s, numChannels, outView, alphaKind, priority);
             resultData.hasPremultipliedAlpha = true;
         } else {
             // Assume sRGB-encoded LDR images are display-referred.
@@ -114,7 +114,7 @@ Task<vector<ImageData>>
             resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
 
             const auto s = span{static_cast<const uint8_t*>(data.get()) + numSamples * frameIdx, (size_t)numSamples};
-            co_await toFloat32<true, true>(s, numChannels, outView, alphaKind, priority);
+            co_await toFloat32<ituth273::ETransfer::SRGB, true>(s, numChannels, outView, alphaKind, priority);
             resultData.hasPremultipliedAlpha = true;
         }
     }

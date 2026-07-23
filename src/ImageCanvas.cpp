@@ -180,7 +180,7 @@ void ImageCanvas::drawPixelValuesAsText(NVGcontext* ctx) {
                 // If shift and control are held, we display sRGB hex values
                 if (shiftAndControlHeld) {
                     for (size_t i = 0; i < colors.size(); ++i) {
-                        values[i] = hasAlpha && i == colors.size() - 1 ? values[i] : toSRGB(values[i]);
+                        values[i] = hasAlpha && i == colors.size() - 1 ? values[i] : ituth273::linearToSrgb(values[i]);
                     }
                 } else {
                     // Otherwise, display what the user configured as the inspection color space
@@ -954,13 +954,13 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     // We're going to draw our histogram in log space.
     static constexpr float addition = 0.001f;
-    static const float smallest = log(addition);
+    static const float smallest = fastLog2(addition);
 
     static constexpr auto symmetricLog = [](const float val) {
-        return val > 0 ? (log(val + addition) - smallest) : -(log(-val + addition) - smallest);
+        return val > 0 ? (fastLog2(val + addition) - smallest) : -(fastLog2(-val + addition) - smallest);
     };
     static constexpr auto symmetricLogInverse = [](const float val) {
-        return val > 0 ? (exp(val + smallest) - addition) : -(exp(-val + smallest) - addition);
+        return val > 0 ? (fastExp2(val + smallest) - addition) : -(fastExp2(-val + smallest) - addition);
     };
 
     const float minLog = symmetricLog(stats.minimum);
