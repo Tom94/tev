@@ -92,6 +92,30 @@ void ThreadPool::startThreads(size_t num) {
     }
 }
 
+bool ThreadPool::tryRunOneTask() {
+    if (!mTaskQueueSemaphore.tryWait()) {
+        return false;
+    }
+
+    QueuedTask task;
+    {
+        const std::scoped_lock lock{mTaskQueueMutex};
+        TEV_ASSERT(!mTaskQueue.empty(), "Task queue empty after successful tryWait.");
+
+        if (mTaskQueue.top().stopToken) {
+            // Hand off stop tokens to actual thread pool threads, not draining callers
+            mTaskQueueSemaphore.signal();
+            return false;
+        }
+
+        task = mTaskQueue.pop();
+    }
+
+    task.fun();
+    --mNumTasksInSystem;
+    return true;
+}
+
 void ThreadPool::shutdownThreads(size_t num) {
     mNumThreads -= num;
     for (size_t i = 0; i < num; ++i) {
