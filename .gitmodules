@@ -50,10 +50,6 @@
 	path = dependencies/libde265
 	url = https://github.com/strukturag/libde265
 	shallow = true
-[submodule "dependencies/aom"]
-	path = dependencies/aom
-	url = https://github.com/Tom94/aom
-	shallow = true
 [submodule "dependencies/Little-CMS"]
 	path = dependencies/Little-CMS
 	url = https://github.com/mm2/Little-CMS
@@ -125,4 +121,8 @@
 [submodule "dependencies/xsimd"]
 	path = dependencies/xsimd
 	url = https://github.com/Tom94/xsimd
+	shallow = true
+[submodule "dependencies/dav1d-cmake"]
+	path = dependencies/dav1d-cmake
+	url = https://github.com/Tom94/dav1d-cmake
 	shallow = true

@@ -181,67 +181,12 @@ set_target_properties(openjpeg-tev PROPERTIES
     INTERFACE_COMPILE_DEFINITIONS OPJ_STATIC
 )
 
-# Compile aom (dependency of libheif, which follows)
+# Compile DAV1D for AVIF support. Consumed by libheif, which follows
 if (TEV_SUPPORT_AVIF)
-    set(AOM_TARGET_NAME aom)
-    set(AOM_PREFIX_DIR ${CMAKE_CURRENT_BINARY_DIR}/${AOM_TARGET_NAME})
-    set(AOM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/aom)
-    set(AOM_BINARY_DIR ${AOM_PREFIX_DIR}/src/${AOM_TARGET_NAME}-build)
-    set(AOM_INCLUDE_DIRS ${AOM_SOURCE_DIR})
-    set(AOM_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}aom${CMAKE_STATIC_LIBRARY_SUFFIX})
-    if(IS_MULTI)
-        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/$<CONFIG>/)
-    else()
-        set(AOM_LIB_PREFIX ${AOM_BINARY_DIR}/)
-    endif()
-    set(AOM_LIBRARIES ${AOM_LIB_PREFIX}${AOM_LIB})
-
-    find_program(NASM_EXECUTABLE nasm)
-    if (NASM_EXECUTABLE)
-        message(STATUS "NASM found, some decoders will be faster")
-    endif()
-
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
-        set(AOM_TARGET_CPU "arm64")
-    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|ARM)$")
-        set(AOM_TARGET_CPU "arm")
-    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$" AND NASM_EXECUTABLE)
-        set(AOM_TARGET_CPU "x86_64")
-    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86|i386|i486|i586|i686|x86)$" AND NASM_EXECUTABLE)
-        set(AOM_TARGET_CPU "x86")
-    else()
-        set(AOM_TARGET_CPU "generic")
-    endif()
-    message(STATUS "AOM target CPU: ${AOM_TARGET_CPU}, CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
-
-    ExternalProject_Add(${AOM_TARGET_NAME}
-        PREFIX ${AOM_PREFIX_DIR}
-        SOURCE_DIR ${AOM_SOURCE_DIR}
-        BINARY_DIR ${AOM_BINARY_DIR}
-        BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target aom
-        CMAKE_ARGS
-            -DAOM_TARGET_CPU=${AOM_TARGET_CPU}
-            -DBUILD_SHARED_LIBS=0
-            -DENABLE_DOCS=0
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
-            -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
-            -DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}
-        BUILD_BYPRODUCTS ${AOM_LIBRARIES}
-        INSTALL_COMMAND ""
-    )
-
-    set(AOM_LIBRARY ${AOM_LIBRARIES} CACHE STRING " " FORCE)
-    set(AOM_INCLUDE_DIR ${AOM_INCLUDE_DIRS} CACHE PATH " " FORCE)
-    set(AOM_DIR ${AOM_SOURCE_DIR} CACHE PATH " " FORCE)
-
-    add_library(aom-lib INTERFACE IMPORTED GLOBAL)
-    add_dependencies(aom-lib ${AOM_TARGET_NAME})
-    set_target_properties(aom-lib PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${AOM_INCLUDE_DIRS}"
-        INTERFACE_LINK_LIBRARIES "${AOM_LIBRARIES}"
-    )
-
-    set(AOM_DECODER_FOUND TRUE CACHE BOOL " " FORCE)
+    add_subdirectory(dav1d-cmake EXCLUDE_FROM_ALL)
+    set(DAV1D_FOUND TRUE CACHE BOOL " " FORCE)
+    set(DAV1D_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dav1d-cmake/dav1d/include CACHE PATH " " FORCE)
+    set(DAV1D_LIBRARY dav1d::dav1d CACHE STRING " " FORCE)
 endif()
 
 # Compile libde265 (dependency of libheif, which follows)
@@ -290,7 +235,9 @@ if (TEV_USE_LIBHEIF)
     set(WITH_OpenH264_DECODER OFF CACHE BOOL " " FORCE)
 
     set(WITH_AOM_ENCODER OFF CACHE BOOL " " FORCE)
-    set(WITH_AOM_DECODER ${TEV_SUPPORT_AVIF} CACHE BOOL " " FORCE)
+    set(WITH_AOM_DECODER OFF CACHE BOOL " " FORCE)
+
+    set(WITH_DAV1D ${TEV_SUPPORT_AVIF} CACHE BOOL " " FORCE)
 
     set(WITH_JPEG_DECODER ON CACHE BOOL " " FORCE)
     set(WITH_OpenJPEG_DECODER ON CACHE BOOL " " FORCE)
@@ -312,12 +259,7 @@ if (TEV_USE_LIBHEIF)
     add_dependencies(heif ${JPEGTURBO_TARGET_NAME})
     target_include_directories(heif PRIVATE "${JPEG_INCLUDE_DIRS}")
 
-    target_link_libraries(heif PRIVATE openjpeg-tev)
-
-    if (TEV_SUPPORT_AVIF)
-        add_dependencies(heif ${AOM_TARGET_NAME})
-        target_include_directories(heif PRIVATE ${AOM_BINARY_DIR})
-    endif()
+    target_link_libraries(heif PRIVATE openjpeg-tev dav1d::dav1d)
 
     if (TEV_SUPPORT_HEIC)
         target_include_directories(heif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/libde265)
