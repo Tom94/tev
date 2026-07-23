@@ -112,6 +112,26 @@ public:
     void shutdownThreads(size_t num);
     void shutdown();
 
+    bool tryRunOneTask();
+
+    // Block the calling thread on `task`, but keep the pool productive by running queued tasks inline instead of sleeping. Useful for
+    // sychronous APIs that need to wait for a task to finish, but don't want to block the threadpool. See `parallelForSync`.
+    template <typename T> T blockAndDrain(Task<T>&& task) {
+        while (!task.done()) {
+            if (!tryRunOneTask()) {
+                // If we've got no tasks to run, back off a bit to avoid busy waiting. No big harm done if tasks are queued for up to 1ms
+                // without being dealt with. If more tasks arrive than can be processed, the threadpool will remain busy once the 1ms are
+                // over. Waiting on the blocked task itself allows early wakeups if the task finishes while we're waiting, so we're not
+                // actually incurring 1ms latency on that front.
+                if (task.wait_for(std::chrono::milliseconds(1)) == std::future_status::ready) {
+                    break;
+                }
+            }
+        }
+
+        return task.get(); // already complete; no real blocking
+    }
+
     size_t numTasksInSystem() const { return mNumTasksInSystem; }
 
     void waitUntilFinished();
@@ -188,6 +208,15 @@ public:
             },
             priority
         );
+    }
+
+    template <std::integral Int, std::invocable<Int, Int> F>
+    void parallelForSync(Int start, Int end, size_t approxCost, F body, int priority) {
+        blockAndDrain(parallelFor(start, end, approxCost, body, priority));
+    }
+
+    template <std::integral Int, std::invocable<Int> F> void parallelForSync(Int start, Int end, size_t approxCost, F body, int priority) {
+        blockAndDrain(parallelFor(start, end, approxCost, body, priority));
     }
 
     size_t numThreads() const { return mNumThreads; }

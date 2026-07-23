@@ -20,6 +20,7 @@
 
 #include <tev/Common.h>
 
+#include <chrono>
 #include <coroutine>
 #include <future>
 #include <ranges>
@@ -199,6 +200,10 @@ public:
         mHandle = nullptr;
         return await_resume();
     }
+
+    bool done() const noexcept { return mState->latch.value() <= (mState->continuation ? 0 : 1); }
+
+    std::future_status wait_for(const std::chrono::microseconds& duration) const noexcept { return mFuture.wait_for(duration); }
 
     bool await_suspend(std::coroutine_handle<> coroutine) noexcept {
         if (!mHandle) {
