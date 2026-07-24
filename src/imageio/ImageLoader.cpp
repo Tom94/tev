@@ -102,6 +102,11 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/heif",
 #endif
         "image/ico",
+        "image/jp2",
+        "image/jpx",
+        // TODO: add support for these
+        // "image/jpm",
+        // "video/mj2",
         "image/jpeg",
         "image/jxl",
         "image/jxr",
@@ -130,6 +135,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/x-portable-graymap",
         "image/x-portable-pixmap",
         "application/dicom",
+        "application/fits",
     };
 
     return mimeTypes;
