@@ -1287,7 +1287,7 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
 
     HeapArray<uint8_t> result(rgbaHdrData.size());
 
-    const auto applyExposureAndOffset = [factor = exp2(exposure), offset](float value) { return factor * value + offset; };
+    const auto exposureFactor = exp2(exposure);
     co_await ThreadPool::global().parallelFor(
         0uz,
         rgbaHdrData.size() / 4,
@@ -1295,24 +1295,16 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
         [&](const size_t i) {
             const size_t start = 4 * i;
 
-            const Vector3f rgb = ituth273::transfer<ituth273::ETransfer::SRGB>(applyGamma(
-                applyTonemap(
-                    {
-                        applyExposureAndOffset(rgbaHdrData[start + 0]),
-                        applyExposureAndOffset(rgbaHdrData[start + 1]),
-                        applyExposureAndOffset(rgbaHdrData[start + 2]),
-                    },
-                    gamma,
-                    tonemap
-                ),
-                2.2f
-            ));
+            v4f rgba = xsimd::load_unaligned(&rgbaHdrData[start]);
+            v4f rgb = ituth273::transferComponent<ituth273::ETransfer::SRGB>(
+                applyGamma(applyTonemap(exposureFactor * rgba + v4f{offset}, gamma, tonemap), v4f{2.2f})
+            );
 
-            const auto rgba = Vector4f{rgb.x(), rgb.y(), rgb.z(), rgbaHdrData[start + 3]};
+            // splice original alpha back into lane 3
+            rgba = xsimd::select(v4f::batch_bool_type{true, true, true, false}, rgb, rgba);
 
-            for (int j = 0; j < 4; ++j) {
-                result[start + j] = (uint8_t)(clamp(rgba[j], 0.0f, 1.0f) * 255 + 0.5f);
-            }
+            rgba = xsimd::clip(rgba, v4f{0.0f}, v4f{1.0f}) * v4f{255.0f} + v4f{0.5f};
+            rgba.store_unaligned(&result[start]);
         },
         priority
     );

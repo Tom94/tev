@@ -127,6 +127,7 @@ std::string_view toString(EWpPrimaries wpPrimaties);
 // Scalar mode:  B = float                                  (size == 1)
 // -----------------------------------------------------------------------------
 using vf = xsimd::batch<float>;
+using v4f = xsimd::make_sized_batch_t<float, 4>;
 
 template <class B, class = void> struct int_companion {
     using type = xsimd::batch<int32_t, typename B::arch_type>;
@@ -144,15 +145,15 @@ template <class B> struct uint_companion<B, std::enable_if_t<std::is_arithmetic_
 };
 template <class B> using uint_companion_t = typename uint_companion<B>::type;
 
-inline float int_to_float(std::int32_t i) { return static_cast<float>(i); }
-template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) { return xsimd::to_float(i); }
+inline float int_to_float(std::int32_t i) noexcept { return static_cast<float>(i); }
+template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) noexcept { return xsimd::to_float(i); }
 
-inline int float_to_int(float f) { return static_cast<int32_t>(f); }
-template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) { return xsimd::to_int(f); }
+inline int float_to_int(float f) noexcept { return static_cast<int32_t>(f); }
+template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) noexcept { return xsimd::to_int(f); }
 
 // portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
 // results land in the low 16 bits of an equally-wide uint32 batch.
-template <class B> auto float_to_half(const B& fb) -> uint_companion_t<B> {
+template <class B> auto float_to_half(const B& fb) noexcept -> uint_companion_t<B> {
     using i32 = uint_companion_t<B>;
     using s32 = int_companion_t<B>;
     using f32 = B;
@@ -198,7 +199,7 @@ template <class B> auto float_to_half(const B& fb) -> uint_companion_t<B> {
 
 // portable round-half-up: xsimd port of Giesen's float_to_half_fast3.
 // operates on one float batch, returns results in the low 16 bits of an equally-wide uint32 batch.
-template <class B> auto float_to_half_round_up(const B& fb) -> uint_companion_t<B> {
+template <class B> auto float_to_half_round_up(const B& fb) noexcept -> uint_companion_t<B> {
     using i32 = uint_companion_t<B>;
 
     const i32 sign_mask = i32(0x80000000u);
@@ -230,7 +231,7 @@ template <class B> auto float_to_half_round_up(const B& fb) -> uint_companion_t<
     return out;
 }
 
-template <class B> void store_halves(const B& v, half* dst) {
+template <class B> void store_halves(const B& v, half* dst) noexcept {
     if constexpr (std::is_arithmetic_v<B>) {
         *dst = std::bit_cast<half>(static_cast<uint16_t>(v));
     } else {
@@ -243,7 +244,7 @@ template <class B> void store_halves(const B& v, half* dst) {
 }
 
 // log2, ~single-precision polynomial. Clamps subnormals to FLT_MIN.
-template <class B> B fastLog2(const B& x_in) {
+template <class B> B fastLog2(const B& x_in) noexcept {
     using vi = int_companion_t<B>;
 
     // x = max(x, FLT_MIN) to avoid the subnormal path.
@@ -270,7 +271,7 @@ template <class B> B fastLog2(const B& x_in) {
 }
 
 // exp2, ~single-precision polynomial. round-to-nearest-even + bit-injection ldexp.
-template <class B> B fastExp2(const B& x) {
+template <class B> B fastExp2(const B& x) noexcept {
     using vi = int_companion_t<B>;
 
     // round to nearest even (matches nearbyintf under default rounding).
@@ -293,50 +294,53 @@ template <class B> B fastExp2(const B& x) {
 }
 
 // pow2-based pow: 2^(e * log2(x)). Requires x >= 0
-template <class B> B fastPow(const B& x, const B& y) {
+template <class B> B fastPow(const B& x, const B& y) noexcept {
     B r = fastExp2(y * fastLog2(x));
     r = xsimd::select(x == B(0.0f), B(0.0f), r);
     return r;
 }
 
-template <class B> B applyGamma(const B& val, const B& gamma) { return xsimd::copysign(fastPow(xsimd::abs(val), gamma), val); }
+template <class B> B applyGamma(const B& val, const B& gamma) noexcept { return xsimd::copysign(fastPow(xsimd::abs(val), gamma), val); }
 
-inline nanogui::Vector3f applyGamma(nanogui::Vector3f val, float gamma) {
-    using v4f = xsimd::make_sized_batch_t<float, 4>;
+inline nanogui::Vector3f applyGamma(nanogui::Vector3f val, float gamma) noexcept {
     const v4f in{val.x(), val.y(), val.z(), 0.0f};
     const v4f res = applyGamma(in, v4f(gamma));
     nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
     return v;
 }
 
-inline nanogui::Vector3f applyTonemap(nanogui::Vector3f value, float gamma, ETonemap tonemap) {
-    nanogui::Vector3f result;
+inline v4f applyTonemap(const v4f& val, const float gamma, ETonemap tonemap) noexcept {
+    using xsimd::max;
+    using xsimd::min;
+    using xsimd::reduce_add;
     switch (tonemap) {
-        case ETonemap::Gamma: {
-            result = applyGamma(value, 1.0f / gamma);
-            break;
-        }
+        case ETonemap::Gamma: return applyGamma(val, v4f{1.0f / gamma});
         case ETonemap::FalseColor: {
-            static constexpr auto falseColor = [](float linear) {
+            static constexpr auto falseColor = [](const float linear) {
                 static const auto fcd = colormap::turbo();
                 int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
-                return nanogui::Vector3f{fcd[start], fcd[start + 1], fcd[start + 2]};
+                return v4f{fcd[start], fcd[start + 1], fcd[start + 2], 0.0f};
             };
 
-            result = falseColor(fastLog2(mean(value) + 0.03125f) / 10 + 0.5f);
-            break;
+            const v4f tmp = val & xsimd::bit_cast<v4f>(uint_companion_t<v4f>{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000});
+            return falseColor(fastLog2(reduce_add(tmp) * (1.0f / 3.0f) + 0.03125f) / 10 + 0.5f);
         }
         case ETonemap::PositiveNegative: {
-            result = {-2.0f * mean(min(value, nanogui::Vector3f{0.0f})), 2.0f * mean(max(value, nanogui::Vector3f{0.0f})), 0.0f};
-            break;
+            const v4f tmp = val & xsimd::bit_cast<v4f>(uint_companion_t<v4f>{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000});
+            return v4f{(-2.0f / 3.0f) * reduce_add(min(tmp, v4f{0.0f})), (2.0f / 3.0f) * reduce_add(max(tmp, v4f{0.0f})), 0.0f, 0.0f};
         }
-        default: throw std::runtime_error{"Invalid tonemap selected."};
+        default: return val; // Invalid tonemap selected, return input unchanged.
     }
-
-    return min(max(result, nanogui::Vector3f{0.0f}), nanogui::Vector3f{1.0f});
 }
 
-inline float applyMetric(float image, float reference, EMetric metric) {
+inline nanogui::Vector3f applyTonemap(nanogui::Vector3f val, float gamma, ETonemap tonemap) noexcept {
+    const v4f in{val.x(), val.y(), val.z(), 0.0f};
+    const v4f res = applyTonemap(in, gamma, tonemap);
+    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
+    return v;
+}
+
+inline float applyMetric(float image, float reference, EMetric metric) noexcept {
     float diff = image - reference;
     switch (metric) {
         case EMetric::Error: return diff;
@@ -344,7 +348,7 @@ inline float applyMetric(float image, float reference, EMetric metric) {
         case EMetric::SquaredError: return diff * diff;
         case EMetric::RelativeAbsoluteError: return std::abs(diff) / (reference + 0.01f);
         case EMetric::RelativeSquaredError: return diff * diff / (reference * reference + 0.01f);
-        default: throw std::runtime_error{"Invalid metric selected."};
+        default: return diff; // Invalid metric selected, return error.
     }
 }
 
@@ -676,7 +680,6 @@ template <class B> B invTransferComponent(ETransfer transfer, const B& val) noex
 }
 
 template <ETransfer TRANSFER> nanogui::Vector3f invTransfer(const nanogui::Vector3f& val) noexcept {
-    using v4f = xsimd::make_sized_batch_t<float, 4>;
     const v4f in{val.x(), val.y(), val.z(), 0.0f};
     const v4f res = invTransferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
     nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
@@ -765,7 +768,6 @@ template <class B> B transferComponent(const ETransfer transfer, const B& val) n
 }
 
 template <ETransfer TRANSFER> nanogui::Vector3f transfer(const nanogui::Vector3f& val) noexcept {
-    using v4f = xsimd::make_sized_batch_t<float, 4>;
     const v4f in{val.x(), val.y(), val.z(), 0.0f};
     const v4f res = transferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
     nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
