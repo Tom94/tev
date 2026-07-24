@@ -163,7 +163,7 @@ ImageViewer::ImageViewer(
     mImageCanvas = new ImageCanvas{horizontalScreenSplit};
     mImageCanvas->setPixelRatio(pixel_ratio());
 
-    // Tonemapping sectionim
+    // Tonemapping section
     {
         auto panel = new Widget{mSidebarLayout};
         panel->set_layout(new BoxLayout{Orientation::Horizontal, Alignment::Fill, 5});
@@ -497,6 +497,21 @@ ImageViewer::ImageViewer(
         }
     }
 
+    {
+        auto buttonContainer = new Widget{mSidebarLayout};
+        buttonContainer->set_layout(new GridLayout{Orientation::Horizontal, 1});
+
+        auto splitscreenButton = new Button{buttonContainer, "Splitscreen", 0};
+        splitscreenButton->set_font_size(15);
+        splitscreenButton->set_change_callback([this](bool status) { setSplitscreenSlider(status); });
+        splitscreenButton->set_tooltip(
+            "Toggle splitscreen when overlaying images.\n\n"
+            "Right-click and drag anywhere on the canvas to move the slider."
+        );
+        splitscreenButton->set_flags(Button::Flags::ToggleButton);
+        splitscreenButton->set_pushed(false);
+    }
+
     // Tonemap options
     {
         mTonemapButtonContainer = new Widget{mSidebarLayout};
@@ -708,7 +723,7 @@ ImageViewer::ImageViewer(
                 makePlaybackButton("", true, {}, FA_WINDOW_RESTORE, "Automatically resize tev's window to fit image on load.");
             mResizeWindowToFitImageOnLoadButton->set_flags(Button::Flags::ToggleButton);
             mResizeWindowToFitImageOnLoadButton->set_change_callback([this](bool value) { setResizeWindowToFitImageOnLoad(value); });
-            mResizeWindowToFitImageOnLoadButton->set_pushed(true);
+            mResizeWindowToFitImageOnLoadButton->set_pushed(false);
         }
 
         // Save, refresh, load, close
