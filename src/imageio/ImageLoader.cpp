@@ -104,9 +104,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/ico",
         "image/jp2",
         "image/jpx",
-        // TODO: add support for these
-        // "image/jpm",
-        // "video/mj2",
+        "image/jpm",
         "image/jpeg",
         "image/jxl",
         "image/jxr",
@@ -136,6 +134,7 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/x-portable-pixmap",
         "application/dicom",
         "application/fits",
+        "video/mj2",
     };
 
     return mimeTypes;

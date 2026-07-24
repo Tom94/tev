@@ -50,7 +50,14 @@ optional<OPJ_CODEC_FORMAT> detectJ2kFormat(span<const uint8_t> hdr) {
     }
 
     if (memcmp(hdr.data(), jp2Magic, sizeof(jp2Magic)) == 0) {
-        // We could differentiate between JP2 and other codecs, but openjpeg only supports JP2 anyway, so we won't.
+        // Peek the ftyp major brand (box: [len(4)][ 'ftyp' ][ brand(4) ]).
+        if (hdr.size() >= 24 && memcmp(hdr.data() + 16, "ftyp", 4) == 0) {
+            const char* brand = (const char*)hdr.data() + 20;
+            if (memcmp(brand, "mjp2", 4) == 0 || memcmp(brand, "jpm ", 4) == 0) {
+                return OPJ_CODEC_JPX; // sentinel "box-based, extract codestream"
+            }
+        }
+
         return OPJ_CODEC_JP2;
     }
 
@@ -180,7 +187,7 @@ static optional<Jp2Box> readBoxHeader(span<const uint8_t> data, uint64_t* length
     };
 }
 
-Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
+static Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
     Jp2Metadata meta;
 
     tlog::debug("Extracting JP2 boxes:");
@@ -216,6 +223,138 @@ Jp2Metadata extractJp2Metadata(span<const uint8_t> data) {
     return meta;
 }
 
+// Recursively collect all contiguous codestream ('jp2c') boxes.
+static void collectCodestreamBoxes(span<const uint8_t> data, vector<span<const uint8_t>>& out) {
+    vector<span<const uint8_t>> codestreams;
+    while (data.size() > 0) {
+        uint64_t boxLength = 0;
+        const auto box = readBoxHeader(data, &boxLength);
+        if (!box.has_value()) {
+            break;
+        }
+
+        if (box->type == "jp2c") {
+            out.push_back(box->data);
+        } else if (
+            box->type == "jpch" || box->type == "jplh" || box->type == "pcol" || box->type == "moov" || box->type == "trak" ||
+            box->type == "mdia" || box->type == "minf" || box->type == "stbl"
+        ) {
+            collectCodestreamBoxes(box->data, out);
+        }
+
+        data = data.subspan(boxLength);
+    }
+}
+
+static vector<span<const uint8_t>> findAllCodestreamBoxes(span<const uint8_t> data) {
+    vector<span<const uint8_t>> out;
+    collectCodestreamBoxes(data, out);
+    return out;
+}
+
+// Fallback for MJ2 where streams live raw in 'mdat': split on SOC...EOC.
+static vector<span<const uint8_t>> findAllSocMarkers(span<const uint8_t> data) {
+    vector<span<const uint8_t>> out;
+    size_t i = 0;
+    while (i + 1 < data.size()) {
+        if (data[i] == 0xFF && data[i + 1] == 0x4F) {
+            const size_t start = i;
+            size_t j = i + 2;
+            while (j + 1 < data.size() && !(data[j] == 0xFF && data[j + 1] == 0xD9)) {
+                ++j;
+            }
+            const size_t end = (j + 1 < data.size()) ? j + 2 : data.size();
+            out.push_back(data.subspan(start, end - start));
+            i = end;
+        } else {
+            ++i;
+        }
+    }
+    return out;
+}
+
+// colr box body:
+//   METH (1 byte): 1 = enumerated, 2 = restricted ICC, (3/4 = extended, JPX)
+//   PREC (1 byte), APPROX (1 byte)
+//   if METH==1: EnumCS (4 bytes BE): 16=sRGB, 17=greyscale, 18=sYCC
+//   if METH==2: ICC profile bytes to end of box
+struct Jp2ColorInfo {
+    optional<OPJ_COLOR_SPACE> enumCs;
+    span<const uint8_t> iccProfile;
+};
+
+static optional<Jp2ColorInfo> parseColrBox(span<const uint8_t> box) {
+    if (box.size() < 3) {
+        return nullopt;
+    }
+
+    const uint8_t meth = box[0];
+    Jp2ColorInfo info;
+
+    if (meth == 1) {
+        if (box.size() < 7) {
+            return nullopt;
+        }
+        switch (readU32Be(box.data() + 3)) {
+            case 16: info.enumCs = OPJ_CLRSPC_SRGB; break;
+            case 17: info.enumCs = OPJ_CLRSPC_GRAY; break;
+            case 18: info.enumCs = OPJ_CLRSPC_SYCC; break;
+            default: return nullopt;
+        }
+    } else if (meth == 2 || meth == 3) {
+        if (box.size() <= 3) {
+            return nullopt;
+        }
+        info.iccProfile = box.subspan(3);
+    } else {
+        return nullopt;
+    }
+
+    return info;
+}
+
+static optional<Jp2ColorInfo> findColrBox(span<const uint8_t> data) {
+    while (data.size() > 0) {
+        uint64_t boxLength = 0;
+        const auto box = readBoxHeader(data, &boxLength);
+        if (!box.has_value()) {
+            break;
+        }
+
+        if (box->type == "colr") {
+            if (auto info = parseColrBox(box->data)) {
+                return info;
+            }
+        } else if (box->type == "stsd") {
+            // FullBox header (4) + entry count (4), then sample entries.
+            if (box->data.size() > 8) {
+                if (auto info = findColrBox(box->data.subspan(8))) {
+                    return info;
+                }
+            }
+        } else if (box->type == "mjp2") {
+            // VisualSampleEntry: 6 reserved + 2 data-ref-index + 70 bytes
+            // of visual header = 78 bytes, then child boxes (incl. colr).
+            if (box->data.size() > 78) {
+                if (auto info = findColrBox(box->data.subspan(78))) {
+                    return info;
+                }
+            }
+        } else if (
+            box->type == "moov" || box->type == "trak" || box->type == "mdia" || box->type == "minf" || box->type == "stbl" ||
+            box->type == "jp2h" || box->type == "jpch" || box->type == "jplh"
+        ) {
+            if (auto info = findColrBox(box->data)) {
+                return info;
+            }
+        }
+
+        data = data.subspan(boxLength);
+    }
+
+    return nullopt;
+}
+
 Task<vector<ImageData>> Jpeg2000ImageLoader::load(
     span<const uint8_t> data,
     const fs::path& path,
@@ -232,129 +371,290 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         throw FormatNotSupported{"Data is not a JPEG 2000 image or codestream."};
     }
 
-    using CodecPtr = unique_ptr<opj_codec_t, decltype(&opj_destroy_codec)>;
-    const auto codec = CodecPtr{opj_create_decompress(*j2kFormat), opj_destroy_codec};
-    if (!codec) {
-        throw ImageLoadError{"Failed to create JPEG 2000 codec."};
-    }
+    vector<span<const uint8_t>> codestreams;
+    OPJ_CODEC_FORMAT codecFormat;
 
-    opj_dparameters_t params;
-    opj_set_default_decoder_parameters(&params);
-    opj_setup_decoder(codec.get(), &params);
-
-    MemStream ms{data, 0};
-
-    using StreamPtr = unique_ptr<opj_stream_t, decltype(&opj_stream_destroy)>;
-    const auto stream = StreamPtr{makeMemStream(&ms), opj_stream_destroy};
-    if (!stream) {
-        throw ImageLoadError{"Failed to create JPEG 2000 stream."};
-    }
-
-    using ImagePtr = unique_ptr<opj_image_t, decltype(&opj_image_destroy)>;
-    auto image = ImagePtr{nullptr, opj_image_destroy};
-
-    if (opj_image_t* img; opj_read_header(stream.get(), codec.get(), &img) && img) {
-        image.reset(img);
+    if (*j2kFormat == OPJ_CODEC_J2K || *j2kFormat == OPJ_CODEC_JP2) {
+        codestreams.push_back(data); // whole thing; openjpeg parses the JP2 boxes itself
+        codecFormat = *j2kFormat;
     } else {
-        throw ImageLoadError{"Failed to read JPEG 2000 header."};
-    }
-
-    if (!opj_decode(codec.get(), stream.get(), image.get())) {
-        throw ImageLoadError{"Failed to decode JPEG 2000 image."};
-    }
-
-    if (!opj_end_decompress(codec.get(), stream.get())) {
-        throw ImageLoadError{"Failed to finalize JPEG 2000 decompression."};
-    }
-
-    static constexpr auto colorSpaceToString = [](OPJ_COLOR_SPACE cs) -> string_view {
-        switch (cs) {
-            case OPJ_CLRSPC_UNKNOWN: return "unknown";
-            case OPJ_CLRSPC_UNSPECIFIED: return "unspecified";
-            case OPJ_CLRSPC_SRGB: return "srgb";
-            case OPJ_CLRSPC_GRAY: return "gray";
-            case OPJ_CLRSPC_SYCC: return "sycc";
-            case OPJ_CLRSPC_EYCC: return "eycc";
-            case OPJ_CLRSPC_CMYK: return "cmyk";
-            default: return "invalid";
+        codestreams = findAllCodestreamBoxes(data);
+        if (codestreams.empty()) {
+            codestreams = findAllSocMarkers(data);
         }
-    };
 
-    const auto region = Box2i{
-        Vector2i{(int)image->x0,               (int)image->y0              },
-        Vector2i{(int)(image->x0 + image->x1), (int)(image->y0 + image->y1)}
-    };
-    const auto size = region.size();
+        if (codestreams.empty()) {
+            throw ImageLoadError{"No JPEG 2000 codestream found in container."};
+        }
 
-    tlog::debug(
-        "JPEG 2000 info: region=[{}, {}] numcomps={} color_space={} icc={}",
-        region.min,
-        region.max,
-        image->numcomps,
-        colorSpaceToString(image->color_space),
-        image->icc_profile_len > 0 ? "yes" : "no"
-    );
+        codecFormat = OPJ_CODEC_J2K;
+    }
 
-    const size_t numChannels = image->numcomps;
+    optional<Jp2ColorInfo> globalColorInfo = nullopt;
 
-    for (size_t c = 0; c < image->numcomps; ++c) {
-        const auto& comp = image->comps[c];
+    // If the codec is neither JP2 not J2K that means we are decoding a box-based format that openjpeg doesn't support and that we manually
+    // extracted the codestreams and colr boxes from. In that case, we should overwrite what openjpeg has populated from the raw codestream.
+    if (j2kFormat == OPJ_CODEC_JPX) {
+        globalColorInfo = findColrBox(data);
+    }
 
-        tlog::debug(
-            "  Component {}: w={} h={} dx={} dy={} x0={} y0={} prec={} sgnd={} resno_decoded={} factor={} alpha={}",
-            c,
-            comp.w,
-            comp.h,
-            comp.dx,
-            comp.dy,
-            comp.x0,
-            comp.y0,
-            comp.prec,
-            comp.sgnd,
-            comp.resno_decoded,
-            comp.factor,
-            comp.alpha
-        );
+    const auto decodeCodestream = [&](span<const uint8_t> codestream) -> Task<ImageData> {
+        using CodecPtr = unique_ptr<opj_codec_t, decltype(&opj_destroy_codec)>;
+        const auto codec = CodecPtr{opj_create_decompress(codecFormat), opj_destroy_codec};
+        if (!codec) {
+            throw ImageLoadError{"Failed to create JPEG 2000 codec."};
+        }
 
-        if (comp.alpha) {
-            if (c != image->numcomps - 1) {
-                tlog::warning("Alpha channel is not the last component (index {}). This is unusual and may cause issues.", c);
+        opj_dparameters_t params;
+        opj_set_default_decoder_parameters(&params);
+        opj_setup_decoder(codec.get(), &params);
+
+        MemStream ms{codestream, 0};
+
+        using StreamPtr = unique_ptr<opj_stream_t, decltype(&opj_stream_destroy)>;
+        const auto stream = StreamPtr{makeMemStream(&ms), opj_stream_destroy};
+        if (!stream) {
+            throw ImageLoadError{"Failed to create JPEG 2000 stream."};
+        }
+
+        using ImagePtr = unique_ptr<opj_image_t, decltype(&opj_image_destroy)>;
+        auto image = ImagePtr{nullptr, opj_image_destroy};
+
+        if (opj_image_t* img; opj_read_header(stream.get(), codec.get(), &img) && img) {
+            image.reset(img);
+        } else {
+            throw ImageLoadError{"Failed to read JPEG 2000 header."};
+        }
+
+        if (!opj_decode(codec.get(), stream.get(), image.get())) {
+            throw ImageLoadError{"Failed to decode JPEG 2000 image."};
+        }
+
+        if (!opj_end_decompress(codec.get(), stream.get())) {
+            throw ImageLoadError{"Failed to finalize JPEG 2000 decompression."};
+        }
+
+        OPJ_COLOR_SPACE colorSpace = image->color_space;
+        span<const uint8_t> iccProfile = {image->icc_profile_buf, image->icc_profile_len};
+
+        if (globalColorInfo) {
+            if (colorSpace == OPJ_CLRSPC_UNSPECIFIED && globalColorInfo->enumCs.has_value()) {
+                tlog::debug("Setting color space from colr box: {}", (int)*globalColorInfo->enumCs);
+                colorSpace = *globalColorInfo->enumCs;
+            }
+
+            if ((!iccProfile.data() || iccProfile.empty()) && !globalColorInfo->iccProfile.empty()) {
+                tlog::debug("Setting ICC profile from colr box: {} bytes", globalColorInfo->iccProfile.size());
+                iccProfile = globalColorInfo->iccProfile;
             }
         }
-    }
 
-    OPJ_COLOR_SPACE colorSpace = image->color_space;
-    if (colorSpace == OPJ_CLRSPC_UNSPECIFIED || colorSpace == OPJ_CLRSPC_UNKNOWN) {
-        if (numChannels <= 2) {
-            colorSpace = OPJ_CLRSPC_GRAY;
-        } else {
-            colorSpace = OPJ_CLRSPC_SRGB;
+        static constexpr auto colorSpaceToString = [](OPJ_COLOR_SPACE cs) -> string_view {
+            switch (cs) {
+                case OPJ_CLRSPC_UNKNOWN: return "unknown";
+                case OPJ_CLRSPC_UNSPECIFIED: return "unspecified";
+                case OPJ_CLRSPC_SRGB: return "srgb";
+                case OPJ_CLRSPC_GRAY: return "gray";
+                case OPJ_CLRSPC_SYCC: return "sycc";
+                case OPJ_CLRSPC_EYCC: return "eycc";
+                case OPJ_CLRSPC_CMYK: return "cmyk";
+                default: return "invalid";
+            }
+        };
+
+        const auto region = Box2i{
+            Vector2i{(int)image->x0,               (int)image->y0              },
+            Vector2i{(int)(image->x0 + image->x1), (int)(image->y0 + image->y1)}
+        };
+        const auto size = region.size();
+
+        tlog::debug(
+            "JPEG 2000 info: region=[{}, {}] numcomps={} colorSpace={} icc={}",
+            region.min,
+            region.max,
+            image->numcomps,
+            colorSpaceToString(colorSpace),
+            !iccProfile.empty() ? "yes" : "no"
+        );
+
+        const size_t numChannels = image->numcomps;
+
+        for (size_t c = 0; c < image->numcomps; ++c) {
+            const auto& comp = image->comps[c];
+
+            tlog::debug(
+                "  Component {}: w={} h={} dx={} dy={} x0={} y0={} prec={} sgnd={} resno_decoded={} factor={} alpha={}",
+                c,
+                comp.w,
+                comp.h,
+                comp.dx,
+                comp.dy,
+                comp.x0,
+                comp.y0,
+                comp.prec,
+                comp.sgnd,
+                comp.resno_decoded,
+                comp.factor,
+                comp.alpha
+            );
+
+            if (comp.alpha) {
+                if (c != image->numcomps - 1) {
+                    tlog::warning("Alpha channel is not the last component (index {}). This is unusual and may cause issues.", c);
+                }
+            }
         }
-    }
 
-    static constexpr auto yccToRgb = [](float y, float cb, float cr) {
-        cb -= 0.5f;
-        cr -= 0.5f;
-        return Vector3f{y + (1.402f * cr), y - (0.344136f * cb + 0.714136f * cr), y + (1.772f * cb)};
+        if (colorSpace == OPJ_CLRSPC_UNSPECIFIED || colorSpace == OPJ_CLRSPC_UNKNOWN) {
+            if (numChannels <= 2) {
+                colorSpace = OPJ_CLRSPC_GRAY;
+            } else {
+                colorSpace = OPJ_CLRSPC_SRGB;
+            }
+        }
+
+        static constexpr auto yccToRgb = [](float y, float cb, float cr) {
+            cb -= 0.5f;
+            cr -= 0.5f;
+            return Vector3f{y + (1.402f * cr), y - (0.344136f * cb + 0.714136f * cr), y + (1.772f * cb)};
+        };
+
+        ImageData resultData;
+        resultData.dataWindow = resultData.displayWindow = region;
+
+        const bool hasAlpha = numChannels == 2 || numChannels >= 4;
+        const auto numRgbaChannels = std::min(numChannels, (size_t)4);
+        const auto numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
+        const auto numColorChannels = hasAlpha ? numRgbaChannels - 1 : numRgbaChannels;
+        const auto numExtraChannels = numChannels > numRgbaChannels ? numChannels - numRgbaChannels : 0;
+
+        resultData.channels = co_await makeInterleavedChannels(
+            numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+        );
+
+        for (size_t c = 0; c < numExtraChannels; ++c) {
+            resultData.channels.emplace_back(fmt::format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
+        }
+
+        // If there is an alpha channel, it's usually straight. TODO: read cdef box if present to be sure.
+        resultData.hasPremultipliedAlpha = !hasAlpha;
+        const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
+
+        const auto numPixels = posProd(size);
+
+        const auto getChannelValue = [&image](size_t c, int x, int y) -> float {
+            const auto& comp = image->comps[c];
+            const auto xc = ((x - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor;
+            const auto yc = ((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor;
+
+            if (yc >= 0 && yc < (int)comp.h && xc >= 0 && xc < (int)comp.w) {
+                return (float)comp.data[yc * comp.w + xc] / ((1ull << (comp.prec - comp.sgnd)) - 1);
+            } else {
+                return 0.0f;
+            }
+        };
+
+        // First copy over the extra channels -- they are treated the same way, regardless of color space settings
+        if (numExtraChannels > 0) {
+            const auto extraView = MultiChannelView<float>{span{resultData.channels}.subspan(numRgbaChannels)};
+            TEV_ASSERT(extraView.nChannels() == numExtraChannels, "Not enough channels allocated for extra channels.");
+
+            co_await ThreadPool::global().parallelFor(
+                0,
+                size.y(),
+                numPixels * numExtraChannels,
+                [&](int y) {
+                    for (size_t c = 0; c < numExtraChannels; ++c) {
+                        for (int x = 0; x < size.x(); ++x) {
+                            extraView[c, x, y] = getChannelValue(c, x, y);
+                        }
+                    }
+                },
+                priority
+            );
+        }
+
+        // Then we handle RGBA channels together, depending on color space and presence of ICC profile
+        const auto rgbaToFloat = [&](const MultiChannelView<float>& rgbaOut, bool convertSrgbToLinear) -> Task<void> {
+            TEV_ASSERT(numColorChannels > 0 && numColorChannels <= 3, "Invalid number of color channels.");
+            TEV_ASSERT(rgbaOut.nChannels() >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
+
+            co_await ThreadPool::global().parallelFor(
+                0,
+                size.y(),
+                numPixels * numRgbaChannels,
+                [&](int y) {
+                    for (int x = 0; x < size.x(); ++x) {
+                        Vector3f rgb{0.0f};
+                        for (size_t c = 0; c < numColorChannels; ++c) {
+                            rgb[c] = getChannelValue(c, x, y);
+                        }
+
+                        if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
+                            rgb = yccToRgb(rgb.x(), rgb.y(), rgb.z());
+                        }
+
+                        if (convertSrgbToLinear) {
+                            for (size_t c = 0; c < numColorChannels; ++c) {
+                                rgb[c] = ituth273::srgbToLinear(rgb[c]);
+                            }
+                        }
+
+                        for (size_t c = 0; c < numColorChannels; ++c) {
+                            rgbaOut[c, x, y] = rgb[std::min(c, numColorChannels - 1)];
+                        }
+
+                        if (hasAlpha) {
+                            rgbaOut[-1, x, y] = getChannelValue(numColorChannels, x, y);
+                        }
+                    }
+                },
+                priority
+            );
+        };
+
+        const auto dstView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
+
+        if (!skipColorProcessing && !iccProfile.empty()) {
+            try {
+                const auto profile = ColorProfile::fromIcc(iccProfile);
+
+                co_await rgbaToFloat(dstView, false);
+
+                co_await toLinearSrgbPremul(profile, alphaKind, dstView, dstView, nullopt, priority);
+                resultData.hasPremultipliedAlpha = true;
+                resultData.readMetadataFromIcc(profile);
+
+                co_return resultData;
+            } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
+        }
+
+        co_await rgbaToFloat(dstView, !skipColorProcessing);
+
+        resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
+        resultData.nativeMetadata.chroma = rec709Chroma();
+
+        co_return resultData;
     };
-
-    vector<ImageData> result(1);
-    auto& resultData = result.front();
 
     // Only a box-based jpeg 2000 image can contain metadata.
     const auto meta = j2kFormat == OPJ_CODEC_JP2 || j2kFormat == OPJ_CODEC_JPX ? extractJp2Metadata(data) : Jp2Metadata{};
+
+    EOrientation orientation = EOrientation::None;
+    optional<AttributeNode> exifAttributes;
+    optional<AttributeNode> xmpAttributes;
 
     if (!meta.exifData.empty()) {
         tlog::debug("Found EXIF data of size {} bytes", meta.exifData.size());
 
         try {
             const auto exif = Exif{meta.exifData};
-            resultData.attributes.emplace_back(exif.toAttributes());
+            exifAttributes = exif.toAttributes();
 
             const EOrientation exifOrientation = exif.getOrientation();
             if (exifOrientation != EOrientation::None) {
-                resultData.orientation = exifOrientation;
-                tlog::debug("EXIF image orientation: {}", toString(resultData.orientation));
+                orientation = exifOrientation;
+                tlog::debug("EXIF image orientation: {}", toString(orientation));
             }
         } catch (const invalid_argument& e) { tlog::warning("Failed to read EXIF metadata: {}", e.what()); }
     }
@@ -374,12 +674,12 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
         try {
             const auto xmp = Xmp{xmpDataView};
-            resultData.attributes.emplace_back(xmp.attributes());
+            xmpAttributes = xmp.attributes();
 
             const EOrientation xmpOrientation = xmp.orientation();
             if (xmpOrientation != EOrientation::None) {
-                resultData.orientation = xmpOrientation;
-                tlog::debug("XMP image orientation: {}", toString(resultData.orientation));
+                orientation = xmpOrientation;
+                tlog::debug("XMP image orientation: {}", toString(orientation));
             }
         } catch (const invalid_argument& e) {
             if (xmlData.data() == meta.genericXml.data()) {
@@ -390,119 +690,26 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
         }
     }
 
-    resultData.dataWindow = resultData.displayWindow = region;
+    vector<ImageData> result;
+    for (const auto& codestream : codestreams) {
+        result.emplace_back(co_await decodeCodestream(codestream));
 
-    const bool hasAlpha = numChannels == 2 || numChannels >= 4;
-    const auto numRgbaChannels = std::min(numChannels, (size_t)4);
-    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
-    const auto numColorChannels = hasAlpha ? numRgbaChannels - 1 : numRgbaChannels;
-    const auto numExtraChannels = numChannels > numRgbaChannels ? numChannels - numRgbaChannels : 0;
-
-    resultData.channels = co_await makeInterleavedChannels(
-        numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
-    );
-
-    for (size_t c = 0; c < numExtraChannels; ++c) {
-        resultData.channels.emplace_back(fmt::format("extra.{}", c), size, EPixelFormat::F32, EPixelFormat::F16);
-    }
-
-    // If there is an alpha channel, it's usually straight. TODO: read cdef box if present to be sure.
-    resultData.hasPremultipliedAlpha = !hasAlpha;
-    const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
-
-    const auto numPixels = posProd(size);
-
-    const auto getChannelValue = [&image](size_t c, int x, int y) -> float {
-        const auto& comp = image->comps[c];
-        const auto xc = ((x - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor;
-        const auto yc = ((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor;
-
-        if (yc >= 0 && yc < (int)comp.h && xc >= 0 && xc < (int)comp.w) {
-            return (float)comp.data[yc * comp.w + xc] / ((1ull << (comp.prec - comp.sgnd)) - 1);
-        } else {
-            return 0.0f;
+        if (codestreams.size() > 1) {
+            result.back().partName = fmt::format("frames.{}", result.size() - 1);
         }
-    };
 
-    // First copy over the extra channels -- they are treated the same way, regardless of color space settings
-    if (numExtraChannels > 0) {
-        const auto extraView = MultiChannelView<float>{span{resultData.channels}.subspan(numRgbaChannels)};
-        TEV_ASSERT(extraView.nChannels() == numExtraChannels, "Not enough channels allocated for extra channels.");
+        if (orientation != EOrientation::None) {
+            result.back().orientation = orientation;
+        }
 
-        co_await ThreadPool::global().parallelFor(
-            0,
-            size.y(),
-            numPixels * numExtraChannels,
-            [&](int y) {
-                for (size_t c = 0; c < numExtraChannels; ++c) {
-                    for (int x = 0; x < size.x(); ++x) {
-                        extraView[c, x, y] = getChannelValue(c, x, y);
-                    }
-                }
-            },
-            priority
-        );
+        if (exifAttributes.has_value()) {
+            result.back().attributes.emplace_back(*exifAttributes);
+        }
+
+        if (xmpAttributes.has_value()) {
+            result.back().attributes.emplace_back(*xmpAttributes);
+        }
     }
-
-    // Then we handle RGBA channels together, depending on color space and presence of ICC profile
-    const auto rgbaToFloat = [&](const MultiChannelView<float>& rgbaOut, bool convertSrgbToLinear) -> Task<void> {
-        TEV_ASSERT(numColorChannels > 0 && numColorChannels <= 3, "Invalid number of color channels.");
-        TEV_ASSERT(rgbaOut.nChannels() >= numRgbaChannels, "Output buffer must have enough channels for RGBA data.");
-
-        co_await ThreadPool::global().parallelFor(
-            0,
-            size.y(),
-            numPixels * numRgbaChannels,
-            [&](int y) {
-                for (int x = 0; x < size.x(); ++x) {
-                    Vector3f rgb{0.0f};
-                    for (size_t c = 0; c < numColorChannels; ++c) {
-                        rgb[c] = getChannelValue(c, x, y);
-                    }
-
-                    if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
-                        rgb = yccToRgb(rgb.x(), rgb.y(), rgb.z());
-                    }
-
-                    if (convertSrgbToLinear) {
-                        for (size_t c = 0; c < numColorChannels; ++c) {
-                            rgb[c] = ituth273::srgbToLinear(rgb[c]);
-                        }
-                    }
-
-                    for (size_t c = 0; c < numColorChannels; ++c) {
-                        rgbaOut[c, x, y] = rgb[std::min(c, numColorChannels - 1)];
-                    }
-
-                    if (hasAlpha) {
-                        rgbaOut[-1, x, y] = getChannelValue(numColorChannels, x, y);
-                    }
-                }
-            },
-            priority
-        );
-    };
-
-    const auto dstView = MultiChannelView<float>{span{resultData.channels}.subspan(0, numRgbaChannels)};
-
-    if (!skipColorProcessing && image->icc_profile_buf && image->icc_profile_len > 0) {
-        try {
-            const auto profile = ColorProfile::fromIcc({image->icc_profile_buf, image->icc_profile_len});
-
-            co_await rgbaToFloat(dstView, false);
-
-            co_await toLinearSrgbPremul(profile, alphaKind, dstView, dstView, nullopt, priority);
-            resultData.hasPremultipliedAlpha = true;
-            resultData.readMetadataFromIcc(profile);
-
-            co_return result;
-        } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
-    }
-
-    co_await rgbaToFloat(dstView, !skipColorProcessing);
-
-    resultData.nativeMetadata.transfer = ituth273::ETransfer::SRGB;
-    resultData.nativeMetadata.chroma = rec709Chroma();
 
     co_return result;
 }
@@ -512,8 +719,8 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 ) const {
     const size_t initialPos = iStream.tellg();
 
-    uint8_t magic[12];
-    iStream.read((char*)magic, 12);
+    uint8_t magic[24];
+    iStream.read((char*)magic, 24);
 
     if (!detectJ2kFormat({magic, (size_t)iStream.tellg() - initialPos}).has_value()) {
         throw FormatNotSupported{"File is not a JPEG 2000 image or codestream."};
