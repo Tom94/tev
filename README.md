@@ -100,12 +100,16 @@ There are helper functions in [Ipc.cpp](src/Ipc.cpp) (`IpcPacket::set*`) that sh
 
 ## Building tev
 
-All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++23-compatible compiler.
+All that is required for building __tev__ is [CMake](https://cmake.org/) and a C++23-compatible compiler. GCC, Clang, and MSVC (Visual Studio) are supported.
+On x86, __tev__ additionally requires [NASM](https://www.nasm.us/) for generating optimized assembly.
 
 Most Linux distributions additionally require _xorg_, _wayland_, _gl_, and _dbus_. On Ubuntu/Debian simply call
 ```sh
 $ apt-get install cmake libdbus-1-dev libffi-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev nasm wayland-protocols xorg-dev
 ```
+
+On Windows, you can install [Visual Studio](https://visualstudio.microsoft.com/) (Community Edition is sufficient) and select the "Desktop
+development with C++" workload. Make sure to also install NASM and CMake, e.g. by running `winget install nasm cmake` in the command line.
 
 Once all dependencies are installed, begin by cloning this repository and all its submodules using the following command:
 ```sh
@@ -140,7 +144,7 @@ $ cpack --config build/CPackConfig.cmake
 - __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows only)
 - __WEBP__ (via [libwebp](https://chromium.googlesource.com/webm/libwebp))
 - __TIFF__, __DNG__ (via [libtiff](https://gitlab.com/libtiff/libtiff))
-- __AVIF__ (including gain maps, e.g. HDR pictures from Android; via [aom](https://aomedia.googlesource.com/aom)+[libheif](https://github.com/strukturag/libheif))
+- __AVIF__ (including gain maps, e.g. HDR pictures from Android; via [dav1d](https://github.com/videolan/dav1d)+[libheif](https://github.com/strukturag/libheif))
 - __HEIC__ (including gain maps, e.g. HDR pictures from iPhones; via [libde265](https://github.com/strukturag/libde265)+[libheif](https://github.com/strukturag/libheif); disabled in binary release. You must build __tev__ yourself with the `TEV_SUPPORT_HEIC` CMake option. Check patent laws in your jurisdiction before enabling this feature.)
 - __BMP__, ICO, CUR (including color profiles)
 - __HDR__, GIF, PIC, PSD, TGA (via [stb_image](https://github.com/wjakob/nanovg/blob/master/src/stb_image.h))
