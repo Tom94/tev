@@ -78,10 +78,6 @@
 	path = dependencies/LibRaw
 	url = https://github.com/LibRaw/LibRaw
 	shallow = true
-[submodule "dependencies/LibRaw-cmake"]
-	path = dependencies/LibRaw-cmake
-	url = https://github.com/LibRaw/LibRaw-cmake
-	shallow = true
 [submodule "dependencies/xmp"]
 	path = dependencies/xmp
 	url = https://github.com/tom94/xmp
@@ -125,4 +121,8 @@
 [submodule "dependencies/dav1d-cmake"]
 	path = dependencies/dav1d-cmake
 	url = https://github.com/Tom94/dav1d-cmake
+	shallow = true
+[submodule "dependencies/LibRaw-cmake"]
+	path = dependencies/LibRaw-cmake
+	url = https://github.com/Tom94/LibRaw-cmake
 	shallow = true

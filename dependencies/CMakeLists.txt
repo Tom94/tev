@@ -27,9 +27,6 @@ if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nanogui/CMakeLists.txt")
     )
 endif()
 
-include(ExternalProject)
-get_cmake_property(IS_MULTI GENERATOR_IS_MULTI_CONFIG)
-
 # Some dependencies depend on zlib, so we compile it first
 set(ZLIB_BUILD_TESTING OFF CACHE BOOL " " FORCE)
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL " " FORCE)
@@ -104,58 +101,33 @@ target_include_directories(png_static PRIVATE ${ZLIB_INCLUDE_DIR} ${CMAKE_CURREN
 add_subdirectory(libexif EXCLUDE_FROM_ALL)
 
 # Compile libjpeg-turbo for JPEG support
-set(JPEGTURBO_TARGET_NAME turbojpeg)
-set(JPEGTURBO_PREFIX_DIR ${CMAKE_CURRENT_BINARY_DIR}/${JPEGTURBO_TARGET_NAME})
-set(JPEGTURBO_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo)
-set(JPEGTURBO_BINARY_DIR ${JPEGTURBO_PREFIX_DIR}/src/${JPEGTURBO_TARGET_NAME}-build)
-set(JPEG_INCLUDE_DIRS ${JPEGTURBO_SOURCE_DIR}/src ${JPEGTURBO_BINARY_DIR})
-if(MSVC)
-    set(JPEG_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}jpeg-static${CMAKE_STATIC_LIBRARY_SUFFIX})
-else()
-    set(JPEG_LIB ${CMAKE_STATIC_LIBRARY_PREFIX}jpeg${CMAKE_STATIC_LIBRARY_SUFFIX})
-endif()
-if(IS_MULTI)
-    set(JPEG_LIB_PREFIX ${JPEGTURBO_BINARY_DIR}/$<CONFIG>/)
-else()
-    set(JPEG_LIB_PREFIX ${JPEGTURBO_BINARY_DIR}/)
-endif()
-set(JPEG_LIBRARIES ${JPEG_LIB_PREFIX}${JPEG_LIB})
-set(JPEG_VERSION "80")
-ExternalProject_Add(${JPEGTURBO_TARGET_NAME}
-    PREFIX ${JPEGTURBO_PREFIX_DIR}
-    SOURCE_DIR ${JPEGTURBO_SOURCE_DIR}
-    BINARY_DIR ${JPEGTURBO_BINARY_DIR}
-    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target jpeg-static
-    CMAKE_ARGS
-        -DENABLE_SHARED=0
-        -DWITH_JPEG8=1
-        -DWITH_TURBOJPEG=0
-        -DWITH_TOOLS=0
-        -DWITH_TESTS=0
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
-        -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}
-        -DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}
-    BUILD_BYPRODUCTS ${JPEG_LIBRARIES}
-    INSTALL_COMMAND ""
-)
+set(ENABLE_SHARED OFF CACHE BOOL " " FORCE)
+set(ENABLE_STATIC ON CACHE BOOL " " FORCE)
+set(WITH_JPEG8 ON CACHE BOOL " " FORCE)
+set(WITH_TURBOJPEG OFF CACHE BOOL " " FORCE)
+set(WITH_TOOLS OFF CACHE BOOL " " FORCE)
+set(WITH_TESTS OFF CACHE BOOL " " FORCE)
+add_subdirectory(libjpeg-turbo EXCLUDE_FROM_ALL)
 
 # The following variables ensure that find_package can find libjpeg-turbo
+set(JPEG_LIBRARIES JPEG::JPEG)
 set(JPEG_LIBRARY ${JPEG_LIBRARIES})
-set(JPEG_INCLUDE_DIR ${JPEGTURBO_SOURCE_DIR})
+set(JPEG_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo/src ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo)
+set(JPEG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo/src)
 set(JPEG_HAS_12BIT_API TRUE)
-
-add_library(jpeg-turbo INTERFACE IMPORTED GLOBAL)
-add_dependencies(jpeg-turbo ${JPEGTURBO_TARGET_NAME})
-set_target_properties(jpeg-turbo PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${JPEG_INCLUDE_DIRS}"
-    INTERFACE_LINK_LIBRARIES "${JPEG_LIBRARIES}"
-)
-add_library(JPEG::JPEG ALIAS jpeg-turbo)
+set(JPEG_VERSION 80)
 set(JPEG_FOUND TRUE CACHE BOOL " " FORCE)
 
 set(libjpeg-turbo_INCLUDE_DIRS ${JPEG_INCLUDE_DIRS})
 set(libjpeg-turbo_LIBRARIES ${JPEG_LIBRARIES})
-add_library(libjpeg-turbo::jpeg ALIAS jpeg-turbo)
+
+add_library(JPEG::JPEG INTERFACE IMPORTED GLOBAL)
+set_target_properties(JPEG::JPEG PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${JPEG_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES jpeg-static
+)
+
+add_library(libjpeg-turbo::jpeg ALIAS JPEG::JPEG)
 
 # Compile OpenJPEG for JPEG 2000 support
 set(BUILD_CODEC OFF CACHE BOOL " " FORCE)
@@ -213,6 +185,7 @@ if (TEV_SUPPORT_JXL)
     set(JPEGXL_BUNDLE_LIBPNG OFF CACHE BOOL " " FORCE)
     set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL " " FORCE)
     set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL " " FORCE)
+    set(JPEGXL_ENABLE_JPEGLI OFF CACHE BOOL " " FORCE)
 
     add_subdirectory(libjxl EXCLUDE_FROM_ALL)
 endif()
@@ -255,9 +228,6 @@ if (TEV_USE_LIBHEIF)
         ${CMAKE_CURRENT_SOURCE_DIR}/libheif/libheif/api
         ${CMAKE_CURRENT_BINARY_DIR}/libheif
     )
-
-    add_dependencies(heif ${JPEGTURBO_TARGET_NAME})
-    target_include_directories(heif PRIVATE "${JPEG_INCLUDE_DIRS}")
 
     target_link_libraries(heif PRIVATE openjpeg-tev dav1d::dav1d)
 
@@ -396,7 +366,7 @@ set(JPEG_INSTALL_NO_DEVELOPMENT ON CACHE BOOL " " FORCE)
 set(SOCKETXX_INSTALL_NO_DEVELOPMENT ON CACHE BOOL " " FORCE)
 
 # Pretend that we want to use system libraries and reroute to ours so that GDCM doesn't build its own copies. Particularly important for
-# openjpeg (whose cmake otherwise messes with parent scope) and libjpeg-turbo, which requires complex ExternalProject_Add logic.
+# openjpeg (whose cmake otherwise messes with parent scope) and libjpeg-turbo
 set(GDCM_USE_SYSTEM_OPENJPEG ON CACHE BOOL " " FORCE)
 set(GDCM_USE_JPEGTURBO ON CACHE BOOL " " FORCE)
 
