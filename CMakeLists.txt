@@ -269,7 +269,7 @@ endif()
 
 target_compile_definitions(tev PRIVATE ${TEV_DEFINITIONS})
 
-set(TEV_LIBS cfitsio clip exif_static gdcm-tev jpeg-turbo jxrglue libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore xsimd)
+set(TEV_LIBS cfitsio clip exif_static gdcm-tev JPEG::JPEG jxrglue libraw::libraw_r nanogui OpenEXR::OpenEXR openjpeg-tev png_static tiff webpdemux XMPCore xsimd)
 if (MSVC)
     list(APPEND TEV_LIBS DirectXTex wsock32 ws2_32)
 endif()
