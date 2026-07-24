@@ -2426,6 +2426,11 @@ void ImageViewer::openImageDialog() {
                 {"heic",                    "High Efficiency Image Container"  },
 #endif
                 {"ico",                     "Microsoft icon image"             },
+                {"jp2,jpf,jpc,j2k,j2c",     "JPEG 2000 image"                  },
+                {"jpc,j2k,j2c",             "JPEG 2000 codestream"             },
+                // TODO: add support for these formats (should be light wrapper around OpenJPEG)
+                // {"jpm",                     "JPEG 2000 compound image"         },
+                // {"mj2,mjp2",                "JPEG 2000 moving image"           },
                 {"jpeg,jpg",                "JPEG image"                       },
                 {"jxl",                     "JPEG XL image"                    },
                 {"jxr,hdp,wdp",             "JPEG XR image"                    },
