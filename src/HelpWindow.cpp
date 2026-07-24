@@ -231,12 +231,12 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addSpacer(about, 20);
 
     addLibrary(about, "args", "Single-header argument parsing library");
-#ifdef TEV_SUPPORT_AVIF
-    addLibrary(about, "aom", "AV1 video codec library");
-#endif
     addLibrary(about, "cfitsio", "FITS data file library");
     addLibrary(about, "clip", "Cross-platform clipboard library");
     addLibrary(about, "concurrentqueue", "Cross-platform lightweight semaphore");
+#ifdef TEV_SUPPORT_AVIF
+    addLibrary(about, "dav1d", "Fast AV1 decoder library");
+#endif
 #ifdef _WIN32
     addLibrary(about, "DirectXTex", "DirectX texture processing library");
 #endif
