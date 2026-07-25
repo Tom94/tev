@@ -467,6 +467,8 @@ string_view toString(const ETransfer transfer) {
         case ETransfer::PQ: return "pq";
         case ETransfer::SMPTE428: return "smpte428";
         case ETransfer::HLG: return "hlg";
+        case ETransfer::YCbCrLinear: return "ycbcr";
+        case ETransfer::YCbCrSRGB: return "ycbcr_srgb";
         // Not actually in the spec, but useful for tev to have
         case ETransfer::LUT: return "lut";
         case ETransfer::GenericGamma: return "gamma";
@@ -488,33 +490,6 @@ EColorPrimaries fromWpPrimaries(EWpPrimaries wpPrimaries) {
         case EWpPrimaries::DisplayP3: return ituth273::EColorPrimaries::SMPTE432;
         default: throw invalid_argument{fmt::format("Unknown wp color primaries: {}", toString(wpPrimaries))};
     }
-}
-
-bool isTransferImplemented(const ETransfer transfer) {
-    switch (transfer) {
-        case ETransfer::BT709:
-        case ETransfer::BT601:
-        case ETransfer::BT202010bit:
-        case ETransfer::BT202012bit:
-        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
-        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
-        case ETransfer::Gamma22:
-        case ETransfer::Gamma28:
-        case ETransfer::SMPTE240:
-        case ETransfer::Linear:
-        case ETransfer::Log100:
-        case ETransfer::Log100Sqrt10:
-        case ETransfer::SRGB:
-        case ETransfer::PQ:
-        case ETransfer::SMPTE428:
-        case ETransfer::HLG:
-        case ETransfer::Unspecified: return true;
-        // Require extra data
-        case ETransfer::LUT:
-        case ETransfer::GenericGamma: return false;
-    }
-
-    return false;
 }
 
 ETransfer fromWpTransfer(int wpTransfer) {
@@ -1063,7 +1038,9 @@ Task<void> toLinearSrgbPremul(
                         color[c] = in[c, x] * range.scale + range.offset;
                     }
 
-                    color = toRec709 * ituth273::invTransfer(cicp->transfer, color);
+                    ituth273::invTransferRgb(cicp->transfer, color.x(), color.y(), color.z());
+                    color = toRec709 * color;
+
                     for (size_t c = 0; c < numColorChannelsOut; ++c) {
                         out[c, x] = color[c];
                     }

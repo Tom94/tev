@@ -513,12 +513,6 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             }
         }
 
-        static constexpr auto yccToRgb = [](float y, float cb, float cr) {
-            cb -= 0.5f;
-            cr -= 0.5f;
-            return Vector3f{y + (1.402f * cr), y - (0.344136f * cb + 0.714136f * cr), y + (1.772f * cb)};
-        };
-
         ImageData resultData;
         resultData.dataWindow = resultData.displayWindow = region;
 
@@ -591,7 +585,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                         }
 
                         if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
-                            rgb = yccToRgb(rgb.x(), rgb.y(), rgb.z());
+                            ituth273::yCbCrToRgb(rgb.x(), rgb.y(), rgb.z());
                         }
 
                         if (convertSrgbToLinear) {

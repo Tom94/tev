@@ -1269,7 +1269,8 @@ Task<void> postprocessRgb(
             tlog::debug("Found YCbCr coefficients: {} -> {}", K, coeffs);
         }
 
-        co_await yCbCrToRgb(rgbaView, priority, Vector2f{0.5f}, coeffs);
+        const float offset[2] = {0.5f, 0.5f};
+        co_await yCbCrToRgb(rgbaView, priority, offset, coeffs.v);
     }
 
     // If we've got an ICC profile, apply it *after* scaling by reference black/white and converting from YCbCr to RGB; see the TIFF/EP

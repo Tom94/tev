@@ -393,12 +393,13 @@ enum class ETransfer : uint8_t {
     SMPTE428 = 17,
     HLG = 18, // Hybrid Log-Gamma
     // Not actually in the spec, but useful for tev to have
+    YCbCrLinear = 124,
+    YCbCrSRGB = 125,
     LUT = 126,
     GenericGamma = 127,
 };
 
 std::string_view toString(const ETransfer transfer);
-bool isTransferImplemented(const ETransfer transfer);
 
 ETransfer fromWpTransfer(int wpTransfer);
 
@@ -630,6 +631,80 @@ template <class B> B linearToHlgComponent(const B& val) {
     return hlgOetf(e);
 }
 
+static constexpr float DEFAULT_YCBCR_OFFSETS[2] = {0.5f, 0.5f};
+static constexpr float DEFAULT_YCBCR_COEFFS[4] = {1.402f, -0.344136f, -0.714136f, 1.772f};
+static constexpr float DEFAULT_RGB_TO_YCBCR_COEFFS[3][3] = {
+    {0.299f,     0.587f,     0.114f    },
+    {-0.168736f, -0.331264f, 0.5f      },
+    {0.5f,       -0.418688f, -0.081312f},
+};
+
+template <class B>
+void yCbCrToRgb(B& y, B& cb, B& cr, const float offsets[2] = DEFAULT_YCBCR_OFFSETS, const float coeffs[4] = DEFAULT_YCBCR_COEFFS) {
+    B& r = y;
+    B& g = cb;
+    B& b = cr;
+
+    const B cbOffset = cb - B(offsets[0]);
+    const B crOffset = cr - B(offsets[1]);
+
+    // Assign r last to avoid overwriting y before it's used in g and b. g and b can be assigned in any order because cbOffset and crOffset
+    // are already copied.
+    g = y + B(coeffs[1]) * cbOffset + B(coeffs[2]) * crOffset;
+    b = y + B(coeffs[3]) * cbOffset;
+    r = y + B(coeffs[0]) * crOffset;
+}
+
+template <class B>
+void rgbToYCbCr(B& r, B& g, B& b, const float offsets[2] = DEFAULT_YCBCR_OFFSETS, const float coeffs[3][3] = DEFAULT_RGB_TO_YCBCR_COEFFS) {
+    const B y = B(coeffs[0][0]) * r + B(coeffs[0][1]) * g + B(coeffs[0][2]) * b;
+    const B cb = B(offsets[0]) + B(coeffs[1][0]) * r + B(coeffs[1][1]) * g + B(coeffs[1][2]) * b;
+    const B cr = B(offsets[1]) + B(coeffs[2][0]) * r + B(coeffs[2][1]) * g + B(coeffs[2][2]) * b;
+
+    r = y;
+    g = cb;
+    b = cr;
+}
+
+static constexpr bool isTransferImplemented(const ETransfer transfer) {
+    switch (transfer) {
+        case ETransfer::BT709:
+        case ETransfer::BT601:
+        case ETransfer::BT202010bit:
+        case ETransfer::BT202012bit:
+        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
+        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
+        case ETransfer::Gamma22:
+        case ETransfer::Gamma28:
+        case ETransfer::SMPTE240:
+        case ETransfer::Linear:
+        case ETransfer::Log100:
+        case ETransfer::Log100Sqrt10:
+        case ETransfer::SRGB:
+        case ETransfer::PQ:
+        case ETransfer::SMPTE428:
+        // YCbCr and HLG are implemented, but only incomplete when used component-wise. Only RGB overloads are whole
+        case ETransfer::YCbCrLinear:
+        case ETransfer::YCbCrSRGB:
+        case ETransfer::HLG:
+        case ETransfer::Unspecified: return true;
+        // Require extra data
+        case ETransfer::LUT:
+        case ETransfer::GenericGamma: return false;
+    }
+
+    return false;
+}
+
+static constexpr bool isTransferRgb(const ETransfer transfer) {
+    switch (transfer) {
+        case ETransfer::HLG:
+        case ETransfer::YCbCrLinear:
+        case ETransfer::YCbCrSRGB: return true;
+        default: return false;
+    }
+}
+
 // Default: linear passthrough
 template <ETransfer E, class B> B invTransferComponentImpl(std::integral_constant<ETransfer, E>, const B& val) { return val; }
 
@@ -675,45 +750,57 @@ template <class B> B invTransferComponent(ETransfer transfer, const B& val) noex
         case ETransfer::PQ: return pqToLinear(val);
         case ETransfer::SMPTE428: return smpteSt428ToLinear(val);
         case ETransfer::HLG: return hlgToLinearComponent(val);
+        case ETransfer::YCbCrLinear: return val;
+        case ETransfer::YCbCrSRGB: return srgbToLinear(val);
         default: return val; // Linear / Unspecified / LUT / GenericGamma / unimplemented
     }
 }
 
-template <ETransfer TRANSFER> nanogui::Vector3f invTransfer(const nanogui::Vector3f& val) noexcept {
-    const v4f in{val.x(), val.y(), val.z(), 0.0f};
-    const v4f res = invTransferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
-    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
-    return v;
+template <ETransfer E, class B> void invTransferRgbImpl(std::integral_constant<ETransfer, E>, B& r, B& g, B& b) {
+    r = invTransferComponent<E>(r);
+    g = invTransferComponent<E>(g);
+    b = invTransferComponent<E>(b);
 }
 
-template <> inline nanogui::Vector3f invTransfer<ETransfer::HLG>(const nanogui::Vector3f& val) noexcept {
-    auto res = val;
-    hlgToLinear(res.x(), res.y(), res.z());
-    return res;
+template <class B> void invTransferRgbImpl(std::integral_constant<ETransfer, ETransfer::HLG>, B& r, B& g, B& b) { hlgToLinear(r, g, b); }
+
+template <class B> void invTransferRgbImpl(std::integral_constant<ETransfer, ETransfer::YCbCrLinear>, B& r, B& g, B& b) {
+    yCbCrToRgb(r, g, b);
 }
 
-inline nanogui::Vector3f invTransfer(const ETransfer transfer, const nanogui::Vector3f& val) noexcept {
+template <class B> void invTransferRgbImpl(std::integral_constant<ETransfer, ETransfer::YCbCrSRGB>, B& r, B& g, B& b) {
+    yCbCrToRgb(r, g, b);
+    invTransferRgbImpl(std::integral_constant<ETransfer, ETransfer::SRGB>(), r, g, b);
+}
+
+template <ETransfer TRANSFER, class B> void invTransferRgb(B& r, B& g, B& b) noexcept {
+    invTransferRgbImpl(std::integral_constant<ETransfer, TRANSFER>(), r, g, b);
+}
+
+template <class B> void invTransferRgb(const ETransfer transfer, B& r, B& g, B& b) noexcept {
     switch (transfer) {
-        case ETransfer::BT709: return invTransfer<ETransfer::BT709>(val);
-        case ETransfer::BT601: return invTransfer<ETransfer::BT601>(val);
-        case ETransfer::BT202010bit: return invTransfer<ETransfer::BT202010bit>(val);
-        case ETransfer::BT202012bit: return invTransfer<ETransfer::BT202012bit>(val);
-        case ETransfer::IEC61966_2_4: return invTransfer<ETransfer::IEC61966_2_4>(val);
-        case ETransfer::BT1361Extended: return invTransfer<ETransfer::BT1361Extended>(val);
-        case ETransfer::Gamma22: return invTransfer<ETransfer::Gamma22>(val);
-        case ETransfer::Gamma28: return invTransfer<ETransfer::Gamma28>(val);
-        case ETransfer::SMPTE240: return invTransfer<ETransfer::SMPTE240>(val);
-        case ETransfer::Linear: return invTransfer<ETransfer::Linear>(val);
-        case ETransfer::Log100: return invTransfer<ETransfer::Log100>(val);
-        case ETransfer::Log100Sqrt10: return invTransfer<ETransfer::Log100Sqrt10>(val);
-        case ETransfer::SRGB: return invTransfer<ETransfer::SRGB>(val);
-        case ETransfer::PQ: return invTransfer<ETransfer::PQ>(val);
-        case ETransfer::SMPTE428: return invTransfer<ETransfer::SMPTE428>(val);
-        case ETransfer::HLG: return invTransfer<ETransfer::HLG>(val);
-        case ETransfer::Unspecified: return invTransfer<ETransfer::Unspecified>(val);
-        case ETransfer::LUT: return invTransfer<ETransfer::LUT>(val);
-        case ETransfer::GenericGamma: return invTransfer<ETransfer::GenericGamma>(val);
-        default: return val; // Other transfer functions are not implemented. Default to linear.
+        case ETransfer::BT709: invTransferRgb<ETransfer::BT709>(r, g, b); break;
+        case ETransfer::BT601: invTransferRgb<ETransfer::BT601>(r, g, b); break;
+        case ETransfer::BT202010bit: invTransferRgb<ETransfer::BT202010bit>(r, g, b); break;
+        case ETransfer::BT202012bit: invTransferRgb<ETransfer::BT202012bit>(r, g, b); break;
+        case ETransfer::IEC61966_2_4: invTransferRgb<ETransfer::IEC61966_2_4>(r, g, b); break;
+        case ETransfer::BT1361Extended: invTransferRgb<ETransfer::BT1361Extended>(r, g, b); break;
+        case ETransfer::Gamma22: invTransferRgb<ETransfer::Gamma22>(r, g, b); break;
+        case ETransfer::Gamma28: invTransferRgb<ETransfer::Gamma28>(r, g, b); break;
+        case ETransfer::SMPTE240: invTransferRgb<ETransfer::SMPTE240>(r, g, b); break;
+        case ETransfer::Linear: invTransferRgb<ETransfer::Linear>(r, g, b); break;
+        case ETransfer::Log100: invTransferRgb<ETransfer::Log100>(r, g, b); break;
+        case ETransfer::Log100Sqrt10: invTransferRgb<ETransfer::Log100Sqrt10>(r, g, b); break;
+        case ETransfer::SRGB: invTransferRgb<ETransfer::SRGB>(r, g, b); break;
+        case ETransfer::PQ: invTransferRgb<ETransfer::PQ>(r, g, b); break;
+        case ETransfer::SMPTE428: invTransferRgb<ETransfer::SMPTE428>(r, g, b); break;
+        case ETransfer::HLG: invTransferRgb<ETransfer::HLG>(r, g, b); break;
+        case ETransfer::Unspecified: invTransferRgb<ETransfer::Unspecified>(r, g, b); break;
+        case ETransfer::YCbCrLinear: invTransferRgb<ETransfer::YCbCrLinear>(r, g, b); break;
+        case ETransfer::YCbCrSRGB: invTransferRgb<ETransfer::YCbCrSRGB>(r, g, b); break;
+        case ETransfer::LUT: invTransferRgb<ETransfer::LUT>(r, g, b); break;
+        case ETransfer::GenericGamma: invTransferRgb<ETransfer::GenericGamma>(r, g, b); break;
+        default: break;
     }
 }
 
@@ -763,6 +850,8 @@ template <class B> B transferComponent(const ETransfer transfer, const B& val) n
         case ETransfer::PQ: return linearToPq(val);
         case ETransfer::SMPTE428: return linearToSmpteSt428(val);
         case ETransfer::HLG: return linearToHlgComponent(val);
+        case ETransfer::YCbCrLinear: return val;
+        case ETransfer::YCbCrSRGB: return linearToSrgb(val);
         default: return val; // Linear / Unspecified / LUT / GenericGamma / unimplemented
     }
 }
@@ -772,6 +861,18 @@ template <ETransfer TRANSFER> nanogui::Vector3f transfer(const nanogui::Vector3f
     const v4f res = transferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
     nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
     return v;
+}
+
+template <> inline nanogui::Vector3f transfer<ETransfer::YCbCrLinear>(const nanogui::Vector3f& val) noexcept {
+    auto res = val;
+    rgbToYCbCr(res.x(), res.y(), res.z());
+    return res;
+}
+
+template <> inline nanogui::Vector3f transfer<ETransfer::YCbCrSRGB>(const nanogui::Vector3f& val) noexcept {
+    auto res = transfer<ETransfer::SRGB>(val);
+    rgbToYCbCr(res.x(), res.y(), res.z());
+    return res;
 }
 
 template <> inline nanogui::Vector3f transfer<ETransfer::HLG>(const nanogui::Vector3f& val) noexcept {
@@ -799,6 +900,8 @@ inline nanogui::Vector3f transfer(const ETransfer t, const nanogui::Vector3f& va
         case ETransfer::SMPTE428: return transfer<ETransfer::SMPTE428>(val);
         case ETransfer::HLG: return transfer<ETransfer::HLG>(val);
         case ETransfer::Unspecified: return transfer<ETransfer::Unspecified>(val);
+        case ETransfer::YCbCrLinear: return transfer<ETransfer::YCbCrLinear>(val);
+        case ETransfer::YCbCrSRGB: return transfer<ETransfer::YCbCrSRGB>(val);
         case ETransfer::LUT: return transfer<ETransfer::LUT>(val);
         case ETransfer::GenericGamma: return transfer<ETransfer::GenericGamma>(val);
         default: return val;

@@ -490,17 +490,17 @@ Task<vector<ImageData>>
                 dst.nChannels() >= 3;
 
             const float scale = 1.0f / ((1 << cinfo.data_precision) - 1);
-            if (fromSrgb && !yCbCrConversionNeeded) {
-                co_await toFloat32<ituth273::ETransfer::SRGB>(src, numChannels, dst, alphaKind, priority, scale);
-            } else {
-                co_await toFloat32(src, numChannels, dst, alphaKind, priority, scale);
-            }
-
-            if (yCbCrConversionNeeded) {
-                if (fromSrgb) {
-                    co_await yCbCrToRgb<true>(dst, priority);
+            if (fromSrgb) {
+                if (yCbCrConversionNeeded) {
+                    co_await toFloat32<ituth273::ETransfer::YCbCrSRGB>(src, numChannels, dst, alphaKind, priority, scale);
                 } else {
-                    co_await yCbCrToRgb<false>(dst, priority);
+                    co_await toFloat32<ituth273::ETransfer::SRGB>(src, numChannels, dst, alphaKind, priority, scale);
+                }
+            } else {
+                if (yCbCrConversionNeeded) {
+                    co_await toFloat32<ituth273::ETransfer::YCbCrLinear>(src, numChannels, dst, alphaKind, priority, scale);
+                } else {
+                    co_await toFloat32<ituth273::ETransfer::Linear>(src, numChannels, dst, alphaKind, priority, scale);
                 }
             }
 

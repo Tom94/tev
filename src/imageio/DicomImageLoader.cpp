@@ -612,7 +612,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
                 const float offset = pi == gdcm::PhotometricInterpretation::YBR_ICT ?
                     0.0f :
                     (float)(1 << (m.bitsStored - 1)) / (float)((1 << m.bitsStored) - 1);
-                co_await yCbCrToRgb<true>(view, priority, Vector2f{offset});
+                co_await yCbCrToRgb<true>(view, priority, Vector2f{offset}.v);
             }
         } else /* if (isRgb) */ { // Applying inverse sRGB transfer even when not RGB to match JPEG exports from professional software
             const auto numPixels = posProd(size);

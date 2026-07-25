@@ -41,8 +41,8 @@ template <bool SRGB_TO_LINEAR = false>
 Task<void> yCbCrToRgb(
     MultiChannelView<float> data,
     int priority,
-    nanogui::Vector2f offsets = {0.5f, 0.5f},
-    nanogui::Vector4f coeffs = {1.402f, -0.344136f, -0.714136f, 1.772f}
+    const float offsets[2] = ituth273::DEFAULT_YCBCR_OFFSETS,
+    const float coeffs[4] = ituth273::DEFAULT_YCBCR_COEFFS
 ) {
     if (data.nChannels() < 3) {
         tlog::warning("Cannot convert from YCbCr to RGB: not enough channels.");
@@ -57,14 +57,11 @@ Task<void> yCbCrToRgb(
         numPixels,
         numPixels * 3,
         [offsets, &coeffs, &data](size_t i) {
-            const float Y = data[0, i];
-            const float Cb = data[1, i] - offsets[0];
-            const float Cr = data[2, i] - offsets[1];
+            float r = data[0, i];
+            float g = data[1, i];
+            float b = data[2, i];
 
-            // BT.601 conversion
-            float r = Y + coeffs[0] * Cr;
-            float g = Y + coeffs[1] * Cb + coeffs[2] * Cr;
-            float b = Y + coeffs[3] * Cb;
+            ituth273::yCbCrToRgb(r, g, b, offsets, coeffs);
 
             if constexpr (SRGB_TO_LINEAR) {
                 r = ituth273::srgbToLinear(r);
@@ -94,13 +91,13 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
         numPixels,
         numPixels * 3,
         [&data](size_t i) {
-            const float Y = data[0, i];
-            const float Cb = data[1, i];
-            const float Cr = data[2, i];
+            const float y = data[0, i];
+            const float cb = data[1, i];
+            const float cr = data[2, i];
 
-            float g = Y - ((Cb + Cr) / 4);
-            float r = Cr + g;
-            float b = Cb + g;
+            float g = y - ((cb + cr) / 4);
+            float r = cr + g;
+            float b = cb + g;
 
             if constexpr (SRGB_TO_LINEAR) {
                 r = ituth273::srgbToLinear(r);
@@ -229,17 +226,22 @@ Task<void> toFloat32(
                         }
                     }
 
-                    if constexpr (TRANSFER == ituth273::ETransfer::HLG && N_COLOR_CHANNELS_STATIC == 3) {
-                        // HLG is a special case: we need to load all three color channels at once to compute the luminance for scaling.
+                    if (N_COLOR_CHANNELS >= 3) {
                         Scalar r = loadChannel(0) * factor;
                         Scalar g = loadChannel(1) * factor;
                         Scalar b = loadChannel(2) * factor;
 
-                        ituth273::hlgToLinear(r, g, b);
+                        ituth273::invTransferRgb<TRANSFER>(r, g, b);
 
                         storeChannel(0, r * invFactor);
                         storeChannel(1, g * invFactor);
                         storeChannel(2, b * invFactor);
+
+                        for (size_t c = 3; c < N_COLOR_CHANNELS; ++c) {
+                            Scalar v = loadChannel(c) * factor;
+                            v = ituth273::invTransferComponent<TRANSFER>(v);
+                            storeChannel((int)c, v * invFactor);
+                        }
                     } else {
                         for (size_t c = 0; c < N_COLOR_CHANNELS; ++c) {
                             Scalar v = loadChannel(c) * factor;
