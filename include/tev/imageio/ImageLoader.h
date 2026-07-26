@@ -22,6 +22,7 @@
 #include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/Image.h>
+#include <tev/Simd.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/GainMap.h>
 
@@ -52,14 +53,16 @@ Task<void> yCbCrToRgb(
     const nanogui::Vector2i size = data.size();
 
     const auto numPixels = posProd(size);
-    co_await ThreadPool::global().parallelFor(
+    static constexpr auto TRANSFER = SRGB_TO_LINEAR ? ituth273::ETransfer::YCbCrSRGB : ituth273::ETransfer::YCbCrLinear;
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         numPixels,
-        numPixels * 3,
-        [offsets, &coeffs, &data](size_t i) {
-            float r = data[0, i];
-            float g = data[1, i];
-            float b = data[2, i];
+        numPixels * 3 * ituth273::approxCost(TRANSFER),
+        [&data, &offsets, &coeffs]<class B>(size_t i) {
+            auto r = loadChannel<B>(data, 0, i);
+            auto g = loadChannel<B>(data, 1, i);
+            auto b = loadChannel<B>(data, 2, i);
 
             ituth273::yCbCrToRgb(r, g, b, offsets, coeffs);
 
@@ -69,9 +72,9 @@ Task<void> yCbCrToRgb(
                 b = ituth273::srgbToLinear(b);
             }
 
-            data[0, i] = r;
-            data[1, i] = g;
-            data[2, i] = b;
+            storeChannel<B>(data, 0, i, r);
+            storeChannel<B>(data, 1, i, g);
+            storeChannel<B>(data, 2, i, b);
         },
         priority
     );
@@ -86,18 +89,20 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
     const nanogui::Vector2i size = data.size();
 
     const auto numPixels = posProd(size);
-    co_await ThreadPool::global().parallelFor(
+    static constexpr auto EFFECTIVE_TRANSFER = SRGB_TO_LINEAR ? ituth273::ETransfer::YCbCrSRGB : ituth273::ETransfer::YCbCrLinear;
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         numPixels,
-        numPixels * 3,
-        [&data](size_t i) {
-            const float y = data[0, i];
-            const float cb = data[1, i];
-            const float cr = data[2, i];
+        numPixels * 3 * ituth273::approxCost(EFFECTIVE_TRANSFER),
+        [&data]<class B>(size_t i) {
+            const auto y = loadChannel<B>(data, 0, i);
+            const auto cb = loadChannel<B>(data, 1, i);
+            const auto cr = loadChannel<B>(data, 2, i);
 
-            float g = y - ((cb + cr) / 4);
-            float r = cr + g;
-            float b = cb + g;
+            auto g = y - ((cb + cr) / 4);
+            auto r = cr + g;
+            auto b = cb + g;
 
             if constexpr (SRGB_TO_LINEAR) {
                 r = ituth273::srgbToLinear(r);
@@ -105,9 +110,9 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
                 b = ituth273::srgbToLinear(b);
             }
 
-            data[0, i] = r;
-            data[1, i] = g;
-            data[2, i] = b;
+            storeChannel<B>(data, 0, i, r);
+            storeChannel<B>(data, 1, i, g);
+            storeChannel<B>(data, 2, i, b);
         },
         priority
     );
