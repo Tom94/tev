@@ -120,42 +120,32 @@ std::string_view toString(EWpPrimaries wpPrimaties);
 
 template <class B> B applyGamma(const B& val, const B& gamma) noexcept { return xsimd::copysign(fastPow(xsimd::abs(val), gamma), val); }
 
-inline nanogui::Vector3f applyGamma(nanogui::Vector3f val, float gamma) noexcept {
-    const v4f in{val.x(), val.y(), val.z(), 0.0f};
-    const v4f res = applyGamma(in, v4f(gamma));
-    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
-    return v;
+template <class B> nanogui::Array<B, 3> applyGamma(const nanogui::Array<B, 3>& val, const B& gamma) noexcept {
+    return {applyGamma(val.x(), gamma), applyGamma(val.y(), gamma), applyGamma(val.z(), gamma)};
 }
 
-inline v4f applyTonemap(const v4f& val, const float gamma, ETonemap tonemap) noexcept {
-    using xsimd::max;
-    using xsimd::min;
-    using xsimd::reduce_add;
+template <class B> nanogui::Array<B, 3> applyTonemap(const nanogui::Array<B, 3>& val, const float gamma, ETonemap tonemap) noexcept {
     switch (tonemap) {
-        case ETonemap::Gamma: return applyGamma(val, v4f{1.0f / gamma});
+        case ETonemap::Gamma: return applyGamma(val, B{1.0f / gamma});
         case ETonemap::FalseColor: {
-            static constexpr auto falseColor = [](const float linear) {
+            static constexpr auto falseColor = [](const B& linear) -> nanogui::Array<B, 3> {
                 static const auto fcd = colormap::turbo();
-                int start = 4 * std::clamp((int)(linear * (int)(fcd.size() / 4)), 0, (int)fcd.size() / 4 - 1);
-                return v4f{fcd[start], fcd[start + 1], fcd[start + 2], 0.0f};
+                using vi = int_companion_t<B>;
+                const auto start = 4 * xsimd::clip(float_to_int(linear * B(fcd.size() / 4)), vi{0}, vi(fcd.size() / 4 - 1));
+                if constexpr (std::is_same_v<B, float>) {
+                    return {fcd[start], fcd[start + 1], fcd[start + 2]};
+                } else {
+                    return {B::gather(fcd.data(), start), B::gather(fcd.data(), start + 1), B::gather(fcd.data(), start + 2)};
+                }
             };
 
-            const v4f tmp = val & xsimd::bit_cast<v4f>(uint_companion_t<v4f>{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000});
-            return falseColor(fastLog2(reduce_add(tmp) * (1.0f / 3.0f) + 0.03125f) / 10 + 0.5f);
+            return falseColor(fastLog2(mean(val) + 0.03125f) / 10 + 0.5f);
         }
         case ETonemap::PositiveNegative: {
-            const v4f tmp = val & xsimd::bit_cast<v4f>(uint_companion_t<v4f>{0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000});
-            return v4f{(-2.0f / 3.0f) * reduce_add(min(tmp, v4f{0.0f})), (2.0f / 3.0f) * reduce_add(max(tmp, v4f{0.0f})), 0.0f, 0.0f};
+            return {-2.0f * mean(min(val, nanogui::Array<B, 3>{B{0.0f}})), 2.0f * mean(max(val, nanogui::Array<B, 3>{B{0.0f}})), B{0.0f}};
         }
         default: return val; // Invalid tonemap selected, return input unchanged.
     }
-}
-
-inline nanogui::Vector3f applyTonemap(nanogui::Vector3f val, float gamma, ETonemap tonemap) noexcept {
-    const v4f in{val.x(), val.y(), val.z(), 0.0f};
-    const v4f res = applyTonemap(in, gamma, tonemap);
-    nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
-    return v;
 }
 
 inline float applyMetric(float image, float reference, EMetric metric) noexcept {
@@ -707,6 +697,8 @@ template <class B> B transferComponent(const ETransfer transfer, const B& val) n
 }
 
 template <ETransfer TRANSFER> nanogui::Vector3f transfer(const nanogui::Vector3f& val) noexcept {
+    // TODO: align interface with invTransferRgb
+    using v4f = xsimd::make_sized_batch_t<float, 4>;
     const v4f in{val.x(), val.y(), val.z(), 0.0f};
     const v4f res = transferComponentImpl(std::integral_constant<ETransfer, TRANSFER>(), in);
     nanogui::Vector3f v{res.get(0), res.get(1), res.get(2)};
@@ -824,15 +816,29 @@ private:
 // smaller than 0, even if the input was within [0, 1]. This is by design, and, on macOS, the OS translates these out-of-bounds colors
 // correctly to the gamut of the display. Other operating systems, like Windows and Linux don't do this -- it's a TODO for tev to explicitly
 // hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
+template <typename T>
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     EAlphaKind alphaKind,
-    const MultiChannelView<const float>& src,
+    const MultiChannelView<const T>& src,
     const MultiChannelView<float>& rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
     int priority,
     bool invertCmyk = false
 );
+
+template <typename T>
+Task<void> toLinearSrgbPremul(
+    const ColorProfile& profile,
+    EAlphaKind alphaKind,
+    const MultiChannelView<T>& src,
+    const MultiChannelView<float>& rgbaDst,
+    std::optional<ERenderingIntent> intentOverride,
+    int priority,
+    bool invertCmyk = false
+) {
+    co_await toLinearSrgbPremul(profile, alphaKind, MultiChannelView<const T>{src}, rgbaDst, intentOverride, priority, invertCmyk);
+}
 
 struct LimitedRange {
     float scale = 1.0f; // Scale factor for limited range to full range conversion

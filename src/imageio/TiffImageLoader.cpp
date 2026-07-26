@@ -1421,7 +1421,7 @@ Task<void> postprocessRgb(
                     // the power behaves like an odd exponent, thereby preserving the range of R.
                     float& v = rgbaView[c, i];
                     v *= factor;
-                    v = copysign(pow(abs(v), 2.2f), v);
+                    v = copysign(fastPow(std::abs(v), 2.2f), v);
                     v *= invFactor;
                 }
             },

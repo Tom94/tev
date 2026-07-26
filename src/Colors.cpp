@@ -85,7 +85,7 @@ Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
     const Vector2f& white = chroma[3];
 
     // prevent a division that rounds to zero
-    if (abs(white.y()) <= 1.f && abs(white.x() * Y) >= abs(white.y()) * numeric_limits<float>::max()) {
+    if (std::abs(white.y()) <= 1.f && std::abs(white.x() * Y) >= std::abs(white.y()) * numeric_limits<float>::max()) {
         tlog::warning("Bad chromaticities: white.y is too small ({}); returning identity", white.y());
         return Matrix3f{1.0f};
     }
@@ -107,9 +107,9 @@ Matrix3f rgbToXyz(const chroma_t& chroma, float Y) {
         (X * (green.y() - red.y()) - red.x() * (Y * (green.y() - 1) + green.y() * (X + Z)) +
          green.x() * (Y * (red.y() - 1) + red.y() * (X + Z)));
 
-    if (abs(d) < 1.f &&
-        (abs(SrN) >= abs(d) * numeric_limits<float>::max() || abs(SgN) >= abs(d) * numeric_limits<float>::max() ||
-         abs(SbN) >= abs(d) * numeric_limits<float>::max())) {
+    if (std::abs(d) < 1.f &&
+        (std::abs(SrN) >= std::abs(d) * numeric_limits<float>::max() || std::abs(SgN) >= std::abs(d) * numeric_limits<float>::max() ||
+         std::abs(SbN) >= std::abs(d) * numeric_limits<float>::max())) {
         // cannot generate matrix if all RGB primaries have the same y value
         // or if they all have the an x value of zero
         // in both cases, the primaries are colinear, which makes them unusable
@@ -731,10 +731,11 @@ ColorProfile ColorProfile::fromIcc(span<const uint8_t> iccProfile) {
     return result;
 }
 
+template <typename T>
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
     EAlphaKind alphaKind,
-    const MultiChannelView<const float>& src,
+    const MultiChannelView<const T>& src,
     const MultiChannelView<float>& rgbaDst,
     std::optional<ERenderingIntent> intentOverride,
     int priority,
@@ -1031,24 +1032,23 @@ Task<void> toLinearSrgbPremul(
             }
 
             if (cicp) {
-                // TODO: optimize invTransfer's runtime argument
-                for (int x = 0; x < size.x(); ++x) {
-                    Vector3f color;
+                simdFor(0, size.x(), [&]<class B>(int x) {
+                    Array<B, 3> color = {B{0}};
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        color[c] = in[c, x] * range.scale + range.offset;
+                        color[c] = xsimd::fma(loadChannel<B>(in, c, x), B{range.scale}, B{range.offset});
                     }
 
                     ituth273::invTransferRgb(cicp->transfer, color.x(), color.y(), color.z());
-                    color = toRec709 * color;
+                    color = simdMatmul(toRec709, color);
 
                     for (size_t c = 0; c < numColorChannelsOut; ++c) {
-                        out[c, x] = color[c];
+                        storeChannel<B>(out, c, x, color[c]);
                     }
 
                     if (alphaKind != EAlphaKind::None) {
-                        out[-1, x] = in[-1, x];
+                        storeChannel<B>(out, -1, x, loadChannel<B>(in, -1, x));
                     }
-                }
+                });
             } else {
                 cmsDoTransform(transform, in.interleavedData(src.nChannels()), out.interleavedData(rgbaDst.nChannels()), size.x());
             }
@@ -1074,6 +1074,34 @@ Task<void> toLinearSrgbPremul(
         priority
     );
 }
+
+template Task<void> toLinearSrgbPremul<float>(
+    const ColorProfile& profile,
+    EAlphaKind alphaKind,
+    const MultiChannelView<const float>& src,
+    const MultiChannelView<float>& rgbaDst,
+    std::optional<ERenderingIntent> intentOverride,
+    int priority,
+    bool invertCmyk
+);
+template Task<void> toLinearSrgbPremul<uint8_t>(
+    const ColorProfile& profile,
+    EAlphaKind alphaKind,
+    const MultiChannelView<const uint8_t>& src,
+    const MultiChannelView<float>& rgbaDst,
+    std::optional<ERenderingIntent> intentOverride,
+    int priority,
+    bool invertCmyk
+);
+template Task<void> toLinearSrgbPremul<uint16_t>(
+    const ColorProfile& profile,
+    EAlphaKind alphaKind,
+    const MultiChannelView<const uint16_t>& src,
+    const MultiChannelView<float>& rgbaDst,
+    std::optional<ERenderingIntent> intentOverride,
+    int priority,
+    bool invertCmyk
+);
 
 LimitedRange limitedRangeForBitsPerSample(int bitsPerSample, bool cbcr) {
     const int eightBitMin = 16;

@@ -180,33 +180,6 @@ bool almostEquals(const nanogui::Matrix<T, N_DIMS>& a, const nanogui::Matrix<T, 
     return frob < epsilon;
 }
 
-template <size_t N_DIMS> nanogui::Array<float, N_DIMS> abs(const nanogui::Array<float, N_DIMS>& v) {
-    nanogui::Array<float, N_DIMS> result;
-    for (size_t i = 0; i < N_DIMS; ++i) {
-        result[i] = std::abs(v[i]);
-    }
-
-    return result;
-}
-
-template <size_t N_DIMS> nanogui::Array<float, N_DIMS> max(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
-    nanogui::Array<float, N_DIMS> result;
-    for (size_t i = 0; i < N_DIMS; ++i) {
-        result[i] = std::max(a[i], b[i]);
-    }
-
-    return result;
-}
-
-template <size_t N_DIMS> nanogui::Array<float, N_DIMS> min(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
-    nanogui::Array<float, N_DIMS> result;
-    for (size_t i = 0; i < N_DIMS; ++i) {
-        result[i] = std::min(a[i], b[i]);
-    }
-
-    return result;
-}
-
 template <typename T, size_t N_DIMS> auto prod(const nanogui::Array<T, N_DIMS>& v) {
     using signed_size_t = std::common_type_t<std::ptrdiff_t, std::make_signed_t<size_t>>;
     using area_t = std::conditional_t<std::is_integral_v<T>, std::conditional_t<std::is_signed_v<T>, signed_size_t, size_t>, T>;

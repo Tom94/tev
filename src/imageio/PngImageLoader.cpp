@@ -512,10 +512,10 @@ Task<vector<ImageData>>
                 co_return;
             } else if (iccProfileData) {
                 try {
-                    co_await toFloat32(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
-
                     const auto profile = ColorProfile::fromIcc({iccProfileData, iccProfileSize});
-                    co_await toLinearSrgbPremul(profile, alphaKind, dstView, dstView, nullopt, priority);
+                    co_await toLinearSrgbPremul(
+                        profile, alphaKind, MultiChannelView<const T>{buf.data<const T>(), numChannels, size}, dstView, nullopt, priority
+                    );
                     resultData.hasPremultipliedAlpha = true;
                     resultData.readMetadataFromIcc(profile);
                     co_return;
@@ -558,14 +558,15 @@ Task<vector<ImageData>>
             tlog::debug("Using gamma={}", invGamma64);
             co_await toFloat32(buf.span<const T>(), numChannels, dstView, alphaKind, priority);
 
-            co_await ThreadPool::global().parallelFor(
+            co_await simdParallelFor(
+                ThreadPool::global(),
                 0uz,
                 numPixels,
                 numSamples,
-                [&](size_t i) {
-                    const float alpha = hasAlpha ? dstView[-1, i] : 1.0f;
+                [&]<class B>(size_t i) {
+                    const auto alpha = hasAlpha ? loadChannel<B>(dstView, -1, i) : 1.0f;
                     for (size_t c = 0; c < numColorChannels; ++c) {
-                        dstView[c, i] = pow(dstView[c, i], gamma) * alpha;
+                        storeChannel<B>(dstView, c, i, fastPow(loadChannel<B>(dstView, c, i), B{gamma}) * alpha);
                     }
                 },
                 priority

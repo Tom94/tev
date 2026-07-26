@@ -17,6 +17,7 @@
  */
 
 #include <tev/Channel.h>
+#include <tev/Simd.h>
 #include <tev/ThreadPool.h>
 
 #include <memory>
@@ -116,13 +117,15 @@ Task<void> Channel::divideByAsync(const Channel& other, int priority) {
     auto dst = view<float>();
     const auto src = other.view<const float>();
 
-    co_await ThreadPool::global().parallelFor(
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         other.numPixels(),
         other.numPixels(),
-        [&](size_t i) {
-            const float divisor = src[i];
-            dst[i] = divisor != 0.0f ? dst[i] / divisor : 0.0f;
+        [&]<class B>(size_t i) {
+            const auto divisor = loadChannel<B>(src, i);
+            const auto v = xsimd::select(divisor != B{0.0f}, loadChannel<B>(dst, i) / divisor, B{0.0f});
+            storeChannel<B>(dst, i, v);
         },
         priority
     );
@@ -136,7 +139,14 @@ Task<void> Channel::multiplyWithAsync(const Channel& other, int priority) {
     auto dst = view<float>();
     const auto src = other.view<const float>();
 
-    co_await ThreadPool::global().parallelFor(0uz, other.numPixels(), other.numPixels(), [&](size_t i) { dst[i] *= src[i]; }, priority);
+    co_await simdParallelFor(
+        ThreadPool::global(),
+        0uz,
+        other.numPixels(),
+        other.numPixels(),
+        [&]<class B>(size_t i) { storeChannel<B>(dst, i, loadChannel<B>(dst, i) * loadChannel<B>(src, i)); },
+        priority
+    );
 }
 
 void Channel::updateTile(const Box2i bounds, const span<const float> newData) {

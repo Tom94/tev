@@ -18,6 +18,7 @@
 
 #include <tev/Common.h>
 #include <tev/Image.h>
+#include <tev/Simd.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
@@ -178,7 +179,7 @@ Task<vector<ImageData>>
                 }
 
                 isLittleEndian = scale < 0;
-                scale = abs(scale);
+                scale = std::abs(scale);
                 bitsPerChannel = 32;
 
                 switch (pamType) {

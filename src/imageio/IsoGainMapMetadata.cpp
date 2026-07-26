@@ -247,7 +247,7 @@ IsoGainMapMetadata::IsoGainMapMetadata(const char* ns, void* xmpMeta) {
             throw invalid_argument{"XMP gainmap property HDRCapacityMax is required."};
         }
 
-        mAlternateHdrHeadroom = max(mAlternateHdrHeadroom, mBaseHdrHeadroom);
+        mAlternateHdrHeadroom = std::max(mAlternateHdrHeadroom, mBaseHdrHeadroom);
 
         // Old versions of XMP gainmap metadata used different properties to indicate the gainmap direction.
         if (string baseRendition; meta->GetProperty(ns, "BaseRendition", &baseRendition, nullptr)) {

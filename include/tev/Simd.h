@@ -36,7 +36,6 @@ namespace tev {
 // Scalar mode:  B = float                                  (size == 1)
 // -----------------------------------------------------------------------------
 using vf = xsimd::batch<float>;
-using v4f = xsimd::make_sized_batch_t<float, 4>;
 
 template <class B, class = void> struct int_companion {
     using type = xsimd::batch<int32_t, typename B::arch_type>;
@@ -213,6 +212,45 @@ template <class B> B fastPow(const B& x, const B& y) noexcept {
     return r;
 }
 
+template <class B, typename Value, size_t Size>
+nanogui::Array<B, Size> simdMatmul(const nanogui::Matrix<Value, Size>& m, const nanogui::Array<B, Size>& v) {
+    nanogui::Array<B, Size> result((Value)0);
+    for (size_t k = 0; k < Size; ++k) {
+        for (size_t i = 0; i < Size; ++i) {
+            result.v[i] = xsimd::fma(B{m.m[k][i]}, v.v[k], result.v[i]);
+        }
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> abs(const nanogui::Array<float, N_DIMS>& v) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = xsimd::abs(v[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> max(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = xsimd::max(a[i], b[i]);
+    }
+
+    return result;
+}
+
+template <size_t N_DIMS> nanogui::Array<float, N_DIMS> min(const nanogui::Array<float, N_DIMS>& a, const nanogui::Array<float, N_DIMS>& b) {
+    nanogui::Array<float, N_DIMS> result;
+    for (size_t i = 0; i < N_DIMS; ++i) {
+        result[i] = xsimd::min(a[i], b[i]);
+    }
+
+    return result;
+}
+
 template <class B, typename T> B loadChannel(const std::span<const T>& view, size_t c, size_t x, size_t y, size_t xstride, size_t ystride) {
     if constexpr (std::is_arithmetic_v<B>) {
         return B(view[c + x * xstride + y * ystride]);
@@ -220,6 +258,18 @@ template <class B, typename T> B loadChannel(const std::span<const T>& view, siz
         alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
         for (std::size_t i = 0; i < B::size; ++i) {
             tmp[i] = view[c + (x + i) * xstride + y * ystride];
+        }
+        return B::load_aligned(tmp);
+    }
+}
+
+template <class B, typename T> B loadChannel(const std::span<const T>& view, size_t c, size_t idx, size_t stride) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        return B(view[c + idx * stride]);
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        for (std::size_t i = 0; i < B::size; ++i) {
+            tmp[i] = view[c + (idx + i) * stride];
         }
         return B::load_aligned(tmp);
     }
@@ -250,7 +300,57 @@ template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, si
     }
 }
 
-template <class B, typename T> void storeChannel(MultiChannelView<T>& view, size_t c, size_t x, size_t y, const B& v) {
+template <class B, typename T> B loadChannel(const ChannelView<T>& view, size_t x, size_t y) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        return view[x, y];
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        for (std::size_t i = 0; i < B::size; ++i) {
+            tmp[i] = view[x + i, y];
+        }
+        return B::load_aligned(tmp);
+    }
+}
+
+template <class B, typename T> B loadChannel(const ChannelView<T>& view, size_t idx) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        return view[idx];
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        for (std::size_t i = 0; i < B::size; ++i) {
+            tmp[i] = view[idx + i];
+        }
+
+        return B::load_aligned(tmp);
+    }
+}
+
+template <class B, typename T>
+void storeChannel(const std::span<T>& view, size_t c, size_t x, size_t y, size_t xstride, size_t ystride, const B& v) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        view[c + x * xstride + y * ystride] = v;
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        v.store_aligned(tmp);
+        for (std::size_t i = 0; i < B::size; ++i) {
+            view[c + (x + i) * xstride + y * ystride] = tmp[i];
+        }
+    }
+}
+
+template <class B, typename T> void storeChannel(const std::span<T>& view, size_t c, size_t idx, size_t stride, const B& v) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        view[c + idx * stride] = v;
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        v.store_aligned(tmp);
+        for (std::size_t i = 0; i < B::size; ++i) {
+            view[c + (idx + i) * stride] = tmp[i];
+        }
+    }
+}
+
+template <class B, typename T> void storeChannel(const MultiChannelView<T>& view, size_t c, size_t x, size_t y, const B& v) {
     if constexpr (std::is_arithmetic_v<B>) {
         view.setAt(c, x, y, v);
     } else {
@@ -262,7 +362,7 @@ template <class B, typename T> void storeChannel(MultiChannelView<T>& view, size
     }
 }
 
-template <class B, typename T> void storeChannel(MultiChannelView<T>& view, size_t c, size_t idx, const B& v) {
+template <class B, typename T> void storeChannel(const MultiChannelView<T>& view, size_t c, size_t idx, const B& v) {
     if constexpr (std::is_arithmetic_v<B>) {
         view.setAt(c, idx, v);
     } else {
@@ -274,7 +374,31 @@ template <class B, typename T> void storeChannel(MultiChannelView<T>& view, size
     }
 }
 
-template <std::integral Int, typename F> void simdLoop(Int start, Int end, F&& f) {
+template <class B, typename T> void storeChannel(const ChannelView<T>& view, size_t x, size_t y, const B& v) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        view.setAt(x, y, v);
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        v.store_aligned(tmp);
+        for (std::size_t i = 0; i < B::size; ++i) {
+            view.setAt(x + i, y, tmp[i]);
+        }
+    }
+}
+
+template <class B, typename T> void storeChannel(const ChannelView<T>& view, size_t idx, const B& v) {
+    if constexpr (std::is_arithmetic_v<B>) {
+        view.setAt(idx, v);
+    } else {
+        alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
+        v.store_aligned(tmp);
+        for (std::size_t i = 0; i < B::size; ++i) {
+            view.setAt(idx + i, tmp[i]);
+        }
+    }
+}
+
+template <std::integral Int, typename F> void simdFor(Int start, Int end, F&& f) {
     static constexpr auto SIMD_SIZE = (Int)vf::size;
 
     auto i = start;
@@ -291,7 +415,7 @@ template <std::integral Int, typename F> void simdLoop(Int start, Int end, F&& f
 
 template <std::integral Int, typename F>
 Task<void> simdParallelFor(ThreadPool& pool, Int start, Int end, size_t approxCost, F body, int priority) {
-    co_await pool.parallelFor(start, end, approxCost, [&body](Int bStart, Int bEnd) { simdLoop(bStart, bEnd, body); }, priority);
+    co_await pool.parallelFor(start, end, approxCost, [&body](Int bStart, Int bEnd) { simdFor(bStart, bEnd, body); }, priority);
 }
 
 } // namespace tev

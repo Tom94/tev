@@ -1342,7 +1342,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     const auto renderingIntent = convertIntent(dib.intent);
 
     const bool flipVertically = dib.height > 0;
-    dib.height = abs(dib.height);
+    dib.height = std::abs(dib.height);
 
     if (dib.height <= 0 || dib.width <= 0) {
         throw ImageLoadError{fmt::format("Invalid BMP image dimensions: {}x{}", dib.width, dib.height)};
@@ -1398,7 +1398,7 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     }
 
     const size_t bytesPerRow = nextMultiple(dib.bitsPerPixel * dib.width, 32) / 8; // Rows are padded to a multiple of 4 bytes
-    const size_t pixelDataSize = bytesPerRow * abs(dib.height);
+    const size_t pixelDataSize = bytesPerRow * std::abs(dib.height);
 
     if (pixelDataOffset.has_value()) {
         iStream.seekg(*pixelDataOffset, ios_base::beg);
