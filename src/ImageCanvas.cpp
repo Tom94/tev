@@ -19,6 +19,7 @@
 #include <tev/Common.h>
 #include <tev/FalseColor.h>
 #include <tev/ImageCanvas.h>
+#include <tev/Simd.h>
 #include <tev/ThreadPool.h>
 
 #include <nanogui/opengl.h>
@@ -786,7 +787,7 @@ void ImageCanvas::applyInspectionParameters(vector<float>& values, bool hasAlpha
             rgb[c] = values[c] * alphaFactor;
         }
 
-        rgb = ituth273::transfer(mInspectionTransfer, mat * rgb);
+        rgb = ituth273::transferRgb(mInspectionTransfer, mat * rgb);
         for (size_t c = 0; c < 3; ++c) {
             values[c] = rgb[c];
         }
@@ -863,20 +864,20 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             region.max.y(),
             numSamples,
             [&](int y) {
-                for (int x = region.min.x(); x < region.max.x(); ++x) {
-                    const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)[x, y] : 1.0f;
-                    const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
+                simdFor(region.min.x(), region.max.x(), [&]<class B>(int x) {
+                    const auto alpha = alphaChannel && !premultipliedAlpha ? loadChannel<B>(*alphaChannel, x, y) : B{1.0f};
+                    const auto alphaFactor = xsimd::select(alpha == B{0.0f}, B{0.0f}, 1.0f / alpha);
 
-                    Vector3f rgb;
+                    nanogui::Array<B, 3> rgb;
                     for (size_t c = 0; c < 3; ++c) {
-                        rgb[c] = views[c][x, y] * alphaFactor;
+                        rgb[c] = loadChannel<B>(views[c], x, y) * alphaFactor;
                     }
 
-                    rgb = ituth273::transfer(transfer, mat * rgb);
+                    rgb = ituth273::transferRgb(transfer, simdMatmul(mat, rgb));
                     for (size_t c = 0; c < 3; ++c) {
-                        views[c][x, y] = rgb[c];
+                        storeChannel<B>(views[c], x, y, rgb[c]);
                     }
-                }
+                });
             },
             priority
         );
@@ -888,15 +889,15 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                 region.max.y(),
                 numSamples,
                 [&](int y) {
-                    for (int x = region.min.x(); x < region.max.x(); ++x) {
-                        const float alpha = alphaChannel && !premultipliedAlpha ? (*alphaChannel)[x, y] : 1.0f;
-                        const float alphaFactor = alpha == 0 ? 0.0f : 1.0f / alpha;
+                    simdFor(region.min.x(), region.max.x(), [&]<class B>(int x) {
+                        const auto alpha = alphaChannel && !premultipliedAlpha ? loadChannel<B>(*alphaChannel, x, y) : B{1.0f};
+                        const auto alphaFactor = xsimd::select(alpha == B{0.0f}, B{0.0f}, 1.0f / alpha);
 
                         for (size_t c = 0; c < nColorChannels; ++c) {
-                            const float val = views[c][x, y] * alphaFactor;
-                            views[c][x, y] = ituth273::transferComponent(transfer, val);
+                            const auto val = loadChannel<B>(views[c], x, y) * alphaFactor;
+                            storeChannel<B>(views[c], x, y, ituth273::transferComponent(transfer, val));
                         }
-                    }
+                    });
                 },
                 priority
             );
@@ -919,19 +920,19 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             numSamples,
             [&](int y) {
                 Stats& lineStats = perLineStats[y - region.min.y()];
-
-                for (int x = region.min.x(); x < region.max.x(); ++x) {
+                simdFor(region.min.x(), region.max.x(), [&]<class B>(int x) {
                     for (size_t c = 0; c < nColorChannels; ++c) {
-                        auto v = views[c][x, y];
-                        if (!isfinite(v)) {
-                            continue;
-                        }
+                        const auto v = loadChannel<B>(views[c], x, y);
 
-                        lineStats.mean += v;
-                        lineStats.maximum = std::max(lineStats.maximum, v);
-                        lineStats.minimum = std::min(lineStats.minimum, v);
+                        lineStats.mean += sum(xsimd::select(xsimd::isfinite(v), v, B{0.0f}));
+                        lineStats.maximum = std::max(
+                            lineStats.maximum, tev::max(xsimd::select(xsimd::isfinite(v), v, B{-numeric_limits<float>::infinity()}))
+                        );
+                        lineStats.minimum = std::min(
+                            lineStats.minimum, tev::min(xsimd::select(xsimd::isfinite(v), v, B{numeric_limits<float>::infinity()}))
+                        );
                     }
-                }
+                });
             },
             priority
         );
@@ -949,30 +950,31 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     // The more pixels we have, the finer we can make the histogram without becoming noisy
     // const size_t numBins = clamp(numPixels / 512, 16uz, 512uz);
-    const size_t numBins = 400;
-    result->histogram.resize(numBins * nColorChannels);
+    static constexpr size_t NUM_BINS = 400;
+    result->histogram.resize(NUM_BINS * nColorChannels);
 
     // We're going to draw our histogram in log space.
     static constexpr float addition = 0.001f;
     static const float smallest = fastLog2(addition);
 
-    static constexpr auto symmetricLog = [](const float val) {
-        return val > 0 ? (fastLog2(val + addition) - smallest) : -(fastLog2(-val + addition) - smallest);
+    static constexpr auto symmetricLog = [](const auto val) {
+        return xsimd::select(val > 0, (fastLog2(val + addition) - smallest), -(fastLog2(-val + addition) - smallest));
     };
-    static constexpr auto symmetricLogInverse = [](const float val) {
-        return val > 0 ? (fastExp2(val + smallest) - addition) : -(fastExp2(-val + smallest) - addition);
+    static constexpr auto symmetricLogInverse = [](const auto val) {
+        return xsimd::select(val > 0, (fastExp2(val + smallest) - addition), -(fastExp2(-val + smallest) - addition));
     };
 
     const float minLog = symmetricLog(stats.minimum);
     const float diffLog = symmetricLog(stats.maximum) - minLog;
 
-    const auto valToBin = [minLog, diffLog](const float val) {
-        return clamp((int)(numBins * (symmetricLog(val) - minLog) / diffLog), 0, (int)numBins - 1);
+    const auto valToBin = [minLog, diffLog]<class B>(const B& val) {
+        using vi = int_companion_t<B>;
+        return xsimd::clip(float_to_int(NUM_BINS * (symmetricLog(val) - B{minLog}) / B{diffLog}), vi{0}, vi(NUM_BINS - 1));
     };
 
-    result->histogramZero = valToBin(0);
+    result->histogramZero = valToBin(0.0f);
 
-    const auto binToVal = [minLog, diffLog](const float val) { return symmetricLogInverse((diffLog * val / numBins) + minLog); };
+    const auto binToVal = [minLog, diffLog](const float val) { return symmetricLogInverse((diffLog * val / NUM_BINS) + minLog); };
 
     // In the strange case that we have 0 channels, early return, because the histogram makes no sense.
     if (nColorChannels == 0) {
@@ -986,27 +988,37 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
         const size_t numTasks = nextMultiple(ThreadPool::global().nTasks<size_t>(0, numPixels, approxCost), nColorChannels);
         const size_t numTasksPerChannel = numTasks / nColorChannels;
 
-        vector<float> perTaskHistograms(numBins * nColorChannels * numTasks);
+        vector<float> perTaskHistograms(NUM_BINS * nColorChannels * numTasks);
 
         co_await ThreadPool::global().parallelFor(
             0uz,
             numTasks,
-            approxCost,
+            numeric_limits<uint32_t>::max(), // Maximum parallelism up to numTasks threads
             [&](size_t i) {
                 const size_t c = i % nColorChannels;
                 const size_t taskPerChannelIndex = i / nColorChannels;
 
-                const size_t taskStart = numPixels * taskPerChannelIndex / numTasksPerChannel;
-                const size_t taskEnd = numPixels * (taskPerChannelIndex + 1) / numTasksPerChannel;
+                const int taskStart = region.size().y() * taskPerChannelIndex / numTasksPerChannel + region.min.y();
+                const int taskEnd =
+                    std::min((int)(region.size().y() * (taskPerChannelIndex + 1) / numTasksPerChannel) + region.min.y(), region.max.y());
 
-                float* const histogram = perTaskHistograms.data() + numBins * i;
+                float* const histogram = perTaskHistograms.data() + NUM_BINS * i;
                 const auto& channel = views[c];
 
-                for (size_t j = taskStart; j < taskEnd; ++j) {
-                    const int x = (int)(j % regionSize.x()) + region.min.x();
-                    const int y = (int)(j / regionSize.x()) + region.min.y();
+                for (int y = taskStart; y < taskEnd; ++y) {
+                    simdFor(region.min.x(), region.max.x(), [&]<class B>(int x) {
+                        const auto bin = valToBin(loadChannel<B>(channel, x, y));
 
-                    histogram[valToBin(channel[x, y])] += alphaChannel ? (*alphaChannel)[x, y] : 1;
+                        if constexpr (is_same_v<B, float>) {
+                            histogram[bin] += alphaChannel ? (*alphaChannel)[x, y] : 1;
+                        } else {
+                            alignas(B::arch_type::alignment()) int32_t binArray[B::size];
+                            bin.store_aligned(binArray);
+                            for (size_t j = 0; j < B::size; ++j) {
+                                histogram[binArray[j]] += alphaChannel ? (*alphaChannel)[x + j, y] : 1;
+                            }
+                        }
+                    });
                 }
             },
             priority
@@ -1014,10 +1026,10 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
         co_await ThreadPool::global().parallelFor(
             0uz,
-            numBins * nColorChannels,
-            numBins * nColorChannels * numTasks,
+            NUM_BINS * nColorChannels,
+            NUM_BINS * nColorChannels * numTasks,
             [&](size_t i) {
-                const size_t stride = numBins * nColorChannels;
+                const size_t stride = NUM_BINS * nColorChannels;
                 for (size_t j = 0; j < numTasks; ++j) {
                     result->histogram[i] += perTaskHistograms[i + j * stride];
                 }
@@ -1027,8 +1039,8 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     }
 
     for (size_t i = 0; i < nColorChannels; ++i) {
-        for (size_t j = 0; j < numBins; ++j) {
-            result->histogram[j + i * numBins] /= binToVal(j + 1) - binToVal(j);
+        for (size_t j = 0; j < NUM_BINS; ++j) {
+            result->histogram[j + i * NUM_BINS] /= binToVal(j + 1) - binToVal(j);
         }
     }
 
@@ -1036,13 +1048,13 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
     // - Ensure at least one element per color channel is excluded (typically a spike at zero)
     // - Additionally, scale by number of bins to make it a percentile-like normalization.
     auto tmp = result->histogram;
-    const size_t idx = tmp.size() - 1 - (1 + numBins / 128) * nColorChannels;
+    const size_t idx = tmp.size() - 1 - (1 + NUM_BINS / 128) * nColorChannels;
     nth_element(tmp.data(), tmp.data() + idx, tmp.data() + tmp.size());
 
     const float norm = 1.0f / (std::max(tmp[idx], 0.1f) * 1.3f);
     for (size_t i = 0; i < nColorChannels; ++i) {
-        for (size_t j = 0; j < numBins; ++j) {
-            result->histogram[j + i * numBins] *= norm;
+        for (size_t j = 0; j < NUM_BINS; ++j) {
+            result->histogram[j + i * NUM_BINS] *= norm;
         }
     }
 

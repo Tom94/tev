@@ -59,6 +59,13 @@ template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::i
 inline int float_to_int(float f) noexcept { return static_cast<int32_t>(f); }
 template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) noexcept { return xsimd::to_int(f); }
 
+inline float sum(float f) noexcept { return f; }
+template <class T, class A> T sum(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_add(f); }
+inline float max(float f) noexcept { return f; }
+template <class T, class A> T max(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_max(f); }
+inline float min(float f) noexcept { return f; }
+template <class T, class A> T min(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_min(f); }
+
 // portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
 // results land in the low 16 bits of an equally-wide uint32 batch.
 template <class B> auto float_to_half(const B& fb) noexcept -> uint_companion_t<B> {
@@ -300,6 +307,15 @@ template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, si
     }
 }
 
+template <class B, size_t Size, typename T, typename... Args> nanogui::Array<B, Size> loadChannel(const T& view, Args... args) {
+    nanogui::Array<B, Size> result;
+    for (size_t c = 0; c < Size; ++c) {
+        result.v[c] = loadChannel<B>(view, c, args...);
+    }
+
+    return result;
+}
+
 template <class B, typename T> B loadChannel(const ChannelView<T>& view, size_t x, size_t y) {
     if constexpr (std::is_arithmetic_v<B>) {
         return view[x, y];
@@ -371,6 +387,13 @@ template <class B, typename T> void storeChannel(const MultiChannelView<T>& view
         for (std::size_t i = 0; i < B::size; ++i) {
             view.setAt(c, idx + i, tmp[i]);
         }
+    }
+}
+
+template <class B, size_t Size, typename T, typename... Args>
+void storeChannel(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& view, Args... args) {
+    for (size_t c = 0; c < Size; ++c) {
+        storeChannel<B>(view, c, args..., v.v[c]);
     }
 }
 

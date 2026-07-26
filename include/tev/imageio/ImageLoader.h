@@ -60,21 +60,14 @@ Task<void> yCbCrToRgb(
         numPixels,
         numPixels * 3 * ituth273::approxCost(TRANSFER),
         [&data, &offsets, &coeffs]<class B>(size_t i) {
-            auto r = loadChannel<B>(data, 0, i);
-            auto g = loadChannel<B>(data, 1, i);
-            auto b = loadChannel<B>(data, 2, i);
+            auto rgb = loadChannel<B, 3>(data, i);
 
-            ituth273::yCbCrToRgb(r, g, b, offsets, coeffs);
-
+            rgb = ituth273::yCbCrToRgb(rgb, offsets, coeffs);
             if constexpr (SRGB_TO_LINEAR) {
-                r = ituth273::srgbToLinear(r);
-                g = ituth273::srgbToLinear(g);
-                b = ituth273::srgbToLinear(b);
+                rgb = ituth273::invTransferRgb<ituth273::ETransfer::SRGB>(rgb);
             }
 
-            storeChannel<B>(data, 0, i, r);
-            storeChannel<B>(data, 1, i, g);
-            storeChannel<B>(data, 2, i, b);
+            storeChannel<B>(rgb, data, i);
         },
         priority
     );
@@ -101,18 +94,17 @@ template <bool SRGB_TO_LINEAR = false> Task<void> yCbCrToRgbRct(MultiChannelView
             const auto cr = loadChannel<B>(data, 2, i);
 
             auto g = y - ((cb + cr) / 4);
-            auto r = cr + g;
-            auto b = cb + g;
+            nanogui::Array<B, 3> rgb = {
+                cr + g,
+                g,
+                cb + g,
+            };
 
             if constexpr (SRGB_TO_LINEAR) {
-                r = ituth273::srgbToLinear(r);
-                g = ituth273::srgbToLinear(g);
-                b = ituth273::srgbToLinear(b);
+                rgb = ituth273::invTransferRgb<ituth273::ETransfer::SRGB>(rgb);
             }
 
-            storeChannel<B>(data, 0, i, r);
-            storeChannel<B>(data, 1, i, g);
-            storeChannel<B>(data, 2, i, b);
+            storeChannel<B>(rgb, data, i);
         },
         priority
     );
@@ -217,15 +209,16 @@ Task<void> toFloat32(
                 }
 
                 if (N_COLOR_CHANNELS >= 3) {
-                    Scalar r = loadChannel(0) * factor;
-                    Scalar g = loadChannel(1) * factor;
-                    Scalar b = loadChannel(2) * factor;
+                    nanogui::Array<Scalar, 3> rgb = {
+                        loadChannel(0) * factor,
+                        loadChannel(1) * factor,
+                        loadChannel(2) * factor,
+                    };
 
-                    ituth273::invTransferRgb<TRANSFER>(r, g, b);
-
-                    storeChannel(floatData, 0, x, y, r * invFactor);
-                    storeChannel(floatData, 1, x, y, g * invFactor);
-                    storeChannel(floatData, 2, x, y, b * invFactor);
+                    rgb = ituth273::invTransferRgb<TRANSFER>(rgb);
+                    for (size_t c = 0; c < 3; ++c) {
+                        storeChannel(floatData, c, x, y, rgb[c] * invFactor);
+                    }
 
                     for (size_t c = 3; c < N_COLOR_CHANNELS; ++c) {
                         Scalar v = loadChannel(c) * factor;

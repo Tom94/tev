@@ -585,7 +585,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                         }
 
                         if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
-                            ituth273::yCbCrToRgb(rgb.x(), rgb.y(), rgb.z());
+                            rgb = ituth273::yCbCrToRgb(rgb);
                         }
 
                         if (convertSrgbToLinear) {

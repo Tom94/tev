@@ -1038,9 +1038,7 @@ Task<void> toLinearSrgbPremul(
                         color[c] = xsimd::fma(loadChannel<B>(in, c, x), B{range.scale}, B{range.offset});
                     }
 
-                    ituth273::invTransferRgb(cicp->transfer, color.x(), color.y(), color.z());
-                    color = simdMatmul(toRec709, color);
-
+                    color = ituth273::invTransferRgb(cicp->transfer, simdMatmul(toRec709, color));
                     for (size_t c = 0; c < numColorChannelsOut; ++c) {
                         storeChannel<B>(out, c, x, color[c]);
                     }

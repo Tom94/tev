@@ -1296,16 +1296,13 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
         rgbaHdrData.size() / 4,
         rgbaHdrData.size(),
         [&]<class B>(const size_t i) {
-            Array<B, 3> rgb = {loadChannel<B>(in, 0, i, 4), loadChannel<B>(in, 1, i, 4), loadChannel<B>(in, 2, i, 4)};
-
+            Array<B, 3> rgb = loadChannel<B, 3>(in, i, 4);
             for (size_t c = 0; c < 3; ++c) {
                 rgb[c] = xsimd::fma(rgb[c], B{exposureFactor}, B{offset});
             }
 
             rgb = applyGamma(applyTonemap(rgb, gamma, tonemap), B{2.2f});
-            for (size_t c = 0; c < 3; ++c) {
-                rgb[c] = ituth273::transferComponent<ituth273::ETransfer::SRGB>(rgb[c]);
-            }
+            rgb = ituth273::transferRgb<ituth273::ETransfer::SRGB>(rgb);
 
             for (size_t c = 0; c < 3; ++c) {
                 storeChannel(out, c, i, 4, xsimd::clip(xsimd::fma(rgb[c], B{255.0f}, B{0.5f}), B{0.0f}, B{255.0f}));
