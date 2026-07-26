@@ -17,10 +17,10 @@
  */
 
 #include <tev/Channel.h>
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/BmpImageLoader.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>

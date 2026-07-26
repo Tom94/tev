@@ -20,11 +20,10 @@
 
 #include <tev/Channel.h>
 #include <tev/Common.h>
+#include <tev/Simd.h>
 #include <tev/Task.h>
 
 #include <nanogui/vector.h>
-
-#include <xsimd/xsimd.hpp>
 
 #include <array>
 #include <optional>
@@ -118,187 +117,6 @@ enum class EWpPrimaries : int {
 
 chroma_t chroma(EWpPrimaries wpPrimaries);
 std::string_view toString(EWpPrimaries wpPrimaties);
-
-// -----------------------------------------------------------------------------
-// All functions are templated on the batch type B = xsimd::batch<float, A>.
-//
-// Vector mode:  B = xsimd::batch<float>                    (native best arch)
-//               B = xsimd::batch<float, xsimd::avx2>       (explicit arch)
-// Scalar mode:  B = float                                  (size == 1)
-// -----------------------------------------------------------------------------
-using vf = xsimd::batch<float>;
-using v4f = xsimd::make_sized_batch_t<float, 4>;
-
-template <class B, class = void> struct int_companion {
-    using type = xsimd::batch<int32_t, typename B::arch_type>;
-};
-template <class B> struct int_companion<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
-    using type = int32_t;
-};
-template <class B> using int_companion_t = typename int_companion<B>::type;
-
-template <class B, class = void> struct uint_companion {
-    using type = xsimd::batch<uint32_t, typename B::arch_type>;
-};
-template <class B> struct uint_companion<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
-    using type = uint32_t;
-};
-template <class B> using uint_companion_t = typename uint_companion<B>::type;
-
-inline float int_to_float(std::int32_t i) noexcept { return static_cast<float>(i); }
-template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) noexcept { return xsimd::to_float(i); }
-
-inline int float_to_int(float f) noexcept { return static_cast<int32_t>(f); }
-template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) noexcept { return xsimd::to_int(f); }
-
-// portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
-// results land in the low 16 bits of an equally-wide uint32 batch.
-template <class B> auto float_to_half(const B& fb) noexcept -> uint_companion_t<B> {
-    using i32 = uint_companion_t<B>;
-    using s32 = int_companion_t<B>;
-    using f32 = B;
-
-    const i32 sign_mask = i32(0x80000000u);
-    const i32 f32infty = i32(255u << 23);
-    const i32 f16max = i32((127u + 16u) << 23); // >= this rounds to +inf
-    const i32 min_normal = i32((127u - 14u) << 23); // smallest fp32 -> normalized fp16
-    const i32 subnorm_magic = i32(((127u - 15u) + (23u - 10u) + 1u) << 23);
-    const i32 normal_bias = i32(0xfffu - ((127u - 15u) << 23));
-    const i32 nan_out = i32(0x7e00u);
-    const i32 inf_out = i32(0x7c00u);
-
-    i32 u = xsimd::bit_cast<i32>(fb);
-    i32 sign = u & sign_mask;
-    u = u ^ sign; // abs bits
-    f32 absf = xsimd::bit_cast<f32>(u);
-
-    // classification
-    auto is_nan = (u > f32infty); // strictly greater -> NaN
-    auto is_regular = (u < f16max); // (sub)normal, not special
-    auto is_sub = (u < min_normal); // result is subnormal fp16
-    i32 special = xsimd::select(is_nan, nan_out, inf_out);
-
-    // subnormal path: add magic, then integer-subtract the bias.
-    // relies on fp addition being round-to-nearest-even.
-    f32 sub1 = absf + xsimd::bit_cast<f32>(subnorm_magic);
-    i32 sub = xsimd::bit_cast<i32>(sub1) - subnorm_magic;
-
-    // normal path: RTNE via odd-mantissa bias.
-    i32 mantoddbit = u << (31 - 13);        // move mantissa LSB (bit 13) to sign
-    // arithmetic shift right by 31 -> all-ones if odd, zero if even.
-    i32 mantodd = xsimd::bit_cast<i32>(xsimd::bit_cast<s32>(mantoddbit) >> 31);
-    i32 round = (u + normal_bias) - mantodd;
-    i32 normal = round >> 13;
-
-    // combine
-    i32 nonspecial = xsimd::select(is_sub, sub, normal);
-    i32 out = xsimd::select(is_regular, nonspecial, special);
-    out = out | (sign >> 16);
-    return out;
-}
-
-// portable round-half-up: xsimd port of Giesen's float_to_half_fast3.
-// operates on one float batch, returns results in the low 16 bits of an equally-wide uint32 batch.
-template <class B> auto float_to_half_round_up(const B& fb) noexcept -> uint_companion_t<B> {
-    using i32 = uint_companion_t<B>;
-
-    const i32 sign_mask = i32(0x80000000u);
-    const i32 round_mask = i32(~0xfffu);
-    const i32 f32infty = i32(255u << 23);
-    const i32 f16infty = i32(31u << 23);
-    const B magic = xsimd::bit_cast<B>(i32(15u << 23));
-    const i32 nan_out = i32(0x7e00u);
-    const i32 inf_out = i32(0x7c00u);
-
-    i32 u = xsimd::bit_cast<i32>(fb);
-    i32 sign = u & sign_mask;
-    u = u ^ sign; // abs bits
-
-    // special-case mask: exponent all-ones (inf/nan)
-    auto is_special = u >= f32infty;
-    auto is_nan = u > f32infty;
-    i32 special = xsimd::select(is_nan, nan_out, inf_out);
-
-    // normal / denormal path
-    i32 masked = u & round_mask;
-    B scaled = xsimd::bit_cast<B>(masked) * magic;
-    i32 biased = xsimd::bit_cast<i32>(scaled) - round_mask;
-    biased = xsimd::min(biased, f16infty);   // clamp overflow to inf
-    i32 normal = biased >> 13;
-
-    i32 out = xsimd::select(is_special, special, normal);
-    out = out | (sign >> 16);
-    return out;
-}
-
-template <class B> void store_halves(const B& v, half* dst) noexcept {
-    if constexpr (std::is_arithmetic_v<B>) {
-        *dst = std::bit_cast<half>(static_cast<uint16_t>(v));
-    } else {
-        alignas(B::arch_type::alignment()) uint32_t tmp[B::size];
-        v.store_aligned(tmp);
-        for (std::size_t j = 0; j < B::size; ++j) {
-            dst[j] = std::bit_cast<half>(static_cast<uint16_t>(tmp[j]));
-        }
-    }
-}
-
-// log2, ~single-precision polynomial. Clamps subnormals to FLT_MIN.
-template <class B> B fastLog2(const B& x_in) noexcept {
-    using vi = int_companion_t<B>;
-
-    // x = max(x, FLT_MIN) to avoid the subnormal path.
-    B x = xsimd::max(x_in, B(1.1754944e-38f));
-
-    vi i = xsimd::bitwise_cast<int32_t>(x);
-
-    // exponent: ((i >> 23) & 0xFF) - 127
-    vi e = ((i >> 23) & vi(0xFF)) - vi(127);
-    B ef = int_to_float(e);
-
-    // mantissa in [1,2): (i & 0x007FFFFF) | 0x3F800000
-    vi mi = (i & vi(0x007FFFFF)) | vi(0x3F800000);
-    B m = xsimd::bitwise_cast<float>(mi);
-
-    B p = m - B(1.0f);
-    B r(0.04588701f);
-    r = xsimd::fma(r, p, B(-0.19442591f));
-    r = xsimd::fma(r, p, B(0.41542437f));
-    r = xsimd::fma(r, p, B(-0.70868282f));
-    r = xsimd::fma(r, p, B(1.44182586f));
-    r = r * p;
-    return r + ef;
-}
-
-// exp2, ~single-precision polynomial. round-to-nearest-even + bit-injection ldexp.
-template <class B> B fastExp2(const B& x) noexcept {
-    using vi = int_companion_t<B>;
-
-    // round to nearest even (matches nearbyintf under default rounding).
-    B n = xsimd::rint(x);
-    B f = x - n;
-
-    B r(0.00015465312f);
-    r = xsimd::fma(r, f, B(0.0013395280f));
-    r = xsimd::fma(r, f, B(0.0096180400f));
-    r = xsimd::fma(r, f, B(0.055503407f));
-    r = xsimd::fma(r, f, B(0.24022651f));
-    r = xsimd::fma(r, f, B(0.69314720f));
-    r = xsimd::fma(r, f, B(1.0f));
-
-    // scale by 2^n via exponent bits: (ni + 127) << 23
-    vi ni = float_to_int(n);
-    vi bias = (ni + vi(127)) << 23;
-    B scale = xsimd::bitwise_cast<float>(bias);
-    return r * scale;
-}
-
-// pow2-based pow: 2^(e * log2(x)). Requires x >= 0
-template <class B> B fastPow(const B& x, const B& y) noexcept {
-    B r = fastExp2(y * fastLog2(x));
-    r = xsimd::select(x == B(0.0f), B(0.0f), r);
-    return r;
-}
 
 template <class B> B applyGamma(const B& val, const B& gamma) noexcept { return xsimd::copysign(fastPow(xsimd::abs(val), gamma), val); }
 
@@ -574,19 +392,17 @@ inline constexpr float c = 0.55991073f;
 
 // HLG inverse OETF, per-lane (no channel coupling)
 template <class B> B hlgInvOetf(const B& v) {
-    using xsimd::exp;
     using xsimd::select;
     const B lo = v * v * (1.0f / 3.0f);
-    const B hi = (exp((v - hlg::c) * (1.0f / hlg::a)) + hlg::b) * (1.0f / 12.0f);
+    const B hi = (fastExp((v - hlg::c) * (1.0f / hlg::a)) + hlg::b) * (1.0f / 12.0f);
     return select(v <= B(0.5f), lo, hi);
 }
 
 template <class B> B hlgOetf(const B& v) {
-    using xsimd::log;
     using xsimd::select;
     using xsimd::sqrt;
     const B lo = sqrt(v * 3.0f);
-    const B hi = B(hlg::a) * log(v * 12.0f - hlg::b) + hlg::c;
+    const B hi = B(hlg::a) * fastLog(v * 12.0f - hlg::b) + hlg::c;
     return select(v <= B(1.0f / 12.0f), lo, hi);
 }
 
@@ -703,6 +519,40 @@ static constexpr bool isTransferRgb(const ETransfer transfer) {
         case ETransfer::YCbCrSRGB: return true;
         default: return false;
     }
+}
+
+// In cycles
+static constexpr size_t approxCost(const ETransfer transfer) {
+    switch (transfer) {
+        // Cheapest: linear. It's free.
+        case ETransfer::Linear:
+        case ETransfer::Unspecified: return 1;
+        case ETransfer::YCbCrLinear: return 4;
+        // Then: single fastExp / fastLog and some arithmetic.
+        case ETransfer::Log100:
+        case ETransfer::Log100Sqrt10: return 16;
+        // Single fastPow
+        case ETransfer::BT709:
+        case ETransfer::BT601:
+        case ETransfer::BT202010bit:
+        case ETransfer::BT202012bit:
+        case ETransfer::IEC61966_2_4: // handles negative values by mirroring
+        case ETransfer::BT1361Extended: // extended to negative values (weirdly)
+        case ETransfer::Gamma22:
+        case ETransfer::Gamma28:
+        case ETransfer::SMPTE240:
+        case ETransfer::SRGB:
+        case ETransfer::SMPTE428:
+        case ETransfer::YCbCrSRGB:
+        case ETransfer::GenericGamma:
+        case ETransfer::LUT: return 32;
+        // fastPow, fastExp/Log and some extra
+        case ETransfer::HLG: return 64;
+        // Two fastPow and some extra
+        case ETransfer::PQ: return 96;
+    }
+
+    return 1;
 }
 
 // Default: linear passthrough

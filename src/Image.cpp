@@ -17,10 +17,10 @@
  */
 
 #include <tev/Channel.h>
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/ImageSaver.h>
 
@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <istream>
 #include <map>
 #include <numeric>
 #include <ranges>

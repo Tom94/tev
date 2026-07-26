@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Colors.h>
 #include <tev/Common.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/Ifd.h>
 #include <tev/imageio/ImageLoader.h>

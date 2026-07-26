@@ -17,10 +17,10 @@
  */
 
 #include <tev/BackgroundImagesLoader.h>
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/ImageSaver.h>
 

@@ -20,10 +20,10 @@
 
 #include <tev/Box.h>
 #include <tev/Channel.h>
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
 #include <tev/VectorGraphics.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
 
 #include <nanogui/texture.h>

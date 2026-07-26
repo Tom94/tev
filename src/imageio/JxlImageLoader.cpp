@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/ImageLoader.h>
@@ -623,7 +623,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                             co_await ThreadPool::global().parallelFor(
                                 0uz,
                                 numPixels,
-                                numPixels * numInterleavedChannels,
+                                numPixels * numInterleavedChannels * ituth273::approxCost(ituth273::ETransfer::GenericGamma),
                                 [&](size_t i) {
                                     // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
                                     // transfer), so we must unpremultiply prior to the color space conversion and transfer function

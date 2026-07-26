@@ -19,10 +19,10 @@
 #pragma once
 
 #include <tev/Channel.h>
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
 
 #include <nanogui/vector.h>
@@ -168,104 +168,75 @@ Task<void> toFloat32(
     static constexpr size_t DYNAMIC = 0;
     const auto numColorChannelsSpecialized = [&]<size_t N_COLOR_CHANNELS_STATIC>(size_t nColorChannelsDynamic) -> Task<void> {
         const size_t N_COLOR_CHANNELS = N_COLOR_CHANNELS_STATIC == DYNAMIC ? nColorChannelsDynamic : N_COLOR_CHANNELS_STATIC;
-        co_await ThreadPool::global().parallelFor(
-            0,
-            size.y(),
-            numPixels * N,
-            [&](int y) {
-                const size_t rowIdxIn = (size_t)y * numSamplesPerRowIn;
-                const int w = size.x();
+        co_await simdParallelFor(
+            ThreadPool::global(),
+            0uz,
+            numPixels,
+            numPixels * N * ituth273::approxCost(TRANSFER),
+            [&]<class Scalar>(size_t idx) {
+                const size_t y = (idx / (size_t)size.x());
+                const size_t x = (idx - y * (size_t)size.x());
+
+                const size_t rowIdxIn = y * numSamplesPerRowIn;
                 const size_t alphaOff = numSamplesPerPixelIn - 1;
 
-                // Shared kernel over LANES pixels starting at pixel x.
-                //   LANES == N  -> vector path (Scalar = vf)
-                //   LANES == 1  -> scalar tail (Scalar = float)
                 // A tiny set of if-constexpr branches handle the load/store/select
                 // differences; the arithmetic is written once.
-                const auto processPixels = [&]<size_t LANES, class Scalar>(int x) {
-                    static constexpr bool IS_VECTOR = !std::is_same_v<Scalar, float>;
-                    const auto loadChannel = [&](size_t c) -> Scalar {
-                        if constexpr (IS_VECTOR) {
-                            alignas(vf::arch_type::alignment()) float in[N];
-                            for (size_t i = 0; i < N; ++i) {
-                                const size_t base = rowIdxIn + (size_t)(x + (int)i) * numSamplesPerPixelIn;
-                                in[i] = (float)imageData[base + c];
-                            }
-
-                            return xsimd::fma(vf::load_aligned(in), vf(scale), vf(offset));
-                        } else {
-                            const size_t base = rowIdxIn + (size_t)x * numSamplesPerPixelIn;
-                            return (float)imageData[base + c] * scale + offset;
-                        }
-                    };
-
-                    // -- store channel `c` (or alpha when c < 0) for all LANES pixels --
-                    const auto storeChannel = [&](int c, const Scalar& v) {
-                        if constexpr (IS_VECTOR) {
-                            alignas(vf::arch_type::alignment()) float out[N];
-                            v.store_aligned(out);
-                            for (size_t i = 0; i < N; ++i) {
-                                floatData[c, x + (int)i, y] = out[i];
-                            }
-                        } else {
-                            floatData[c, x, y] = v;
-                        }
-                    };
-
-                    // Alpha (needed before the color loop for premultiply handling).
-                    Scalar a = hasAlpha ? loadChannel(alphaOff) : Scalar(1.0f);
-
-                    Scalar factor = Scalar(1.0f);
-                    Scalar invFactor = Scalar(1.0f);
-                    if constexpr (MULTIPLY_ALPHA) {
-                        if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
-                            factor = xsimd::select(a > Scalar(0.0001f), Scalar(1.0f / a), Scalar(1.0f));
-                            invFactor = a;
-                        } else if (alphaKind == EAlphaKind::Straight) {
-                            invFactor = a;
-                        }
-                    }
-
-                    if (N_COLOR_CHANNELS >= 3) {
-                        Scalar r = loadChannel(0) * factor;
-                        Scalar g = loadChannel(1) * factor;
-                        Scalar b = loadChannel(2) * factor;
-
-                        ituth273::invTransferRgb<TRANSFER>(r, g, b);
-
-                        storeChannel(0, r * invFactor);
-                        storeChannel(1, g * invFactor);
-                        storeChannel(2, b * invFactor);
-
-                        for (size_t c = 3; c < N_COLOR_CHANNELS; ++c) {
-                            Scalar v = loadChannel(c) * factor;
-                            v = ituth273::invTransferComponent<TRANSFER>(v);
-                            storeChannel((int)c, v * invFactor);
-                        }
+                const auto loadChannel = [&](size_t c) -> Scalar {
+                    if constexpr (std::is_same_v<Scalar, float>) {
+                        const size_t base = rowIdxIn + (size_t)x * numSamplesPerPixelIn;
+                        return (float)imageData[base + c] * scale + offset;
                     } else {
-                        for (size_t c = 0; c < N_COLOR_CHANNELS; ++c) {
-                            Scalar v = loadChannel(c) * factor;
-                            v = ituth273::invTransferComponent<TRANSFER>(v);
-                            storeChannel((int)c, v * invFactor);
+                        alignas(vf::arch_type::alignment()) float in[N];
+                        for (size_t i = 0; i < N; ++i) {
+                            const size_t base = rowIdxIn + (x + i) * numSamplesPerPixelIn;
+                            in[i] = (float)imageData[base + c];
                         }
-                    }
 
-                    if (hasAlpha) {
-                        storeChannel(-1, a);
+                        return xsimd::fma(vf::load_aligned(in), vf(scale), vf(offset));
                     }
                 };
 
-                int x = 0;
+                // Alpha (needed before the color loop for premultiply handling).
+                Scalar a = hasAlpha ? loadChannel(alphaOff) : Scalar(1.0f);
 
-                if constexpr (N > 1) {
-                    // Vector body: N pixels at a time, then scalar tail.
-                    for (; x + (int)N <= w; x += (int)N) {
-                        processPixels.template operator()<N, vf>(x);
+                Scalar factor = Scalar(1.0f);
+                Scalar invFactor = Scalar(1.0f);
+                if constexpr (MULTIPLY_ALPHA) {
+                    if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
+                        factor = xsimd::select(a > Scalar(0.0001f), Scalar(1.0f / a), Scalar(1.0f));
+                        invFactor = a;
+                    } else if (alphaKind == EAlphaKind::Straight) {
+                        invFactor = a;
                     }
                 }
 
-                for (; x < w; ++x) {
-                    processPixels.template operator()<1, float>(x);
+                if (N_COLOR_CHANNELS >= 3) {
+                    Scalar r = loadChannel(0) * factor;
+                    Scalar g = loadChannel(1) * factor;
+                    Scalar b = loadChannel(2) * factor;
+
+                    ituth273::invTransferRgb<TRANSFER>(r, g, b);
+
+                    storeChannel(floatData, 0, x, y, r * invFactor);
+                    storeChannel(floatData, 1, x, y, g * invFactor);
+                    storeChannel(floatData, 2, x, y, b * invFactor);
+
+                    for (size_t c = 3; c < N_COLOR_CHANNELS; ++c) {
+                        Scalar v = loadChannel(c) * factor;
+                        v = ituth273::invTransferComponent<TRANSFER>(v);
+                        storeChannel(floatData, c, x, y, v * invFactor);
+                    }
+                } else {
+                    for (size_t c = 0; c < N_COLOR_CHANNELS; ++c) {
+                        Scalar v = loadChannel(c) * factor;
+                        v = ituth273::invTransferComponent<TRANSFER>(v);
+                        storeChannel(floatData, c, x, y, v * invFactor);
+                    }
+                }
+
+                if (hasAlpha) {
+                    storeChannel(floatData, -1, x, y, a);
                 }
             },
             priority

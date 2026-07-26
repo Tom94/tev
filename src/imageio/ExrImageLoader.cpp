@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Colors.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/ExrImageLoader.h>
 
 #include <Iex.h>
@@ -455,8 +455,9 @@ private:
     PixelBuffer mData;
 };
 
-Task<vector<ImageData>>
-    ExrImageLoader::load(istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>> ExrImageLoader::load(
+    istringstream& iStream, const fs::path& path, string_view channelSelector, const ImageLoaderSettings&, int priority
+) const {
     try {
         if (!isExrImage(iStream)) {
             throw FormatNotSupported{"File is not an EXR image."};
@@ -553,7 +554,9 @@ Task<vector<ImageData>>
                 };
 
                 if (!data.dataWindow.isValid()) {
-                    throw ImageLoadError{fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)};
+                    throw ImageLoadError{
+                        fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)
+                    };
                 }
 
                 if (!data.displayWindow.isValid()) {

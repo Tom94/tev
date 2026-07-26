@@ -19,6 +19,7 @@
 #pragma once
 
 #include <tev/BackgroundImagesLoader.h>
+#include <tev/Colors.h>
 #include <tev/ErrorDialog.h>
 #include <tev/HelpWindow.h>
 #include <tev/Image.h>
@@ -30,7 +31,6 @@
 #include <tev/MultiGraph.h>
 #include <tev/SharedQueue.h>
 #include <tev/VectorGraphics.h>
-#include <tev/imageio/Colors.h>
 
 #include <nanogui/button.h>
 #include <nanogui/colorwheel.h>
