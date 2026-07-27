@@ -258,7 +258,7 @@ template <size_t N_DIMS> nanogui::Array<float, N_DIMS> min(const nanogui::Array<
     return result;
 }
 
-template <class B, typename T> B loadChannel(const std::span<const T>& view, size_t c, size_t x, size_t y, size_t xstride, size_t ystride) {
+template <class B, typename T> B loadChannel(const std::span<T>& view, size_t c, size_t x, size_t y, size_t xstride, size_t ystride) {
     if constexpr (std::is_arithmetic_v<B>) {
         return B(view[c + x * xstride + y * ystride]);
     } else {
@@ -270,7 +270,7 @@ template <class B, typename T> B loadChannel(const std::span<const T>& view, siz
     }
 }
 
-template <class B, typename T> B loadChannel(const std::span<const T>& view, size_t c, size_t idx, size_t stride) {
+template <class B, typename T> B loadChannel(const std::span<T>& view, size_t c, size_t idx, size_t stride) {
     if constexpr (std::is_arithmetic_v<B>) {
         return B(view[c + idx * stride]);
     } else {
@@ -307,7 +307,7 @@ template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, si
     }
 }
 
-template <class B, size_t Size, typename T, typename... Args> nanogui::Array<B, Size> loadChannel(const T& view, Args... args) {
+template <class B, size_t Size, typename T, typename... Args> nanogui::Array<B, Size> loadChannels(const T& view, Args... args) {
     nanogui::Array<B, Size> result;
     for (size_t c = 0; c < Size; ++c) {
         result.v[c] = loadChannel<B>(view, c, args...);
@@ -391,7 +391,7 @@ template <class B, typename T> void storeChannel(const MultiChannelView<T>& view
 }
 
 template <class B, size_t Size, typename T, typename... Args>
-void storeChannel(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& view, Args... args) {
+void storeChannels(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& view, Args... args) {
     for (size_t c = 0; c < Size; ++c) {
         storeChannel<B>(view, c, args..., v.v[c]);
     }

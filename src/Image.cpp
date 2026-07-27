@@ -1296,7 +1296,7 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
         rgbaHdrData.size() / 4,
         rgbaHdrData.size(),
         [&]<class B>(const size_t i) {
-            Array<B, 3> rgb = loadChannel<B, 3>(in, i, 4);
+            auto rgb = loadChannels<B, 3>(in, i, 4);
             for (size_t c = 0; c < 3; ++c) {
                 rgb[c] = xsimd::fma(rgb[c], B{exposureFactor}, B{offset});
             }

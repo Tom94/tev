@@ -165,6 +165,9 @@ Task<vector<Channel>> ImageLoader::makeInterleavedChannels(
         throw ImageLoadError{fmt::format("Image has invalid number of color channels: {}", numColorChannels)};
     }
 
+#ifdef TEV_PLANAR_CHANNELS
+    channels = makeNChannels(numChannels, size, pixelFormat, desiredFormat, layer);
+#else
     const size_t numPixels = posProd(size);
     const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, pixelFormat));
 
@@ -231,23 +234,29 @@ Task<vector<Channel>> ImageLoader::makeInterleavedChannels(
         default: throw ImageLoadError{"Unsupported pixel format."};
     }
 
-    if (numColorChannels > 1) {
-        const auto channelNames = numColorChannels == 4 ? vector<string_view>{"C", "M", "Y", "K"} : vector<string_view>{"R", "G", "B"};
-        for (size_t c = 0; c < numColorChannels; ++c) {
-            channels.emplace_back(
-                c < channelNames.size() ? channelNames[c] : to_string(c), size, pixelFormat, desiredFormat, data, c, numInterleavedDims
-            );
-        }
-    } else {
-        channels.emplace_back("L", size, pixelFormat, desiredFormat, data, 0, numInterleavedDims);
+    for (size_t c = 0; c < numColorChannels; ++c) {
+        channels.emplace_back(to_string(c), size, pixelFormat, desiredFormat, data, c, numInterleavedDims);
     }
 
     if (hasAlpha) {
         channels.emplace_back("A", size, pixelFormat, desiredFormat, data, numColorChannels, numInterleavedDims);
     }
+#endif
 
-    for (auto& channel : channels) {
-        channel.setName(Channel::joinIfNonempty(layer, channel.name()));
+    const auto channelNames = numColorChannels == 1 ? vector{"L"} :
+                                                      (numColorChannels == 4 ? vector{"C", "M", "Y", "K"} : vector{"R", "G", "B"});
+
+    for (size_t c = 0; c < channels.size(); ++c) {
+        auto& channel = channels[c];
+
+        string_view name = channel.name();
+        if (c < channelNames.size()) {
+            name = channelNames[c];
+        } else if (hasAlpha && c == channels.size() - 1) {
+            name = "A";
+        }
+
+        channel.setName(Channel::joinIfNonempty(layer, name));
     }
 
     co_return channels;

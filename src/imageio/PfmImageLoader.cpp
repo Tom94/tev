@@ -368,7 +368,7 @@ Task<vector<ImageData>>
             TEV_ASSERT(ver >= 1 && ver <= 3, "ASCII PNM with invalid version.");
             TEV_ASSERT(!pfm, "ASCII PFM not supported.");
 
-            uint32_t* const uintData = buf.data<uint32_t>();
+            const auto uintData = buf.span<uint32_t>();
             if (ver == 1) {
                 // Special case for P1 bitmaps where spaces are optional and the only allowed values are 0 (white) and 1 (black)
                 char c;
