@@ -620,11 +620,12 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                         if (hasGamma) {
                             const size_t numPixels = posProd(size);
-                            co_await ThreadPool::global().parallelFor(
+                            co_await simdParallelFor(
+                                ThreadPool::global(),
                                 0uz,
                                 numPixels,
                                 numPixels * numInterleavedChannels * ituth273::approxCost(ituth273::ETransfer::GenericGamma),
-                                [&](size_t i) {
+                                [&]<class B>(size_t i) {
                                     // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
                                     // transfer), so we must unpremultiply prior to the color space conversion and transfer function
                                     // inversion. See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
@@ -632,7 +633,9 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                     const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
 
                                     for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                        outView[c, i] = fastPow(outView[c, i] * factor, 1.0f / (float)ce->gamma) * alpha;
+                                        storeChannel<B>(
+                                            outView, c, i, fastPow(loadChannel<B>(outView, c, i) * factor, B{1.0f / (float)ce->gamma}) * alpha
+                                        );
                                     }
                                 },
                                 priority
