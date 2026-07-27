@@ -66,6 +66,9 @@ template <class T, class A> T max(const xsimd::batch<T, A>& f) noexcept { return
 inline float min(float f) noexcept { return f; }
 template <class T, class A> T min(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_min(f); }
 
+inline float gather(const float* ptr, int i) noexcept { return ptr[i]; }
+template <class B> vf gather(const float* ptr, const B& i) noexcept { return vf::gather(ptr, i); }
+
 // portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
 // results land in the low 16 bits of an equally-wide uint32 batch.
 template <class B> auto float_to_half(const B& fb) noexcept -> uint_companion_t<B> {
