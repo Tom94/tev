@@ -233,7 +233,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         }
 
         const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-        const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+        const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
                                           EAlphaKind::None;
 
         // HEIF images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent

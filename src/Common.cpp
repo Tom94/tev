@@ -546,7 +546,7 @@ const optional<FlatpakInfo>& flatpakInfo() {
 
 string_view toString(EAlphaKind kind) {
     switch (kind) {
-        case EAlphaKind::PremultipliedNonlinear: return "premul_nonlinear";
+        case EAlphaKind::PremultipliedPostTransfer: return "premul_nonlinear";
         case EAlphaKind::Premultiplied: return "premul";
         case EAlphaKind::Straight: return "straight";
         case EAlphaKind::None: return "none";

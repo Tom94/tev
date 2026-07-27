@@ -360,7 +360,7 @@ Task<vector<ImageData>>
     const auto outDesc = *describeFormat(outGuid);
 
     const bool hasAlpha = outDesc.hasAlpha;
-    const auto alphaKind = hasAlpha ? (outDesc.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+    const auto alphaKind = hasAlpha ? (outDesc.hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
                                       EAlphaKind::None;
     const auto numColorChannels = outDesc.numColorChannels;
     const auto numChannels = hasAlpha ? numColorChannels + 1 : numColorChannels;
@@ -538,7 +538,7 @@ Task<vector<ImageData>>
         JXR_CHECK(converter->Copy(converter, &rect, buf.dataBytes(), static_cast<uint32_t>(stride)));
     }
 
-    resultData.hasPremultipliedAlpha = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Premultiplied;
+    resultData.hasPremultipliedAlpha = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Premultiplied;
 
     const auto desiredPixelFormat = nBits(outDesc.pixelFormat) > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
 

@@ -219,7 +219,7 @@ Task<vector<ImageData>>
 
     const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = DirectX::HasAlpha(metadata.format);
-    const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+    const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
                                       EAlphaKind::None;
 
     resultData.channels = co_await makeInterleavedChannels(

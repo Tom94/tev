@@ -593,7 +593,7 @@ enum class EAlphaKind {
     // premultiplied alpha has generally little use, since one should not blend in non-linear space. But, regrettably, some image formats
     // represent premultiplied alpha this way. Our color management system (lcms2) for handling ICC color profiles unfortunately also
     // expects this kind of premultiplied alpha, so we have to support it.
-    PremultipliedNonlinear,
+    PremultipliedPostTransfer,
     // This refers to premultiplied alpha in linear space, i.e. before a transfer function like gamma correction. This is the most useful
     // kind of premultiplied alpha.
     Premultiplied,

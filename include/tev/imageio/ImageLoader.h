@@ -180,14 +180,21 @@ Task<void> toFloat32(
                         a = xsimd::fma(a, s, o);
                         storeChannel(floatData, -1, x, y, a);
 
-                        if constexpr (MULTIPLY_ALPHA) {
-                            if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
+                        // If alpha has been premultiplied in a nonlinear space, we need to un- and re-multiply around transfer inversion,
+                        // regardless of MULTIPLY_ALPHA setting. Even if user doesn't want to multiply alpha, if it's already premultiplied
+                        // we should preserve that.
+                        if constexpr (TRANSFER != ETransfer::Linear) {
+                            if (alphaKind == EAlphaKind::PremultipliedPostTransfer) {
                                 const auto f = xsimd::select(a > Scalar{0.0001f}, 1.0f / a, Scalar{1.0f});
                                 s *= f;
                                 o *= f;
 
                                 invFactor = a;
-                            } else if (alphaKind == EAlphaKind::Straight) {
+                            }
+                        }
+
+                        if constexpr (MULTIPLY_ALPHA) {
+                            if (alphaKind == EAlphaKind::Straight) {
                                 invFactor = a;
                             }
                         }

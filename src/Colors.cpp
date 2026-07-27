@@ -816,7 +816,7 @@ Task<void> toLinearSrgbPremul(
     // We expressly *don't* tell lcms2 that the alpha channel is premultiplied, because it would divide the alpha channel prior to color
     // space conversion and inverse transfer function application. This would be bad for multiple reasons: first, EAlphaKind::Premultiplied
     // indicated premultiplication in linear space, and second, lcms2 does not handle the case of alpha close to 0 very accurately. This is
-    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedNonlinear below rather than relying on lcms2.
+    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedPostTransfer below rather than relying on lcms2.
     // if (alphaKind == EAlphaKind::Premultiplied) {
     //     type |= PREMUL_SH(1);
     // }
@@ -997,7 +997,7 @@ Task<void> toLinearSrgbPremul(
             }
 
             // If premultiplied alpha is in nonlinear space, we need to manually unpremultiply it before the color transform.
-            if (alphaKind == EAlphaKind::PremultipliedNonlinear) {
+            if (alphaKind == EAlphaKind::PremultipliedPostTransfer) {
                 for (int x = 0; x < size.x(); ++x) {
                     const float alpha = in[-1, x];
                     const float factor = alpha > 0.0001f ? 1.0f / alpha : 1.0f;

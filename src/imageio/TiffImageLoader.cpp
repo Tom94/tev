@@ -1345,8 +1345,8 @@ Task<void> postprocessRgb(
             numPixels * rgbaView.nChannels(),
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
-                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& val = rgbaView[c, i];
@@ -1377,8 +1377,8 @@ Task<void> postprocessRgb(
             numPixels * rgbaView.nChannels(),
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
-                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& v = rgbaView[c, i];
@@ -1413,8 +1413,8 @@ Task<void> postprocessRgb(
             numPixels * rgbaView.nChannels(),
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
-                const float factor = alphaKind == EAlphaKind::PremultipliedNonlinear && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
@@ -1976,7 +1976,7 @@ Task<ImageData> readTiffImage(
         numExtraChannels = 0;
     }
 
-    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) : EAlphaKind::None;
+    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) : EAlphaKind::None;
 
     tlog::debug(
         "TIFF info: size={} bps={}/{} spp={} alpha={} photometric={} planar={} interleave={} sampleFormat={} compression={}",

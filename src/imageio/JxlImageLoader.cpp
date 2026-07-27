@@ -479,7 +479,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 // If there's no alpha channel, treat as premultiplied (by 1)
                 data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
                 const auto alphaKind = info.alpha_bits > 0 ?
-                    (info.alpha_premultiplied ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+                    (info.alpha_premultiplied ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
                     EAlphaKind::None;
 
                 const bool isCmyk = blackChannelIndex.has_value() && info.num_color_channels == 3;
