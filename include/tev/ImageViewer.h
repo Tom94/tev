@@ -137,9 +137,12 @@ public:
     EMetric metric() const { return mImageCanvas->metric(); }
     void setMetric(EMetric metric);
 
-    bool areChannelsMasked(EChannelMask mask) const { return mImageCanvas->areChannelsMasked(mask); };
+    bool areChannelsMasked(EChannelMask mask) const { return mImageCanvas->areChannelsMasked(mask); }
     EChannelMask channelMask() const { return mImageCanvas->channelMask(); }
     void setChannelMask(EChannelMask channel, bool state);
+
+    bool splitscreenSlider() const { return mImageCanvas->splitscreenSlider(); }
+    void setSplitscreenSlider(bool enabled) { mImageCanvas->setSplitscreenSlider(enabled); }
 
     void setBackgroundColorStraight(nanogui::Color color);
 

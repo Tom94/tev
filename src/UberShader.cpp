@@ -130,6 +130,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             uniform vec2 cropMin;
             uniform vec2 cropMax;
 
+            uniform float splitscreenEnabled;
+            uniform float splitscreenSliderT;
+
             uniform vec4 bgColor;
 
             varying vec2 checkerUv;
@@ -251,7 +254,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     referenceVal.a *= cropAlpha;
 
                     vec3 difference = val.rgb - referenceVal.rgb;
-                    val = vec4(applyMetric(difference, referenceVal.rgb), (val.a + referenceVal.a) * 0.5);
+                    vec4 errorMetric = vec4(applyMetric(difference, referenceVal.rgb), (val.a + referenceVal.a) * 0.5);
+                    vec4 splitscreen = mix(val, referenceVal, vec4(step(splitscreenSliderT, imageUv.x)));
+                    val = mix(errorMetric, splitscreen, splitscreenEnabled);
                 }
 
                 val += bgColor * (1.0 - val.a);
@@ -565,7 +570,9 @@ void UberShader::draw(
     ETonemap tonemap,
     EMetric metric,
     EChannelMask channelMask,
-    const optional<Box2i>& crop
+    const optional<Box2i>& crop,
+    bool splitscreenEnabled,
+    float splitscreenSliderT
 ) {
     // We're passing the channels found in `mImage` such that, if some channels don't exist in `mReference`, they're filled with default
     // values (0 for colors, 1 for alpha).
@@ -614,6 +621,9 @@ void UberShader::draw(
         mShader->set_uniform("cropMin", Vector2f{-numeric_limits<float>::infinity()});
         mShader->set_uniform("cropMax", Vector2f{numeric_limits<float>::infinity()});
     }
+
+    mShader->set_uniform("splitscreenEnabled", static_cast<float>(splitscreenEnabled));
+    mShader->set_uniform("splitscreenSliderT", splitscreenSliderT);
 
     mShader->set_uniform("ditherSize", static_cast<float>(DITHER_MATRIX_SIZE));
     mShader->set_texture("ditherMatrix", mDitherMatrix);

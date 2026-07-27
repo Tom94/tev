@@ -56,7 +56,9 @@ public:
         ETonemap tonemap,
         EMetric metric,
         EChannelMask channelMask,
-        const std::optional<Box2i>& crop
+        const std::optional<Box2i>& crop,
+        bool splitscreenEnabled,
+        float splitscreenSliderT
     );
 
 private:

@@ -188,6 +188,7 @@ set(TEV_SOURCES
     include/tev/MultiGraph.h src/MultiGraph.cpp
     include/tev/PriorityQueue.h src/PriorityQueue.cpp
     include/tev/SharedQueue.h src/SharedQueue.cpp
+    include/tev/SplitscreenSlider.h src/SplitscreenSlider.cpp
     include/tev/Task.h src/Task.cpp
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp
