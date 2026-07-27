@@ -608,13 +608,14 @@ Task<vector<ImageData>>
         tlog::debug("Detected Rec.2020 PQ transfer function from JXR metadata");
 
         co_await convertToFloat32();
-        co_await ThreadPool::global().parallelFor(
+        co_await simdParallelFor(
+            ThreadPool::global(),
             0uz,
             numPixels,
             numPixels * numColorChannels,
-            [&](size_t i) {
+            [&]<class B>(size_t i) {
                 for (uint32_t c = 0; c < numColorChannels; ++c) {
-                    dstView[c, i] = ituth273::pqToLinear(dstView[c, i]);
+                    storeChannel<B>(dstView, c, i, ituth273::pqToLinearLut(loadChannel<B>(dstView, c, i)));
                 }
             },
             priority
