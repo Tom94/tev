@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/Ifd.h>
 #include <tev/imageio/JxrImageLoader.h>
@@ -360,7 +360,7 @@ Task<vector<ImageData>>
     const auto outDesc = *describeFormat(outGuid);
 
     const bool hasAlpha = outDesc.hasAlpha;
-    const auto alphaKind = hasAlpha ? (outDesc.hasPremultipliedAlpha ? EAlphaKind::PremultipliedNonlinear : EAlphaKind::Straight) :
+    const auto alphaKind = hasAlpha ? (outDesc.hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
                                       EAlphaKind::None;
     const auto numColorChannels = outDesc.numColorChannels;
     const auto numChannels = hasAlpha ? numColorChannels + 1 : numColorChannels;
@@ -538,7 +538,7 @@ Task<vector<ImageData>>
         JXR_CHECK(converter->Copy(converter, &rect, buf.dataBytes(), static_cast<uint32_t>(stride)));
     }
 
-    resultData.hasPremultipliedAlpha = alphaKind == EAlphaKind::PremultipliedNonlinear || alphaKind == EAlphaKind::Premultiplied;
+    resultData.hasPremultipliedAlpha = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Premultiplied;
 
     const auto desiredPixelFormat = nBits(outDesc.pixelFormat) > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
 
@@ -608,13 +608,14 @@ Task<vector<ImageData>>
         tlog::debug("Detected Rec.2020 PQ transfer function from JXR metadata");
 
         co_await convertToFloat32();
-        co_await ThreadPool::global().parallelFor(
+        co_await simdParallelFor(
+            ThreadPool::global(),
             0uz,
             numPixels,
             numPixels * numColorChannels,
-            [&](size_t i) {
+            [&]<class B>(size_t i) {
                 for (uint32_t c = 0; c < numColorChannels; ++c) {
-                    dstView[c, i] = ituth273::pqToLinear(dstView[c, i]);
+                    storeChannel<B>(dstView, c, i, ituth273::pqToLinearLut(loadChannel<B>(dstView, c, i)));
                 }
             },
             priority

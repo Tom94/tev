@@ -16,9 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/Exif.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/Jpeg2000ImageLoader.h>
@@ -585,7 +585,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                         }
 
                         if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
-                            ituth273::yCbCrToRgb(rgb.x(), rgb.y(), rgb.z());
+                            rgb = ituth273::yCbCrToRgb(rgb);
                         }
 
                         if (convertSrgbToLinear) {

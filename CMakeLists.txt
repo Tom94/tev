@@ -140,7 +140,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies)
 set(TEV_SOURCES
     include/tev/imageio/BmpImageLoader.h src/imageio/BmpImageLoader.cpp
     include/tev/imageio/ClipboardImageLoader.h src/imageio/ClipboardImageLoader.cpp
-    include/tev/imageio/Colors.h src/imageio/Colors.cpp
     include/tev/imageio/Demosaic.h src/imageio/Demosaic.cpp
     include/tev/imageio/DicomImageLoader.h src/imageio/DicomImageLoader.cpp
     include/tev/imageio/EmptyImageLoader.h src/imageio/EmptyImageLoader.cpp
@@ -174,6 +173,7 @@ set(TEV_SOURCES
     include/tev/BackgroundImagesLoader.h src/BackgroundImagesLoader.cpp
     include/tev/Box.h src/Box.cpp
     include/tev/Channel.h src/Channel.cpp
+    include/tev/Colors.h src/Colors.cpp
     include/tev/Common.h src/Common.cpp
     include/tev/ErrorDialog.h src/ErrorDialog.cpp
     include/tev/FalseColor.h src/FalseColor.cpp
@@ -188,6 +188,7 @@ set(TEV_SOURCES
     include/tev/MultiGraph.h src/MultiGraph.cpp
     include/tev/PriorityQueue.h src/PriorityQueue.cpp
     include/tev/SharedQueue.h src/SharedQueue.cpp
+    include/tev/Simd.h src/Simd.cpp
     include/tev/Task.h src/Task.cpp
     include/tev/ThreadPool.h src/ThreadPool.cpp
     include/tev/UberShader.h src/UberShader.cpp

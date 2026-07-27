@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <tev/Colors.h>
 #include <tev/Common.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/GainMap.h>
 #include <tev/imageio/Ifd.h>
 #include <tev/imageio/ImageLoader.h>
@@ -52,7 +52,7 @@ string GainmapHeadroom::toString() const {
     }
 }
 
-static vector<ChannelView<float>> getRgbOrLuminanceChannels(ImageData& image) {
+static optional<MultiChannelView<float>> getRgbOrLuminanceChannels(ImageData& image) {
     image.updateLayers();
 
     Channel* r = nullptr;
@@ -62,7 +62,9 @@ static vector<ChannelView<float>> getRgbOrLuminanceChannels(ImageData& image) {
     for (auto& layer : image.layers) {
         if (((r = image.mutableChannel(layer + "R")) && (g = image.mutableChannel(layer + "G")) && (b = image.mutableChannel(layer + "B"))) ||
             ((r = image.mutableChannel(layer + "r")) && (g = image.mutableChannel(layer + "g")) && (b = image.mutableChannel(layer + "b")))) {
-            return {r->view<float>(), g->view<float>(), b->view<float>()};
+            return MultiChannelView<float>{
+                vector{r->view<float>(), g->view<float>(), b->view<float>()}
+            };
         } else if (
             (r = image.mutableChannel(layer + "L")) || (r = image.mutableChannel(layer + "l")) || (r = image.mutableChannel(layer + "Y")) ||
             (r = image.mutableChannel(layer + "y"))
@@ -71,52 +73,55 @@ static vector<ChannelView<float>> getRgbOrLuminanceChannels(ImageData& image) {
         }
     }
 
-    return {};
+    return nullopt;
 }
 
 Task<void> preprocessAndApplyAppleGainMap(
     ImageData& image, ImageData& gainMap, const optional<Ifd>& amn, const GainmapHeadroom& targetHeadroom, int priority
 ) {
-    auto imageChannels = getRgbOrLuminanceChannels(image);
-    auto gainMapChannels = getRgbOrLuminanceChannels(gainMap);
+    auto optImageChannels = getRgbOrLuminanceChannels(image);
+    auto optGainMapChannels = getRgbOrLuminanceChannels(gainMap);
 
-    if (imageChannels.empty() || gainMapChannels.empty()) {
+    if (!optImageChannels || !optGainMapChannels) {
         tlog::warning("Apple gain map: image or gain map has no channels. Skipping gain map application.");
         co_return;
     }
+
+    auto imageChannels = *optImageChannels;
+    auto gainMapChannels = *optGainMapChannels;
 
     // Apply gain map per https://developer.apple.com/documentation/appkit/applying-apple-hdr-effect-to-your-photos
 
     tlog::debug("Apple gain map: linearizing and resizing");
 
     // First: linearize per the spec, then resize to image size
-    const auto gainmapSize = gainMapChannels.front().size();
+    const auto gainmapSize = gainMapChannels.size();
     const size_t gainmapNumPixels = posProd(gainmapSize);
-    co_await ThreadPool::global().parallelFor(
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         gainmapNumPixels,
-        gainmapNumPixels * gainMapChannels.size(),
-        [&](int i) {
-            for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
+        gainmapNumPixels * gainMapChannels.nChannels() * ituth273::approxCost(ituth273::ETransfer::SRGB),
+        [&]<class B>(size_t i) {
+            for (size_t c = 0; c < gainMapChannels.nChannels(); ++c) {
                 // NOTE: The docs (above link) say to use the Rec.709 transfer function here, but comparisons with ISO gain maps indicate
                 // that the gain maps are actually encoded with the sRGB transfer function.
                 // const float gain = ituth273::bt709ToLinear(gainMapChannels[gainmapChannel].at(i));
-                gainMapChannels[c][i] = ituth273::srgbToLinear(gainMapChannels[c][i]);
+                storeChannel<B>(gainMapChannels, c, i, ituth273::srgbToLinear(loadChannel<B>(gainMapChannels, c, i)));
             }
         },
         priority
     );
 
-    const auto size = imageChannels.front().size();
+    const auto size = imageChannels.size();
 
     co_await ImageLoader::resizeImageData(gainMap, size, nullopt, priority);
 
     // Re-fetch channels after resize
-    gainMapChannels = getRgbOrLuminanceChannels(gainMap);
-    TEV_ASSERT(!gainMapChannels.empty(), "Gain map must have at least one channel after resize.");
-    TEV_ASSERT(
-        size == gainMapChannels.front().size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.front().size()
-    );
+    optGainMapChannels = getRgbOrLuminanceChannels(gainMap);
+    TEV_ASSERT(optGainMapChannels, "Gain map must have at least one channel after resize.");
+    gainMapChannels = *optGainMapChannels;
+    TEV_ASSERT(size == gainMapChannels.size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.size());
 
     // Apple gain maps are always assumed to be in the image's color space. (Technically an irrelevant detail, because they're also assumed
     // to be monochromatic, but we'll set the metadata to generalize just in case, analogously to ISO gain maps.)
@@ -148,8 +153,8 @@ Task<void> preprocessAndApplyAppleGainMap(
     }
 
     const float headroom = targetHeadroom.unit == GainmapHeadroom::EUnit::Percent ?
-        fastExp2(clamp(stops * targetHeadroom.value, 0.0f, stops)) :
-        fastExp2(clamp(stops, 0.0f, targetHeadroom.value));
+        std::exp2(clamp(stops * targetHeadroom.value, 0.0f, stops)) :
+        std::exp2(clamp(stops, 0.0f, targetHeadroom.value));
 
     // If we don't actually want to apply the gain map, we should still have done the linearization and resizing above for display of the
     // gain map itself in tev.
@@ -162,23 +167,24 @@ Task<void> preprocessAndApplyAppleGainMap(
         "Apple gain map: derived weight {} from headroom {} and maker note #33={} #48={}", headroom, targetHeadroom.toString(), maker33, maker48
     );
 
-    if (gainMapChannels.size() > 1) {
+    if (gainMapChannels.nChannels() > 1) {
         tlog::warning("Apple gain map: should only have one channel. Attempting to apply multi-channel gain map.");
     }
 
     const size_t numPixels = posProd(size);
-    co_await ThreadPool::global().parallelFor(
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         numPixels,
-        numPixels * imageChannels.size(),
-        [&](size_t i) {
-            for (size_t c = 0; c < imageChannels.size(); ++c) {
-                const size_t gainmapChannel = std::min(c, gainMapChannels.size() - 1);
+        numPixels * imageChannels.nChannels(),
+        [&]<class B>(size_t i) {
+            for (size_t c = 0; c < imageChannels.nChannels(); ++c) {
+                const size_t gainMapChannel = std::min(c, gainMapChannels.nChannels() - 1);
 
-                const float sdr = imageChannels[c][i];
-                const float gain = gainMapChannels[gainmapChannel][i];
+                const auto sdr = loadChannel<B>(imageChannels, c, i);
+                const auto gain = loadChannel<B>(gainMapChannels, gainMapChannel, i);
 
-                imageChannels[c][i] = sdr * (1.0f + (headroom - 1.0f) * gain);
+                storeChannel<B>(imageChannels, c, i, sdr * (1.0f + (headroom - 1.0f) * gain));
             }
         },
         priority
@@ -196,13 +202,16 @@ Task<void> preprocessAndApplyIsoGainMap(
     const GainmapHeadroom& targetHeadroom,
     int priority
 ) {
-    auto imageChannels = getRgbOrLuminanceChannels(image);
-    auto gainMapChannels = getRgbOrLuminanceChannels(gainMap);
+    auto optImageChannels = getRgbOrLuminanceChannels(image);
+    auto optGainMapChannels = getRgbOrLuminanceChannels(gainMap);
 
-    if (imageChannels.empty() || gainMapChannels.empty()) {
+    if (!optImageChannels || !optGainMapChannels) {
         tlog::warning("ISO gain map: image or gain map has no channels. Skipping gain map application.");
         co_return;
     }
+
+    auto imageChannels = *optImageChannels;
+    auto gainMapChannels = *optGainMapChannels;
 
     // Apply gain map per https://www.iso.org/standard/86775.html (paywalled, unfortunately)
 
@@ -218,35 +227,35 @@ Task<void> preprocessAndApplyIsoGainMap(
     );
 
     // Per the spec, unnormalize and then resize (in log space) to image size
-    const auto gainmapSize = gainMapChannels.front().size();
+    const auto gainmapSize = gainMapChannels.size();
     const size_t gainmapNumPixels = posProd(gainmapSize);
-    co_await ThreadPool::global().parallelFor(
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         gainmapNumPixels,
-        gainmapNumPixels * gainMapChannels.size(),
-        [&](int i) {
-            for (int c = 0; c < (int)gainMapChannels.size(); ++c) {
-                const float val = gainMapChannels[c][i];
+        gainmapNumPixels * gainMapChannels.nChannels(),
+        [&]<class B>(size_t i) {
+            for (size_t c = 0; c < gainMapChannels.nChannels(); ++c) {
+                const auto val = loadChannel<B>(gainMapChannels, c, i);
 
-                const float logRecovery = copysign(fastPow(abs(val), 1.0f / metadata.gainMapGamma()[c]), val);
-                const float logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
+                const auto logRecovery = xsimd::copysign(fastPow(xsimd::abs(val), B{1.0f / metadata.gainMapGamma()[c]}), val);
+                const auto logBoost = metadata.gainMapMin()[c] * (1.0f - logRecovery) + metadata.gainMapMax()[c] * logRecovery;
 
-                gainMapChannels[c][i] = logBoost;
+                storeChannel<B>(gainMapChannels, c, i, logBoost);
             }
         },
         priority
     );
 
-    const auto size = imageChannels.front().size();
+    const auto size = imageChannels.size();
 
     co_await ImageLoader::resizeImageData(gainMap, size, nullopt, priority);
 
     // Re-fetch channels after resize
-    gainMapChannels = getRgbOrLuminanceChannels(gainMap);
-    TEV_ASSERT(!gainMapChannels.empty(), "Gain map must have at least one channel after resize.");
-    TEV_ASSERT(
-        size == gainMapChannels.front().size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.front().size()
-    );
+    optGainMapChannels = getRgbOrLuminanceChannels(gainMap);
+    TEV_ASSERT(optGainMapChannels, "Gain map must have at least one channel after resize.");
+    gainMapChannels = *optGainMapChannels;
+    TEV_ASSERT(size == gainMapChannels.size(), "Image and gain map must have the same size. ({}!={})", size, gainMapChannels.size());
 
     // Before applying the gainmap, convert the image to the appropriate color space. Fall back to base chroma if alt chroma requested but
     // not given (image should have been left in base chroma in that case). Gainmap is assumed to be in that color space as well.
@@ -283,20 +292,21 @@ Task<void> preprocessAndApplyIsoGainMap(
 
     // Actual gainmap application
     const size_t numPixels = posProd(size);
-    co_await ThreadPool::global().parallelFor(
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         numPixels,
-        numPixels * imageChannels.size(),
-        [&](size_t i) {
-            for (size_t c = 0; c < imageChannels.size(); ++c) {
-                const int gainmapChannel = std::min(c, gainMapChannels.size() - 1);
+        numPixels * imageChannels.nChannels(),
+        [&]<class B>(size_t i) {
+            for (size_t c = 0; c < imageChannels.nChannels(); ++c) {
+                const int gainMapChannel = std::min(c, gainMapChannels.nChannels() - 1);
 
-                const float logBoost = gainMapChannels[gainmapChannel][i];
+                const auto sdr = loadChannel<B>(imageChannels, c, i);
+                const auto logBoost = loadChannel<B>(gainMapChannels, gainMapChannel, i);
 
-                const float sdr = imageChannels[c][i];
-                const float hdr = (sdr + metadata.baseOffset()[c]) * fastExp2(logBoost * weight) - metadata.alternateOffset()[c];
+                const auto hdr = (sdr + metadata.baseOffset()[c]) * fastExp2(logBoost * weight) - metadata.alternateOffset()[c];
 
-                imageChannels[c][i] = hdr;
+                storeChannel<B>(imageChannels, c, i, hdr);
             }
         },
         priority

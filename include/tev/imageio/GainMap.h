@@ -18,9 +18,9 @@
 
 #pragma once
 
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/Task.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/Ifd.h>
 
 #include <optional>

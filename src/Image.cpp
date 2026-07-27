@@ -17,10 +17,10 @@
  */
 
 #include <tev/Channel.h>
+#include <tev/Colors.h>
 #include <tev/Common.h>
 #include <tev/Image.h>
 #include <tev/ThreadPool.h>
-#include <tev/imageio/Colors.h>
 #include <tev/imageio/ImageLoader.h>
 #include <tev/imageio/ImageSaver.h>
 
@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <istream>
 #include <map>
 #include <numeric>
 #include <ranges>
@@ -173,21 +172,19 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
         auto rv = r->view<float>(), gv = g->view<float>(), bv = b->view<float>();
-        tasks.emplace_back(
-            ThreadPool::global().parallelFor(
-                0uz,
-                r->numPixels(),
-                r->numPixels() * 3,
-                [rv, gv, bv, mat](size_t i) mutable {
-                    // TODO: vectorize with SIMD
-                    const auto rgb = mat * Vector3f{rv[i], gv[i], bv[i]};
-                    rv[i] = rgb.x();
-                    gv[i] = rgb.y();
-                    bv[i] = rgb.z();
-                },
-                priority
-            )
-        );
+        tasks.emplace_back(simdParallelFor(
+            ThreadPool::global(),
+            0uz,
+            r->numPixels(),
+            r->numPixels() * 3,
+            [rv, gv, bv, mat]<class B>(size_t i) mutable {
+                const auto rgb = simdMatmul(mat, Array<B, 3>{loadChannel<B>(rv, i), loadChannel<B>(gv, i), loadChannel<B>(bv, i)});
+                storeChannel<B>(rv, i, rgb.x());
+                storeChannel<B>(gv, i, rgb.y());
+                storeChannel<B>(bv, i, rgb.z());
+            },
+            priority
+        ));
     }
 
     co_await awaitAll(tasks);
@@ -260,22 +257,27 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
         const auto rv = r->view<const float>(), gv = g->view<const float>(), bv = b->view<const float>();
 
         lumPerLayer[i].resize(r->numPixels());
-        tasks.emplace_back(
-            ThreadPool::global().parallelFor(
-                0uz,
-                lumPerLayer[i].size(),
-                lumPerLayer[i].size(),
-                [rv, gv, bv, &lumBuf = lumPerLayer[i] /*, &toRec2020*/](size_t px) {
-                    // Optional: max RGB in BT.2020 primaries (see comment above)
-                    // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
-                    // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
+        tasks.emplace_back(simdParallelFor(
+            ThreadPool::global(),
+            0uz,
+            lumPerLayer[i].size(),
+            lumPerLayer[i].size(),
+            [rv, gv, bv, &lumBuf = lumPerLayer[i] /*, &toRec2020*/]<class B>(size_t px) {
+                // Optional: max RGB in BT.2020 primaries (see comment above)
+                // const auto rgb = toRec2020 * Vector3f{r->at(px), g->at(px), b->at(px)};
+                // const float lum = max({rgb.x(), rgb.y(), rgb.z()});
 
-                    const float lum = 0.2126 * rv[px] + 0.7152 * gv[px] + 0.0722 * bv[px];
-                    lumBuf[px] = isfinite(lum) ? lum : 0.0f;
-                },
-                priority
-            )
-        );
+                auto lum = 0.2126f * loadChannel<B>(rv, px) + 0.7152f * loadChannel<B>(gv, px) + 0.0722f * loadChannel<B>(bv, px);
+                lum = xsimd::select(xsimd::isfinite(lum), lum, B{0.0f});
+
+                if constexpr (is_same_v<B, float>) {
+                    lumBuf[px] = lum;
+                } else {
+                    lum.store_unaligned(&lumBuf[px]);
+                }
+            },
+            priority
+        ));
     }
 
     co_await awaitAll(tasks);
@@ -300,7 +302,7 @@ Task<void> ImageData::deriveWhiteLevelFromMetadata(int priority) {
         }
 
         if (whiteLevelFromMaxFALL > 0 && whiteLevelFromMaxCLL > 0 &&
-            abs(whiteLevelFromMaxCLL - whiteLevelFromMaxFALL) / (whiteLevelFromMaxCLL + whiteLevelFromMaxFALL) > 0.01f) {
+            std::abs(whiteLevelFromMaxCLL - whiteLevelFromMaxFALL) / (whiteLevelFromMaxCLL + whiteLevelFromMaxFALL) > 0.01f) {
             tlog::warning(
                 "Derived white levels from maxCLL ({}->{}) and maxFALL ({}->{}) of layer '{}' differ by over 1%.",
                 hdrMetadata.maxCLL,
@@ -373,23 +375,20 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                 // Specialization for float->half conversion. Imf's built-in one is a bit slow, so we roll our own (ported from Giesen's
                 // float_to_half_fast3), SIMD vectorizing it while we're at it.
                 if constexpr (is_same_v<TSRC, float> && is_same_v<TDST, half> && vf::size > 1) {
-                    static constexpr size_t W = xsimd::batch<float>::size;
-                    co_await ThreadPool::global().parallelFor(
+                    co_await simdParallelFor(
+                        ThreadPool::global(),
                         0uz,
-                        nSamples / W,
                         nSamples,
-                        [typedSrc, typedDst](size_t i) {
-                            const auto fb = vf::load_unaligned(typedSrc + i * W);
-                            const auto out = float_to_half(fb);
-                            store_halves(out, typedDst + i * W);
+                        nSamples,
+                        [typedSrc, typedDst]<class B>(size_t i) {
+                            if constexpr (is_same_v<B, float>) {
+                                store_halves(float_to_half(typedSrc[i]), typedDst + i);
+                            } else {
+                                store_halves(float_to_half(vf::load_unaligned(typedSrc + i)), typedDst + i);
+                            }
                         },
                         priority
                     );
-
-                    for (size_t i = nSamples / W * W; i < nSamples; ++i) {
-                        const auto out = float_to_half(typedSrc[i]);
-                        store_halves(out, typedDst + i);
-                    }
 
                     co_return;
                 }
@@ -1285,26 +1284,32 @@ Task<HeapArray<uint8_t>> Image::getRgbaLdrImageData(
         throw runtime_error{"RGBA HDR data must have a size that is a multiple of 4."};
     }
 
+    const span<const float> in{rgbaHdrData};
+
     HeapArray<uint8_t> result(rgbaHdrData.size());
+    const span<uint8_t> out{result};
 
     const auto exposureFactor = exp2(exposure);
-    co_await ThreadPool::global().parallelFor(
+    co_await simdParallelFor(
+        ThreadPool::global(),
         0uz,
         rgbaHdrData.size() / 4,
         rgbaHdrData.size(),
-        [&](const size_t i) {
-            const size_t start = 4 * i;
+        [&]<class B>(const size_t i) {
+            auto rgb = loadChannels<B, 3>(in, i, 4);
+            for (size_t c = 0; c < 3; ++c) {
+                rgb[c] = xsimd::fma(rgb[c], B{exposureFactor}, B{offset});
+            }
 
-            v4f rgba = xsimd::load_unaligned(&rgbaHdrData[start]);
-            v4f rgb = ituth273::transferComponent<ituth273::ETransfer::SRGB>(
-                applyGamma(applyTonemap(exposureFactor * rgba + v4f{offset}, gamma, tonemap), v4f{2.2f})
-            );
+            rgb = applyGamma(applyTonemap(rgb, gamma, tonemap), B{2.2f});
+            rgb = ituth273::transferRgb<ituth273::ETransfer::SRGB>(rgb);
 
-            // splice original alpha back into lane 3
-            rgba = xsimd::select(v4f::batch_bool_type{true, true, true, false}, rgb, rgba);
+            for (size_t c = 0; c < 3; ++c) {
+                storeChannel(out, c, i, 4, xsimd::clip(xsimd::fma(rgb[c], B{255.0f}, B{0.5f}), B{0.0f}, B{255.0f}));
+            }
 
-            rgba = xsimd::clip(rgba, v4f{0.0f}, v4f{1.0f}) * v4f{255.0f} + v4f{0.5f};
-            rgba.store_unaligned(&result[start]);
+            const auto alpha = loadChannel<B>(in, 3, i, 4);
+            storeChannel(out, 3, i, 4, xsimd::clip(xsimd::fma(alpha, B{255.0f}, B{0.5f}), B{0.0f}, B{255.0f}));
         },
         priority
     );
