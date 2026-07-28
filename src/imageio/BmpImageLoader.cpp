@@ -1596,22 +1596,25 @@ Task<vector<ImageData>> BmpImageLoader::loadWithoutFileHeader(
     // inverted to get linear values.
     const bool invertTransfer = dib.bitsPerPixel != 64;
     if (invertTransfer) {
-        co_await ThreadPool::global().parallelFor(
+        co_await simdParallelFor(
+            ThreadPool::global(),
             0uz,
             numPixels,
             numPixels * numChannels,
-            [&](size_t i) {
+            [&]<class B>(size_t i) {
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     const float g = c < 3 ? effectiveGamma[c] : 0.0f;
-                    float& val = outView[c, i];
+                    auto val = loadChannel<B>(outView, c, i);
 
                     // Modern browsers / image viewers treat untagged BMPs as sRGB, so we do the same. But if a gamma is explicitly
                     // specified in the header, we respect that instead.
                     if (g > 0.0f) {
-                        val = fastPow(val, g);
+                        val = fastPow(val, B{g});
                     } else {
                         val = ituth273::srgbToLinear(val);
                     }
+
+                    storeChannel<B>(outView, c, i, val);
                 }
             },
             priority

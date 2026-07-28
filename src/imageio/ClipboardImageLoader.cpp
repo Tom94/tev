@@ -96,20 +96,31 @@ Task<vector<ImageData>>
         numPixels * numChannels,
         [&](int y) {
             const size_t rowIdxIn = y * numBytesPerRow;
-            for (int x = 0; x < size.x(); ++x) {
-                float alpha = 1.0f;
+            simdFor(0, size.x(), [&]<class B>(int x) {
+                auto alpha = B{1.0f};
                 const size_t baseIdxIn = rowIdxIn + x * numChannels;
 
                 for (int c = (int)numChannels - 1; c >= 0; --c) {
-                    const unsigned char val = data[baseIdxIn + shifts[c]];
-                    if (c == alphaChannelIndex) {
-                        alpha = val / 255.0f;
-                        outView[-1, x, y] = alpha;
+                    B val;
+                    if constexpr (is_same_v<B, float>) {
+                        val = (float)data[baseIdxIn + shifts[c]] / 255.0f;
                     } else {
-                        outView[c, x, y] = ituth273::srgbToLinear(val / 255.0f) * alpha;
+                        alignas(B::arch_type::alignment()) float tmp[B::size];
+                        for (size_t i = 0; i < B::size; ++i) {
+                            tmp[i] = (float)data[baseIdxIn + i * numChannels + shifts[c]];
+                        }
+
+                        val = B::load_aligned(tmp) / 255.0f;
+                    }
+
+                    if (c == alphaChannelIndex) {
+                        alpha = val;
+                        storeChannel<B>(outView, -1, x, y, alpha);
+                    } else {
+                        storeChannel<B>(outView, c, x, y, ituth273::srgbToLinear(val) * alpha);
                     }
                 }
-            }
+            });
         },
         priority
     );

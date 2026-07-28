@@ -19,6 +19,7 @@
 #include <tev/Channel.h>
 #include <tev/Colors.h>
 #include <tev/Common.h>
+#include <tev/Simd.h>
 #include <tev/ThreadPool.h>
 #include <tev/imageio/DicomImageLoader.h>
 #include <tev/imageio/ImageLoader.h>
@@ -616,18 +617,19 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
             }
         } else /* if (isRgb) */ { // Applying inverse sRGB transfer even when not RGB to match JPEG exports from professional software
             const auto numPixels = posProd(size);
-            co_await ThreadPool::global().parallelFor(
+            co_await simdParallelFor(
+                ThreadPool::global(),
                 0uz,
                 numPixels,
                 numPixels * view.nChannels(),
-                [&](size_t i) {
+                [&]<class B>(size_t i) {
                     for (size_t c = 0; c < (size_t)view.nChannels(); ++c) {
-                        float v = view[c, i];
+                        auto v = loadChannel<B>(view, c, i);
                         if (pi == gdcm::PhotometricInterpretation::MONOCHROME1) {
                             v = 1.0f - v;
                         }
 
-                        view[c, i] = ituth273::srgbToLinear(v);
+                        storeChannel<B>(view, c, i, ituth273::srgbToLinear(v));
                     }
                 },
                 priority
