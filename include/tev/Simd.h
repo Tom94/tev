@@ -285,7 +285,7 @@ template <class B, typename T> B loadChannel(const std::span<T>& view, size_t c,
     }
 }
 
-template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, size_t c, size_t x, size_t y) {
+template <class B, typename T> B loadChannel(const T& view, size_t c, size_t x, size_t y) {
     if constexpr (std::is_arithmetic_v<B>) {
         return view[c, x, y];
     } else {
@@ -297,7 +297,7 @@ template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, si
     }
 }
 
-template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, size_t c, size_t idx) {
+template <class B, typename T> B loadChannel(const T& view, size_t c, size_t idx) {
     if constexpr (std::is_arithmetic_v<B>) {
         return view[c, idx];
     } else {
@@ -369,32 +369,32 @@ template <class B, typename T> void storeChannel(const std::span<T>& view, size_
     }
 }
 
-template <class B, typename T> void storeChannel(const MultiChannelView<T>& view, size_t c, size_t x, size_t y, const B& v) {
+template <class B, typename T> void storeChannel(const T& view, size_t c, size_t x, size_t y, const B& v) {
     if constexpr (std::is_arithmetic_v<B>) {
-        view.setAt(c, x, y, v);
+        view[c, x, y] = v;
     } else {
         alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
         v.store_aligned(tmp);
         for (std::size_t i = 0; i < B::size; ++i) {
-            view.setAt(c, x + i, y, tmp[i]);
+            view[c, x + i, y] = tmp[i];
         }
     }
 }
 
-template <class B, typename T> void storeChannel(const MultiChannelView<T>& view, size_t c, size_t idx, const B& v) {
+template <class B, typename T> void storeChannel(const T& view, size_t c, size_t idx, const B& v) {
     if constexpr (std::is_arithmetic_v<B>) {
-        view.setAt(c, idx, v);
+        view[c, idx] = v;
     } else {
         alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
         v.store_aligned(tmp);
         for (std::size_t i = 0; i < B::size; ++i) {
-            view.setAt(c, idx + i, tmp[i]);
+            view[c, idx + i] = tmp[i];
         }
     }
 }
 
 template <class B, size_t Size, typename T, typename... Args>
-void storeChannels(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& view, Args... args) {
+void storeChannels(const nanogui::Array<B, Size>& v, const T& view, Args... args) {
     for (size_t c = 0; c < Size; ++c) {
         storeChannel<B>(view, c, args..., v.v[c]);
     }

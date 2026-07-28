@@ -816,8 +816,8 @@ Task<void> toLinearSrgbPremul(
     // We expressly *don't* tell lcms2 that the alpha channel is premultiplied, because it would divide the alpha channel prior to color
     // space conversion and inverse transfer function application. This would be bad for multiple reasons: first, EAlphaKind::Premultiplied
     // indicated premultiplication in linear space, and second, lcms2 does not handle the case of alpha close to 0 very accurately. This is
-    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedPostTransfer below rather than relying on lcms2.
-    // if (alphaKind == EAlphaKind::Premultiplied) {
+    // also the reason, why we manually unpremultiply in the case of EAlphaKind::PremultipliedPostTransfer below rather than relying on
+    // lcms2. if (alphaKind == EAlphaKind::Premultiplied) {
     //     type |= PREMUL_SH(1);
     // }
 
@@ -983,11 +983,16 @@ Task<void> toLinearSrgbPremul(
         numSamples * 64, // arbitrary factor to reflect increased cost of color conversion
         [&](size_t y) {
             HeapArray<float> tmp(size.x() * (src.nChannels() + rgbaDst.nChannels()));
-            auto in = MultiChannelView<float>{
-                tmp.data(), src.nChannels(), {size.x(), 1}
+            const auto in = MdSpan<float, 2>{
+                span<float>{tmp},
+                {1, (int)src.nChannels()},
+                {(int)src.nChannels(), size.x()},
             };
-            auto out = MultiChannelView<float>{
-                tmp.data() + size.x() * src.nChannels(), rgbaDst.nChannels(), {size.x(), 1}
+            const auto out = MdSpan<float, 2>{
+                span<float>{tmp}
+                .subspan(posProd(in.size())),
+                {1, (int)rgbaDst.nChannels()},
+                {(int)rgbaDst.nChannels(), size.x()},
             };
 
             for (int x = 0; x < size.x(); ++x) {
@@ -1048,7 +1053,7 @@ Task<void> toLinearSrgbPremul(
                     }
                 });
             } else {
-                cmsDoTransform(transform, in.interleavedData(src.nChannels()), out.interleavedData(rgbaDst.nChannels()), size.x());
+                cmsDoTransform(transform, in.data(), out.data(), size.x());
             }
 
             // If we passed straight alpha data through lcms2, we need to multiply it by alpha again, hence we need to premultiply. If the
