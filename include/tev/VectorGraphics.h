@@ -48,10 +48,17 @@ struct VgCommand {
         Rect = 18,
         RoundedRect = 19,
         RoundedRectVarying = 20,
+        Text = 21
     };
 
     VgCommand() : type{EType::Invalid} {}
     VgCommand(EType _type, std::span<const float> _data) : type{_type}, data{_data.begin(), _data.end()} {
+        if (size() != data.size()) {
+            throw std::runtime_error{"VgCommand constructed with invalid amount of data"};
+        }
+    }
+    VgCommand(EType _type, std::span<const float> _data, std::string _text)
+        : type{_type}, data{_data.begin(), _data.end()}, mtext{std::move(_text)} {
         if (size() != data.size()) {
             throw std::runtime_error{"VgCommand constructed with invalid amount of data"};
         }
@@ -75,6 +82,8 @@ struct VgCommand {
     };
 
     // Returns the expected (not actual) size of `data` in number of bytes, depending on the type of the command.
+    // For EType::Text, this counts only the fixed portion (position, font size). The string
+    // payload itself is carried separately in `text` and is not included in this count.
     size_t bytes() const {
         switch (type) {
             case EType::Save: return 0;
@@ -98,6 +107,7 @@ struct VgCommand {
             case EType::Rect: return sizeof(Pos) + sizeof(Size);
             case EType::RoundedRect: return sizeof(Pos) + sizeof(Size) + sizeof(float) /* radius */;
             case EType::RoundedRectVarying: return sizeof(Pos) + sizeof(Size) + sizeof(float) * 4 /* radius per corner */;
+            case EType::Text: return sizeof(Pos) + sizeof(float) /* font size */;
             default: throw std::runtime_error{"Invalid VgCommand type."};
         }
     }
@@ -150,8 +160,13 @@ struct VgCommand {
         };
     }
 
+    static VgCommand text(Pos p, float fontSize, std::string_view str) {
+        return {EType::Text, {{p.x, p.y, fontSize}}, std::string{str}};
+    }
+
     EType type;
     std::vector<float> data;
+    std::string mtext; // only populated for EType::Text
 };
 
 } // namespace tev

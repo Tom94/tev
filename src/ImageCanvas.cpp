@@ -477,7 +477,16 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                     nvgRoundedRectVarying(ctx, p.x(), p.y(), size.x(), size.y(), f[4] * scale, f[5] * scale, f[6] * scale, f[7] * scale);
                 }
                     return;
-                // TODO: text rendering
+                case VgCommand::EType::Text: {
+                    Vector2f p = vgToNano({f[0], f[1]});
+                    float fontSize = f[2] * extractScale(displayWindowToNano);
+
+                    nvgFontSize(ctx, fontSize);
+                    nvgFontFace(ctx, "sans-bold");
+                    nvgTextAlign(ctx, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                    nvgText(ctx, p.x(), p.y(), command.mtext.data(), command.mtext.data() + command.mtext.size());
+                }
+                    return;
                 default: throw runtime_error{"Invalid VgCommand type."};
             }
         };
