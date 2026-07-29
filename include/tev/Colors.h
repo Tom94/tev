@@ -535,8 +535,8 @@ template <class B> B pqToLinearLut(const B& n) {
     const auto i = min(float_to_int(x), vi{1023});
     const auto t = x - int_to_float(i);
 
-    const auto a0 = gather(kPqToLinearRoot8, i);
-    const auto a1 = gather(kPqToLinearRoot8, i + 1);
+    const auto a0 = gather<B>(kPqToLinearRoot8, i);
+    const auto a1 = gather<B>(kPqToLinearRoot8, i + 1);
     B y = fma(t, a1 - a0, a0);
 
     y = y * y;

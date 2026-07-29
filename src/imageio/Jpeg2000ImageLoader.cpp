@@ -536,16 +536,17 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
         const auto numPixels = posProd(size);
 
-        const auto getChannelValue = [&image](size_t c, int x, int y) -> float {
-            const auto& comp = image->comps[c];
-            const auto xc = ((x - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor;
-            const auto yc = ((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor;
-
-            if (yc >= 0 && yc < (int)comp.h && xc >= 0 && xc < (int)comp.w) {
-                return (float)comp.data[yc * comp.w + xc] / ((1ull << (comp.prec - comp.sgnd)) - 1);
-            } else {
-                return 0.0f;
+        const auto getChannelValue = [&image]<class B>(size_t c, int x, int y) {
+            auto X = B{x};
+            if constexpr (!is_arithmetic_v<B>) {
+                X += xsimd::make_iota_batch_constant<int32_t>();
             }
+
+            const auto& comp = image->comps[c];
+            const auto xc = xsimd::clip(((X - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor, B{0}, B{(int)comp.w - 1});
+            const auto yc = xsimd::clip(((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor, 0, (int)comp.h - 1);
+
+            return int_to_float(gather<B>(comp.data, yc * comp.w + xc)) / ((1ull << (comp.prec - comp.sgnd)) - 1ull);
         };
 
         // First copy over the extra channels -- they are treated the same way, regardless of color space settings
@@ -560,7 +561,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                 [&](int y) {
                     for (size_t c = 0; c < numExtraChannels; ++c) {
                         for (int x = 0; x < size.x(); ++x) {
-                            extraView[c, x, y] = getChannelValue(c, x, y);
+                            extraView[c, x, y] = getChannelValue.template operator()<int>(c, x, y);
                         }
                     }
                 },
@@ -578,10 +579,10 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                 size.y(),
                 numPixels * numRgbaChannels,
                 [&](int y) {
-                    for (int x = 0; x < size.x(); ++x) {
-                        Vector3f rgb{0.0f};
+                    simdFor(0, size.x(), [&]<class B>(int x) {
+                        Array<B, 3> rgb = {B{0.0f}};
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            rgb[c] = getChannelValue(c, x, y);
+                            rgb[c] = getChannelValue.template operator()<int_companion_t<B>>(c, x, y);
                         }
 
                         if (colorSpace == OPJ_CLRSPC_SYCC || colorSpace == OPJ_CLRSPC_EYCC) {
@@ -595,13 +596,13 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
                         }
 
                         for (size_t c = 0; c < numColorChannels; ++c) {
-                            rgbaOut[c, x, y] = rgb[std::min(c, numColorChannels - 1)];
+                            storeChannel<B>(rgbaOut, c, x, y, rgb[std::min(c, numColorChannels - 1)]);
                         }
 
                         if (hasAlpha) {
-                            rgbaOut[-1, x, y] = getChannelValue(numColorChannels, x, y);
+                            storeChannel<B>(rgbaOut, -1, x, y, getChannelValue.template operator()<int_companion_t<B>>(numColorChannels, x, y));
                         }
-                    }
+                    });
                 },
                 priority
             );

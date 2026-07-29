@@ -53,6 +53,14 @@ template <class B> struct uint_companion<B, std::enable_if_t<std::is_arithmetic_
 };
 template <class B> using uint_companion_t = typename uint_companion<B>::type;
 
+template <class B, class = void> struct value_type {
+    using type = typename B::value_type;
+};
+template <class B> struct value_type<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
+    using type = B;
+};
+template <class B> using value_type_t = typename value_type<B>::type;
+
 inline float int_to_float(std::int32_t i) noexcept { return static_cast<float>(i); }
 template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) noexcept { return xsimd::to_float(i); }
 
@@ -66,8 +74,13 @@ template <class T, class A> T max(const xsimd::batch<T, A>& f) noexcept { return
 inline float min(float f) noexcept { return f; }
 template <class T, class A> T min(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_min(f); }
 
-inline float gather(const float* ptr, int i) noexcept { return ptr[i]; }
-template <class B> vf gather(const float* ptr, const B& i) noexcept { return vf::gather(ptr, i); }
+template <class B> B gather(const value_type_t<B>* ptr, const int_companion_t<B>& i) noexcept {
+    if constexpr (std::is_arithmetic_v<B>) {
+        return ptr[i];
+    } else {
+        return B::gather(ptr, i);
+    }
+}
 
 // portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
 // results land in the low 16 bits of an equally-wide uint32 batch.
