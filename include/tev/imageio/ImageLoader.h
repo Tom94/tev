@@ -159,87 +159,75 @@ Task<void> toFloat32(
     const size_t numColorChannels = numSamplesPerPixel == 0 ? 0 : (numSamplesPerPixel - (alphaKind != EAlphaKind::None ? 1 : 0));
     const bool hasAlpha = alphaKind != EAlphaKind::None;
 
-    static constexpr size_t DYNAMIC = 0;
-    const auto numColorChannelsSpecialized = [&]<size_t N_COLOR_CHANNELS_STATIC>(size_t nColorChannelsDynamic) -> Task<void> {
-        const size_t N_COLOR_CHANNELS = N_COLOR_CHANNELS_STATIC == DYNAMIC ? nColorChannelsDynamic : N_COLOR_CHANNELS_STATIC;
-        co_await ThreadPool::global().parallelFor(
-            0,
-            size.y(),
-            numPixels * N_COLOR_CHANNELS * ituth273::approxCost(TRANSFER),
-            [&](int y) {
-                simdFor(0, size.x(), [&]<class Scalar>(int x) {
-                    const size_t rowIdxIn = y * numSamplesPerRowIn;
-                    const auto rowData = imageData.subspan(rowIdxIn, numSamplesPerRowIn);
+    co_await ThreadPool::global().parallelFor(
+        0,
+        size.y(),
+        numPixels * numColorChannels * ituth273::approxCost(TRANSFER),
+        [&](int y) {
+            simdFor(0, size.x(), [&]<class Scalar>(int x) {
+                const size_t rowIdxIn = y * numSamplesPerRowIn;
+                const auto rowData = imageData.subspan(rowIdxIn, numSamplesPerRowIn);
 
-                    Scalar s = Scalar{scale};
-                    Scalar o = Scalar{offset};
+                Scalar s = Scalar{scale};
+                Scalar o = Scalar{offset};
 
-                    Scalar invFactor = Scalar{1.0f};
-                    if (hasAlpha) {
-                        Scalar a = loadChannel<Scalar>(rowData, numSamplesPerPixelIn - 1, x, numSamplesPerPixelIn);
-                        a = xsimd::fma(a, s, o);
-                        storeChannel(floatData, -1, x, y, a);
+                Scalar invFactor = Scalar{1.0f};
+                if (hasAlpha) {
+                    Scalar a = loadChannel<Scalar>(rowData, numSamplesPerPixelIn - 1, x, numSamplesPerPixelIn);
+                    a = xsimd::fma(a, s, o);
+                    storeChannel(floatData, -1, x, y, a);
 
-                        // If alpha has been premultiplied in a nonlinear space, we need to un- and re-multiply around transfer inversion,
-                        // regardless of MULTIPLY_ALPHA setting. Even if user doesn't want to multiply alpha, if it's already premultiplied
-                        // we should preserve that.
-                        if constexpr (TRANSFER != ETransfer::Linear) {
-                            if (alphaKind == EAlphaKind::PremultipliedPostTransfer) {
-                                const auto f = xsimd::select(a > Scalar{0.0001f}, 1.0f / a, Scalar{1.0f});
-                                s *= f;
-                                o *= f;
+                    // If alpha has been premultiplied in a nonlinear space, we need to un- and re-multiply around transfer inversion,
+                    // regardless of MULTIPLY_ALPHA setting. Even if user doesn't want to multiply alpha, if it's already premultiplied
+                    // we should preserve that.
+                    if constexpr (TRANSFER != ETransfer::Linear) {
+                        if (alphaKind == EAlphaKind::PremultipliedPostTransfer) {
+                            const auto f = xsimd::select(a > Scalar{0.0001f}, 1.0f / a, Scalar{1.0f});
+                            s *= f;
+                            o *= f;
 
-                                invFactor = a;
-                            }
-                        }
-
-                        if constexpr (MULTIPLY_ALPHA) {
-                            if (alphaKind == EAlphaKind::Straight) {
-                                invFactor = a;
-                            }
+                            invFactor = a;
                         }
                     }
 
-                    if (N_COLOR_CHANNELS >= 3) {
-                        auto rgb = loadChannels<Scalar, 3>(rowData, x, numSamplesPerPixelIn);
-                        for (size_t c = 0; c < 3; ++c) {
-                            rgb[c] = xsimd::fma(rgb[c], s, o);
-                        }
-
-                        rgb = ituth273::invTransferRgb<TRANSFER>(rgb);
-                        for (size_t c = 0; c < 3; ++c) {
-                            rgb[c] *= invFactor;
-                        }
-
-                        storeChannels(rgb, floatData, x, y);
-
-                        for (size_t c = 3; c < N_COLOR_CHANNELS; ++c) {
-                            Scalar v = loadChannel<Scalar>(rowData, c, x, numSamplesPerPixelIn);
-                            v = xsimd::fma(v, s, o);
-                            v = ituth273::invTransferComponent<TRANSFER>(v);
-                            storeChannel(floatData, c, x, y, v * invFactor);
-                        }
-                    } else {
-                        for (size_t c = 0; c < N_COLOR_CHANNELS; ++c) {
-                            Scalar v = loadChannel<Scalar>(rowData, c, x, numSamplesPerPixelIn);
-                            v = xsimd::fma(v, s, o);
-                            v = ituth273::invTransferComponent<TRANSFER>(v);
-                            storeChannel(floatData, c, x, y, v * invFactor);
+                    if constexpr (MULTIPLY_ALPHA) {
+                        if (alphaKind == EAlphaKind::Straight) {
+                            invFactor = a;
                         }
                     }
-                });
-            },
-            priority
-        );
-    };
+                }
 
-    // Specialize for 3 channels (RGB) to get extra instruction-level parallelism (unrolled loop over channels). 1 channel wouldn't benefit
-    // (nothing to unroll), 2 (e.g. uv) and 4 (e.g. CMYK) color channels are rare enough that it's not worth the binary size increase.
-    if (numColorChannels == 3) {
-        co_await numColorChannelsSpecialized.template operator()<3>(3);
-    } else {
-        co_await numColorChannelsSpecialized.template operator()<DYNAMIC>(numColorChannels);
-    }
+                if (numColorChannels >= 3) {
+                    auto rgb = loadChannels<Scalar, 3>(rowData, x, numSamplesPerPixelIn);
+                    for (size_t c = 0; c < 3; ++c) {
+                        rgb[c] = xsimd::fma(rgb[c], s, o);
+                    }
+
+                    rgb = ituth273::invTransferRgb<TRANSFER>(rgb);
+                    for (size_t c = 0; c < 3; ++c) {
+                        rgb[c] *= invFactor;
+                    }
+
+                    storeChannels(rgb, floatData, x, y);
+
+                    for (size_t c = 3; c < numColorChannels; ++c) {
+                        Scalar v = loadChannel<Scalar>(rowData, c, x, numSamplesPerPixelIn);
+                        v = xsimd::fma(v, s, o);
+                        v = ituth273::invTransferComponent<TRANSFER>(v);
+                        storeChannel(floatData, c, x, y, v * invFactor);
+                    }
+                } else {
+                    for (size_t c = 0; c < numColorChannels; ++c) {
+                        Scalar v = loadChannel<Scalar>(rowData, c, x, numSamplesPerPixelIn);
+                        v = xsimd::fma(v, s, o);
+                        v = ituth273::invTransferComponent<TRANSFER>(v);
+                        storeChannel(floatData, c, x, y, v * invFactor);
+                    }
+                }
+            });
+        },
+        priority
+    );
 }
 
 template <bool MULTIPLY_ALPHA = false, typename T>

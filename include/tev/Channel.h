@@ -371,15 +371,15 @@ public:
     const IdxType& size() const { return mSizes; }
     const IdxType& stride() const { return mStrides; }
 
-    T* data() const { return mData; }
-
-private:
     template <typename... Idx> constexpr size_t offsetOf(Idx... idx) const {
         return [&]<size_t... I>(std::index_sequence<I...>) {
             return ((static_cast<size_t>(idx) * mStrides[I]) + ... + size_t{0});
         }(std::make_index_sequence<N_AXES>{});
     }
 
+    T* data() const { return mData; }
+
+private:
     T* mData = nullptr;
     IdxType mStrides = {0};
     IdxType mSizes = {0};

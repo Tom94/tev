@@ -37,6 +37,14 @@ namespace tev {
 // -----------------------------------------------------------------------------
 using vf = xsimd::batch<float>;
 
+template <class B, class = void> struct is_arm_neon {
+    static constexpr bool value = std::is_same_v<typename B::arch_type, xsimd::neon> || std::is_same_v<typename vf::arch_type, xsimd::neon64>;
+};
+template <class B> struct is_arm_neon<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
+    static constexpr bool value = false;
+};
+template <class B> static constexpr bool is_arm_neon_v = is_arm_neon<B>::value;
+
 template <class B, class = void> struct int_companion {
     using type = xsimd::batch<int32_t, typename B::arch_type>;
 };
@@ -323,10 +331,52 @@ template <class B, typename T> B loadChannel(const T& view, size_t c, size_t idx
     }
 }
 
-template <class B, size_t Size, typename T, typename... Args> nanogui::Array<B, Size> loadChannels(const T& view, Args... args) {
+template <class B, size_t Size, typename T, typename... Args>
+nanogui::Array<B, Size> loadChannels(const MultiChannelView<T>& view, Args... args) {
     nanogui::Array<B, Size> result;
     for (size_t c = 0; c < Size; ++c) {
         result.v[c] = loadChannel<B>(view, c, args...);
+    }
+
+    return result;
+}
+
+template <class B, size_t Size, typename T> nanogui::Array<B, Size> loadChannels(const std::span<T>& view, size_t idx, size_t stride) {
+    nanogui::Array<B, Size> result;
+#if defined(__ARM_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
+    // ARM NEON has 2x4, 3x4, 4x4 deinterleave load instructions
+    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float>) {
+        const float* ptr = view.data() + idx * stride;
+
+        if (stride == Size) {
+            if constexpr (Size == 4) {
+                float32x4x4_t v = vld4q_f32(ptr);
+                for (size_t c = 0; c < Size; ++c) {
+                    result.v[c] = B(v.val[c]);
+                }
+
+                return result;
+            } else if constexpr (Size == 3) {
+                float32x4x3_t v = vld3q_f32(ptr);
+                for (size_t c = 0; c < Size; ++c) {
+                    result.v[c] = B(v.val[c]);
+                }
+
+                return result;
+            } else if constexpr (Size == 2) {
+                float32x4x2_t v = vld2q_f32(ptr);
+                for (size_t c = 0; c < Size; ++c) {
+                    result.v[c] = B(v.val[c]);
+                }
+
+                return result;
+            }
+        }
+    }
+#endif
+
+    for (size_t c = 0; c < Size; ++c) {
+        result.v[c] = loadChannel<B>(view, c, idx, stride);
     }
 
     return result;
@@ -407,9 +457,67 @@ template <class B, typename T> void storeChannel(const T& view, size_t c, size_t
 }
 
 template <class B, size_t Size, typename T, typename... Args>
-void storeChannels(const nanogui::Array<B, Size>& v, const T& view, Args... args) {
+void storeChannels(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& view, Args... args) {
     for (size_t c = 0; c < Size; ++c) {
         storeChannel<B>(view, c, args..., v.v[c]);
+    }
+}
+
+template <class B, size_t Size, typename T, typename... Args>
+void storeChannels(const nanogui::Array<B, Size>& v, const MdSpan<T, 3>& view, size_t x, size_t y) {
+#if defined(__ARM_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
+    // ARM NEON has 2x4, 3x4, 4x4 interleave store instructions
+    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float>) {
+        float* ptr = view.data() + view.offsetOf(0, x, y);
+        const auto pixelStride = view.stride()[1];
+
+        if constexpr (Size <= 2) {
+            if (pixelStride == 2) {
+                float32x4x2_t d;
+                for (size_t c = 0; c < Size; ++c) {
+                    d.val[c] = v.v[c].data;
+                }
+
+                vst2q_f32(ptr, d);
+                return;
+            }
+        }
+
+        if constexpr (Size <= 3) {
+            if (pixelStride == 3) {
+                float32x4x3_t d;
+                for (size_t c = 0; c < Size; ++c) {
+                    d.val[c] = v.v[c].data;
+                }
+
+                vst3q_f32(ptr, d);
+                return;
+            }
+        }
+
+        if constexpr (Size <= 4) {
+            if (pixelStride == 4) {
+                float32x4x4_t d;
+                for (size_t c = 0; c < Size; ++c) {
+                    d.val[c] = v.v[c].data;
+                }
+
+                vst4q_f32(ptr, d);
+                return;
+            }
+        }
+    }
+#endif
+
+    for (size_t c = 0; c < Size; ++c) {
+        storeChannel<B>(view, c, x, y, v.v[c]);
+    }
+}
+
+template <class B, size_t Size, typename T, typename... Args>
+void storeChannels(const nanogui::Array<B, Size>& v, const MdSpan<T, 2>& view, size_t idx) {
+    for (size_t c = 0; c < Size; ++c) {
+        storeChannel<B>(view, c, idx, v.v[c]);
     }
 }
 
