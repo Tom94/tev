@@ -641,9 +641,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                                 priority
                             );
                         } else {
-                            co_await toFloat32(
-                                cicpTransfer, info.alpha_bits, span<const float>{colorData}, numChannels, outView, alphaKind, priority
-                            );
+                            co_await toFloat32<true>(cicpTransfer, span<const float>{colorData}, numChannels, outView, alphaKind, priority);
                         }
 
                         data.hasPremultipliedAlpha = true;

@@ -361,8 +361,8 @@ static void tiffUnmapProc(thandle_t, tdata_t, toff_t) {
 }
 
 // https://helpx.adobe.com/content/dam/help/en/photoshop/pdf/DNG_Spec_1_7_0_0.pdf page 94
-float dngHdrEncodingFunction(const float x) { return x * (256.0f + x) / (256.0f * (1 + x)); }
-float dngHdrDecodingFunction(const float x) { return 16.0f * (8.0f * x - 8.0f + sqrt(64.0f * x * x - 127.0f * x + 64.0f)); }
+template <class B> B dngHdrEncodingFunction(const B& x) { return x * (256.0f + x) / (256.0f * (1 + x)); }
+template <class B> B dngHdrDecodingFunction(const B& x) { return 16.0f * (8.0f * x - 8.0f + sqrt(64.0f * x * x - 127.0f * x + 64.0f)); }
 
 template <trivially_copyable T>
 void unpackBits(
