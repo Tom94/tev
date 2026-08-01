@@ -250,7 +250,6 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
     // State that gets updated during various decoding steps. Is reused for each frame of an animated image to avoid reallocation.
     JxlBasicInfo info;
-    HeapArray<float> colorData;
     HeapArray<uint8_t> iccProfile;
 
     size_t frameCount = 0;
@@ -365,22 +364,38 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 const size_t numChannels = info.num_color_channels + (info.alpha_bits ? 1 : 0);
                 const size_t numExtraChannels = info.num_extra_channels;
 
-                size_t bufferSize;
-
-                // Main image buffer & decode setup
-                JxlPixelFormat imageFormat = {(uint32_t)numChannels, JXL_TYPE_FLOAT, JXL_LITTLE_ENDIAN, 0};
-                if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(decoder.get(), &imageFormat, &bufferSize)) {
-                    throw ImageLoadError{"Failed to get output buffer size."};
-                }
-
-                colorData = HeapArray<float>{bufferSize / sizeof(float)};
-                if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, colorData.data(), bufferSize)) {
-                    throw ImageLoadError{"Failed to set output buffer."};
-                }
-
                 ImageData& data = result.emplace_back();
                 if (info.have_animation) {
                     data.partName = frameName;
+                }
+
+                const Vector2i size{(int)info.xsize, (int)info.ysize};
+
+                const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
+                data.channels = co_await makeInterleavedChannels(
+                    numChannels,
+                    numInterleavedChannels,
+                    info.alpha_bits > 0,
+                    size,
+                    EPixelFormat::F32,
+                    info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16,
+                    data.partName,
+                    priority
+                );
+
+                auto inView = MultiChannelView<float>{data.channels};
+                const auto outView = MultiChannelView<float>{data.channels};
+                auto rgbaOutView = outView;
+
+                TEV_ASSERT(
+                    inView.interleavedStride() == numInterleavedChannels, "Interleaved stride must match number of interleaved channels."
+                );
+
+                // Main image buffer & decode setup
+                const JxlPixelFormat imageFormat = {(uint32_t)numInterleavedChannels, JXL_TYPE_FLOAT, JXL_NATIVE_ENDIAN, 0};
+                if (JXL_DEC_SUCCESS !=
+                    JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, inView.asSpan()->data(), inView.asSpan()->size() * sizeof(float))) {
+                    throw ImageLoadError{"Failed to set output buffer."};
                 }
 
                 struct ExtraChannelInfo {
@@ -436,13 +451,14 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         extraChannel.dimShift
                     );
 
+                    size_t bufferSize = 0;
                     if (JXL_DEC_SUCCESS != JxlDecoderExtraChannelBufferSize(decoder.get(), &extraChannelFormat, &bufferSize, i)) {
                         throw ImageLoadError{fmt::format("Failed to get extra channel {}'s buffer size.", i)};
                     }
 
                     extraChannel.data = HeapArray<float>{bufferSize / sizeof(float)};
                     if (JXL_DEC_SUCCESS !=
-                        JxlDecoderSetExtraChannelBuffer(decoder.get(), &imageFormat, extraChannel.data.data(), bufferSize, i)) {
+                        JxlDecoderSetExtraChannelBuffer(decoder.get(), &extraChannelFormat, extraChannel.data.data(), bufferSize, i)) {
                         throw ImageLoadError{fmt::format("Failed to set extra channel {}'s buffer.", i)};
                     }
 
@@ -457,24 +473,6 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 if (status == JXL_DEC_ERROR) {
                     throw ImageLoadError{"Error processing input."};
                 }
-
-                const Vector2i size{(int)info.xsize, (int)info.ysize};
-
-                const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-                data.channels = co_await makeInterleavedChannels(
-                    numChannels,
-                    numInterleavedChannels,
-                    info.alpha_bits > 0,
-                    size,
-                    EPixelFormat::F32,
-                    info.bits_per_sample > 16 ? EPixelFormat::F32 : EPixelFormat::F16,
-                    data.partName,
-                    priority
-                );
-
-                auto inView = MultiChannelView<float>{colorData.data(), numChannels, size};
-                const auto outView = MultiChannelView<float>{data.channels};
-                auto rgbaOutView = outView;
 
                 // If there's no alpha channel, treat as premultiplied (by 1)
                 data.hasPremultipliedAlpha = info.alpha_bits == 0 || info.alpha_premultiplied;
@@ -498,10 +496,6 @@ Task<vector<ImageData>> JxlImageLoader::load(
                     if (info.alpha_bits > 0) {
                         rgbaOutView.insertView(3, data.channels.at(3 + info.num_color_channels).view<float>());
                     }
-
-                    // Copy CMY(A) data into the original output view such that tev can display it and the K channel to the user in addition
-                    // to the converted RGB data later on.
-                    co_await toFloat32(span<const float>{colorData}, numChannels, outView, alphaKind, priority);
                 }
 
                 // JXL's orientation values match EXIF orientation tags (which also match our EOrientation enum).
@@ -519,133 +513,6 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 if (pixelTypeOut) {
                     *pixelTypeOut = info.exponent_bits_per_sample > 0 ? EPixelType::Float : EPixelType::Uint;
-                }
-
-                bool colorChannelsLoaded = false;
-                if (iccProfile && !skipColorProcessing) {
-                    tlog::debug("Found ICC color profile. Attempting to apply...");
-
-                    try {
-                        const auto profile = ColorProfile::fromIcc(iccProfile);
-                        co_await toLinearSrgbPremul(
-                            profile,
-                            alphaKind,
-                            inView,
-                            rgbaOutView,
-                            nullopt,
-                            priority,
-                            true // invert CMYK ink values since JXL strangely uses 0 == full ink, 1 == no ink
-                        );
-
-                        data.hasPremultipliedAlpha = true;
-                        data.readMetadataFromIcc(profile);
-
-                        colorChannelsLoaded = true;
-                    } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
-                }
-
-                if (!colorChannelsLoaded && isCmyk) {
-                    tlog::debug("No ICC profile found, applying default CMYK->RGB conversion.");
-
-                    const auto numPixels = posProd(size);
-                    co_await ThreadPool::global().parallelFor(
-                        0uz,
-                        numPixels,
-                        numPixels * 4,
-                        [&](size_t i) {
-                            const float oneMinusK = inView[3, i];
-                            rgbaOutView[0, i] = inView[0, i] * oneMinusK;
-                            rgbaOutView[1, i] = inView[1, i] * oneMinusK;
-                            rgbaOutView[2, i] = inView[2, i] * oneMinusK;
-                        },
-                        priority
-                    );
-
-                    colorChannelsLoaded = true;
-                }
-
-                // If we didn't load the channels via the ICC profile, we need to load them manually.
-                if (!colorChannelsLoaded) {
-                    // If color encoding information is available, we need to use it to convert to linear sRGB. Otherwise, assume the
-                    // decoder has already prepared the data in linear sRGB for us.
-                    if (!ce || skipColorProcessing) {
-                        co_await toFloat32(span<const float>{colorData}, numChannels, outView, alphaKind, priority);
-                    } else {
-                        data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
-
-                        tlog::debug(
-                            "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={} intent={}",
-                            jxlToString(ce->color_space),
-                            jxlToString(ce->primaries),
-                            jxlToString(ce->white_point),
-                            jxlToString(ce->transfer_function),
-                            toString(data.renderingIntent)
-                        );
-
-                        // Primaries are only valid for RGB data. We need to set up a conversion matrix only if we aren't already in sRGB.
-                        if (ce->color_space == JXL_COLOR_SPACE_RGB) {
-                            if (ce->primaries != JXL_PRIMARIES_SRGB || ce->white_point != JXL_WHITE_POINT_D65) {
-                                const chroma_t chroma = {
-                                    {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
-                                     {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
-                                     {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
-                                     {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
-                                };
-
-                                data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent);
-                                data.nativeMetadata.chroma = chroma;
-                            } else {
-                                data.nativeMetadata.chroma = rec709Chroma();
-                            }
-                        }
-
-                        const bool hasGamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
-                        if (hasGamma) {
-                            tlog::debug("gamma={}", ce->gamma);
-                            data.nativeMetadata.gamma = (float)ce->gamma;
-                        }
-
-                        auto cicpTransfer = hasGamma ? ituth273::ETransfer::GenericGamma :
-                                                       static_cast<ituth273::ETransfer>(ce->transfer_function);
-
-                        if (!hasGamma) {
-                            if (!ituth273::isTransferImplemented(cicpTransfer)) {
-                                tlog::warning("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
-                                cicpTransfer = ituth273::ETransfer::SRGB;
-                            }
-                        }
-
-                        data.nativeMetadata.transfer = cicpTransfer;
-                        data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
-
-                        if (hasGamma) {
-                            const size_t numPixels = posProd(size);
-                            co_await simdParallelFor(
-                                ThreadPool::global(),
-                                0uz,
-                                numPixels,
-                                numPixels * numInterleavedChannels * ituth273::approxCost(ituth273::ETransfer::GenericGamma),
-                                [&]<class B>(size_t i) {
-                                    // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
-                                    // transfer), so we must unpremultiply prior to the color space conversion and transfer function
-                                    // inversion. See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
-                                    const float alpha = info.alpha_bits ? outView[-1, i] : 1.0f;
-                                    const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-
-                                    for (uint32_t c = 0; c < info.num_color_channels; ++c) {
-                                        storeChannel<B>(
-                                            outView, c, i, fastPow(loadChannel<B>(outView, c, i) * factor, B{1.0f / (float)ce->gamma}) * alpha
-                                        );
-                                    }
-                                },
-                                priority
-                            );
-                        } else {
-                            co_await toFloat32<true>(cicpTransfer, span<const float>{colorData}, numChannels, outView, alphaKind, priority);
-                        }
-
-                        data.hasPremultipliedAlpha = true;
-                    }
                 }
 
                 // Load and upscale extra channels if present
@@ -674,6 +541,136 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         priority
                     );
                 }
+
+                // Color processing if necessary
+                if (skipColorProcessing) {
+                    tlog::debug("Skipping color processing.");
+                    break;
+                }
+
+                if (iccProfile) {
+                    tlog::debug("Found ICC color profile. Attempting to apply...");
+
+                    try {
+                        const auto profile = ColorProfile::fromIcc(iccProfile);
+                        co_await toLinearSrgbPremul(
+                            profile,
+                            alphaKind,
+                            inView,
+                            rgbaOutView,
+                            nullopt,
+                            priority,
+                            true // invert CMYK ink values since JXL strangely uses 0 == full ink, 1 == no ink
+                        );
+
+                        data.hasPremultipliedAlpha = true;
+                        data.readMetadataFromIcc(profile);
+
+                        break;
+                    } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
+                }
+
+                if (isCmyk) {
+                    tlog::debug("No ICC profile found, applying default CMYK->RGB conversion.");
+
+                    const auto numPixels = posProd(size);
+                    co_await ThreadPool::global().parallelFor(
+                        0uz,
+                        numPixels,
+                        numPixels * 4,
+                        [&](size_t i) {
+                            const float oneMinusK = inView[3, i];
+                            rgbaOutView[0, i] = inView[0, i] * oneMinusK;
+                            rgbaOutView[1, i] = inView[1, i] * oneMinusK;
+                            rgbaOutView[2, i] = inView[2, i] * oneMinusK;
+                        },
+                        priority
+                    );
+
+                    break;
+                }
+
+                // If we didn't process the channels via an ICC profile, we need to load them manually. If color encoding information is
+                // available, we need to use it to convert to linear sRGB. Otherwise, assume the decoder has already prepared the data in
+                // linear sRGB for us.
+                if (!ce) {
+                    break;
+                }
+
+                data.renderingIntent = static_cast<ERenderingIntent>(ce->rendering_intent);
+
+                tlog::debug(
+                    "JxlColorEncoding: colorspace={} primaries={} whitepoint={} transfer={} intent={}",
+                    jxlToString(ce->color_space),
+                    jxlToString(ce->primaries),
+                    jxlToString(ce->white_point),
+                    jxlToString(ce->transfer_function),
+                    toString(data.renderingIntent)
+                );
+
+                // Primaries are only valid for RGB data. We need to set up a conversion matrix only if we aren't already in sRGB.
+                if (ce->color_space == JXL_COLOR_SPACE_RGB) {
+                    if (ce->primaries != JXL_PRIMARIES_SRGB || ce->white_point != JXL_WHITE_POINT_D65) {
+                        const chroma_t chroma = {
+                            {{(float)ce->primaries_red_xy[0], (float)ce->primaries_red_xy[1]},
+                             {(float)ce->primaries_green_xy[0], (float)ce->primaries_green_xy[1]},
+                             {(float)ce->primaries_blue_xy[0], (float)ce->primaries_blue_xy[1]},
+                             {(float)ce->white_point_xy[0], (float)ce->white_point_xy[1]}}
+                        };
+
+                        data.toRec709 = convertColorspaceMatrix(chroma, rec709Chroma(), data.renderingIntent);
+                        data.nativeMetadata.chroma = chroma;
+                    } else {
+                        data.nativeMetadata.chroma = rec709Chroma();
+                    }
+                }
+
+                const bool hasGamma = ce->transfer_function == JXL_TRANSFER_FUNCTION_GAMMA;
+                if (hasGamma) {
+                    tlog::debug("gamma={}", ce->gamma);
+                    data.nativeMetadata.gamma = (float)ce->gamma;
+                }
+
+                auto cicpTransfer = hasGamma ? ituth273::ETransfer::GenericGamma : static_cast<ituth273::ETransfer>(ce->transfer_function);
+
+                if (!hasGamma) {
+                    if (!ituth273::isTransferImplemented(cicpTransfer)) {
+                        tlog::warning("Unsupported transfer '{}'. Using sRGB instead.", ituth273::toString(cicpTransfer));
+                        cicpTransfer = ituth273::ETransfer::SRGB;
+                    }
+                }
+
+                data.nativeMetadata.transfer = cicpTransfer;
+                data.hdrMetadata.bestGuessWhiteLevel = ituth273::bestGuessReferenceWhiteLevel(cicpTransfer);
+
+                if (hasGamma) {
+                    const size_t numPixels = posProd(size);
+                    co_await simdParallelFor(
+                        ThreadPool::global(),
+                        0uz,
+                        numPixels,
+                        numPixels * numInterleavedChannels * ituth273::approxCost(ituth273::ETransfer::GenericGamma),
+                        [&]<class B>(size_t i) {
+                            // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
+                            // transfer), so we must unpremultiply prior to the color space conversion and transfer function
+                            // inversion. See https://github.com/libjxl/conformance/issues/39#issuecomment-3004735767
+                            const float alpha = info.alpha_bits ? outView[-1, i] : 1.0f;
+                            const float factor = info.alpha_premultiplied && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
+
+                            for (uint32_t c = 0; c < info.num_color_channels; ++c) {
+                                storeChannel<B>(
+                                    outView, c, i, fastPow(loadChannel<B>(outView, c, i) * factor, B{1.0f / (float)ce->gamma}) * alpha
+                                );
+                            }
+                        },
+                        priority
+                    );
+                } else {
+                    co_await toFloat32<true>(cicpTransfer, *inView.asSpan(), numInterleavedChannels, outView, alphaKind, priority);
+                }
+
+                data.hasPremultipliedAlpha = true;
+
             } break;
             case JXL_DEC_BOX: {
                 JxlBoxType type = {};

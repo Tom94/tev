@@ -510,6 +510,15 @@ public:
         };
     }
 
+    std::optional<std::span<T>> asSpan() const {
+        const auto stride = interleavedStride();
+        if (!stride) {
+            return std::nullopt;
+        }
+
+        return std::span<T>{interleavedData(*stride), posProd(size()) * (*stride)};
+    }
+
 private:
     SmallRgbaVector<ChannelView<T>> mChannelViews;
 };
