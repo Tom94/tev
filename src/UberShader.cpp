@@ -206,6 +206,9 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     color = vec4(color.r, color.r, color.r, color.g);
                 } else if (channelConfig == CHANNEL_CONFIG_RGA) {
                     color = vec4(color.r, color.g, 0.0, color.b);
+                } else if (channelConfig != CHANNEL_CONFIG_RGBA) {
+                    // If the channel config doesn't have an alpha channel, ignore the one from the texture (may be uninitialized)
+                    color = vec4(color.rgb, 1.0);
                 }
 
                 return applyMask(color, mask);
@@ -386,7 +389,11 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
                     color = float4(color.r, color.r, color.r, color.g);
                 } else if (channelConfig == CHANNEL_CONFIG_RGA) {
                     color = float4(color.r, color.g, 0.0f, color.b);
+                } else if (channelConfig != CHANNEL_CONFIG_RGBA) {
+                    // If the channel config doesn't have an alpha channel, ignore the one from the texture (may be uninitialized)
+                    color = float4(color.rgb, 1.0f);
                 }
+
 
                 return applyMask(color, mask);
             }
