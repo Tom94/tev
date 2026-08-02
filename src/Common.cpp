@@ -386,16 +386,7 @@ int maxTextureSize() {
 #endif
 }
 
-size_t nextSupportedTextureChannelCount(size_t channelCount) {
-#if NANOGUI_USE_METAL
-    // Metal only supports 1, 2, and 4 channel textures.
-    if (channelCount == 3) {
-        return 4;
-    }
-#endif
-
-    return channelCount;
-}
+size_t nextSupportedTextureChannelCount(size_t channelCount) { return channelCount; }
 
 int lastError() {
 #ifdef _WIN32

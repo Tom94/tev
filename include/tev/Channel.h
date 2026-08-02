@@ -343,6 +343,48 @@ private:
     size_t mDataStride;
 };
 
+template <typename T, size_t N_AXES> class MdSpan {
+public:
+    using IdxType = nanogui::Array<int, N_AXES>;
+
+    MdSpan() = delete;
+    MdSpan(T* data, const IdxType& strides, const IdxType& sizes) : mData{data}, mStrides{strides}, mSizes{sizes} {}
+    MdSpan(std::span<T> data, const IdxType& strides, const IdxType& sizes) : mData{data.data()}, mStrides{strides}, mSizes{sizes} {
+        TEV_ASSERT(data.size() >= posProd(sizes), "Data span is too small for the given sizes.");
+    }
+
+    operator MdSpan<const T, N_AXES>() const { return MdSpan<const T, N_AXES>{mData, mStrides, mSizes}; }
+
+    // decltype(auto) as opposed to `auto` preserves the reference category
+    template <typename... Idx>
+        requires(sizeof...(Idx) == N_AXES && (std::convertible_to<Idx, size_t> && ...))
+    decltype(auto) operator[](Idx... idx) const & {
+        return mData[offsetOf(idx...)];
+    }
+
+    template <typename... Idx>
+        requires(sizeof...(Idx) == N_AXES && (std::convertible_to<Idx, size_t> && ...))
+    auto operator[](Idx... idx) const && {
+        return mData[offsetOf(idx...)];
+    }
+
+    const IdxType& size() const { return mSizes; }
+    const IdxType& stride() const { return mStrides; }
+
+    template <typename... Idx> constexpr size_t offsetOf(Idx... idx) const {
+        return [&]<size_t... I>(std::index_sequence<I...>) {
+            return ((static_cast<size_t>(idx) * mStrides[I]) + ... + size_t{0});
+        }(std::make_index_sequence<N_AXES>{});
+    }
+
+    T* data() const { return mData; }
+
+private:
+    T* mData = nullptr;
+    IdxType mStrides = {0};
+    IdxType mSizes = {0};
+};
+
 template <typename T> using SmallRgbaVector = gch::small_vector<T, 5>; // Up to 5 channels (CMYKA) should be stored on the stack
 inline constexpr detail::to_vector_fn<SmallRgbaVector> toSmallRgbaVector{};
 
@@ -440,6 +482,41 @@ public:
         }
 
         mChannelViews.insert(mChannelViews.begin() + idx, view);
+    }
+
+    std::optional<MdSpan<T, 2>> asIdxMdSpan() const {
+        const auto stride = interleavedStride();
+        if (!stride) {
+            return std::nullopt;
+        }
+
+        return MdSpan<T, 2>{
+            interleavedData(*stride),
+            {1,                (int)*stride},
+            {(int)nChannels(), size().x()  },
+        };
+    }
+
+    std::optional<MdSpan<T, 3>> asXyMdSpan() const {
+        const auto stride = interleavedStride();
+        if (!stride) {
+            return std::nullopt;
+        }
+
+        return MdSpan<T, 3>{
+            interleavedData(*stride),
+            {1,                (int)*stride, (int)size().x() * (int)*stride},
+            {(int)nChannels(), size().x(),   size().y()                    },
+        };
+    }
+
+    std::optional<std::span<T>> asSpan() const {
+        const auto stride = interleavedStride();
+        if (!stride) {
+            return std::nullopt;
+        }
+
+        return std::span<T>{interleavedData(*stride), posProd(size()) * (*stride)};
     }
 
 private:

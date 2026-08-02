@@ -171,69 +171,6 @@ Task<vector<Channel>> ImageLoader::makeInterleavedChannels(
     const size_t numPixels = posProd(size);
     const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, pixelFormat));
 
-    // Initialize pattern [0,0,0,1] efficiently using multi-byte writes
-    const auto init = [numPixels, numChannels, numInterleavedDims, hasAlpha, priority]<typename T>(T* __restrict ptr) -> Task<void> {
-        if (numPixels == 0) {
-            co_return;
-        }
-
-        if (!hasAlpha && numChannels >= numInterleavedDims) {
-            co_await ThreadPool::global().parallelFor(
-                0uz,
-                numPixels,
-                numPixels,
-                [&](size_t start, size_t end) {
-                    memset(ptr + start * numInterleavedDims, 0, (end - start) * numInterleavedDims * sizeof(T));
-                },
-                priority
-            );
-
-            co_return;
-        }
-
-        const auto zero = T{0};
-        const auto one = is_integral_v<T> ? numeric_limits<T>::max() : T{1};
-
-        vector<T> pattern(numInterleavedDims, zero);
-        pattern.back() = one;
-
-        const T* __restrict patPtr = pattern.data();
-        const size_t patElems = pattern.size();
-        const size_t patSize = patElems * sizeof(T);
-
-        co_await ThreadPool::global().parallelFor(
-            0uz,
-            numPixels,
-            numPixels,
-            [&](size_t start, size_t end) {
-                // Copy the pattern and double memcpy size until full (quickly saturates memory bandwidth single thread)
-                T* __restrict dst = ptr + start * patElems;
-                memcpy(dst, patPtr, patSize);
-
-                size_t filled = 1;
-                const size_t numToFill = end - start;
-                while (filled < numToFill) {
-                    const size_t numToCopy = std::min(filled, numToFill - filled);
-                    memcpy(dst + filled * patElems, dst, numToCopy * patSize);
-                    filled += numToCopy;
-                }
-            },
-            priority
-        );
-    };
-
-    switch (pixelFormat) {
-        case EPixelFormat::U8: co_await init(data->data<uint8_t>()); break;
-        case EPixelFormat::U16: co_await init(data->data<uint16_t>()); break;
-        case EPixelFormat::U32: co_await init(data->data<uint32_t>()); break;
-        case EPixelFormat::I8: co_await init(data->data<int8_t>()); break;
-        case EPixelFormat::I16: co_await init(data->data<int16_t>()); break;
-        case EPixelFormat::I32: co_await init(data->data<int32_t>()); break;
-        case EPixelFormat::F16: co_await init(data->data<half>()); break;
-        case EPixelFormat::F32: co_await init(data->data<float>()); break;
-        default: throw ImageLoadError{"Unsupported pixel format."};
-    }
-
     for (size_t c = 0; c < numColorChannels; ++c) {
         channels.emplace_back(to_string(c), size, pixelFormat, desiredFormat, data, c, numInterleavedDims);
     }

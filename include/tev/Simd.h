@@ -37,6 +37,14 @@ namespace tev {
 // -----------------------------------------------------------------------------
 using vf = xsimd::batch<float>;
 
+template <class B, class = void> struct is_arm_neon {
+    static constexpr bool value = std::is_same_v<typename B::arch_type, xsimd::neon> || std::is_same_v<typename vf::arch_type, xsimd::neon64>;
+};
+template <class B> struct is_arm_neon<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
+    static constexpr bool value = false;
+};
+template <class B> static constexpr bool is_arm_neon_v = is_arm_neon<B>::value;
+
 template <class B, class = void> struct int_companion {
     using type = xsimd::batch<int32_t, typename B::arch_type>;
 };
@@ -53,6 +61,14 @@ template <class B> struct uint_companion<B, std::enable_if_t<std::is_arithmetic_
 };
 template <class B> using uint_companion_t = typename uint_companion<B>::type;
 
+template <class B, class = void> struct value_type {
+    using type = typename B::value_type;
+};
+template <class B> struct value_type<B, std::enable_if_t<std::is_arithmetic_v<B>>> {
+    using type = B;
+};
+template <class B> using value_type_t = typename value_type<B>::type;
+
 inline float int_to_float(std::int32_t i) noexcept { return static_cast<float>(i); }
 template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) noexcept { return xsimd::to_float(i); }
 
@@ -66,8 +82,13 @@ template <class T, class A> T max(const xsimd::batch<T, A>& f) noexcept { return
 inline float min(float f) noexcept { return f; }
 template <class T, class A> T min(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_min(f); }
 
-inline float gather(const float* ptr, int i) noexcept { return ptr[i]; }
-template <class B> vf gather(const float* ptr, const B& i) noexcept { return vf::gather(ptr, i); }
+template <class B> B gather(const value_type_t<B>* ptr, const int_companion_t<B>& i) noexcept {
+    if constexpr (std::is_arithmetic_v<B>) {
+        return ptr[i];
+    } else {
+        return B::gather(ptr, i);
+    }
+}
 
 // portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
 // results land in the low 16 bits of an equally-wide uint32 batch.
@@ -285,7 +306,7 @@ template <class B, typename T> B loadChannel(const std::span<T>& view, size_t c,
     }
 }
 
-template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, size_t c, size_t x, size_t y) {
+template <class B, typename T> B loadChannel(const T& view, size_t c, size_t x, size_t y) {
     if constexpr (std::is_arithmetic_v<B>) {
         return view[c, x, y];
     } else {
@@ -297,7 +318,7 @@ template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, si
     }
 }
 
-template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, size_t c, size_t idx) {
+template <class B, typename T> B loadChannel(const T& view, size_t c, size_t idx) {
     if constexpr (std::is_arithmetic_v<B>) {
         return view[c, idx];
     } else {
@@ -310,10 +331,52 @@ template <class B, typename T> B loadChannel(const MultiChannelView<T>& view, si
     }
 }
 
-template <class B, size_t Size, typename T, typename... Args> nanogui::Array<B, Size> loadChannels(const T& view, Args... args) {
+template <class B, size_t Size, typename T, typename... Args>
+nanogui::Array<B, Size> loadChannels(const MultiChannelView<T>& view, Args... args) {
     nanogui::Array<B, Size> result;
     for (size_t c = 0; c < Size; ++c) {
         result.v[c] = loadChannel<B>(view, c, args...);
+    }
+
+    return result;
+}
+
+template <class B, size_t Size, typename T> nanogui::Array<B, Size> loadChannels(const std::span<T>& view, size_t idx, size_t stride) {
+    nanogui::Array<B, Size> result;
+#if defined(__ARM_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
+    // ARM NEON has 2x4, 3x4, 4x4 deinterleave load instructions
+    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float>) {
+        const float* ptr = view.data() + idx * stride;
+
+        if (stride == Size) {
+            if constexpr (Size == 4) {
+                float32x4x4_t v = vld4q_f32(ptr);
+                for (size_t c = 0; c < Size; ++c) {
+                    result.v[c] = B(v.val[c]);
+                }
+
+                return result;
+            } else if constexpr (Size == 3) {
+                float32x4x3_t v = vld3q_f32(ptr);
+                for (size_t c = 0; c < Size; ++c) {
+                    result.v[c] = B(v.val[c]);
+                }
+
+                return result;
+            } else if constexpr (Size == 2) {
+                float32x4x2_t v = vld2q_f32(ptr);
+                for (size_t c = 0; c < Size; ++c) {
+                    result.v[c] = B(v.val[c]);
+                }
+
+                return result;
+            }
+        }
+    }
+#endif
+
+    for (size_t c = 0; c < Size; ++c) {
+        result.v[c] = loadChannel<B>(view, c, idx, stride);
     }
 
     return result;
@@ -369,26 +432,26 @@ template <class B, typename T> void storeChannel(const std::span<T>& view, size_
     }
 }
 
-template <class B, typename T> void storeChannel(const MultiChannelView<T>& view, size_t c, size_t x, size_t y, const B& v) {
+template <class B, typename T> void storeChannel(const T& view, size_t c, size_t x, size_t y, const B& v) {
     if constexpr (std::is_arithmetic_v<B>) {
-        view.setAt(c, x, y, v);
+        view[c, x, y] = v;
     } else {
         alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
         v.store_aligned(tmp);
         for (std::size_t i = 0; i < B::size; ++i) {
-            view.setAt(c, x + i, y, tmp[i]);
+            view[c, x + i, y] = tmp[i];
         }
     }
 }
 
-template <class B, typename T> void storeChannel(const MultiChannelView<T>& view, size_t c, size_t idx, const B& v) {
+template <class B, typename T> void storeChannel(const T& view, size_t c, size_t idx, const B& v) {
     if constexpr (std::is_arithmetic_v<B>) {
-        view.setAt(c, idx, v);
+        view[c, idx] = v;
     } else {
         alignas(B::arch_type::alignment()) typename B::value_type tmp[B::size];
         v.store_aligned(tmp);
         for (std::size_t i = 0; i < B::size; ++i) {
-            view.setAt(c, idx + i, tmp[i]);
+            view[c, idx + i] = tmp[i];
         }
     }
 }
@@ -397,6 +460,64 @@ template <class B, size_t Size, typename T, typename... Args>
 void storeChannels(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& view, Args... args) {
     for (size_t c = 0; c < Size; ++c) {
         storeChannel<B>(view, c, args..., v.v[c]);
+    }
+}
+
+template <class B, size_t Size, typename T, typename... Args>
+void storeChannels(const nanogui::Array<B, Size>& v, const MdSpan<T, 3>& view, size_t x, size_t y) {
+#if defined(__ARM_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
+    // ARM NEON has 2x4, 3x4, 4x4 interleave store instructions
+    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float>) {
+        float* ptr = view.data() + view.offsetOf(0, x, y);
+        const auto pixelStride = view.stride()[1];
+
+        if constexpr (Size <= 2) {
+            if (pixelStride == 2) {
+                float32x4x2_t d;
+                for (size_t c = 0; c < Size; ++c) {
+                    d.val[c] = v.v[c].data;
+                }
+
+                vst2q_f32(ptr, d);
+                return;
+            }
+        }
+
+        if constexpr (Size <= 3) {
+            if (pixelStride == 3) {
+                float32x4x3_t d;
+                for (size_t c = 0; c < Size; ++c) {
+                    d.val[c] = v.v[c].data;
+                }
+
+                vst3q_f32(ptr, d);
+                return;
+            }
+        }
+
+        if constexpr (Size <= 4) {
+            if (pixelStride == 4) {
+                float32x4x4_t d;
+                for (size_t c = 0; c < Size; ++c) {
+                    d.val[c] = v.v[c].data;
+                }
+
+                vst4q_f32(ptr, d);
+                return;
+            }
+        }
+    }
+#endif
+
+    for (size_t c = 0; c < Size; ++c) {
+        storeChannel<B>(view, c, x, y, v.v[c]);
+    }
+}
+
+template <class B, size_t Size, typename T, typename... Args>
+void storeChannels(const nanogui::Array<B, Size>& v, const MdSpan<T, 2>& view, size_t idx) {
+    for (size_t c = 0; c < Size; ++c) {
+        storeChannel<B>(view, c, idx, v.v[c]);
     }
 }
 
