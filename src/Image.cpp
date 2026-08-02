@@ -886,6 +886,11 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         Texture::ComponentFormat::Float32 :
         Texture::ComponentFormat::Float16;
 
+    uint8_t textureFlags = Texture::TextureFlags::ShaderRead;
+#ifdef __APPLE__ // On Metal, we write to the texture using a shader when expanding RGB to RGBA
+    textureFlags |= Texture::TextureFlags::ShaderWrite;
+#endif
+
     mTextures.emplace(
         piecewise_construct,
         tuple{
@@ -900,7 +905,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
                 toNanogui(magFilter),
                 Texture::WrapMode::ClampToEdge,
                 1,
-                Texture::TextureFlags::ShaderRead,
+                textureFlags,
                 true,
             },
             channelNames | toVector,
@@ -910,12 +915,13 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     auto& texture = mTextures.at(lookup).nanoguiTexture;
 
+    const size_t numChannels = channelNames.size();
     const size_t numTextureChannels = nChannelsInPixelFormat(texture->pixel_format());
     const size_t bitsPerSample = bitsPerSampleInComponentFormat(texture->component_format());
 
-    // Important: num channels can be *larger* than the number of channels in the image here!
+    // Important: num texture channels can be *larger* than the number of channels in the image here!
     // This is because some graphics APIs, like metal, only have power-of-two channel counts: 1, 2, 4
-    if (numTextureChannels < channelNames.size()) {
+    if (numTextureChannels < numChannels) {
         throw runtime_error{fmt::format(
             "Image has {} channels, but texture requires at least {} channels. (Image: {}, Texture: {})",
             channelNames.size(),
@@ -925,7 +931,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         )};
     }
 
-    const bool directUpload = isInterleaved(channelNames, numTextureChannels);
+    const bool directUpload = isInterleaved(channelNames, numChannels);
 
     tlog::debug(
         "Uploading texture: direct={} bps={} filter={}-{} img={}:{}",
@@ -958,18 +964,18 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
         const auto size = this->size();
 
         dataPtr = make_shared<PixelBuffer>(
-            PixelBuffer::alloc(numPixels * numTextureChannels, pixelFormatForComponentFormat(texture->component_format()))
+            PixelBuffer::alloc(numPixels * numChannels, pixelFormatForComponentFormat(texture->component_format()))
         );
 
         vector<Task<void>> tasks;
-        for (size_t i = 0; i < numTextureChannels; ++i) {
+        for (size_t i = 0; i < numChannels; ++i) {
             const Channel* chan = i < channelNames.size() ? channel(channelNames[i]) : nullptr;
             switch (texture->component_format()) {
                 case Texture::ComponentFormat::Float16:
-                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<half>(), chan, {size}, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<half>(), chan, {size}, i, numChannels));
                     break;
                 case Texture::ComponentFormat::Float32:
-                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<float>(), chan, {size}, i, numTextureChannels));
+                    tasks.emplace_back(prepareTextureChannel(dataPtr->data<float>(), chan, {size}, i, numChannels));
                     break;
                 default: throw runtime_error{"Unsupported component format for texture."};
             }
@@ -981,7 +987,9 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
     // If the backend supports it, schedule an async copy that uses DMA to copy the texture without blocking the host. The operation is part
     // of the graphics queue and correctly ordered wrt. other display operations. On Apple M* GPUs, CPU/GPU share the same memory, so this
     // step just converts the texture into a more suitable layout.
-    texture->upload_async(dataPtr->dataBytes(), [](void* p) { delete (shared_ptr<PixelBuffer>*)p; }, new shared_ptr<PixelBuffer>(dataPtr));
+    texture->upload_async(
+        dataPtr->dataBytes(), numChannels, [](void* p) { delete (shared_ptr<PixelBuffer>*)p; }, new shared_ptr<PixelBuffer>(dataPtr)
+    );
 
     if (minFilter == EInterpolationMode::Trilinear) {
         texture->generate_mipmap();
