@@ -399,6 +399,13 @@ void ImageCanvas::draw(NVGcontext* ctx) {
                 case VgCommand::EType::FillColor: nvgFillColor(ctx, {{{f[0], f[1], f[2], f[3]}}}); return;
                 case VgCommand::EType::Fill: nvgFill(ctx); return;
                 case VgCommand::EType::StrokeColor: nvgStrokeColor(ctx, {{{f[0], f[1], f[2], f[3]}}}); return;
+                case VgCommand::EType::StrokeWidth: {
+                    const float scale = (VgCommand::EScaleKind)(int)f[1] == VgCommand::EScaleKind::Relative ?
+                        extractScale(displayWindowToNano) :
+                        1.0f;
+                    nvgStrokeWidth(ctx, f[0] * scale);
+                }
+                    return;
                 case VgCommand::EType::Stroke: nvgStroke(ctx); return;
                 // Path control
                 case VgCommand::EType::BeginPath: nvgBeginPath(ctx); return;

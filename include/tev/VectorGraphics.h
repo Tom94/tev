@@ -32,6 +32,7 @@ struct VgCommand {
         FillColor = 2,
         Fill = 3,
         StrokeColor = 4,
+        StrokeWidth = 25,
         Stroke = 5,
         BeginPath = 6,
         ClosePath = 7,
@@ -106,6 +107,7 @@ struct VgCommand {
             case EType::FillColor: return sizeof(Color);
             case EType::Fill: return 0;
             case EType::StrokeColor: return sizeof(Color);
+            case EType::StrokeWidth: return sizeof(float) /* width */ + sizeof(float) /* absolute or relative */;
             case EType::Stroke: return 0;
             case EType::BeginPath: return 0;
             case EType::ClosePath: return 0;
@@ -140,6 +142,7 @@ struct VgCommand {
     static VgCommand fill() { return {EType::Fill, {}}; }
 
     static VgCommand strokeColor(Color c) { return {EType::StrokeColor, {{c.r, c.g, c.b, c.a}}}; }
+    static VgCommand strokeWidth(float width, EScaleKind scaleKind) { return {EType::StrokeWidth, {{width, (float)(int)scaleKind}}}; }
     static VgCommand stroke() { return {EType::Stroke, {}}; }
 
     static VgCommand beginPath() { return {EType::BeginPath, {}}; }
