@@ -170,8 +170,8 @@ void IpcPacket::setVectorGraphics(string_view imageName, bool grabFocus, bool ap
     for (const auto& command : commands) {
         payload << command.type;
         payload << command.data;
-        if (command.type == VgCommand::EType::Text) {
-            payload << command.mtext;
+        if (command.hasStringData()) {
+            payload << command.stringData;
         }
     }
 }
@@ -353,8 +353,8 @@ IpcPacketVectorGraphics IpcPacket::interpretAsVectorGraphics() const {
         payload >> command.type;
         command.data.resize(command.size());
         payload >> command.data;
-        if (command.type == VgCommand::EType::Text) {
-            payload >> command.mtext;
+        if (command.hasStringData()) {
+            payload >> command.stringData;
         }
     }
 
