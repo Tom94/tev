@@ -32,6 +32,7 @@ struct VgCommand {
         FillColor = 2,
         Fill = 3,
         StrokeColor = 4,
+        StrokeWidth = 25,
         Stroke = 5,
         BeginPath = 6,
         ClosePath = 7,
@@ -48,14 +49,33 @@ struct VgCommand {
         Rect = 18,
         RoundedRect = 19,
         RoundedRectVarying = 20,
+        Text = 21,
+        TextAlign = 22,
+        FontFace = 23,
+        FontSize = 24,
     };
 
-    VgCommand() : type{EType::Invalid} {}
-    VgCommand(EType _type, std::span<const float> _data) : type{_type}, data{_data.begin(), _data.end()} {
+    VgCommand(EType type = EType::Invalid, std::span<const float> data = {}, std::string_view stringData = "") :
+        type{type}, data{data.begin(), data.end()}, stringData{stringData} {
         if (size() != data.size()) {
             throw std::runtime_error{"VgCommand constructed with invalid amount of data"};
         }
     }
+
+    enum EScaleKind : int {
+        Relative = 0,
+        Absolute = 1,
+    };
+
+    enum ETextAlign : int {
+        Left = 1 << 0,
+        Center = 1 << 1,
+        Right = 1 << 2,
+        Top = 1 << 3,
+        Middle = 1 << 4,
+        Bottom = 1 << 5,
+        Baseline = 1 << 6
+    };
 
     enum EWinding : int {
         CounterClockwise = 1,
@@ -74,14 +94,20 @@ struct VgCommand {
         float r, g, b, a;
     };
 
+    bool hasStringData() const { return type == EType::Text || type == EType::FontFace; }
+
     // Returns the expected (not actual) size of `data` in number of bytes, depending on the type of the command.
+    // For EType::Text, this counts only the fixed portion (position, font size). The string
+    // payload itself is carried separately in `text` and is not included in this count.
     size_t bytes() const {
         switch (type) {
+            case EType::Invalid: return 0;
             case EType::Save: return 0;
             case EType::Restore: return 0;
             case EType::FillColor: return sizeof(Color);
             case EType::Fill: return 0;
             case EType::StrokeColor: return sizeof(Color);
+            case EType::StrokeWidth: return sizeof(float) /* width */ + sizeof(float) /* absolute or relative */;
             case EType::Stroke: return 0;
             case EType::BeginPath: return 0;
             case EType::ClosePath: return 0;
@@ -98,6 +124,10 @@ struct VgCommand {
             case EType::Rect: return sizeof(Pos) + sizeof(Size);
             case EType::RoundedRect: return sizeof(Pos) + sizeof(Size) + sizeof(float) /* radius */;
             case EType::RoundedRectVarying: return sizeof(Pos) + sizeof(Size) + sizeof(float) * 4 /* radius per corner */;
+            case EType::Text: return sizeof(Pos); // + string payload
+            case EType::TextAlign: return sizeof(float);
+            case EType::FontFace: return 0; // + string payload
+            case EType::FontSize: return sizeof(float) /* size */ + sizeof(float) /* absolute or relative */;
             default: throw std::runtime_error{"Invalid VgCommand type."};
         }
     }
@@ -112,6 +142,7 @@ struct VgCommand {
     static VgCommand fill() { return {EType::Fill, {}}; }
 
     static VgCommand strokeColor(Color c) { return {EType::StrokeColor, {{c.r, c.g, c.b, c.a}}}; }
+    static VgCommand strokeWidth(float width, EScaleKind scaleKind) { return {EType::StrokeWidth, {{width, (float)(int)scaleKind}}}; }
     static VgCommand stroke() { return {EType::Stroke, {}}; }
 
     static VgCommand beginPath() { return {EType::BeginPath, {}}; }
@@ -150,8 +181,17 @@ struct VgCommand {
         };
     }
 
+    static VgCommand text(Pos p, std::string_view str) { return {EType::Text, {{p.x, p.y}}, std::string{str}}; }
+
+    static VgCommand textAlign(ETextAlign align) { return {EType::TextAlign, {{(float)(int)align}}}; }
+
+    static VgCommand fontFace(std::string_view face) { return {EType::FontFace, {}, face}; }
+
+    static VgCommand fontSize(float fontSize, EScaleKind sizeKind) { return {EType::FontSize, {{fontSize, (float)(int)sizeKind}}}; }
+
     EType type;
     std::vector<float> data;
+    std::string stringData;
 };
 
 } // namespace tev
