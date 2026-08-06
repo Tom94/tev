@@ -312,8 +312,6 @@ Task<vector<ImageData>>
     const bool hasAlpha = numChannels > numColorChannels;
     const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
 
-    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-
     png_bytep iccProfileData = nullptr;
     png_charp iccProfileName = nullptr;
     png_uint_32 iccProfileSize = 0;
@@ -329,7 +327,6 @@ Task<vector<ImageData>>
 
     const auto numPixels = posProd(size);
     const auto numSamples = numPixels * numChannels;
-    const auto numInterleavedSamples = numPixels * numInterleavedChannels;
     const auto numBytesPerPixel = numChannels * nBytes(pixelFormat);
 
     // Allocate enough memory for each frame. By making the data as big as the whole canvas, all frames should fit.
@@ -354,7 +351,7 @@ Task<vector<ImageData>>
         // PNG images have a fixed point representation of up to 16 bits per channel in TF space. FP16 is perfectly adequate to represent
         // such values after conversion to linear space.
         resultData.channels = co_await makeInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
         resultData.orientation = orientation;
         resultData.hasPremultipliedAlpha = false;
@@ -416,9 +413,9 @@ Task<vector<ImageData>>
         const bool directlyOnCanvas = frameOffset == Vector2i{0, 0} && frameSize == size;
 
         const size_t numFramePixels = posProd(frameSize);
-        const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
-        if (!directlyOnCanvas && numInterleavedFrameSamples > frameData.size()) {
-            const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
+        const size_t numFrameSamples = numFramePixels * numChannels;
+        if (!directlyOnCanvas && numFrameSamples > frameData.size()) {
+            const size_t allocationSize = std::max(numFrameSamples, numSamples);
             if (allocationSize > numSamples) {
                 tlog::warning("PNG frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
             }
@@ -426,7 +423,7 @@ Task<vector<ImageData>>
             frameData = HeapArray<float>(allocationSize);
         }
 
-        const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numInterleavedChannels, frameSize};
+        const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameData.data(), numChannels, frameSize};
 
         for (int y = 0; y < frameSize.y(); ++y) {
             rowPointers[y] = buf.dataBytes() + y * frameSize.x() * numBytesPerPixel;

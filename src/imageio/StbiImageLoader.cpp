@@ -73,7 +73,6 @@ Task<vector<ImageData>>
 
     const bool hasAlpha = numChannels == 4;
     const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
-    const auto numInterleavedChannels = nextSupportedTextureChannelCount((size_t)numChannels);
 
     vector<ImageData> result(numFrames);
     for (int frameIdx = 0; frameIdx < numFrames; ++frameIdx) {
@@ -84,14 +83,7 @@ Task<vector<ImageData>>
 
         // Unless the image is a .hdr file, it's 8 bits per channel, so we can comfortably fit it into F16.
         resultData.channels = co_await makeInterleavedChannels(
-            numChannels,
-            numInterleavedChannels,
-            hasAlpha,
-            size,
-            EPixelFormat::F32,
-            isHdr ? EPixelFormat::F32 : EPixelFormat::F16,
-            resultData.partName,
-            priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, isHdr ? EPixelFormat::F32 : EPixelFormat::F16, resultData.partName, priority
         );
         resultData.hasPremultipliedAlpha = !hasAlpha;
         resultData.nativeMetadata.chroma = rec709Chroma();

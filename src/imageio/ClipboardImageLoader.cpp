@@ -65,10 +65,7 @@ Task<vector<ImageData>>
     ImageData& resultData = result.front();
 
     // Clipboard images are always 32 bit RGBA. Can be comfortably represented as F16.
-    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-    resultData.channels = co_await makeInterleavedChannels(
-        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
-    );
+    resultData.channels = co_await makeInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
 
     const auto outView = MultiChannelView<float>{resultData.channels};
 

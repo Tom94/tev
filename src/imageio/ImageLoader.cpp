@@ -142,7 +142,6 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
 
 Task<vector<Channel>> ImageLoader::makeInterleavedChannels(
     size_t numChannels,
-    size_t numInterleavedDims,
     bool hasAlpha,
     Vector2i size,
     EPixelFormat pixelFormat,
@@ -152,10 +151,6 @@ Task<vector<Channel>> ImageLoader::makeInterleavedChannels(
 ) {
     if (numChannels == 0) {
         throw ImageLoadError{"Invalid number of rgba channels."};
-    }
-
-    if (numInterleavedDims < numChannels) {
-        throw ImageLoadError{"Number of interleaved dimensions must be at least the number of channels."};
     }
 
     vector<Channel> channels;
@@ -169,14 +164,14 @@ Task<vector<Channel>> ImageLoader::makeInterleavedChannels(
     channels = makeNChannels(numChannels, size, pixelFormat, desiredFormat, layer);
 #else
     const size_t numPixels = posProd(size);
-    const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numInterleavedDims, pixelFormat));
+    const auto data = make_shared<PixelBuffer>(PixelBuffer::alloc(numPixels * numChannels, pixelFormat));
 
     for (size_t c = 0; c < numColorChannels; ++c) {
-        channels.emplace_back(to_string(c), size, pixelFormat, desiredFormat, data, c, numInterleavedDims);
+        channels.emplace_back(to_string(c), size, pixelFormat, desiredFormat, data, c, numChannels);
     }
 
     if (hasAlpha) {
-        channels.emplace_back("A", size, pixelFormat, desiredFormat, data, numColorChannels, numInterleavedDims);
+        channels.emplace_back("A", size, pixelFormat, desiredFormat, data, numColorChannels, numChannels);
     }
 #endif
 

@@ -386,8 +386,6 @@ int maxTextureSize() {
 #endif
 }
 
-size_t nextSupportedTextureChannelCount(size_t channelCount) { return channelCount; }
-
 int lastError() {
 #ifdef _WIN32
     return GetLastError();
