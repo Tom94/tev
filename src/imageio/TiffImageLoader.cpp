@@ -2381,6 +2381,25 @@ Task<ImageData> readTiffImage(
 
         HeapArray<uint8_t> tileData(tile.size * tile.count);
 
+        const auto subsampledOffset = [sub = yCbCrSubsampling,
+                                       unitSamples = posProd(yCbCrSubsampling) + 2,
+                                       unitsPerRow = (tile.width + yCbCrSubsampling.x() - 1) / yCbCrSubsampling.x()](int x, int y, int c) {
+            // which data unit, and position within it
+            int unitX = x / sub.x(); // column of data units
+            int unitY = y / sub.y(); // row of data units
+            int inX = x - unitX * sub.x(); // x within the unit's Y block
+            int inY = y - unitY * sub.y(); // y within the unit's Y block
+
+            size_t unitIndex = unitY * unitsPerRow + unitX;
+            size_t base = unitIndex * unitSamples;
+
+            if (c == 0) {
+                return base + inY * sub.x() + inX; // Y sample
+            } else {
+                return base + posProd(sub) + c - 1; // C* sample
+            }
+        };
+
         for (size_t i = 0; i < tile.count; ++i) {
             // Read tiled/striped data. Unfortunately, libtiff doesn't support decompressing all tiles/strips in parallel, so we have to do
             // that sequentially.
@@ -2389,25 +2408,6 @@ Task<ImageData> readTiffImage(
                 co_await awaitAll(decodeTasks);
                 throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
-
-            const auto subsampledOffset = [sub = yCbCrSubsampling,
-                                           unitSamples = posProd(yCbCrSubsampling) + 2,
-                                           unitsPerRow = (tile.width + yCbCrSubsampling.x() - 1) / yCbCrSubsampling.x()](int x, int y, int c) {
-                // which data unit, and position within it
-                int unitX = x / sub.x(); // column of data units
-                int unitY = y / sub.y(); // row of data units
-                int inX = x - unitX * sub.x(); // x within the unit's Y block
-                int inY = y - unitY * sub.y(); // y within the unit's Y block
-
-                size_t unitIndex = unitY * unitsPerRow + unitX;
-                size_t base = unitIndex * unitSamples;
-
-                if (c == 0) {
-                    return base + inY * sub.x() + inX; // Y sample
-                } else {
-                    return base + posProd(sub) + c - 1; // C* sample
-                }
-            };
 
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
@@ -2424,7 +2424,9 @@ Task<ImageData> readTiffImage(
 
                         const size_t numPixels = (size_t)tile.width * tile.height;
 
-                        const auto unpackTask = [&](auto& utd, auto* const data) -> Task<void> {
+                        const auto unpackTask = [&]<typename T>(T* const data) -> Task<void> {
+                            HeapArray<T> utd(unpackedTileSize);
+
                             // Not fused with the second parallel for loop to avoid data races in blocked subsampled layouts
                             const size_t planarC = i / numTilesPerPlane;
                             const Vector2i planarSub = planar == PLANARCONFIG_SEPARATE && planarC > 0 ? yCbCrSubsampling : Vector2i{1, 1};
@@ -2470,14 +2472,11 @@ Task<ImageData> readTiffImage(
                         };
 
                         if (buf.format() == EPixelFormat::F32) {
-                            HeapArray<float> unpackedTile(unpackedTileSize);
-                            co_await unpackTask(unpackedTile, buf.data<float>());
+                            co_await unpackTask(buf.data<float>());
                         } else if (buf.format() == EPixelFormat::U32) {
-                            HeapArray<uint32_t> unpackedTile(unpackedTileSize);
-                            co_await unpackTask(unpackedTile, buf.data<uint32_t>());
+                            co_await unpackTask(buf.data<uint32_t>());
                         } else if (buf.format() == EPixelFormat::I32) {
-                            HeapArray<int32_t> unpackedTile(unpackedTileSize);
-                            co_await unpackTask(unpackedTile, buf.data<int32_t>());
+                            co_await unpackTask(buf.data<int32_t>());
                         } else {
                             TEV_ASSERT(false, "Unsupported pixel format {}", toString(buf.format()));
                         }
