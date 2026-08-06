@@ -166,7 +166,7 @@ public:
 
     bool setFilter(std::string_view filter);
 
-    void setFps(int value);
+    void setFps(float value);
 
     bool useRegex() const;
     void setUseRegex(bool value);
@@ -308,7 +308,7 @@ private:
     std::vector<nanogui::Button*> mAnyImageButtons;
 
     nanogui::Button* mPlayButton = nullptr;
-    nanogui::IntBox<int>* mFpsTextBox = nullptr;
+    nanogui::FloatBox<float>* mFpsTextBox = nullptr;
     std::chrono::steady_clock::time_point mLastPlaybackFrameTime = {};
 
     nanogui::Widget* mImageButtonContainer = nullptr;

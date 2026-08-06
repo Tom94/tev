@@ -53,6 +53,8 @@ namespace tev {
 
 static constexpr int SIDEBAR_MIN_WIDTH = 230;
 static constexpr float CROP_MIN_SIZE = 3;
+static constexpr float MIN_PLAYBACK_FPS = 0.00001f;
+static constexpr float MAX_PLAYBACK_FPS = 100000.0f;
 
 static constexpr array<pair<EWpPrimaries, string_view>, 11> PRIMARIES = {
     {
@@ -691,13 +693,14 @@ ImageViewer::ImageViewer(
                 makePlaybackButton("", false, [this] { selectImage(nthVisibleImage(mImages.size())); }, FA_FAST_FORWARD, "Back (End)")
             );
 
-            mFpsTextBox = new IntBox<int>{playback, 24};
+            mFpsTextBox = new FloatBox<float>{playback, 24.0f};
             mFpsTextBox->set_default_value("24");
             mFpsTextBox->set_units("fps");
             mFpsTextBox->set_editable(true);
             mFpsTextBox->set_alignment(TextBox::Alignment::Right);
-            mFpsTextBox->set_min_max_values(1, 1000);
+            mFpsTextBox->set_min_max_values(MIN_PLAYBACK_FPS, MAX_PLAYBACK_FPS);
             mFpsTextBox->set_spinnable(true);
+            mFpsTextBox->set_value_increment(1.0f);
 
             mAutoFitToScreenButton =
                 makePlaybackButton("", true, {}, FA_EXPAND_ARROWS_ALT, "Automatically fit image to screen upon selection.");
@@ -1337,18 +1340,19 @@ void ImageViewer::draw_contents() {
 
     // If playing back, ensure correct frame pacing
     if (playingBack() && mTaskQueue.empty()) {
-        auto fps = clamp(mFpsTextBox->value(), 1, 1000);
-        auto seconds_per_frame = chrono::duration<float>{1.0f / fps};
-        auto now = chrono::steady_clock::now();
+        const auto fps = clamp(mFpsTextBox->value(), MIN_PLAYBACK_FPS, MAX_PLAYBACK_FPS);
+        const auto secondsPerFrame = chrono::duration<float>{1.0f / fps};
+        const auto now = chrono::steady_clock::now();
+        const auto maxPlaybackLag = max(chrono::duration<float>{500s}, secondsPerFrame);
 
-        if (now - mLastPlaybackFrameTime > 500s) {
+        if (now - mLastPlaybackFrameTime > maxPlaybackLag) {
             // If lagging behind too far, drop the frames, but otherwise...
             mLastPlaybackFrameTime = now;
             selectImage(nextImage(mCurrentImage, Forward), false);
         } else {
             // ...advance by as many frames as the user-specified FPS would demand, given the elapsed time since the last render.
-            while (now - mLastPlaybackFrameTime >= seconds_per_frame) {
-                mLastPlaybackFrameTime += chrono::duration_cast<chrono::steady_clock::duration>(seconds_per_frame);
+            while (now - mLastPlaybackFrameTime >= secondsPerFrame) {
+                mLastPlaybackFrameTime += chrono::duration_cast<chrono::steady_clock::duration>(secondsPerFrame);
                 selectImage(nextImage(mCurrentImage, Forward), false);
             }
         }
@@ -1356,7 +1360,7 @@ void ImageViewer::draw_contents() {
 
     // If watching files for changes, do so every 100ms
     if (watchFilesForChanges()) {
-        auto now = chrono::steady_clock::now();
+        const auto now = chrono::steady_clock::now();
         if (now - mLastFileChangesCheckTime >= 100ms) {
             reloadImagesWhoseFileChanged();
             mImagesLoader->checkDirectoriesForNewFilesAndLoadThose();
@@ -2268,7 +2272,7 @@ bool ImageViewer::setFilter(string_view filter) {
     return true;
 }
 
-void ImageViewer::setFps(int value) { mFpsTextBox->set_value(value); }
+void ImageViewer::setFps(float value) { mFpsTextBox->set_value(value); }
 
 bool ImageViewer::useRegex() const { return mRegexButton->pushed(); }
 
