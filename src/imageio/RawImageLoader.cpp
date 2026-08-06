@@ -63,7 +63,8 @@ Box2i maskToBox(const int mask[4]) {
     };
 }
 
-Task<vector<ImageData>> RawImageLoader::load(istringstream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
+Task<vector<ImageData>>
+    RawImageLoader::load(istringstream& iStream, const fs::path& path, string_view, const ImageLoaderSettings&, int priority) const {
     if (toLower(toString(path.extension())) == ".dng") {
         throw FormatNotSupported{"DNG files will be handled by TiffImageLoader."};
     }
@@ -209,12 +210,10 @@ Task<vector<ImageData>> RawImageLoader::load(istringstream& iStream, const fs::p
     ImageData& resultData = result.front();
 
     const size_t numChannels = 3;
-    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = numChannels == 4;
 
-    resultData.channels = co_await makeInterleavedChannels(
-        numChannels, numInterleavedChannels, hasAlpha, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
-    );
+    resultData.channels =
+        co_await makeInterleavedChannels(numChannels, hasAlpha, orientedSize, EPixelFormat::F32, EPixelFormat::F16, "", priority);
     resultData.hasPremultipliedAlpha = !hasAlpha;
     // resultData.displayWindow = displayWindow; // This seems to be wrong
 

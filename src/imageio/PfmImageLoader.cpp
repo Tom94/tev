@@ -323,14 +323,12 @@ Task<vector<ImageData>>
 
         const EPixelFormat desiredFormat = bitsPerChannel == 32 ? EPixelFormat::F32 : EPixelFormat::F16;
 
-        const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         const bool hasAlpha = numChannels == 2 || numChannels == 4;
         const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
 
         resultData.hasPremultipliedAlpha = !hasAlpha;
-        resultData.channels = co_await makeInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority
-        );
+        resultData.channels =
+            co_await makeInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, desiredFormat, resultData.partName, priority);
 
         const auto dstView = MultiChannelView<float>{resultData.channels};
 

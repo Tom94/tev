@@ -549,7 +549,7 @@ Task<vector<ImageData>>
         }
     } else {
         resultData.channels = co_await makeInterleavedChannels(
-            numChannels, nextSupportedTextureChannelCount(numChannels), hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, resultData.partName, priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, resultData.partName, priority
         );
     }
 

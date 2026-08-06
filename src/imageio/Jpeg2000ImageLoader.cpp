@@ -518,12 +518,11 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
 
         const bool hasAlpha = numChannels == 2 || numChannels >= 4;
         const auto numRgbaChannels = std::min(numChannels, (size_t)4);
-        const auto numInterleavedChannels = nextSupportedTextureChannelCount(numRgbaChannels);
         const auto numColorChannels = hasAlpha ? numRgbaChannels - 1 : numRgbaChannels;
         const auto numExtraChannels = numChannels > numRgbaChannels ? numChannels - numRgbaChannels : 0;
 
         resultData.channels = co_await makeInterleavedChannels(
-            numRgbaChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numRgbaChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
         for (size_t c = 0; c < numExtraChannels; ++c) {

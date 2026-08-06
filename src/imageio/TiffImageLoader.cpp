@@ -1346,7 +1346,8 @@ Task<void> postprocessRgb(
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
                 const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha :
+                                                                                                                                  1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& val = rgbaView[c, i];
@@ -1378,7 +1379,8 @@ Task<void> postprocessRgb(
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
                 const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha :
+                                                                                                                                  1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& v = rgbaView[c, i];
@@ -1414,7 +1416,8 @@ Task<void> postprocessRgb(
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
                 const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha :
+                                                                                                                                  1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
@@ -1692,7 +1695,7 @@ Task<ImageData> decodeJpeg(
 
     ImageData result;
     result.channels = co_await ImageLoader::makeInterleavedChannels(
-        tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
     const auto outView = MultiChannelView<float>{result.channels};
@@ -1976,7 +1979,8 @@ Task<ImageData> readTiffImage(
         numExtraChannels = 0;
     }
 
-    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) : EAlphaKind::None;
+    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
+                                      EAlphaKind::None;
 
     tlog::debug(
         "TIFF info: size={} bps={}/{} spp={} alpha={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
@@ -2561,13 +2565,11 @@ Task<ImageData> readTiffImage(
 
     resultData.displayWindow = getDefaultCrop(tif, size);
 
-    size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-
     // Local scope to prevent use-after-move
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
         auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
         auto extraChannels = ImageLoader::makeNChannels(numExtraChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 
@@ -2655,9 +2657,8 @@ Task<ImageData> readTiffImage(
         }
 
         numChannels = numColorChannels = 3;
-        numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numChannels, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
+            numChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
         );
 
         co_await demosaicCfa(tif, resultData.channels.front().view<float>(), MultiChannelView<float>(rgbaChannels), priority);

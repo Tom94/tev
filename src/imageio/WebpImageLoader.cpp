@@ -97,7 +97,6 @@ Task<vector<ImageData>>
     }
 
     const size_t numChannels = 4;
-    const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = numChannels == 4;
     const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
 
@@ -138,7 +137,6 @@ Task<vector<ImageData>>
     // Conservatively allocate enough space such that any frame can be decoded into it.
     const size_t numPixels = posProd(size);
     const size_t numSamples = numPixels * numChannels;
-    const size_t numInterleavedSamples = numPixels * numInterleavedChannels;
     HeapArray<float> frameFloatData;
 
     if (WebPDemuxGetFrame(demux.get(), 1, &iter)) {
@@ -159,7 +157,7 @@ Task<vector<ImageData>>
             // WebP is always 8bit per channel, so we can comfortably use F16 for the decoded data.
             resultData.partName = isAnimation ? fmt::format("frames.{}", frameIdx++) : "";
             resultData.channels = co_await makeInterleavedChannels(
-                numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+                numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
             );
             resultData.hasPremultipliedAlpha = false;
 
@@ -171,9 +169,8 @@ Task<vector<ImageData>>
 
             const size_t numFramePixels = posProd(frameSize);
             const size_t numFrameSamples = numFramePixels * numChannels;
-            const size_t numInterleavedFrameSamples = numFramePixels * numInterleavedChannels;
-            if (!directlyOnCanvas && numInterleavedFrameSamples > frameFloatData.size()) {
-                const size_t allocationSize = std::max(numInterleavedFrameSamples, numInterleavedSamples);
+            if (!directlyOnCanvas && numFrameSamples > frameFloatData.size()) {
+                const size_t allocationSize = std::max(numFrameSamples, numSamples);
                 if (allocationSize > numSamples) {
                     tlog::warning("WebP frame data {} is larger than final image buffer {}. Re-allocating.", frameSize, size);
                 }
@@ -181,8 +178,7 @@ Task<vector<ImageData>>
                 frameFloatData = HeapArray<float>(allocationSize);
             }
 
-            const auto dstView = directlyOnCanvas ? outView :
-                                                    MultiChannelView<float>{frameFloatData.data(), numInterleavedChannels, frameSize};
+            const auto dstView = directlyOnCanvas ? outView : MultiChannelView<float>{frameFloatData.data(), numChannels, frameSize};
 
             const auto frameDataSpan = span<const uint8_t>{frameData.get(), numFrameSamples};
             if (iccProfileData) {
