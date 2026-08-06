@@ -200,14 +200,17 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
 
             // Duplicate first channel in monochromatic images and move alpha to end if not already there.
             if (channelConfig == CHANNEL_CONFIG_R) {
-                color = vec4(color.r, color.r, color.r, 1.0);
-            } else if (channelConfig == CHANNEL_CONFIG_RA) {
-                color = vec4(color.r, color.r, color.r, color.g);
-            } else if (channelConfig == CHANNEL_CONFIG_RGA) {
-                color = vec4(color.r, color.g, 0.0, color.b);
-            } else if (channelConfig != CHANNEL_CONFIG_RGBA) {
-                // If the channel config doesn't have an alpha channel, ignore the one from the texture (may be uninitialized)
+                color = vec4(color.rrr, 1.0);
+            } else if (channelConfig == CHANNEL_CONFIG_RG) {
+                color = vec4(color.rg, 0.0, 1.0);
+            } else if (channelConfig == CHANNEL_CONFIG_RGB) {
                 color = vec4(color.rgb, 1.0);
+            } else if (channelConfig == CHANNEL_CONFIG_RA) {
+                color = vec4(color.rrr, color.g);
+            } else if (channelConfig == CHANNEL_CONFIG_RGA) {
+                color = vec4(color.rg, 0.0, color.b);
+            } else if (channelConfig == CHANNEL_CONFIG_RGBA) {
+                // Do nothing, already in RGBA format
             }
 
             return applyMask(color, mask);
@@ -382,17 +385,14 @@ UberShader::UberShader(RenderPass* renderPass, float ditherScale) {
             float4 color = texture.sample(textureSampler, uv);
 
             // Duplicate first channel in monochromatic images and move alpha to end if not already there.
-            if (channelConfig == CHANNEL_CONFIG_R) {
-                color = float4(color.r, color.r, color.r, 1.0f);
-            } else if (channelConfig == CHANNEL_CONFIG_RA) {
-                color = float4(color.r, color.r, color.r, color.g);
-            } else if (channelConfig == CHANNEL_CONFIG_RGA) {
-                color = float4(color.r, color.g, 0.0f, color.b);
-            } else if (channelConfig != CHANNEL_CONFIG_RGBA) {
-                // If the channel config doesn't have an alpha channel, ignore the one from the texture (may be uninitialized)
-                color = float4(color.rgb, 1.0f);
+            switch (channelConfig) {
+                case CHANNEL_CONFIG_R:    color = float4(color.rrr, 1.0f); break;
+                case CHANNEL_CONFIG_RG:   color = float4(color.rg, 0.0f, 1.0f); break;
+                case CHANNEL_CONFIG_RGB:  color = float4(color.rgb, 1.0f); break;
+                case CHANNEL_CONFIG_RA:   color = float4(color.rrr, color.g); break;
+                case CHANNEL_CONFIG_RGA:  color = float4(color.rg, 0.0f, color.b); break;
+                case CHANNEL_CONFIG_RGBA: break; // Do nothing, already in RGBA format
             }
-
 
             return applyMask(color, mask);
         }
