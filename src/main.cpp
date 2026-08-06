@@ -336,7 +336,7 @@ static int mainFunc(span<const string> arguments) {
         {'f', "filter"},
     };
 
-    ValueFlag<int> fpsFlag{
+    ValueFlag<float> fpsFlag{
         parser,
         "FPS",
         "Frames per second during playback",
