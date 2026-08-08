@@ -58,7 +58,6 @@ Task<vector<ImageData>>
 
     const size_t numBytesPerRow = spec.bytes_per_row;
     const size_t numBytes = numBytesPerRow * size.y();
-    const size_t alphaChannelIndex = 3;
     const bool hasAlpha = numChannels == 4;
 
     vector<ImageData> result(1);
@@ -110,7 +109,7 @@ Task<vector<ImageData>>
                         val = B::load_aligned(tmp) / 255.0f;
                     }
 
-                    if (c == alphaChannelIndex) {
+                    if (c == 3) {
                         alpha = val;
                         storeChannel<B>(outView, -1, x, y, alpha);
                     } else {
