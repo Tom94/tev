@@ -217,14 +217,11 @@ Task<vector<ImageData>>
 
     resultData.hasPremultipliedAlpha = scratchImage.GetMetadata().IsPMAlpha();
 
-    const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const bool hasAlpha = DirectX::HasAlpha(metadata.format);
     const auto alphaKind = hasAlpha ? (resultData.hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
                                       EAlphaKind::None;
 
-    resultData.channels = co_await makeInterleavedChannels(
-        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F32, "", priority
-    );
+    resultData.channels = co_await makeInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F32, "", priority);
 
     const auto outView = MultiChannelView<float>{resultData.channels};
 

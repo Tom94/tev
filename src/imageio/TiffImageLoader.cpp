@@ -1346,7 +1346,8 @@ Task<void> postprocessRgb(
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
                 const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha :
+                                                                                                                                  1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& val = rgbaView[c, i];
@@ -1378,7 +1379,8 @@ Task<void> postprocessRgb(
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
                 const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha :
+                                                                                                                                  1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     float& v = rgbaView[c, i];
@@ -1414,7 +1416,8 @@ Task<void> postprocessRgb(
             [&](size_t i) {
                 const float alpha = alphaKind == EAlphaKind::None ? 1.0f : rgbaView[-1, i];
                 const float factor = alphaKind == EAlphaKind::PremultipliedPostTransfer && alpha > 0.0001f ? 1.0f / alpha : 1.0f;
-                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha : 1.0f;
+                const float invFactor = alphaKind == EAlphaKind::PremultipliedPostTransfer || alphaKind == EAlphaKind::Straight ? alpha :
+                                                                                                                                  1.0f;
 
                 for (size_t c = 0; c < numColorChannels; ++c) {
                     // We use the absolute value here to avoid having to clamp negative values to 0 -- we instead pretend that
@@ -1692,7 +1695,7 @@ Task<ImageData> decodeJpeg(
 
     ImageData result;
     result.channels = co_await ImageLoader::makeInterleavedChannels(
-        tileNumComponents, tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
+        tileNumComponents, false, tileSize, EPixelFormat::F32, EPixelFormat::F16, "", priority
     );
 
     const auto outView = MultiChannelView<float>{result.channels};
@@ -1976,7 +1979,8 @@ Task<ImageData> readTiffImage(
         numExtraChannels = 0;
     }
 
-    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) : EAlphaKind::None;
+    const auto alphaKind = hasAlpha ? (hasPremultipliedAlpha ? EAlphaKind::PremultipliedPostTransfer : EAlphaKind::Straight) :
+                                      EAlphaKind::None;
 
     tlog::debug(
         "TIFF info: size={} bps={}/{} spp={} alpha={} photometric={} planar={} interleave={} sampleFormat={} compression={}",
@@ -2381,6 +2385,25 @@ Task<ImageData> readTiffImage(
 
         HeapArray<uint8_t> tileData(tile.size * tile.count);
 
+        const auto subsampledOffset = [sub = yCbCrSubsampling,
+                                       unitSamples = posProd(yCbCrSubsampling) + 2,
+                                       unitsPerRow = (tile.width + yCbCrSubsampling.x() - 1) / yCbCrSubsampling.x()](int x, int y, int c) {
+            // which data unit, and position within it
+            int unitX = x / sub.x(); // column of data units
+            int unitY = y / sub.y(); // row of data units
+            int inX = x - unitX * sub.x(); // x within the unit's Y block
+            int inY = y - unitY * sub.y(); // y within the unit's Y block
+
+            size_t unitIndex = unitY * unitsPerRow + unitX;
+            size_t base = unitIndex * unitSamples;
+
+            if (c == 0) {
+                return base + inY * sub.x() + inX; // Y sample
+            } else {
+                return base + posProd(sub) + c - 1; // C* sample
+            }
+        };
+
         for (size_t i = 0; i < tile.count; ++i) {
             // Read tiled/striped data. Unfortunately, libtiff doesn't support decompressing all tiles/strips in parallel, so we have to do
             // that sequentially.
@@ -2389,25 +2412,6 @@ Task<ImageData> readTiffImage(
                 co_await awaitAll(decodeTasks);
                 throw ImageLoadError{fmt::format("Failed to read tile {}", i)};
             }
-
-            const auto subsampledOffset = [sub = yCbCrSubsampling,
-                                           unitSamples = posProd(yCbCrSubsampling) + 2,
-                                           unitsPerRow = (tile.width + yCbCrSubsampling.x() - 1) / yCbCrSubsampling.x()](int x, int y, int c) {
-                // which data unit, and position within it
-                int unitX = x / sub.x(); // column of data units
-                int unitY = y / sub.y(); // row of data units
-                int inX = x - unitX * sub.x(); // x within the unit's Y block
-                int inY = y - unitY * sub.y(); // y within the unit's Y block
-
-                size_t unitIndex = unitY * unitsPerRow + unitX;
-                size_t base = unitIndex * unitSamples;
-
-                if (c == 0) {
-                    return base + inY * sub.x() + inX; // Y sample
-                } else {
-                    return base + posProd(sub) + c - 1; // C* sample
-                }
-            };
 
             decodeTasks.emplace_back(
                 ThreadPool::global().enqueueCoroutine(
@@ -2424,7 +2428,9 @@ Task<ImageData> readTiffImage(
 
                         const size_t numPixels = (size_t)tile.width * tile.height;
 
-                        const auto unpackTask = [&](auto& utd, auto* const data) -> Task<void> {
+                        const auto unpackTask = [&]<typename T>(T* const data) -> Task<void> {
+                            HeapArray<T> utd(unpackedTileSize);
+
                             // Not fused with the second parallel for loop to avoid data races in blocked subsampled layouts
                             const size_t planarC = i / numTilesPerPlane;
                             const Vector2i planarSub = planar == PLANARCONFIG_SEPARATE && planarC > 0 ? yCbCrSubsampling : Vector2i{1, 1};
@@ -2470,14 +2476,11 @@ Task<ImageData> readTiffImage(
                         };
 
                         if (buf.format() == EPixelFormat::F32) {
-                            HeapArray<float> unpackedTile(unpackedTileSize);
-                            co_await unpackTask(unpackedTile, buf.data<float>());
+                            co_await unpackTask(buf.data<float>());
                         } else if (buf.format() == EPixelFormat::U32) {
-                            HeapArray<uint32_t> unpackedTile(unpackedTileSize);
-                            co_await unpackTask(unpackedTile, buf.data<uint32_t>());
+                            co_await unpackTask(buf.data<uint32_t>());
                         } else if (buf.format() == EPixelFormat::I32) {
-                            HeapArray<int32_t> unpackedTile(unpackedTileSize);
-                            co_await unpackTask(unpackedTile, buf.data<int32_t>());
+                            co_await unpackTask(buf.data<int32_t>());
                         } else {
                             TEV_ASSERT(false, "Unsupported pixel format {}", toString(buf.format()));
                         }
@@ -2562,13 +2565,11 @@ Task<ImageData> readTiffImage(
 
     resultData.displayWindow = getDefaultCrop(tif, size);
 
-    size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
-
     // Local scope to prevent use-after-move
     {
         const auto desiredPixelFormat = bitsPerSample > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
         auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, partName, priority
         );
         auto extraChannels = ImageLoader::makeNChannels(numExtraChannels, size, EPixelFormat::F32, desiredPixelFormat, partName);
 
@@ -2656,9 +2657,8 @@ Task<ImageData> readTiffImage(
         }
 
         numChannels = numColorChannels = 3;
-        numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         auto rgbaChannels = co_await ImageLoader::makeInterleavedChannels(
-            numChannels, numInterleavedChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
+            numChannels, false, size, EPixelFormat::F32, resultData.channels.front().desiredPixelFormat(), partName, priority
         );
 
         co_await demosaicCfa(tif, resultData.channels.front().view<float>(), MultiChannelView<float>(rgbaChannels), priority);

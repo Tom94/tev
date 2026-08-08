@@ -57,15 +57,12 @@ Task<vector<ImageData>>
 
     const bool hasAlpha = numChannels == 4;
     const auto alphaKind = hasAlpha ? EAlphaKind::Straight : EAlphaKind::None;
-    const auto numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
 
     vector<ImageData> result(1);
     ImageData& resultData = result.front();
 
     // QOI images are 8 bit per pixel which easily fits into F16.
-    resultData.channels = co_await makeInterleavedChannels(
-        numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority
-    );
+    resultData.channels = co_await makeInterleavedChannels(numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, "", priority);
     resultData.nativeMetadata.chroma = rec709Chroma();
 
     const auto outView = MultiChannelView<float>{resultData.channels};

@@ -522,7 +522,6 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
     }
 
     // We only build the primary frame's channels here; multi-frame handling is done by the caller iterating frames as separate parts.
-    const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
     const auto desiredPixelFormat = m.bitsStored > 16 ? EPixelFormat::F32 : EPixelFormat::F16;
 
     const auto readFrame = [&](size_t frameIdx) -> Task<ImageData> {
@@ -536,7 +535,7 @@ Task<vector<DicomImageData>> readDicomImage(const gdcm::ImageReader& reader, con
         }
 
         resultData.channels = co_await ImageLoader::makeInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, resultData.partName, priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, desiredPixelFormat, resultData.partName, priority
         );
 
         const auto view = MultiChannelView<float>{span{resultData.channels}.subspan(0, numChannels)};

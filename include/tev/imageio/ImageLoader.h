@@ -384,7 +384,6 @@ public:
 
     static Task<std::vector<Channel>> makeInterleavedChannels(
         size_t numChannels,
-        size_t numInterleavedDims,
         bool hasAlpha,
         nanogui::Vector2i size,
         EPixelFormat pixelFormat,

@@ -662,7 +662,6 @@ Task<void> ImageData::prependRgb(int priority) {
 
     auto tmp = co_await ImageLoader::makeInterleavedChannels(
         3,
-        nextSupportedTextureChannelCount(3),
         false,
         channels.front().size(),
         channels.front().pixelFormat(),

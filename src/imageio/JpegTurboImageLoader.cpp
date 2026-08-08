@@ -475,9 +475,8 @@ Task<vector<ImageData>>
 
         // This JPEG loader is at most 8 bits per channel (technically, JPEG can hold more, but we don't support that here). Thus easily
         // fits into F16.
-        const size_t numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
         resultData.channels = co_await makeInterleavedChannels(
-            numChannels, numInterleavedChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
+            numChannels, hasAlpha, size, EPixelFormat::F32, EPixelFormat::F16, resultData.partName, priority
         );
 
         const auto jpegDataToFloat32Typed =

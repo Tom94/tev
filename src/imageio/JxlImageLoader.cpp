@@ -371,10 +371,8 @@ Task<vector<ImageData>> JxlImageLoader::load(
 
                 const Vector2i size{(int)info.xsize, (int)info.ysize};
 
-                const int numInterleavedChannels = nextSupportedTextureChannelCount(numChannels);
                 data.channels = co_await makeInterleavedChannels(
                     numChannels,
-                    numInterleavedChannels,
                     info.alpha_bits > 0,
                     size,
                     EPixelFormat::F32,
@@ -387,12 +385,10 @@ Task<vector<ImageData>> JxlImageLoader::load(
                 const auto outView = MultiChannelView<float>{data.channels};
                 auto rgbaOutView = outView;
 
-                TEV_ASSERT(
-                    inView.interleavedStride() == numInterleavedChannels, "Interleaved stride must match number of interleaved channels."
-                );
+                TEV_ASSERT(inView.interleavedStride() == numChannels, "Interleaved stride must match number of interleaved channels.");
 
                 // Main image buffer & decode setup
-                const JxlPixelFormat imageFormat = {(uint32_t)numInterleavedChannels, JXL_TYPE_FLOAT, JXL_NATIVE_ENDIAN, 0};
+                const JxlPixelFormat imageFormat = {(uint32_t)numChannels, JXL_TYPE_FLOAT, JXL_NATIVE_ENDIAN, 0};
                 if (JXL_DEC_SUCCESS !=
                     JxlDecoderSetImageOutBuffer(decoder.get(), &imageFormat, inView.asSpan()->data(), inView.asSpan()->size() * sizeof(float))) {
                     throw ImageLoadError{"Failed to set output buffer."};
@@ -649,7 +645,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         ThreadPool::global(),
                         0uz,
                         numPixels,
-                        numPixels * numInterleavedChannels * ituth273::approxCost(ituth273::ETransfer::GenericGamma),
+                        numPixels * numChannels * ituth273::approxCost(ituth273::ETransfer::GenericGamma),
                         [&]<class B>(size_t i) {
                             // Jxl unfortunately premultiplies the alpha channel in non-linear space (after application of the
                             // transfer), so we must unpremultiply prior to the color space conversion and transfer function
@@ -666,7 +662,7 @@ Task<vector<ImageData>> JxlImageLoader::load(
                         priority
                     );
                 } else {
-                    co_await toFloat32<true>(cicpTransfer, *inView.asSpan(), numInterleavedChannels, outView, alphaKind, priority);
+                    co_await toFloat32<true>(cicpTransfer, *inView.asSpan(), numChannels, outView, alphaKind, priority);
                 }
 
                 data.hasPremultipliedAlpha = true;
