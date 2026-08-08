@@ -168,10 +168,10 @@ void IpcPacket::setVectorGraphics(string_view imageName, bool grabFocus, bool ap
     payload << append;
     payload << (int32_t)commands.size();
     for (const auto& command : commands) {
-        payload << command.type;
-        payload << command.data;
+        payload << command.type();
+        payload << command.data();
         if (command.hasStringData()) {
-            payload << command.stringData;
+            payload << command.stringData();
         }
     }
 }
@@ -349,12 +349,12 @@ IpcPacketVectorGraphics IpcPacket::interpretAsVectorGraphics() const {
 
     result.commands.resize(result.nCommands);
     for (int32_t i = 0; i < result.nCommands; ++i) {
-        auto& command = result.commands[i];
-        payload >> command.type;
-        command.data.resize(command.size());
-        payload >> command.data;
-        if (command.hasStringData()) {
-            payload >> command.stringData;
+        auto& cmd = result.commands[i];
+        payload >> cmd.type();
+        cmd.data().resize(cmd.size());
+        payload >> cmd.data();
+        if (cmd.hasStringData()) {
+            payload >> cmd.stringData();
         }
     }
 

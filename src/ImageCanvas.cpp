@@ -389,114 +389,113 @@ void ImageCanvas::draw(NVGcontext* ctx) {
         const auto displayWindowToNano = displayWindowToNanogui(mImage.get());
 
         const auto vgToNano = [&](const Vector2f p) { return Vector2f{m_pos} + displayWindowToNano * p; };
-        const auto applyVgCommand = [&](const VgCommand& command) {
-            const float* f = command.data.data();
-            switch (command.type) {
+        const auto applyVgCommand = [&](const VgCommand& cmd) {
+            switch (cmd.type()) {
                 // State
                 case VgCommand::EType::Save: nvgSave(ctx); return;
                 case VgCommand::EType::Restore: nvgRestore(ctx); return;
                 // Draw calls
-                case VgCommand::EType::FillColor: nvgFillColor(ctx, {{{f[0], f[1], f[2], f[3]}}}); return;
+                case VgCommand::EType::FillColor: nvgFillColor(ctx, {{{cmd.data(0), cmd.data(1), cmd.data(2), cmd.data(3)}}}); return;
                 case VgCommand::EType::Fill: nvgFill(ctx); return;
-                case VgCommand::EType::StrokeColor: nvgStrokeColor(ctx, {{{f[0], f[1], f[2], f[3]}}}); return;
+                case VgCommand::EType::StrokeColor: nvgStrokeColor(ctx, {{{cmd.data(0), cmd.data(1), cmd.data(2), cmd.data(3)}}}); return;
                 case VgCommand::EType::StrokeWidth: {
-                    const float scale = (VgCommand::EScaleKind)(int)f[1] == VgCommand::EScaleKind::Relative ?
+                    const float scale = (VgCommand::EScaleKind)(int)cmd.data(1) == VgCommand::EScaleKind::Relative ?
                         extractScale(displayWindowToNano) :
                         1.0f;
-                    nvgStrokeWidth(ctx, f[0] * scale);
+                    nvgStrokeWidth(ctx, cmd.data(0) * scale);
                 }
                     return;
                 case VgCommand::EType::Stroke: nvgStroke(ctx); return;
                 // Path control
                 case VgCommand::EType::BeginPath: nvgBeginPath(ctx); return;
                 case VgCommand::EType::ClosePath: nvgClosePath(ctx); return;
-                case VgCommand::EType::PathWinding: nvgPathWinding(ctx, (int)f[0]); return;
+                case VgCommand::EType::PathWinding: nvgPathWinding(ctx, (int)cmd.data(0)); return;
                 case VgCommand::EType::DebugDumpPathCache: nvgDebugDumpPathCache(ctx); return;
                 // Path construction
                 case VgCommand::EType::MoveTo: {
-                    const Vector2f p = vgToNano({f[0], f[1]});
+                    const Vector2f p = vgToNano({cmd.data(0), cmd.data(1)});
                     nvgMoveTo(ctx, p.x(), p.y());
                 }
                     return;
                 case VgCommand::EType::LineTo: {
-                    const Vector2f p = vgToNano({f[0], f[1]});
+                    const Vector2f p = vgToNano({cmd.data(0), cmd.data(1)});
                     nvgLineTo(ctx, p.x(), p.y());
                 }
                     return;
                 case VgCommand::EType::ArcTo: {
-                    const Vector2f p1 = vgToNano({f[0], f[1]});
-                    const Vector2f p2 = vgToNano({f[2], f[3]});
-                    const float radius = f[4] * extractScale(displayWindowToNano);
-                    nvgArcTo(ctx, p1.x(), p1.y(), p2.x(), p2.y(), radius);
+                    const Vector2f p1 = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f p2 = vgToNano({cmd.data(2), cmd.data(3)});
+                    const float r = cmd.data(4) * extractScale(displayWindowToNano);
+                    nvgArcTo(ctx, p1.x(), p1.y(), p2.x(), p2.y(), r);
                 }
                     return;
                 case VgCommand::EType::Arc: {
-                    const Vector2f c = vgToNano({f[0], f[1]});
-                    const float radius = f[2] * extractScale(displayWindowToNano);
-                    nvgArc(ctx, c.x(), c.y(), radius, f[3], f[4], (int)f[5]);
+                    const Vector2f c = vgToNano({cmd.data(0), cmd.data(1)});
+                    const float r = cmd.data(2) * extractScale(displayWindowToNano);
+                    nvgArc(ctx, c.x(), c.y(), r, cmd.data(3), cmd.data(4), (int)cmd.data(5));
                 }
                     return;
                 case VgCommand::EType::BezierTo: {
-                    const Vector2f c1 = vgToNano({f[0], f[1]});
-                    const Vector2f c2 = vgToNano({f[2], f[3]});
-                    const Vector2f p = vgToNano({f[4], f[5]});
+                    const Vector2f c1 = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f c2 = vgToNano({cmd.data(2), cmd.data(3)});
+                    const Vector2f p = vgToNano({cmd.data(4), cmd.data(5)});
                     nvgBezierTo(ctx, c1.x(), c1.y(), c2.x(), c2.y(), p.x(), p.y());
                 }
                     return;
                 case VgCommand::EType::Circle: {
-                    const Vector2f c = vgToNano({f[0], f[1]});
-                    const float radius = f[2] * extractScale(displayWindowToNano);
-                    nvgCircle(ctx, c.x(), c.y(), radius);
+                    const Vector2f c = vgToNano({cmd.data(0), cmd.data(1)});
+                    const float r = cmd.data(2) * extractScale(displayWindowToNano);
+                    nvgCircle(ctx, c.x(), c.y(), r);
                 }
                     return;
                 case VgCommand::EType::Ellipse: {
-                    const Vector2f c = vgToNano({f[0], f[1]});
-                    const Vector2f r = extract2x2(displayWindowToNano) * Vector2f{f[2], f[3]};
+                    const Vector2f c = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f r = extract2x2(displayWindowToNano) * Vector2f{cmd.data(2), cmd.data(3)};
                     nvgEllipse(ctx, c.x(), c.y(), r.x(), r.y());
                 }
                     return;
-                case VgCommand::EType::QuadTo:
-
-                {
-                    const Vector2f c = vgToNano({f[0], f[1]});
-                    const Vector2f p = vgToNano({f[2], f[3]});
+                case VgCommand::EType::QuadTo: {
+                    const Vector2f c = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f p = vgToNano({cmd.data(2), cmd.data(3)});
                     nvgQuadTo(ctx, c.x(), c.y(), p.x(), p.y());
                 }
 
                     return;
                 case VgCommand::EType::Rect: {
-                    const Vector2f p = vgToNano({f[0], f[1]});
-                    const Vector2f size = extract2x2(displayWindowToNano) * Vector2f{f[2], f[3]};
+                    const Vector2f p = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f size = extract2x2(displayWindowToNano) * Vector2f{cmd.data(2), cmd.data(3)};
                     nvgRect(ctx, p.x(), p.y(), size.x(), size.y());
                 }
                     return;
                 case VgCommand::EType::RoundedRect: {
-                    const Vector2f p = vgToNano({f[0], f[1]});
-                    const Vector2f size = extract2x2(displayWindowToNano) * Vector2f{f[2], f[3]};
-                    const float radius = f[4] * extractScale(displayWindowToNano);
+                    const Vector2f p = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f size = extract2x2(displayWindowToNano) * Vector2f{cmd.data(2), cmd.data(3)};
+                    const float radius = cmd.data(4) * extractScale(displayWindowToNano);
                     nvgRoundedRect(ctx, p.x(), p.y(), size.x(), size.y(), radius);
                 }
                     return;
                 case VgCommand::EType::RoundedRectVarying: {
-                    const Vector2f p = vgToNano({f[0], f[1]});
-                    const Vector2f size = extract2x2(displayWindowToNano) * Vector2f{f[2], f[3]};
+                    const Vector2f p = vgToNano({cmd.data(0), cmd.data(1)});
+                    const Vector2f size = extract2x2(displayWindowToNano) * Vector2f{cmd.data(2), cmd.data(3)};
                     const float scale = extractScale(displayWindowToNano);
-                    nvgRoundedRectVarying(ctx, p.x(), p.y(), size.x(), size.y(), f[4] * scale, f[5] * scale, f[6] * scale, f[7] * scale);
+                    nvgRoundedRectVarying(
+                        ctx, p.x(), p.y(), size.x(), size.y(), cmd.data(4) * scale, cmd.data(5) * scale, cmd.data(6) * scale, cmd.data(7) * scale
+                    );
                 }
                     return;
                 // Text rendering
                 case VgCommand::EType::Text: {
-                    const Vector2f p = vgToNano({f[0], f[1]});
-                    nvgText(ctx, p.x(), p.y(), command.stringData.data(), command.stringData.data() + command.stringData.size());
+                    const Vector2f p = vgToNano({cmd.data(0), cmd.data(1)});
+                    nvgText(ctx, p.x(), p.y(), cmd.stringData().data(), cmd.stringData().data() + cmd.stringData().size());
                 }
                     return;
-                case VgCommand::EType::TextAlign: nvgTextAlign(ctx, (int)f[0]); return;
-                case VgCommand::EType::FontFace: nvgFontFace(ctx, command.stringData.c_str()); return;
+                case VgCommand::EType::TextAlign: nvgTextAlign(ctx, (int)cmd.data(0)); return;
+                case VgCommand::EType::FontFace: nvgFontFace(ctx, cmd.stringData().c_str()); return;
                 case VgCommand::EType::FontSize: {
-                    const float scale = (VgCommand::EScaleKind)(int)f[1] == VgCommand::EScaleKind::Relative ?
+                    const float scale = (VgCommand::EScaleKind)(int)cmd.data(1) == VgCommand::EScaleKind::Relative ?
                         extractScale(displayWindowToNano) :
                         1.0f;
-                    nvgFontSize(ctx, f[0] * scale);
+                    nvgFontSize(ctx, cmd.data(0) * scale);
                 }
                     return;
                 default: throw runtime_error{"Invalid VgCommand type."};
@@ -517,9 +516,9 @@ void ImageCanvas::draw(NVGcontext* ctx) {
 
             size_t saveCounter = 0;
             for (const auto& command : commands) {
-                if (command.type == VgCommand::EType::Save) {
+                if (command.type() == VgCommand::EType::Save) {
                     ++saveCounter;
-                } else if (command.type == VgCommand::EType::Restore) {
+                } else if (command.type() == VgCommand::EType::Restore) {
                     if (saveCounter == 0) {
                         tlog::warning("Malformed vector graphics commands: restore before save");
                         continue;

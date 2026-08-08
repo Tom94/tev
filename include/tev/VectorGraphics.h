@@ -24,7 +24,8 @@
 
 namespace tev {
 
-struct VgCommand {
+class VgCommand {
+public:
     enum class EType : int8_t {
         Invalid = 127,
         Save = 0,
@@ -56,7 +57,7 @@ struct VgCommand {
     };
 
     VgCommand(EType type = EType::Invalid, std::span<const float> data = {}, std::string_view stringData = "") :
-        type{type}, data{data.begin(), data.end()}, stringData{stringData} {
+        mType{type}, mData{data.begin(), data.end()}, mStringData{stringData} {
         if (size() != data.size()) {
             throw std::runtime_error{"VgCommand constructed with invalid amount of data"};
         }
@@ -94,13 +95,14 @@ struct VgCommand {
         float r, g, b, a;
     };
 
-    bool hasStringData() const { return type == EType::Text || type == EType::FontFace; }
+    static inline bool hasStringData(EType type) { return type == EType::Text || type == EType::FontFace; }
+    bool hasStringData() const { return hasStringData(mType); }
 
     // Returns the expected (not actual) size of `data` in number of bytes, depending on the type of the command.
     // For EType::Text, this counts only the fixed portion (position, font size). The string
     // payload itself is carried separately in `text` and is not included in this count.
     size_t bytes() const {
-        switch (type) {
+        switch (mType) {
             case EType::Invalid: return 0;
             case EType::Save: return 0;
             case EType::Restore: return 0;
@@ -189,9 +191,25 @@ struct VgCommand {
 
     static VgCommand fontSize(float fontSize, EScaleKind sizeKind) { return {EType::FontSize, {{fontSize, (float)(int)sizeKind}}}; }
 
-    EType type;
-    std::vector<float> data;
-    std::string stringData;
+    EType type() const & { return mType; }
+    EType& type() & { return mType; }
+    const std::vector<float>& data() const & { return mData; }
+    std::vector<float>& data() & { return mData; }
+    const std::string& stringData() const & { return mStringData; }
+    std::string& stringData() & { return mStringData; }
+
+    float data(size_t index) const {
+        if (index >= mData.size()) {
+            throw std::runtime_error{fmt::format("VgCommand {}: data index {} out of bounds. size={}", (int)mType, index, mData.size())};
+        }
+
+        return mData.at(index);
+    }
+
+private:
+    EType mType;
+    std::vector<float> mData;
+    std::string mStringData;
 };
 
 } // namespace tev
