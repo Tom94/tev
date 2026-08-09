@@ -237,12 +237,12 @@ template <typename F> concept TaskCoroutine = std::invocable<F> && is_task<std::
 
 template <TaskCoroutine F, typename... Args> Task<void> invokeTask(F&& executor, Args&&... args) {
     auto exec = std::forward<F>(executor);
-    co_await exec(args...);
+    co_await exec(std::forward<Args>(args)...);
 }
 
 template <TaskCoroutine F, typename... Args> DetachedTask invokeTaskDetached(F&& executor, Args&&... args) {
     auto exec = std::forward<F>(executor);
-    co_await exec(args...);
+    co_await exec(std::forward<Args>(args)...);
 }
 
 void waitAll(range_of<Task<void>> auto&& futures) {
