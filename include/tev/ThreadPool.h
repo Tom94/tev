@@ -155,7 +155,7 @@ public:
     }
 
     template <std::integral Int, std::invocable<Int, Int> F>
-    Task<void> parallelFor(Int start, Int end, size_t approxCost, F&& body, int priority) {
+    Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
         const Int range = end - start;
         const Int n = nTasks(start, end, approxCost);
 
@@ -190,7 +190,7 @@ public:
     }
 
     template <std::integral Int, std::invocable<Int> F>
-    Task<void> parallelFor(Int start, Int end, size_t approxCost, F&& body, int priority) {
+    Task<void> parallelFor(Int start, Int end, size_t approxCost, F body, int priority) {
         co_await parallelFor(
             start,
             end,
