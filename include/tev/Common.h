@@ -406,7 +406,7 @@ template <typename F> void forEachFileInDir(bool recursive, const fs::path& path
 template <std::invocable F> class ScopeGuard {
 public:
     ScopeGuard(const F& callback) : mCallback{callback} {}
-    ScopeGuard(F&& callback) : mCallback{std::move(callback)} {}
+    ScopeGuard(F&& callback) : mCallback{std::forward<F>(callback)} {}
     ScopeGuard(const ScopeGuard<F>& other) = delete;
     ScopeGuard& operator=(const ScopeGuard<F>& other) = delete;
     ScopeGuard(ScopeGuard<F>&& other) { *this = std::move(other); }
