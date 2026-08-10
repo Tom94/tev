@@ -393,7 +393,7 @@ Task<vector<ImageData>>
             frameOffset = {static_cast<int>(xOffset), static_cast<int>(yOffset)};
 
             tlog::debug(
-                "fcTL: size={}, offset={}, dispose_op={}, blend_op={}",
+                "fcTL: size={} offset={} dispose_op={} blend_op={}",
                 frameSize,
                 frameOffset,
                 disposeOpToString(disposeOp),

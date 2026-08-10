@@ -555,13 +555,13 @@ Task<vector<ImageData>> ExrImageLoader::load(
 
                 if (!data.dataWindow.isValid()) {
                     throw ImageLoadError{
-                        fmt::format("EXR image has invalid data window: min={}, max={}", data.dataWindow.min, data.dataWindow.max)
+                        fmt::format("EXR image has invalid data window: min={} max={}", data.dataWindow.min, data.dataWindow.max)
                     };
                 }
 
                 if (!data.displayWindow.isValid()) {
                     throw ImageLoadError{
-                        fmt::format("EXR image has invalid display window: min={}, max={}", data.displayWindow.min, data.displayWindow.max)
+                        fmt::format("EXR image has invalid display window: min={} max={}", data.displayWindow.min, data.displayWindow.max)
                     };
                 }
 

@@ -278,9 +278,15 @@ Task<vector<ImageData>> HeifImageLoader::load(
             }
         };
 
+        if (skipColorProcessing) {
+            tlog::debug("Skipping color processing.");
+
+            co_await heifToFloat32(ituth273::ETransfer::Linear, false);
+            co_return resultData;
+        }
+
         // If we've got an ICC color profile, apply that because it's the most detailed / standardized.
-        const auto iccProfileData = skipColorProcessing ? nullopt : getIccProfileFromImgAndHandle(img, imgHandle);
-        if (!skipColorProcessing && iccProfileData) {
+        if (const auto iccProfileData = getIccProfileFromImgAndHandle(img, imgHandle)) {
             tlog::debug("Found ICC color profile. Attempting to apply...");
 
             try {
@@ -291,13 +297,6 @@ Task<vector<ImageData>> HeifImageLoader::load(
                 resultData.readMetadataFromIcc(profile);
                 co_return resultData;
             } catch (const runtime_error& e) { tlog::warning("Failed to apply ICC color profile: {}", e.what()); }
-        }
-
-        if (skipColorProcessing) {
-            tlog::debug("Skipping color processing.");
-
-            co_await heifToFloat32(ituth273::ETransfer::Linear, false);
-            co_return resultData;
         }
 
         // Otherwise, check for an NCLX color profile and, if not present, assume the image is in Rec.709/sRGB.
@@ -328,7 +327,7 @@ Task<vector<ImageData>> HeifImageLoader::load(
         const auto primaries = (ituth273::EColorPrimaries)(nclx ? nclx->color_primaries : heif_color_primaries_ITU_R_BT_709_5);
 
         tlog::debug(
-            "CICP: primaries={}, transfer={}, full_range={}",
+            "CICP: primaries={} transfer={} full_range={}",
             ituth273::toString(primaries),
             ituth273::toString(cicpTransfer),
             range == LimitedRange::full() ? "yes" : "no"
