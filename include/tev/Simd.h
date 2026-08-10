@@ -26,6 +26,38 @@
 
 #include <xsimd/xsimd.hpp>
 
+#if defined(__ARM_NEON)
+#    include <arm_neon.h>
+#    define TEV_HAS_NEON 1
+#    if defined(__ARM_FP) && (__ARM_FP & 2) && defined(__ARM_FP16_FORMAT_IEEE)
+#        define TEV_HAS_NEON_FP16 1
+#    endif
+
+template <size_t Size> auto vldnq_f32(const float* ptr) {
+    if constexpr (Size == 2) {
+        return vld2q_f32(ptr);
+    } else if constexpr (Size == 3) {
+        return vld3q_f32(ptr);
+    } else if constexpr (Size == 4) {
+        return vld4q_f32(ptr);
+    }
+}
+
+template <size_t Size>
+using float32x4xn_t = std::conditional_t<Size == 2, float32x4x2_t, std::conditional_t<Size == 3, float32x4x3_t, float32x4x4_t>>;
+
+template <size_t Size> void vstnq_f32(float* ptr, const float32x4xn_t<Size>& v) {
+    if constexpr (Size == 2) {
+        vst2q_f32(ptr, v);
+    } else if constexpr (Size == 3) {
+        vst3q_f32(ptr, v);
+    } else if constexpr (Size == 4) {
+        vst4q_f32(ptr, v);
+    }
+}
+
+#endif
+
 namespace tev {
 
 // -----------------------------------------------------------------------------
@@ -343,34 +375,17 @@ nanogui::Array<B, Size> loadChannels(const MultiChannelView<T>& view, Args... ar
 
 template <class B, size_t Size, typename T> nanogui::Array<B, Size> loadChannels(const std::span<T>& view, size_t idx, size_t stride) {
     nanogui::Array<B, Size> result;
-#if defined(__ARM_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
+#if defined(TEV_HAS_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
     // ARM NEON has 2x4, 3x4, 4x4 deinterleave load instructions
-    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float>) {
-        const float* ptr = view.data() + idx * stride;
-
+    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float> && Size >= 2 && Size <= 4) {
         if (stride == Size) {
-            if constexpr (Size == 4) {
-                float32x4x4_t v = vld4q_f32(ptr);
-                for (size_t c = 0; c < Size; ++c) {
-                    result.v[c] = B(v.val[c]);
-                }
-
-                return result;
-            } else if constexpr (Size == 3) {
-                float32x4x3_t v = vld3q_f32(ptr);
-                for (size_t c = 0; c < Size; ++c) {
-                    result.v[c] = B(v.val[c]);
-                }
-
-                return result;
-            } else if constexpr (Size == 2) {
-                float32x4x2_t v = vld2q_f32(ptr);
-                for (size_t c = 0; c < Size; ++c) {
-                    result.v[c] = B(v.val[c]);
-                }
-
-                return result;
+            const float* ptr = view.data() + idx * stride;
+            const auto v = vldnq_f32<Size>(ptr);
+            for (size_t c = 0; c < Size; ++c) {
+                result.v[c] = B(v.val[c]);
             }
+
+            return result;
         }
     }
 #endif
@@ -465,46 +480,17 @@ void storeChannels(const nanogui::Array<B, Size>& v, const MultiChannelView<T>& 
 
 template <class B, size_t Size, typename T, typename... Args>
 void storeChannels(const nanogui::Array<B, Size>& v, const MdSpan<T, 3>& view, size_t x, size_t y) {
-#if defined(__ARM_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
-    // ARM NEON has 2x4, 3x4, 4x4 interleave store instructions
-    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float>) {
-        float* ptr = view.data() + view.offsetOf(0, x, y);
+#if defined(TEV_HAS_NEON) && 0 // TODO: uncomment once we measure that this is actually faster than the generic implementation
+    if constexpr (is_arm_neon_v<B> && std::is_same_v<std::remove_cv_t<T>, float> && Size >= 2 && Size <= 4) {
         const auto pixelStride = view.stride()[1];
-
-        if constexpr (Size <= 2) {
-            if (pixelStride == 2) {
-                float32x4x2_t d;
-                for (size_t c = 0; c < Size; ++c) {
-                    d.val[c] = v.v[c].data;
-                }
-
-                vst2q_f32(ptr, d);
-                return;
+        if (pixelStride == Size) {
+            float32x4xn_t<Size> d;
+            for (size_t c = 0; c < Size; ++c) {
+                d.val[c] = v.v[c].data;
             }
-        }
 
-        if constexpr (Size <= 3) {
-            if (pixelStride == 3) {
-                float32x4x3_t d;
-                for (size_t c = 0; c < Size; ++c) {
-                    d.val[c] = v.v[c].data;
-                }
-
-                vst3q_f32(ptr, d);
-                return;
-            }
-        }
-
-        if constexpr (Size <= 4) {
-            if (pixelStride == 4) {
-                float32x4x4_t d;
-                for (size_t c = 0; c < Size; ++c) {
-                    d.val[c] = v.v[c].data;
-                }
-
-                vst4q_f32(ptr, d);
-                return;
-            }
+            vstnq_f32<Size>(view.data() + view.offsetOf(0, x, y), d);
+            return;
         }
     }
 #endif

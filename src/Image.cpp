@@ -384,6 +384,15 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                             if constexpr (is_same_v<B, float>) {
                                 store_halves(float_to_half(typedSrc[i]), typedDst + i);
                             } else {
+#if defined(TEV_HAS_NEON_FP16) && 0 // TODO: Enable once benchmarks show genuine benefit
+                                if constexpr (is_arm_neon_v<B>) {
+                                    vst1_u16(
+                                        reinterpret_cast<uint16_t*>(typedDst + i), vreinterpret_u16_f16(vcvt_f16_f32(vld1q_f32(typedSrc + i)))
+                                    );
+
+                                    return;
+                                }
+#endif
                                 store_halves(float_to_half(vf::load_unaligned(typedSrc + i)), typedDst + i);
                             }
                         },
