@@ -993,7 +993,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
 
     const auto valToBin = [minLog, diffLog]<class B>(const B& val) {
         using vi = int_companion_t<B>;
-        return xsimd::clip(float_to_int(NUM_BINS * (symmetricLog(val) - B{minLog}) / B{diffLog}), vi{0}, vi(NUM_BINS - 1));
+        return xsimd::clip(floatToInt(NUM_BINS * (symmetricLog(val) - B{minLog}) / B{diffLog}), vi{0}, vi(NUM_BINS - 1));
     };
 
     result->histogramZero = valToBin(0.0f);

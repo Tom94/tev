@@ -545,7 +545,7 @@ Task<vector<ImageData>> Jpeg2000ImageLoader::load(
             const auto xc = xsimd::clip(((X - (int)comp.x0 + (int)image->x0) / (int)comp.dx) >> comp.factor, B{0}, B{(int)comp.w - 1});
             const auto yc = xsimd::clip(((y - (int)comp.y0 + (int)image->y0) / (int)comp.dy) >> comp.factor, 0, (int)comp.h - 1);
 
-            return int_to_float(gather<B>(comp.data, yc * comp.w + xc)) / ((1ull << (comp.prec - comp.sgnd)) - 1ull);
+            return intToFloat(gather<B>(comp.data, yc * comp.w + xc)) / ((1ull << (comp.prec - comp.sgnd)) - 1ull);
         };
 
         // First copy over the extra channels -- they are treated the same way, regardless of color space settings

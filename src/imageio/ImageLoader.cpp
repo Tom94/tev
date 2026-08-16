@@ -287,6 +287,7 @@ Task<void> ImageLoader::resizeImageData(ImageData& resultData, Vector2i targetSi
         co_return;
     }
 
+    tlog::debug("Resizing image from {} to {}", size, targetSize);
     auto resizedChannels = resultData.channels |
         views::transform([targetSize](const Channel& c) { return Channel{c.name(), targetSize, c.pixelFormat(), c.desiredPixelFormat()}; }) |
         toVector;

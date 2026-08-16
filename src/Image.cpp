@@ -171,18 +171,15 @@ Task<void> ImageData::applyColorConversion(const Matrix3f& mat, int priority) {
 
         TEV_ASSERT(r && g && b, "RGB triplet of channels must exist.");
 
-        auto rv = r->view<float>(), gv = g->view<float>(), bv = b->view<float>();
+        const auto view = MultiChannelView<float>{
+            array{r->view<float>(), g->view<float>(), b->view<float>()}
+        };
         tasks.emplace_back(simdParallelFor(
             ThreadPool::global(),
             0uz,
             r->numPixels(),
             r->numPixels() * 3,
-            [rv, gv, bv, mat]<class B>(size_t i) mutable {
-                const auto rgb = simdMatmul(mat, Array<B, 3>{loadChannel<B>(rv, i), loadChannel<B>(gv, i), loadChannel<B>(bv, i)});
-                storeChannel<B>(rv, i, rgb.x());
-                storeChannel<B>(gv, i, rgb.y());
-                storeChannel<B>(bv, i, rgb.z());
-            },
+            [view, mat]<class B>(size_t i) { storeChannels<B>(simdMatmul(mat, loadChannels<B, 3>(view, i)), view, i); },
             priority
         ));
     }
@@ -382,7 +379,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                         nSamples,
                         [typedSrc, typedDst]<class B>(size_t i) {
                             if constexpr (is_same_v<B, float>) {
-                                store_halves(float_to_half(typedSrc[i]), typedDst + i);
+                                storeHalves(floatToHalf(typedSrc[i]), typedDst + i);
                             } else {
 #if defined(TEV_HAS_NEON_FP16) && 0 // TODO: Enable once benchmarks show genuine benefit
                                 if constexpr (is_arm_neon_v<B>) {
@@ -393,7 +390,7 @@ Task<void> ImageData::convertToDesiredPixelFormat(int priority) {
                                     return;
                                 }
 #endif
-                                store_halves(float_to_half(vf::load_unaligned(typedSrc + i)), typedDst + i);
+                                storeHalves(floatToHalf(vf::load_unaligned(typedSrc + i)), typedDst + i);
                             }
                         },
                         priority

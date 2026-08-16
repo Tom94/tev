@@ -101,11 +101,11 @@ template <class B> struct value_type<B, std::enable_if_t<std::is_arithmetic_v<B>
 };
 template <class B> using value_type_t = typename value_type<B>::type;
 
-inline float int_to_float(std::int32_t i) noexcept { return static_cast<float>(i); }
-template <class A> xsimd::batch<float, A> int_to_float(const xsimd::batch<std::int32_t, A>& i) noexcept { return xsimd::to_float(i); }
+inline float intToFloat(std::int32_t i) noexcept { return static_cast<float>(i); }
+template <class A> xsimd::batch<float, A> intToFloat(const xsimd::batch<std::int32_t, A>& i) noexcept { return xsimd::to_float(i); }
 
-inline int float_to_int(float f) noexcept { return static_cast<int32_t>(f); }
-template <class A> xsimd::batch<int32_t, A> float_to_int(const xsimd::batch<float, A>& f) noexcept { return xsimd::to_int(f); }
+inline int floatToInt(float f) noexcept { return static_cast<int32_t>(f); }
+template <class A> xsimd::batch<int32_t, A> floatToInt(const xsimd::batch<float, A>& f) noexcept { return xsimd::to_int(f); }
 
 inline float sum(float f) noexcept { return f; }
 template <class T, class A> T sum(const xsimd::batch<T, A>& f) noexcept { return xsimd::reduce_add(f); }
@@ -124,7 +124,7 @@ template <class B> B gather(const value_type_t<B>* ptr, const int_companion_t<B>
 
 // portable round-to-nearest-even: xsimd port of Giesen's float_to_half_fast3_rtne.
 // results land in the low 16 bits of an equally-wide uint32 batch.
-template <class B> auto float_to_half(const B& fb) noexcept -> uint_companion_t<B> {
+template <class B> auto floatToHalf(const B& fb) noexcept -> uint_companion_t<B> {
     using i32 = uint_companion_t<B>;
     using s32 = int_companion_t<B>;
     using f32 = B;
@@ -170,7 +170,7 @@ template <class B> auto float_to_half(const B& fb) noexcept -> uint_companion_t<
 
 // portable round-half-up: xsimd port of Giesen's float_to_half_fast3.
 // operates on one float batch, returns results in the low 16 bits of an equally-wide uint32 batch.
-template <class B> auto float_to_half_round_up(const B& fb) noexcept -> uint_companion_t<B> {
+template <class B> auto floatToHalfRoundUp(const B& fb) noexcept -> uint_companion_t<B> {
     using i32 = uint_companion_t<B>;
 
     const i32 sign_mask = i32(0x80000000u);
@@ -202,7 +202,7 @@ template <class B> auto float_to_half_round_up(const B& fb) noexcept -> uint_com
     return out;
 }
 
-template <class B> void store_halves(const B& v, half* dst) noexcept {
+template <class B> void storeHalves(const B& v, half* dst) noexcept {
     if constexpr (std::is_arithmetic_v<B>) {
         *dst = std::bit_cast<half>(static_cast<uint16_t>(v));
     } else {
@@ -225,7 +225,7 @@ template <class B> B fastLog2(const B& x_in) noexcept {
 
     // exponent: ((i >> 23) & 0xFF) - 127
     vi e = ((i >> 23) & vi(0xFF)) - vi(127);
-    B ef = int_to_float(e);
+    B ef = intToFloat(e);
 
     // mantissa in [1,2): (i & 0x007FFFFF) | 0x3F800000
     vi mi = (i & vi(0x007FFFFF)) | vi(0x3F800000);
@@ -260,7 +260,7 @@ template <class B> B fastExp2(const B& x) noexcept {
     r = xsimd::fma(r, f, B(1.0f));
 
     // scale by 2^n via exponent bits: (ni + 127) << 23
-    vi ni = float_to_int(n);
+    vi ni = floatToInt(n);
     vi bias = (ni + vi(127)) << 23;
     B scale = xsimd::bitwise_cast<float>(bias);
     return r * scale;

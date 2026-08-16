@@ -131,7 +131,7 @@ template <class B> nanogui::Array<B, 3> applyTonemap(const nanogui::Array<B, 3>&
             static constexpr auto falseColor = [](const B& linear) -> nanogui::Array<B, 3> {
                 static const auto fcd = colormap::turbo();
                 using vi = int_companion_t<B>;
-                const auto start = 4 * xsimd::clip(float_to_int(linear * B(fcd.size() / 4)), vi{0}, vi(fcd.size() / 4 - 1));
+                const auto start = 4 * xsimd::clip(floatToInt(linear * B(fcd.size() / 4)), vi{0}, vi(fcd.size() / 4 - 1));
                 if constexpr (std::is_same_v<B, float>) {
                     return {fcd[start], fcd[start + 1], fcd[start + 2]};
                 } else {
@@ -532,8 +532,8 @@ template <class B> B pqToLinearLut(const B& n) {
     using vi = int_companion_t<B>;
 
     const auto x = clip(n, B{0.0f}, B{1.0f}) * 1024.0f;
-    const auto i = min(float_to_int(x), vi{1023});
-    const auto t = x - int_to_float(i);
+    const auto i = min(floatToInt(x), vi{1023});
+    const auto t = x - intToFloat(i);
 
     const auto a0 = gather<B>(kPqToLinearRoot8, i);
     const auto a1 = gather<B>(kPqToLinearRoot8, i + 1);
@@ -1003,9 +1003,8 @@ private:
 // Converts colors from an ICC profile to linear sRGB Rec.709 w/ premultiplied alpha.
 //
 // Note that, because we this function converts potentially larger color gamuts to sRGB, output channels may have values larger than 1 or
-// smaller than 0, even if the input was within [0, 1]. This is by design, and, on macOS, the OS translates these out-of-bounds colors
-// correctly to the gamut of the display. Other operating systems, like Windows and Linux don't do this -- it's a TODO for tev to explicitly
-// hook into these OSs' color management systems to ensure that out-of-bounds colors are displayed correctly.
+// smaller than 0, even if the input was within [0, 1]. This is by design such that larger-than-sRGB colors are not clipped and display
+// correctly.
 template <typename T>
 Task<void> toLinearSrgbPremul(
     const ColorProfile& profile,
