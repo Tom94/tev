@@ -883,6 +883,7 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
             rec709Chroma(), chroma, adaptWhitePoint ? ERenderingIntent::RelativeColorimetric : ERenderingIntent::AbsoluteColorimetric
         );
 
+        const auto mview = MultiChannelView<float>{views};
         co_await ThreadPool::global().parallelFor(
             region.min.y(),
             region.max.y(),
@@ -892,15 +893,13 @@ Task<shared_ptr<CanvasStatistics>> ImageCanvas::computeCanvasStatistics(
                     const auto alpha = alphaChannel && !premultipliedAlpha ? loadChannel<B>(*alphaChannel, x, y) : B{1.0f};
                     const auto alphaFactor = xsimd::select(alpha == B{0.0f}, B{0.0f}, 1.0f / alpha);
 
-                    nanogui::Array<B, 3> rgb;
+                    auto rgb = loadChannels<B, 3>(mview, x, y) * alphaFactor;
                     for (size_t c = 0; c < 3; ++c) {
-                        rgb[c] = loadChannel<B>(views[c], x, y) * alphaFactor;
+                        rgb[c] *= alphaFactor;
                     }
 
                     rgb = ituth273::transferRgb(transfer, simdMatmul(mat, rgb));
-                    for (size_t c = 0; c < 3; ++c) {
-                        storeChannel<B>(views[c], x, y, rgb[c]);
-                    }
+                    storeChannels<B>(rgb, mview, x, y);
                 });
             },
             priority
