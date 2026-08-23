@@ -201,7 +201,10 @@ public:
         return await_resume();
     }
 
-    bool done() const noexcept { return mState->latch.value() <= (mState->continuation ? 0 : 1); }
+    bool done() const noexcept {
+        const auto val = mState->latch.value(); // `val` acquired before comparison to ensure memory barrier before continuation check
+        return val <= (mState->continuation ? 0 : 1);
+    }
 
     std::future_status wait_for(const std::chrono::microseconds& duration) const noexcept { return mFuture.wait_for(duration); }
 

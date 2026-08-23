@@ -75,10 +75,10 @@ void ThreadPool::startThreads(size_t num) {
                 }
             }
 
-            const scoped_lock threadsLock{mThreadsMutex};
-
-            // Remove oneself from the thread pool. NOTE: at this point, the lock is still held, so modifying mThreads is safe.
             // tlog::debug("Shutting down thread pool thread {}", id);
+
+            // Remove oneself from the thread pool.
+            const scoped_lock threadsLock{mThreadsMutex};
 
             const auto it = ranges::find(mThreads, id, [](const auto& t) { return t.get_id(); });
             TEV_ASSERT(it != mThreads.end(), "Thread not found in thread pool.");
