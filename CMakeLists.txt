@@ -358,10 +358,6 @@ elseif (WIN32)
     set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/patch.wxs")
     set(CPACK_WIX_UPGRADE_GUID "F3EC0D95-B2DC-4451-975C-CF591871E162")
     set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/icon.ico")
-
-    configure_file(scripts/configure-winget.cmake scripts/configure-winget.cmake @ONLY)
-    configure_file(resources/windows/winget.yaml resources/windows/winget.yaml COPYONLY)
-    set(CPACK_POST_BUILD_SCRIPTS "${CMAKE_BINARY_DIR}/scripts/configure-winget.cmake")
 else()
     install(TARGETS tev)
 
