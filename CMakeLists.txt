@@ -319,6 +319,11 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
         # Coroutines need to be explicitly enabled on g++
         target_compile_options(tev PRIVATE -fcoroutines)
     endif()
+
+    target_compile_options(tev PRIVATE
+        $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>
+        $<$<CONFIG:RelWithDebInfo>:-mno-omit-leaf-frame-pointer>
+    )
 endif()
 
 set(CPACK_PACKAGE_VENDOR "Tom94 (Thomas Müller)")
