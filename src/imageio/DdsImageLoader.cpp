@@ -20,6 +20,7 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/DdsImageLoader.h>
 
+#include <sal.h>
 #include <DirectXTex.h>
 
 using namespace nanogui;
