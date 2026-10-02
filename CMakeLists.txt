@@ -43,15 +43,8 @@ if (TEV_LINUX_REVERSE_DNS_APP_ID)
     set(TEV_LINUX_APP_ID "io.github.tom94.tev")
 endif()
 
-# DirectXTex only compiles on Linux and Windows
-if (APPLE)
-    set(TEV_SUPPORT_DDS_DEFAULT OFF)
-else()
-    set(TEV_SUPPORT_DDS_DEFAULT ON)
-endif()
-
 option(TEV_SUPPORT_AVIF "Support loading AVIF images" ON)
-option(TEV_SUPPORT_DDS "Support loading DDS images" ${TEV_SUPPORT_DDS_DEFAULT})
+option(TEV_SUPPORT_DDS "Support loading DDS images" ON)
 option(TEV_SUPPORT_HEIC "Support loading HEIC images" OFF)
 option(TEV_SUPPORT_JXL "Support loading/saving JPEG XL images" ON)
 

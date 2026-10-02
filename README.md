@@ -141,7 +141,7 @@ $ cpack --config build/CPackConfig.cmake
 - __PNG__, APNG (via [libpng](https://github.com/pnggroup/libpng))
 - __PFM__, PAM, PNM, PBM, PGM, PPM (generally: see [NetPBM](https://netpbm.sourceforge.net/) and [PFM](https://www.pauldebevec.com/Research/HDR/PFM/))
 - __QOI__ (via [qoi](https://github.com/phoboslab/qoi))
-- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex); Windows and Linux only)
+- __DDS__ (via [DirectXTex](https://github.com/microsoft/DirectXTex))
 - __WEBP__ (via [libwebp](https://chromium.googlesource.com/webm/libwebp))
 - __TIFF__, __DNG__ (via [libtiff](https://gitlab.com/libtiff/libtiff))
 - __AVIF__ (including gain maps, e.g. HDR pictures from Android; via [dav1d](https://github.com/videolan/dav1d)+[libheif](https://github.com/strukturag/libheif))
