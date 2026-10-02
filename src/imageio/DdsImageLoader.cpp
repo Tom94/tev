@@ -20,6 +20,7 @@
 #include <tev/ThreadPool.h>
 #include <tev/imageio/DdsImageLoader.h>
 
+#include <sal.h>
 #include <DirectXTex.h>
 
 using namespace nanogui;
@@ -159,6 +160,7 @@ Task<vector<ImageData>>
         throw FormatNotSupported{"File is not a DDS file."};
     }
 
+#ifdef _WIN32
     // COM must be initialized on the thread executing the following DirectX calls. Thus: when editing this file *make sure* that no
     // co_await calls are made before the last DirectX call! Note that it is not a problem that CoInitializeEx will potentially get called
     // multiple times across different threads, or even multiple times by the same thread pool thread. Both situations are explicitly
@@ -167,6 +169,7 @@ Task<vector<ImageData>>
     if (const auto res = CoInitializeEx(nullptr, COINIT_MULTITHREADED); res != S_OK && res != S_FALSE) {
         throw ImageLoadError{"Failed to initialize COM."};
     }
+#endif
 
     // The correct way to clean up would be to call CoUninitialize() on every task pool thread on shutdown. Using a scope guard here
     // wouldn't work for multiple reasons: (i) the coroutine might have been scheduled to another thread once the scope ends, and (ii) it
@@ -177,7 +180,9 @@ Task<vector<ImageData>>
 
     DirectX::ScratchImage scratchImage;
     DirectX::TexMetadata metadata;
-    if (DirectX::LoadFromDDSMemory(data.data(), data.size(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage) != S_OK) {
+    if (DirectX::LoadFromDDSMemory(
+            reinterpret_cast<const std::byte*>(data.data()), data.size(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage
+        ) != S_OK) {
         throw ImageLoadError{"Failed to read DDS file."};
     }
 

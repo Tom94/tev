@@ -58,13 +58,18 @@ set(NANOGUI_SKIP_METAL_SHADER_PRECOMPILATION ON CACHE BOOL " " FORCE)
 add_subdirectory(nanogui)
 
 # Compile DirectXTex (only on Windows)
-if (WIN32)
+if (TEV_SUPPORT_DDS)
     set(BUILD_TOOLS OFF CACHE BOOL " " FORCE)
     set(BUILD_DX11 OFF CACHE BOOL " " FORCE)
     set(BUILD_DX12 OFF CACHE BOOL " " FORCE)
     set(BC_USE_OPENMP OFF CACHE BOOL " " FORCE)
 
-    add_subdirectory(DirectXTex)
+    if (NOT WIN32)
+        add_subdirectory(DirectXMath EXCLUDE_FROM_ALL)
+        add_subdirectory(DirectX-Headers EXCLUDE_FROM_ALL)
+    endif()
+
+    add_subdirectory(DirectXTex EXCLUDE_FROM_ALL)
 endif()
 
 # Compile Little-CMS for ICC color profile handling. The library name is set to lcms2-tev to avoid conflicts with libjxl which also comes
