@@ -534,7 +534,7 @@ Task<vector<ImageData>>
         throw FormatNotSupported{"File is not a KTX image."};
     }
 
-    const string buffer = iStream.str();
+    const string_view buffer = iStream.view();
 
     ktxTexture* rawTexture = nullptr;
     if (const KTX_error_code err = ktxTexture_CreateFromMemory(
