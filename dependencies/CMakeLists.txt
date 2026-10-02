@@ -395,6 +395,17 @@ set(LIBKTX_FEATURE_KTX2 ON CACHE BOOL " " FORCE)
 set(LIBKTX_FEATURE_VK_UPLOAD OFF CACHE BOOL " " FORCE)
 set(LIBKTX_FEATURE_GL_UPLOAD OFF CACHE BOOL " " FORCE)
 set(LIBKTX_FEATURE_ETC_UNPACK ON CACHE BOOL " " FORCE)
+
+if (HAS_SSE2)
+    if (APPLE)
+        # Since we're targeting macOS 10.15 and later, Intel macOS always has SSE4.1
+        set(ASTCENC_ISA_SSE41 ON)
+    else()
+        # Otherwise, assume only SSE2, *not* ASTENC's default of AVX2 on Intel platforms
+        set(ASTCENC_ISA_SSE2 ON)
+    endif()
+endif()
+
 add_subdirectory(KTX-Software EXCLUDE_FROM_ALL)
 
 # Cross-platform SIMD
