@@ -514,7 +514,7 @@ static int mainFunc(span<const string> arguments) {
         parser,
         "VERSION",
         "Display the version of tev.",
-        {'v', "version"},
+        {"version"},
     };
 
     Flag watchFlag{
