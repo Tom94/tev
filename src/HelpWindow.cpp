@@ -243,6 +243,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "DirectXMath", "DirectX math library");
     addLibrary(about, "DirectX-Headers", "DirectX headers");
 #endif
+    addLibrary(about, "etcdec", "Single-header ETC/EAC decoder library");
     addLibrary(about, "GDCM", "Grassroots library for DICOM medical files");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
     addLibrary(about, "GLFW", "OpenGL desktop development library");
