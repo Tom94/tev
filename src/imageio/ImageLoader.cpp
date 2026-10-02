@@ -27,6 +27,7 @@
 #include <tev/imageio/Jpeg2000ImageLoader.h>
 #include <tev/imageio/JpegTurboImageLoader.h>
 #include <tev/imageio/JxrImageLoader.h>
+#include <tev/imageio/KtxImageLoader.h>
 #include <tev/imageio/PfmImageLoader.h>
 #include <tev/imageio/PngImageLoader.h>
 #include <tev/imageio/QoiImageLoader.h>
@@ -68,6 +69,7 @@ const vector<unique_ptr<ImageLoader>>& ImageLoader::getLoaders() {
 #ifdef TEV_SUPPORT_JXL
         imageLoaders.emplace_back(new JxlImageLoader());
 #endif
+        imageLoaders.emplace_back(new KtxImageLoader());
         imageLoaders.emplace_back(new FitsImageLoader());
         imageLoaders.emplace_back(new QoiImageLoader());
         imageLoaders.emplace_back(new WebpImageLoader());
@@ -108,6 +110,8 @@ const vector<string_view>& ImageLoader::supportedMimeTypes() {
         "image/jpeg",
         "image/jxl",
         "image/jxr",
+        "image/ktx",
+        "image/ktx2",
         "image/png",
         "image/qoi",
         "image/tga",

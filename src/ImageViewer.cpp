@@ -2437,6 +2437,7 @@ void ImageViewer::openImageDialog() {
                 {"jpeg,jpg",                "JPEG image"                       },
                 {"jxl",                     "JPEG XL image"                    },
                 {"jxr,hdp,wdp",             "JPEG XR image"                    },
+                {"ktx,ktx2",                "Khronos texture"                  },
                 {"pam,pbm,pfm,pgm,pnm,ppm", "Portable *Map image"              },
                 {"pic",                     "PIC image"                        },
                 {"png",                     "Portable Network Graphics image"  },
