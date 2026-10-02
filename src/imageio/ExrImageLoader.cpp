@@ -43,57 +43,61 @@
 
 #include <istream>
 
-#include <errno.h>
-
 using namespace nanogui;
 using namespace std;
 
 namespace tev {
 
-class StdIStream final : public Imf::IStream {
+class MemoryIStream final : public Imf::IStream {
 public:
-    StdIStream(istream& stream, const char fileName[]) : Imf::IStream{fileName}, mStream{stream} {}
+    MemoryIStream(span<const uint8_t> data, const char fileName[]) : Imf::IStream{fileName}, m_data{data}, m_pos{0} {}
 
     bool read(char c[/*n*/], int n) override {
-        if (!mStream) {
-            throw IEX_NAMESPACE::InputExc("Unexpected end of file.");
+        if (m_pos + n > m_data.size() || n < 0) {
+            throw IEX_NAMESPACE::InputExc("Requested read past end of data.");
         }
 
-        clearError();
-        mStream.read(c, n);
-        return checkError(mStream, n);
+        memcpy(c, m_data.data() + m_pos, n);
+        m_pos += n;
+        return m_pos < m_data.size();
     }
 
-    uint64_t tellg() override { return streamoff(mStream.tellg()); }
+    bool isMemoryMapped() const override { return true; }
+
+    char* readMemoryMapped(int n) override {
+        if (m_pos + n > m_data.size() || n < 0) {
+            throw IEX_NAMESPACE::InputExc("Requested read past end of data.");
+        }
+
+        const char* p = reinterpret_cast<const char*>(&m_data[m_pos]);
+        m_pos += n;
+        return const_cast<char*>(p);
+    }
+
+    uint64_t tellg() override { return m_pos; }
 
     void seekg(uint64_t pos) override {
-        mStream.seekg(pos);
-        checkError(mStream);
-    }
-
-    void clear() override { mStream.clear(); }
-
-private:
-    // The following error-checking functions were copy&pasted from the OpenEXR source code
-    static void clearError() { errno = 0; }
-
-    static bool checkError(istream& is, streamsize expected = 0) {
-        if (!is) {
-            if (errno) {
-                IEX_NAMESPACE::throwErrnoExc();
-            }
-
-            if (is.gcount() < expected) {
-                THROW(IEX_NAMESPACE::InputExc, "Early end of file: read " << is.gcount() << " out of " << expected << " requested bytes.");
-            }
-
-            return false;
+        if (pos > m_data.size()) {
+            throw IEX_NAMESPACE::InputExc("Requested seek past end of data.");
         }
 
-        return true;
+        m_pos = pos;
     }
 
-    istream& mStream;
+    void clear() override {}
+
+    bool isStatelessRead() const override { return true; }
+
+    int64_t read(void* buf, uint64_t sz, uint64_t offset) override {
+        uint64_t bytes_to_read = std::min(sz, m_data.size() - offset);
+        memcpy(buf, m_data.data() + offset, bytes_to_read);
+        memset(static_cast<uint8_t*>(buf) + bytes_to_read, 0, sz - bytes_to_read);
+        return bytes_to_read;
+    }
+
+private:
+    span<const uint8_t> m_data;
+    uint64_t m_pos = 0;
 };
 
 static bool isExrImage(istream& iStream) {
@@ -463,8 +467,11 @@ Task<vector<ImageData>> ExrImageLoader::load(
             throw FormatNotSupported{"File is not an EXR image."};
         }
 
-        StdIStream stdIStream{iStream, toString(path).c_str()};
-        Imf::MultiPartInputFile multiPartFile{stdIStream};
+        MemoryIStream memoryIStream{
+            span<const uint8_t>{reinterpret_cast<const uint8_t*>(iStream.view().data()), iStream.view().size()},
+            toString(path).c_str(),
+        };
+        Imf::MultiPartInputFile multiPartFile{memoryIStream};
         int numParts = multiPartFile.parts();
 
         if (numParts <= 0) {
