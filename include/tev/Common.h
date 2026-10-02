@@ -65,12 +65,12 @@
 #    define SYSTEM_COMMAND_RIGHT GLFW_KEY_RIGHT_CONTROL
 #endif
 
-#define TEV_ASSERT(cond, description, ...)                                                                                     \
-    if (!(cond)) [[unlikely]] {                                                                                                \
-        const auto s = std::source_location::current();                                                                        \
-        throw std::runtime_error{                                                                                              \
-            fmt::format("{}({}:{}) `{}`: " description, s.file_name(), s.line(), s.column(), s.function_name(), ##__VA_ARGS__) \
-        };                                                                                                                     \
+#define TEV_ASSERT(cond, description, ...)                                                                                         \
+    if (!(cond)) [[unlikely]] {                                                                                                    \
+        const auto s_ = std::source_location::current();                                                                           \
+        throw std::runtime_error{                                                                                                  \
+            fmt::format("{}({}:{}) `{}`: " description, s_.file_name(), s_.line(), s_.column(), s_.function_name(), ##__VA_ARGS__) \
+        };                                                                                                                         \
     }
 
 #ifndef TEV_VERSION

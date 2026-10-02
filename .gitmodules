@@ -126,3 +126,12 @@
 	path = dependencies/LibRaw-cmake
 	url = https://github.com/Tom94/LibRaw-cmake
 	shallow = true
+[submodule "dependencies/DirectXMath"]
+	path = dependencies/DirectXMath
+	url = https://github.com/Tom94/DirectXMath
+	shallow = true
+[submodule "dependencies/DirectX-Headers"]
+	path = dependencies/DirectX-Headers
+	url = https://github.com/Tom94/DirectX-Headers
+	shallow = true
+

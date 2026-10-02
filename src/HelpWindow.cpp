@@ -237,8 +237,10 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
 #ifdef TEV_SUPPORT_AVIF
     addLibrary(about, "dav1d", "Fast AV1 decoder library");
 #endif
-#ifdef _WIN32
+#ifdef TEV_SUPPORT_DDS
     addLibrary(about, "DirectXTex", "DirectX texture processing library");
+    addLibrary(about, "DirectXMath", "DirectX math library");
+    addLibrary(about, "DirectX-Headers", "DirectX headers");
 #endif
     addLibrary(about, "GDCM", "Grassroots library for DICOM medical files");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
