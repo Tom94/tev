@@ -383,6 +383,31 @@ target_include_directories(gdcm-tev INTERFACE ${GDCM_INCLUDE_PATH})
 # Compile jxrlib for JPEG XR support
 add_subdirectory(jxrlib EXCLUDE_FROM_ALL)
 
+# Compile KTX-Software for KTX2 support
+set(BUILD_SHARED_LIBS OFF CACHE BOOL " " FORCE)
+set(KTX_FEATURE_JS OFF CACHE BOOL " " FORCE)
+set(KTX_FEATURE_TESTS OFF CACHE BOOL " " FORCE)
+set(KTX_FEATURE_TOOLS OFF CACHE BOOL " " FORCE)
+set(LIBKTX_VERSION_READ_ONLY ON CACHE BOOL " " FORCE)
+set(LIBKTX_VERSION_FULL OFF CACHE BOOL " " FORCE)
+set(LIBKTX_FEATURE_KTX1 ON CACHE BOOL " " FORCE)
+set(LIBKTX_FEATURE_KTX2 ON CACHE BOOL " " FORCE)
+set(LIBKTX_FEATURE_VK_UPLOAD OFF CACHE BOOL " " FORCE)
+set(LIBKTX_FEATURE_GL_UPLOAD OFF CACHE BOOL " " FORCE)
+set(LIBKTX_FEATURE_ETC_UNPACK ON CACHE BOOL " " FORCE)
+
+if (HAS_SSE2)
+    if (APPLE)
+        # Since we're targeting macOS 10.15 and later, Intel macOS always has SSE4.1
+        set(ASTCENC_ISA_SSE41 ON)
+    else()
+        # Otherwise, assume only SSE2, *not* ASTENC's default of AVX2 on Intel platforms
+        set(ASTCENC_ISA_SSE2 ON)
+    endif()
+endif()
+
+add_subdirectory(KTX-Software EXCLUDE_FROM_ALL)
+
 # Cross-platform SIMD
 set(XSIMD_SKIP_INSTALL ON CACHE BOOL " " FORCE)
 add_subdirectory(xsimd EXCLUDE_FROM_ALL)

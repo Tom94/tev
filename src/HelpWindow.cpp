@@ -231,6 +231,7 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addSpacer(about, 20);
 
     addLibrary(about, "args", "Single-header argument parsing library");
+    addLibrary(about, "bcdec", "Single-header BC1-BC7 decoder library");
     addLibrary(about, "cfitsio", "FITS data file library");
     addLibrary(about, "clip", "Cross-platform clipboard library");
     addLibrary(about, "concurrentqueue", "Cross-platform lightweight semaphore");
@@ -242,10 +243,12 @@ HelpWindow::HelpWindow(Widget* parent, weak_ptr<Ipc> weakIpc, function<void()> c
     addLibrary(about, "DirectXMath", "DirectX math library");
     addLibrary(about, "DirectX-Headers", "DirectX headers");
 #endif
+    addLibrary(about, "etcdec", "Single-header ETC/EAC decoder library");
     addLibrary(about, "GDCM", "Grassroots library for DICOM medical files");
     addLibrary(about, "Glad", "Multi-language GL loader-generator");
     addLibrary(about, "GLFW", "OpenGL desktop development library");
     addLibrary(about, "jxrlib", "JPEG XR image format library");
+    addLibrary(about, "KTX-Software", "KTX (Khronos texture) library");
 #ifdef TEV_SUPPORT_HEIC
     addLibrary(about, "libde265", "Open h.265 video codec library");
 #endif

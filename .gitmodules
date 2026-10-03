@@ -134,4 +134,15 @@
 	path = dependencies/DirectX-Headers
 	url = https://github.com/Tom94/DirectX-Headers
 	shallow = true
-
+[submodule "dependencies/KTX-Software"]
+	path = dependencies/KTX-Software
+	url = https://github.com/Tom94/KTX-Software
+	shallow = true
+[submodule "dependencies/bcdec"]
+	path = dependencies/bcdec
+	url = https://github.com/Tom94/bcdec
+	shallow = true
+[submodule "dependencies/etcdec"]
+	path = dependencies/etcdec
+	url = https://github.com/Tom94/etcdec
+	shallow = true
