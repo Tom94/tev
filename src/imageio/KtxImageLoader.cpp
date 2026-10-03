@@ -437,7 +437,7 @@ bool needsVerticalFlip(ktxTexture* texture) {
     return orientation.empty() ? texture->classId == ktxTexture1_c : orientation.find('u') != string_view::npos;
 }
 
-string makePartName(ktxTexture* texture, const uint32_t level, const uint32_t layer, const uint32_t face, const uint32_t slice) {
+string makeLayerName(ktxTexture* texture, const uint32_t layer, const uint32_t face, const uint32_t slice) {
     static const array<string_view, 6> CUBE_FACE_NAMES = {"+X", "-X", "+Y", "-Y", "+Z", "-Z"};
 
     vector<string> components;
@@ -453,6 +453,12 @@ string makePartName(ktxTexture* texture, const uint32_t level, const uint32_t la
     if (texture->baseDepth > 1) {
         components.emplace_back(fmt::format("z{}", slice));
     }
+
+    return join(components, ".");
+}
+
+string makePartName(ktxTexture* texture, const uint32_t level) {
+    vector<string> components;
 
     if (texture->numLevels > 1) {
         components.emplace_back(fmt::format("mip{}", level));
@@ -625,6 +631,10 @@ Task<vector<ImageData>>
         const uint32_t numSlices = std::max(1u, texture->baseDepth >> level);
         const size_t rowPitch = ktxTexture_GetRowPitch(texture.get(), level);
 
+        ImageData& resultData = result.emplace_back();
+        resultData.hasPremultipliedAlpha = layout->alpha && premultipliedAlpha;
+        resultData.partName = makePartName(texture.get(), level);
+
         for (uint32_t layer = 0; layer < texture->numLayers; ++layer) {
             for (uint32_t face = 0; face < texture->numFaces; ++face) {
                 for (uint32_t slice = 0; slice < numSlices; ++slice) {
@@ -643,21 +653,17 @@ Task<vector<ImageData>>
                         throw ImageLoadError{"KTX subimage extends past the end of the payload."};
                     }
 
-                    ImageData& resultData = result.emplace_back();
-                    resultData.channels = co_await makeInterleavedChannels(
+                    auto channels = co_await makeInterleavedChannels(
                         layout->numOutputChannels(),
                         layout->alpha,
                         levelSize,
                         EPixelFormat::F32,
                         layout->type == ESampleType::Float32 ? EPixelFormat::F32 : EPixelFormat::F16,
-                        "",
+                        makeLayerName(texture.get(), layer, face, slice),
                         priority
                     );
 
-                    resultData.hasPremultipliedAlpha = layout->alpha && premultipliedAlpha;
-                    resultData.partName = makePartName(texture.get(), level, layer, face, slice);
-
-                    const auto dst = MultiChannelView<float>{resultData.channels};
+                    const auto dst = MultiChannelView<float>{channels};
                     span<const uint8_t> src = data.subspan(offset, imageSize);
                     size_t srcRowPitch = rowPitch;
 
@@ -676,6 +682,8 @@ Task<vector<ImageData>>
                         case ESampleType::Float16: co_await convertToFloat<half>(src, srcRowPitch, dst, *layout, flipY, priority); break;
                         case ESampleType::Float32: co_await convertToFloat<float>(src, srcRowPitch, dst, *layout, flipY, priority); break;
                     }
+
+                    ranges::move(channels, back_inserter(resultData.channels));
                 }
             }
         }
