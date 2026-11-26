@@ -877,6 +877,7 @@ Texture* Image::texture(span<const string> channelNames, EInterpolationMode minF
 
     Texture::PixelFormat pixelFormat;
     switch (channelNames.size()) {
+        case 0: return nullptr; // No channels to upload
         case 1: pixelFormat = Texture::PixelFormat::R; break;
         case 2: pixelFormat = Texture::PixelFormat::RA; break;
         case 3: pixelFormat = Texture::PixelFormat::RGB; break;
